@@ -2,6 +2,7 @@ package ai.agent.android
 
 import android.app.Application
 import dagger.hilt.android.HiltAndroidApp
+import timber.log.Timber
 
 /**
  * Base Application class for the Android AI Agent project.
@@ -15,4 +16,11 @@ import dagger.hilt.android.HiltAndroidApp
  * domain, and data layers of our Clean Architecture.
  */
 @HiltAndroidApp
-class App : Application()
+class App : Application() {
+    override fun onCreate() {
+        super.onCreate()
+        if (BuildConfig.DEBUG) {
+            Timber.plant(Timber.DebugTree())
+        }
+    }
+}
