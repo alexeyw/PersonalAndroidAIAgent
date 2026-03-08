@@ -6,6 +6,7 @@ import ai.agent.android.domain.models.Result
 import com.google.ai.edge.litertlm.Engine
 import com.google.ai.edge.litertlm.EngineConfig
 import com.google.ai.edge.litertlm.GenerationConfig
+import com.google.ai.edge.litertlm.Content
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
@@ -95,7 +96,11 @@ class LiteRTLlmEngine @Inject constructor() : LlmInferenceEngine {
             val conversation = currentEngine.createConversation()
             // Stream the tokens directly from the LiteRT-LM conversation
             conversation.sendMessageAsync(prompt).collect { chunk ->
-                emit(chunk.text)
+                val textParts = chunk.contents.contents.filterIsInstance<Content.Text>()
+                val text = textParts.joinToString("") { it.text }
+                if (text.isNotEmpty()) {
+                    emit(text)
+                }
             }
             
         } catch (e: Exception) {
