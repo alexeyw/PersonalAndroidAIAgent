@@ -1,4 +1,4 @@
-package ai.agent.android.ui.theme
+package ai.agent.android.presentation.theme
 
 import androidx.compose.ui.graphics.Color
 
