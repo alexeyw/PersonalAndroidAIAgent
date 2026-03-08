@@ -95,7 +95,7 @@ class LiteRTLlmEngine @Inject constructor() : LlmInferenceEngine {
             val conversation = currentEngine.createConversation()
             // Stream the tokens directly from the LiteRT-LM conversation
             conversation.sendMessageAsync(prompt).collect { chunk ->
-                emit(chunk)
+                emit(chunk.text)
             }
             
         } catch (e: Exception) {
