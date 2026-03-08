@@ -4,6 +4,8 @@ import ai.agent.android.data.engine.LiteRTLlmEngine
 import ai.agent.android.data.local.SettingsManager
 import ai.agent.android.domain.engine.LlmInferenceEngine
 import ai.agent.android.domain.repositories.SettingsRepository
+import ai.agent.android.data.network.AndroidModelDownloadManager
+import ai.agent.android.domain.repositories.ModelDownloadManager
 import dagger.Binds
 import dagger.Module
 import dagger.hilt.InstallIn
@@ -39,5 +41,14 @@ abstract class DataModule {
     abstract fun bindLlmInferenceEngine(
         engine: LiteRTLlmEngine
     ): LlmInferenceEngine
+
+    /**
+     * Binds the [AndroidModelDownloadManager] implementation to the [ModelDownloadManager] interface.
+     */
+    @Binds
+    @Singleton
+    abstract fun bindModelDownloadManager(
+        downloadManager: AndroidModelDownloadManager
+    ): ModelDownloadManager
 }
 
