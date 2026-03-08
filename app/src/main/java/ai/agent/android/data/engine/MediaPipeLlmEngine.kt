@@ -70,10 +70,14 @@ class MediaPipeLlmEngine @Inject constructor(
 
             val options = LlmInference.LlmInferenceOptions.builder()
                 .setModelPath(modelPath)
-                .setResultListener { partialResult, done ->
+                .setResultListener { partialResult: String?, done: Boolean ->
                     val flow = currentTokenFlow
                     if (flow != null) {
-                        flow.tryEmit(if (done) TokenResult.Done else TokenResult.Token(partialResult))
+                        if (done) {
+                            flow.tryEmit(TokenResult.Done)
+                        } else if (partialResult != null) {
+                            flow.tryEmit(TokenResult.Token(partialResult))
+                        }
                     }
                 }
                 .build()
@@ -118,7 +122,7 @@ class MediaPipeLlmEngine @Inject constructor(
         }
 
         // Collect tokens from the shared flow
-        val job = kotlinx.coroutines.launch {
+        val job = launch {
             tokenFlow.collect { result ->
                 when (result) {
                     is TokenResult.Token -> {
