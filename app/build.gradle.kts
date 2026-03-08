@@ -76,8 +76,8 @@ dependencies {
     // DataStore Preferences
     implementation(libs.datastore.preferences)
 
-    // MediaPipe LLM Inference
-    implementation(libs.mediapipe.tasks.genai)
+    // LiteRT LLM Inference
+    implementation(libs.litertlm)
 
     testImplementation(libs.junit)
     testImplementation(libs.mockk)
