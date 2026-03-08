@@ -1,8 +1,18 @@
 package ai.agent.android.di
 
+import android.content.Context
+import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.PreferenceDataStoreFactory
+import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.preferencesDataStoreFile
+import androidx.room.Room
+import ai.agent.android.data.local.AppDatabase
 import dagger.Module
+import dagger.Provides
 import dagger.hilt.InstallIn
+import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
+import javax.inject.Singleton
 
 /**
  * Global application-level dependency injection module.
@@ -15,5 +25,36 @@ import dagger.hilt.components.SingletonComponent
 @Module
 @InstallIn(SingletonComponent::class)
 object AppModule {
-    // Add global @Provides functions here
+
+    private const val USER_PREFERENCES_NAME = "agent_preferences"
+    private const val DATABASE_NAME = "agent_database.db"
+
+    /**
+     * Provides the singleton instance of the DataStore preferences.
+     */
+    @Provides
+    @Singleton
+    fun providePreferencesDataStore(
+        @ApplicationContext appContext: Context
+    ): DataStore<Preferences> {
+        return PreferenceDataStoreFactory.create(
+            produceFile = { appContext.preferencesDataStoreFile(USER_PREFERENCES_NAME) }
+        )
+    }
+
+    /**
+     * Provides the singleton instance of the Room Database.
+     */
+    @Provides
+    @Singleton
+    fun provideAppDatabase(
+        @ApplicationContext appContext: Context
+    ): AppDatabase {
+        return Room.databaseBuilder(
+            appContext,
+            AppDatabase::class.java,
+            DATABASE_NAME
+        ).build()
+    }
 }
+

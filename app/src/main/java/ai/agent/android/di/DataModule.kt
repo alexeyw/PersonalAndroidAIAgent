@@ -1,8 +1,12 @@
 package ai.agent.android.di
 
+import ai.agent.android.data.local.SettingsManager
+import ai.agent.android.domain.repositories.SettingsRepository
+import dagger.Binds
 import dagger.Module
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
+import javax.inject.Singleton
 
 /**
  * Data layer dependency injection module.
@@ -15,5 +19,14 @@ import dagger.hilt.components.SingletonComponent
 @Module
 @InstallIn(SingletonComponent::class)
 abstract class DataModule {
-    // Add @Binds functions here to map implementations to interfaces
+
+    /**
+     * Binds the [SettingsManager] implementation to the [SettingsRepository] interface.
+     */
+    @Binds
+    @Singleton
+    abstract fun bindSettingsRepository(
+        settingsManager: SettingsManager
+    ): SettingsRepository
 }
+
