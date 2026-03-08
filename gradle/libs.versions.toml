@@ -15,13 +15,14 @@ timber = "5.0.1"
 room = "2.8.4"
 datastore = "1.2.0"
 mockk = "1.14.9"
-mediapipeGenai = "0.10.32"
+litert = "2.1.1"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 mockk = { group = "io.mockk", name = "mockk", version.ref = "mockk" }
-mediapipe-tasks-genai = { group = "com.google.mediapipe", name = "tasks-genai", version.ref = "mediapipeGenai" }
+litert = { group = "com.google.ai.edge.litert", name = "litert", version.ref = "litert" }
+litert-gpu = { group = "com.google.ai.edge.litert", name = "litert-gpu", version.ref = "litert" }
 coroutines-test = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-test", version.ref = "coroutines" }
 androidx-junit = { group = "androidx.test.ext", name = "junit", version.ref = "junitVersion" }
 androidx-espresso-core = { group = "androidx.test.espresso", name = "espresso-core", version.ref = "espressoCore" }
