@@ -1,6 +1,8 @@
 package ai.agent.android.di
 
+import ai.agent.android.data.engine.MediaPipeLlmEngine
 import ai.agent.android.data.local.SettingsManager
+import ai.agent.android.domain.engine.LlmInferenceEngine
 import ai.agent.android.domain.repositories.SettingsRepository
 import dagger.Binds
 import dagger.Module
@@ -28,5 +30,14 @@ abstract class DataModule {
     abstract fun bindSettingsRepository(
         settingsManager: SettingsManager
     ): SettingsRepository
+
+    /**
+     * Binds the [MediaPipeLlmEngine] implementation to the [LlmInferenceEngine] interface.
+     */
+    @Binds
+    @Singleton
+    abstract fun bindLlmInferenceEngine(
+        engine: MediaPipeLlmEngine
+    ): LlmInferenceEngine
 }
 
