@@ -12,9 +12,9 @@ hilt = "2.59.2"
 ksp = "2.3.2"
 coroutines = "1.10.2"
 timber = "5.0.1"
-room = "2.6.1"
-datastore = "1.1.2"
-mockk = "1.13.10"
+room = "2.8.4"
+datastore = "1.2.0"
+mockk = "1.14.9"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
