@@ -48,7 +48,7 @@ class LiteRTLlmEngineTest {
         // Assert
         assertTrue(result is Result.Error)
         val errorResult = result as Result.Error
-        assertTrue(errorResult.message.contains("does not exist"))
+        assertTrue(errorResult.message!!.contains("does not exist"))
     }
 
     @Test
