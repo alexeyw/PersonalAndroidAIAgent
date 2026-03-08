@@ -1,4 +1,4 @@
-package ai.agent.android.ui.theme
+package ai.agent.android.presentation.theme
 
 import androidx.compose.material3.Typography
 import androidx.compose.ui.text.TextStyle

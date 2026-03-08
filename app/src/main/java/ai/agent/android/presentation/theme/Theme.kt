@@ -1,4 +1,4 @@
-package ai.agent.android.ui.theme
+package ai.agent.android.presentation.theme
 
 import android.app.Activity
 import android.os.Build
