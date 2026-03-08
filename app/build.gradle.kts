@@ -76,6 +76,9 @@ dependencies {
     // DataStore Preferences
     implementation(libs.datastore.preferences)
 
+    // LiteRT LLM Inference
+    implementation(libs.litertlm)
+
     testImplementation(libs.junit)
     testImplementation(libs.mockk)
     testImplementation(libs.coroutines.test)
