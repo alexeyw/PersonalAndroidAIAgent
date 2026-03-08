@@ -9,7 +9,7 @@ import io.mockk.every
 import io.mockk.mockk
 import io.mockk.mockkStatic
 import io.mockk.unmockkAll
-import io.mockk.verify
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -44,6 +44,7 @@ class AndroidModelDownloadManagerTest {
         unmockkAll()
     }
 
+    @OptIn(ExperimentalCoroutinesApi::class)
     @Test
     fun `downloadModel emits Pending and Success when download finishes successfully`() = runTest {
         val url = "http://example.com/model.bin"
@@ -64,15 +65,15 @@ class AndroidModelDownloadManagerTest {
         val emissions = mutableListOf<DownloadState>()
         val job = launch(UnconfinedTestDispatcher()) {
             sut.downloadModel(url, fileName).toList(emissions)
+            assertTrue(emissions[0] is DownloadState.Pending)
+            val successState = emissions[1] as DownloadState.Success
+            assertEquals(localUri, successState.fileUri)
         }
-
-        assertTrue(emissions[0] is DownloadState.Pending)
-        val successState = emissions[1] as DownloadState.Success
-        assertEquals(localUri, successState.fileUri)
 
         job.cancel()
     }
 
+    @OptIn(ExperimentalCoroutinesApi::class)
     @Test
     fun `downloadModel emits Pending and Error when download fails`() = runTest {
         val url = "http://example.com/model.bin"
@@ -93,16 +94,16 @@ class AndroidModelDownloadManagerTest {
         val emissions = mutableListOf<DownloadState>()
         val job = launch(UnconfinedTestDispatcher()) {
             sut.downloadModel(url, fileName).toList(emissions)
+            assertTrue(emissions[0] is DownloadState.Pending)
+            val errorState = emissions[1] as DownloadState.Error
+            val errorMsg = (errorState.error as AndroidModelDownloadManager.DownloadError).message
+            assertTrue(errorMsg.contains(reasonCode.toString()))
         }
-
-        assertTrue(emissions[0] is DownloadState.Pending)
-        val errorState = emissions[1] as DownloadState.Error
-        val errorMsg = (errorState.error as AndroidModelDownloadManager.DownloadError).message
-        assertTrue(errorMsg.contains(reasonCode.toString()))
 
         job.cancel()
     }
 
+    @OptIn(ExperimentalCoroutinesApi::class)
     @Test
     fun `downloadModel emits Pending and Error when URL is invalid`() = runTest {
         val url = "invalid_url"
@@ -113,13 +114,12 @@ class AndroidModelDownloadManagerTest {
         val emissions = mutableListOf<DownloadState>()
         val job = launch(UnconfinedTestDispatcher()) {
             sut.downloadModel(url, fileName).toList(emissions)
+            assertTrue(emissions[0] is DownloadState.Pending)
+            assertTrue(emissions[1] is DownloadState.Error)
+            val errorState = emissions[1] as DownloadState.Error
+            val errorMsg = (errorState.error as AndroidModelDownloadManager.DownloadError).message
+            assertTrue(errorMsg.contains("Invalid URL"))
         }
-
-        assertTrue(emissions[0] is DownloadState.Pending)
-        assertTrue(emissions[1] is DownloadState.Error)
-        val errorState = emissions[1] as DownloadState.Error
-        val errorMsg = (errorState.error as AndroidModelDownloadManager.DownloadError).message
-        assertTrue(errorMsg.contains("Invalid URL"))
 
         job.cancel()
     }

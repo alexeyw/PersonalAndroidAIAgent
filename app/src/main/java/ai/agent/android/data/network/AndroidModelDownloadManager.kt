@@ -5,7 +5,7 @@ import ai.agent.android.domain.models.DownloadState
 import ai.agent.android.domain.repositories.ModelDownloadManager
 import android.app.DownloadManager
 import android.content.Context
-import android.net.Uri
+import androidx.core.net.toUri
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -31,7 +31,7 @@ class AndroidModelDownloadManager @Inject constructor(
         emit(DownloadState.Pending)
 
         val request = try {
-            DownloadManager.Request(Uri.parse(url))
+            DownloadManager.Request(url.toUri())
                 .setTitle(fileName)
                 .setDescription("Downloading AI Model")
                 .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE)
