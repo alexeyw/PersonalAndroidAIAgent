@@ -1,11 +1,7 @@
 package ai.agent.android.data.engine
 
 import ai.agent.android.domain.models.Result
-import io.mockk.every
-import io.mockk.mockk
-import io.mockk.mockkStatic
 import io.mockk.unmockkAll
-import io.mockk.verify
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.runTest
 import org.junit.After
@@ -13,7 +9,6 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
-import java.io.File
 
 /**
  * Unit tests for [LiteRTLlmEngine].
@@ -25,7 +20,6 @@ class LiteRTLlmEngineTest {
     @Before
     fun setup() {
         engine = LiteRTLlmEngine()
-        mockkStatic(File::class)
     }
 
     @After
@@ -38,9 +32,6 @@ class LiteRTLlmEngineTest {
     fun `initialize returns Error when model file does not exist`() = runTest {
         // Arrange
         val path = "/fake/path/model.tflite"
-        val mockFile = mockk<File>()
-        every { mockFile.exists() } returns false
-        every { File(path) } returns mockFile
 
         // Act
         val result = engine.initialize(path)
