@@ -3,10 +3,10 @@ package ai.agent.android.data.engine
 import ai.agent.android.domain.engine.LlmInferenceEngine
 import ai.agent.android.domain.models.AppError
 import ai.agent.android.domain.models.Result
-import com.google.ai.edge.litert.InterpreterApi
-import com.google.ai.edge.litert.gpu.GpuDelegateFactory
+import com.google.ai.edge.litertlm.Engine
+import com.google.ai.edge.litertlm.EngineConfig
+import com.google.ai.edge.litertlm.GenerationConfig
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
@@ -17,19 +17,15 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * An implementation of [LlmInferenceEngine] using the LiteRT API (formerly TensorFlow Lite).
+ * An implementation of [LlmInferenceEngine] using the specialized LiteRT-LM library.
  * 
- * This engine manages the lifecycle of the LiteRT [InterpreterApi] and its delegates (e.g., GPU, XNNPACK).
- * It loads the model directly from the file system and performs local inference.
- * 
- * Note: Raw LLM generation using only an Interpreter requires a custom tokenization
- * and sampling pipeline. This class currently provides the foundational wrapper and
- * lifecycle management for the interpreter.
+ * This engine manages the lifecycle of the LiteRT-LM [Engine], which is optimized
+ * specifically for Large Language Models (LLMs) on edge devices.
  */
 @Singleton
 class LiteRTLlmEngine @Inject constructor() : LlmInferenceEngine {
 
-    private var interpreter: InterpreterApi? = null
+    private var engine: Engine? = null
 
     /**
      * Internal error mapping implementation for system/unknown errors.
@@ -37,10 +33,10 @@ class LiteRTLlmEngine @Inject constructor() : LlmInferenceEngine {
     private object LlmSystemError : AppError.System
 
     /**
-     * Initializes the LiteRT engine by configuring its options with the
-     * specified model path and adding hardware delegates.
+     * Initializes the LiteRT-LM engine by configuring its options with the
+     * specified model path.
      * 
-     * @param modelPath The exact path to the locally downloaded model file (.tflite or .bin).
+     * @param modelPath The exact path to the locally downloaded model file.
      * @return [Result.Success] on successful initialization, or [Result.Error] on failure.
      */
     override suspend fun initialize(modelPath: String): Result<Unit, AppError> = withContext(Dispatchers.IO) {
@@ -58,22 +54,16 @@ class LiteRTLlmEngine @Inject constructor() : LlmInferenceEngine {
             // Close existing engine if present to release previous resources
             close()
 
-            // Initialize Interpreter Options
-            val options = InterpreterApi.Options().apply {
-                // Set the number of threads for XNNPACK CPU execution
-                setNumThreads(4)
-                
-                // Example of adding a GPU delegate if available
-                // try {
-                //     addDelegateFactory(GpuDelegateFactory())
-                // } catch (e: Exception) {
-                //     Timber.w(e, "GPU Delegate is not supported on this device, falling back to CPU")
-                // }
-            }
+            // Initialize Engine Configuration
+            val config = EngineConfig(
+                modelPath = modelPath
+            )
 
-            // Create Interpreter from file
-            interpreter = InterpreterApi.create(file, options)
-            Timber.i("LiteRT Interpreter successfully initialized")
+            // Create Engine from config and initialize
+            engine = Engine(config).apply {
+                initialize()
+            }
+            Timber.i("LiteRT-LM Engine successfully initialized")
             
             Result.Success(Unit)
         } catch (e: Exception) {
@@ -93,44 +83,37 @@ class LiteRTLlmEngine @Inject constructor() : LlmInferenceEngine {
      * @return A [Flow] of strings representing the generated tokens as they are produced.
      */
     override fun generateResponseStream(prompt: String): Flow<String> = flow {
-        val currentInterpreter = interpreter
-        if (currentInterpreter == null) {
-            Timber.e("Interpreter is not initialized")
+        val currentEngine = engine
+        if (currentEngine == null) {
+            Timber.e("Engine is not initialized")
             throw IllegalStateException("LLM Engine not initialized")
         }
 
         try {
-            // TODO: In a complete implementation, this is where tokenization happens.
-            // 1. Convert prompt string to token IDs using a tokenizer.
-            // 2. Feed tokens into the Interpreter's input buffers.
-            // 3. Run the Interpreter in a loop (auto-regressive generation).
-            // 4. Decode output token IDs to strings and emit them.
-            
             Timber.d("Starting inference for prompt: %s", prompt)
             
-            // Stub generation for demonstration
-            val tokens = listOf("This ", "is ", "a ", "response ", "from ", "LiteRT.")
-            for (token in tokens) {
-                emit(token)
-                delay(100) // Simulate inference time
+            val conversation = currentEngine.createConversation()
+            // Stream the tokens directly from the LiteRT-LM conversation
+            conversation.sendMessageAsync(prompt).collect { chunk ->
+                emit(chunk)
             }
             
         } catch (e: Exception) {
             Timber.e(e, "Error during text generation")
             throw e
         }
-    }.flowOn(Dispatchers.Default)
+    }.flowOn(Dispatchers.IO)
 
     /**
      * Closes the engine and releases any underlying hardware resources.
      */
     override fun close() {
         try {
-            interpreter?.close()
+            engine?.close()
         } catch (e: Exception) {
-            Timber.e(e, "Error closing LiteRT interpreter")
+            Timber.e(e, "Error closing LiteRT-LM engine")
         } finally {
-            interpreter = null
+            engine = null
         }
     }
 }

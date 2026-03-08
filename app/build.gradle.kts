@@ -77,8 +77,7 @@ dependencies {
     implementation(libs.datastore.preferences)
 
     // LiteRT LLM Inference
-    implementation(libs.litert)
-    implementation(libs.litert.gpu)
+    implementation(libs.litertlm)
 
     testImplementation(libs.junit)
     testImplementation(libs.mockk)
