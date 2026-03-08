@@ -5,7 +5,6 @@ import ai.agent.android.domain.models.AppError
 import ai.agent.android.domain.models.Result
 import com.google.ai.edge.litertlm.Engine
 import com.google.ai.edge.litertlm.EngineConfig
-import com.google.ai.edge.litertlm.GenerationConfig
 import com.google.ai.edge.litertlm.Content
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
