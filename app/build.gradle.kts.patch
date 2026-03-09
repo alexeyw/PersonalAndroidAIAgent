@@ -1,0 +1,12 @@
+--- /app/projects/android-ai-agent/src/app/build.gradle.kts
++++ /app/projects/android-ai-agent/src/app/build.gradle.kts
+@@ -51,6 +51,9 @@
+     implementation(libs.androidx.navigation.compose)
+     implementation(libs.androidx.hilt.navigation.compose)
+     
++    // Network
++    implementation(libs.okhttp)
++
+     // Coroutines
+     implementation(libs.coroutines.core)
+     implementation(libs.coroutines.android)
