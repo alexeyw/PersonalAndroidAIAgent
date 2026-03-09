@@ -17,6 +17,8 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
+import ai.agent.android.domain.repositories.SettingsRepository
+
 /**
  * ViewModel responsible for managing the state and business logic of the Models UI.
  * It interacts with the repository to fetch downloaded models and the download manager
@@ -24,11 +26,13 @@ import javax.inject.Inject
  *
  * @property localModelRepository The repository for accessing locally stored models.
  * @property downloadManager The manager for downloading new models from the network.
+ * @property settingsRepository The repository for managing application settings like auth tokens.
  */
 @HiltViewModel
 class ModelsViewModel @Inject constructor(
     private val localModelRepository: LocalModelRepository,
-    private val downloadManager: ModelDownloadManager
+    private val downloadManager: ModelDownloadManager,
+    private val settingsRepository: SettingsRepository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ModelsUiState())
@@ -36,6 +40,7 @@ class ModelsViewModel @Inject constructor(
 
     init {
         observeDownloadedModels()
+        observeAuthToken()
     }
 
     private fun observeDownloadedModels() {
@@ -52,6 +57,14 @@ class ModelsViewModel @Inject constructor(
             .launchIn(viewModelScope)
     }
 
+    private fun observeAuthToken() {
+        settingsRepository.huggingFaceAuthToken
+            .onEach { token ->
+                _uiState.update { it.copy(authTokenInput = token ?: "") }
+            }
+            .launchIn(viewModelScope)
+    }
+
     /**
      * Updates the custom URL input text in the UI state.
      *
@@ -62,12 +75,15 @@ class ModelsViewModel @Inject constructor(
     }
 
     /**
-     * Updates the authorization token input text in the UI state.
+     * Updates the authorization token input text in the UI state and saves it to settings.
      *
      * @param token The new token string entered by the user.
      */
     fun onAuthTokenChanged(token: String) {
         _uiState.update { it.copy(authTokenInput = token) }
+        viewModelScope.launch {
+            settingsRepository.setHuggingFaceAuthToken(token.takeIf { it.isNotBlank() })
+        }
     }
 
     /**

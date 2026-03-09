@@ -13,6 +13,8 @@ import timber.log.Timber
 import java.io.IOException
 import javax.inject.Inject
 
+import androidx.datastore.preferences.core.stringPreferencesKey
+
 /**
  * Concrete implementation of [SettingsRepository] utilizing Androidx DataStore Preferences.
  * 
@@ -24,6 +26,7 @@ class SettingsManager @Inject constructor(
 
     private object PreferencesKeys {
         val IS_FIRST_LAUNCH = booleanPreferencesKey("is_first_launch")
+        val HUGGING_FACE_TOKEN = stringPreferencesKey("hugging_face_token")
     }
 
     override val isFirstLaunch: Flow<Boolean> = dataStore.data
@@ -42,6 +45,29 @@ class SettingsManager @Inject constructor(
     override suspend fun setFirstLaunch(isFirstLaunch: Boolean) {
         dataStore.edit { preferences ->
             preferences[PreferencesKeys.IS_FIRST_LAUNCH] = isFirstLaunch
+        }
+    }
+
+    override val huggingFaceAuthToken: Flow<String?> = dataStore.data
+        .catch { exception ->
+            if (exception is IOException) {
+                Timber.e(exception, "Error reading preferences")
+                emit(emptyPreferences())
+            } else {
+                throw exception
+            }
+        }
+        .map { preferences ->
+            preferences[PreferencesKeys.HUGGING_FACE_TOKEN]
+        }
+
+    override suspend fun setHuggingFaceAuthToken(token: String?) {
+        dataStore.edit { preferences ->
+            if (token == null) {
+                preferences.remove(PreferencesKeys.HUGGING_FACE_TOKEN)
+            } else {
+                preferences[PreferencesKeys.HUGGING_FACE_TOKEN] = token
+            }
         }
     }
 }
