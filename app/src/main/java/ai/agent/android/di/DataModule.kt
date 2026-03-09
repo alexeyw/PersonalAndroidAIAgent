@@ -6,6 +6,8 @@ import ai.agent.android.domain.engine.LlmInferenceEngine
 import ai.agent.android.domain.repositories.SettingsRepository
 import ai.agent.android.data.network.AndroidModelDownloadManager
 import ai.agent.android.domain.repositories.ModelDownloadManager
+import ai.agent.android.data.repositories.LocalModelRepositoryImpl
+import ai.agent.android.domain.repositories.LocalModelRepository
 import dagger.Binds
 import dagger.Module
 import dagger.hilt.InstallIn
@@ -23,6 +25,15 @@ import javax.inject.Singleton
 @Module
 @InstallIn(SingletonComponent::class)
 abstract class DataModule {
+
+    /**
+     * Binds the [ai.agent.android.data.repositories.LocalModelRepositoryImpl] implementation to the [ai.agent.android.domain.repositories.LocalModelRepository] interface.
+     */
+    @Binds
+    @Singleton
+    abstract fun bindLocalModelRepository(
+        repository: LocalModelRepositoryImpl
+    ): LocalModelRepository
 
     /**
      * Binds the [SettingsManager] implementation to the [SettingsRepository] interface.

@@ -1,7 +1,11 @@
 package ai.agent.android.data.engine
 
+import android.content.ComponentCallbacks2
+import android.content.Context
 import ai.agent.android.domain.models.Result
+import io.mockk.mockk
 import io.mockk.unmockkAll
+import io.mockk.verify
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.runTest
 import org.junit.After
@@ -15,11 +19,13 @@ import org.junit.Test
  */
 class LiteRTLlmEngineTest {
 
+    private lateinit var context: Context
     private lateinit var engine: LiteRTLlmEngine
 
     @Before
     fun setup() {
-        engine = LiteRTLlmEngine()
+        context = mockk(relaxed = true)
+        engine = LiteRTLlmEngine(context)
     }
 
     @After
@@ -54,5 +60,19 @@ class LiteRTLlmEngineTest {
         } catch (e: IllegalStateException) {
             assertEquals("LLM Engine not initialized", e.message)
         }
+    }
+
+    @Test
+    fun `registers component callbacks on init`() {
+        verify { context.registerComponentCallbacks(engine) }
+    }
+
+    @Test
+    fun `onTrimMemory background level unloads engine`() {
+        engine.onTrimMemory(ComponentCallbacks2.TRIM_MEMORY_BACKGROUND)
+        
+        // Also verify that close() unregisters callbacks
+        engine.close()
+        verify { context.unregisterComponentCallbacks(engine) }
     }
 }

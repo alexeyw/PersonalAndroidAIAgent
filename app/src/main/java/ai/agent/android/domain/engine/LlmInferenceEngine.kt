@@ -35,4 +35,11 @@ interface LlmInferenceEngine {
      * Should be called when the engine is no longer needed to prevent memory leaks.
      */
     fun close()
+
+    /**
+     * Unloads the engine from memory, releasing heavy resources without fully destroying the manager.
+     * 
+     * Used for temporary memory relief (e.g., when the app goes into the background or onTrimMemory).
+     */
+    fun unload()
 }

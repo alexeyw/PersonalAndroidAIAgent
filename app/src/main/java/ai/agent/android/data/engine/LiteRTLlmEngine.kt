@@ -1,11 +1,15 @@
 package ai.agent.android.data.engine
 
+import android.content.ComponentCallbacks2
+import android.content.Context
+import android.content.res.Configuration
 import ai.agent.android.domain.engine.LlmInferenceEngine
 import ai.agent.android.domain.models.AppError
 import ai.agent.android.domain.models.Result
 import com.google.ai.edge.litertlm.Engine
 import com.google.ai.edge.litertlm.EngineConfig
 import com.google.ai.edge.litertlm.Content
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
@@ -23,9 +27,15 @@ import javax.inject.Singleton
  * specifically for Large Language Models (LLMs) on edge devices.
  */
 @Singleton
-class LiteRTLlmEngine @Inject constructor() : LlmInferenceEngine {
+class LiteRTLlmEngine @Inject constructor(
+    @ApplicationContext private val context: Context
+) : LlmInferenceEngine, ComponentCallbacks2 {
 
     private var engine: Engine? = null
+
+    init {
+        context.registerComponentCallbacks(this)
+    }
 
     /**
      * Internal error mapping implementation for system/unknown errors.
@@ -52,7 +62,7 @@ class LiteRTLlmEngine @Inject constructor() : LlmInferenceEngine {
             }
 
             // Close existing engine if present to release previous resources
-            close()
+            unload()
 
             // Initialize Engine Configuration
             val config = EngineConfig(
@@ -109,15 +119,40 @@ class LiteRTLlmEngine @Inject constructor() : LlmInferenceEngine {
     }.flowOn(Dispatchers.IO)
 
     /**
-     * Closes the engine and releases any underlying hardware resources.
+     * Unloads the engine from memory, releasing heavy resources.
      */
-    override fun close() {
+    override fun unload() {
         try {
             engine?.close()
+            Timber.i("LiteRT-LM engine unloaded successfully")
         } catch (e: Exception) {
-            Timber.e(e, "Error closing LiteRT-LM engine")
+            Timber.e(e, "Error unloading LiteRT-LM engine")
         } finally {
             engine = null
+        }
+    }
+
+    /**
+     * Closes the engine and removes the callbacks to prevent leaks.
+     */
+    override fun close() {
+        unload()
+        context.unregisterComponentCallbacks(this)
+    }
+
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        // No action needed
+    }
+
+    override fun onLowMemory() {
+        Timber.w("onLowMemory called, unloading engine")
+        unload()
+    }
+
+    override fun onTrimMemory(level: Int) {
+        if (level >= ComponentCallbacks2.TRIM_MEMORY_BACKGROUND) {
+            Timber.w("onTrimMemory called with critical level \$level, unloading engine")
+            unload()
         }
     }
 }
