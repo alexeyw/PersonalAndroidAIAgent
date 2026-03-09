@@ -1,18 +1,16 @@
 package ai.agent.android.presentation.ui.models
 
 import ai.agent.android.data.local.models.LocalModelEntity
-import ai.agent.android.domain.models.AppError
+import ai.agent.android.data.network.AndroidModelDownloadManager
 import ai.agent.android.domain.models.DownloadState
 import ai.agent.android.domain.repositories.LocalModelRepository
 import ai.agent.android.domain.repositories.ModelDownloadManager
-import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.flowOf
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
@@ -31,7 +29,7 @@ class ModelsViewModelTest {
 
     private val localModelRepository: LocalModelRepository = mockk(relaxed = true)
     private val downloadManager: ModelDownloadManager = mockk(relaxed = true)
-    private lateinit val viewModel: ModelsViewModel
+    private lateinit var viewModel: ModelsViewModel
 
     private val testDispatcher = StandardTestDispatcher()
 
@@ -107,7 +105,7 @@ class ModelsViewModelTest {
     fun `startDownload handles error state`() = runTest {
         val url = "http://example.com/model.bin"
         val fileName = "model.bin"
-        val error = AppError.NetworkError("Network failed")
+        val error = AndroidModelDownloadManager.DownloadError("Network failed")
         
         every { downloadManager.downloadModel(url, fileName) } returns flowOf(
             DownloadState.Error(error)

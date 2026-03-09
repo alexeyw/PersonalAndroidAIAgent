@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.ResponseBody
 import okio.buffer
 import okio.sink
 import java.io.File
@@ -49,7 +50,7 @@ class AndroidModelDownloadManager @Inject constructor(
             }
 
             val body = response.body
-            if (body == null) {
+            if (body == ResponseBody.EMPTY) {
                 emit(DownloadState.Error(DownloadError("Empty response body from server")))
                 return@flow
             }

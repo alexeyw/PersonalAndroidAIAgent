@@ -1,5 +1,6 @@
 package ai.agent.android.presentation.ui.models
 
+import ai.agent.android.data.network.AndroidModelDownloadManager.DownloadError
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -30,13 +31,13 @@ import androidx.hilt.navigation.compose.hiltViewModel
  * Composable screen for managing LLM models. Allows users to view downloaded models,
  * select an active model, and download new models from presets or custom URLs.
  *
- * @param viewModel The view model managing the state for this screen.
  * @param modifier The modifier to be applied to the layout.
+ * @param viewModel The view model managing the state for this screen.
  */
 @Composable
 fun ModelsScreen(
-    viewModel: ModelsViewModel = hiltViewModel(),
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    viewModel: ModelsViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
 
@@ -158,7 +159,7 @@ fun ModelsScreen(
         uiState.downloadError?.let { error ->
             Spacer(modifier = Modifier.height(8.dp))
             val errorMessage = when (error) {
-                is ai.agent.android.data.network.AndroidModelDownloadManager.DownloadError -> error.message
+                is DownloadError -> error.message
                 else -> "An unknown error occurred"
             }
             Text(
@@ -194,7 +195,7 @@ private fun PresetItem(
                     text = preset.url,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1
+                    maxLines = 3
                 )
             }
             Button(
