@@ -12,6 +12,7 @@ import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
+import okhttp3.OkHttpClient
 import javax.inject.Singleton
 
 /**
@@ -54,7 +55,7 @@ object AppModule {
             appContext,
             AppDatabase::class.java,
             DATABASE_NAME
-        ).fallbackToDestructiveMigration().build()
+        ).fallbackToDestructiveMigration(true).build()
     }
 
     /**
@@ -63,6 +64,15 @@ object AppModule {
     @Provides
     fun provideLocalModelDao(database: AppDatabase): ai.agent.android.data.local.dao.LocalModelDao {
         return database.localModelDao()
+    }
+
+    /**
+     * Provides the singleton instance of OkHttpClient.
+     */
+    @Provides
+    @Singleton
+    fun provideOkHttpClient(): OkHttpClient {
+        return OkHttpClient.Builder().build()
     }
 }
 

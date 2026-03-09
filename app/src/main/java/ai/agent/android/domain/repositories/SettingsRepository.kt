@@ -21,4 +21,16 @@ interface SettingsRepository {
      * @param isFirstLaunch The new value to set.
      */
     suspend fun setFirstLaunch(isFirstLaunch: Boolean)
+
+    /**
+     * A [Flow] representing the saved HuggingFace authorization token.
+     */
+    val huggingFaceAuthToken: Flow<String?>
+
+    /**
+     * Updates the HuggingFace authorization token.
+     *
+     * @param token The new token to save, or null to clear it.
+     */
+    suspend fun setHuggingFaceAuthToken(token: String?)
 }

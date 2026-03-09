@@ -3,95 +3,92 @@ package ai.agent.android.data.network
 import ai.agent.android.domain.models.AppError
 import ai.agent.android.domain.models.DownloadState
 import ai.agent.android.domain.repositories.ModelDownloadManager
-import android.app.DownloadManager
 import android.content.Context
-import androidx.core.net.toUri
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.ResponseBody
+import okio.buffer
+import okio.sink
+import java.io.File
 import javax.inject.Inject
 
 /**
- * Implementation of [ModelDownloadManager] that uses the Android system's [DownloadManager]
- * to handle large file downloads efficiently in the background.
+ * Implementation of [ModelDownloadManager] that uses [OkHttp]
+ * to handle large file downloads efficiently. This bypasses the Android system's
+ * [android.app.DownloadManager] cache limits (which frequently cause ERROR_INSUFFICIENT_SPACE
+ * for gigabyte-sized LLMs on emulators) by streaming data directly to external storage.
  *
- * @property context The application context used to access the [DownloadManager] system service.
+ * @property context The application context used to access external files directory.
+ * @property client The injected OkHttpClient for making network requests.
  */
 class AndroidModelDownloadManager @Inject constructor(
-    @ApplicationContext private val context: Context
+    @ApplicationContext private val context: Context,
+    private val client: OkHttpClient
 ) : ModelDownloadManager {
 
-    private val downloadManager = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
-
-    override fun downloadModel(url: String, fileName: String): Flow<DownloadState> = flow {
+    override fun downloadModel(url: String, fileName: String, authToken: String?): Flow<DownloadState> = flow {
         emit(DownloadState.Pending)
 
-        val request = try {
-            DownloadManager.Request(url.toUri())
-                .setTitle(fileName)
-                .setDescription("Downloading AI Model")
-                .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE)
-                .setDestinationInExternalFilesDir(context, null, fileName)
-        } catch (e: Exception) {
-            emit(DownloadState.Error(DownloadError("Invalid URL or request setup: ${e.message}")))
-            return@flow
-        }
+        try {
+            val requestBuilder = Request.Builder().url(url)
+            if (!authToken.isNullOrBlank()) {
+                requestBuilder.addHeader("Authorization", "Bearer $authToken")
+            }
 
-        val downloadId = downloadManager.enqueue(request)
+            val request = requestBuilder.build()
+            val response = client.newCall(request).execute()
 
-        var isFinished = false
-        while (!isFinished) {
-            val query = DownloadManager.Query().setFilterById(downloadId)
-            val cursor = downloadManager.query(query)
+            if (!response.isSuccessful) {
+                emit(DownloadState.Error(DownloadError("Server returned code: ${response.code}")))
+                return@flow
+            }
 
-            if (cursor != null && cursor.moveToFirst()) {
-                val statusIndex = cursor.getColumnIndex(DownloadManager.COLUMN_STATUS)
-                val status = if (statusIndex >= 0) cursor.getInt(statusIndex) else DownloadManager.STATUS_FAILED
+            val body = response.body
+            if (body == ResponseBody.EMPTY) {
+                emit(DownloadState.Error(DownloadError("Empty response body from server")))
+                return@flow
+            }
 
-                when (status) {
-                    DownloadManager.STATUS_SUCCESSFUL -> {
-                        val uriIndex = cursor.getColumnIndex(DownloadManager.COLUMN_LOCAL_URI)
-                        val uri = if (uriIndex >= 0) cursor.getString(uriIndex) else ""
-                        emit(DownloadState.Success(uri ?: ""))
-                        isFinished = true
-                    }
-                    DownloadManager.STATUS_FAILED -> {
-                        val reasonIndex = cursor.getColumnIndex(DownloadManager.COLUMN_REASON)
-                        val reason = if (reasonIndex >= 0) cursor.getInt(reasonIndex) else -1
-                        emit(DownloadState.Error(DownloadError("Download failed with reason code: $reason")))
-                        isFinished = true
-                    }
-                    DownloadManager.STATUS_RUNNING -> {
-                        val bytesDownloadedIndex = cursor.getColumnIndex(DownloadManager.COLUMN_BYTES_DOWNLOADED_SO_FAR)
-                        val bytesTotalIndex = cursor.getColumnIndex(DownloadManager.COLUMN_TOTAL_SIZE_BYTES)
+            val targetFile = File(context.getExternalFilesDir(null), fileName)
+            val contentLength = body.contentLength()
 
-                        if (bytesDownloadedIndex >= 0 && bytesTotalIndex >= 0) {
-                            val bytesDownloaded = cursor.getLong(bytesDownloadedIndex)
-                            val bytesTotal = cursor.getLong(bytesTotalIndex)
+            body.source().use { source ->
+                targetFile.sink().buffer().use { sink ->
+                    var totalBytesRead = 0L
+                    var lastProgressEmit = -1
+                    val buffer = okio.Buffer()
+                    val bufferSize = 8L * 1024 // 8 KB chunks
 
-                            if (bytesTotal > 0) {
-                                val progress = ((bytesDownloaded * 100L) / bytesTotal).toInt()
+                    var bytesRead: Long
+                    while (source.read(buffer, bufferSize).also { bytesRead = it } != -1L) {
+                        sink.write(buffer, bytesRead)
+                        totalBytesRead += bytesRead
+
+                        if (contentLength > 0) {
+                            val progress = ((totalBytesRead * 100) / contentLength).toInt()
+                            if (progress != lastProgressEmit) {
                                 emit(DownloadState.Downloading(progress))
-                            } else {
-                                emit(DownloadState.Downloading(0))
+                                lastProgressEmit = progress
                             }
+                        } else {
+                            // If total size is unknown, just emit 0 or indeterminate
+                            emit(DownloadState.Downloading(0))
                         }
                     }
+                    sink.flush()
                 }
-                cursor.close()
-            } else {
-                cursor?.close()
-                emit(DownloadState.Error(DownloadError("Download task not found or cancelled")))
-                isFinished = true
             }
 
-            if (!isFinished) {
-                delay(1000L) // Poll every second
-            }
+            emit(DownloadState.Success(targetFile.absolutePath))
+
+        } catch (e: Exception) {
+            emit(DownloadState.Error(DownloadError(e.message ?: "Unknown download error")))
         }
     }.distinctUntilChanged().flowOn(Dispatchers.IO)
 
