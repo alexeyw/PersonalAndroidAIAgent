@@ -24,7 +24,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.hilt.navigation.compose.hiltViewModel
 
 /**
  * Composable screen for managing LLM models. Allows users to view downloaded models,
@@ -35,7 +35,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
  */
 @Composable
 fun ModelsScreen(
-    viewModel: ModelsViewModel = viewModel(),
+    viewModel: ModelsViewModel = hiltViewModel(),
     modifier: Modifier = Modifier
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -50,6 +50,17 @@ fun ModelsScreen(
             style = MaterialTheme.typography.headlineMedium,
             modifier = Modifier.padding(bottom = 16.dp)
         )
+
+        // HuggingFace Auth Token
+        OutlinedTextField(
+            value = uiState.authTokenInput,
+            onValueChange = viewModel::onAuthTokenChanged,
+            label = { Text("HuggingFace Auth Token (Optional)") },
+            modifier = Modifier.fillMaxWidth(),
+            enabled = !uiState.isDownloading
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
 
         // Custom URL Input
         OutlinedTextField(

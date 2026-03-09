@@ -27,15 +27,20 @@ class AndroidModelDownloadManager @Inject constructor(
 
     private val downloadManager = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
 
-    override fun downloadModel(url: String, fileName: String): Flow<DownloadState> = flow {
+    override fun downloadModel(url: String, fileName: String, authToken: String?): Flow<DownloadState> = flow {
         emit(DownloadState.Pending)
 
         val request = try {
-            DownloadManager.Request(url.toUri())
+            val req = DownloadManager.Request(url.toUri())
                 .setTitle(fileName)
                 .setDescription("Downloading AI Model")
                 .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE)
                 .setDestinationInExternalFilesDir(context, null, fileName)
+            
+            if (!authToken.isNullOrBlank()) {
+                req.addRequestHeader("Authorization", "Bearer $authToken")
+            }
+            req
         } catch (e: Exception) {
             emit(DownloadState.Error(DownloadError("Invalid URL or request setup: ${e.message}")))
             return@flow

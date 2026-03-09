@@ -24,7 +24,8 @@ data class ModelsUiState(
     val downloadProgress: Int? = null,
     val isDownloading: Boolean = false,
     val downloadError: AppError? = null,
-    val customUrlInput: String = ""
+    val customUrlInput: String = "",
+    val authTokenInput: String = ""
 )
 
 /**

@@ -62,6 +62,15 @@ class ModelsViewModel @Inject constructor(
     }
 
     /**
+     * Updates the authorization token input text in the UI state.
+     *
+     * @param token The new token string entered by the user.
+     */
+    fun onAuthTokenChanged(token: String) {
+        _uiState.update { it.copy(authTokenInput = token) }
+    }
+
+    /**
      * Initiates a download for the given URL and desired file name.
      *
      * @param url The direct URL to download the model from.
@@ -69,6 +78,8 @@ class ModelsViewModel @Inject constructor(
      */
     fun startDownload(url: String, fileName: String) {
         if (_uiState.value.isDownloading) return
+
+        val authToken = _uiState.value.authTokenInput.takeIf { it.isNotBlank() }
 
         _uiState.update {
             it.copy(
@@ -78,7 +89,7 @@ class ModelsViewModel @Inject constructor(
             )
         }
 
-        downloadManager.downloadModel(url, fileName)
+        downloadManager.downloadModel(url, fileName, authToken)
             .onEach { state ->
                 when (state) {
                     is DownloadState.Pending -> {
