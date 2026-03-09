@@ -24,13 +24,12 @@ import javax.inject.Inject
  * for gigabyte-sized LLMs on emulators) by streaming data directly to external storage.
  *
  * @property context The application context used to access external files directory.
+ * @property client The injected OkHttpClient for making network requests.
  */
 class AndroidModelDownloadManager @Inject constructor(
-    @ApplicationContext private val context: Context
+    @ApplicationContext private val context: Context,
+    private val client: OkHttpClient
 ) : ModelDownloadManager {
-
-    // Ideally, OkHttpClient should be injected, but for simplicity here we instantiate a default one.
-    private val client = OkHttpClient.Builder().build()
 
     override fun downloadModel(url: String, fileName: String, authToken: String?): Flow<DownloadState> = flow {
         emit(DownloadState.Pending)
