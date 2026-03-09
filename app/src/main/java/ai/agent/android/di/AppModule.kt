@@ -54,7 +54,15 @@ object AppModule {
             appContext,
             AppDatabase::class.java,
             DATABASE_NAME
-        ).build()
+        ).fallbackToDestructiveMigration().build()
+    }
+
+    /**
+     * Provides the [ai.agent.android.data.local.dao.LocalModelDao] from the database.
+     */
+    @Provides
+    fun provideLocalModelDao(database: AppDatabase): ai.agent.android.data.local.dao.LocalModelDao {
+        return database.localModelDao()
     }
 }
 
