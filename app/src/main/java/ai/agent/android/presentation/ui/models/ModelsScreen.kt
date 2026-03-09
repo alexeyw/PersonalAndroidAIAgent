@@ -155,8 +155,12 @@ fun ModelsScreen(
         // Error Message
         uiState.downloadError?.let { error ->
             Spacer(modifier = Modifier.height(8.dp))
+            val errorMessage = when (error) {
+                is ai.agent.android.data.network.AndroidModelDownloadManager.DownloadError -> error.message
+                else -> "An unknown error occurred"
+            }
             Text(
-                text = "Error: ${error.message}",
+                text = "Error: $errorMessage",
                 color = MaterialTheme.colorScheme.error,
                 style = MaterialTheme.typography.bodyMedium
             )
