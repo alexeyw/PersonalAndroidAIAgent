@@ -101,9 +101,11 @@ fun ModelsScreen(
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             items(uiState.availablePresets) { preset ->
+                val isAlreadyDownloaded = uiState.downloadedModels.any { it.name == preset.url.substringAfterLast("/") }
                 PresetItem(
                     preset = preset,
                     isDownloading = uiState.isDownloading,
+                    isAlreadyDownloaded = isAlreadyDownloaded,
                     onDownload = {
                         val fileName = preset.url.substringAfterLast("/")
                         viewModel.startDownload(preset.url, fileName)
@@ -172,6 +174,7 @@ fun ModelsScreen(
 private fun PresetItem(
     preset: ModelPreset,
     isDownloading: Boolean,
+    isAlreadyDownloaded: Boolean,
     onDownload: () -> Unit
 ) {
     Card(
@@ -196,10 +199,10 @@ private fun PresetItem(
             }
             Button(
                 onClick = onDownload,
-                enabled = !isDownloading,
+                enabled = !isDownloading && !isAlreadyDownloaded,
                 modifier = Modifier.padding(start = 16.dp)
             ) {
-                Text("Download")
+                Text(if (isAlreadyDownloaded) "Downloaded" else "Download")
             }
         }
     }
