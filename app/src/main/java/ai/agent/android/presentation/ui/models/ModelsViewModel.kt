@@ -121,7 +121,8 @@ class ModelsViewModel @Inject constructor(
                 _uiState.update {
                     it.copy(
                         isDownloading = false,
-                        downloadProgress = null
+                        downloadProgress = null,
+                        downloadError = ai.agent.android.data.network.AndroidModelDownloadManager.DownloadError(e.message ?: "Unknown error occurred")
                     )
                 }
             }

@@ -46,7 +46,12 @@ class AndroidModelDownloadManager @Inject constructor(
             return@flow
         }
 
-        val downloadId = downloadManager.enqueue(request)
+        val downloadId = try {
+            downloadManager.enqueue(request)
+        } catch (e: Exception) {
+            emit(DownloadState.Error(DownloadError("Failed to enqueue download: ${e.message}")))
+            return@flow
+        }
 
         var isFinished = false
         while (!isFinished) {
