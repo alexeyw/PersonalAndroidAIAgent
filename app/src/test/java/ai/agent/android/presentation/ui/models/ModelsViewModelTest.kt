@@ -1,0 +1,131 @@
+package ai.agent.android.presentation.ui.models
+
+import ai.agent.android.data.local.models.LocalModelEntity
+import ai.agent.android.domain.models.AppError
+import ai.agent.android.domain.models.DownloadState
+import ai.agent.android.domain.repositories.LocalModelRepository
+import ai.agent.android.domain.repositories.ModelDownloadManager
+import io.mockk.coEvery
+import io.mockk.coVerify
+import io.mockk.every
+import io.mockk.mockk
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.test.setMain
+import org.junit.After
+import org.junit.Assert.assertEquals
+import org.junit.Before
+import org.junit.Test
+
+/**
+ * Unit tests for [ModelsViewModel].
+ */
+@OptIn(ExperimentalCoroutinesApi::class)
+class ModelsViewModelTest {
+
+    private val localModelRepository: LocalModelRepository = mockk(relaxed = true)
+    private val downloadManager: ModelDownloadManager = mockk(relaxed = true)
+    private lateinit val viewModel: ModelsViewModel
+
+    private val testDispatcher = StandardTestDispatcher()
+
+    @Before
+    fun setup() {
+        Dispatchers.setMain(testDispatcher)
+        
+        // Default mock for initial state
+        every { localModelRepository.getAllModels() } returns flowOf(emptyList())
+        
+        viewModel = ModelsViewModel(localModelRepository, downloadManager)
+    }
+
+    @After
+    fun tearDown() {
+        Dispatchers.resetMain()
+    }
+
+    @Test
+    fun `initial state loads downloaded models and active model`() = runTest {
+        val models = listOf(
+            LocalModelEntity(id = 1, name = "Model 1", path = "/path", size = 100, isActive = false),
+            LocalModelEntity(id = 2, name = "Model 2", path = "/path", size = 100, isActive = true)
+        )
+        
+        every { localModelRepository.getAllModels() } returns flowOf(models)
+        
+        // Re-initialize to pick up the new flow
+        viewModel = ModelsViewModel(localModelRepository, downloadManager)
+        
+        advanceUntilIdle()
+        
+        val state = viewModel.uiState.value
+        assertEquals(models, state.downloadedModels)
+        assertEquals(models[1], state.activeModel)
+    }
+
+    @Test
+    fun `onCustomUrlChanged updates state`() {
+        val newUrl = "http://example.com/model.bin"
+        viewModel.onCustomUrlChanged(newUrl)
+        
+        assertEquals(newUrl, viewModel.uiState.value.customUrlInput)
+        assertEquals(null, viewModel.uiState.value.downloadError)
+    }
+
+    @Test
+    fun `startDownload updates state through download lifecycle`() = runTest {
+        val url = "http://example.com/model.bin"
+        val fileName = "model.bin"
+        
+        every { downloadManager.downloadModel(url, fileName) } returns flowOf(
+            DownloadState.Pending,
+            DownloadState.Downloading(50),
+            DownloadState.Success("/local/path")
+        )
+        
+        viewModel.startDownload(url, fileName)
+        
+        // Assert initial downloading state
+        var state = viewModel.uiState.value
+        assertEquals(true, state.isDownloading)
+        
+        advanceUntilIdle()
+        
+        // Assert final state after success
+        state = viewModel.uiState.value
+        assertEquals(false, state.isDownloading)
+        assertEquals(null, state.downloadProgress)
+    }
+
+    @Test
+    fun `startDownload handles error state`() = runTest {
+        val url = "http://example.com/model.bin"
+        val fileName = "model.bin"
+        val error = AppError.NetworkError("Network failed")
+        
+        every { downloadManager.downloadModel(url, fileName) } returns flowOf(
+            DownloadState.Error(error)
+        )
+        
+        viewModel.startDownload(url, fileName)
+        
+        advanceUntilIdle()
+        
+        val state = viewModel.uiState.value
+        assertEquals(false, state.isDownloading)
+        assertEquals(error, state.downloadError)
+    }
+
+    @Test
+    fun `setActiveModel calls repository`() = runTest {
+        viewModel.setActiveModel(1L)
+        advanceUntilIdle()
+        coVerify { localModelRepository.setActiveModel(1L) }
+    }
+}
