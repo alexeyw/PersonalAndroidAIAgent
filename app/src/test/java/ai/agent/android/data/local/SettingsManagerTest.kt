@@ -25,7 +25,7 @@ import kotlinx.coroutines.flow.flow
 class SettingsManagerTest {
 
     private val dataStore = mockk<DataStore<Preferences>>()
-    private val settingsManager = SettingsManager(dataStore)
+    //private val settingsManager = SettingsManager(dataStore)
     private val isFirstLaunchKey = booleanPreferencesKey("is_first_launch")
 
     @Test
@@ -34,6 +34,7 @@ class SettingsManagerTest {
         every { prefs[isFirstLaunchKey] } returns null
         every { dataStore.data } returns flowOf(prefs)
 
+        val settingsManager = SettingsManager(dataStore)
         val result = settingsManager.isFirstLaunch.first()
         assertTrue(result)
     }
@@ -44,6 +45,7 @@ class SettingsManagerTest {
         every { prefs[isFirstLaunchKey] } returns false
         every { dataStore.data } returns flowOf(prefs)
 
+        val settingsManager = SettingsManager(dataStore)
         val result = settingsManager.isFirstLaunch.first()
         assertEquals(false, result)
     }
@@ -52,6 +54,7 @@ class SettingsManagerTest {
     fun `isFirstLaunch handles IOException and returns default`() = runTest {
         every { dataStore.data } returns flow { throw IOException("Test") }
 
+        val settingsManager = SettingsManager(dataStore)
         val result = settingsManager.isFirstLaunch.first()
         assertTrue(result)
     }
