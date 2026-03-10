@@ -84,6 +84,9 @@ dependencies {
     // LiteRT LLM Inference
     implementation(libs.litertlm)
 
+    // Koog Framework
+    implementation(libs.koog.agents)
+
     testImplementation(libs.junit)
     testImplementation(libs.mockk)
     testImplementation(libs.coroutines.test)
