@@ -33,4 +33,16 @@ interface SettingsRepository {
      * @param token The new token to save, or null to clear it.
      */
     suspend fun setHuggingFaceAuthToken(token: String?)
+
+    /**
+     * A [Flow] representing the maximum allowed context length (e.g., in characters or tokens).
+     */
+    val maxContextLength: Flow<Int>
+
+    /**
+     * Updates the maximum allowed context length.
+     *
+     * @param length The new maximum length to set.
+     */
+    suspend fun setMaxContextLength(length: Int)
 }
