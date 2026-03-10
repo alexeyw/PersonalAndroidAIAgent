@@ -14,6 +14,7 @@ import java.io.IOException
 import javax.inject.Inject
 
 import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.core.intPreferencesKey
 
 /**
  * Concrete implementation of [SettingsRepository] utilizing Androidx DataStore Preferences.
@@ -27,6 +28,7 @@ class SettingsManager @Inject constructor(
     private object PreferencesKeys {
         val IS_FIRST_LAUNCH = booleanPreferencesKey("is_first_launch")
         val HUGGING_FACE_TOKEN = stringPreferencesKey("hugging_face_token")
+        val MAX_CONTEXT_LENGTH = intPreferencesKey("max_context_length")
     }
 
     override val isFirstLaunch: Flow<Boolean> = dataStore.data
@@ -68,6 +70,25 @@ class SettingsManager @Inject constructor(
             } else {
                 preferences[PreferencesKeys.HUGGING_FACE_TOKEN] = token
             }
+        }
+    }
+
+    override val maxContextLength: Flow<Int> = dataStore.data
+        .catch { exception ->
+            if (exception is IOException) {
+                Timber.e(exception, "Error reading preferences")
+                emit(emptyPreferences())
+            } else {
+                throw exception
+            }
+        }
+        .map { preferences ->
+            preferences[PreferencesKeys.MAX_CONTEXT_LENGTH] ?: 4000
+        }
+
+    override suspend fun setMaxContextLength(length: Int) {
+        dataStore.edit { preferences ->
+            preferences[PreferencesKeys.MAX_CONTEXT_LENGTH] = length
         }
     }
 }
