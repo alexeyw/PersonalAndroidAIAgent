@@ -8,6 +8,8 @@ import ai.agent.android.data.network.AndroidModelDownloadManager
 import ai.agent.android.domain.repositories.ModelDownloadManager
 import ai.agent.android.data.repositories.LocalModelRepositoryImpl
 import ai.agent.android.domain.repositories.LocalModelRepository
+import ai.agent.android.data.repositories.ChatRepositoryImpl
+import ai.agent.android.domain.repositories.ChatRepository
 import dagger.Binds
 import dagger.Module
 import dagger.hilt.InstallIn
@@ -61,5 +63,14 @@ abstract class DataModule {
     abstract fun bindModelDownloadManager(
         downloadManager: AndroidModelDownloadManager
     ): ModelDownloadManager
+
+    /**
+     * Binds the [ChatRepositoryImpl] implementation to the [ChatRepository] interface.
+     */
+    @Binds
+    @Singleton
+    abstract fun bindChatRepository(
+        repository: ChatRepositoryImpl
+    ): ChatRepository
 }
 

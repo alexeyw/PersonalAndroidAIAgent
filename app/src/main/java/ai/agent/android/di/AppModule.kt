@@ -67,6 +67,14 @@ object AppModule {
     }
 
     /**
+     * Provides the [ai.agent.android.data.local.dao.ChatDao] from the database.
+     */
+    @Provides
+    fun provideChatDao(database: AppDatabase): ai.agent.android.data.local.dao.ChatDao {
+        return database.chatDao()
+    }
+
+    /**
      * Provides the singleton instance of OkHttpClient.
      */
     @Provides

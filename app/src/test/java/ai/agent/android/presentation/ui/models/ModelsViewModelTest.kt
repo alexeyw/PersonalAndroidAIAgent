@@ -5,6 +5,7 @@ import ai.agent.android.data.network.AndroidModelDownloadManager
 import ai.agent.android.domain.models.DownloadState
 import ai.agent.android.domain.repositories.LocalModelRepository
 import ai.agent.android.domain.repositories.ModelDownloadManager
+import ai.agent.android.domain.repositories.SettingsRepository
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
@@ -29,6 +30,8 @@ class ModelsViewModelTest {
 
     private val localModelRepository: LocalModelRepository = mockk(relaxed = true)
     private val downloadManager: ModelDownloadManager = mockk(relaxed = true)
+    private val settingsRepository: SettingsRepository = mockk(relaxed = true)
+
     private lateinit var viewModel: ModelsViewModel
 
     private val testDispatcher = StandardTestDispatcher()
@@ -40,7 +43,7 @@ class ModelsViewModelTest {
         // Default mock for initial state
         every { localModelRepository.getAllModels() } returns flowOf(emptyList())
         
-        viewModel = ModelsViewModel(localModelRepository, downloadManager)
+        viewModel = ModelsViewModel(localModelRepository, downloadManager, settingsRepository)
     }
 
     @After
@@ -58,7 +61,7 @@ class ModelsViewModelTest {
         every { localModelRepository.getAllModels() } returns flowOf(models)
         
         // Re-initialize to pick up the new flow
-        viewModel = ModelsViewModel(localModelRepository, downloadManager)
+        viewModel = ModelsViewModel(localModelRepository, downloadManager, settingsRepository)
         
         advanceUntilIdle()
         
