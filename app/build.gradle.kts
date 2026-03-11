@@ -90,6 +90,9 @@ dependencies {
     // LiteRT LLM Inference
     implementation(libs.litertlm)
 
+    // MediaPipe Tasks Text
+    implementation(libs.mediapipe.tasks.text)
+
     // Koog Framework
     implementation(libs.koog.agents)
 
