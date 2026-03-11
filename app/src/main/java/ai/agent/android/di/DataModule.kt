@@ -10,6 +10,8 @@ import ai.agent.android.data.repositories.LocalModelRepositoryImpl
 import ai.agent.android.domain.repositories.LocalModelRepository
 import ai.agent.android.data.repositories.ChatRepositoryImpl
 import ai.agent.android.domain.repositories.ChatRepository
+import ai.agent.android.data.repositories.MemoryRepositoryImpl
+import ai.agent.android.domain.repositories.MemoryRepository
 import ai.agent.android.data.engine.MediaPipeTextEmbeddingEngine
 import ai.agent.android.domain.engine.TextEmbeddingEngine
 import dagger.Binds
@@ -65,6 +67,15 @@ abstract class DataModule {
     abstract fun bindTextEmbeddingEngine(
         engine: MediaPipeTextEmbeddingEngine
     ): TextEmbeddingEngine
+
+    /**
+     * Binds the [MemoryRepositoryImpl] implementation to the [MemoryRepository] interface.
+     */
+    @Binds
+    @Singleton
+    abstract fun bindMemoryRepository(
+        repository: MemoryRepositoryImpl
+    ): MemoryRepository
 
     /**
      * Binds the [AndroidModelDownloadManager] implementation to the [ModelDownloadManager] interface.

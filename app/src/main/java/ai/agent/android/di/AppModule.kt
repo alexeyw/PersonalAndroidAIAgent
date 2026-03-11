@@ -75,6 +75,23 @@ object AppModule {
     }
 
     /**
+     * Provides the [ai.agent.android.data.local.dao.MemoryDao] from the database.
+     */
+    @Provides
+    fun provideMemoryDao(database: AppDatabase): ai.agent.android.data.local.dao.MemoryDao {
+        return database.memoryDao()
+    }
+
+    /**
+     * Provides the singleton instance of Converters for Room mapping.
+     */
+    @Provides
+    @Singleton
+    fun provideConverters(): ai.agent.android.data.local.Converters {
+        return ai.agent.android.data.local.Converters()
+    }
+
+    /**
      * Provides the singleton instance of OkHttpClient.
      */
     @Provides
