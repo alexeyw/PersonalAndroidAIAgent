@@ -1,42 +1,57 @@
 package ai.agent.android.data.tools.local
 
+import android.app.appfunctions.AppFunctionException
+import android.app.appfunctions.AppFunctionManager
+import android.app.appfunctions.ExecuteAppFunctionRequest
+import android.app.appfunctions.ExecuteAppFunctionResponse
 import android.content.Context
-import androidx.appfunctions.AppFunctionContext
+import android.os.Build
+import android.os.CancellationSignal
+import android.os.OutcomeReceiver
+import androidx.annotation.RequiresApi
+import java.util.concurrent.Executor
 
 /**
- * Manager class responsible for coordinating and executing local AppFunctions.
- * It provides a unified interface for the AI agent's orchestrator to discover
- * and trigger application functions securely.
+ * Manager class responsible for orchestrating AppFunctions execution.
+ * It provides a unified interface for the AI agent to discover and trigger
+ * application functions securely through the Android 16 AppFunctionManager.
  */
 class LocalAppFunctionManager(private val context: Context) {
 
-    private val getSystemTimeTool = GetSystemTimeTool()
-    private val setAlarmTool = SetAlarmTool(context)
-
     /**
-     * Gets the current system time using the internal tool.
+     * Executes an AppFunction by its identifier using the system AppFunctionManager.
      *
-     * @return Current time string.
+     * @param targetPackageName The package name of the app providing the function.
+     * @param functionIdentifier The unique identifier of the function to execute.
+     * @param parameters The parameters for the function, as a serialized string or bundle (depending on implementation).
+     *                   For simplicity in this initial version, we pass raw parameters and construct a request.
+     * @param callback The callback to handle the execution response.
      */
-    fun executeGetSystemTime(): String {
-        val appContext = object : AppFunctionContext {
-            override val context: Context get() = this@LocalAppFunctionManager.context
-        }
-        return getSystemTimeTool.getCurrentTime(appContext)
+    @RequiresApi(Build.VERSION_CODES.VANILLA_ICE_CREAM)
+    fun executeFunction(
+        targetPackageName: String,
+        functionIdentifier: String,
+        parameters: android.app.appsearch.GenericDocument,
+        executor: Executor,
+        callback: OutcomeReceiver<ExecuteAppFunctionResponse, AppFunctionException>
+    ) {
+        val appFunctionManager = context.getSystemService(AppFunctionManager::class.java)
+            ?: throw IllegalStateException("AppFunctionManager is not available on this device.")
+
+        val request = ExecuteAppFunctionRequest.Builder(targetPackageName, functionIdentifier)
+            .setParameters(parameters)
+            .build()
+
+        val cancellationSignal = CancellationSignal()
+
+        appFunctionManager.executeAppFunction(
+            request,
+            executor,
+            cancellationSignal,
+            callback
+        )
     }
 
-    /**
-     * Sets an alarm using the internal tool.
-     *
-     * @param hour Hour of the day (0-23).
-     * @param minute Minute of the hour (0-59).
-     * @param message Alarm label.
-     * @return Result message of the operation.
-     */
-    fun executeSetAlarm(hour: Int, minute: Int, message: String): String {
-        val appContext = object : AppFunctionContext {
-            override val context: Context get() = this@LocalAppFunctionManager.context
-        }
-        return setAlarmTool.setAlarm(appContext, hour, minute, message)
-    }
+    // We can also implement methods here to query AppSearch for available functions,
+    // which will be used later for the UI to toggle functions on/off.
 }
