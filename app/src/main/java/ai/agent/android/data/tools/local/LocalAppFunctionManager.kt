@@ -21,7 +21,6 @@ class LocalAppFunctionManager(private val context: Context) {
     fun executeGetSystemTime(): String {
         val appContext = object : AppFunctionContext {
             override val context: Context get() = this@LocalAppFunctionManager.context
-            override val callingPackageName: String get() = this@LocalAppFunctionManager.context.packageName
         }
         return getSystemTimeTool.getCurrentTime(appContext)
     }
@@ -37,7 +36,6 @@ class LocalAppFunctionManager(private val context: Context) {
     fun executeSetAlarm(hour: Int, minute: Int, message: String): String {
         val appContext = object : AppFunctionContext {
             override val context: Context get() = this@LocalAppFunctionManager.context
-            override val callingPackageName: String get() = this@LocalAppFunctionManager.context.packageName
         }
         return setAlarmTool.setAlarm(appContext, hour, minute, message)
     }

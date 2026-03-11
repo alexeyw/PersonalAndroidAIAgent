@@ -3,6 +3,7 @@ package ai.agent.android.data.tools.local
 import android.content.Context
 import android.content.Intent
 import android.provider.AlarmClock
+import androidx.appfunctions.AppFunctionContext
 import androidx.appfunctions.service.AppFunction
 
 /**
@@ -22,7 +23,7 @@ class SetAlarmTool(private val context: Context) {
      * @return A string indicating the result of the operation.
      */
     @AppFunction
-    fun setAlarm(appContext: androidx.appfunctions.AppFunctionContext, hour: Int, minute: Int, message: String): String {
+    fun setAlarm(appContext: AppFunctionContext, hour: Int, minute: Int, message: String): String {
         val intent = Intent(AlarmClock.ACTION_SET_ALARM).apply {
             putExtra(AlarmClock.EXTRA_HOUR, hour)
             putExtra(AlarmClock.EXTRA_MINUTES, minute)
