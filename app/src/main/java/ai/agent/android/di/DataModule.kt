@@ -10,6 +10,8 @@ import ai.agent.android.data.repositories.LocalModelRepositoryImpl
 import ai.agent.android.domain.repositories.LocalModelRepository
 import ai.agent.android.data.repositories.ChatRepositoryImpl
 import ai.agent.android.domain.repositories.ChatRepository
+import ai.agent.android.data.engine.MediaPipeTextEmbeddingEngine
+import ai.agent.android.domain.engine.TextEmbeddingEngine
 import dagger.Binds
 import dagger.Module
 import dagger.hilt.InstallIn
@@ -54,6 +56,15 @@ abstract class DataModule {
     abstract fun bindLlmInferenceEngine(
         engine: LiteRTLlmEngine
     ): LlmInferenceEngine
+
+    /**
+     * Binds the [MediaPipeTextEmbeddingEngine] implementation to the [TextEmbeddingEngine] interface.
+     */
+    @Binds
+    @Singleton
+    abstract fun bindTextEmbeddingEngine(
+        engine: MediaPipeTextEmbeddingEngine
+    ): TextEmbeddingEngine
 
     /**
      * Binds the [AndroidModelDownloadManager] implementation to the [ModelDownloadManager] interface.
