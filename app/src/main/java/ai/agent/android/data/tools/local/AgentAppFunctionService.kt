@@ -5,10 +5,8 @@ import android.app.appfunctions.AppFunctionService
 import android.app.appfunctions.ExecuteAppFunctionRequest
 import android.app.appfunctions.ExecuteAppFunctionResponse
 import android.content.pm.SigningInfo
-import android.os.Build
 import android.os.CancellationSignal
 import android.os.OutcomeReceiver
-import androidx.annotation.RequiresApi
 
 /**
  * The service that exposes our AppFunctions to the system and AI agents.
@@ -17,7 +15,6 @@ import androidx.annotation.RequiresApi
  * override onExecuteFunction unless we are doing custom routing, but it's required
  * to declare a service that extends AppFunctionService in the manifest.
  */
-@RequiresApi(Build.VERSION_CODES.VANILLA_ICE_CREAM)
 class AgentAppFunctionService : AppFunctionService() {
 
     override fun onExecuteFunction(

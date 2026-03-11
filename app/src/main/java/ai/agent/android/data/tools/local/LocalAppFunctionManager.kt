@@ -5,10 +5,8 @@ import android.app.appfunctions.AppFunctionManager
 import android.app.appfunctions.ExecuteAppFunctionRequest
 import android.app.appfunctions.ExecuteAppFunctionResponse
 import android.content.Context
-import android.os.Build
 import android.os.CancellationSignal
 import android.os.OutcomeReceiver
-import androidx.annotation.RequiresApi
 import java.util.concurrent.Executor
 
 /**
@@ -27,7 +25,6 @@ class LocalAppFunctionManager(private val context: Context) {
      *                   For simplicity in this initial version, we pass raw parameters and construct a request.
      * @param callback The callback to handle the execution response.
      */
-    @RequiresApi(Build.VERSION_CODES.VANILLA_ICE_CREAM)
     fun executeFunction(
         targetPackageName: String,
         functionIdentifier: String,
