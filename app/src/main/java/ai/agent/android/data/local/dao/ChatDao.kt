@@ -38,4 +38,20 @@ interface ChatDao {
      */
     @Query("DELETE FROM chat_messages WHERE sessionId = :sessionId")
     suspend fun deleteSession(sessionId: String)
+
+    /**
+     * Retrieves a list of all distinct chat session IDs.
+     *
+     * @return A list of unique session IDs.
+     */
+    @Query("SELECT DISTINCT sessionId FROM chat_messages")
+    suspend fun getAllSessions(): List<String>
+
+    /**
+     * Deletes a specific chat message by its ID.
+     *
+     * @param messageId The ID of the message to delete.
+     */
+    @Query("DELETE FROM chat_messages WHERE id = :messageId")
+    suspend fun deleteMessageById(messageId: Long)
 }
