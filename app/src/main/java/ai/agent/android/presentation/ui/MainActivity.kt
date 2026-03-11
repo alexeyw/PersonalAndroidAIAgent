@@ -19,6 +19,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import ai.agent.android.presentation.theme.AndroidAIAgentTheme
+import ai.agent.android.presentation.ui.memory.MemoryScreen
 import ai.agent.android.presentation.ui.models.ModelsScreen
 import dagger.hilt.android.AndroidEntryPoint
 
@@ -40,11 +41,15 @@ class MainActivity : ComponentActivity() {
                         composable("home") {
                             HomeScreen(
                                 onNavigateToModels = { navController.navigate("models") },
+                                onNavigateToMemory = { navController.navigate("memory") },
                                 modifier = Modifier.fillMaxSize()
                             )
                         }
                         composable("models") {
                             ModelsScreen(modifier = Modifier.fillMaxSize())
+                        }
+                        composable("memory") {
+                            MemoryScreen()
                         }
                     }
                 }
@@ -54,7 +59,11 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-fun HomeScreen(onNavigateToModels: () -> Unit, modifier: Modifier = Modifier) {
+fun HomeScreen(
+    onNavigateToModels: () -> Unit,
+    onNavigateToMemory: () -> Unit,
+    modifier: Modifier = Modifier
+) {
     Column(
         modifier = modifier.padding(16.dp)
     ) {
@@ -62,6 +71,10 @@ fun HomeScreen(onNavigateToModels: () -> Unit, modifier: Modifier = Modifier) {
         Spacer(modifier = Modifier.height(16.dp))
         Button(onClick = onNavigateToModels) {
             Text("Manage Models")
+        }
+        Spacer(modifier = Modifier.height(16.dp))
+        Button(onClick = onNavigateToMemory) {
+            Text("Memory Management")
         }
     }
 }
