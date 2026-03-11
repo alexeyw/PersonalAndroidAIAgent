@@ -40,6 +40,10 @@ android {
         buildConfig = true
     }
 
+    testOptions {
+        unitTests.isReturnDefaultValues = true
+    }
+
     packaging {
         resources {
             excludes += "META-INF/*"
@@ -96,6 +100,11 @@ dependencies {
 
     // Koog Framework
     implementation(libs.koog.agents)
+
+    // AppFunctions
+    implementation(libs.androidx.appfunctions)
+    implementation(libs.androidx.appfunctions.service)
+    ksp(libs.androidx.appfunctions.compiler)
 
     testImplementation(libs.junit)
     testImplementation(libs.mockk)
