@@ -99,5 +99,16 @@ object AppModule {
     fun provideOkHttpClient(): OkHttpClient {
         return OkHttpClient.Builder().build()
     }
+
+    /**
+     * Provides the singleton instance of LocalAppFunctionManager.
+     */
+    @Provides
+    @Singleton
+    fun provideLocalAppFunctionManager(
+        @ApplicationContext appContext: Context
+    ): ai.agent.android.data.tools.local.LocalAppFunctionManager {
+        return ai.agent.android.data.tools.local.LocalAppFunctionManager(appContext)
+    }
 }
 

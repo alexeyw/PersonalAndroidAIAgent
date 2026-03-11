@@ -13,7 +13,7 @@ android {
 
     defaultConfig {
         applicationId = "ai.agent.android"
-        minSdk = 26
+        minSdk = 36
         targetSdk = 36
         versionCode = 1
         versionName = "1.0"
@@ -40,6 +40,10 @@ android {
         buildConfig = true
     }
 
+    testOptions {
+        unitTests.isReturnDefaultValues = true
+    }
+
     packaging {
         resources {
             excludes += "META-INF/*"
@@ -62,7 +66,7 @@ dependencies {
     implementation(libs.androidx.compose.ui.graphics)
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.compose.material3)
-    implementation("androidx.compose.material:material-icons-core")
+    implementation(libs.androidx.compose.material.icons.core)
     implementation(libs.androidx.navigation.compose)
     implementation(libs.androidx.hilt.navigation.compose)
     
@@ -96,6 +100,11 @@ dependencies {
 
     // Koog Framework
     implementation(libs.koog.agents)
+
+    // AppFunctions
+    implementation(libs.androidx.appfunctions)
+    implementation(libs.androidx.appfunctions.service)
+    ksp(libs.androidx.appfunctions.compiler)
 
     testImplementation(libs.junit)
     testImplementation(libs.mockk)
