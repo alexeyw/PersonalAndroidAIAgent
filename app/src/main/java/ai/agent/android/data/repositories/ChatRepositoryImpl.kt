@@ -33,4 +33,12 @@ class ChatRepositoryImpl @Inject constructor(
     override suspend fun deleteSession(sessionId: String) {
         chatDao.deleteSession(sessionId)
     }
+
+    override suspend fun getAllSessions(): List<String> {
+        return chatDao.getAllSessions()
+    }
+
+    override suspend fun deleteMessage(messageId: Long) {
+        chatDao.deleteMessageById(messageId)
+    }
 }

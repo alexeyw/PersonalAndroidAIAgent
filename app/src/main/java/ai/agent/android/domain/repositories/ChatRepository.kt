@@ -28,4 +28,18 @@ interface ChatRepository {
      * @param sessionId The unique ID of the chat session to delete.
      */
     suspend fun deleteSession(sessionId: String)
+
+    /**
+     * Retrieves a list of all distinct chat session IDs.
+     *
+     * @return A list of unique session IDs.
+     */
+    suspend fun getAllSessions(): List<String>
+
+    /**
+     * Deletes a specific chat message by its ID.
+     *
+     * @param messageId The ID of the message to delete.
+     */
+    suspend fun deleteMessage(messageId: Long)
 }
