@@ -1,6 +1,8 @@
 package ai.agent.android.presentation.ui.tools
 
+import ai.agent.android.domain.models.AgentTool
 import ai.agent.android.domain.repositories.SettingsRepository
+import ai.agent.android.domain.repositories.ToolRepository
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -22,6 +24,7 @@ import org.junit.Test
 class ToolsViewModelTest {
 
     private val settingsRepository: SettingsRepository = mockk(relaxed = true)
+    private val toolRepository: ToolRepository = mockk(relaxed = true)
     private lateinit var viewModel: ToolsViewModel
     private val testDispatcher = StandardTestDispatcher()
 
@@ -33,7 +36,8 @@ class ToolsViewModelTest {
         Dispatchers.setMain(testDispatcher)
         every { settingsRepository.mcpServerUrls } returns mcpServersFlow
         every { settingsRepository.disabledAppFunctions } returns disabledAppFunctionsFlow
-        viewModel = ToolsViewModel(settingsRepository)
+        coEvery { toolRepository.getAllLocalTools() } returns listOf(AgentTool("get_system_time", "desc", "{}"))
+        viewModel = ToolsViewModel(settingsRepository, toolRepository)
     }
 
     @After
@@ -50,6 +54,7 @@ class ToolsViewModelTest {
 
         assertEquals(listOf("http://test.com"), viewModel.uiState.value.mcpServers)
         assertEquals(setOf("get_system_time"), viewModel.uiState.value.disabledAppFunctions)
+        assertEquals("get_system_time", viewModel.uiState.value.localTools.first().name)
     }
 
     @Test

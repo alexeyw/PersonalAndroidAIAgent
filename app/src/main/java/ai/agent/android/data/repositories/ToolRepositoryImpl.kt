@@ -2,6 +2,7 @@ package ai.agent.android.data.repositories
 
 import ai.agent.android.data.mcp.McpClient
 import ai.agent.android.data.mcp.McpClientFactory
+import ai.agent.android.data.tools.local.LocalAppFunctionManager
 import ai.agent.android.domain.models.AgentTool
 import ai.agent.android.domain.repositories.SettingsRepository
 import ai.agent.android.domain.repositories.ToolRepository
@@ -14,16 +15,11 @@ import javax.inject.Inject
  */
 class ToolRepositoryImpl @Inject constructor(
     private val settingsRepository: SettingsRepository,
-    private val mcpClientFactory: McpClientFactory
+    private val mcpClientFactory: McpClientFactory,
+    private val localAppFunctionManager: LocalAppFunctionManager
 ) : ToolRepository {
 
     private val mcpClients = mutableMapOf<String, McpClient>()
-
-    // Local dummy tools for demonstration. Filtered based on disabledAppFunctions
-    private val localTools = listOf(
-        AgentTool("get_system_time", "Get the current system time", "{}"),
-        AgentTool("set_alarm", "Set an alarm", "{\"time\": \"string\"}")
-    )
 
     private suspend fun syncMcpClients() {
         val urls = settingsRepository.mcpServerUrls.first()
@@ -51,9 +47,14 @@ class ToolRepositoryImpl @Inject constructor(
     }
 
 
+    override suspend fun getAllLocalTools(): List<AgentTool> {
+        return localAppFunctionManager.getAvailableFunctions()
+    }
+
     override suspend fun getAvailableTools(): List<AgentTool> {
         syncMcpClients()
         val disabled = settingsRepository.disabledAppFunctions.first()
+        val localTools = localAppFunctionManager.getAvailableFunctions()
         val availableLocal = localTools.filter { it.name !in disabled }
         
         val mcpTools = mcpClients.values.flatMap { client ->
@@ -68,6 +69,7 @@ class ToolRepositoryImpl @Inject constructor(
     }
 
     override suspend fun executeTool(name: String, arguments: String): String {
+        val localTools = localAppFunctionManager.getAvailableFunctions()
         // Check if the tool is a known local tool and is not disabled
         val disabled = settingsRepository.disabledAppFunctions.first()
         if (localTools.any { it.name == name }) {

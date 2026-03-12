@@ -2,6 +2,7 @@ package ai.agent.android.data.repositories
 
 import ai.agent.android.data.mcp.McpClient
 import ai.agent.android.data.mcp.McpClientFactory
+import ai.agent.android.data.tools.local.LocalAppFunctionManager
 import ai.agent.android.domain.models.AgentTool
 import ai.agent.android.domain.repositories.SettingsRepository
 import io.mockk.coEvery
@@ -20,6 +21,7 @@ class ToolRepositoryImplTest {
     private val settingsRepository: SettingsRepository = mockk()
     private val mcpClientFactory: McpClientFactory = mockk()
     private val mcpClient: McpClient = mockk()
+    private val localAppFunctionManager: LocalAppFunctionManager = mockk()
     
     private lateinit var repository: ToolRepositoryImpl
 
@@ -28,10 +30,11 @@ class ToolRepositoryImplTest {
         every { mcpClientFactory.create() } returns mcpClient
         every { settingsRepository.mcpServerUrls } returns flowOf(setOf("http://localhost:8080"))
         every { settingsRepository.disabledAppFunctions } returns flowOf(emptySet())
+        coEvery { localAppFunctionManager.getAvailableFunctions() } returns listOf(AgentTool("get_system_time", "desc", "{}"))
         coEvery { mcpClient.connect(any()) } returns Unit
         coEvery { mcpClient.disconnect() } returns Unit
         
-        repository = ToolRepositoryImpl(settingsRepository, mcpClientFactory)
+        repository = ToolRepositoryImpl(settingsRepository, mcpClientFactory, localAppFunctionManager)
     }
 
     @Test

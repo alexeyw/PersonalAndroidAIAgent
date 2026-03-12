@@ -1,13 +1,13 @@
 package ai.agent.android.data.tools.local
 
-import android.app.appfunctions.AppFunctionException
-import android.app.appfunctions.AppFunctionManager
-import android.app.appfunctions.ExecuteAppFunctionRequest
-import android.app.appfunctions.ExecuteAppFunctionResponse
 import android.content.Context
-import android.os.CancellationSignal
-import android.os.OutcomeReceiver
-import java.util.concurrent.Executor
+import androidx.appfunctions.AppFunctionManager
+import androidx.appfunctions.AppFunctionSearchSpec
+import androidx.appfunctions.ExecuteAppFunctionRequest
+import androidx.appfunctions.ExecuteAppFunctionResponse
+import ai.agent.android.domain.models.AgentTool
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 
 /**
  * Manager class responsible for orchestrating AppFunctions execution.
@@ -16,39 +16,44 @@ import java.util.concurrent.Executor
  */
 class LocalAppFunctionManager(private val context: Context) {
 
+    private val appFunctionManager: AppFunctionManager? by lazy {
+        AppFunctionManager.getInstance(context)
+    }
+
     /**
      * Executes an AppFunction by its identifier using the system AppFunctionManager.
      *
-     * @param targetPackageName The package name of the app providing the function.
-     * @param functionIdentifier The unique identifier of the function to execute.
-     * @param parameters The parameters for the function, as a serialized string or bundle (depending on implementation).
-     *                   For simplicity in this initial version, we pass raw parameters and construct a request.
-     * @param callback The callback to handle the execution response.
+     * @param request The request object containing targetPackageName, functionIdentifier, and parameters.
+     * @return ExecuteAppFunctionResponse
      */
-    fun executeFunction(
-        targetPackageName: String,
-        functionIdentifier: String,
-        parameters: android.app.appsearch.GenericDocument,
-        executor: Executor,
-        callback: OutcomeReceiver<ExecuteAppFunctionResponse, AppFunctionException>
-    ) {
-        val appFunctionManager = context.getSystemService(AppFunctionManager::class.java)
-            ?: throw IllegalStateException("AppFunctionManager is not available on this device.")
-
-        val request = ExecuteAppFunctionRequest.Builder(targetPackageName, functionIdentifier)
-            .setParameters(parameters)
-            .build()
-
-        val cancellationSignal = CancellationSignal()
-
-        appFunctionManager.executeAppFunction(
-            request,
-            executor,
-            cancellationSignal,
-            callback
-        )
+    suspend fun executeFunction(
+        request: ExecuteAppFunctionRequest
+    ): ExecuteAppFunctionResponse {
+        val manager = appFunctionManager ?: throw IllegalStateException("AppFunctionManager is not available on this device.")
+        return manager.executeAppFunction(request)
     }
 
-    // We can also implement methods here to query AppSearch for available functions,
-    // which will be used later for the UI to toggle functions on/off.
+    /**
+     * Queries the system to discover available AppFunctions for this application.
+     */
+    suspend fun getAvailableFunctions(): List<AgentTool> {
+        val manager = appFunctionManager ?: return emptyList()
+        val searchSpec = AppFunctionSearchSpec(packageNames = setOf(context.packageName))
+        
+        // Observe app functions once and map them to our domain model
+        return manager.observeAppFunctions(searchSpec)
+            .map { packages ->
+                packages.flatMap { pkg ->
+                    pkg.appFunctions.map { metadata ->
+                        // In a real implementation we would convert the schema to a JSON string
+                        // that the LLM can understand, but here we just map basic info.
+                        AgentTool(
+                            name = metadata.id,
+                            description = metadata.description ?: "App function \${metadata.id}",
+                            parameters = "{}" // TODO: Parse metadata.schema and parameters into JSON Schema
+                        )
+                    }
+                }
+            }.first()
+    }
 }

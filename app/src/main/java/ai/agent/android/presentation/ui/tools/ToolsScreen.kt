@@ -42,8 +42,8 @@ fun ToolsScreen(
                 .weight(1f),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            items(uiState.localTools) { toolName ->
-                val isEnabled = !uiState.disabledAppFunctions.contains(toolName)
+            items(uiState.localTools) { tool ->
+                val isEnabled = !uiState.disabledAppFunctions.contains(tool.name)
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
@@ -55,12 +55,22 @@ fun ToolsScreen(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text(text = toolName, style = MaterialTheme.typography.bodyLarge)
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(text = tool.name, style = MaterialTheme.typography.bodyLarge)
+                            if (tool.description.isNotBlank()) {
+                                Text(
+                                    text = tool.description, 
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
                         Switch(
                             checked = isEnabled,
                             onCheckedChange = { checked ->
-                                viewModel.toggleLocalTool(toolName, checked)
-                            }
+                                viewModel.toggleLocalTool(tool.name, checked)
+                            },
+                            modifier = Modifier.padding(start = 16.dp)
                         )
                     }
                 }
