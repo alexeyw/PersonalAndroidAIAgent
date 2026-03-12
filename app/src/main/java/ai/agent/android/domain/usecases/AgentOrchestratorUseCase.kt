@@ -10,6 +10,9 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import javax.inject.Inject
 
+import ai.agent.android.domain.repositories.SettingsRepository
+import kotlinx.coroutines.flow.first
+
 /**
  * Use case that orchestrates the ReAct (Reasoning and Acting) cycle of the AI Agent.
  * It manages the loop of generating thoughts, deciding on actions, executing tools,
@@ -19,11 +22,11 @@ class AgentOrchestratorUseCase @Inject constructor(
     private val llmEngine: LlmInferenceEngine,
     private val toolRepository: ToolRepository,
     private val chatRepository: ChatRepository,
-    private val getContextWindowUseCase: GetContextWindowUseCase
+    private val getContextWindowUseCase: GetContextWindowUseCase,
+    private val settingsRepository: SettingsRepository
 ) {
     companion object {
         const val MAX_ITERATIONS = 5
-        private const val SYSTEM_PROMPT_PREFIX = "You are a helpful AI assistant running on an Android device."
     }
 
     /**
@@ -51,19 +54,13 @@ class AgentOrchestratorUseCase @Inject constructor(
             "- ${it.name}: ${it.description} | Params: ${it.parameters}" 
         }
 
+        val systemPromptPrefix = settingsRepository.systemPromptPrefix.first()
+        val toolUsageInstructionTemplate = settingsRepository.toolUsageInstruction.first()
+        val toolUsageInstruction = String.format(toolUsageInstructionTemplate, toolsDescription)
+
         val baseSystemPrompt = """
-            $SYSTEM_PROMPT_PREFIX
-            You have access to the following tools:
-            $toolsDescription
-            
-            To use a tool, output a JSON block like this:
-            ```json
-            {
-              "tool": "tool_name",
-              "arguments": "{ \"param\": \"value\" }"
-            }
-            ```
-            If you don't need to use a tool, just answer the user directly.
+            $systemPromptPrefix
+            $toolUsageInstruction
         """.trimIndent()
 
         // ReAct loop

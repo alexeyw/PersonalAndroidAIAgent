@@ -45,4 +45,28 @@ interface SettingsRepository {
      * @param length The new maximum length to set.
      */
     suspend fun setMaxContextLength(length: Int)
+
+    /**
+     * A [Flow] representing the system prompt prefix.
+     */
+    val systemPromptPrefix: Flow<String>
+
+    /**
+     * Updates the system prompt prefix.
+     *
+     * @param prompt The new prompt to set.
+     */
+    suspend fun setSystemPromptPrefix(prompt: String)
+
+    /**
+     * A [Flow] representing the tool usage instruction prompt.
+     */
+    val toolUsageInstruction: Flow<String>
+
+    /**
+     * Updates the tool usage instruction prompt.
+     *
+     * @param instruction The new instruction to set.
+     */
+    suspend fun setToolUsageInstruction(instruction: String)
 }

@@ -13,8 +13,9 @@ import timber.log.Timber
 import java.io.IOException
 import javax.inject.Inject
 
-import androidx.datastore.preferences.core.stringPreferencesKey
+import ai.agent.android.domain.constants.DefaultPrompts
 import androidx.datastore.preferences.core.intPreferencesKey
+import androidx.datastore.preferences.core.stringPreferencesKey
 
 /**
  * Concrete implementation of [SettingsRepository] utilizing Androidx DataStore Preferences.
@@ -29,6 +30,8 @@ class SettingsManager @Inject constructor(
         val IS_FIRST_LAUNCH = booleanPreferencesKey("is_first_launch")
         val HUGGING_FACE_TOKEN = stringPreferencesKey("hugging_face_token")
         val MAX_CONTEXT_LENGTH = intPreferencesKey("max_context_length")
+        val SYSTEM_PROMPT_PREFIX = stringPreferencesKey("system_prompt_prefix")
+        val TOOL_USAGE_INSTRUCTION = stringPreferencesKey("tool_usage_instruction")
     }
 
     override val isFirstLaunch: Flow<Boolean> = dataStore.data
@@ -89,6 +92,44 @@ class SettingsManager @Inject constructor(
     override suspend fun setMaxContextLength(length: Int) {
         dataStore.edit { preferences ->
             preferences[PreferencesKeys.MAX_CONTEXT_LENGTH] = length
+        }
+    }
+
+    override val systemPromptPrefix: Flow<String> = dataStore.data
+        .catch { exception ->
+            if (exception is IOException) {
+                Timber.e(exception, "Error reading preferences")
+                emit(emptyPreferences())
+            } else {
+                throw exception
+            }
+        }
+        .map { preferences ->
+            preferences[PreferencesKeys.SYSTEM_PROMPT_PREFIX] ?: DefaultPrompts.SYSTEM_PROMPT_PREFIX
+        }
+
+    override suspend fun setSystemPromptPrefix(prompt: String) {
+        dataStore.edit { preferences ->
+            preferences[PreferencesKeys.SYSTEM_PROMPT_PREFIX] = prompt
+        }
+    }
+
+    override val toolUsageInstruction: Flow<String> = dataStore.data
+        .catch { exception ->
+            if (exception is IOException) {
+                Timber.e(exception, "Error reading preferences")
+                emit(emptyPreferences())
+            } else {
+                throw exception
+            }
+        }
+        .map { preferences ->
+            preferences[PreferencesKeys.TOOL_USAGE_INSTRUCTION] ?: DefaultPrompts.TOOL_USAGE_INSTRUCTION
+        }
+
+    override suspend fun setToolUsageInstruction(instruction: String) {
+        dataStore.edit { preferences ->
+            preferences[PreferencesKeys.TOOL_USAGE_INSTRUCTION] = instruction
         }
     }
 }

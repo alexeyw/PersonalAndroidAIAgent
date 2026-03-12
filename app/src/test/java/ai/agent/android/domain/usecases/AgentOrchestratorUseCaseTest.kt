@@ -4,7 +4,9 @@ import ai.agent.android.domain.engine.LlmInferenceEngine
 import ai.agent.android.domain.models.AgentOrchestratorState
 import ai.agent.android.domain.models.AgentTool
 import ai.agent.android.domain.repositories.ChatRepository
+import ai.agent.android.domain.repositories.SettingsRepository
 import ai.agent.android.domain.repositories.ToolRepository
+import ai.agent.android.domain.constants.DefaultPrompts
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -23,6 +25,7 @@ class AgentOrchestratorUseCaseTest {
     private lateinit var toolRepository: ToolRepository
     private lateinit var chatRepository: ChatRepository
     private lateinit var getContextWindowUseCase: GetContextWindowUseCase
+    private lateinit var settingsRepository: SettingsRepository
     private lateinit var useCase: AgentOrchestratorUseCase
 
     private val sessionId = "test-session"
@@ -33,12 +36,15 @@ class AgentOrchestratorUseCaseTest {
         toolRepository = mockk()
         chatRepository = mockk(relaxed = true)
         getContextWindowUseCase = mockk()
-        useCase = AgentOrchestratorUseCase(llmEngine, toolRepository, chatRepository, getContextWindowUseCase)
+        settingsRepository = mockk()
+        useCase = AgentOrchestratorUseCase(llmEngine, toolRepository, chatRepository, getContextWindowUseCase, settingsRepository)
 
         coEvery { toolRepository.getAvailableTools() } returns listOf(
             AgentTool("test_tool", "A test tool", "{}")
         )
         coEvery { getContextWindowUseCase(sessionId) } returns "USER: hello"
+        every { settingsRepository.systemPromptPrefix } returns flowOf(DefaultPrompts.SYSTEM_PROMPT_PREFIX)
+        every { settingsRepository.toolUsageInstruction } returns flowOf(DefaultPrompts.TOOL_USAGE_INSTRUCTION)
     }
 
     @Test
