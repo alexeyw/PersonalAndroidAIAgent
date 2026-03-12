@@ -12,6 +12,14 @@ interface ToolRepository {
      * @return A list of [AgentTool] instances.
      */
     suspend fun getAvailableTools(): List<AgentTool>
+
+    /**
+     * Retrieves a list of all available local tools (AppFunctions), ignoring their disabled state.
+     *
+     * @return A list of [AgentTool] instances.
+     */
+    suspend fun getAllLocalTools(): List<AgentTool>
+
     
     /**
      * Executes a specific tool by its name with the given arguments.
