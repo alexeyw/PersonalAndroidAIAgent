@@ -4,6 +4,15 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.EXECUTE_APP_FUNCTIONS" />
+<!--    <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />-->
+
+<!--    <queries>-->
+<!--        <package android:name="com.samsung.android.dialer" />-->
+<!--        <package android:name="com.sec.android.gallery3d" />-->
+<!--        <package android:name="com.sec.android.app.myfiles" />-->
+<!--        <package android:name="com.samsung.android.incallui" />-->
+<!--        <package android:name="com.samsung.android.app.sharelive" />-->
+<!--    </queries>-->
 
     <application
         android:name=".App"

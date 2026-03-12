@@ -51,7 +51,7 @@ class LocalAppFunctionManager(private val context: Context) {
      */
     suspend fun getAvailableFunctions(): List<AgentTool> {
         val manager = appFunctionManager ?: return emptyList()
-        val searchSpec = AppFunctionSearchSpec(packageNames = setOf(context.packageName))
+        val searchSpec = AppFunctionSearchSpec()
         
         // Observe app functions once and map them to our domain model
         return manager.observeAppFunctions(searchSpec)

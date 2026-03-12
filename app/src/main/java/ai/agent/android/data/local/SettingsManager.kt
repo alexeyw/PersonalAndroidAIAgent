@@ -16,6 +16,7 @@ import javax.inject.Inject
 import ai.agent.android.domain.constants.DefaultPrompts
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.core.stringSetPreferencesKey
 
 /**
  * Concrete implementation of [SettingsRepository] utilizing Androidx DataStore Preferences.
@@ -32,8 +33,8 @@ class SettingsManager @Inject constructor(
         val MAX_CONTEXT_LENGTH = intPreferencesKey("max_context_length")
         val SYSTEM_PROMPT_PREFIX = stringPreferencesKey("system_prompt_prefix")
         val TOOL_USAGE_INSTRUCTION = stringPreferencesKey("tool_usage_instruction")
-        val MCP_SERVER_URLS = androidx.datastore.preferences.core.stringSetPreferencesKey("mcp_server_urls")
-        val DISABLED_APP_FUNCTIONS = androidx.datastore.preferences.core.stringSetPreferencesKey("disabled_app_functions")
+        val MCP_SERVER_URLS = stringSetPreferencesKey("mcp_server_urls")
+        val DISABLED_APP_FUNCTIONS = stringSetPreferencesKey("disabled_app_functions")
     }
 
     override val isFirstLaunch: Flow<Boolean> = dataStore.data
