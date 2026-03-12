@@ -8,3 +8,7 @@ interface McpClient {
     suspend fun getTools(): List<AgentTool>
     suspend fun executeTool(name: String, arguments: String): String
 }
+
+interface McpClientFactory {
+    fun create(): McpClient
+}
