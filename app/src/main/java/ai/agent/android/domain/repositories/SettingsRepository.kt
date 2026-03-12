@@ -69,4 +69,29 @@ interface SettingsRepository {
      * @param instruction The new instruction to set.
      */
     suspend fun setToolUsageInstruction(instruction: String)
+
+    /**
+     * A [Flow] representing the set of connected MCP server URLs.
+     */
+    val mcpServerUrls: Flow<Set<String>>
+
+    /**
+     * Adds an MCP server URL.
+     */
+    suspend fun addMcpServerUrl(url: String)
+
+    /**
+     * Removes an MCP server URL.
+     */
+    suspend fun removeMcpServerUrl(url: String)
+
+    /**
+     * A [Flow] representing the set of disabled local app function names.
+     */
+    val disabledAppFunctions: Flow<Set<String>>
+
+    /**
+     * Updates the set of disabled local app functions.
+     */
+    suspend fun setDisabledAppFunctions(functions: Set<String>)
 }

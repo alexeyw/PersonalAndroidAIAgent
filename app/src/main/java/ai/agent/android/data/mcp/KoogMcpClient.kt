@@ -8,6 +8,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
+import javax.inject.Inject
 
 @OptIn(ai.koog.agents.core.tools.annotations.InternalAgentToolsApi::class)
 class KoogMcpClient : McpClient {
@@ -52,5 +53,11 @@ class KoogMcpClient : McpClient {
             val result = tool.executeUnsafe(args!!)
             tool.encodeResultToStringUnsafe(result!!)
         }
+    }
+}
+
+class KoogMcpClientFactory @Inject constructor() : McpClientFactory {
+    override fun create(): McpClient {
+        return KoogMcpClient()
     }
 }

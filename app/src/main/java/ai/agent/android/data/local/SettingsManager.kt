@@ -32,6 +32,8 @@ class SettingsManager @Inject constructor(
         val MAX_CONTEXT_LENGTH = intPreferencesKey("max_context_length")
         val SYSTEM_PROMPT_PREFIX = stringPreferencesKey("system_prompt_prefix")
         val TOOL_USAGE_INSTRUCTION = stringPreferencesKey("tool_usage_instruction")
+        val MCP_SERVER_URLS = androidx.datastore.preferences.core.stringSetPreferencesKey("mcp_server_urls")
+        val DISABLED_APP_FUNCTIONS = androidx.datastore.preferences.core.stringSetPreferencesKey("disabled_app_functions")
     }
 
     override val isFirstLaunch: Flow<Boolean> = dataStore.data
@@ -130,6 +132,52 @@ class SettingsManager @Inject constructor(
     override suspend fun setToolUsageInstruction(instruction: String) {
         dataStore.edit { preferences ->
             preferences[PreferencesKeys.TOOL_USAGE_INSTRUCTION] = instruction
+        }
+    }
+
+    override val mcpServerUrls: Flow<Set<String>> = dataStore.data
+        .catch { exception ->
+            if (exception is IOException) {
+                Timber.e(exception, "Error reading preferences")
+                emit(emptyPreferences())
+            } else {
+                throw exception
+            }
+        }
+        .map { preferences ->
+            preferences[PreferencesKeys.MCP_SERVER_URLS] ?: emptySet()
+        }
+
+    override suspend fun addMcpServerUrl(url: String) {
+        dataStore.edit { preferences ->
+            val currentUrls = preferences[PreferencesKeys.MCP_SERVER_URLS] ?: emptySet()
+            preferences[PreferencesKeys.MCP_SERVER_URLS] = currentUrls + url
+        }
+    }
+
+    override suspend fun removeMcpServerUrl(url: String) {
+        dataStore.edit { preferences ->
+            val currentUrls = preferences[PreferencesKeys.MCP_SERVER_URLS] ?: emptySet()
+            preferences[PreferencesKeys.MCP_SERVER_URLS] = currentUrls - url
+        }
+    }
+
+    override val disabledAppFunctions: Flow<Set<String>> = dataStore.data
+        .catch { exception ->
+            if (exception is IOException) {
+                Timber.e(exception, "Error reading preferences")
+                emit(emptyPreferences())
+            } else {
+                throw exception
+            }
+        }
+        .map { preferences ->
+            preferences[PreferencesKeys.DISABLED_APP_FUNCTIONS] ?: emptySet()
+        }
+
+    override suspend fun setDisabledAppFunctions(functions: Set<String>) {
+        dataStore.edit { preferences ->
+            preferences[PreferencesKeys.DISABLED_APP_FUNCTIONS] = functions
         }
     }
 }
