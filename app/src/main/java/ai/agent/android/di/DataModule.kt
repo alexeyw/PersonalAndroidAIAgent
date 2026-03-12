@@ -94,5 +94,23 @@ abstract class DataModule {
     abstract fun bindChatRepository(
         repository: ChatRepositoryImpl
     ): ChatRepository
+
+    /**
+     * Binds the [ai.agent.android.data.repositories.ToolRepositoryImpl] implementation to the [ai.agent.android.domain.repositories.ToolRepository] interface.
+     */
+    @Binds
+    @Singleton
+    abstract fun bindToolRepository(
+        repository: ai.agent.android.data.repositories.ToolRepositoryImpl
+    ): ai.agent.android.domain.repositories.ToolRepository
+
+    /**
+     * Binds the [ai.agent.android.data.mcp.KoogMcpClientFactory] implementation to the [ai.agent.android.data.mcp.McpClientFactory] interface.
+     */
+    @Binds
+    @Singleton
+    abstract fun bindMcpClientFactory(
+        factory: ai.agent.android.data.mcp.KoogMcpClientFactory
+    ): ai.agent.android.data.mcp.McpClientFactory
 }
 

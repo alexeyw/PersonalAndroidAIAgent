@@ -23,6 +23,7 @@ import androidx.navigation.compose.rememberNavController
 import ai.agent.android.presentation.theme.AndroidAIAgentTheme
 import ai.agent.android.presentation.ui.memory.MemoryScreen
 import ai.agent.android.presentation.ui.models.ModelsScreen
+import ai.agent.android.presentation.ui.tools.ToolsScreen
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -55,6 +56,7 @@ class MainActivity : ComponentActivity() {
                             HomeScreen(
                                 onNavigateToModels = { navController.navigate("models") },
                                 onNavigateToMemory = { navController.navigate("memory") },
+                                onNavigateToTools = { navController.navigate("tools") },
                                 modifier = Modifier.fillMaxSize()
                             )
                         }
@@ -63,6 +65,9 @@ class MainActivity : ComponentActivity() {
                         }
                         composable("memory") {
                             MemoryScreen()
+                        }
+                        composable("tools") {
+                            ToolsScreen(modifier = Modifier.fillMaxSize())
                         }
                     }
                 }
@@ -75,6 +80,7 @@ class MainActivity : ComponentActivity() {
 fun HomeScreen(
     onNavigateToModels: () -> Unit,
     onNavigateToMemory: () -> Unit,
+    onNavigateToTools: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -88,6 +94,10 @@ fun HomeScreen(
         Spacer(modifier = Modifier.height(16.dp))
         Button(onClick = onNavigateToMemory) {
             Text("Memory Management")
+        }
+        Spacer(modifier = Modifier.height(16.dp))
+        Button(onClick = onNavigateToTools) {
+            Text("Manage Tools & MCP")
         }
     }
 }
