@@ -100,6 +100,7 @@ dependencies {
 
     // Koog Framework
     implementation(libs.koog.agents)
+    implementation(libs.koog.mcp)
 
     // AppFunctions
     implementation(libs.androidx.appfunctions)
