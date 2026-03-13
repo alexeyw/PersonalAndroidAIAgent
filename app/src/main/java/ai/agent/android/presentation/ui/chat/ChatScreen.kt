@@ -122,7 +122,7 @@ fun ChatScreen(
 
                 if (uiState.orchestratorState != null && uiState.isGenerating) {
                     item {
-                        OrchestratorStateItem(state = uiState.orchestratorState!!)
+                        AgentThoughtIndicator(state = uiState.orchestratorState!!)
                         Spacer(modifier = Modifier.height(8.dp))
                     }
                 }
@@ -202,65 +202,6 @@ fun ChatMessageItem(message: ChatMessage) {
                 Markdown(
                     content = message.content,
                 )
-            }
-        }
-    }
-}
-
-/**
- * Composable for displaying the live orchestrator state.
- *
- * @param state The current [AgentOrchestratorState].
- */
-@Composable
-fun OrchestratorStateItem(state: AgentOrchestratorState) {
-    Box(
-        modifier = Modifier.fillMaxWidth(),
-        contentAlignment = Alignment.CenterStart
-    ) {
-        Column(
-            modifier = Modifier
-                .widthIn(max = 300.dp)
-                .clip(RoundedCornerShape(12.dp))
-                .background(MaterialTheme.colorScheme.secondaryContainer)
-                .padding(12.dp)
-        ) {
-            when (state) {
-                is AgentOrchestratorState.Loading -> {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Initializing agent...")
-                    }
-                }
-                is AgentOrchestratorState.Thinking -> {
-                    Text(
-                        text = "Thinking...",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(text = state.partialText)
-                }
-                is AgentOrchestratorState.ExecutingTool -> {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Using tool: ${state.toolName}...")
-                    }
-                }
-                is AgentOrchestratorState.ObservationResult -> {
-                    Text("Tool result received.")
-                }
-                is AgentOrchestratorState.Answering -> {
-                    Markdown(content = state.partialText)
-                }
-                is AgentOrchestratorState.Completed -> {
-                    Markdown(content = state.finalResponse)
-                }
-                is AgentOrchestratorState.Error -> {
-                    Text(text = "Error: ${state.message}", color = MaterialTheme.colorScheme.error)
-                }
             }
         }
     }
