@@ -3,9 +3,11 @@ package ai.agent.android.presentation.ui.chat
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import ai.agent.android.domain.models.AgentOrchestratorState
+import ai.agent.android.domain.models.Result
 import ai.agent.android.domain.repositories.ChatRepository
-import ai.agent.android.domain.usecases.AgentOrchestratorUseCase
 import ai.agent.android.domain.repositories.SettingsRepository
+import ai.agent.android.domain.usecases.AgentOrchestratorUseCase
+import ai.agent.android.domain.usecases.LoadModelUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -25,7 +27,8 @@ import javax.inject.Inject
 class ChatViewModel @Inject constructor(
     private val agentOrchestratorUseCase: AgentOrchestratorUseCase,
     private val chatRepository: ChatRepository,
-    private val settingsRepository: SettingsRepository
+    private val settingsRepository: SettingsRepository,
+    private val loadModelUseCase: LoadModelUseCase
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ChatUiState())
@@ -38,9 +41,19 @@ class ChatViewModel @Inject constructor(
     /**
      * Initializes the chat session by either restoring the last active session ID
      * or generating a new one if none exists.
+     * Also verifies that the LLM model is loaded and ready.
      */
     private fun initializeSession() {
         viewModelScope.launch {
+            // Check if model is loaded by attempting to load it (LoadModelUseCase handles already loaded state if needed,
+            // but primarily it ensures the current active model is initialized in the engine).
+            val modelResult = loadModelUseCase()
+            if (modelResult is Result.Error) {
+                _uiState.update { 
+                    it.copy(errorMessage = "Model Error: ${modelResult.message}. Please check your model settings.") 
+                }
+            }
+
             val savedSessionId = settingsRepository.currentChatSessionId.first()
             val sessionId = if (savedSessionId.isNullOrBlank()) {
                 val newId = UUID.randomUUID().toString()

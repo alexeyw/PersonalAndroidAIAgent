@@ -3,9 +3,11 @@ package ai.agent.android.presentation.ui.chat
 import ai.agent.android.domain.models.AgentOrchestratorState
 import ai.agent.android.domain.models.ChatMessage
 import ai.agent.android.domain.models.Role
+import ai.agent.android.domain.models.Result
 import ai.agent.android.domain.repositories.ChatRepository
 import ai.agent.android.domain.usecases.AgentOrchestratorUseCase
 import ai.agent.android.domain.repositories.SettingsRepository
+import ai.agent.android.domain.usecases.LoadModelUseCase
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -36,6 +38,7 @@ class ChatViewModelTest {
     private lateinit var agentOrchestratorUseCase: AgentOrchestratorUseCase
     private lateinit var chatRepository: ChatRepository
     private lateinit var settingsRepository: SettingsRepository
+    private lateinit var loadModelUseCase: LoadModelUseCase
     private lateinit var viewModel: ChatViewModel
 
     @Before
@@ -44,11 +47,14 @@ class ChatViewModelTest {
         agentOrchestratorUseCase = mockk()
         chatRepository = mockk()
         settingsRepository = mockk(relaxed = true)
+        loadModelUseCase = mockk()
 
         // Mock chat repository flow for any session
         every { chatRepository.getMessagesForSession(any()) } returns flowOf(emptyList())
         // Default: no saved session
         every { settingsRepository.currentChatSessionId } returns flowOf(null)
+        // Default: model loads successfully
+        coEvery { loadModelUseCase() } returns Result.Success(Unit)
     }
 
     @After
@@ -58,7 +64,7 @@ class ChatViewModelTest {
 
     @Test
     fun `init should generate session id when none saved`() = runTest {
-        viewModel = ChatViewModel(agentOrchestratorUseCase, chatRepository, settingsRepository)
+        viewModel = ChatViewModel(agentOrchestratorUseCase, chatRepository, settingsRepository, loadModelUseCase)
         advanceUntilIdle()
 
         val state = viewModel.uiState.value
@@ -67,11 +73,24 @@ class ChatViewModelTest {
     }
 
     @Test
+    fun `init should show error if model fails to load`() = runTest {
+        val errorMsg = "Model file not found"
+        coEvery { loadModelUseCase() } returns Result.Error(mockk(), errorMsg)
+
+        viewModel = ChatViewModel(agentOrchestratorUseCase, chatRepository, settingsRepository, loadModelUseCase)
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertNotNull(state.errorMessage)
+        assertTrue(state.errorMessage!!.contains(errorMsg))
+    }
+
+    @Test
     fun `init should restore session id from settings`() = runTest {
         val savedId = "saved-session-123"
         every { settingsRepository.currentChatSessionId } returns flowOf(savedId)
         
-        viewModel = ChatViewModel(agentOrchestratorUseCase, chatRepository, settingsRepository)
+        viewModel = ChatViewModel(agentOrchestratorUseCase, chatRepository, settingsRepository, loadModelUseCase)
         advanceUntilIdle()
 
         assertEquals(savedId, viewModel.uiState.value.currentSessionId)
@@ -80,7 +99,7 @@ class ChatViewModelTest {
 
     @Test
     fun `sendMessage should ignore blank prompt`() = runTest {
-        viewModel = ChatViewModel(agentOrchestratorUseCase, chatRepository, settingsRepository)
+        viewModel = ChatViewModel(agentOrchestratorUseCase, chatRepository, settingsRepository, loadModelUseCase)
         advanceUntilIdle()
 
         viewModel.sendMessage("   ")
@@ -94,7 +113,7 @@ class ChatViewModelTest {
     fun `sendMessage should update state to generating and collect orchestrator states`() = runTest {
         val userPrompt = "Test prompt"
         
-        viewModel = ChatViewModel(agentOrchestratorUseCase, chatRepository, settingsRepository)
+        viewModel = ChatViewModel(agentOrchestratorUseCase, chatRepository, settingsRepository, loadModelUseCase)
         advanceUntilIdle()
 
         val actualSessionId = viewModel.uiState.value.currentSessionId
@@ -121,7 +140,7 @@ class ChatViewModelTest {
         val userPrompt = "Test prompt"
         val exceptionMessage = "Network failure"
         
-        viewModel = ChatViewModel(agentOrchestratorUseCase, chatRepository, settingsRepository)
+        viewModel = ChatViewModel(agentOrchestratorUseCase, chatRepository, settingsRepository, loadModelUseCase)
         advanceUntilIdle()
 
         val actualSessionId = viewModel.uiState.value.currentSessionId
@@ -142,7 +161,7 @@ class ChatViewModelTest {
 
     @Test
     fun `clearError should set errorMessage to null`() = runTest {
-        viewModel = ChatViewModel(agentOrchestratorUseCase, chatRepository, settingsRepository)
+        viewModel = ChatViewModel(agentOrchestratorUseCase, chatRepository, settingsRepository, loadModelUseCase)
         advanceUntilIdle()
 
         // Force an error state
