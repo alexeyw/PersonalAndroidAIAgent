@@ -26,6 +26,8 @@ class LoadModelUseCase @Inject constructor(
      * Retrieves the currently active model from the repository, checks if the file exists on disk,
      * and initializes the LLM engine with the model path.
      * 
+     * If the active model is already loaded in the engine, it returns [Result.Success] immediately.
+     * 
      * @return [Result.Success] if the active model was successfully loaded, or [Result.Error] otherwise.
      */
     suspend operator fun invoke(): Result<Unit, AppError> = withContext(Dispatchers.IO) {
@@ -33,14 +35,19 @@ class LoadModelUseCase @Inject constructor(
             val activeModel = localModelRepository.getActiveModel()
                 ?: return@withContext Result.Error(
                     error = LlmSystemError,
-                    message = "No active model found in the database"
+                    message = "No active model found in the database. Please select a model in settings."
                 )
+
+            // Check if the engine is already initialized with this exact model
+            if (llmInferenceEngine.isInitialized && llmInferenceEngine.currentModelPath == activeModel.path) {
+                return@withContext Result.Success(Unit)
+            }
 
             val file = File(activeModel.path)
             if (!file.exists()) {
                 return@withContext Result.Error(
                     error = LlmSystemError,
-                    message = "Model file does not exist at path: ${activeModel.path}"
+                    message = "Active model file not found at: ${activeModel.path}. Please download it again."
                 )
             }
 
