@@ -35,6 +35,7 @@ class SettingsManager @Inject constructor(
         val TOOL_USAGE_INSTRUCTION = stringPreferencesKey("tool_usage_instruction")
         val MCP_SERVER_URLS = stringSetPreferencesKey("mcp_server_urls")
         val DISABLED_APP_FUNCTIONS = stringSetPreferencesKey("disabled_app_functions")
+        val CURRENT_CHAT_SESSION_ID = stringPreferencesKey("current_chat_session_id")
     }
 
     override val isFirstLaunch: Flow<Boolean> = dataStore.data
@@ -179,6 +180,29 @@ class SettingsManager @Inject constructor(
     override suspend fun setDisabledAppFunctions(functions: Set<String>) {
         dataStore.edit { preferences ->
             preferences[PreferencesKeys.DISABLED_APP_FUNCTIONS] = functions
+        }
+    }
+
+    override val currentChatSessionId: Flow<String?> = dataStore.data
+        .catch { exception ->
+            if (exception is IOException) {
+                Timber.e(exception, "Error reading preferences")
+                emit(emptyPreferences())
+            } else {
+                throw exception
+            }
+        }
+        .map { preferences ->
+            preferences[PreferencesKeys.CURRENT_CHAT_SESSION_ID]
+        }
+
+    override suspend fun setCurrentChatSessionId(sessionId: String?) {
+        dataStore.edit { preferences ->
+            if (sessionId == null) {
+                preferences.remove(PreferencesKeys.CURRENT_CHAT_SESSION_ID)
+            } else {
+                preferences[PreferencesKeys.CURRENT_CHAT_SESSION_ID] = sessionId
+            }
         }
     }
 }

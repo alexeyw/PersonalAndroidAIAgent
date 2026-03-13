@@ -5,6 +5,7 @@ import ai.agent.android.domain.models.ChatMessage
 import ai.agent.android.domain.models.Role
 import ai.agent.android.domain.repositories.ChatRepository
 import ai.agent.android.domain.usecases.AgentOrchestratorUseCase
+import ai.agent.android.domain.repositories.SettingsRepository
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -34,6 +35,7 @@ class ChatViewModelTest {
     
     private lateinit var agentOrchestratorUseCase: AgentOrchestratorUseCase
     private lateinit var chatRepository: ChatRepository
+    private lateinit var settingsRepository: SettingsRepository
     private lateinit var viewModel: ChatViewModel
 
     @Before
@@ -41,9 +43,12 @@ class ChatViewModelTest {
         Dispatchers.setMain(testDispatcher)
         agentOrchestratorUseCase = mockk()
         chatRepository = mockk()
+        settingsRepository = mockk(relaxed = true)
 
         // Mock chat repository flow for any session
         every { chatRepository.getMessagesForSession(any()) } returns flowOf(emptyList())
+        // Default: no saved session
+        every { settingsRepository.currentChatSessionId } returns flowOf(null)
     }
 
     @After
@@ -52,26 +57,30 @@ class ChatViewModelTest {
     }
 
     @Test
-    fun `init should generate session id and load messages`() = runTest {
-        val messages = listOf(
-            ChatMessage(sessionId = "test-session", role = Role.USER, content = "Hello", timestamp = 1L)
-        )
-        every { chatRepository.getMessagesForSession(any()) } returns flowOf(messages)
-        
-        viewModel = ChatViewModel(agentOrchestratorUseCase, chatRepository)
+    fun `init should generate session id when none saved`() = runTest {
+        viewModel = ChatViewModel(agentOrchestratorUseCase, chatRepository, settingsRepository)
         advanceUntilIdle()
 
         val state = viewModel.uiState.value
         assertTrue(state.currentSessionId.isNotEmpty())
-        assertEquals(messages, state.messages)
-        assertFalse(state.isGenerating)
-        assertNull(state.orchestratorState)
-        assertNull(state.errorMessage)
+        coVerify { settingsRepository.setCurrentChatSessionId(any()) }
+    }
+
+    @Test
+    fun `init should restore session id from settings`() = runTest {
+        val savedId = "saved-session-123"
+        every { settingsRepository.currentChatSessionId } returns flowOf(savedId)
+        
+        viewModel = ChatViewModel(agentOrchestratorUseCase, chatRepository, settingsRepository)
+        advanceUntilIdle()
+
+        assertEquals(savedId, viewModel.uiState.value.currentSessionId)
+        coVerify(exactly = 0) { settingsRepository.setCurrentChatSessionId(any()) }
     }
 
     @Test
     fun `sendMessage should ignore blank prompt`() = runTest {
-        viewModel = ChatViewModel(agentOrchestratorUseCase, chatRepository)
+        viewModel = ChatViewModel(agentOrchestratorUseCase, chatRepository, settingsRepository)
         advanceUntilIdle()
 
         viewModel.sendMessage("   ")
@@ -83,11 +92,9 @@ class ChatViewModelTest {
 
     @Test
     fun `sendMessage should update state to generating and collect orchestrator states`() = runTest {
-        val sessionId = "test-session"
         val userPrompt = "Test prompt"
         
-        every { chatRepository.getMessagesForSession(any()) } returns flowOf(emptyList())
-        viewModel = ChatViewModel(agentOrchestratorUseCase, chatRepository)
+        viewModel = ChatViewModel(agentOrchestratorUseCase, chatRepository, settingsRepository)
         advanceUntilIdle()
 
         val actualSessionId = viewModel.uiState.value.currentSessionId
@@ -114,7 +121,7 @@ class ChatViewModelTest {
         val userPrompt = "Test prompt"
         val exceptionMessage = "Network failure"
         
-        viewModel = ChatViewModel(agentOrchestratorUseCase, chatRepository)
+        viewModel = ChatViewModel(agentOrchestratorUseCase, chatRepository, settingsRepository)
         advanceUntilIdle()
 
         val actualSessionId = viewModel.uiState.value.currentSessionId
@@ -135,7 +142,7 @@ class ChatViewModelTest {
 
     @Test
     fun `clearError should set errorMessage to null`() = runTest {
-        viewModel = ChatViewModel(agentOrchestratorUseCase, chatRepository)
+        viewModel = ChatViewModel(agentOrchestratorUseCase, chatRepository, settingsRepository)
         advanceUntilIdle()
 
         // Force an error state

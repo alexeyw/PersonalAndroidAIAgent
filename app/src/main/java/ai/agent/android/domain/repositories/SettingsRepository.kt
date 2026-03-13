@@ -94,4 +94,14 @@ interface SettingsRepository {
      * Updates the set of disabled local app functions.
      */
     suspend fun setDisabledAppFunctions(functions: Set<String>)
+
+    /**
+     * A [Flow] representing the current active chat session ID.
+     */
+    val currentChatSessionId: Flow<String?>
+
+    /**
+     * Updates the current active chat session ID.
+     */
+    suspend fun setCurrentChatSessionId(sessionId: String?)
 }

@@ -5,11 +5,13 @@ import androidx.lifecycle.viewModelScope
 import ai.agent.android.domain.models.AgentOrchestratorState
 import ai.agent.android.domain.repositories.ChatRepository
 import ai.agent.android.domain.usecases.AgentOrchestratorUseCase
+import ai.agent.android.domain.repositories.SettingsRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.util.UUID
@@ -22,17 +24,35 @@ import javax.inject.Inject
 @HiltViewModel
 class ChatViewModel @Inject constructor(
     private val agentOrchestratorUseCase: AgentOrchestratorUseCase,
-    private val chatRepository: ChatRepository
+    private val chatRepository: ChatRepository,
+    private val settingsRepository: SettingsRepository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ChatUiState())
     val uiState: StateFlow<ChatUiState> = _uiState.asStateFlow()
 
     init {
-        // Initialize a new session ID for the chat when the ViewModel is created.
-        val newSessionId = UUID.randomUUID().toString()
-        _uiState.update { it.copy(currentSessionId = newSessionId) }
-        loadMessages(newSessionId)
+        initializeSession()
+    }
+
+    /**
+     * Initializes the chat session by either restoring the last active session ID
+     * or generating a new one if none exists.
+     */
+    private fun initializeSession() {
+        viewModelScope.launch {
+            val savedSessionId = settingsRepository.currentChatSessionId.first()
+            val sessionId = if (savedSessionId.isNullOrBlank()) {
+                val newId = UUID.randomUUID().toString()
+                settingsRepository.setCurrentChatSessionId(newId)
+                newId
+            } else {
+                savedSessionId
+            }
+            
+            _uiState.update { it.copy(currentSessionId = sessionId) }
+            loadMessages(sessionId)
+        }
     }
 
     /**
