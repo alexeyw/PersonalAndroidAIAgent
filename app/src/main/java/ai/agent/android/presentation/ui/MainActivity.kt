@@ -20,7 +20,10 @@ import androidx.lifecycle.lifecycleScope
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import androidx.hilt.navigation.compose.hiltViewModel
 import ai.agent.android.presentation.theme.AndroidAIAgentTheme
+import ai.agent.android.presentation.ui.chat.ChatScreen
+import ai.agent.android.presentation.ui.chat.ChatViewModel
 import ai.agent.android.presentation.ui.memory.MemoryScreen
 import ai.agent.android.presentation.ui.models.ModelsScreen
 import ai.agent.android.presentation.ui.tools.ToolsScreen
@@ -57,8 +60,13 @@ class MainActivity : ComponentActivity() {
                                 onNavigateToModels = { navController.navigate("models") },
                                 onNavigateToMemory = { navController.navigate("memory") },
                                 onNavigateToTools = { navController.navigate("tools") },
+                                onNavigateToChat = { navController.navigate("chat") },
                                 modifier = Modifier.fillMaxSize()
                             )
+                        }
+                        composable("chat") {
+                            val chatViewModel: ChatViewModel = hiltViewModel()
+                            ChatScreen(viewModel = chatViewModel)
                         }
                         composable("models") {
                             ModelsScreen(modifier = Modifier.fillMaxSize())
@@ -81,12 +89,17 @@ fun HomeScreen(
     onNavigateToModels: () -> Unit,
     onNavigateToMemory: () -> Unit,
     onNavigateToTools: () -> Unit,
+    onNavigateToChat: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Column(
         modifier = modifier.padding(16.dp)
     ) {
         Text(text = "Android AI Agent Home")
+        Spacer(modifier = Modifier.height(16.dp))
+        Button(onClick = onNavigateToChat) {
+            Text("Open Chat")
+        }
         Spacer(modifier = Modifier.height(16.dp))
         Button(onClick = onNavigateToModels) {
             Text("Manage Models")

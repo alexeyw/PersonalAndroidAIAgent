@@ -7,6 +7,7 @@ import ai.agent.android.domain.models.Result
 import ai.agent.android.domain.repositories.LocalModelRepository
 import io.mockk.coEvery
 import io.mockk.coVerify
+import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertTrue
@@ -23,8 +24,12 @@ class LoadModelUseCaseTest {
     @Before
     fun setup() {
         localModelRepository = mockk()
-        llmInferenceEngine = mockk()
+        llmInferenceEngine = mockk(relaxed = true)
         loadModelUseCase = LoadModelUseCase(localModelRepository, llmInferenceEngine)
+        
+        // Default: not initialized
+        every { llmInferenceEngine.isInitialized } returns false
+        every { llmInferenceEngine.currentModelPath } returns null
     }
 
     @Test
@@ -34,6 +39,21 @@ class LoadModelUseCaseTest {
         val result = loadModelUseCase()
 
         assertTrue(result is Result.Error)
+        coVerify(exactly = 0) { llmInferenceEngine.initialize(any()) }
+    }
+
+    @Test
+    fun `invoke returns Success and does not reload if model is already loaded`() = runTest {
+        val path = "/path/to/model.bin"
+        val model = LocalModelEntity(1, "Model", path, 100, true)
+        coEvery { localModelRepository.getActiveModel() } returns model
+        
+        every { llmInferenceEngine.isInitialized } returns true
+        every { llmInferenceEngine.currentModelPath } returns path
+
+        val result = loadModelUseCase()
+
+        assertTrue(result is Result.Success)
         coVerify(exactly = 0) { llmInferenceEngine.initialize(any()) }
     }
 
@@ -49,7 +69,7 @@ class LoadModelUseCaseTest {
     }
 
     @Test
-    fun `invoke initializes engine when model file exists`() = runTest {
+    fun `invoke initializes engine when model file exists and not loaded`() = runTest {
         // Create a temporary file to simulate existing model
         val tempFile = File.createTempFile("test_model", ".bin")
         tempFile.deleteOnExit()

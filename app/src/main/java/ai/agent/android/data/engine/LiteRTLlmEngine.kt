@@ -32,6 +32,10 @@ class LiteRTLlmEngine @Inject constructor(
 ) : LlmInferenceEngine, ComponentCallbacks2 {
 
     private var engine: Engine? = null
+    private var _currentModelPath: String? = null
+
+    override val isInitialized: Boolean get() = engine != null
+    override val currentModelPath: String? get() = _currentModelPath
 
     init {
         context.registerComponentCallbacks(this)
@@ -55,6 +59,7 @@ class LiteRTLlmEngine @Inject constructor(
             if (!file.exists()) {
                 val errorMsg = "Model file does not exist at path: $modelPath"
                 Timber.e(errorMsg)
+                _currentModelPath = null
                 return@withContext Result.Error(
                     error = LlmSystemError,
                     message = errorMsg
@@ -73,11 +78,13 @@ class LiteRTLlmEngine @Inject constructor(
             engine = Engine(config).apply {
                 initialize()
             }
-            Timber.i("LiteRT-LM Engine successfully initialized")
+            _currentModelPath = modelPath
+            Timber.i("LiteRT-LM Engine successfully initialized with $modelPath")
             
             Result.Success(Unit)
         } catch (e: Exception) {
             Timber.e(e, "Failed to initialize LiteRTLlmEngine")
+            _currentModelPath = null
             Result.Error(
                 error = LlmSystemError,
                 message = e.localizedMessage ?: "Unknown initialization error",
@@ -129,6 +136,7 @@ class LiteRTLlmEngine @Inject constructor(
             Timber.e(e, "Error unloading LiteRT-LM engine")
         } finally {
             engine = null
+            _currentModelPath = null
         }
     }
 

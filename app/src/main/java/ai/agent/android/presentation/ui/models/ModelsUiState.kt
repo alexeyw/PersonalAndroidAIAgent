@@ -16,8 +16,9 @@ import ai.agent.android.domain.models.AppError
  */
 data class ModelsUiState(
     val availablePresets: List<ModelPreset> = listOf(
-        ModelPreset("Gemma 2B", "https://huggingface.co/google/gemma-2b-it-tflite/resolve/main/gemma-2b-it-gpu-int4.bin"),
-        ModelPreset("Gemma 7B", "https://huggingface.co/google/gemma-7b-it-tflite/resolve/main/gemma-7b-it-gpu-int4.bin")
+        ModelPreset("Gemma-3n-E4B-it", "https://huggingface.co/google/gemma-3n-E4B-it-litert-lm/resolve/main/gemma-3n-E4B-it-int4.litertlm"),
+        ModelPreset("Qwen3.5-0.8B", "https://huggingface.co/g-ntovas/Qwen3.5-0.8B-LiteRT/resolve/main/qwen35_mm_q8_ekv2048.litertlm"),
+        ModelPreset("Qwen3.5-2B", "https://huggingface.co/g-ntovas/Qwen3.5-2B-LiteRT/resolve/main/qwen35_2b_mm_q4_block32_ekv4096.litertlm")
     ),
     val downloadedModels: List<LocalModelEntity> = emptyList(),
     val activeModel: LocalModelEntity? = null,

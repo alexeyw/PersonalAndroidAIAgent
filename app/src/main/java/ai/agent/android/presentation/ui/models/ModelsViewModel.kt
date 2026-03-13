@@ -3,6 +3,7 @@ package ai.agent.android.presentation.ui.models
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import ai.agent.android.data.local.models.LocalModelEntity
+import ai.agent.android.data.network.AndroidModelDownloadManager
 import ai.agent.android.domain.models.DownloadState
 import ai.agent.android.domain.repositories.LocalModelRepository
 import ai.agent.android.domain.repositories.ModelDownloadManager
@@ -148,7 +149,7 @@ class ModelsViewModel @Inject constructor(
                     it.copy(
                         isDownloading = false,
                         downloadProgress = null,
-                        downloadError = ai.agent.android.data.network.AndroidModelDownloadManager.DownloadError(e.message ?: "Unknown error occurred")
+                        downloadError = AndroidModelDownloadManager.DownloadError(e.message ?: "Unknown error occurred")
                     )
                 }
             }

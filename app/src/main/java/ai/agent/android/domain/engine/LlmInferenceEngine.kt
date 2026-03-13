@@ -22,6 +22,16 @@ interface LlmInferenceEngine {
     suspend fun initialize(modelPath: String): Result<Unit, AppError>
 
     /**
+     * Returns true if the LLM engine is currently initialized with a model.
+     */
+    val isInitialized: Boolean
+
+    /**
+     * Returns the absolute path of the currently loaded model, or null if none is loaded.
+     */
+    val currentModelPath: String?
+
+    /**
      * Generates a response stream from the LLM based on the provided prompt.
      * 
      * @param prompt The input text prompt for the LLM.
