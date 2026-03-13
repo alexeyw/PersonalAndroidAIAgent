@@ -1,6 +1,7 @@
 package ai.agent.android.presentation.ui.chat
 
-import androidx.compose.animation.AnimatedVisibility
+import ai.agent.android.domain.models.ChatMessage
+import ai.agent.android.domain.models.Role
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -14,7 +15,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -45,9 +46,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import ai.agent.android.domain.models.AgentOrchestratorState
-import ai.agent.android.domain.models.ChatMessage
-import ai.agent.android.domain.models.Role
 import com.mikepenz.markdown.m3.Markdown
 import kotlinx.coroutines.launch
 
@@ -79,7 +77,8 @@ fun ChatScreen(
     // Auto-scroll to the bottom when messages or generation state changes
     LaunchedEffect(uiState.messages.size, uiState.orchestratorState) {
         if (uiState.messages.isNotEmpty() || uiState.orchestratorState != null) {
-            val targetIndex = uiState.messages.size + if (uiState.orchestratorState != null) 1 else 0
+            val targetIndex =
+                uiState.messages.size + if (uiState.orchestratorState != null) 1 else 0
             if (targetIndex > 0) {
                 coroutineScope.launch {
                     listState.animateScrollToItem(targetIndex - 1)
@@ -115,8 +114,12 @@ fun ChatScreen(
             ) {
                 item { Spacer(modifier = Modifier.height(16.dp)) }
 
-                items(uiState.messages) { message ->
-                    ChatMessageItem(message = message)
+                itemsIndexed(uiState.messages) { index, message ->
+                    if (uiState.messages.lastIndex == index) {
+                        ChatMessageItem(message = message, isGenerating = uiState.isGenerating)
+                    } else {
+                        ChatMessageItem(message = message)
+                    }
                     Spacer(modifier = Modifier.height(8.dp))
                 }
 
@@ -151,7 +154,10 @@ fun ChatScreen(
  * @param message The [ChatMessage] to display.
  */
 @Composable
-fun ChatMessageItem(message: ChatMessage) {
+fun ChatMessageItem(
+    isGenerating: Boolean = false,
+    message: ChatMessage
+) {
     val isUser = message.role == Role.USER
     val isSystem = message.role == Role.SYSTEM
 
@@ -160,7 +166,7 @@ fun ChatMessageItem(message: ChatMessage) {
         isSystem -> MaterialTheme.colorScheme.surfaceVariant
         else -> MaterialTheme.colorScheme.secondaryContainer
     }
-    
+
     val alignment = when {
         isUser -> Alignment.CenterEnd
         isSystem -> Alignment.Center
@@ -199,9 +205,15 @@ fun ChatMessageItem(message: ChatMessage) {
                     color = MaterialTheme.colorScheme.onPrimaryContainer
                 )
             } else {
-                Markdown(
-                    content = message.content,
-                )
+                if (isGenerating) {
+                    Text(
+                        text = message.content,
+                    )
+                } else {
+                    Markdown(
+                        content = message.content,
+                    )
+                }
             }
         }
     }
