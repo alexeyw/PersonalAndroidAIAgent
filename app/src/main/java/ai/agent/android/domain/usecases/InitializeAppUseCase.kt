@@ -11,8 +11,7 @@ import javax.inject.Inject
  * such as saving the default system prompts to the settings repository.
  */
 class InitializeAppUseCase @Inject constructor(
-    private val settingsRepository: SettingsRepository,
-    private val loadModelUseCase: LoadModelUseCase
+    private val settingsRepository: SettingsRepository
 ) {
     /**
      * Executes the initialization logic.
@@ -28,8 +27,5 @@ class InitializeAppUseCase @Inject constructor(
             // Mark first launch as complete
             settingsRepository.setFirstLaunch(false)
         }
-
-        // Load the currently active model into memory
-        loadModelUseCase()
     }
 }

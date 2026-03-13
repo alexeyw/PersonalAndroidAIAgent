@@ -6,9 +6,11 @@ import android.content.res.Configuration
 import ai.agent.android.domain.engine.LlmInferenceEngine
 import ai.agent.android.domain.models.AppError
 import ai.agent.android.domain.models.Result
+import com.google.ai.edge.litertlm.Backend
 import com.google.ai.edge.litertlm.Engine
 import com.google.ai.edge.litertlm.EngineConfig
 import com.google.ai.edge.litertlm.Content
+import com.google.ai.edge.litertlm.Conversation
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -32,6 +34,7 @@ class LiteRTLlmEngine @Inject constructor(
 ) : LlmInferenceEngine, ComponentCallbacks2 {
 
     private var engine: Engine? = null
+    private var conversation: Conversation? = null
     private var _currentModelPath: String? = null
 
     override val isInitialized: Boolean get() = engine != null
@@ -71,7 +74,12 @@ class LiteRTLlmEngine @Inject constructor(
 
             // Initialize Engine Configuration
             val config = EngineConfig(
-                modelPath = modelPath
+                modelPath = modelPath,
+                backend = Backend.CPU(),
+                visionBackend = null,
+                audioBackend = null,
+                maxNumTokens = 4096,
+                cacheDir = context.cacheDir.absolutePath,
             )
 
             // Create Engine from config and initialize
@@ -108,14 +116,17 @@ class LiteRTLlmEngine @Inject constructor(
 
         try {
             Timber.d("Starting inference for prompt: %s", prompt)
-            
-            val conversation = currentEngine.createConversation()
+            if (conversation == null) {
+                conversation = currentEngine.createConversation()
+            }
             // Stream the tokens directly from the LiteRT-LM conversation
-            conversation.sendMessageAsync(prompt).collect { chunk ->
-                val textParts = chunk.contents.contents.filterIsInstance<Content.Text>()
-                val text = textParts.joinToString("") { it.text }
-                if (text.isNotEmpty()) {
-                    emit(text)
+            conversation?.let { conversation ->
+                conversation.sendMessageAsync(prompt).collect { chunk ->
+                    val textParts = chunk.contents.contents.filterIsInstance<Content.Text>()
+                    val text = textParts.joinToString("") { it.text }
+                    if (text.isNotEmpty()) {
+                        emit(text)
+                    }
                 }
             }
             
@@ -136,6 +147,7 @@ class LiteRTLlmEngine @Inject constructor(
             Timber.e(e, "Error unloading LiteRT-LM engine")
         } finally {
             engine = null
+            conversation = null
             _currentModelPath = null
         }
     }
