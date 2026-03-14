@@ -22,6 +22,9 @@ import java.io.File
 import javax.inject.Inject
 import javax.inject.Singleton
 
+import ai.agent.android.domain.repositories.SettingsRepository
+import kotlinx.coroutines.flow.first
+
 /**
  * An implementation of [LlmInferenceEngine] using the specialized LiteRT-LM library.
  * 
@@ -30,7 +33,8 @@ import javax.inject.Singleton
  */
 @Singleton
 class LiteRTLlmEngine @Inject constructor(
-    @ApplicationContext private val context: Context
+    @ApplicationContext private val context: Context,
+    private val settingsRepository: SettingsRepository
 ) : LlmInferenceEngine, ComponentCallbacks2 {
 
     private var engine: Engine? = null
@@ -72,13 +76,15 @@ class LiteRTLlmEngine @Inject constructor(
             // Close existing engine if present to release previous resources
             unload()
 
+            val maxTokens = settingsRepository.maxContextLength.first()
+
             // Initialize Engine Configuration
             val config = EngineConfig(
                 modelPath = modelPath,
                 backend = Backend.CPU(),
                 visionBackend = null,
                 audioBackend = null,
-                maxNumTokens = 4096,
+                maxNumTokens = maxTokens,
                 cacheDir = context.cacheDir.absolutePath,
             )
 

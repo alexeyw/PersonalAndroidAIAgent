@@ -27,6 +27,10 @@ class SettingsManagerTest {
     private val dataStore = mockk<DataStore<Preferences>>()
     //private val settingsManager = SettingsManager(dataStore)
     private val isFirstLaunchKey = booleanPreferencesKey("is_first_launch")
+    private val temperatureKey = androidx.datastore.preferences.core.floatPreferencesKey("temperature")
+    private val topKKey = androidx.datastore.preferences.core.intPreferencesKey("top_k")
+    private val topPKey = androidx.datastore.preferences.core.floatPreferencesKey("top_p")
+    private val requiresUserConfirmationKey = booleanPreferencesKey("requires_user_confirmation")
 
     @Test
     fun `isFirstLaunch returns true by default`() = runTest {
@@ -36,6 +40,50 @@ class SettingsManagerTest {
 
         val settingsManager = SettingsManager(dataStore)
         val result = settingsManager.isFirstLaunch.first()
+        assertTrue(result)
+    }
+
+    @Test
+    fun `temperature returns default value`() = runTest {
+        val prefs = mockk<Preferences>()
+        every { prefs[temperatureKey] } returns null
+        every { dataStore.data } returns flowOf(prefs)
+
+        val settingsManager = SettingsManager(dataStore)
+        val result = settingsManager.temperature.first()
+        assertEquals(0.7f, result)
+    }
+
+    @Test
+    fun `topK returns default value`() = runTest {
+        val prefs = mockk<Preferences>()
+        every { prefs[topKKey] } returns null
+        every { dataStore.data } returns flowOf(prefs)
+
+        val settingsManager = SettingsManager(dataStore)
+        val result = settingsManager.topK.first()
+        assertEquals(40, result)
+    }
+
+    @Test
+    fun `topP returns default value`() = runTest {
+        val prefs = mockk<Preferences>()
+        every { prefs[topPKey] } returns null
+        every { dataStore.data } returns flowOf(prefs)
+
+        val settingsManager = SettingsManager(dataStore)
+        val result = settingsManager.topP.first()
+        assertEquals(0.9f, result)
+    }
+
+    @Test
+    fun `requiresUserConfirmation returns true by default`() = runTest {
+        val prefs = mockk<Preferences>()
+        every { prefs[requiresUserConfirmationKey] } returns null
+        every { dataStore.data } returns flowOf(prefs)
+
+        val settingsManager = SettingsManager(dataStore)
+        val result = settingsManager.requiresUserConfirmation.first()
         assertTrue(result)
     }
 

@@ -31,6 +31,10 @@ class SettingsManager @Inject constructor(
         val IS_FIRST_LAUNCH = booleanPreferencesKey("is_first_launch")
         val HUGGING_FACE_TOKEN = stringPreferencesKey("hugging_face_token")
         val MAX_CONTEXT_LENGTH = intPreferencesKey("max_context_length")
+        val TEMPERATURE = androidx.datastore.preferences.core.floatPreferencesKey("temperature")
+        val TOP_K = intPreferencesKey("top_k")
+        val TOP_P = androidx.datastore.preferences.core.floatPreferencesKey("top_p")
+        val REQUIRES_USER_CONFIRMATION = booleanPreferencesKey("requires_user_confirmation")
         val SYSTEM_PROMPT_PREFIX = stringPreferencesKey("system_prompt_prefix")
         val TOOL_USAGE_INSTRUCTION = stringPreferencesKey("tool_usage_instruction")
         val MCP_SERVER_URLS = stringSetPreferencesKey("mcp_server_urls")
@@ -96,6 +100,82 @@ class SettingsManager @Inject constructor(
     override suspend fun setMaxContextLength(length: Int) {
         dataStore.edit { preferences ->
             preferences[PreferencesKeys.MAX_CONTEXT_LENGTH] = length
+        }
+    }
+
+    override val temperature: Flow<Float> = dataStore.data
+        .catch { exception ->
+            if (exception is IOException) {
+                Timber.e(exception, "Error reading preferences")
+                emit(emptyPreferences())
+            } else {
+                throw exception
+            }
+        }
+        .map { preferences ->
+            preferences[PreferencesKeys.TEMPERATURE] ?: 0.7f
+        }
+
+    override suspend fun setTemperature(temperature: Float) {
+        dataStore.edit { preferences ->
+            preferences[PreferencesKeys.TEMPERATURE] = temperature
+        }
+    }
+
+    override val topK: Flow<Int> = dataStore.data
+        .catch { exception ->
+            if (exception is IOException) {
+                Timber.e(exception, "Error reading preferences")
+                emit(emptyPreferences())
+            } else {
+                throw exception
+            }
+        }
+        .map { preferences ->
+            preferences[PreferencesKeys.TOP_K] ?: 40
+        }
+
+    override suspend fun setTopK(topK: Int) {
+        dataStore.edit { preferences ->
+            preferences[PreferencesKeys.TOP_K] = topK
+        }
+    }
+
+    override val topP: Flow<Float> = dataStore.data
+        .catch { exception ->
+            if (exception is IOException) {
+                Timber.e(exception, "Error reading preferences")
+                emit(emptyPreferences())
+            } else {
+                throw exception
+            }
+        }
+        .map { preferences ->
+            preferences[PreferencesKeys.TOP_P] ?: 0.9f
+        }
+
+    override suspend fun setTopP(topP: Float) {
+        dataStore.edit { preferences ->
+            preferences[PreferencesKeys.TOP_P] = topP
+        }
+    }
+
+    override val requiresUserConfirmation: Flow<Boolean> = dataStore.data
+        .catch { exception ->
+            if (exception is IOException) {
+                Timber.e(exception, "Error reading preferences")
+                emit(emptyPreferences())
+            } else {
+                throw exception
+            }
+        }
+        .map { preferences ->
+            preferences[PreferencesKeys.REQUIRES_USER_CONFIRMATION] ?: true
+        }
+
+    override suspend fun setRequiresUserConfirmation(required: Boolean) {
+        dataStore.edit { preferences ->
+            preferences[PreferencesKeys.REQUIRES_USER_CONFIRMATION] = required
         }
     }
 

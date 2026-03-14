@@ -121,26 +121,33 @@ class AgentOrchestratorUseCase @Inject constructor(
             
             if (toolCall != null) {
                 val (toolName, toolArgs) = toolCall
-                emit(AgentOrchestratorState.ExecutingTool(toolName, toolArgs))
+                val requiresUserConfirmation = settingsRepository.requiresUserConfirmation.first()
 
-                // Execute the tool
-                val result = try {
-                    toolRepository.executeTool(toolName, toolArgs)
-                } catch (e: Exception) {
-                    "Error executing $toolName: ${e.message}"
-                }
+                if (requiresUserConfirmation) {
+                    emit(AgentOrchestratorState.RequiresUserConfirmation(toolName, toolArgs))
+                    isCompleted = true // Stop the orchestration loop to await user confirmation
+                } else {
+                    emit(AgentOrchestratorState.ExecutingTool(toolName, toolArgs))
 
-                emit(AgentOrchestratorState.ObservationResult(toolName, result))
+                    // Execute the tool
+                    val result = try {
+                        toolRepository.executeTool(toolName, toolArgs)
+                    } catch (e: Exception) {
+                        "Error executing $toolName: ${e.message}"
+                    }
 
-                // Save the observation to the history as a SYSTEM message so the LLM sees it
-                chatRepository.saveMessage(
-                    ChatMessage(
-                        sessionId = sessionId,
-                        role = Role.SYSTEM,
-                        content = "Observation from $toolName: $result",
-                        timestamp = System.currentTimeMillis()
+                    emit(AgentOrchestratorState.ObservationResult(toolName, result))
+
+                    // Save the observation to the history as a SYSTEM message so the LLM sees it
+                    chatRepository.saveMessage(
+                        ChatMessage(
+                            sessionId = sessionId,
+                            role = Role.SYSTEM,
+                            content = "Observation from $toolName: $result",
+                            timestamp = System.currentTimeMillis()
+                        )
                     )
-                )
+                }
             } else {
                 // No tool called, the agent answered directly
                 isCompleted = true

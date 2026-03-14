@@ -14,18 +14,25 @@ import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 
+import ai.agent.android.domain.repositories.SettingsRepository
+import io.mockk.every
+import kotlinx.coroutines.flow.flowOf
+
 /**
  * Unit tests for [LiteRTLlmEngine].
  */
 class LiteRTLlmEngineTest {
 
     private lateinit var context: Context
+    private lateinit var settingsRepository: SettingsRepository
     private lateinit var engine: LiteRTLlmEngine
 
     @Before
     fun setup() {
         context = mockk(relaxed = true)
-        engine = LiteRTLlmEngine(context)
+        settingsRepository = mockk(relaxed = true)
+        every { settingsRepository.maxContextLength } returns flowOf(4096)
+        engine = LiteRTLlmEngine(context, settingsRepository)
     }
 
     @After
