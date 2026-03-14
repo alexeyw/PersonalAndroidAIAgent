@@ -1,6 +1,7 @@
 package ai.agent.android.presentation.ui
 
 import ai.agent.android.domain.usecases.InitializeAppUseCase
+import ai.agent.android.data.services.AgentForegroundService
 import ai.agent.android.presentation.theme.AndroidAIAgentTheme
 import ai.agent.android.presentation.ui.chat.ChatScreen
 import ai.agent.android.presentation.ui.chat.ChatViewModel
@@ -10,6 +11,8 @@ import ai.agent.android.presentation.ui.monitoring.MonitoringScreen
 import ai.agent.android.presentation.ui.monitoring.MonitoringViewModel
 import ai.agent.android.presentation.ui.settings.SettingsScreen
 import ai.agent.android.presentation.ui.tools.ToolsScreen
+import android.content.Intent
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -45,6 +48,14 @@ class MainActivity : ComponentActivity() {
         
         lifecycleScope.launch {
             initializeAppUseCase()
+        }
+
+        // Start the background agent service
+        val serviceIntent = Intent(this, AgentForegroundService::class.java)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            startForegroundService(serviceIntent)
+        } else {
+            startService(serviceIntent)
         }
 
         enableEdgeToEdge()

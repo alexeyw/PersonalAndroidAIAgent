@@ -14,11 +14,19 @@ import ai.agent.android.domain.repositories.SettingsRepository
 import ai.agent.android.domain.repositories.MetricsRepository
 import kotlinx.coroutines.flow.first
 
+import javax.inject.Singleton
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.onCompletion
+import kotlinx.coroutines.flow.onEach
+
 /**
  * Use case that orchestrates the ReAct (Reasoning and Acting) cycle of the AI Agent.
  * It manages the loop of generating thoughts, deciding on actions, executing tools,
  * and feeding observations back to the LLM.
  */
+@Singleton
 class AgentOrchestratorUseCase @Inject constructor(
     private val llmEngine: LlmInferenceEngine,
     private val toolRepository: ToolRepository,
@@ -31,6 +39,9 @@ class AgentOrchestratorUseCase @Inject constructor(
         const val MAX_ITERATIONS = 5
     }
 
+    private val _globalState = MutableStateFlow<AgentOrchestratorState>(AgentOrchestratorState.Idle)
+    val globalState: StateFlow<AgentOrchestratorState> = _globalState.asStateFlow()
+
     /**
      * Starts the orchestration cycle for a given user prompt.
      *
@@ -38,7 +49,7 @@ class AgentOrchestratorUseCase @Inject constructor(
      * @param userPrompt The new prompt from the user.
      * @return A [Flow] of [AgentOrchestratorState] emitting the progress of the agent.
      */
-    operator fun invoke(sessionId: String, userPrompt: String): Flow<AgentOrchestratorState> = flow {
+    operator fun invoke(sessionId: String, userPrompt: String): Flow<AgentOrchestratorState> = flow<AgentOrchestratorState> {
         emit(AgentOrchestratorState.Loading)
 
         // 1. Save the user's message
@@ -158,6 +169,10 @@ class AgentOrchestratorUseCase @Inject constructor(
         if (!isCompleted) {
             emit(AgentOrchestratorState.Error("Reached maximum iterations ($MAX_ITERATIONS) without a final answer."))
         }
+    }.onEach { state ->
+        _globalState.value = state
+    }.onCompletion {
+        _globalState.value = AgentOrchestratorState.Idle
     }
 
     /**
