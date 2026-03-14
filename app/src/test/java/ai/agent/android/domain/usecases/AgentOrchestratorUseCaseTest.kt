@@ -4,6 +4,7 @@ import ai.agent.android.domain.engine.LlmInferenceEngine
 import ai.agent.android.domain.models.AgentOrchestratorState
 import ai.agent.android.domain.models.AgentTool
 import ai.agent.android.domain.repositories.ChatRepository
+import ai.agent.android.domain.repositories.MetricsRepository
 import ai.agent.android.domain.repositories.SettingsRepository
 import ai.agent.android.domain.repositories.ToolRepository
 import ai.agent.android.domain.constants.DefaultPrompts
@@ -26,6 +27,7 @@ class AgentOrchestratorUseCaseTest {
     private lateinit var chatRepository: ChatRepository
     private lateinit var getContextWindowUseCase: GetContextWindowUseCase
     private lateinit var settingsRepository: SettingsRepository
+    private lateinit var metricsRepository: MetricsRepository
     private lateinit var useCase: AgentOrchestratorUseCase
 
     private val sessionId = "test-session"
@@ -37,7 +39,8 @@ class AgentOrchestratorUseCaseTest {
         chatRepository = mockk(relaxed = true)
         getContextWindowUseCase = mockk()
         settingsRepository = mockk()
-        useCase = AgentOrchestratorUseCase(llmEngine, toolRepository, chatRepository, getContextWindowUseCase, settingsRepository)
+        metricsRepository = mockk(relaxed = true)
+        useCase = AgentOrchestratorUseCase(llmEngine, toolRepository, chatRepository, getContextWindowUseCase, settingsRepository, metricsRepository)
 
         coEvery { toolRepository.getAvailableTools() } returns listOf(
             AgentTool("test_tool", "A test tool", "{}")

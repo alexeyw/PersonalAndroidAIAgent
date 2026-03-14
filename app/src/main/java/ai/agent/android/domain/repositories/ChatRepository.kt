@@ -42,4 +42,12 @@ interface ChatRepository {
      * @param messageId The ID of the message to delete.
      */
     suspend fun deleteMessage(messageId: Long)
+
+    /**
+     * Retrieves recent system messages (logs/observations).
+     *
+     * @param limit The maximum number of messages to retrieve.
+     * @return A [Flow] emitting a list of recent system [ChatMessage].
+     */
+    fun getRecentSystemMessages(limit: Int = 100): Flow<List<ChatMessage>>
 }

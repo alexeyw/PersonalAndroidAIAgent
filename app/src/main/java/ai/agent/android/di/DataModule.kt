@@ -112,5 +112,14 @@ abstract class DataModule {
     abstract fun bindMcpClientFactory(
         factory: ai.agent.android.data.mcp.KoogMcpClientFactory
     ): ai.agent.android.data.mcp.McpClientFactory
+
+    /**
+     * Binds the [ai.agent.android.data.repositories.MetricsRepositoryImpl] implementation to the [ai.agent.android.domain.repositories.MetricsRepository] interface.
+     */
+    @Binds
+    @Singleton
+    abstract fun bindMetricsRepository(
+        repository: ai.agent.android.data.repositories.MetricsRepositoryImpl
+    ): ai.agent.android.domain.repositories.MetricsRepository
 }
 

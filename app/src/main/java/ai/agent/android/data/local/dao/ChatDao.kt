@@ -54,4 +54,14 @@ interface ChatDao {
      */
     @Query("DELETE FROM chat_messages WHERE id = :messageId")
     suspend fun deleteMessageById(messageId: Long)
+
+    /**
+     * Retrieves recent messages of a specific role, used for monitoring logs.
+     *
+     * @param role The role of the messages to retrieve.
+     * @param limit The maximum number of messages to retrieve.
+     * @return A [Flow] emitting a list of recent [ChatMessageEntity].
+     */
+    @Query("SELECT * FROM chat_messages WHERE role = :role ORDER BY timestamp DESC LIMIT :limit")
+    fun getRecentMessagesByRole(role: String, limit: Int = 100): Flow<List<ChatMessageEntity>>
 }
