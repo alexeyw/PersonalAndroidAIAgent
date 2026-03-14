@@ -27,6 +27,8 @@ import ai.agent.android.presentation.ui.chat.ChatViewModel
 import ai.agent.android.presentation.ui.memory.MemoryScreen
 import ai.agent.android.presentation.ui.models.ModelsScreen
 import ai.agent.android.presentation.ui.tools.ToolsScreen
+import ai.agent.android.presentation.ui.monitoring.MonitoringScreen
+import ai.agent.android.presentation.ui.monitoring.MonitoringViewModel
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -61,6 +63,7 @@ class MainActivity : ComponentActivity() {
                                 onNavigateToMemory = { navController.navigate("memory") },
                                 onNavigateToTools = { navController.navigate("tools") },
                                 onNavigateToChat = { navController.navigate("chat") },
+                                onNavigateToMonitoring = { navController.navigate("monitoring") },
                                 modifier = Modifier.fillMaxSize()
                             )
                         }
@@ -77,6 +80,10 @@ class MainActivity : ComponentActivity() {
                         composable("tools") {
                             ToolsScreen(modifier = Modifier.fillMaxSize())
                         }
+                        composable("monitoring") {
+                            val monitoringViewModel: MonitoringViewModel = hiltViewModel()
+                            MonitoringScreen(viewModel = monitoringViewModel)
+                        }
                     }
                 }
             }
@@ -90,6 +97,7 @@ fun HomeScreen(
     onNavigateToMemory: () -> Unit,
     onNavigateToTools: () -> Unit,
     onNavigateToChat: () -> Unit,
+    onNavigateToMonitoring: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -111,6 +119,10 @@ fun HomeScreen(
         Spacer(modifier = Modifier.height(16.dp))
         Button(onClick = onNavigateToTools) {
             Text("Manage Tools & MCP")
+        }
+        Spacer(modifier = Modifier.height(16.dp))
+        Button(onClick = onNavigateToMonitoring) {
+            Text("Monitor Tasks & Logs")
         }
     }
 }

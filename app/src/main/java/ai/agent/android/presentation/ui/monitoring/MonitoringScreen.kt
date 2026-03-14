@@ -1,0 +1,142 @@
+package ai.agent.android.presentation.ui.monitoring
+
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+
+/**
+ * Screen displaying the status of tasks, system logs, and resource usage metrics.
+ *
+ * @param viewModel The ViewModel providing the monitoring state.
+ * @param modifier The modifier for this composable.
+ */
+@Composable
+fun MonitoringScreen(
+    viewModel: MonitoringViewModel,
+    modifier: Modifier = Modifier
+) {
+    val uiState by viewModel.uiState.collectAsState()
+
+    Column(modifier = modifier.fillMaxSize().padding(16.dp)) {
+        Text(
+            text = "Monitoring & Tasks",
+            style = MaterialTheme.typography.headlineMedium,
+            fontWeight = FontWeight.Bold
+        )
+        
+        Spacer(modifier = Modifier.height(16.dp))
+        
+        // Metrics Section
+        MetricsCard(metrics = uiState.metrics)
+        
+        Spacer(modifier = Modifier.height(16.dp))
+        
+        Text(
+            text = "System Actions & Logs",
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.SemiBold
+        )
+        
+        Spacer(modifier = Modifier.height(8.dp))
+        
+        // Logs Section
+        if (uiState.isLoading && uiState.recentLogs.isEmpty()) {
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator()
+            }
+        } else if (uiState.recentLogs.isEmpty()) {
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Text(text = "No recent actions found.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        } else {
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                items(uiState.recentLogs, key = { it.timestamp }) { log ->
+                    LogItemCard(log = log)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun MetricsCard(metrics: ai.agent.android.domain.models.AgentMetrics) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text(
+                text = "Resource Consumption",
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                MetricItem("Inference Time", "${metrics.lastInferenceTimeMs} ms")
+                MetricItem("Speed", String.format(Locale.US, "%.1f tokens/s", metrics.tokensPerSecond))
+                MetricItem("Total Tokens", "${metrics.totalTokensProcessed}")
+            }
+        }
+    }
+}
+
+@Composable
+fun MetricItem(label: String, value: String) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(text = label, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(text = value, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
+    }
+}
+
+@Composable
+fun LogItemCard(log: ai.agent.android.domain.models.ChatMessage) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    ) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            val formatter = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
+            val timeString = formatter.format(Date(log.timestamp))
+            
+            Text(
+                text = "[$timeString]",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.primary
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = log.content,
+                style = MaterialTheme.typography.bodyMedium
+            )
+        }
+    }
+}

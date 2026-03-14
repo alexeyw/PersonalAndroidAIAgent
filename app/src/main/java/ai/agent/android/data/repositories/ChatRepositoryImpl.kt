@@ -41,4 +41,10 @@ class ChatRepositoryImpl @Inject constructor(
     override suspend fun deleteMessage(messageId: Long) {
         chatDao.deleteMessageById(messageId)
     }
+
+    override fun getRecentSystemMessages(limit: Int): Flow<List<ChatMessage>> {
+        return chatDao.getRecentMessagesByRole("SYSTEM", limit).map { entities ->
+            entities.map { it.toDomain() }
+        }
+    }
 }
