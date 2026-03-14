@@ -5,6 +5,11 @@ package ai.agent.android.domain.models
  */
 sealed interface AgentOrchestratorState {
     /**
+     * The agent is doing nothing.
+     */
+    data object Idle : AgentOrchestratorState
+
+    /**
      * Initializing the orchestrator, preparing context and tools.
      */
     data object Loading : AgentOrchestratorState

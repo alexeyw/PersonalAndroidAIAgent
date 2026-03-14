@@ -4,6 +4,10 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.EXECUTE_APP_FUNCTIONS" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
 <!--    <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />-->
 
 <!--    <queries>-->
@@ -45,6 +49,15 @@
             <intent-filter>
                 <action android:name="android.app.appfunctions.AppFunctionService" />
             </intent-filter>
+        </service>
+
+        <service
+            android:name=".data.services.AgentForegroundService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="On-Device LLM Inference and Agent Orchestration" />
         </service>
     </application>
 
