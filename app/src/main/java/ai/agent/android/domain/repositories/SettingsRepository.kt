@@ -47,6 +47,46 @@ interface SettingsRepository {
     suspend fun setMaxContextLength(length: Int)
 
     /**
+     * A [Flow] representing the sampling temperature for generation.
+     */
+    val temperature: Flow<Float>
+
+    /**
+     * Updates the sampling temperature.
+     */
+    suspend fun setTemperature(temperature: Float)
+
+    /**
+     * A [Flow] representing the top-k sampling parameter for generation.
+     */
+    val topK: Flow<Int>
+
+    /**
+     * Updates the top-k sampling parameter.
+     */
+    suspend fun setTopK(topK: Int)
+
+    /**
+     * A [Flow] representing the top-p sampling parameter for generation.
+     */
+    val topP: Flow<Float>
+
+    /**
+     * Updates the top-p sampling parameter.
+     */
+    suspend fun setTopP(topP: Float)
+
+    /**
+     * A [Flow] indicating if user confirmation is required for critical actions (Human-in-the-loop).
+     */
+    val requiresUserConfirmation: Flow<Boolean>
+
+    /**
+     * Updates the requirement for user confirmation.
+     */
+    suspend fun setRequiresUserConfirmation(required: Boolean)
+
+    /**
      * A [Flow] representing the system prompt prefix.
      */
     val systemPromptPrefix: Flow<String>

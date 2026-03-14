@@ -31,6 +31,8 @@ import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
+import ai.agent.android.presentation.ui.settings.SettingsScreen
+
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
 
@@ -61,6 +63,7 @@ class MainActivity : ComponentActivity() {
                                 onNavigateToMemory = { navController.navigate("memory") },
                                 onNavigateToTools = { navController.navigate("tools") },
                                 onNavigateToChat = { navController.navigate("chat") },
+                                onNavigateToSettings = { navController.navigate("settings") },
                                 modifier = Modifier.fillMaxSize()
                             )
                         }
@@ -77,6 +80,9 @@ class MainActivity : ComponentActivity() {
                         composable("tools") {
                             ToolsScreen(modifier = Modifier.fillMaxSize())
                         }
+                        composable("settings") {
+                            SettingsScreen(modifier = Modifier.fillMaxSize())
+                        }
                     }
                 }
             }
@@ -90,6 +96,7 @@ fun HomeScreen(
     onNavigateToMemory: () -> Unit,
     onNavigateToTools: () -> Unit,
     onNavigateToChat: () -> Unit,
+    onNavigateToSettings: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -111,6 +118,10 @@ fun HomeScreen(
         Spacer(modifier = Modifier.height(16.dp))
         Button(onClick = onNavigateToTools) {
             Text("Manage Tools & MCP")
+        }
+        Spacer(modifier = Modifier.height(16.dp))
+        Button(onClick = onNavigateToSettings) {
+            Text("Settings")
         }
     }
 }

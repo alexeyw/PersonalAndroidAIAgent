@@ -45,6 +45,7 @@ class AgentOrchestratorUseCaseTest {
         coEvery { getContextWindowUseCase(sessionId) } returns "USER: hello"
         every { settingsRepository.systemPromptPrefix } returns flowOf(DefaultPrompts.SYSTEM_PROMPT_PREFIX)
         every { settingsRepository.toolUsageInstruction } returns flowOf(DefaultPrompts.TOOL_USAGE_INSTRUCTION)
+        every { settingsRepository.requiresUserConfirmation } returns flowOf(false)
     }
 
     @Test
@@ -134,5 +135,36 @@ class AgentOrchestratorUseCaseTest {
         val errors = states.filterIsInstance<AgentOrchestratorState.Error>()
         assertTrue(errors.isNotEmpty())
         assertTrue(errors.first().message.contains("maximum iterations"))
+    }
+
+    @Test
+    fun `emits RequiresUserConfirmation and stops when setting is true`() = runTest {
+        every { settingsRepository.requiresUserConfirmation } returns flowOf(true)
+
+        val userPrompt = "Do something dangerous"
+        val toolCallResponse = """
+            Thought: I need permission for this.
+            ```json
+            {
+              "tool": "test_tool",
+              "arguments": "{\"arg\":\"danger\"}"
+            }
+            ```
+        """.trimIndent()
+
+        every { llmEngine.generateResponseStream(any()) } returns flowOf(toolCallResponse)
+
+        val states = useCase(sessionId, userPrompt).toList()
+
+        val confirmationState = states.filterIsInstance<AgentOrchestratorState.RequiresUserConfirmation>().firstOrNull()
+        assertTrue(confirmationState != null)
+        assertEquals("test_tool", confirmationState?.toolName)
+        assertEquals("{\"arg\":\"danger\"}", confirmationState?.arguments)
+
+        // It should NOT execute the tool or emit ObservationResult
+        val executingState = states.filterIsInstance<AgentOrchestratorState.ExecutingTool>().firstOrNull()
+        assertTrue(executingState == null)
+        
+        coVerify(exactly = 0) { toolRepository.executeTool(any(), any()) }
     }
 }
