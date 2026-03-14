@@ -1,6 +1,15 @@
 package ai.agent.android.presentation.ui
 
 import ai.agent.android.domain.usecases.InitializeAppUseCase
+import ai.agent.android.presentation.theme.AndroidAIAgentTheme
+import ai.agent.android.presentation.ui.chat.ChatScreen
+import ai.agent.android.presentation.ui.chat.ChatViewModel
+import ai.agent.android.presentation.ui.memory.MemoryScreen
+import ai.agent.android.presentation.ui.models.ModelsScreen
+import ai.agent.android.presentation.ui.monitoring.MonitoringScreen
+import ai.agent.android.presentation.ui.monitoring.MonitoringViewModel
+import ai.agent.android.presentation.ui.settings.SettingsScreen
+import ai.agent.android.presentation.ui.tools.ToolsScreen
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -16,24 +25,14 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.lifecycleScope
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
-import androidx.hilt.navigation.compose.hiltViewModel
-import ai.agent.android.presentation.theme.AndroidAIAgentTheme
-import ai.agent.android.presentation.ui.chat.ChatScreen
-import ai.agent.android.presentation.ui.chat.ChatViewModel
-import ai.agent.android.presentation.ui.memory.MemoryScreen
-import ai.agent.android.presentation.ui.models.ModelsScreen
-import ai.agent.android.presentation.ui.tools.ToolsScreen
-import ai.agent.android.presentation.ui.monitoring.MonitoringScreen
-import ai.agent.android.presentation.ui.monitoring.MonitoringViewModel
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.launch
 import javax.inject.Inject
-
-import ai.agent.android.presentation.ui.settings.SettingsScreen
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {

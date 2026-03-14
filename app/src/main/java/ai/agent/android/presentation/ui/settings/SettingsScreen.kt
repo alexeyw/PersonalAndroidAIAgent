@@ -136,7 +136,7 @@ fun SettingsScreen(
             value = uiState.maxContextLength.toFloat(),
             onValueChange = { viewModel.updateMaxContextLength(it.roundToInt()) },
             valueRange = 512f..8192f,
-            steps = 15 // 512 step increments roughly
+            steps = 14 // 512 step increments roughly
         )
         
         Spacer(modifier = Modifier.height(32.dp))
