@@ -11,6 +11,7 @@ import kotlinx.coroutines.flow.flow
 import javax.inject.Inject
 
 import ai.agent.android.domain.repositories.SettingsRepository
+import ai.agent.android.domain.repositories.MetricsRepository
 import kotlinx.coroutines.flow.first
 
 /**
@@ -23,7 +24,8 @@ class AgentOrchestratorUseCase @Inject constructor(
     private val toolRepository: ToolRepository,
     private val chatRepository: ChatRepository,
     private val getContextWindowUseCase: GetContextWindowUseCase,
-    private val settingsRepository: SettingsRepository
+    private val settingsRepository: SettingsRepository,
+    private val metricsRepository: MetricsRepository
 ) {
     companion object {
         const val MAX_ITERATIONS = 5
@@ -75,14 +77,17 @@ class AgentOrchestratorUseCase @Inject constructor(
             val fullPrompt = "$baseSystemPrompt\n\n$contextWindow\nAGENT: "
 
             // 4. Request generation from the local LLM
+            val startTime = System.currentTimeMillis()
             val responseStream = llmEngine.generateResponseStream(fullPrompt)
             
             val accumulatedResponse = StringBuilder()
             var emittedThinking = false
+            var approximateTokenCount = 0
 
             try {
                 responseStream.collect { token ->
                     accumulatedResponse.append(token)
+                    approximateTokenCount += token.length / 4 + 1
                     
                     if (!emittedThinking) {
                         emit(AgentOrchestratorState.Thinking(accumulatedResponse.toString()))
@@ -95,6 +100,9 @@ class AgentOrchestratorUseCase @Inject constructor(
                 emit(AgentOrchestratorState.Error(e.message ?: "Unknown error during LLM generation"))
                 return@flow
             }
+            
+            val endTime = System.currentTimeMillis()
+            metricsRepository.updateMetrics(endTime - startTime, approximateTokenCount)
 
             val fullResponseText = accumulatedResponse.toString().trim()
             
