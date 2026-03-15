@@ -22,6 +22,7 @@ class ToolRepositoryImplTest {
     private val mcpClientFactory: McpClientFactory = mockk()
     private val mcpClient: McpClient = mockk()
     private val localAppFunctionManager: LocalAppFunctionManager = mockk()
+    private val scheduleTaskUseCase: ai.agent.android.domain.usecases.ScheduleTaskUseCase = mockk()
     
     private lateinit var repository: ToolRepositoryImpl
 
@@ -34,7 +35,7 @@ class ToolRepositoryImplTest {
         coEvery { mcpClient.connect(any()) } returns Unit
         coEvery { mcpClient.disconnect() } returns Unit
         
-        repository = ToolRepositoryImpl(settingsRepository, mcpClientFactory, localAppFunctionManager)
+        repository = ToolRepositoryImpl(settingsRepository, mcpClientFactory, localAppFunctionManager, scheduleTaskUseCase)
     }
 
     @Test

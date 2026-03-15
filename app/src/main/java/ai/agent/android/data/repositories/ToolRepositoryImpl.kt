@@ -6,7 +6,9 @@ import ai.agent.android.data.tools.local.LocalAppFunctionManager
 import ai.agent.android.domain.models.AgentTool
 import ai.agent.android.domain.repositories.SettingsRepository
 import ai.agent.android.domain.repositories.ToolRepository
+import ai.agent.android.domain.usecases.ScheduleTaskUseCase
 import kotlinx.coroutines.flow.first
+import org.json.JSONObject
 import javax.inject.Inject
 
 /**
@@ -16,10 +18,29 @@ import javax.inject.Inject
 class ToolRepositoryImpl @Inject constructor(
     private val settingsRepository: SettingsRepository,
     private val mcpClientFactory: McpClientFactory,
-    private val localAppFunctionManager: LocalAppFunctionManager
+    private val localAppFunctionManager: LocalAppFunctionManager,
+    private val scheduleTaskUseCase: ScheduleTaskUseCase
 ) : ToolRepository {
 
     private val mcpClients = mutableMapOf<String, McpClient>()
+
+    private val builtinTools = listOf(
+        AgentTool(
+            name = "schedule_task",
+            description = "Schedules a task to be executed by the agent in the background. intervalHours: >0 for periodic, 0 for one-time. delayMinutes: >0 for delayed execution.",
+            parameters = """
+                {
+                  "type": "object",
+                  "properties": {
+                    "prompt": { "type": "string", "description": "The prompt or task description" },
+                    "intervalHours": { "type": "integer", "description": "Interval in hours for periodic tasks. Default 0." },
+                    "delayMinutes": { "type": "integer", "description": "Delay in minutes for one-time tasks. Default 0." }
+                  },
+                  "required": ["prompt"]
+                }
+            """.trimIndent()
+        )
+    )
 
     private suspend fun syncMcpClients() {
         val urls = settingsRepository.mcpServerUrls.first()
@@ -48,13 +69,13 @@ class ToolRepositoryImpl @Inject constructor(
 
 
     override suspend fun getAllLocalTools(): List<AgentTool> {
-        return localAppFunctionManager.getAvailableFunctions()
+        return localAppFunctionManager.getAvailableFunctions() + builtinTools
     }
 
     override suspend fun getAvailableTools(): List<AgentTool> {
         syncMcpClients()
         val disabled = settingsRepository.disabledAppFunctions.first()
-        val localTools = localAppFunctionManager.getAvailableFunctions()
+        val localTools = localAppFunctionManager.getAvailableFunctions() + builtinTools
         val availableLocal = localTools.filter { it.name !in disabled }
         
         val mcpTools = mcpClients.values.flatMap { client ->
@@ -69,13 +90,22 @@ class ToolRepositoryImpl @Inject constructor(
     }
 
     override suspend fun executeTool(name: String, arguments: String): String {
-        val localTools = localAppFunctionManager.getAvailableFunctions()
+        val localTools = localAppFunctionManager.getAvailableFunctions() + builtinTools
         // Check if the tool is a known local tool and is not disabled
         val disabled = settingsRepository.disabledAppFunctions.first()
         if (localTools.any { it.name == name }) {
             if (name in disabled) {
                 throw IllegalArgumentException("Tool \$name is disabled")
             }
+            
+            if (name == "schedule_task") {
+                val json = JSONObject(arguments)
+                val prompt = json.getString("prompt")
+                val intervalHours = if (json.has("intervalHours")) json.getLong("intervalHours") else 0L
+                val delayMinutes = if (json.has("delayMinutes")) json.getLong("delayMinutes") else 0L
+                return scheduleTaskUseCase(prompt, intervalHours, delayMinutes)
+            }
+            
             return "Local tool executed: \$name with \$arguments" // Dummy implementation
         }
 
