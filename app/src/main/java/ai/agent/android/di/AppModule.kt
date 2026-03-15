@@ -110,5 +110,16 @@ object AppModule {
     ): ai.agent.android.data.tools.local.LocalAppFunctionManager {
         return ai.agent.android.data.tools.local.LocalAppFunctionManager(appContext)
     }
+
+    /**
+     * Provides the singleton instance of WorkManager.
+     */
+    @Provides
+    @Singleton
+    fun provideWorkManager(
+        @ApplicationContext appContext: Context
+    ): androidx.work.WorkManager {
+        return androidx.work.WorkManager.getInstance(appContext)
+    }
 }
 
