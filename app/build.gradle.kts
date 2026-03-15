@@ -79,6 +79,7 @@ dependencies {
     
     // Hilt
     implementation(libs.hilt.android)
+    implementation(libs.work.testing)
     ksp(libs.hilt.compiler)
     
     // Logging
