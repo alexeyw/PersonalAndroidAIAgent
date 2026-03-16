@@ -25,11 +25,13 @@ class AgentApprovalReceiver : BroadcastReceiver() {
 
     override fun onReceive(context: Context, intent: Intent) {
         val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        notificationManager.cancel(ApprovalNotificationManager.NOTIFICATION_ID)
+        val sessionId = intent.getStringExtra("sessionId") ?: return
+        
+        notificationManager.cancel(ApprovalNotificationManager.NOTIFICATION_ID + sessionId.hashCode() % 1000)
 
         when (intent.action) {
-            ACTION_APPROVE -> orchestratorUseCase.resumeWithApproval(true)
-            ACTION_DENY -> orchestratorUseCase.resumeWithApproval(false)
+            ACTION_APPROVE -> orchestratorUseCase.resumeWithApproval(sessionId, true)
+            ACTION_DENY -> orchestratorUseCase.resumeWithApproval(sessionId, false)
         }
     }
 }

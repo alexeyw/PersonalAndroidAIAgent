@@ -25,7 +25,7 @@ class ApprovalNotificationManager @Inject constructor(
         const val NOTIFICATION_ID = 201
     }
 
-    override fun sendApprovalRequest(toolName: String, arguments: String) {
+    override fun sendApprovalRequest(sessionId: String, toolName: String, arguments: String) {
         val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -41,16 +41,18 @@ class ApprovalNotificationManager @Inject constructor(
 
         val approveIntent = Intent(context, AgentApprovalReceiver::class.java).apply {
             action = AgentApprovalReceiver.ACTION_APPROVE
+            putExtra("sessionId", sessionId)
         }
         val approvePendingIntent = PendingIntent.getBroadcast(
-            context, 0, approveIntent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            context, sessionId.hashCode(), approveIntent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
         val denyIntent = Intent(context, AgentApprovalReceiver::class.java).apply {
             action = AgentApprovalReceiver.ACTION_DENY
+            putExtra("sessionId", sessionId)
         }
         val denyPendingIntent = PendingIntent.getBroadcast(
-            context, 1, denyIntent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            context, sessionId.hashCode() + 1, denyIntent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
         val notification = NotificationCompat.Builder(context, CHANNEL_ID)
@@ -64,6 +66,7 @@ class ApprovalNotificationManager @Inject constructor(
             .setAutoCancel(true)
             .build()
 
-        notificationManager.notify(NOTIFICATION_ID, notification)
+        // Use sessionId hashcode as notification ID so multiple requests can be shown if needed
+        notificationManager.notify(NOTIFICATION_ID + sessionId.hashCode() % 1000, notification)
     }
 }

@@ -185,10 +185,10 @@ class AgentOrchestratorUseCaseTest {
         assertEquals("test_tool", confirmationState?.toolName)
         assertEquals("{\"arg\":\"danger\"}", confirmationState?.arguments)
 
-        coVerify { approvalNotifier.sendApprovalRequest("test_tool", "{\"arg\":\"danger\"}") }
+        coVerify { approvalNotifier.sendApprovalRequest(sessionId, "test_tool", "{\"arg\":\"danger\"}") }
 
         // Resume with approval
-        useCase.resumeWithApproval(true)
+        useCase.resumeWithApproval(sessionId, true)
         advanceUntilIdle()
 
         val executingState = states.filterIsInstance<AgentOrchestratorState.ExecutingTool>().firstOrNull()
@@ -232,7 +232,7 @@ class AgentOrchestratorUseCaseTest {
         advanceUntilIdle()
 
         // Resume with deny
-        useCase.resumeWithApproval(false)
+        useCase.resumeWithApproval(sessionId, false)
         advanceUntilIdle()
 
         val executingState = states.filterIsInstance<AgentOrchestratorState.ExecutingTool>().firstOrNull()

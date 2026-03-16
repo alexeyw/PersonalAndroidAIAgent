@@ -7,8 +7,9 @@ interface ApprovalNotifier {
     /**
      * Sends an approval request.
      *
+     * @param sessionId The ID of the session that triggered the request.
      * @param toolName The name of the tool.
      * @param arguments The arguments passed to the tool.
      */
-    fun sendApprovalRequest(toolName: String, arguments: String)
+    fun sendApprovalRequest(sessionId: String, toolName: String, arguments: String)
 }

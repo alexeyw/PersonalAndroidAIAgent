@@ -43,16 +43,17 @@ class AgentOrchestratorUseCase @Inject constructor(
     private val _globalState = MutableStateFlow<AgentOrchestratorState>(AgentOrchestratorState.Idle)
     val globalState: StateFlow<AgentOrchestratorState> = _globalState.asStateFlow()
 
-    private var activeApprovalDeferred: kotlinx.coroutines.CompletableDeferred<Boolean>? = null
+    private val activeApprovalDeferreds = java.util.concurrent.ConcurrentHashMap<String, kotlinx.coroutines.CompletableDeferred<Boolean>>()
 
     /**
      * Resumes the suspended ReAct cycle after the user has made a decision.
      *
+     * @param sessionId The session ID that was waiting for approval.
      * @param isApproved True if the user allowed the action, false otherwise.
      */
-    fun resumeWithApproval(isApproved: Boolean) {
-        activeApprovalDeferred?.complete(isApproved)
-        activeApprovalDeferred = null
+    fun resumeWithApproval(sessionId: String, isApproved: Boolean) {
+        val deferred = activeApprovalDeferreds.remove(sessionId)
+        deferred?.complete(isApproved)
     }
 
     /**
@@ -149,10 +150,10 @@ class AgentOrchestratorUseCase @Inject constructor(
 
                 if (requiresUserConfirmation) {
                     emit(AgentOrchestratorState.WaitingForApproval(toolName, toolArgs))
-                    approvalNotifier.sendApprovalRequest(toolName, toolArgs)
+                    approvalNotifier.sendApprovalRequest(sessionId, toolName, toolArgs)
                     
                     val deferred = kotlinx.coroutines.CompletableDeferred<Boolean>()
-                    activeApprovalDeferred = deferred
+                    activeApprovalDeferreds[sessionId] = deferred
                     val isApproved = deferred.await()
                     
                     if (!isApproved) {
