@@ -59,6 +59,10 @@
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
                 android:value="On-Device LLM Inference and Agent Orchestration" />
         </service>
+
+        <receiver
+            android:name=".presentation.receivers.AgentApprovalReceiver"
+            android:exported="false" />
     </application>
 
 </manifest>

@@ -121,5 +121,16 @@ object AppModule {
     ): androidx.work.WorkManager {
         return androidx.work.WorkManager.getInstance(appContext)
     }
+
+    /**
+     * Provides the singleton instance of ApprovalNotifier.
+     */
+    @Provides
+    @Singleton
+    fun provideApprovalNotifier(
+        @ApplicationContext appContext: Context
+    ): ai.agent.android.domain.services.ApprovalNotifier {
+        return ai.agent.android.presentation.notifications.ApprovalNotificationManager(appContext)
+    }
 }
 

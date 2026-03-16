@@ -33,7 +33,8 @@ class AgentOrchestratorUseCase @Inject constructor(
     private val chatRepository: ChatRepository,
     private val getContextWindowUseCase: GetContextWindowUseCase,
     private val settingsRepository: SettingsRepository,
-    private val metricsRepository: MetricsRepository
+    private val metricsRepository: MetricsRepository,
+    private val approvalNotifier: ai.agent.android.domain.services.ApprovalNotifier
 ) {
     companion object {
         const val MAX_ITERATIONS = 5
@@ -41,6 +42,19 @@ class AgentOrchestratorUseCase @Inject constructor(
 
     private val _globalState = MutableStateFlow<AgentOrchestratorState>(AgentOrchestratorState.Idle)
     val globalState: StateFlow<AgentOrchestratorState> = _globalState.asStateFlow()
+
+    private val activeApprovalDeferreds = java.util.concurrent.ConcurrentHashMap<String, kotlinx.coroutines.CompletableDeferred<Boolean>>()
+
+    /**
+     * Resumes the suspended ReAct cycle after the user has made a decision.
+     *
+     * @param sessionId The session ID that was waiting for approval.
+     * @param isApproved True if the user allowed the action, false otherwise.
+     */
+    fun resumeWithApproval(sessionId: String, isApproved: Boolean) {
+        val deferred = activeApprovalDeferreds.remove(sessionId)
+        deferred?.complete(isApproved)
+    }
 
     /**
      * Starts the orchestration cycle for a given user prompt.
@@ -135,30 +149,47 @@ class AgentOrchestratorUseCase @Inject constructor(
                 val requiresUserConfirmation = settingsRepository.requiresUserConfirmation.first()
 
                 if (requiresUserConfirmation) {
-                    emit(AgentOrchestratorState.RequiresUserConfirmation(toolName, toolArgs))
-                    isCompleted = true // Stop the orchestration loop to await user confirmation
-                } else {
-                    emit(AgentOrchestratorState.ExecutingTool(toolName, toolArgs))
-
-                    // Execute the tool
-                    val result = try {
-                        toolRepository.executeTool(toolName, toolArgs)
-                    } catch (e: Exception) {
-                        "Error executing $toolName: ${e.message}"
-                    }
-
-                    emit(AgentOrchestratorState.ObservationResult(toolName, result))
-
-                    // Save the observation to the history as a SYSTEM message so the LLM sees it
-                    chatRepository.saveMessage(
-                        ChatMessage(
-                            sessionId = sessionId,
-                            role = Role.SYSTEM,
-                            content = "Observation from $toolName: $result",
-                            timestamp = System.currentTimeMillis()
+                    emit(AgentOrchestratorState.WaitingForApproval(toolName, toolArgs))
+                    approvalNotifier.sendApprovalRequest(sessionId, toolName, toolArgs)
+                    
+                    val deferred = kotlinx.coroutines.CompletableDeferred<Boolean>()
+                    activeApprovalDeferreds[sessionId] = deferred
+                    val isApproved = deferred.await()
+                    
+                    if (!isApproved) {
+                        chatRepository.saveMessage(
+                            ChatMessage(
+                                sessionId = sessionId,
+                                role = Role.SYSTEM,
+                                content = "User denied execution of tool: $toolName",
+                                timestamp = System.currentTimeMillis()
+                            )
                         )
-                    )
+                        emit(AgentOrchestratorState.ObservationResult(toolName, "Execution denied by user"))
+                        continue
+                    }
                 }
+                
+                emit(AgentOrchestratorState.ExecutingTool(toolName, toolArgs))
+
+                // Execute the tool
+                val result = try {
+                    toolRepository.executeTool(toolName, toolArgs)
+                } catch (e: Exception) {
+                    "Error executing $toolName: ${e.message}"
+                }
+
+                emit(AgentOrchestratorState.ObservationResult(toolName, result))
+
+                // Save the observation to the history as a SYSTEM message so the LLM sees it
+                chatRepository.saveMessage(
+                    ChatMessage(
+                        sessionId = sessionId,
+                        role = Role.SYSTEM,
+                        content = "Observation from $toolName: $result",
+                        timestamp = System.currentTimeMillis()
+                    )
+                )
             } else {
                 // No tool called, the agent answered directly
                 isCompleted = true
