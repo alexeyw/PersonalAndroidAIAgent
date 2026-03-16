@@ -7,6 +7,7 @@ import ai.agent.android.domain.repositories.ChatRepository
 import ai.agent.android.domain.repositories.MetricsRepository
 import ai.agent.android.domain.repositories.SettingsRepository
 import ai.agent.android.domain.repositories.ToolRepository
+import ai.agent.android.domain.services.ApprovalNotifier
 import ai.agent.android.domain.constants.DefaultPrompts
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -15,6 +16,8 @@ import io.mockk.mockk
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.advanceUntilIdle
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -28,6 +31,7 @@ class AgentOrchestratorUseCaseTest {
     private lateinit var getContextWindowUseCase: GetContextWindowUseCase
     private lateinit var settingsRepository: SettingsRepository
     private lateinit var metricsRepository: MetricsRepository
+    private lateinit var approvalNotifier: ApprovalNotifier
     private lateinit var useCase: AgentOrchestratorUseCase
 
     private val sessionId = "test-session"
@@ -40,7 +44,8 @@ class AgentOrchestratorUseCaseTest {
         getContextWindowUseCase = mockk()
         settingsRepository = mockk()
         metricsRepository = mockk(relaxed = true)
-        useCase = AgentOrchestratorUseCase(llmEngine, toolRepository, chatRepository, getContextWindowUseCase, settingsRepository, metricsRepository)
+        approvalNotifier = mockk(relaxed = true)
+        useCase = AgentOrchestratorUseCase(llmEngine, toolRepository, chatRepository, getContextWindowUseCase, settingsRepository, metricsRepository, approvalNotifier)
 
         coEvery { toolRepository.getAvailableTools() } returns listOf(
             AgentTool("test_tool", "A test tool", "{}")
@@ -141,7 +146,7 @@ class AgentOrchestratorUseCaseTest {
     }
 
     @Test
-    fun `emits RequiresUserConfirmation and stops when setting is true`() = runTest {
+    fun `emits WaitingForApproval and waits for approval, then executes on approve`() = runTest {
         every { settingsRepository.requiresUserConfirmation } returns flowOf(true)
 
         val userPrompt = "Do something dangerous"
@@ -154,20 +159,90 @@ class AgentOrchestratorUseCaseTest {
             }
             ```
         """.trimIndent()
+        val finalResponse = "Done."
 
-        every { llmEngine.generateResponseStream(any()) } returns flowOf(toolCallResponse)
+        var iteration = 0
+        every { llmEngine.generateResponseStream(any()) } answers {
+            if (iteration == 0) {
+                iteration++
+                flowOf(toolCallResponse)
+            } else {
+                flowOf(finalResponse)
+            }
+        }
 
-        val states = useCase(sessionId, userPrompt).toList()
+        coEvery { toolRepository.executeTool("test_tool", "{\"arg\":\"danger\"}") } returns "Success"
 
-        val confirmationState = states.filterIsInstance<AgentOrchestratorState.RequiresUserConfirmation>().firstOrNull()
+        val states = mutableListOf<AgentOrchestratorState>()
+        val job = launch {
+            useCase(sessionId, userPrompt).toList(states)
+        }
+
+        advanceUntilIdle()
+
+        val confirmationState = states.filterIsInstance<AgentOrchestratorState.WaitingForApproval>().firstOrNull()
         assertTrue(confirmationState != null)
         assertEquals("test_tool", confirmationState?.toolName)
         assertEquals("{\"arg\":\"danger\"}", confirmationState?.arguments)
 
-        // It should NOT execute the tool or emit ObservationResult
+        coVerify { approvalNotifier.sendApprovalRequest("test_tool", "{\"arg\":\"danger\"}") }
+
+        // Resume with approval
+        useCase.resumeWithApproval(true)
+        advanceUntilIdle()
+
+        val executingState = states.filterIsInstance<AgentOrchestratorState.ExecutingTool>().firstOrNull()
+        assertTrue(executingState != null)
+        
+        coVerify(exactly = 1) { toolRepository.executeTool("test_tool", "{\"arg\":\"danger\"}") }
+        job.cancel()
+    }
+
+    @Test
+    fun `emits WaitingForApproval and skips execution on deny`() = runTest {
+        every { settingsRepository.requiresUserConfirmation } returns flowOf(true)
+
+        val userPrompt = "Do something dangerous"
+        val toolCallResponse = """
+            Thought: I need permission for this.
+            ```json
+            {
+              "tool": "test_tool",
+              "arguments": "{\"arg\":\"danger\"}"
+            }
+            ```
+        """.trimIndent()
+        val finalResponse = "Okay, cancelled."
+
+        var iteration = 0
+        every { llmEngine.generateResponseStream(any()) } answers {
+            if (iteration == 0) {
+                iteration++
+                flowOf(toolCallResponse)
+            } else {
+                flowOf(finalResponse)
+            }
+        }
+
+        val states = mutableListOf<AgentOrchestratorState>()
+        val job = launch {
+            useCase(sessionId, userPrompt).toList(states)
+        }
+
+        advanceUntilIdle()
+
+        // Resume with deny
+        useCase.resumeWithApproval(false)
+        advanceUntilIdle()
+
         val executingState = states.filterIsInstance<AgentOrchestratorState.ExecutingTool>().firstOrNull()
         assertTrue(executingState == null)
+
+        val observationState = states.filterIsInstance<AgentOrchestratorState.ObservationResult>().firstOrNull()
+        assertTrue(observationState != null)
+        assertEquals("Execution denied by user", observationState?.result)
         
         coVerify(exactly = 0) { toolRepository.executeTool(any(), any()) }
+        job.cancel()
     }
 }

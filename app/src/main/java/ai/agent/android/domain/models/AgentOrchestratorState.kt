@@ -35,7 +35,7 @@ sealed interface AgentOrchestratorState {
      * @property toolName The name of the tool.
      * @property arguments The arguments for the tool.
      */
-    data class RequiresUserConfirmation(val toolName: String, val arguments: String) : AgentOrchestratorState
+    data class WaitingForApproval(val toolName: String, val arguments: String) : AgentOrchestratorState
 
     /**
      * The tool execution finished.
