@@ -49,8 +49,10 @@ class AgentPowerManager(
             engine.unload()
         }
 
-        // Cancel all scheduled background tasks
-        Timber.i("Canceling all WorkManager jobs due to low battery.")
-        workManager.cancelAllWork()
+        // We avoid calling workManager.cancelAllWork() here because it would
+        // permanently delete scheduled tasks. WorkManager constraints (like 
+        // setRequiresBatteryNotLow(true)) should be used in ScheduleTaskUseCase 
+        // to naturally pause execution without losing the task definitions.
+        Timber.i("Power saving mode enforced. Scheduled tasks will pause if they have battery constraints.")
     }
 }

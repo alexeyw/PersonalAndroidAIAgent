@@ -34,7 +34,7 @@ class AgentPowerManagerTest {
     }
 
     @Test
-    fun `when battery is low and not charging, should unload engine and cancel work`() = runTest {
+    fun `when battery is low and not charging, should unload engine`() = runTest {
         val powerManager = AgentPowerManager(
             scope = backgroundScope,
             powerStateRepository = powerStateRepository,
@@ -52,11 +52,11 @@ class AgentPowerManagerTest {
         kotlinx.coroutines.yield()
 
         verify(exactly = 1) { engine.unload() }
-        verify(exactly = 1) { workManager.cancelAllWork() }
+        verify(exactly = 0) { workManager.cancelAllWork() }
     }
 
     @Test
-    fun `when battery is low but charging, should NOT unload engine and cancel work`() = runTest {
+    fun `when battery is low but charging, should NOT unload engine`() = runTest {
         val powerManager = AgentPowerManager(
             scope = backgroundScope,
             powerStateRepository = powerStateRepository,
@@ -78,7 +78,7 @@ class AgentPowerManagerTest {
     }
 
     @Test
-    fun `when battery is ok and not charging, should NOT unload engine and cancel work`() = runTest {
+    fun `when battery is ok and not charging, should NOT unload engine`() = runTest {
         val powerManager = AgentPowerManager(
             scope = backgroundScope,
             powerStateRepository = powerStateRepository,
