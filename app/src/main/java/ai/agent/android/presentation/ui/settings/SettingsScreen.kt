@@ -20,6 +20,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import kotlin.math.roundToInt
@@ -139,6 +140,76 @@ fun SettingsScreen(
             steps = 14 // 512 step increments roughly
         )
         
+        Spacer(modifier = Modifier.height(24.dp))
+        Divider()
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Section: External Providers (API Keys)
+        Text(
+            text = "External Providers (API Keys)",
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.primary
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        
+        OutlinedTextField(
+            value = uiState.openAiKey,
+            onValueChange = { viewModel.updateOpenAiKey(it) },
+            label = { Text("OpenAI API Key") },
+            modifier = Modifier.fillMaxWidth(),
+            visualTransformation = PasswordVisualTransformation(),
+            singleLine = true
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        
+        OutlinedTextField(
+            value = uiState.anthropicKey,
+            onValueChange = { viewModel.updateAnthropicKey(it) },
+            label = { Text("Anthropic API Key") },
+            modifier = Modifier.fillMaxWidth(),
+            visualTransformation = PasswordVisualTransformation(),
+            singleLine = true
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+
+        OutlinedTextField(
+            value = uiState.googleKey,
+            onValueChange = { viewModel.updateGoogleKey(it) },
+            label = { Text("Google API Key") },
+            modifier = Modifier.fillMaxWidth(),
+            visualTransformation = PasswordVisualTransformation(),
+            singleLine = true
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+
+        OutlinedTextField(
+            value = uiState.deepSeekKey,
+            onValueChange = { viewModel.updateDeepSeekKey(it) },
+            label = { Text("DeepSeek API Key") },
+            modifier = Modifier.fillMaxWidth(),
+            visualTransformation = PasswordVisualTransformation(),
+            singleLine = true
+        )
+
+        Spacer(modifier = Modifier.height(24.dp))
+        Divider()
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Section: Local Network Models (Ollama)
+        Text(
+            text = "Local Network Models (Ollama)",
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.primary
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        OutlinedTextField(
+            value = uiState.ollamaBaseUrl,
+            onValueChange = { viewModel.updateOllamaBaseUrl(it) },
+            label = { Text("Ollama Base URL (e.g., http://192.168.1.100:11434)") },
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true
+        )
+
         Spacer(modifier = Modifier.height(32.dp))
     }
 }

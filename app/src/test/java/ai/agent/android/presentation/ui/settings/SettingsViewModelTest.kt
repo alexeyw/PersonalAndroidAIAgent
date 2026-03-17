@@ -1,5 +1,6 @@
 package ai.agent.android.presentation.ui.settings
 
+import ai.agent.android.domain.repositories.ApiKeyRepository
 import ai.agent.android.domain.repositories.SettingsRepository
 import io.mockk.coVerify
 import io.mockk.every
@@ -21,6 +22,7 @@ import org.junit.Test
 class SettingsViewModelTest {
 
     private val settingsRepository = mockk<SettingsRepository>(relaxed = true)
+    private val apiKeyRepository = mockk<ApiKeyRepository>(relaxed = true)
     private lateinit var viewModel: SettingsViewModel
     private val testDispatcher = StandardTestDispatcher()
 
@@ -36,7 +38,14 @@ class SettingsViewModelTest {
         every { settingsRepository.systemPromptPrefix } returns MutableStateFlow("Default Prompt")
         every { settingsRepository.requiresUserConfirmation } returns MutableStateFlow(true)
 
-        viewModel = SettingsViewModel(settingsRepository)
+        // Setup default flows for API keys repository
+        every { apiKeyRepository.getOpenAIKey() } returns MutableStateFlow("sk-open")
+        every { apiKeyRepository.getAnthropicKey() } returns MutableStateFlow(null)
+        every { apiKeyRepository.getGoogleKey() } returns MutableStateFlow(null)
+        every { apiKeyRepository.getDeepSeekKey() } returns MutableStateFlow(null)
+        every { apiKeyRepository.getOllamaBaseUrl() } returns MutableStateFlow("http://localhost:11434")
+
+        viewModel = SettingsViewModel(settingsRepository, apiKeyRepository)
     }
 
     @After
@@ -96,5 +105,40 @@ class SettingsViewModelTest {
         viewModel.updateRequiresUserConfirmation(false)
         advanceUntilIdle()
         coVerify { settingsRepository.setRequiresUserConfirmation(false) }
+    }
+
+    @Test
+    fun `updateOpenAiKey calls repository`() = runTest {
+        viewModel.updateOpenAiKey("new-sk")
+        advanceUntilIdle()
+        coVerify { apiKeyRepository.setOpenAIKey("new-sk") }
+    }
+
+    @Test
+    fun `updateAnthropicKey calls repository`() = runTest {
+        viewModel.updateAnthropicKey("anthropic-key")
+        advanceUntilIdle()
+        coVerify { apiKeyRepository.setAnthropicKey("anthropic-key") }
+    }
+
+    @Test
+    fun `updateGoogleKey calls repository`() = runTest {
+        viewModel.updateGoogleKey("google-key")
+        advanceUntilIdle()
+        coVerify { apiKeyRepository.setGoogleKey("google-key") }
+    }
+
+    @Test
+    fun `updateDeepSeekKey calls repository`() = runTest {
+        viewModel.updateDeepSeekKey("deepseek-key")
+        advanceUntilIdle()
+        coVerify { apiKeyRepository.setDeepSeekKey("deepseek-key") }
+    }
+
+    @Test
+    fun `updateOllamaBaseUrl calls repository`() = runTest {
+        viewModel.updateOllamaBaseUrl("http://192.168.0.1:11434")
+        advanceUntilIdle()
+        coVerify { apiKeyRepository.setOllamaBaseUrl("http://192.168.0.1:11434") }
     }
 }
