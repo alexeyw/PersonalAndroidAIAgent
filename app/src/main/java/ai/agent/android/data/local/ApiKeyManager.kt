@@ -9,6 +9,8 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import timber.log.Timber
+import java.io.File
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -23,17 +25,48 @@ class ApiKeyManager @Inject constructor(
     @ApplicationContext private val context: Context
 ) : ApiKeyRepository {
 
-    private val masterKey = MasterKey.Builder(context)
-        .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
-        .build()
+    private val prefsName = "secure_api_keys"
 
-    private val sharedPreferences: SharedPreferences = EncryptedSharedPreferences.create(
-        context,
-        "secure_api_keys",
-        masterKey,
-        EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
-        EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
-    )
+    private val masterKey by lazy {
+        MasterKey.Builder(context)
+            .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
+            .build()
+    }
+
+    private val sharedPreferences: SharedPreferences by lazy {
+        try {
+            createEncryptedSharedPreferences()
+        } catch (e: Exception) {
+            Timber.e(e, "Failed to initialize EncryptedSharedPreferences. Attempting recovery by clearing corrupt data.")
+            // Recovery path: if data is corrupted (e.g. key lost during backup/restore), delete the file and recreate
+            deleteSharedPreferences(prefsName)
+            createEncryptedSharedPreferences()
+        }
+    }
+
+    private fun createEncryptedSharedPreferences(): SharedPreferences {
+        return EncryptedSharedPreferences.create(
+            context,
+            prefsName,
+            masterKey,
+            EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+            EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+        )
+    }
+
+    private fun deleteSharedPreferences(name: String) {
+        try {
+            // Context.deleteSharedPreferences is available in API 24+
+            context.deleteSharedPreferences(name)
+        } catch (e: Exception) {
+            // Fallback for older APIs or if deleteSharedPreferences fails
+            val dir = File(context.applicationInfo.dataDir, "shared_prefs")
+            val file = File(dir, "$name.xml")
+            if (file.exists()) {
+                file.delete()
+            }
+        }
+    }
 
     private object Keys {
         const val OPENAI_KEY = "openai_api_key"
@@ -44,11 +77,11 @@ class ApiKeyManager @Inject constructor(
     }
 
     // Mutable state flows to allow reactive observing of key changes
-    private val _openAIKeyFlow = MutableStateFlow(sharedPreferences.getString(Keys.OPENAI_KEY, null))
-    private val _anthropicKeyFlow = MutableStateFlow(sharedPreferences.getString(Keys.ANTHROPIC_KEY, null))
-    private val _googleKeyFlow = MutableStateFlow(sharedPreferences.getString(Keys.GOOGLE_KEY, null))
-    private val _deepSeekKeyFlow = MutableStateFlow(sharedPreferences.getString(Keys.DEEPSEEK_KEY, null))
-    private val _ollamaUrlFlow = MutableStateFlow(sharedPreferences.getString(Keys.OLLAMA_URL, null))
+    private val _openAIKeyFlow by lazy { MutableStateFlow(sharedPreferences.getString(Keys.OPENAI_KEY, null)) }
+    private val _anthropicKeyFlow by lazy { MutableStateFlow(sharedPreferences.getString(Keys.ANTHROPIC_KEY, null)) }
+    private val _googleKeyFlow by lazy { MutableStateFlow(sharedPreferences.getString(Keys.GOOGLE_KEY, null)) }
+    private val _deepSeekKeyFlow by lazy { MutableStateFlow(sharedPreferences.getString(Keys.DEEPSEEK_KEY, null)) }
+    private val _ollamaUrlFlow by lazy { MutableStateFlow(sharedPreferences.getString(Keys.OLLAMA_URL, null)) }
 
     override fun getOpenAIKey(): Flow<String?> = _openAIKeyFlow.asStateFlow()
 
