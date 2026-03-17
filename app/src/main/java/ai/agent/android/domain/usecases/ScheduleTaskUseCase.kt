@@ -1,5 +1,6 @@
 package ai.agent.android.domain.usecases
 
+import androidx.work.Constraints
 import androidx.work.Data
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.PeriodicWorkRequestBuilder
@@ -34,10 +35,15 @@ class ScheduleTaskUseCase @Inject constructor(
                 .putString(AgentWorker.KEY_PROMPT, prompt)
                 .build()
 
+            val constraints = Constraints.Builder()
+                .setRequiresBatteryNotLow(true) // Native WorkManager way to pause on low battery
+                .build()
+
             if (intervalHours > 0) {
                 // Periodic task
                 val request = PeriodicWorkRequestBuilder<AgentWorker>(intervalHours, TimeUnit.HOURS)
                     .setInputData(inputData)
+                    .setConstraints(constraints)
                     .build()
                 workManager.enqueue(request)
                 Timber.d("Scheduled periodic task every \$intervalHours hours with prompt: \$prompt")
@@ -46,6 +52,7 @@ class ScheduleTaskUseCase @Inject constructor(
                 // One-time task
                 val requestBuilder = OneTimeWorkRequestBuilder<AgentWorker>()
                     .setInputData(inputData)
+                    .setConstraints(constraints)
                 
                 if (delayMinutes > 0) {
                     requestBuilder.setInitialDelay(delayMinutes, TimeUnit.MINUTES)

@@ -121,5 +121,14 @@ abstract class DataModule {
     abstract fun bindMetricsRepository(
         repository: ai.agent.android.data.repositories.MetricsRepositoryImpl
     ): ai.agent.android.domain.repositories.MetricsRepository
+
+    /**
+     * Binds the [ai.agent.android.data.repositories.PowerStateRepositoryImpl] implementation to the [ai.agent.android.domain.repositories.PowerStateRepository] interface.
+     */
+    @Binds
+    @Singleton
+    abstract fun bindPowerStateRepository(
+        repository: ai.agent.android.data.repositories.PowerStateRepositoryImpl
+    ): ai.agent.android.domain.repositories.PowerStateRepository
 }
 
