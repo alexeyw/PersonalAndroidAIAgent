@@ -2,6 +2,7 @@ package ai.agent.android.data.services
 
 import ai.agent.android.domain.engine.LlmInferenceEngine
 import ai.agent.android.domain.models.AgentOrchestratorState
+import ai.agent.android.domain.repositories.PowerStateRepository
 import ai.agent.android.domain.usecases.AgentOrchestratorUseCase
 import android.app.Notification
 import android.app.NotificationChannel
@@ -13,6 +14,7 @@ import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
+import androidx.work.WorkManager
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -36,8 +38,15 @@ class AgentForegroundService : Service() {
     @Inject
     lateinit var llmEngine: LlmInferenceEngine
 
+    @Inject
+    lateinit var powerStateRepository: PowerStateRepository
+
+    @Inject
+    lateinit var workManager: WorkManager
+
     private val serviceScope = CoroutineScope(Dispatchers.Main + Job())
     private lateinit var idleManager: AgentIdleManager
+    private lateinit var powerManager: AgentPowerManager
 
     companion object {
         private const val NOTIFICATION_CHANNEL_ID = "AgentForegroundServiceChannel"
@@ -55,6 +64,14 @@ class AgentForegroundService : Service() {
             agentState = agentOrchestratorUseCase.globalState
         )
         idleManager.startObserving()
+
+        powerManager = AgentPowerManager(
+            scope = serviceScope,
+            powerStateRepository = powerStateRepository,
+            engine = llmEngine,
+            workManager = workManager
+        )
+        powerManager.startObserving()
 
         serviceScope.launch {
             agentOrchestratorUseCase.globalState.collectLatest { state ->

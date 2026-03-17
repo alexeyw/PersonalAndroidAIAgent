@@ -13,5 +13,6 @@ import ai.agent.android.domain.models.ChatMessage
 data class MonitoringUiState(
     val metrics: AgentMetrics = AgentMetrics(),
     val recentLogs: List<ChatMessage> = emptyList(),
-    val isLoading: Boolean = false
+    val isLoading: Boolean = false,
+    val isPowerSavingActive: Boolean = false
 )

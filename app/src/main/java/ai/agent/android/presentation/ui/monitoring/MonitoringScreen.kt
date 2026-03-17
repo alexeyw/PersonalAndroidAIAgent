@@ -48,6 +48,28 @@ fun MonitoringScreen(
         )
         
         Spacer(modifier = Modifier.height(16.dp))
+
+        if (uiState.isPowerSavingActive) {
+            Card(
+                modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text(
+                        text = "Power Saving Mode Active",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onErrorContainer,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "Battery is low. Agent model is unloaded and background tasks are paused.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onErrorContainer
+                    )
+                }
+            }
+        }
         
         // Metrics Section
         MetricsCard(metrics = uiState.metrics)
