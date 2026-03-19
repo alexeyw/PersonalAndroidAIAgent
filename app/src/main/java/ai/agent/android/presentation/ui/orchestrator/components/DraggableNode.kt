@@ -5,38 +5,53 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import ai.agent.android.domain.models.NodeModel
 import ai.agent.android.domain.models.NodeType
-import kotlin.math.roundToInt
 
 /**
  * A draggable and interactive visual node component.
  *
  * @param node The [NodeModel] detailing type, id, and coordinates.
- * @param scale The current zoom scale to normalize drag deltas.
+ * @param scale The current zoom scale.
+ * @param panOffset The current canvas pan offset.
+ * @param isConnecting Whether this node is currently selected to connect to another.
  * @param modifier The [Modifier] for this composable.
  * @param onPositionChanged Callback invoked when the node is dragged.
+ * @param onConnectClick Callback invoked when the connect button is clicked.
+ * @param onDeleteClick Callback invoked when the delete button is clicked.
  */
 @Composable
 fun DraggableNode(
     node: NodeModel,
     scale: Float = 1f,
+    panOffset: Offset = Offset.Zero,
+    isConnecting: Boolean = false,
     modifier: Modifier = Modifier,
-    onPositionChanged: (String, Float, Float) -> Unit
+    onPositionChanged: (String, Float, Float) -> Unit,
+    onConnectClick: () -> Unit,
+    onDeleteClick: () -> Unit
 ) {
     val nodeColor = when (node.type) {
         NodeType.LITE_RT -> Color(0xFF4CAF50)
@@ -50,15 +65,27 @@ fun DraggableNode(
 
     Box(
         modifier = modifier
+            .graphicsLayer {
+                translationX = node.x * scale + panOffset.x
+                translationY = node.y * scale + panOffset.y
+                scaleX = scale
+                scaleY = scale
+            }
             .pointerInput(node.id) {
                 detectDragGestures { change, dragAmount ->
                     change.consume()
-                    onPositionChanged(node.id, node.x + dragAmount.x / scale, node.y + dragAmount.y / scale)
+                    // dragAmount is in screen space. Since we apply scale via graphicsLayer,
+                    // we must divide the delta by scale to map back to canvas coordinate space.
+                    onPositionChanged(node.id, node.x + (dragAmount.x / scale), node.y + (dragAmount.y / scale))
                 }
             }
             .clip(RoundedCornerShape(8.dp))
             .background(MaterialTheme.colorScheme.surface)
-            .border(2.dp, nodeColor, RoundedCornerShape(8.dp))
+            .border(
+                width = if (isConnecting) 4.dp else 2.dp, 
+                color = if (isConnecting) MaterialTheme.colorScheme.primary else nodeColor, 
+                shape = RoundedCornerShape(8.dp)
+            )
             .padding(16.dp),
         contentAlignment = Alignment.Center
     ) {
@@ -74,6 +101,23 @@ fun DraggableNode(
                 style = MaterialTheme.typography.labelSmall,
                 color = nodeColor
             )
+            Row(modifier = Modifier.padding(top = 8.dp)) {
+                IconButton(onClick = onConnectClick) {
+                    Icon(
+                        imageVector = Icons.Default.Add,
+                        contentDescription = "Connect",
+                        tint = if (isConnecting) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                    )
+                }
+                Spacer(modifier = Modifier.width(8.dp))
+                IconButton(onClick = onDeleteClick) {
+                    Icon(
+                        imageVector = Icons.Default.Close,
+                        contentDescription = "Delete",
+                        tint = MaterialTheme.colorScheme.error
+                    )
+                }
+            }
         }
     }
 }

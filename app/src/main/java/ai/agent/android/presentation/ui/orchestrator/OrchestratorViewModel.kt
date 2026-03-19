@@ -121,6 +121,20 @@ class OrchestratorViewModel @Inject constructor(
     }
 
     /**
+     * Clears the current pipeline.
+     */
+    fun clearPipeline() {
+        _uiState.update { state ->
+            state.copy(
+                currentPipeline = state.currentPipeline.copy(
+                    nodes = emptyList(),
+                    connections = emptyList()
+                )
+            )
+        }
+    }
+
+    /**
      * Saves the current pipeline.
      */
     fun saveCurrentPipeline() {
