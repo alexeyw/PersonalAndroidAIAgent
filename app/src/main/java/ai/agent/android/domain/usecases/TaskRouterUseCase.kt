@@ -47,7 +47,12 @@ class TaskRouterUseCase @Inject constructor(
                 if (!openAIKey.isNullOrBlank()) {
                     return RoutingDecision.CloudLLM("openai")
                 }
-                
+
+                val googleKey = apiKeyRepository.getGoogleKey().first()
+                if (!googleKey.isNullOrBlank()) {
+                    return RoutingDecision.CloudLLM("google")
+                }
+
                 val anthropicKey = apiKeyRepository.getAnthropicKey().first()
                 if (!anthropicKey.isNullOrBlank()) {
                     return RoutingDecision.CloudLLM("anthropic")

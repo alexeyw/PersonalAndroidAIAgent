@@ -32,6 +32,7 @@ class TaskRouterUseCaseTest {
         
         // Default empty keys
         coEvery { apiKeyRepository.getOpenAIKey() } returns flowOf(null)
+        coEvery { apiKeyRepository.getGoogleKey() } returns flowOf(null)
         coEvery { apiKeyRepository.getAnthropicKey() } returns flowOf(null)
         coEvery { apiKeyRepository.getDeepSeekKey() } returns flowOf(null)
         coEvery { apiKeyRepository.getOllamaBaseUrl() } returns flowOf(null)
