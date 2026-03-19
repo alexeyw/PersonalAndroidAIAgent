@@ -1,25 +1,32 @@
 package ai.agent.android.domain.usecases
 
+import ai.agent.android.data.engine.KoogClientFactory
 import ai.agent.android.domain.engine.LlmInferenceEngine
 import ai.agent.android.domain.models.AgentOrchestratorState
 import ai.agent.android.domain.models.ChatMessage
 import ai.agent.android.domain.models.Role
+import ai.agent.android.domain.models.RoutingDecision
 import ai.agent.android.domain.repositories.ChatRepository
-import ai.agent.android.domain.repositories.ToolRepository
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.flow
-import javax.inject.Inject
-
-import ai.agent.android.domain.repositories.SettingsRepository
 import ai.agent.android.domain.repositories.MetricsRepository
-import kotlinx.coroutines.flow.first
-
-import javax.inject.Singleton
+import ai.agent.android.domain.repositories.SettingsRepository
+import ai.agent.android.domain.repositories.ToolRepository
+import ai.agent.android.domain.services.ApprovalNotifier
+import ai.koog.prompt.dsl.prompt
+import ai.koog.prompt.llm.LLModel
+import ai.koog.prompt.streaming.StreamFrame
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.flow.onCompletion
 import kotlinx.coroutines.flow.onEach
+import java.util.concurrent.ConcurrentHashMap
+import javax.inject.Inject
+import javax.inject.Singleton
 
 /**
  * Use case that orchestrates the ReAct (Reasoning and Acting) cycle of the AI Agent.
@@ -34,7 +41,9 @@ class AgentOrchestratorUseCase @Inject constructor(
     private val getContextWindowUseCase: GetContextWindowUseCase,
     private val settingsRepository: SettingsRepository,
     private val metricsRepository: MetricsRepository,
-    private val approvalNotifier: ai.agent.android.domain.services.ApprovalNotifier
+    private val approvalNotifier: ApprovalNotifier,
+    private val taskRouterUseCase: TaskRouterUseCase,
+    private val koogClientFactory: KoogClientFactory
 ) {
     companion object {
         const val MAX_ITERATIONS = 5
@@ -43,7 +52,7 @@ class AgentOrchestratorUseCase @Inject constructor(
     private val _globalState = MutableStateFlow<AgentOrchestratorState>(AgentOrchestratorState.Idle)
     val globalState: StateFlow<AgentOrchestratorState> = _globalState.asStateFlow()
 
-    private val activeApprovalDeferreds = java.util.concurrent.ConcurrentHashMap<String, kotlinx.coroutines.CompletableDeferred<Boolean>>()
+    private val activeApprovalDeferreds = ConcurrentHashMap<String, CompletableDeferred<Boolean>>()
 
     /**
      * Resumes the suspended ReAct cycle after the user has made a decision.
@@ -101,9 +110,43 @@ class AgentOrchestratorUseCase @Inject constructor(
             val contextWindow = getContextWindowUseCase(sessionId)
             val fullPrompt = "$baseSystemPrompt\n\n$contextWindow\nAGENT: "
 
-            // 4. Request generation from the local LLM
+            // 4. Request generation from the routed LLM
             val startTime = System.currentTimeMillis()
-            val responseStream = llmEngine.generateResponseStream(fullPrompt)
+            val decision = taskRouterUseCase(userPrompt)
+            
+            val responseStream = when (decision) {
+                is RoutingDecision.LocalLiteRT -> {
+                    llmEngine.generateResponseStream(fullPrompt)
+                }
+                is RoutingDecision.LocalOllama -> {
+                    val client = koogClientFactory.createOllamaExecutor()
+                    if (client != null) {
+                        val model = client.models().firstOrNull() ?: LLModel(client.llmProvider(), "default")
+                        client.executeStreaming(prompt("default") { user(fullPrompt) }, model).mapNotNull { frame ->
+                            (frame as? StreamFrame.TextDelta)?.text
+                        }
+                    } else {
+                        flow { emit("Error: Ollama not configured.") }
+                    }
+                }
+                is RoutingDecision.CloudLLM -> {
+                    val client = when (decision.provider) {
+                        "openai" -> koogClientFactory.createOpenAIExecutor()
+                        "google" -> koogClientFactory.createGoogleExecutor()
+                        "anthropic" -> koogClientFactory.createAnthropicExecutor()
+                        "deepseek" -> koogClientFactory.createDeepSeekExecutor()
+                        else -> null
+                    }
+                    if (client != null) {
+                        val model = client.models().firstOrNull() ?: LLModel(client.llmProvider(), "default")
+                        client.executeStreaming(prompt("default") { user(fullPrompt) }, model).mapNotNull { frame ->
+                            (frame as? StreamFrame.TextDelta)?.text
+                        }
+                    } else {
+                        flow { emit("Error: Cloud LLM provider not configured.") }
+                    }
+                }
+            }
             
             val accumulatedResponse = StringBuilder()
             var emittedThinking = false
@@ -152,7 +195,7 @@ class AgentOrchestratorUseCase @Inject constructor(
                     emit(AgentOrchestratorState.WaitingForApproval(toolName, toolArgs))
                     approvalNotifier.sendApprovalRequest(sessionId, toolName, toolArgs)
                     
-                    val deferred = kotlinx.coroutines.CompletableDeferred<Boolean>()
+                    val deferred = CompletableDeferred<Boolean>()
                     activeApprovalDeferreds[sessionId] = deferred
                     val isApproved = deferred.await()
                     
