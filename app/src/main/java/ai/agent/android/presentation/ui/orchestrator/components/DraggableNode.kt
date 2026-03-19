@@ -52,6 +52,7 @@ fun DraggableNode(
         NodeType.DEEPSEEK -> Color(0xFF2196F3)
         NodeType.OPENAI -> Color(0xFF9C27B0)
         NodeType.ANTHROPIC -> Color(0xFF673AB7)
+        NodeType.GOOGLE -> Color(0xFF00BCD4)
         NodeType.TOOL -> Color(0xFFFF9800)
         NodeType.INPUT -> Color(0xFF607D8B)
         NodeType.OUTPUT -> Color(0xFFF44336)

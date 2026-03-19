@@ -25,6 +25,11 @@ enum class NodeType {
     ANTHROPIC,
 
     /**
+     * Node representing an Google API client.
+     */
+    GOOGLE,
+
+    /**
      * Node representing a Tool or AppFunction that can be executed.
      */
     TOOL,
