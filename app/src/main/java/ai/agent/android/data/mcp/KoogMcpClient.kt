@@ -3,6 +3,9 @@ package ai.agent.android.data.mcp
 import ai.agent.android.domain.models.AgentTool
 import ai.koog.agents.core.tools.ToolRegistry
 import ai.koog.agents.mcp.McpToolRegistryProvider
+import ai.koog.agents.mcp.metadata.McpServerInfo
+import ai.koog.serialization.kotlinx.KotlinxSerializer
+import ai.koog.serialization.kotlinx.toKoogJSONObject
 import io.ktor.client.HttpClient
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -14,11 +17,13 @@ import javax.inject.Inject
 class KoogMcpClient : McpClient {
     private var registry: ToolRegistry? = null
     private val httpClient = HttpClient()
+    private val serializer = KotlinxSerializer(Json { ignoreUnknownKeys = true })
 
     override suspend fun connect(url: String) {
         withContext(Dispatchers.IO) {
             val transport = McpToolRegistryProvider.defaultSseTransport(url, httpClient)
-            registry = McpToolRegistryProvider.fromTransport(transport)
+            val serverInfo = McpServerInfo(url = url, command = "")
+            registry = McpToolRegistryProvider.fromTransport(transport, serverInfo)
         }
     }
 
@@ -34,7 +39,7 @@ class KoogMcpClient : McpClient {
             registry?.tools?.map { tool ->
                 AgentTool(
                     name = tool.name,
-                    description = tool.descriptor.description ?: "",
+                    description = tool.descriptor.description,
                     parameters = tool.descriptor.requiredParameters.joinToString { it.name } + 
                                  tool.descriptor.optionalParameters.joinToString { it.name }
                 )
@@ -47,11 +52,12 @@ class KoogMcpClient : McpClient {
             val tool = registry?.getToolOrNull(name) 
                 ?: throw IllegalArgumentException("Tool \$name not found")
             
-            val jsonArgs = Json.parseToJsonElement(arguments).jsonObject
-            val args = tool.decodeArgs(jsonArgs)
+            val kotlinxJsonArgs = Json.parseToJsonElement(arguments).jsonObject
+            val koogJsonArgs = kotlinxJsonArgs.toKoogJSONObject()
+            val args = tool.decodeArgs(koogJsonArgs, serializer)
             
             val result = tool.executeUnsafe(args!!)
-            tool.encodeResultToStringUnsafe(result!!)
+            tool.encodeResultToStringUnsafe(result!!, serializer)
         }
     }
 }
