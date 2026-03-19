@@ -27,12 +27,14 @@ import kotlin.math.roundToInt
  * A draggable and interactive visual node component.
  *
  * @param node The [NodeModel] detailing type, id, and coordinates.
+ * @param scale The current zoom scale to normalize drag deltas.
  * @param modifier The [Modifier] for this composable.
  * @param onPositionChanged Callback invoked when the node is dragged.
  */
 @Composable
 fun DraggableNode(
     node: NodeModel,
+    scale: Float = 1f,
     modifier: Modifier = Modifier,
     onPositionChanged: (String, Float, Float) -> Unit
 ) {
@@ -51,7 +53,7 @@ fun DraggableNode(
             .pointerInput(node.id) {
                 detectDragGestures { change, dragAmount ->
                     change.consume()
-                    onPositionChanged(node.id, node.x + dragAmount.x, node.y + dragAmount.y)
+                    onPositionChanged(node.id, node.x + dragAmount.x / scale, node.y + dragAmount.y / scale)
                 }
             }
             .clip(RoundedCornerShape(8.dp))

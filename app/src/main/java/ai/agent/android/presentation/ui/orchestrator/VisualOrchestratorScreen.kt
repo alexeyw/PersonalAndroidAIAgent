@@ -118,6 +118,7 @@ fun VisualOrchestratorScreen(
             uiState.nodes.forEach { node ->
                 DraggableNode(
                     node = node,
+                    scale = scale,
                     modifier = Modifier
                         .offset {
                             IntOffset(
