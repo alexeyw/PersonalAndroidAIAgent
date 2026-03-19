@@ -9,6 +9,11 @@ package ai.agent.android.presentation.ui.settings
  * @property maxContextLength The maximum allowed context length (tokens/characters).
  * @property systemPromptPrefix The main system prompt instructions for the agent.
  * @property requiresUserConfirmation Whether the user must confirm critical actions (Human-in-the-loop).
+ * @property openAiKey The OpenAI API key.
+ * @property anthropicKey The Anthropic API key.
+ * @property googleKey The Google API key.
+ * @property deepSeekKey The DeepSeek API key.
+ * @property ollamaBaseUrl The Ollama local base URL.
  */
 data class SettingsUiState(
     val temperature: Float = 0.7f,
@@ -16,5 +21,10 @@ data class SettingsUiState(
     val topP: Float = 0.9f,
     val maxContextLength: Int = 4096,
     val systemPromptPrefix: String = "",
-    val requiresUserConfirmation: Boolean = true
+    val requiresUserConfirmation: Boolean = true,
+    val openAiKey: String = "",
+    val anthropicKey: String = "",
+    val googleKey: String = "",
+    val deepSeekKey: String = "",
+    val ollamaBaseUrl: String = ""
 )

@@ -14,6 +14,8 @@ import ai.agent.android.data.repositories.MemoryRepositoryImpl
 import ai.agent.android.domain.repositories.MemoryRepository
 import ai.agent.android.data.engine.MediaPipeTextEmbeddingEngine
 import ai.agent.android.domain.engine.TextEmbeddingEngine
+import ai.agent.android.data.local.ApiKeyManager
+import ai.agent.android.domain.repositories.ApiKeyRepository
 import dagger.Binds
 import dagger.Module
 import dagger.hilt.InstallIn
@@ -31,6 +33,15 @@ import javax.inject.Singleton
 @Module
 @InstallIn(SingletonComponent::class)
 abstract class DataModule {
+
+    /**
+     * Binds the [ApiKeyManager] implementation to the [ApiKeyRepository] interface.
+     */
+    @Binds
+    @Singleton
+    abstract fun bindApiKeyRepository(
+        apiKeyManager: ApiKeyManager
+    ): ApiKeyRepository
 
     /**
      * Binds the [ai.agent.android.data.repositories.LocalModelRepositoryImpl] implementation to the [ai.agent.android.domain.repositories.LocalModelRepository] interface.

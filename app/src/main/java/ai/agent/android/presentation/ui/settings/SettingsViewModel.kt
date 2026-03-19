@@ -2,6 +2,7 @@ package ai.agent.android.presentation.ui.settings
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import ai.agent.android.domain.repositories.ApiKeyRepository
 import ai.agent.android.domain.repositories.SettingsRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -17,10 +18,12 @@ import javax.inject.Inject
  * ViewModel responsible for managing the state and business logic of the Settings UI.
  *
  * @property settingsRepository The repository for managing application settings.
+ * @property apiKeyRepository The repository for managing API keys.
  */
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
-    private val settingsRepository: SettingsRepository
+    private val settingsRepository: SettingsRepository,
+    private val apiKeyRepository: ApiKeyRepository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(SettingsUiState())
@@ -53,6 +56,26 @@ class SettingsViewModel @Inject constructor(
 
         settingsRepository.requiresUserConfirmation.onEach { value ->
             _uiState.update { it.copy(requiresUserConfirmation = value) }
+        }.launchIn(viewModelScope)
+
+        apiKeyRepository.getOpenAIKey().onEach { value ->
+            _uiState.update { it.copy(openAiKey = value ?: "") }
+        }.launchIn(viewModelScope)
+
+        apiKeyRepository.getAnthropicKey().onEach { value ->
+            _uiState.update { it.copy(anthropicKey = value ?: "") }
+        }.launchIn(viewModelScope)
+
+        apiKeyRepository.getGoogleKey().onEach { value ->
+            _uiState.update { it.copy(googleKey = value ?: "") }
+        }.launchIn(viewModelScope)
+
+        apiKeyRepository.getDeepSeekKey().onEach { value ->
+            _uiState.update { it.copy(deepSeekKey = value ?: "") }
+        }.launchIn(viewModelScope)
+
+        apiKeyRepository.getOllamaBaseUrl().onEach { value ->
+            _uiState.update { it.copy(ollamaBaseUrl = value ?: "") }
         }.launchIn(viewModelScope)
     }
 
@@ -119,6 +142,61 @@ class SettingsViewModel @Inject constructor(
     fun updateRequiresUserConfirmation(required: Boolean) {
         viewModelScope.launch {
             settingsRepository.setRequiresUserConfirmation(required)
+        }
+    }
+
+    /**
+     * Updates the OpenAI API key.
+     *
+     * @param key The new key or empty string to clear.
+     */
+    fun updateOpenAiKey(key: String) {
+        viewModelScope.launch {
+            apiKeyRepository.setOpenAIKey(key.takeIf { it.isNotBlank() })
+        }
+    }
+
+    /**
+     * Updates the Anthropic API key.
+     *
+     * @param key The new key or empty string to clear.
+     */
+    fun updateAnthropicKey(key: String) {
+        viewModelScope.launch {
+            apiKeyRepository.setAnthropicKey(key.takeIf { it.isNotBlank() })
+        }
+    }
+
+    /**
+     * Updates the Google API key.
+     *
+     * @param key The new key or empty string to clear.
+     */
+    fun updateGoogleKey(key: String) {
+        viewModelScope.launch {
+            apiKeyRepository.setGoogleKey(key.takeIf { it.isNotBlank() })
+        }
+    }
+
+    /**
+     * Updates the DeepSeek API key.
+     *
+     * @param key The new key or empty string to clear.
+     */
+    fun updateDeepSeekKey(key: String) {
+        viewModelScope.launch {
+            apiKeyRepository.setDeepSeekKey(key.takeIf { it.isNotBlank() })
+        }
+    }
+
+    /**
+     * Updates the Ollama local base URL.
+     *
+     * @param url The new URL or empty string to clear.
+     */
+    fun updateOllamaBaseUrl(url: String) {
+        viewModelScope.launch {
+            apiKeyRepository.setOllamaBaseUrl(url.takeIf { it.isNotBlank() })
         }
     }
 }

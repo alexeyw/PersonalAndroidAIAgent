@@ -102,6 +102,14 @@ dependencies {
     // Koog Framework
     implementation(libs.koog.agents)
     implementation(libs.koog.mcp)
+    implementation(libs.koog.openai)
+    implementation(libs.koog.anthropic)
+    implementation(libs.koog.google)
+    implementation(libs.koog.deepseek)
+    implementation(libs.koog.ollama)
+
+    // Security Crypto
+    implementation(libs.androidx.security.crypto)
 
     // AppFunctions
     implementation(libs.androidx.appfunctions)
