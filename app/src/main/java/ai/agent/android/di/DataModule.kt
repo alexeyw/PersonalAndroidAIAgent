@@ -141,5 +141,14 @@ abstract class DataModule {
     abstract fun bindPowerStateRepository(
         repository: ai.agent.android.data.repositories.PowerStateRepositoryImpl
     ): ai.agent.android.domain.repositories.PowerStateRepository
+
+    /**
+     * Binds the [ai.agent.android.data.repositories.NetworkStateRepositoryImpl] implementation to the [ai.agent.android.domain.repositories.NetworkStateRepository] interface.
+     */
+    @Binds
+    @Singleton
+    abstract fun bindNetworkStateRepository(
+        repository: ai.agent.android.data.repositories.NetworkStateRepositoryImpl
+    ): ai.agent.android.domain.repositories.NetworkStateRepository
 }
 
