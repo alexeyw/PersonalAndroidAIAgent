@@ -11,6 +11,8 @@ import ai.agent.android.presentation.ui.monitoring.MonitoringScreen
 import ai.agent.android.presentation.ui.monitoring.MonitoringViewModel
 import ai.agent.android.presentation.ui.settings.SettingsScreen
 import ai.agent.android.presentation.ui.tools.ToolsScreen
+import ai.agent.android.presentation.ui.orchestrator.VisualOrchestratorScreen
+import ai.agent.android.presentation.ui.orchestrator.OrchestratorViewModel
 import android.content.Intent
 import android.os.Build
 import android.os.Bundle
@@ -22,6 +24,8 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -45,7 +49,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        
+
         lifecycleScope.launch {
             initializeAppUseCase()
         }
@@ -77,6 +81,7 @@ class MainActivity : ComponentActivity() {
                                 onNavigateToChat = { navController.navigate("chat") },
                                 onNavigateToMonitoring = { navController.navigate("monitoring") },
                                 onNavigateToSettings = { navController.navigate("settings") },
+                                onNavigateToOrchestrator = { navController.navigate("orchestrator") },
                                 modifier = Modifier.fillMaxSize()
                             )
                         }
@@ -100,6 +105,10 @@ class MainActivity : ComponentActivity() {
                         composable("settings") {
                             SettingsScreen(modifier = Modifier.fillMaxSize())
                         }
+                        composable("orchestrator") {
+                            val orchestratorViewModel: OrchestratorViewModel = hiltViewModel()
+                            VisualOrchestratorScreen(viewModel = orchestratorViewModel)
+                        }
                     }
                 }
             }
@@ -115,10 +124,13 @@ fun HomeScreen(
     onNavigateToChat: () -> Unit,
     onNavigateToMonitoring: () -> Unit,
     onNavigateToSettings: () -> Unit,
+    onNavigateToOrchestrator: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Column(
-        modifier = modifier.padding(16.dp)
+        modifier = modifier
+            .padding(16.dp)
+            .verticalScroll(rememberScrollState())
     ) {
         Text(text = "Android AI Agent Home")
         Spacer(modifier = Modifier.height(16.dp))
@@ -144,6 +156,10 @@ fun HomeScreen(
         Spacer(modifier = Modifier.height(16.dp))
         Button(onClick = onNavigateToSettings) {
             Text("Settings")
+        }
+        Spacer(modifier = Modifier.height(16.dp))
+        Button(onClick = onNavigateToOrchestrator) {
+            Text("Visual Orchestrator")
         }
     }
 }
