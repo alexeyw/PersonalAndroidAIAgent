@@ -39,6 +39,9 @@ import kotlin.math.roundToInt
  * The main screen for the Visual Orchestrator.
  * Contains an infinite canvas to visually connect Koog agents, LiteRT models, and Tools.
  */
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
+
 @Composable
 fun VisualOrchestratorScreen(
     viewModel: OrchestratorViewModel = hiltViewModel()
@@ -59,12 +62,24 @@ fun VisualOrchestratorScreen(
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
-            Row(modifier = Modifier.padding(8.dp)) {
-                Button(onClick = { viewModel.addNode(NodeType.LITE_RT, 100f, 100f) }) {
+            Row(modifier = Modifier
+                .padding(8.dp)
+                .horizontalScroll(rememberScrollState())
+            ) {
+                Button(onClick = { viewModel.addNode(NodeType.INPUT, 50f, 100f) }) {
+                    Text("Add Input")
+                }
+                Button(onClick = { viewModel.addNode(NodeType.LITE_RT, 150f, 100f) }, modifier = Modifier.padding(start = 8.dp)) {
                     Text("Add Local")
                 }
-                Button(onClick = { viewModel.addNode(NodeType.DEEPSEEK, 150f, 150f) }, modifier = Modifier.padding(start = 8.dp)) {
+                Button(onClick = { viewModel.addNode(NodeType.DEEPSEEK, 250f, 150f) }, modifier = Modifier.padding(start = 8.dp)) {
                     Text("Add DeepSeek")
+                }
+                Button(onClick = { viewModel.addNode(NodeType.TOOL, 350f, 200f) }, modifier = Modifier.padding(start = 8.dp)) {
+                    Text("Add Tool")
+                }
+                Button(onClick = { viewModel.addNode(NodeType.OUTPUT, 450f, 100f) }, modifier = Modifier.padding(start = 8.dp)) {
+                    Text("Add Output")
                 }
                 Button(onClick = { viewModel.saveCurrentPipeline() }, modifier = Modifier.padding(start = 8.dp)) {
                     Text("Save")
@@ -79,7 +94,7 @@ fun VisualOrchestratorScreen(
                 .background(Color.DarkGray.copy(alpha = 0.1f))
                 .pointerInput(Unit) {
                     detectTransformGestures { _, pan, zoom, _ ->
-                        scale = (scale * zoom).coerceIn(0.5f, 3f)
+                        scale = (scale * zoom).coerceIn(0.1f, 5f)
                         offset += pan
                     }
                 }
