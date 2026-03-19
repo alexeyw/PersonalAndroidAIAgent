@@ -13,12 +13,21 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import javax.inject.Inject
 
+/**
+ * Concrete implementation of [McpClient] using the Koog framework's MCP tools.
+ * It manages the underlying Ktor HttpClient and the Koog ToolRegistry.
+ */
 @OptIn(ai.koog.agents.core.tools.annotations.InternalAgentToolsApi::class)
 class KoogMcpClient : McpClient {
     private var registry: ToolRegistry? = null
     private val httpClient = HttpClient()
     private val serializer = KotlinxSerializer(Json { ignoreUnknownKeys = true })
 
+    /**
+     * Connects to the MCP server at the specified URL using the Koog MCP transport.
+     *
+     * @param url The endpoint URL of the MCP server.
+     */
     override suspend fun connect(url: String) {
         withContext(Dispatchers.IO) {
             val transport = McpToolRegistryProvider.defaultSseTransport(url, httpClient)
@@ -27,6 +36,9 @@ class KoogMcpClient : McpClient {
         }
     }
 
+    /**
+     * Disconnects from the current MCP server, clearing the registry and closing the HTTP client.
+     */
     override suspend fun disconnect() {
         withContext(Dispatchers.IO) {
             registry = null
@@ -34,6 +46,12 @@ class KoogMcpClient : McpClient {
         }
     }
 
+    /**
+     * Retrieves the list of available tools from the connected Koog ToolRegistry.
+     * Maps the Koog tool descriptors to the domain-specific [AgentTool] models.
+     *
+     * @return A list of [AgentTool] objects, or an empty list if not connected.
+     */
     override suspend fun getTools(): List<AgentTool> {
         return withContext(Dispatchers.IO) {
             registry?.tools?.map { tool ->
@@ -47,6 +65,15 @@ class KoogMcpClient : McpClient {
         }
     }
 
+    /**
+     * Executes a specific tool by name from the Koog ToolRegistry.
+     * Parses the JSON arguments and uses the Koog serializer to execute and format the result.
+     *
+     * @param name The name of the tool to execute.
+     * @param arguments A JSON string representing the arguments.
+     * @return A string containing the serialized result of the execution.
+     * @throws IllegalArgumentException if the tool is not found.
+     */
     override suspend fun executeTool(name: String, arguments: String): String {
         return withContext(Dispatchers.IO) {
             val tool = registry?.getToolOrNull(name) 
@@ -62,7 +89,16 @@ class KoogMcpClient : McpClient {
     }
 }
 
+/**
+ * Factory class for creating [KoogMcpClient] instances.
+ * Injected via Hilt for dependency management.
+ */
 class KoogMcpClientFactory @Inject constructor() : McpClientFactory {
+    /**
+     * Creates a new instance of [KoogMcpClient].
+     *
+     * @return A new [McpClient] implementation.
+     */
     override fun create(): McpClient {
         return KoogMcpClient()
     }
