@@ -83,6 +83,14 @@ object AppModule {
     }
 
     /**
+     * Provides the [ai.agent.android.data.local.dao.PipelineDao] from the database.
+     */
+    @Provides
+    fun providePipelineDao(database: AppDatabase): ai.agent.android.data.local.dao.PipelineDao {
+        return database.pipelineDao()
+    }
+
+    /**
      * Provides the singleton instance of Converters for Room mapping.
      */
     @Provides

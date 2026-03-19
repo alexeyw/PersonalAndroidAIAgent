@@ -9,6 +9,10 @@ import ai.agent.android.data.local.models.ChatMessageEntity
 import ai.agent.android.data.local.dao.ChatDao
 import ai.agent.android.data.local.models.MemoryChunkEntity
 import ai.agent.android.data.local.dao.MemoryDao
+import ai.agent.android.data.local.models.PipelineEntity
+import ai.agent.android.data.local.models.NodeEntity
+import ai.agent.android.data.local.models.ConnectionEntity
+import ai.agent.android.data.local.dao.PipelineDao
 
 /**
  * Main Room Database for the Android AI Agent.
@@ -19,9 +23,12 @@ import ai.agent.android.data.local.dao.MemoryDao
     entities = [
         LocalModelEntity::class, 
         ChatMessageEntity::class,
-        MemoryChunkEntity::class
+        MemoryChunkEntity::class,
+        PipelineEntity::class,
+        NodeEntity::class,
+        ConnectionEntity::class
     ],
-    version = 4,
+    version = 5,
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -46,4 +53,11 @@ abstract class AppDatabase : RoomDatabase() {
      * @return The [MemoryDao] instance.
      */
     abstract fun memoryDao(): MemoryDao
+
+    /**
+     * Provides access to the PipelineDao.
+     *
+     * @return The [PipelineDao] instance.
+     */
+    abstract fun pipelineDao(): PipelineDao
 }
