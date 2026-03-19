@@ -66,12 +66,12 @@ class OrchestratorViewModel @Inject constructor(
     }
 
     /**
-     * Updates the coordinates of an existing node.
+     * Moves an existing node by a delta amount.
      */
-    fun updateNodePosition(nodeId: String, x: Float, y: Float) {
+    fun moveNode(nodeId: String, deltaX: Float, deltaY: Float) {
         _uiState.update { state ->
             val updatedNodes = state.currentPipeline.nodes.map {
-                if (it.id == nodeId) it.copy(x = x, y = y) else it
+                if (it.id == nodeId) it.copy(x = it.x + deltaX, y = it.y + deltaY) else it
             }
             state.copy(
                 currentPipeline = state.currentPipeline.copy(nodes = updatedNodes)

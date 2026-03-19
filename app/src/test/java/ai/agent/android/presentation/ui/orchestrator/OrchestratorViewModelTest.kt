@@ -59,19 +59,19 @@ class OrchestratorViewModelTest {
     }
 
     @Test
-    fun `updateNodePosition updates coordinates of existing node`() {
+    fun `moveNode updates coordinates of existing node by delta`() {
         // Arrange
         viewModel.addNode(NodeType.TOOL, 100f, 200f)
         val nodeId = viewModel.uiState.value.currentPipeline.nodes[0].id
 
         // Act
-        viewModel.updateNodePosition(nodeId, 300f, 400f)
+        viewModel.moveNode(nodeId, 50f, -20f)
 
         // Assert
         val nodes = viewModel.uiState.value.currentPipeline.nodes
         assertEquals(1, nodes.size)
-        assertEquals(300f, nodes[0].x)
-        assertEquals(400f, nodes[0].y)
+        assertEquals(150f, nodes[0].x)
+        assertEquals(180f, nodes[0].y)
     }
 
     @Test

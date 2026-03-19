@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.AlertDialog
@@ -38,6 +39,11 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import ai.agent.android.domain.models.NodeType
 import ai.agent.android.presentation.ui.orchestrator.components.DraggableNode
+
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.unit.IntOffset
+import kotlin.math.roundToInt
 
 /**
  * The main screen for the Visual Orchestrator.
@@ -106,9 +112,9 @@ fun VisualOrchestratorScreen(
                             DropdownMenuItem(
                                 text = { Text(nodeType.name) },
                                 onClick = {
-                                    // Calculate center of screen relative to pan/zoom to place new node
-                                    val centerX = (-panOffset.x + 300f) / scale
-                                    val centerY = (-panOffset.y + 300f) / scale
+                                    // Approximate center relative to current scale and pan
+                                    val centerX = (-panOffset.x + 400f) / scale
+                                    val centerY = (-panOffset.y + 400f) / scale
                                     viewModel.addNode(nodeType, centerX, centerY)
                                     showNodeMenu = false
                                 }
@@ -145,67 +151,83 @@ fun VisualOrchestratorScreen(
                 .padding(paddingValues)
                 .background(Color.DarkGray.copy(alpha = 0.1f))
                 .pointerInput(Unit) {
-                    detectTransformGestures { _, pan, zoom, _ ->
-                        scale = (scale * zoom).coerceIn(0.1f, 5f)
-                        panOffset += pan
+                    detectTransformGestures { centroid, pan, zoom, _ ->
+                        val newScale = (scale * zoom).coerceIn(0.1f, 5f)
+                        val p = panOffset + pan
+                        panOffset = centroid - (centroid - p) * (newScale / scale)
+                        scale = newScale
                     }
                 }
         ) {
-            Canvas(modifier = Modifier.fillMaxSize()) {
-                val nodes = uiState.nodes
-                val connections = uiState.connections
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .graphicsLayer {
+                        scaleX = scale
+                        scaleY = scale
+                        translationX = panOffset.x
+                        translationY = panOffset.y
+                        transformOrigin = TransformOrigin(0f, 0f)
+                    }
+            ) {
+                Canvas(modifier = Modifier.fillMaxSize()) {
+                    val nodes = uiState.nodes
+                    val connections = uiState.connections
 
-                connections.forEach { conn ->
-                    val source = nodes.find { it.id == conn.sourceNodeId }
-                    val target = nodes.find { it.id == conn.targetNodeId }
+                    connections.forEach { conn ->
+                        val source = nodes.find { it.id == conn.sourceNodeId }
+                        val target = nodes.find { it.id == conn.targetNodeId }
 
-                    if (source != null && target != null) {
-                        val path = Path().apply {
-                            val startX = source.x * scale + panOffset.x + 200f // Adjusted for node width
-                            val startY = source.y * scale + panOffset.y + 80f  // Adjusted for node height
-                            val endX = target.x * scale + panOffset.x
-                            val endY = target.y * scale + panOffset.y + 80f
+                        if (source != null && target != null) {
+                            val path = Path().apply {
+                                // Offsets applied directly to logical coordinates
+                                val startX = source.x + 150f 
+                                val startY = source.y + 80f  
+                                val endX = target.x
+                                val endY = target.y + 80f
 
-                            moveTo(startX, startY)
-                            cubicTo(
-                                startX + 100f, startY,
-                                endX - 100f, endY,
-                                endX, endY
+                                moveTo(startX, startY)
+                                cubicTo(
+                                    startX + 100f, startY,
+                                    endX - 100f, endY,
+                                    endX, endY
+                                )
+                            }
+                            drawPath(
+                                path = path,
+                                color = Color.Gray,
+                                style = Stroke(width = 4.dp.toPx()) 
                             )
                         }
-                        drawPath(
-                            path = path,
-                            color = Color.Gray,
-                            style = Stroke(width = 4.dp.toPx() * scale) // Scale stroke width too
-                        )
                     }
                 }
-            }
 
-            uiState.nodes.forEach { node ->
-                DraggableNode(
-                    node = node,
-                    scale = scale,
-                    panOffset = panOffset,
-                    isConnecting = connectingFromNodeId == node.id,
-                    onPositionChanged = { id, x, y ->
-                        viewModel.updateNodePosition(id, x, y)
-                    },
-                    onConnectClick = {
-                        if (connectingFromNodeId == null) {
-                            connectingFromNodeId = node.id
-                        } else if (connectingFromNodeId != node.id) {
-                            viewModel.addConnection(connectingFromNodeId!!, node.id)
-                            connectingFromNodeId = null
-                        } else {
-                            connectingFromNodeId = null // Cancel if clicked again
+                uiState.nodes.forEach { node ->
+                    DraggableNode(
+                        node = node,
+                        isConnecting = connectingFromNodeId == node.id,
+                        modifier = Modifier.offset {
+                            IntOffset(node.x.roundToInt(), node.y.roundToInt())
+                        },
+                        onPositionDelta = { id, dx, dy ->
+                            viewModel.moveNode(id, dx, dy)
+                        },
+                        onConnectClick = {
+                            if (connectingFromNodeId == null) {
+                                connectingFromNodeId = node.id
+                            } else if (connectingFromNodeId != node.id) {
+                                viewModel.addConnection(connectingFromNodeId!!, node.id)
+                                connectingFromNodeId = null
+                            } else {
+                                connectingFromNodeId = null // Cancel if clicked again
+                            }
+                        },
+                        onDeleteClick = {
+                            if (connectingFromNodeId == node.id) connectingFromNodeId = null
+                            viewModel.removeNode(node.id)
                         }
-                    },
-                    onDeleteClick = {
-                        if (connectingFromNodeId == node.id) connectingFromNodeId = null
-                        viewModel.removeNode(node.id)
-                    }
-                )
+                    )
+                }
             }
         }
     }

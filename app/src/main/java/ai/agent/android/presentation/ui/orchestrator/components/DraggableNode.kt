@@ -21,9 +21,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -34,22 +32,18 @@ import ai.agent.android.domain.models.NodeType
  * A draggable and interactive visual node component.
  *
  * @param node The [NodeModel] detailing type, id, and coordinates.
- * @param scale The current zoom scale.
- * @param panOffset The current canvas pan offset.
  * @param isConnecting Whether this node is currently selected to connect to another.
  * @param modifier The [Modifier] for this composable.
- * @param onPositionChanged Callback invoked when the node is dragged.
+ * @param onPositionDelta Callback invoked when the node is dragged, providing the delta x and y.
  * @param onConnectClick Callback invoked when the connect button is clicked.
  * @param onDeleteClick Callback invoked when the delete button is clicked.
  */
 @Composable
 fun DraggableNode(
     node: NodeModel,
-    scale: Float = 1f,
-    panOffset: Offset = Offset.Zero,
     isConnecting: Boolean = false,
     modifier: Modifier = Modifier,
-    onPositionChanged: (String, Float, Float) -> Unit,
+    onPositionDelta: (String, Float, Float) -> Unit,
     onConnectClick: () -> Unit,
     onDeleteClick: () -> Unit
 ) {
@@ -65,18 +59,11 @@ fun DraggableNode(
 
     Box(
         modifier = modifier
-            .graphicsLayer {
-                translationX = node.x * scale + panOffset.x
-                translationY = node.y * scale + panOffset.y
-                scaleX = scale
-                scaleY = scale
-            }
             .pointerInput(node.id) {
                 detectDragGestures { change, dragAmount ->
                     change.consume()
-                    // dragAmount is in screen space. Since we apply scale via graphicsLayer,
-                    // we must divide the delta by scale to map back to canvas coordinate space.
-                    onPositionChanged(node.id, node.x + (dragAmount.x / scale), node.y + (dragAmount.y / scale))
+                    // dragAmount is in the local scaled coordinate space, which perfectly maps to our logical space
+                    onPositionDelta(node.id, dragAmount.x, dragAmount.y)
                 }
             }
             .clip(RoundedCornerShape(8.dp))
