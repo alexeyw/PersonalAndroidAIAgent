@@ -150,5 +150,14 @@ abstract class DataModule {
     abstract fun bindNetworkStateRepository(
         repository: ai.agent.android.data.repositories.NetworkStateRepositoryImpl
     ): ai.agent.android.domain.repositories.NetworkStateRepository
+
+    /**
+     * Binds the [ai.agent.android.data.repositories.LocalPipelineRepositoryImpl] implementation to the [ai.agent.android.domain.repositories.PipelineRepository] interface.
+     */
+    @Binds
+    @Singleton
+    abstract fun bindPipelineRepository(
+        repository: ai.agent.android.data.repositories.LocalPipelineRepositoryImpl
+    ): ai.agent.android.domain.repositories.PipelineRepository
 }
 
