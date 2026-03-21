@@ -19,7 +19,8 @@ class ToolRepositoryImpl @Inject constructor(
     private val settingsRepository: SettingsRepository,
     private val mcpClientFactory: McpClientFactory,
     private val localAppFunctionManager: LocalAppFunctionManager,
-    private val scheduleTaskUseCase: ScheduleTaskUseCase
+    private val scheduleTaskUseCase: ScheduleTaskUseCase,
+    private val delegateTaskTool: ai.agent.android.data.tools.local.DelegateTaskTool
 ) : ToolRepository {
 
     private val mcpClients = mutableMapOf<String, McpClient>()
@@ -37,6 +38,20 @@ class ToolRepositoryImpl @Inject constructor(
                     "delayMinutes": { "type": "integer", "description": "Delay in minutes for one-time tasks. Default 0." }
                   },
                   "required": ["prompt"]
+                }
+            """.trimIndent()
+        ),
+        AgentTool(
+            name = "delegate_task",
+            description = "Delegates a complex or specialized task to a powerful external LLM (e.g., Claude, OpenAI, Gemini) and saves the result to memory.",
+            parameters = """
+                {
+                  "type": "object",
+                  "properties": {
+                    "taskDescription": { "type": "string", "description": "A detailed explanation of the task to be delegated" },
+                    "targetModel": { "type": "string", "description": "The external model to use: anthropic, openai, google, deepseek, ollama. Default is anthropic." }
+                  },
+                  "required": ["taskDescription"]
                 }
             """.trimIndent()
         )
@@ -104,6 +119,13 @@ class ToolRepositoryImpl @Inject constructor(
                 val intervalHours = if (json.has("intervalHours")) json.getLong("intervalHours") else 0L
                 val delayMinutes = if (json.has("delayMinutes")) json.getLong("delayMinutes") else 0L
                 return scheduleTaskUseCase(prompt, intervalHours, delayMinutes)
+            }
+            
+            if (name == "delegate_task") {
+                val json = JSONObject(arguments)
+                val taskDescription = json.getString("taskDescription")
+                val targetModel = if (json.has("targetModel")) json.getString("targetModel") else "anthropic"
+                return delegateTaskTool.executeDelegation(taskDescription, targetModel)
             }
             
             return "Local tool executed: \$name with \$arguments" // Dummy implementation
