@@ -70,15 +70,15 @@ class DelegateTaskTool @Inject constructor(
             val defaultModelId = when (targetModel.lowercase()) {
                 "anthropic" -> "claude-3-5-sonnet-20241022"
                 "openai" -> "gpt-4o"
-                "google", "gemini" -> "gemini-2.5-pro"
+                "google", "gemini" -> "gemini-1.5-pro" // Use 1.5-pro as 2.5 might not be fully mapped in Koog 0.7.1
                 "deepseek" -> "deepseek-chat"
                 "ollama" -> "llama3"
                 else -> "default"
             }
             
-            val availableModels = client.models()
-            val model = availableModels.find { it.id.contains("chat") || it.id.contains("pro") || it.id.contains("sonnet") || it.id.contains("gpt") }
-                ?: LLModel(client.llmProvider(), defaultModelId)
+            // Bypass client.models() to avoid Koog's internal metadata flags which might 
+            // falsely mark a model as not supporting chat completions.
+            val model = LLModel(client.llmProvider(), defaultModelId)
             
             // Apply a 60-second timeout for the external API call
             val result = withTimeoutOrNull(60_000L) {

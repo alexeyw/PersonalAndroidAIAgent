@@ -131,7 +131,7 @@ class AgentOrchestratorUseCase @Inject constructor(
                 is RoutingDecision.LocalOllama -> {
                     val client = koogClientFactory.createOllamaExecutor()
                     if (client != null) {
-                        val model = client.models().firstOrNull() ?: LLModel(client.llmProvider(), "default")
+                        val model = LLModel(client.llmProvider(), "llama3")
                         client.executeStreaming(prompt("default") { user(fullPrompt) }, model).mapNotNull { frame ->
                             (frame as? StreamFrame.TextDelta)?.text
                         }
@@ -148,7 +148,14 @@ class AgentOrchestratorUseCase @Inject constructor(
                         else -> null
                     }
                     if (client != null) {
-                        val model = client.models().firstOrNull() ?: LLModel(client.llmProvider(), "default")
+                        val defaultModelId = when (decision.provider) {
+                            "anthropic" -> "claude-3-5-sonnet-20241022"
+                            "openai" -> "gpt-4o"
+                            "google" -> "gemini-1.5-pro"
+                            "deepseek" -> "deepseek-chat"
+                            else -> "default"
+                        }
+                        val model = LLModel(client.llmProvider(), defaultModelId)
                         client.executeStreaming(prompt("default") { user(fullPrompt) }, model).mapNotNull { frame ->
                             (frame as? StreamFrame.TextDelta)?.text
                         }
