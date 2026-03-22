@@ -10,7 +10,10 @@ import ai.koog.prompt.executor.clients.google.GoogleModels
 import ai.koog.prompt.executor.clients.openai.OpenAIModels
 import ai.koog.prompt.executor.ollama.client.OllamaModels
 import ai.koog.prompt.llm.LLModel
+import ai.koog.prompt.streaming.StreamFrame
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.mapNotNull
+import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import javax.inject.Inject
@@ -83,14 +86,15 @@ class DelegateTaskTool @Inject constructor(
 
             // Apply a 60-second timeout for the external API call
             val result = withTimeoutOrNull(60_000L) {
-                client.execute(prompt("default") { user(taskDescription) }, model)
+                val stream = client.executeStreaming(prompt("default") { user(taskDescription) }, model)
+                stream.mapNotNull { frame -> (frame as? StreamFrame.TextDelta)?.text }.toList().joinToString("")
             }
 
-            if (result == null) {
-                "Error: Task delegation to '$targetModel' timed out after 60 seconds."
+            if (result.isNullOrBlank()) {
+                "Error: Task delegation to '$targetModel' timed out or returned empty after 60 seconds."
             } else {
                 // Task succeeded. Generate embedding for the result.
-                val responseText = result.firstOrNull()?.content ?: "Empty response received."
+                val responseText = result
                 val embedding = textEmbeddingEngine.generateEmbedding(responseText)
                 
                 // Save to long-term memory so the local agent can recall it later
