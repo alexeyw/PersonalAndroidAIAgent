@@ -67,7 +67,11 @@ fun AgentThoughtIndicator(
                     .background(MaterialTheme.colorScheme.secondaryContainer)
                     .padding(12.dp)
             ) {
-                Markdown(content = state.partialText)
+                // Using Text instead of Markdown during streaming to prevent severe UI flickering and layout recalculations
+                Text(
+                    text = state.partialText,
+                    color = MaterialTheme.colorScheme.onSecondaryContainer
+                )
             }
         }
         return

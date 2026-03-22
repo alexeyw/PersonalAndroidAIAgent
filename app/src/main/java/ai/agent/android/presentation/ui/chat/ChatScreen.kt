@@ -74,14 +74,15 @@ fun ChatScreen(
         }
     }
 
-    // Auto-scroll to the bottom when messages or generation state changes
-    LaunchedEffect(uiState.messages.size, uiState.orchestratorState) {
-        if (uiState.messages.isNotEmpty() || uiState.orchestratorState != null) {
+    // Auto-scroll to the bottom when new messages arrive or generation starts
+    LaunchedEffect(uiState.messages.size, uiState.isGenerating) {
+        if (uiState.messages.isNotEmpty() || uiState.isGenerating) {
             val targetIndex =
-                uiState.messages.size + if (uiState.orchestratorState != null) 1 else 0
+                uiState.messages.size + if (uiState.isGenerating) 2 else 1 // +1 for the top spacer, +1 for thought indicator if generating
             if (targetIndex > 0) {
                 coroutineScope.launch {
-                    listState.animateScrollToItem(targetIndex - 1)
+                    // Use a slight delay or simple scrollToItem to avoid animation conflicts during layout passes
+                    listState.scrollToItem(targetIndex)
                 }
             }
         }
