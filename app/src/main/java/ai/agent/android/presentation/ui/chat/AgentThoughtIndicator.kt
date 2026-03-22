@@ -19,6 +19,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -41,9 +43,15 @@ import com.mikepenz.markdown.m3.Markdown
  * It displays states like thinking, using tools, or loading in an animated, expandable card.
  *
  * @param state The current state of the orchestrator to visualize.
+ * @param onApprove Callback when the user approves a tool execution.
+ * @param onDeny Callback when the user denies a tool execution.
  */
 @Composable
-fun AgentThoughtIndicator(state: AgentOrchestratorState) {
+fun AgentThoughtIndicator(
+    state: AgentOrchestratorState,
+    onApprove: () -> Unit = {},
+    onDeny: () -> Unit = {}
+) {
     var expanded by remember { mutableStateOf(false) }
 
     // Render the final generation as a standard message bubble.
@@ -59,7 +67,11 @@ fun AgentThoughtIndicator(state: AgentOrchestratorState) {
                     .background(MaterialTheme.colorScheme.secondaryContainer)
                     .padding(12.dp)
             ) {
-                Markdown(content = state.partialText)
+                // Using Text instead of Markdown during streaming to prevent severe UI flickering and layout recalculations
+                Text(
+                    text = state.partialText,
+                    color = MaterialTheme.colorScheme.onSecondaryContainer
+                )
             }
         }
         return
@@ -99,12 +111,13 @@ fun AgentThoughtIndicator(state: AgentOrchestratorState) {
                             text = when (targetState) {
                                 is AgentOrchestratorState.Loading -> "Initializing agent..."
                                 is AgentOrchestratorState.Thinking -> "Agent is thinking..."
+                                is AgentOrchestratorState.WaitingForApproval -> "Action requires approval!"
                                 is AgentOrchestratorState.ExecutingTool -> "Using tool: ${targetState.toolName}..."
                                 is AgentOrchestratorState.ObservationResult -> "Observation received..."
                                 else -> "Processing..."
                             },
                             style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            color = if (targetState is AgentOrchestratorState.WaitingForApproval) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
@@ -119,9 +132,32 @@ fun AgentThoughtIndicator(state: AgentOrchestratorState) {
                 )
             }
 
-            AnimatedVisibility(visible = expanded) {
+            AnimatedVisibility(visible = expanded || state is AgentOrchestratorState.WaitingForApproval) {
                 Column(modifier = Modifier.padding(top = 8.dp)) {
                     when (state) {
+                        is AgentOrchestratorState.WaitingForApproval -> {
+                            Text(
+                                text = "Agent wants to execute '${state.toolName}'",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(bottom = 8.dp)
+                            )
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.End
+                            ) {
+                                Button(
+                                    onClick = onDeny,
+                                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.errorContainer, contentColor = MaterialTheme.colorScheme.onErrorContainer),
+                                    modifier = Modifier.padding(end = 8.dp)
+                                ) {
+                                    Text("Deny")
+                                }
+                                Button(onClick = onApprove) {
+                                    Text("Approve")
+                                }
+                            }
+                        }
                         is AgentOrchestratorState.Thinking -> {
                             Text(
                                 text = state.partialText,

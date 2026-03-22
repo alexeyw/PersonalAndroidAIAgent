@@ -2,8 +2,10 @@ package ai.agent.android.presentation.ui.memory
 
 import ai.agent.android.domain.models.ChatMessage
 import ai.agent.android.domain.models.MemoryChunk
+import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -16,6 +18,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material3.TextButton
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -32,11 +35,16 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -199,9 +207,11 @@ private fun ChatMessageItem(
 ) {
     val dateFormat = SimpleDateFormat("MMM dd, HH:mm", Locale.getDefault())
     val dateString = dateFormat.format(Date(message.timestamp))
+    var expanded by remember { mutableStateOf(false) }
+    val clipboardManager = LocalClipboardManager.current
 
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().clickable { expanded = !expanded }.animateContentSize(),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surface
         )
@@ -231,17 +241,22 @@ private fun ChatMessageItem(
                 Text(
                     text = message.content,
                     style = MaterialTheme.typography.bodyMedium,
-                    maxLines = 3,
+                    maxLines = if (expanded) Int.MAX_VALUE else 3,
                     overflow = TextOverflow.Ellipsis
                 )
             }
-            IconButton(onClick = onDelete) {
-                Icon(
-                    imageVector = Icons.Default.Delete,
-                    contentDescription = "Delete Message",
-                    tint = MaterialTheme.colorScheme.error,
-                    modifier = Modifier.padding(start = 8.dp)
-                )
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                IconButton(onClick = onDelete) {
+                    Icon(
+                        imageVector = Icons.Default.Delete,
+                        contentDescription = "Delete Message",
+                        tint = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.padding(start = 8.dp)
+                    )
+                }
+                TextButton(onClick = { clipboardManager.setText(AnnotatedString(message.content)) }) {
+                    Text("Copy", style = MaterialTheme.typography.labelMedium)
+                }
             }
         }
     }
@@ -254,9 +269,11 @@ private fun MemoryChunkItem(
 ) {
     val dateFormat = SimpleDateFormat("MMM dd, yyyy HH:mm", Locale.getDefault())
     val dateString = dateFormat.format(Date(memory.timestamp))
+    var expanded by remember { mutableStateOf(false) }
+    val clipboardManager = LocalClipboardManager.current
 
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().clickable { expanded = !expanded }.animateContentSize(),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.secondaryContainer
         )
@@ -273,13 +290,20 @@ private fun MemoryChunkItem(
                     color = MaterialTheme.colorScheme.onSecondaryContainer
                 )
                 Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = memory.text,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSecondaryContainer,
-                    maxLines = 4,
-                    overflow = TextOverflow.Ellipsis
-                )
+                if (expanded) {
+                    com.mikepenz.markdown.m3.Markdown(
+                        content = memory.text,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                } else {
+                    Text(
+                        text = memory.text.trim(),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSecondaryContainer,
+                        maxLines = 4,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
                     text = "Embedding size: ${memory.embedding.size} dims",
@@ -287,12 +311,17 @@ private fun MemoryChunkItem(
                     color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f)
                 )
             }
-            IconButton(onClick = onDelete) {
-                Icon(
-                    imageVector = Icons.Default.Delete,
-                    contentDescription = "Delete Memory",
-                    tint = MaterialTheme.colorScheme.error
-                )
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                IconButton(onClick = onDelete) {
+                    Icon(
+                        imageVector = Icons.Default.Delete,
+                        contentDescription = "Delete Memory",
+                        tint = MaterialTheme.colorScheme.error
+                    )
+                }
+                TextButton(onClick = { clipboardManager.setText(AnnotatedString(memory.text)) }) {
+                    Text("Copy", style = MaterialTheme.typography.labelMedium)
+                }
             }
         }
     }

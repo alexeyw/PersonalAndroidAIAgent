@@ -12,6 +12,11 @@ import ai.agent.android.domain.repositories.SettingsRepository
 import ai.agent.android.domain.repositories.ToolRepository
 import ai.agent.android.domain.services.ApprovalNotifier
 import ai.koog.prompt.dsl.prompt
+import ai.koog.prompt.executor.clients.anthropic.AnthropicModels
+import ai.koog.prompt.executor.clients.deepseek.DeepSeekModels
+import ai.koog.prompt.executor.clients.google.GoogleModels
+import ai.koog.prompt.executor.clients.openai.OpenAIModels
+import ai.koog.prompt.executor.ollama.client.OllamaModels
 import ai.koog.prompt.llm.LLModel
 import ai.koog.prompt.streaming.StreamFrame
 import kotlinx.coroutines.CompletableDeferred
@@ -43,7 +48,8 @@ class AgentOrchestratorUseCase @Inject constructor(
     private val metricsRepository: MetricsRepository,
     private val approvalNotifier: ApprovalNotifier,
     private val taskRouterUseCase: TaskRouterUseCase,
-    private val koogClientFactory: KoogClientFactory
+    private val koogClientFactory: KoogClientFactory,
+    private val retrieveRelevantMemoryUseCase: RetrieveRelevantMemoryUseCase
 ) {
     companion object {
         const val MAX_ITERATIONS = 5
@@ -97,6 +103,11 @@ class AgentOrchestratorUseCase @Inject constructor(
         val baseSystemPrompt = """
             $systemPromptPrefix
             $toolUsageInstruction
+            
+            CRITICAL RULE FOR REACT LOOP: 
+            If you see a "SYSTEM: Observation from <tool>" message in the chat history, it means your previous tool call succeeded. 
+            DO NOT output another JSON block for the same tool. 
+            Instead, synthesize the observation into a final natural language response and stop.
         """.trimIndent()
 
         // ReAct loop
@@ -108,7 +119,16 @@ class AgentOrchestratorUseCase @Inject constructor(
 
             // 3. Get the context window (history + previous thoughts/observations)
             val contextWindow = getContextWindowUseCase(sessionId)
-            val fullPrompt = "$baseSystemPrompt\n\n$contextWindow\nAGENT: "
+            
+            // 3.5. Retrieve relevant long-term memory
+            val relevantMemories = retrieveRelevantMemoryUseCase(userPrompt)
+            val memoryContext = if (relevantMemories.isNotEmpty()) {
+                "RELEVANT LONG-TERM MEMORIES:\n" + relevantMemories.joinToString("\n") { "- ${it.text}" } + "\n\n"
+            } else {
+                ""
+            }
+
+            val fullPrompt = "$baseSystemPrompt\n\n$memoryContext$contextWindow\nAGENT: "
 
             // 4. Request generation from the routed LLM
             val startTime = System.currentTimeMillis()
@@ -121,7 +141,7 @@ class AgentOrchestratorUseCase @Inject constructor(
                 is RoutingDecision.LocalOllama -> {
                     val client = koogClientFactory.createOllamaExecutor()
                     if (client != null) {
-                        val model = client.models().firstOrNull() ?: LLModel(client.llmProvider(), "default")
+                        val model = OllamaModels.Groq.LLAMA_3_GROK_TOOL_USE_8B
                         client.executeStreaming(prompt("default") { user(fullPrompt) }, model).mapNotNull { frame ->
                             (frame as? StreamFrame.TextDelta)?.text
                         }
@@ -138,7 +158,13 @@ class AgentOrchestratorUseCase @Inject constructor(
                         else -> null
                     }
                     if (client != null) {
-                        val model = client.models().firstOrNull() ?: LLModel(client.llmProvider(), "default")
+                        val model = when (decision.provider) {
+                            "anthropic" -> AnthropicModels.Sonnet_4_5
+                            "openai" -> OpenAIModels.Chat.GPT5_4
+                            "google" -> GoogleModels.Gemini3_Flash_Preview
+                            "deepseek" -> DeepSeekModels.DeepSeekChat
+                            else -> LLModel(client.llmProvider(), "default")
+                        }
                         client.executeStreaming(prompt("default") { user(fullPrompt) }, model).mapNotNull { frame ->
                             (frame as? StreamFrame.TextDelta)?.text
                         }

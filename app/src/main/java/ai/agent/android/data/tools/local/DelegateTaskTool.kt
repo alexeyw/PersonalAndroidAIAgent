@@ -4,8 +4,16 @@ import ai.agent.android.data.engine.KoogClientFactory
 import ai.agent.android.domain.engine.TextEmbeddingEngine
 import ai.agent.android.domain.repositories.MemoryRepository
 import ai.koog.prompt.dsl.prompt
+import ai.koog.prompt.executor.clients.anthropic.AnthropicModels
+import ai.koog.prompt.executor.clients.deepseek.DeepSeekModels
+import ai.koog.prompt.executor.clients.google.GoogleModels
+import ai.koog.prompt.executor.clients.openai.OpenAIModels
+import ai.koog.prompt.executor.ollama.client.OllamaModels
 import ai.koog.prompt.llm.LLModel
+import ai.koog.prompt.streaming.StreamFrame
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.mapNotNull
+import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import javax.inject.Inject
@@ -46,12 +54,12 @@ class DelegateTaskTool @Inject constructor(
      * the main thread or the agent's Foreground Service.
      *
      * @param taskDescription A detailed explanation of the task to be delegated. This will be used as the prompt for the external LLM.
-     * @param targetModel The identifier for the external model to use. Supported values: "anthropic", "openai", "google", "deepseek", "ollama". Defaults to "anthropic".
+     * @param targetModel The identifier for the external model to use. Supported values: "anthropic", "openai", "google", "deepseek", "ollama". Defaults to "google".
      * @return A summary string detailing the outcome of the delegation, including whether it succeeded, timed out, or encountered an error. This summary is returned back to the calling agent.
      */
     suspend fun executeDelegation(
         taskDescription: String,
-        targetModel: String = "anthropic"
+        targetModel: String = "google"
     ): String = withContext(Dispatchers.IO) {
         val client = when (targetModel.lowercase()) {
             "anthropic" -> koogClientFactory.createAnthropicExecutor()
@@ -59,35 +67,43 @@ class DelegateTaskTool @Inject constructor(
             "google", "gemini" -> koogClientFactory.createGoogleExecutor()
             "deepseek" -> koogClientFactory.createDeepSeekExecutor()
             "ollama" -> koogClientFactory.createOllamaExecutor()
-            else -> return@withContext "Error: Unsupported target model '\$targetModel'. Supported models: anthropic, openai, google, deepseek, ollama."
+            else -> return@withContext "Error: Unsupported target model '$targetModel'. Supported models: anthropic, openai, google, deepseek, ollama."
         }
 
         if (client == null) {
-            return@withContext "Error: Client for '\$targetModel' could not be initialized. Please check if the API key or configuration is provided."
+            return@withContext "Error: Client for '$targetModel' could not be initialized. Please check if the API key or configuration is provided."
         }
 
         return@withContext try {
-            val model = client.models().firstOrNull() ?: LLModel(client.llmProvider(), "default")
-            
-            // Apply a 60-second timeout for the external API call
-            val result = withTimeoutOrNull(60_000L) {
-                client.execute(prompt("default") { user(taskDescription) }, model)
+            val model = when (targetModel.lowercase()) {
+                "anthropic" -> AnthropicModels.Sonnet_4_5
+                "openai" -> OpenAIModels.Chat.GPT5_4
+                "google", "gemini" -> GoogleModels.Gemini3_Flash_Preview
+                "deepseek" -> DeepSeekModels.DeepSeekChat
+                "ollama" -> OllamaModels.Groq.LLAMA_3_GROK_TOOL_USE_8B
+                else -> LLModel(client.llmProvider(), "default")
             }
 
-            if (result == null) {
-                "Error: Task delegation to '\$targetModel' timed out after 60 seconds."
+            // Apply a 60-second timeout for the external API call
+            val result = withTimeoutOrNull(60_000L) {
+                val stream = client.executeStreaming(prompt("default") { user(taskDescription) }, model)
+                stream.mapNotNull { frame -> (frame as? StreamFrame.TextDelta)?.text }.toList().joinToString("")
+            }
+
+            if (result.isNullOrBlank()) {
+                "Error: Task delegation to '$targetModel' timed out or returned empty after 60 seconds."
             } else {
                 // Task succeeded. Generate embedding for the result.
-                val responseText = result.firstOrNull()?.content ?: "Empty response received."
+                val responseText = result
                 val embedding = textEmbeddingEngine.generateEmbedding(responseText)
                 
                 // Save to long-term memory so the local agent can recall it later
                 memoryRepository.saveMemory(responseText, embedding)
 
-                "Success: Task completed by '\$targetModel' and saved to memory. Summary of response: \${responseText.take(100)}..."
+                "Success: Task completed by '$targetModel' and saved to memory. Summary of response: ${responseText.take(100)}..."
             }
         } catch (e: Exception) {
-            "Error: Task delegation failed due to an exception: \${e.message}"
+            "Error: Task delegation failed due to an exception: ${e.message}"
         }
     }
 }

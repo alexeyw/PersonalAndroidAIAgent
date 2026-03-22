@@ -41,8 +41,8 @@ import ai.agent.android.domain.models.NodeType
 @Composable
 fun DraggableNode(
     node: NodeModel,
-    isConnecting: Boolean = false,
     modifier: Modifier = Modifier,
+    isConnecting: Boolean = false,
     onPositionDelta: (String, Float, Float) -> Unit,
     onConnectClick: () -> Unit,
     onDeleteClick: () -> Unit

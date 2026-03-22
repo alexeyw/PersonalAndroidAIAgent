@@ -95,31 +95,23 @@ class AgentForegroundService : Service() {
     }
 
     private fun createNotificationChannel() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(
-                NOTIFICATION_CHANNEL_ID,
-                "Agent Service",
-                NotificationManager.IMPORTANCE_LOW
-            )
-            channel.description = "Keeps the AI Agent running in the background."
-            val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-            manager.createNotificationChannel(channel)
-        }
+        val channel = NotificationChannel(
+            NOTIFICATION_CHANNEL_ID,
+            "Agent Service",
+            NotificationManager.IMPORTANCE_LOW
+        )
+        channel.description = "Keeps the AI Agent running in the background."
+        val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        manager.createNotificationChannel(channel)
     }
 
     private fun startForegroundServiceWithNotification(status: String) {
         val notification = buildNotification(status)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-            startForeground(
-                NOTIFICATION_ID, 
-                notification, 
-                ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
-            )
-        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            startForeground(NOTIFICATION_ID, notification)
-        } else {
-            startForeground(NOTIFICATION_ID, notification)
-        }
+        startForeground(
+            NOTIFICATION_ID, 
+            notification, 
+            ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
+        )
     }
 
     private fun updateNotification(status: String) {
