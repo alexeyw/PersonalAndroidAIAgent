@@ -290,13 +290,20 @@ private fun MemoryChunkItem(
                     color = MaterialTheme.colorScheme.onSecondaryContainer
                 )
                 Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = memory.text,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSecondaryContainer,
-                    maxLines = if (expanded) Int.MAX_VALUE else 4,
-                    overflow = TextOverflow.Ellipsis
-                )
+                if (expanded) {
+                    com.mikepenz.markdown.m3.Markdown(
+                        content = memory.text,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                } else {
+                    Text(
+                        text = memory.text.trim(),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSecondaryContainer,
+                        maxLines = 4,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
                     text = "Embedding size: ${memory.embedding.size} dims",
