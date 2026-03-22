@@ -4,6 +4,11 @@ import ai.agent.android.data.engine.KoogClientFactory
 import ai.agent.android.domain.engine.TextEmbeddingEngine
 import ai.agent.android.domain.repositories.MemoryRepository
 import ai.koog.prompt.dsl.prompt
+import ai.koog.prompt.executor.clients.anthropic.AnthropicModels
+import ai.koog.prompt.executor.clients.deepseek.DeepSeekModels
+import ai.koog.prompt.executor.clients.google.GoogleModels
+import ai.koog.prompt.executor.clients.openai.OpenAIModels
+import ai.koog.prompt.executor.ollama.client.OllamaModels
 import ai.koog.prompt.llm.LLModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -46,12 +51,12 @@ class DelegateTaskTool @Inject constructor(
      * the main thread or the agent's Foreground Service.
      *
      * @param taskDescription A detailed explanation of the task to be delegated. This will be used as the prompt for the external LLM.
-     * @param targetModel The identifier for the external model to use. Supported values: "anthropic", "openai", "google", "deepseek", "ollama". Defaults to "anthropic".
+     * @param targetModel The identifier for the external model to use. Supported values: "anthropic", "openai", "google", "deepseek", "ollama". Defaults to "google".
      * @return A summary string detailing the outcome of the delegation, including whether it succeeded, timed out, or encountered an error. This summary is returned back to the calling agent.
      */
     suspend fun executeDelegation(
         taskDescription: String,
-        targetModel: String = "anthropic"
+        targetModel: String = "google"
     ): String = withContext(Dispatchers.IO) {
         val client = when (targetModel.lowercase()) {
             "anthropic" -> koogClientFactory.createAnthropicExecutor()
@@ -67,19 +72,15 @@ class DelegateTaskTool @Inject constructor(
         }
 
         return@withContext try {
-            val defaultModelId = when (targetModel.lowercase()) {
-                "anthropic" -> "claude-3-5-sonnet-20241022"
-                "openai" -> "gpt-4o"
-                "google", "gemini" -> "gemini-2.0-flash" // Widely available and fast model
-                "deepseek" -> "deepseek-chat"
-                "ollama" -> "llama3"
-                else -> "default"
+            val model = when (targetModel.lowercase()) {
+                "anthropic" -> AnthropicModels.Sonnet_4_5
+                "openai" -> OpenAIModels.Chat.GPT5_4
+                "google", "gemini" -> GoogleModels.Gemini3_Flash_Preview
+                "deepseek" -> DeepSeekModels.DeepSeekChat
+                "ollama" -> OllamaModels.Groq.LLAMA_3_GROK_TOOL_USE_8B
+                else -> LLModel(client.llmProvider(), "default")
             }
-            
-            // Bypass client.models() to avoid Koog's internal metadata flags which might 
-            // falsely mark a model as not supporting chat completions.
-            val model = LLModel(client.llmProvider(), defaultModelId)
-            
+
             // Apply a 60-second timeout for the external API call
             val result = withTimeoutOrNull(60_000L) {
                 client.execute(prompt("default") { user(taskDescription) }, model)

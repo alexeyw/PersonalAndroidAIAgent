@@ -12,6 +12,11 @@ import ai.agent.android.domain.repositories.SettingsRepository
 import ai.agent.android.domain.repositories.ToolRepository
 import ai.agent.android.domain.services.ApprovalNotifier
 import ai.koog.prompt.dsl.prompt
+import ai.koog.prompt.executor.clients.anthropic.AnthropicModels
+import ai.koog.prompt.executor.clients.deepseek.DeepSeekModels
+import ai.koog.prompt.executor.clients.google.GoogleModels
+import ai.koog.prompt.executor.clients.openai.OpenAIModels
+import ai.koog.prompt.executor.ollama.client.OllamaModels
 import ai.koog.prompt.llm.LLModel
 import ai.koog.prompt.streaming.StreamFrame
 import kotlinx.coroutines.CompletableDeferred
@@ -131,7 +136,7 @@ class AgentOrchestratorUseCase @Inject constructor(
                 is RoutingDecision.LocalOllama -> {
                     val client = koogClientFactory.createOllamaExecutor()
                     if (client != null) {
-                        val model = LLModel(client.llmProvider(), "llama3")
+                        val model = OllamaModels.Groq.LLAMA_3_GROK_TOOL_USE_8B
                         client.executeStreaming(prompt("default") { user(fullPrompt) }, model).mapNotNull { frame ->
                             (frame as? StreamFrame.TextDelta)?.text
                         }
@@ -148,14 +153,13 @@ class AgentOrchestratorUseCase @Inject constructor(
                         else -> null
                     }
                     if (client != null) {
-                        val defaultModelId = when (decision.provider) {
-                            "anthropic" -> "claude-3-5-sonnet-20241022"
-                            "openai" -> "gpt-4o"
-                            "google" -> "gemini-2.0-flash"
-                            "deepseek" -> "deepseek-chat"
-                            else -> "default"
+                        val model = when (decision.provider) {
+                            "anthropic" -> AnthropicModels.Sonnet_4_5
+                            "openai" -> OpenAIModels.Chat.GPT5_4
+                            "google" -> GoogleModels.Gemini3_Flash_Preview
+                            "deepseek" -> DeepSeekModels.DeepSeekChat
+                            else -> LLModel(client.llmProvider(), "default")
                         }
-                        val model = LLModel(client.llmProvider(), defaultModelId)
                         client.executeStreaming(prompt("default") { user(fullPrompt) }, model).mapNotNull { frame ->
                             (frame as? StreamFrame.TextDelta)?.text
                         }
