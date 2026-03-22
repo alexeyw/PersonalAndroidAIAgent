@@ -6,6 +6,7 @@ import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
 import ai.agent.android.domain.repositories.ApiKeyRepository
 import dagger.hilt.android.qualifiers.ApplicationContext
+import androidx.core.content.edit
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -119,12 +120,12 @@ class ApiKeyManager @Inject constructor(
     }
 
     private fun saveString(key: String, value: String?) {
-        sharedPreferences.edit().apply {
+        sharedPreferences.edit {
             if (value == null) {
                 remove(key)
             } else {
                 putString(key, value)
             }
-        }.apply()
+        }
     }
 }

@@ -28,16 +28,14 @@ class ApprovalNotificationManager @Inject constructor(
     override fun sendApprovalRequest(sessionId: String, toolName: String, arguments: String) {
         val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(
-                CHANNEL_ID,
-                "Agent Approvals",
-                NotificationManager.IMPORTANCE_HIGH
-            ).apply {
-                description = "Notifications for tool execution approvals"
-            }
-            notificationManager.createNotificationChannel(channel)
+        val channel = NotificationChannel(
+            CHANNEL_ID,
+            "Agent Approvals",
+            NotificationManager.IMPORTANCE_HIGH
+        ).apply {
+            description = "Notifications for tool execution approvals"
         }
+        notificationManager.createNotificationChannel(channel)
 
         val approveIntent = Intent(context, AgentApprovalReceiver::class.java).apply {
             action = AgentApprovalReceiver.ACTION_APPROVE

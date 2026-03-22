@@ -43,7 +43,8 @@ class AgentOrchestratorUseCase @Inject constructor(
     private val metricsRepository: MetricsRepository,
     private val approvalNotifier: ApprovalNotifier,
     private val taskRouterUseCase: TaskRouterUseCase,
-    private val koogClientFactory: KoogClientFactory
+    private val koogClientFactory: KoogClientFactory,
+    private val retrieveRelevantMemoryUseCase: RetrieveRelevantMemoryUseCase
 ) {
     companion object {
         const val MAX_ITERATIONS = 5
@@ -108,7 +109,16 @@ class AgentOrchestratorUseCase @Inject constructor(
 
             // 3. Get the context window (history + previous thoughts/observations)
             val contextWindow = getContextWindowUseCase(sessionId)
-            val fullPrompt = "$baseSystemPrompt\n\n$contextWindow\nAGENT: "
+            
+            // 3.5. Retrieve relevant long-term memory
+            val relevantMemories = retrieveRelevantMemoryUseCase(userPrompt)
+            val memoryContext = if (relevantMemories.isNotEmpty()) {
+                "RELEVANT LONG-TERM MEMORIES:\n" + relevantMemories.joinToString("\n") { "- ${it.text}" } + "\n\n"
+            } else {
+                ""
+            }
+
+            val fullPrompt = "$baseSystemPrompt\n\n$memoryContext$contextWindow\nAGENT: "
 
             // 4. Request generation from the routed LLM
             val startTime = System.currentTimeMillis()

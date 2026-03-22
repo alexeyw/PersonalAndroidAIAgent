@@ -9,7 +9,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Divider
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
@@ -22,13 +22,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import java.util.Locale
 import kotlin.math.roundToInt
 
 @Composable
 fun SettingsScreen(
-    viewModel: SettingsViewModel = hiltViewModel(),
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    viewModel: SettingsViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val scrollState = rememberScrollState()
@@ -63,7 +64,7 @@ fun SettingsScreen(
         )
 
         Spacer(modifier = Modifier.height(24.dp))
-        Divider()
+        HorizontalDivider()
         Spacer(modifier = Modifier.height(16.dp))
 
         // Section: Restrictions
@@ -92,7 +93,7 @@ fun SettingsScreen(
         }
 
         Spacer(modifier = Modifier.height(24.dp))
-        Divider()
+        HorizontalDivider()
         Spacer(modifier = Modifier.height(16.dp))
 
         // Section: LLM Parameters
@@ -104,7 +105,7 @@ fun SettingsScreen(
         Spacer(modifier = Modifier.height(16.dp))
 
         // Temperature Slider
-        Text(text = "Temperature: ${String.format("%.2f", uiState.temperature)}")
+        Text(text = "Temperature: ${String.format(Locale.getDefault(), "%.2f", uiState.temperature)}")
         Slider(
             value = uiState.temperature,
             onValueChange = { viewModel.updateTemperature(it) },
@@ -123,7 +124,7 @@ fun SettingsScreen(
         Spacer(modifier = Modifier.height(8.dp))
 
         // Top-P Slider
-        Text(text = "Top-P: ${String.format("%.2f", uiState.topP)}")
+        Text(text = "Top-P: ${String.format(Locale.getDefault(), "%.2f", uiState.topP)}")
         Slider(
             value = uiState.topP,
             onValueChange = { viewModel.updateTopP(it) },
@@ -141,7 +142,7 @@ fun SettingsScreen(
         )
         
         Spacer(modifier = Modifier.height(24.dp))
-        Divider()
+        HorizontalDivider()
         Spacer(modifier = Modifier.height(16.dp))
 
         // Section: External Providers (API Keys)
@@ -192,7 +193,7 @@ fun SettingsScreen(
         )
 
         Spacer(modifier = Modifier.height(24.dp))
-        Divider()
+        HorizontalDivider()
         Spacer(modifier = Modifier.height(16.dp))
 
         // Section: Local Network Models (Ollama)

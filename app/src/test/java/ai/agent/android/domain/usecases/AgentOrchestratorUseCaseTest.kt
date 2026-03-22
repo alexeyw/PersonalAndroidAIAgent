@@ -34,6 +34,7 @@ class AgentOrchestratorUseCaseTest {
     private lateinit var approvalNotifier: ApprovalNotifier
     private lateinit var taskRouterUseCase: TaskRouterUseCase
     private lateinit var koogClientFactory: ai.agent.android.data.engine.KoogClientFactory
+    private lateinit var retrieveRelevantMemoryUseCase: RetrieveRelevantMemoryUseCase
     private lateinit var useCase: AgentOrchestratorUseCase
 
     private val sessionId = "test-session"
@@ -49,12 +50,14 @@ class AgentOrchestratorUseCaseTest {
         approvalNotifier = mockk(relaxed = true)
         taskRouterUseCase = mockk()
         koogClientFactory = mockk()
-        useCase = AgentOrchestratorUseCase(llmEngine, toolRepository, chatRepository, getContextWindowUseCase, settingsRepository, metricsRepository, approvalNotifier, taskRouterUseCase, koogClientFactory)
+        retrieveRelevantMemoryUseCase = mockk()
+        useCase = AgentOrchestratorUseCase(llmEngine, toolRepository, chatRepository, getContextWindowUseCase, settingsRepository, metricsRepository, approvalNotifier, taskRouterUseCase, koogClientFactory, retrieveRelevantMemoryUseCase)
 
         coEvery { toolRepository.getAvailableTools() } returns listOf(
             AgentTool("test_tool", "A test tool", "{}")
         )
         coEvery { getContextWindowUseCase(sessionId) } returns "USER: hello"
+        coEvery { retrieveRelevantMemoryUseCase(any()) } returns emptyList()
         coEvery { taskRouterUseCase(any()) } returns ai.agent.android.domain.models.RoutingDecision.LocalLiteRT
         every { settingsRepository.systemPromptPrefix } returns flowOf(DefaultPrompts.SYSTEM_PROMPT_PREFIX)
         every { settingsRepository.toolUsageInstruction } returns flowOf(DefaultPrompts.TOOL_USAGE_INSTRUCTION)
