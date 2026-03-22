@@ -120,4 +120,14 @@ class ChatViewModel @Inject constructor(
     fun clearError() {
         _uiState.update { it.copy(errorMessage = null) }
     }
+
+    /**
+     * Resumes the paused orchestrator cycle by approving or denying a tool execution.
+     *
+     * @param isApproved True to execute the tool, False to cancel.
+     */
+    fun resumeWithApproval(isApproved: Boolean) {
+        val currentState = _uiState.value
+        agentOrchestratorUseCase.resumeWithApproval(currentState.currentSessionId, isApproved)
+    }
 }

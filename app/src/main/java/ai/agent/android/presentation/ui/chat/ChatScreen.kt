@@ -125,7 +125,11 @@ fun ChatScreen(
 
                 if (uiState.orchestratorState != null && uiState.isGenerating) {
                     item {
-                        AgentThoughtIndicator(state = uiState.orchestratorState!!)
+                        AgentThoughtIndicator(
+                            state = uiState.orchestratorState!!,
+                            onApprove = { viewModel.resumeWithApproval(true) },
+                            onDeny = { viewModel.resumeWithApproval(false) }
+                        )
                         Spacer(modifier = Modifier.height(8.dp))
                     }
                 }
