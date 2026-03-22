@@ -103,6 +103,11 @@ class AgentOrchestratorUseCase @Inject constructor(
         val baseSystemPrompt = """
             $systemPromptPrefix
             $toolUsageInstruction
+            
+            CRITICAL RULE FOR REACT LOOP: 
+            If you see a "SYSTEM: Observation from <tool>" message in the chat history, it means your previous tool call succeeded. 
+            DO NOT output another JSON block for the same tool. 
+            Instead, synthesize the observation into a final natural language response and stop.
         """.trimIndent()
 
         // ReAct loop
