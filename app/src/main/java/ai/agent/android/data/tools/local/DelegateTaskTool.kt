@@ -67,7 +67,18 @@ class DelegateTaskTool @Inject constructor(
         }
 
         return@withContext try {
-            val model = client.models().firstOrNull() ?: LLModel(client.llmProvider(), "default")
+            val defaultModelId = when (targetModel.lowercase()) {
+                "anthropic" -> "claude-3-5-sonnet-20241022"
+                "openai" -> "gpt-4o"
+                "google", "gemini" -> "gemini-2.5-pro"
+                "deepseek" -> "deepseek-chat"
+                "ollama" -> "llama3"
+                else -> "default"
+            }
+            
+            val availableModels = client.models()
+            val model = availableModels.find { it.id.contains("chat") || it.id.contains("pro") || it.id.contains("sonnet") || it.id.contains("gpt") }
+                ?: LLModel(client.llmProvider(), defaultModelId)
             
             // Apply a 60-second timeout for the external API call
             val result = withTimeoutOrNull(60_000L) {

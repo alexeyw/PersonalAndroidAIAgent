@@ -4,10 +4,12 @@ import ai.agent.android.data.mcp.McpClient
 import ai.agent.android.data.mcp.McpClientFactory
 import ai.agent.android.data.tools.local.LocalAppFunctionManager
 import ai.agent.android.domain.models.AgentTool
+import ai.agent.android.domain.repositories.ApiKeyRepository
 import ai.agent.android.domain.repositories.SettingsRepository
 import ai.agent.android.domain.repositories.ToolRepository
 import ai.agent.android.domain.usecases.ScheduleTaskUseCase
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.firstOrNull
 import org.json.JSONObject
 import javax.inject.Inject
 
@@ -20,13 +22,21 @@ class ToolRepositoryImpl @Inject constructor(
     private val mcpClientFactory: McpClientFactory,
     private val localAppFunctionManager: LocalAppFunctionManager,
     private val scheduleTaskUseCase: ScheduleTaskUseCase,
-    private val delegateTaskTool: ai.agent.android.data.tools.local.DelegateTaskTool
+    private val delegateTaskTool: ai.agent.android.data.tools.local.DelegateTaskTool,
+    private val apiKeyRepository: ApiKeyRepository
 ) : ToolRepository {
 
     private val mcpClients = mutableMapOf<String, McpClient>()
 
-    private val builtinTools = listOf(
-        AgentTool(
+    private suspend fun getBuiltinTools(): List<AgentTool> {
+        val availableModels = mutableListOf<String>()
+        if (!apiKeyRepository.getOpenAIKey().firstOrNull().isNullOrBlank()) availableModels.add("openai")
+        if (!apiKeyRepository.getAnthropicKey().firstOrNull().isNullOrBlank()) availableModels.add("anthropic")
+        if (!apiKeyRepository.getGoogleKey().firstOrNull().isNullOrBlank()) availableModels.add("google")
+        if (!apiKeyRepository.getDeepSeekKey().firstOrNull().isNullOrBlank()) availableModels.add("deepseek")
+        if (!apiKeyRepository.getOllamaBaseUrl().firstOrNull().isNullOrBlank()) availableModels.add("ollama")
+
+        val scheduleTool = AgentTool(
             name = "schedule_task",
             description = "Schedules a task to be executed by the agent in the background. intervalHours: >0 for periodic, 0 for one-time. delayMinutes: >0 for delayed execution.",
             parameters = """
@@ -40,22 +50,31 @@ class ToolRepositoryImpl @Inject constructor(
                   "required": ["prompt"]
                 }
             """.trimIndent()
-        ),
-        AgentTool(
+        )
+
+        if (availableModels.isEmpty()) {
+            return listOf(scheduleTool)
+        }
+
+        val modelsString = availableModels.joinToString(", ")
+        val defaultModel = availableModels.first()
+        val delegateTool = AgentTool(
             name = "delegate_task",
-            description = "Delegates a complex or specialized task to a powerful external LLM (e.g., Claude, OpenAI, Gemini) and saves the result to memory.",
+            description = "Delegates a complex or specialized task to an external LLM and saves the result to memory. ONLY use this tool if you need cloud reasoning.",
             parameters = """
                 {
                   "type": "object",
                   "properties": {
                     "taskDescription": { "type": "string", "description": "A detailed explanation of the task to be delegated" },
-                    "targetModel": { "type": "string", "description": "The external model to use: anthropic, openai, google, deepseek, ollama. Default is anthropic." }
+                    "targetModel": { "type": "string", "description": "The external model to use. MUST be one of: $modelsString. Default is $defaultModel." }
                   },
                   "required": ["taskDescription"]
                 }
             """.trimIndent()
         )
-    )
+        
+        return listOf(scheduleTool, delegateTool)
+    }
 
     private suspend fun syncMcpClients() {
         val urls = settingsRepository.mcpServerUrls.first()
@@ -84,13 +103,13 @@ class ToolRepositoryImpl @Inject constructor(
 
 
     override suspend fun getAllLocalTools(): List<AgentTool> {
-        return localAppFunctionManager.getAvailableFunctions() + builtinTools
+        return localAppFunctionManager.getAvailableFunctions() + getBuiltinTools()
     }
 
     override suspend fun getAvailableTools(): List<AgentTool> {
         syncMcpClients()
         val disabled = settingsRepository.disabledAppFunctions.first()
-        val localTools = localAppFunctionManager.getAvailableFunctions() + builtinTools
+        val localTools = localAppFunctionManager.getAvailableFunctions() + getBuiltinTools()
         val availableLocal = localTools.filter { it.name !in disabled }
         
         val mcpTools = mcpClients.values.flatMap { client ->
@@ -105,7 +124,7 @@ class ToolRepositoryImpl @Inject constructor(
     }
 
     override suspend fun executeTool(name: String, arguments: String): String {
-        val localTools = localAppFunctionManager.getAvailableFunctions() + builtinTools
+        val localTools = localAppFunctionManager.getAvailableFunctions() + getBuiltinTools()
         // Check if the tool is a known local tool and is not disabled
         val disabled = settingsRepository.disabledAppFunctions.first()
         if (localTools.any { it.name == name }) {
