@@ -151,7 +151,7 @@ class AgentOrchestratorUseCase @Inject constructor(
                         val defaultModelId = when (decision.provider) {
                             "anthropic" -> "claude-3-5-sonnet-20241022"
                             "openai" -> "gpt-4o"
-                            "google" -> "gemini-1.5-pro"
+                            "google" -> "gemini-2.0-flash"
                             "deepseek" -> "deepseek-chat"
                             else -> "default"
                         }

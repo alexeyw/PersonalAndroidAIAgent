@@ -70,7 +70,7 @@ class DelegateTaskTool @Inject constructor(
             val defaultModelId = when (targetModel.lowercase()) {
                 "anthropic" -> "claude-3-5-sonnet-20241022"
                 "openai" -> "gpt-4o"
-                "google", "gemini" -> "gemini-1.5-pro" // Use 1.5-pro as 2.5 might not be fully mapped in Koog 0.7.1
+                "google", "gemini" -> "gemini-2.0-flash" // Widely available and fast model
                 "deepseek" -> "deepseek-chat"
                 "ollama" -> "llama3"
                 else -> "default"
