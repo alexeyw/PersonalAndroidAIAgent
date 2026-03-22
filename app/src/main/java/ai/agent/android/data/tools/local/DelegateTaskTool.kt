@@ -59,11 +59,11 @@ class DelegateTaskTool @Inject constructor(
             "google", "gemini" -> koogClientFactory.createGoogleExecutor()
             "deepseek" -> koogClientFactory.createDeepSeekExecutor()
             "ollama" -> koogClientFactory.createOllamaExecutor()
-            else -> return@withContext "Error: Unsupported target model '\$targetModel'. Supported models: anthropic, openai, google, deepseek, ollama."
+            else -> return@withContext "Error: Unsupported target model '$targetModel'. Supported models: anthropic, openai, google, deepseek, ollama."
         }
 
         if (client == null) {
-            return@withContext "Error: Client for '\$targetModel' could not be initialized. Please check if the API key or configuration is provided."
+            return@withContext "Error: Client for '$targetModel' could not be initialized. Please check if the API key or configuration is provided."
         }
 
         return@withContext try {
@@ -75,7 +75,7 @@ class DelegateTaskTool @Inject constructor(
             }
 
             if (result == null) {
-                "Error: Task delegation to '\$targetModel' timed out after 60 seconds."
+                "Error: Task delegation to '$targetModel' timed out after 60 seconds."
             } else {
                 // Task succeeded. Generate embedding for the result.
                 val responseText = result.firstOrNull()?.content ?: "Empty response received."
@@ -84,10 +84,10 @@ class DelegateTaskTool @Inject constructor(
                 // Save to long-term memory so the local agent can recall it later
                 memoryRepository.saveMemory(responseText, embedding)
 
-                "Success: Task completed by '\$targetModel' and saved to memory. Summary of response: \${responseText.take(100)}..."
+                "Success: Task completed by '$targetModel' and saved to memory. Summary of response: ${responseText.take(100)}..."
             }
         } catch (e: Exception) {
-            "Error: Task delegation failed due to an exception: \${e.message}"
+            "Error: Task delegation failed due to an exception: ${e.message}"
         }
     }
 }
