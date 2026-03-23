@@ -26,6 +26,12 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import java.util.Locale
 import kotlin.math.roundToInt
 
+/**
+ * Composable screen for managing agent settings.
+ *
+ * @param modifier The modifier to be applied to the layout.
+ * @param viewModel The view model managing the state for this screen.
+ */
 @Composable
 fun SettingsScreen(
     modifier: Modifier = Modifier,

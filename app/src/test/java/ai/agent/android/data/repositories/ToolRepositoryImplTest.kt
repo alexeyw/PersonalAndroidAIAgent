@@ -24,6 +24,7 @@ class ToolRepositoryImplTest {
     private val localAppFunctionManager: LocalAppFunctionManager = mockk()
     private val scheduleTaskUseCase: ai.agent.android.domain.usecases.ScheduleTaskUseCase = mockk()
     private val delegateTaskTool: ai.agent.android.data.tools.local.DelegateTaskTool = mockk()
+    private val apiKeyRepository: ai.agent.android.domain.repositories.ApiKeyRepository = mockk()
     
     private lateinit var repository: ToolRepositoryImpl
 
@@ -36,7 +37,13 @@ class ToolRepositoryImplTest {
         coEvery { mcpClient.connect(any()) } returns Unit
         coEvery { mcpClient.disconnect() } returns Unit
         
-        repository = ToolRepositoryImpl(settingsRepository, mcpClientFactory, localAppFunctionManager, scheduleTaskUseCase, delegateTaskTool)
+        every { apiKeyRepository.getOpenAIKey() } returns flowOf(null)
+        every { apiKeyRepository.getAnthropicKey() } returns flowOf(null)
+        every { apiKeyRepository.getGoogleKey() } returns flowOf(null)
+        every { apiKeyRepository.getDeepSeekKey() } returns flowOf(null)
+        every { apiKeyRepository.getOllamaBaseUrl() } returns flowOf(null)
+        
+        repository = ToolRepositoryImpl(settingsRepository, mcpClientFactory, localAppFunctionManager, scheduleTaskUseCase, delegateTaskTool, apiKeyRepository)
     }
 
     @Test

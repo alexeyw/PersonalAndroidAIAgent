@@ -12,6 +12,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 
+/**
+ * Composable screen for managing tools and integrations.
+ *
+ * @param modifier The modifier to be applied to the layout.
+ * @param viewModel The view model managing the state for this screen.
+ */
 @Composable
 fun ToolsScreen(
     modifier: Modifier = Modifier,

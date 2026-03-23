@@ -7,6 +7,7 @@ import ai.koog.prompt.dsl.Prompt
 import ai.koog.prompt.executor.clients.LLMClient
 import ai.koog.prompt.llm.LLModel
 import ai.koog.prompt.message.Message
+import ai.koog.prompt.streaming.StreamFrame
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -55,7 +56,7 @@ class DelegateTaskToolTest {
             coEvery { koogClientFactory.createAnthropicExecutor() } returns mockClient
             coEvery { mockClient.models() } returns emptyList()
             every { mockClient.llmProvider() } returns mockk(relaxed = true)
-            coEvery { mockClient.execute(any<Prompt>(), any<LLModel>()) } returns listOf(mockMessageResponse)
+            coEvery { mockClient.executeStreaming(any<Prompt>(), any<LLModel>()) } returns kotlinx.coroutines.flow.flowOf(StreamFrame.TextDelta(mockResponseText))
             
             coEvery { textEmbeddingEngine.generateEmbedding(mockResponseText) } returns mockEmbedding
 
@@ -87,7 +88,7 @@ class DelegateTaskToolTest {
             coEvery { koogClientFactory.createAnthropicExecutor() } returns mockClient
             coEvery { mockClient.models() } returns emptyList()
             every { mockClient.llmProvider() } returns mockk(relaxed = true)
-            coEvery { mockClient.execute(any<Prompt>(), any<LLModel>()) } throws RuntimeException("Network error")
+            coEvery { mockClient.executeStreaming(any<Prompt>(), any<LLModel>()) } throws RuntimeException("Network error")
 
             val result = delegateTaskTool.executeDelegation("Task", "anthropic")
             

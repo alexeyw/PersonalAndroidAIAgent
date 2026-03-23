@@ -84,36 +84,86 @@ class ApiKeyManager @Inject constructor(
     private val _deepSeekKeyFlow by lazy { MutableStateFlow(sharedPreferences.getString(Keys.DEEPSEEK_KEY, null)) }
     private val _ollamaUrlFlow by lazy { MutableStateFlow(sharedPreferences.getString(Keys.OLLAMA_URL, null)) }
 
+    /**
+     * Retrieves the OpenAI API key flow.
+     * 
+     * @return A flow emitting the current OpenAI API key or null if not set.
+     */
     override fun getOpenAIKey(): Flow<String?> = _openAIKeyFlow.asStateFlow()
 
+    /**
+     * Sets or removes the OpenAI API key securely.
+     * 
+     * @param key The new API key, or null to remove it.
+     */
     override suspend fun setOpenAIKey(key: String?) {
         saveString(Keys.OPENAI_KEY, key)
         _openAIKeyFlow.value = key
     }
 
+    /**
+     * Retrieves the Anthropic API key flow.
+     * 
+     * @return A flow emitting the current Anthropic API key or null if not set.
+     */
     override fun getAnthropicKey(): Flow<String?> = _anthropicKeyFlow.asStateFlow()
 
+    /**
+     * Sets or removes the Anthropic API key securely.
+     * 
+     * @param key The new API key, or null to remove it.
+     */
     override suspend fun setAnthropicKey(key: String?) {
         saveString(Keys.ANTHROPIC_KEY, key)
         _anthropicKeyFlow.value = key
     }
 
+    /**
+     * Retrieves the Google API key flow.
+     * 
+     * @return A flow emitting the current Google API key or null if not set.
+     */
     override fun getGoogleKey(): Flow<String?> = _googleKeyFlow.asStateFlow()
 
+    /**
+     * Sets or removes the Google API key securely.
+     * 
+     * @param key The new API key, or null to remove it.
+     */
     override suspend fun setGoogleKey(key: String?) {
         saveString(Keys.GOOGLE_KEY, key)
         _googleKeyFlow.value = key
     }
 
+    /**
+     * Retrieves the DeepSeek API key flow.
+     * 
+     * @return A flow emitting the current DeepSeek API key or null if not set.
+     */
     override fun getDeepSeekKey(): Flow<String?> = _deepSeekKeyFlow.asStateFlow()
 
+    /**
+     * Sets or removes the DeepSeek API key securely.
+     * 
+     * @param key The new API key, or null to remove it.
+     */
     override suspend fun setDeepSeekKey(key: String?) {
         saveString(Keys.DEEPSEEK_KEY, key)
         _deepSeekKeyFlow.value = key
     }
 
+    /**
+     * Retrieves the Ollama Base URL flow.
+     * 
+     * @return A flow emitting the current Ollama Base URL or null if not set.
+     */
     override fun getOllamaBaseUrl(): Flow<String?> = _ollamaUrlFlow.asStateFlow()
 
+    /**
+     * Sets or removes the Ollama Base URL securely.
+     * 
+     * @param url The new base URL, or null to remove it.
+     */
     override suspend fun setOllamaBaseUrl(url: String?) {
         saveString(Keys.OLLAMA_URL, url)
         _ollamaUrlFlow.value = url

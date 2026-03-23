@@ -32,15 +32,27 @@ import javax.inject.Inject
 @AndroidEntryPoint
 class AgentForegroundService : Service() {
 
+    /**
+     * Use case for managing the global state and execution flow of the agent.
+     */
     @Inject
     lateinit var agentOrchestratorUseCase: AgentOrchestratorUseCase
 
+    /**
+     * The engine responsible for local LLM inference.
+     */
     @Inject
     lateinit var llmEngine: LlmInferenceEngine
 
+    /**
+     * Repository for managing device power state and keeping the CPU awake.
+     */
     @Inject
     lateinit var powerStateRepository: PowerStateRepository
 
+    /**
+     * Manager for scheduling background work and tasks.
+     */
     @Inject
     lateinit var workManager: WorkManager
 
@@ -53,6 +65,10 @@ class AgentForegroundService : Service() {
         private const val NOTIFICATION_ID = 101
     }
 
+    /**
+     * Called by the system when the service is first created.
+     * Initializes the notification channel, idle manager, power manager, and starts observing state.
+     */
     override fun onCreate() {
         super.onCreate()
         createNotificationChannel()
@@ -129,14 +145,32 @@ class AgentForegroundService : Service() {
             .build()
     }
 
+    /**
+     * Called by the system every time a client explicitly starts the service.
+     * 
+     * @param intent The Intent supplied to [android.content.Context.startService].
+     * @param flags Additional data about this start request.
+     * @param startId A unique integer representing this specific request to start.
+     * @return The return value indicates what semantics the system should use for the service's current started state.
+     */
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         return START_STICKY
     }
 
+    /**
+     * Return the communication channel to the service. This service does not support binding.
+     * 
+     * @param intent The Intent that was used to bind to this service.
+     * @return null as binding is not supported.
+     */
     override fun onBind(intent: Intent?): IBinder? {
         return null
     }
 
+    /**
+     * Called by the system to notify a Service that it is no longer used and is being removed.
+     * Cleans up coroutines and the LLM engine.
+     */
     override fun onDestroy() {
         super.onDestroy()
         serviceScope.cancel()

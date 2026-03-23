@@ -13,6 +13,7 @@ import ai.agent.android.domain.models.AppError
  * @property isDownloading True if a download is currently in progress.
  * @property downloadError Any error that occurred during the download process, or null.
  * @property customUrlInput The current text in the custom URL input field.
+ * @property authTokenInput The current authorization token for HuggingFace downloads.
  */
 data class ModelsUiState(
     val availablePresets: List<ModelPreset> = listOf(

@@ -25,6 +25,13 @@ class ApprovalNotificationManager @Inject constructor(
         const val NOTIFICATION_ID = 201
     }
 
+    /**
+     * Sends a notification to request user approval for a tool execution.
+     *
+     * @param sessionId The ID of the session requesting approval.
+     * @param toolName The name of the tool to be executed.
+     * @param arguments The arguments to be passed to the tool.
+     */
     override fun sendApprovalRequest(sessionId: String, toolName: String, arguments: String) {
         val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
