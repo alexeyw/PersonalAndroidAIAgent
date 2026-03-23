@@ -134,5 +134,5 @@ dependencies {
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
     debugImplementation(libs.androidx.compose.ui.tooling)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
-    androidTestImplementation("io.mockk:mockk-android:1.14.9")
+    androidTestImplementation(libs.mockk.android)
 }
