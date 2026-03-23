@@ -45,9 +45,16 @@ import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
+/**
+ * The main activity of the application, serving as the entry point.
+ * It sets up the navigation graph and handles initial app setup.
+ */
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
 
+    /**
+     * Use case for initializing the application state.
+     */
     @Inject
     lateinit var initializeAppUseCase: InitializeAppUseCase
 
@@ -128,6 +135,18 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+/**
+ * Composable screen for the home destination, displaying navigation options.
+ *
+ * @param onNavigateToModels Callback to navigate to the Models screen.
+ * @param onNavigateToMemory Callback to navigate to the Memory screen.
+ * @param onNavigateToTools Callback to navigate to the Tools screen.
+ * @param onNavigateToChat Callback to navigate to the Chat screen.
+ * @param onNavigateToMonitoring Callback to navigate to the Monitoring screen.
+ * @param onNavigateToSettings Callback to navigate to the Settings screen.
+ * @param onNavigateToOrchestrator Callback to navigate to the Orchestrator screen.
+ * @param modifier The modifier to be applied to the layout.
+ */
 @Composable
 fun HomeScreen(
     onNavigateToModels: () -> Unit,

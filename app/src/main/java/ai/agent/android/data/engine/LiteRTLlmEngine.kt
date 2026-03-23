@@ -41,7 +41,14 @@ class LiteRTLlmEngine @Inject constructor(
     private var conversation: Conversation? = null
     private var _currentModelPath: String? = null
 
+    /**
+     * Indicates whether the engine has been successfully initialized and is ready for use.
+     */
     override val isInitialized: Boolean get() = engine != null
+
+    /**
+     * Returns the file path of the currently loaded model, or null if no model is loaded.
+     */
     override val currentModelPath: String? get() = _currentModelPath
 
     init {
@@ -166,15 +173,30 @@ class LiteRTLlmEngine @Inject constructor(
         context.unregisterComponentCallbacks(this)
     }
 
+    /**
+     * Called by the system when the device configuration changes while your component is running.
+     * 
+     * @param newConfig The new device configuration.
+     */
     override fun onConfigurationChanged(newConfig: Configuration) {
         // No action needed
     }
 
+    /**
+     * This is called when the overall system is running low on memory, and actively running processes should trim their memory usage.
+     * Unloads the engine to free up resources.
+     */
     override fun onLowMemory() {
         Timber.w("onLowMemory called, unloading engine")
         unload()
     }
 
+    /**
+     * Called when the operating system has determined that it is a good time for a process to trim unneeded memory from its process.
+     * Unloads the engine if the memory trim level is critical.
+     * 
+     * @param level The context of the trim, giving a hint of the amount of trimming the application may like to perform.
+     */
     override fun onTrimMemory(level: Int) {
         if (level >= ComponentCallbacks2.TRIM_MEMORY_BACKGROUND) {
             Timber.w("onTrimMemory called with critical level \$level, unloading engine")

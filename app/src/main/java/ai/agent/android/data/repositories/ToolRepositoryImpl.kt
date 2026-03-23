@@ -102,10 +102,21 @@ class ToolRepositoryImpl @Inject constructor(
     }
 
 
+    /**
+     * Retrieves all locally available tools, including built-in tools and app functions.
+     *
+     * @return A list of [AgentTool] representing the local tools available.
+     */
     override suspend fun getAllLocalTools(): List<AgentTool> {
         return localAppFunctionManager.getAvailableFunctions() + getBuiltinTools()
     }
 
+    /**
+     * Retrieves all available tools, including both local tools (not disabled) and tools
+     * fetched from connected MCP servers.
+     *
+     * @return A list of [AgentTool] representing all tools currently available to the agent.
+     */
     override suspend fun getAvailableTools(): List<AgentTool> {
         syncMcpClients()
         val disabled = settingsRepository.disabledAppFunctions.first()
@@ -123,6 +134,15 @@ class ToolRepositoryImpl @Inject constructor(
         return availableLocal + mcpTools
     }
 
+    /**
+     * Executes a tool by its name with the given arguments.
+     * The tool is first looked up in local tools, and if not found, in MCP servers.
+     *
+     * @param name The name of the tool to execute.
+     * @param arguments A JSON string containing the arguments required by the tool.
+     * @return A string representing the result of the tool execution.
+     * @throws IllegalArgumentException If the tool is disabled or not found.
+     */
     override suspend fun executeTool(name: String, arguments: String): String {
         val localTools = localAppFunctionManager.getAvailableFunctions() + getBuiltinTools()
         // Check if the tool is a known local tool and is not disabled

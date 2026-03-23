@@ -106,6 +106,11 @@ fun MonitoringScreen(
     }
 }
 
+/**
+ * Displays a card containing performance metrics.
+ *
+ * @param metrics The metrics to display.
+ */
 @Composable
 fun MetricsCard(metrics: ai.agent.android.domain.models.AgentMetrics) {
     Card(
@@ -131,6 +136,12 @@ fun MetricsCard(metrics: ai.agent.android.domain.models.AgentMetrics) {
     }
 }
 
+/**
+ * Displays a single metric with a label and value.
+ *
+ * @param label The label for the metric.
+ * @param value The value of the metric.
+ */
 @Composable
 fun MetricItem(label: String, value: String) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -139,6 +150,11 @@ fun MetricItem(label: String, value: String) {
     }
 }
 
+/**
+ * Displays a card for a single system log item.
+ *
+ * @param log The chat message representing the log.
+ */
 @Composable
 fun LogItemCard(log: ai.agent.android.domain.models.ChatMessage) {
     Card(

@@ -37,6 +37,9 @@ class ModelsViewModel @Inject constructor(
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ModelsUiState())
+    /**
+     * The current UI state of the Models screen.
+     */
     val uiState: StateFlow<ModelsUiState> = _uiState.asStateFlow()
 
     init {

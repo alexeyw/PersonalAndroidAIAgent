@@ -53,6 +53,13 @@ class MediaPipeTextEmbeddingEngine @Inject constructor(
         }
     }
 
+    /**
+     * Generates a text embedding array for a given string using the MediaPipe task.
+     *
+     * @param text The input string to embed.
+     * @return A float array representing the text embedding.
+     * @throws IllegalStateException If the embedder fails to initialize or generate an embedding.
+     */
     override suspend fun generateEmbedding(text: String): FloatArray = withContext(Dispatchers.Default) {
         initializeEmbedderIfNeeded()
         

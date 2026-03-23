@@ -9,6 +9,7 @@ import ai.agent.android.domain.models.ChatMessage
  * @property metrics The current performance metrics of the AI agent.
  * @property recentLogs A list of recent system messages representing actions/observations.
  * @property isLoading True if logs are currently being fetched.
+ * @property isPowerSavingActive True if the system is in power saving mode.
  */
 data class MonitoringUiState(
     val metrics: AgentMetrics = AgentMetrics(),

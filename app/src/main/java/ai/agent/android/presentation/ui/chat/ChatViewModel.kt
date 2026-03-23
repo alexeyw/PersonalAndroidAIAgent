@@ -32,6 +32,9 @@ class ChatViewModel @Inject constructor(
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ChatUiState())
+    /**
+     * The current UI state of the Chat screen.
+     */
     val uiState: StateFlow<ChatUiState> = _uiState.asStateFlow()
 
     init {

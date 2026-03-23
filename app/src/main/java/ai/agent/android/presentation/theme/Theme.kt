@@ -33,6 +33,13 @@ private val LightColorScheme = lightColorScheme(
     */
 )
 
+/**
+ * A composable function that applies the custom theme to the application.
+ *
+ * @param darkTheme Whether to use the dark theme.
+ * @param dynamicColor Whether to use dynamic color on supported devices.
+ * @param content The composable content to apply the theme to.
+ */
 @Composable
 fun AndroidAIAgentTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),

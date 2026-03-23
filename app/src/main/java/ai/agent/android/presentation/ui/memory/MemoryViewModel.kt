@@ -26,6 +26,9 @@ class MemoryViewModel @Inject constructor(
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(MemoryUiState(isLoading = true))
+    /**
+     * The current UI state of the Memory screen.
+     */
     val uiState: StateFlow<MemoryUiState> = _uiState.asStateFlow()
 
     init {

@@ -29,6 +29,10 @@ class OrchestratorViewModel @Inject constructor(
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(OrchestratorUiState())
+    
+    /**
+     * The current UI state of the Orchestrator screen.
+     */
     val uiState: StateFlow<OrchestratorUiState> = _uiState.asStateFlow()
 
     init {
@@ -49,6 +53,10 @@ class OrchestratorViewModel @Inject constructor(
 
     /**
      * Adds a new node to the canvas at the specified coordinates.
+     *
+     * @param type The type of node to add.
+     * @param x The x-coordinate for the node's position.
+     * @param y The y-coordinate for the node's position.
      */
     fun addNode(type: NodeType, x: Float, y: Float) {
         val newNode = NodeModel(
@@ -67,6 +75,10 @@ class OrchestratorViewModel @Inject constructor(
 
     /**
      * Moves an existing node by a delta amount.
+     *
+     * @param nodeId The unique identifier of the node to move.
+     * @param deltaX The change in the x-coordinate.
+     * @param deltaY The change in the y-coordinate.
      */
     fun moveNode(nodeId: String, deltaX: Float, deltaY: Float) {
         _uiState.update { state ->
@@ -81,6 +93,9 @@ class OrchestratorViewModel @Inject constructor(
 
     /**
      * Creates a connection between two nodes.
+     *
+     * @param sourceNodeId The unique identifier of the source node.
+     * @param targetNodeId The unique identifier of the target node.
      */
     fun addConnection(sourceNodeId: String, targetNodeId: String) {
         val newConnection = ConnectionModel(
@@ -104,6 +119,8 @@ class OrchestratorViewModel @Inject constructor(
 
     /**
      * Removes a node and any connections attached to it.
+     *
+     * @param nodeId The unique identifier of the node to remove.
      */
     fun removeNode(nodeId: String) {
         _uiState.update { state ->
@@ -152,6 +169,8 @@ class OrchestratorViewModel @Inject constructor(
 
     /**
      * Loads a specific pipeline by ID.
+     *
+     * @param pipelineId The unique identifier of the pipeline to load.
      */
     fun loadPipeline(pipelineId: String) {
         viewModelScope.launch {

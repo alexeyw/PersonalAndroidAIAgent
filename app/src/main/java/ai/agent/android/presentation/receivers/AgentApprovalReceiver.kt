@@ -15,6 +15,9 @@ import javax.inject.Inject
 @AndroidEntryPoint
 class AgentApprovalReceiver : BroadcastReceiver() {
 
+    /**
+     * Use case for managing the orchestrator's state and actions.
+     */
     @Inject
     lateinit var orchestratorUseCase: AgentOrchestratorUseCase
 
@@ -23,6 +26,12 @@ class AgentApprovalReceiver : BroadcastReceiver() {
         const val ACTION_DENY = "ai.agent.android.ACTION_DENY"
     }
 
+    /**
+     * Called when the BroadcastReceiver is receiving an Intent broadcast.
+     *
+     * @param context The Context in which the receiver is running.
+     * @param intent The Intent being received.
+     */
     override fun onReceive(context: Context, intent: Intent) {
         val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         val sessionId = intent.getStringExtra("sessionId") ?: return
