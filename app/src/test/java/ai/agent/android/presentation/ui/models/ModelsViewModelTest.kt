@@ -80,6 +80,33 @@ class ModelsViewModelTest {
     }
 
     @Test
+    fun `observeAuthToken sets initial auth token`() = runTest {
+        every { settingsRepository.huggingFaceAuthToken } returns flowOf("test-token-123")
+        viewModel = ModelsViewModel(localModelRepository, downloadManager, settingsRepository)
+        advanceUntilIdle()
+
+        assertEquals("test-token-123", viewModel.uiState.value.authTokenInput)
+    }
+
+    @Test
+    fun `onAuthTokenChanged updates state and saves to repository`() = runTest {
+        viewModel.onAuthTokenChanged("new-token-456")
+        advanceUntilIdle()
+
+        assertEquals("new-token-456", viewModel.uiState.value.authTokenInput)
+        coVerify { settingsRepository.setHuggingFaceAuthToken("new-token-456") }
+    }
+
+    @Test
+    fun `onAuthTokenChanged with blank string saves null to repository`() = runTest {
+        viewModel.onAuthTokenChanged("   ")
+        advanceUntilIdle()
+
+        assertEquals("   ", viewModel.uiState.value.authTokenInput)
+        coVerify { settingsRepository.setHuggingFaceAuthToken(null) }
+    }
+
+    @Test
     fun `startDownload updates state through download lifecycle`() = runTest {
         val url = "http://example.com/model.bin"
         val fileName = "model.bin"

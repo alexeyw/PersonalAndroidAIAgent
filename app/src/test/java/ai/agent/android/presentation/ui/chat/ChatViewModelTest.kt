@@ -178,4 +178,20 @@ class ChatViewModelTest {
         viewModel.clearError()
         assertNull(viewModel.uiState.value.errorMessage)
     }
+
+    @Test
+    fun `resumeWithApproval should call orchestrator usecase with correct session id and approval state`() = runTest {
+        every { agentOrchestratorUseCase.resumeWithApproval(any(), any()) } returns Unit
+        
+        viewModel = ChatViewModel(agentOrchestratorUseCase, chatRepository, settingsRepository, loadModelUseCase)
+        advanceUntilIdle()
+
+        val actualSessionId = viewModel.uiState.value.currentSessionId
+
+        viewModel.resumeWithApproval(true)
+        io.mockk.verify { agentOrchestratorUseCase.resumeWithApproval(actualSessionId, true) }
+
+        viewModel.resumeWithApproval(false)
+        io.mockk.verify { agentOrchestratorUseCase.resumeWithApproval(actualSessionId, false) }
+    }
 }

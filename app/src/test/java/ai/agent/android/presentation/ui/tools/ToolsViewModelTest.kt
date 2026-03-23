@@ -70,6 +70,14 @@ class ToolsViewModelTest {
     }
 
     @Test
+    fun `removeMcpServer calls repository`() = runTest {
+        viewModel.removeMcpServer("http://old.com")
+        advanceUntilIdle()
+
+        coVerify { settingsRepository.removeMcpServerUrl("http://old.com") }
+    }
+
+    @Test
     fun `toggleLocalTool updates repository`() = runTest {
         disabledAppFunctionsFlow.value = setOf("get_system_time")
         advanceUntilIdle()
