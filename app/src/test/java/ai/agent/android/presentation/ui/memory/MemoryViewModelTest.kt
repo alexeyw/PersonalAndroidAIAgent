@@ -79,6 +79,30 @@ class MemoryViewModelTest {
         coVerify(exactly = 1) { chatRepository.deleteSession("session-1") }
         coVerify(atLeast = 2) { memoryRepository.getAllMemories() } // 1 from init, 1 from reload
     }
+
+    @Test
+    fun `deleteChatMessage calls repository and reloads data`() = runTest {
+        viewModel = MemoryViewModel(chatRepository, memoryRepository)
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        viewModel.deleteChatMessage(100L)
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        coVerify(exactly = 1) { chatRepository.deleteMessage(100L) }
+        coVerify(atLeast = 2) { memoryRepository.getAllMemories() }
+    }
+
+    @Test
+    fun `deleteVectorMemory calls repository and reloads data`() = runTest {
+        viewModel = MemoryViewModel(chatRepository, memoryRepository)
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        viewModel.deleteVectorMemory(200L)
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        coVerify(exactly = 1) { memoryRepository.deleteMemory(200L) }
+        coVerify(atLeast = 2) { memoryRepository.getAllMemories() }
+    }
     
     @Test
     fun `setTab updates currentTab state`() = runTest {
