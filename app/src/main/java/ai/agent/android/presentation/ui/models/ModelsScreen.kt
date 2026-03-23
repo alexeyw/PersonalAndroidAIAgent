@@ -27,146 +27,171 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.TopAppBar
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
+
 /**
  * Composable screen for managing LLM models. Allows users to view downloaded models,
  * select an active model, and download new models from presets or custom URLs.
  *
  * @param modifier The modifier to be applied to the layout.
  * @param viewModel The view model managing the state for this screen.
+ * @param onBack Callback when the back button is pressed.
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ModelsScreen(
     modifier: Modifier = Modifier,
-    viewModel: ModelsViewModel = hiltViewModel()
+    viewModel: ModelsViewModel = hiltViewModel(),
+    onBack: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val snackbarHostState = remember { SnackbarHostState() }
 
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .padding(16.dp)
-    ) {
-        Text(
-            text = "Model Management",
-            style = MaterialTheme.typography.headlineMedium,
-            modifier = Modifier.padding(bottom = 16.dp)
-        )
-
-        // HuggingFace Auth Token
-        OutlinedTextField(
-            value = uiState.authTokenInput,
-            onValueChange = viewModel::onAuthTokenChanged,
-            label = { Text("HuggingFace Auth Token (Optional)") },
-            modifier = Modifier.fillMaxWidth(),
-            enabled = !uiState.isDownloading
-        )
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        // Custom URL Input
-        OutlinedTextField(
-            value = uiState.customUrlInput,
-            onValueChange = viewModel::onCustomUrlChanged,
-            label = { Text("Custom Model URL") },
-            modifier = Modifier.fillMaxWidth(),
-            enabled = !uiState.isDownloading
-        )
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        Button(
-            onClick = {
-                val url = uiState.customUrlInput
-                if (url.isNotBlank()) {
-                    val fileName = url.substringAfterLast("/")
-                    viewModel.startDownload(url, fileName.ifBlank { "custom_model.bin" })
-                }
-            },
-            enabled = !uiState.isDownloading && uiState.customUrlInput.isNotBlank(),
-            modifier = Modifier.align(Alignment.End)
-        ) {
-            Text("Download Custom Model")
-        }
-
-        Spacer(modifier = Modifier.height(24.dp))
-
-        // Presets
-        Text(
-            text = "Available Presets",
-            style = MaterialTheme.typography.titleMedium,
-            modifier = Modifier.padding(bottom = 8.dp)
-        )
-
-        LazyColumn(
-            modifier = Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            items(uiState.availablePresets) { preset ->
-                val isAlreadyDownloaded = uiState.downloadedModels.any { it.name == preset.url.substringAfterLast("/") }
-                PresetItem(
-                    preset = preset,
-                    isDownloading = uiState.isDownloading,
-                    isAlreadyDownloaded = isAlreadyDownloaded,
-                    onDownload = {
-                        val fileName = preset.url.substringAfterLast("/")
-                        viewModel.startDownload(preset.url, fileName)
-                    }
-                )
-            }
-
-            item {
-                Spacer(modifier = Modifier.height(24.dp))
-                Text(
-                    text = "Downloaded Models",
-                    style = MaterialTheme.typography.titleMedium,
-                    modifier = Modifier.padding(bottom = 8.dp)
-                )
-            }
-
-            items(uiState.downloadedModels) { model ->
-                DownloadedModelItem(
-                    modelName = model.name,
-                    isActive = model.isActive,
-                    onMakeActive = { viewModel.setActiveModel(model.id) }
-                )
-            }
-        }
-
-        // Active Download Progress
-        if (uiState.isDownloading) {
-            Spacer(modifier = Modifier.height(16.dp))
-            Column(modifier = Modifier.fillMaxWidth()) {
-                Text(
-                    text = "Downloading...",
-                    style = MaterialTheme.typography.bodyMedium
-                )
-                Spacer(modifier = Modifier.height(4.dp))
-                uiState.downloadProgress?.let { progress ->
-                    LinearProgressIndicator(
-                        progress = { progress / 100f },
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                    Text(
-                        text = "$progress%",
-                        style = MaterialTheme.typography.bodySmall,
-                        modifier = Modifier.align(Alignment.End)
-                    )
-                } ?: CircularProgressIndicator(modifier = Modifier.align(Alignment.CenterHorizontally))
-            }
-        }
-        
-        // Error Message
+    LaunchedEffect(uiState.downloadError) {
         uiState.downloadError?.let { error ->
-            Spacer(modifier = Modifier.height(8.dp))
             val errorMessage = when (error) {
                 is DownloadError -> error.message
                 else -> "An unknown error occurred"
             }
-            Text(
-                text = "Error: $errorMessage",
-                color = MaterialTheme.colorScheme.error,
-                style = MaterialTheme.typography.bodyMedium
+            snackbarHostState.showSnackbar(errorMessage)
+            viewModel.clearError()
+        }
+    }
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("Model Management") },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(imageVector = Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    }
+                }
             )
+        },
+        snackbarHost = { SnackbarHost(hostState = snackbarHostState) }
+    ) { paddingValues ->
+        Column(
+            modifier = modifier
+                .fillMaxSize()
+                .padding(paddingValues)
+                .padding(horizontal = 16.dp)
+        ) {
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // HuggingFace Auth Token
+            OutlinedTextField(
+                value = uiState.authTokenInput,
+                onValueChange = viewModel::onAuthTokenChanged,
+                label = { Text("HuggingFace Auth Token (Optional)") },
+                modifier = Modifier.fillMaxWidth(),
+                enabled = !uiState.isDownloading
+            )
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Custom URL Input
+            OutlinedTextField(
+                value = uiState.customUrlInput,
+                onValueChange = viewModel::onCustomUrlChanged,
+                label = { Text("Custom Model URL") },
+                modifier = Modifier.fillMaxWidth(),
+                enabled = !uiState.isDownloading
+            )
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Button(
+                onClick = {
+                    val url = uiState.customUrlInput
+                    if (url.isNotBlank()) {
+                        val fileName = url.substringAfterLast("/")
+                        viewModel.startDownload(url, fileName.ifBlank { "custom_model.bin" })
+                    }
+                },
+                enabled = !uiState.isDownloading && uiState.customUrlInput.isNotBlank(),
+                modifier = Modifier.align(Alignment.End)
+            ) {
+                Text("Download Custom Model")
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // Presets
+            Text(
+                text = "Available Presets",
+                style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier.padding(bottom = 8.dp)
+            )
+
+            LazyColumn(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                items(uiState.availablePresets) { preset ->
+                    val isAlreadyDownloaded = uiState.downloadedModels.any { it.name == preset.url.substringAfterLast("/") }
+                    PresetItem(
+                        preset = preset,
+                        isDownloading = uiState.isDownloading,
+                        isAlreadyDownloaded = isAlreadyDownloaded,
+                        onDownload = {
+                            val fileName = preset.url.substringAfterLast("/")
+                            viewModel.startDownload(preset.url, fileName)
+                        }
+                    )
+                }
+
+                item {
+                    Spacer(modifier = Modifier.height(24.dp))
+                    Text(
+                        text = "Downloaded Models",
+                        style = MaterialTheme.typography.titleMedium,
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    )
+                }
+
+                items(uiState.downloadedModels) { model ->
+                    DownloadedModelItem(
+                        modelName = model.name,
+                        isActive = model.isActive,
+                        onMakeActive = { viewModel.setActiveModel(model.id) }
+                    )
+                }
+            }
+
+            // Active Download Progress
+            if (uiState.isDownloading) {
+                Spacer(modifier = Modifier.height(16.dp))
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    Text(
+                        text = "Downloading...",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    uiState.downloadProgress?.let { progress ->
+                        LinearProgressIndicator(
+                            progress = { progress / 100f },
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                        Text(
+                            text = "$progress%",
+                            style = MaterialTheme.typography.bodySmall,
+                            modifier = Modifier.align(Alignment.End)
+                        )
+                    } ?: CircularProgressIndicator(modifier = Modifier.align(Alignment.CenterHorizontally))
+                }
+                Spacer(modifier = Modifier.height(16.dp))
+            }
         }
     }
 }

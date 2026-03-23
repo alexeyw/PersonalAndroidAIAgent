@@ -44,13 +44,25 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlin.math.roundToInt
 
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.TopAppBar
+
 /**
  * The main screen for the Visual Orchestrator.
  * Contains an infinite canvas to visually connect Koog agents, LiteRT models, and Tools.
+ *
+ * @param viewModel The ViewModel providing the orchestrator state.
+ * @param onBack Callback when the back button is pressed.
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun VisualOrchestratorScreen(
-    viewModel: OrchestratorViewModel = hiltViewModel()
+    viewModel: OrchestratorViewModel = hiltViewModel(),
+    onBack: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
@@ -95,53 +107,48 @@ fun VisualOrchestratorScreen(
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
-            Row(modifier = Modifier
-                .padding(8.dp)
-                .horizontalScroll(rememberScrollState())
-            ) {
-                Box {
-                    Button(onClick = { showNodeMenu = true }) {
-                        Text("Add Node")
+            TopAppBar(
+                title = { Text("Visual Orchestrator") },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(imageVector = Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
-                    DropdownMenu(
-                        expanded = showNodeMenu,
-                        onDismissRequest = { showNodeMenu = false }
-                    ) {
-                        NodeType.entries.forEach { nodeType ->
-                            DropdownMenuItem(
-                                text = { Text(nodeType.name) },
-                                onClick = {
-                                    // Approximate center relative to current scale and pan
-                                    val centerX = (-panOffset.x + 400f) / scale
-                                    val centerY = (-panOffset.y + 400f) / scale
-                                    viewModel.addNode(nodeType, centerX, centerY)
-                                    showNodeMenu = false
-                                }
-                            )
+                },
+                actions = {
+                    Box {
+                        Button(onClick = { showNodeMenu = true }) {
+                            Text("Add Node")
+                        }
+                        DropdownMenu(
+                            expanded = showNodeMenu,
+                            onDismissRequest = { showNodeMenu = false }
+                        ) {
+                            NodeType.entries.forEach { nodeType ->
+                                DropdownMenuItem(
+                                    text = { Text(nodeType.name) },
+                                    onClick = {
+                                        // Approximate center relative to current scale and pan
+                                        val centerX = (-panOffset.x + 400f) / scale
+                                        val centerY = (-panOffset.y + 400f) / scale
+                                        viewModel.addNode(nodeType, centerX, centerY)
+                                        showNodeMenu = false
+                                    }
+                                )
+                            }
                         }
                     }
+                    Button(
+                        onClick = { showClearDialog = true },
+                        modifier = Modifier.padding(start = 8.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                    ) {
+                        Text("Clear")
+                    }
+                    Button(onClick = { viewModel.saveCurrentPipeline() }, modifier = Modifier.padding(start = 8.dp)) {
+                        Text("Save")
+                    }
                 }
-
-                Button(
-                    onClick = { showClearDialog = true },
-                    modifier = Modifier.padding(start = 8.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
-                ) {
-                    Text("Clear Graph")
-                }
-                
-                Button(onClick = { viewModel.saveCurrentPipeline() }, modifier = Modifier.padding(start = 8.dp)) {
-                    Text("Save Pipeline")
-                }
-                
-                if (connectingFromNodeId != null) {
-                    Text(
-                        text = "Select target node to connect...",
-                        color = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.padding(start = 16.dp, top = 12.dp)
-                    )
-                }
-            }
+            )
         }
     ) { paddingValues ->
         Box(

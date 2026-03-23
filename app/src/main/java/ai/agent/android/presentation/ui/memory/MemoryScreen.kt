@@ -49,20 +49,28 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+
 /**
  * The main screen for viewing and managing the agent's short-term and long-term memory.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MemoryScreen(
-    viewModel: MemoryViewModel = hiltViewModel()
+    viewModel: MemoryViewModel = hiltViewModel(),
+    onBack: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsState()
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Memory Management") }
+                title = { Text("Memory Management") },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(imageVector = Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    }
+                }
             )
         }
     ) { paddingValues ->
