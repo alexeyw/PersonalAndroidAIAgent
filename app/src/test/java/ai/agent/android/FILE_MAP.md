@@ -1,0 +1,63 @@
+# Directory Map: app/src/test/java/ai/agent/android
+
+This file maps the contents of the local unit test package.
+
+- `di/`
+  - `AppModuleTest.kt` - Tests for AppModule.
+  - `DataModuleTest.kt` - Tests for DataModule.
+- `domain/`
+  - `models/`
+    - `AppErrorTest.kt` - Tests for AppError.
+    - `ResultTest.kt` - Tests for Result.
+  - `usecases/`
+    - `AgentOrchestratorUseCaseTest.kt` - Tests for AgentOrchestratorUseCase.
+    - `GetContextWindowUseCaseTest.kt` - Tests for GetContextWindowUseCase.
+    - `InitializeAppUseCaseTest.kt` - Tests for InitializeAppUseCase.
+    - `LoadModelUseCaseTest.kt` - Tests for LoadModelUseCase.
+    - `LoadPipelineUseCaseTest.kt` - Tests for LoadPipelineUseCase.
+    - `RetrieveRelevantMemoryUseCaseTest.kt` - Tests for RetrieveRelevantMemoryUseCase.
+    - `SavePipelineUseCaseTest.kt` - Tests for SavePipelineUseCase.
+    - `ScheduleTaskUseCaseTest.kt` - Tests for ScheduleTaskUseCase.
+    - `TaskRouterUseCaseTest.kt` - Tests for TaskRouterUseCase.
+- `data/`
+  - `engine/`
+    - `KoogClientFactoryTest.kt` - Tests for KoogClientFactory.
+    - `LiteRTLlmEngineTest.kt` - Tests for LiteRTLlmEngine.
+    - `MediaPipeTextEmbeddingEngineTest.kt` - Tests for MediaPipeTextEmbeddingEngine.
+  - `local/`
+    - `SettingsManagerTest.kt` - Tests for SettingsManager.
+  - `mappers/`
+    - `ChatMessageMapperTest.kt` - Tests for ChatMessageMapper.
+  - `mcp/`
+    - `KoogMcpClientTest.kt` - Tests for KoogMcpClient.
+  - `network/`
+    - `AndroidModelDownloadManagerTest.kt` - Tests for AndroidModelDownloadManager.
+  - `repositories/`
+    - `LocalModelRepositoryImplTest.kt` - Tests for LocalModelRepositoryImpl.
+    - `LocalPipelineRepositoryImplTest.kt` - Tests for LocalPipelineRepositoryImpl.
+    - `MemoryRepositoryImplTest.kt` - Tests for MemoryRepositoryImpl.
+    - `NetworkStateRepositoryImplTest.kt` - Tests for NetworkStateRepositoryImpl.
+    - `PowerStateRepositoryImplTest.kt` - Tests for PowerStateRepositoryImpl.
+    - `ToolRepositoryImplTest.kt` - Tests for ToolRepositoryImpl.
+  - `services/`
+    - `AgentIdleManagerTest.kt` - Tests for AgentIdleManager.
+    - `AgentPowerManagerTest.kt` - Tests for AgentPowerManager.
+  - `tools/local/`
+    - `DelegateTaskToolTest.kt` - Tests for DelegateTaskTool.
+- `presentation/`
+  - `ui/`
+    - `chat/`
+      - `ChatViewModelTest.kt` - Tests for ChatViewModel.
+    - `memory/`
+      - `MemoryViewModelTest.kt` - Tests for MemoryViewModel.
+    - `models/`
+      - `ModelsViewModelTest.kt` - Tests for ModelsViewModel.
+    - `monitoring/`
+      - `MonitoringViewModelTest.kt` - Tests for MonitoringViewModel.
+    - `orchestrator/`
+      - `OrchestratorViewModelTest.kt` - Tests for OrchestratorViewModel.
+    - `settings/`
+      - `SettingsViewModelTest.kt` - Tests for SettingsViewModel.
+    - `tools/`
+      - `ToolsViewModelTest.kt` - Tests for ToolsViewModel.
+- `FILE_MAP.md` - This file mapping the current directory structure.
