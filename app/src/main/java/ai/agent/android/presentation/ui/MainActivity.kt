@@ -1,7 +1,7 @@
 package ai.agent.android.presentation.ui
 
-import ai.agent.android.domain.usecases.InitializeAppUseCase
 import ai.agent.android.data.services.AgentForegroundService
+import ai.agent.android.domain.usecases.InitializeAppUseCase
 import ai.agent.android.presentation.theme.AndroidAIAgentTheme
 import ai.agent.android.presentation.ui.chat.ChatScreen
 import ai.agent.android.presentation.ui.chat.ChatViewModel
@@ -9,20 +9,18 @@ import ai.agent.android.presentation.ui.memory.MemoryScreen
 import ai.agent.android.presentation.ui.models.ModelsScreen
 import ai.agent.android.presentation.ui.monitoring.MonitoringScreen
 import ai.agent.android.presentation.ui.monitoring.MonitoringViewModel
+import ai.agent.android.presentation.ui.orchestrator.OrchestratorViewModel
+import ai.agent.android.presentation.ui.orchestrator.VisualOrchestratorScreen
 import ai.agent.android.presentation.ui.settings.SettingsScreen
 import ai.agent.android.presentation.ui.tools.ToolsScreen
-import ai.agent.android.presentation.ui.orchestrator.VisualOrchestratorScreen
-import ai.agent.android.presentation.ui.orchestrator.OrchestratorViewModel
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.core.content.ContextCompat
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -36,6 +34,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.lifecycleScope
 import androidx.navigation.compose.NavHost
@@ -67,10 +66,12 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
-                requestPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-            }
+        if (ContextCompat.checkSelfPermission(
+                this,
+                Manifest.permission.POST_NOTIFICATIONS
+            ) != PackageManager.PERMISSION_GRANTED
+        ) {
+            requestPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
         }
 
         lifecycleScope.launch {
@@ -94,39 +95,79 @@ class MainActivity : ComponentActivity() {
                     ) {
                         composable("home") {
                             HomeScreen(
-                                onNavigateToModels = { navController.navigate("models") { launchSingleTop = true } },
-                                onNavigateToMemory = { navController.navigate("memory") { launchSingleTop = true } },
-                                onNavigateToTools = { navController.navigate("tools") { launchSingleTop = true } },
-                                onNavigateToChat = { navController.navigate("chat") { launchSingleTop = true } },
-                                onNavigateToMonitoring = { navController.navigate("monitoring") { launchSingleTop = true } },
-                                onNavigateToSettings = { navController.navigate("settings") { launchSingleTop = true } },
-                                onNavigateToOrchestrator = { navController.navigate("orchestrator") { launchSingleTop = true } },
+                                onNavigateToModels = {
+                                    navController.navigate("models") {
+                                        launchSingleTop = true
+                                    }
+                                },
+                                onNavigateToMemory = {
+                                    navController.navigate("memory") {
+                                        launchSingleTop = true
+                                    }
+                                },
+                                onNavigateToTools = {
+                                    navController.navigate("tools") {
+                                        launchSingleTop = true
+                                    }
+                                },
+                                onNavigateToChat = {
+                                    navController.navigate("chat") {
+                                        launchSingleTop = true
+                                    }
+                                },
+                                onNavigateToMonitoring = {
+                                    navController.navigate("monitoring") {
+                                        launchSingleTop = true
+                                    }
+                                },
+                                onNavigateToSettings = {
+                                    navController.navigate("settings") {
+                                        launchSingleTop = true
+                                    }
+                                },
+                                onNavigateToOrchestrator = {
+                                    navController.navigate("orchestrator") {
+                                        launchSingleTop = true
+                                    }
+                                },
                                 modifier = Modifier.fillMaxSize()
                             )
                         }
                         composable("chat") {
                             val chatViewModel: ChatViewModel = hiltViewModel()
-                            ChatScreen(viewModel = chatViewModel, onBack = { navController.popBackStack() })
+                            ChatScreen(
+                                viewModel = chatViewModel,
+                                onBack = { navController.popBackStack() })
                         }
                         composable("models") {
-                            ModelsScreen(modifier = Modifier.fillMaxSize(), onBack = { navController.popBackStack() })
+                            ModelsScreen(
+                                modifier = Modifier.fillMaxSize(),
+                                onBack = { navController.popBackStack() })
                         }
                         composable("memory") {
                             MemoryScreen(onBack = { navController.popBackStack() })
                         }
                         composable("tools") {
-                            ToolsScreen(modifier = Modifier.fillMaxSize(), onBack = { navController.popBackStack() })
+                            ToolsScreen(
+                                modifier = Modifier.fillMaxSize(),
+                                onBack = { navController.popBackStack() })
                         }
                         composable("monitoring") {
                             val monitoringViewModel: MonitoringViewModel = hiltViewModel()
-                            MonitoringScreen(viewModel = monitoringViewModel, onBack = { navController.popBackStack() })
+                            MonitoringScreen(
+                                viewModel = monitoringViewModel,
+                                onBack = { navController.popBackStack() })
                         }
                         composable("settings") {
-                            SettingsScreen(modifier = Modifier.fillMaxSize(), onBack = { navController.popBackStack() })
+                            SettingsScreen(
+                                modifier = Modifier.fillMaxSize(),
+                                onBack = { navController.popBackStack() })
                         }
                         composable("orchestrator") {
                             val orchestratorViewModel: OrchestratorViewModel = hiltViewModel()
-                            VisualOrchestratorScreen(viewModel = orchestratorViewModel, onBack = { navController.popBackStack() })
+                            VisualOrchestratorScreen(
+                                viewModel = orchestratorViewModel,
+                                onBack = { navController.popBackStack() })
                         }
                     }
                 }

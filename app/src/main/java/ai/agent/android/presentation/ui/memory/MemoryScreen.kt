@@ -68,7 +68,10 @@ fun MemoryScreen(
                 title = { Text("Memory Management") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(imageVector = Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "Back"
+                        )
                     }
                 }
             )
@@ -102,6 +105,7 @@ fun MemoryScreen(
                             onDeleteSession = viewModel::deleteChatSession,
                             onDeleteMessage = viewModel::deleteChatMessage
                         )
+
                         1 -> VectorDatabaseTab(
                             memories = uiState.vectorMemories,
                             onDeleteMemory = viewModel::deleteVectorMemory
@@ -219,7 +223,10 @@ private fun ChatMessageItem(
     val clipboardManager = LocalClipboardManager.current
 
     Card(
-        modifier = Modifier.fillMaxWidth().clickable { expanded = !expanded }.animateContentSize(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { expanded = !expanded }
+            .animateContentSize(),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surface
         )
@@ -281,7 +288,10 @@ private fun MemoryChunkItem(
     val clipboardManager = LocalClipboardManager.current
 
     Card(
-        modifier = Modifier.fillMaxWidth().clickable { expanded = !expanded }.animateContentSize(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { expanded = !expanded }
+            .animateContentSize(),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.secondaryContainer
         )

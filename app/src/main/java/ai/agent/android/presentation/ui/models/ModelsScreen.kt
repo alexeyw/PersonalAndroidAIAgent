@@ -74,7 +74,10 @@ fun ModelsScreen(
                 title = { Text("Model Management") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(imageVector = Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "Back"
+                        )
                     }
                 }
             )
@@ -139,7 +142,8 @@ fun ModelsScreen(
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 items(uiState.availablePresets) { preset ->
-                    val isAlreadyDownloaded = uiState.downloadedModels.any { it.name == preset.url.substringAfterLast("/") }
+                    val isAlreadyDownloaded =
+                        uiState.downloadedModels.any { it.name == preset.url.substringAfterLast("/") }
                     PresetItem(
                         preset = preset,
                         isDownloading = uiState.isDownloading,
@@ -188,7 +192,8 @@ fun ModelsScreen(
                             style = MaterialTheme.typography.bodySmall,
                             modifier = Modifier.align(Alignment.End)
                         )
-                    } ?: CircularProgressIndicator(modifier = Modifier.align(Alignment.CenterHorizontally))
+                    }
+                        ?: CircularProgressIndicator(modifier = Modifier.align(Alignment.CenterHorizontally))
                 }
                 Spacer(modifier = Modifier.height(16.dp))
             }
