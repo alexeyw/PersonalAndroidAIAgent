@@ -7,8 +7,10 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
@@ -119,10 +121,31 @@ fun VisualOrchestratorScreen(
                     IconButton(onClick = onBack) {
                         Icon(imageVector = Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
-                },
-                actions = {
-                    IconButton(onClick = { showNodeMenu = true }) {
-                        Icon(imageVector = Icons.Default.Add, contentDescription = "Add Node")
+                }
+            )
+        }
+    ) { paddingValues ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(paddingValues)
+        ) {
+            // Toolbar row for actions
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(MaterialTheme.colorScheme.surfaceVariant)
+                    .padding(horizontal = 8.dp, vertical = 4.dp)
+                    .horizontalScroll(rememberScrollState()),
+                verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
+            ) {
+                Box {
+                    Button(
+                        onClick = { showNodeMenu = true },
+                        modifier = Modifier.padding(end = 8.dp)
+                    ) {
+                        Icon(imageVector = Icons.Default.Add, contentDescription = "Add Node", modifier = Modifier.padding(end = 4.dp))
+                        Text("Add Node")
                     }
                     DropdownMenu(
                         expanded = showNodeMenu,
@@ -132,7 +155,6 @@ fun VisualOrchestratorScreen(
                             DropdownMenuItem(
                                 text = { Text(nodeType.name) },
                                 onClick = {
-                                    // Approximate center relative to current scale and pan
                                     val centerX = (-panOffset.x + 400f) / scale
                                     val centerY = (-panOffset.y + 400f) / scale
                                     viewModel.addNode(nodeType, centerX, centerY)
@@ -141,9 +163,15 @@ fun VisualOrchestratorScreen(
                             )
                         }
                     }
-                    
-                    IconButton(onClick = { showLoadMenu = true }) {
-                        Icon(imageVector = Icons.AutoMirrored.Filled.List, contentDescription = "Load Pipeline")
+                }
+
+                Box {
+                    Button(
+                        onClick = { showLoadMenu = true },
+                        modifier = Modifier.padding(end = 8.dp)
+                    ) {
+                        Icon(imageVector = Icons.AutoMirrored.Filled.List, contentDescription = "Load Pipeline", modifier = Modifier.padding(end = 4.dp))
+                        Text("Load")
                     }
                     DropdownMenu(
                         expanded = showLoadMenu,
@@ -163,99 +191,107 @@ fun VisualOrchestratorScreen(
                             }
                         }
                     }
+                }
 
-                    IconButton(onClick = { showClearDialog = true }) {
-                        Icon(imageVector = Icons.Default.Clear, contentDescription = "Clear Pipeline", tint = MaterialTheme.colorScheme.error)
-                    }
-                    IconButton(onClick = { viewModel.saveCurrentPipeline() }) {
-                        Icon(imageVector = Icons.Default.Check, contentDescription = "Save Pipeline")
-                    }
+                Button(
+                    onClick = { viewModel.saveCurrentPipeline() },
+                    modifier = Modifier.padding(end = 8.dp)
+                ) {
+                    Icon(imageVector = Icons.Default.Check, contentDescription = "Save Pipeline", modifier = Modifier.padding(end = 4.dp))
+                    Text("Save")
                 }
-            )
-        }
-    ) { paddingValues ->
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
-                .background(Color.DarkGray.copy(alpha = 0.1f))
-                .pointerInput(Unit) {
-                    detectTransformGestures { centroid, pan, zoom, _ ->
-                        val newScale = (scale * zoom).coerceIn(0.1f, 5f)
-                        val p = panOffset + pan
-                        panOffset = centroid - (centroid - p) * (newScale / scale)
-                        scale = newScale
-                    }
+
+                Button(
+                    onClick = { showClearDialog = true },
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                ) {
+                    Icon(imageVector = Icons.Default.Clear, contentDescription = "Clear Pipeline", modifier = Modifier.padding(end = 4.dp))
+                    Text("Clear")
                 }
-        ) {
+            }
+
             Box(
                 modifier = Modifier
-                    .fillMaxSize()
-                    .graphicsLayer {
-                        scaleX = scale
-                        scaleY = scale
-                        translationX = panOffset.x
-                        translationY = panOffset.y
-                        transformOrigin = TransformOrigin(0f, 0f)
+                    .fillMaxWidth()
+                    .weight(1f)
+                    .background(Color.DarkGray.copy(alpha = 0.1f))
+                    .pointerInput(Unit) {
+                        detectTransformGestures { centroid, pan, zoom, _ ->
+                            val newScale = (scale * zoom).coerceIn(0.1f, 5f)
+                            val p = panOffset + pan
+                            panOffset = centroid - (centroid - p) * (newScale / scale)
+                            scale = newScale
+                        }
                     }
             ) {
-                Canvas(modifier = Modifier.fillMaxSize()) {
-                    val nodes = uiState.nodes
-                    val connections = uiState.connections
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .graphicsLayer {
+                            scaleX = scale
+                            scaleY = scale
+                            translationX = panOffset.x
+                            translationY = panOffset.y
+                            transformOrigin = TransformOrigin(0f, 0f)
+                        }
+                ) {
+                    Canvas(modifier = Modifier.fillMaxSize()) {
+                        val nodes = uiState.nodes
+                        val connections = uiState.connections
 
-                    connections.forEach { conn ->
-                        val source = nodes.find { it.id == conn.sourceNodeId }
-                        val target = nodes.find { it.id == conn.targetNodeId }
+                        connections.forEach { conn ->
+                            val source = nodes.find { it.id == conn.sourceNodeId }
+                            val target = nodes.find { it.id == conn.targetNodeId }
 
-                        if (source != null && target != null) {
-                            val path = Path().apply {
-                                // Offsets applied directly to logical coordinates
-                                val startX = source.x + 150f 
-                                val startY = source.y + 80f  
-                                val endX = target.x
-                                val endY = target.y + 80f
+                            if (source != null && target != null) {
+                                val path = Path().apply {
+                                    val startX = source.x + 150f 
+                                    val startY = source.y + 80f  
+                                    val endX = target.x
+                                    val endY = target.y + 80f
 
-                                moveTo(startX, startY)
-                                cubicTo(
-                                    startX + 100f, startY,
-                                    endX - 100f, endY,
-                                    endX, endY
+                                    moveTo(startX, startY)
+                                    cubicTo(
+                                        startX + 100f, startY,
+                                        endX - 100f, endY,
+                                        endX, endY
+                                    )
+                                }
+                                drawPath(
+                                    path = path,
+                                    color = Color.Gray,
+                                    style = Stroke(width = 4.dp.toPx()) 
                                 )
                             }
-                            drawPath(
-                                path = path,
-                                color = Color.Gray,
-                                style = Stroke(width = 4.dp.toPx()) 
-                            )
                         }
                     }
-                }
 
-                uiState.nodes.forEach { node ->
-                    DraggableNode(
-                        node = node,
-                        isConnecting = connectingFromNodeId == node.id,
-                        modifier = Modifier.offset {
-                            IntOffset(node.x.roundToInt(), node.y.roundToInt())
-                        },
-                        onPositionDelta = { id, dx, dy ->
-                            viewModel.moveNode(id, dx, dy)
-                        },
-                        onConnectClick = {
-                            if (connectingFromNodeId == null) {
-                                connectingFromNodeId = node.id
-                            } else if (connectingFromNodeId != node.id) {
-                                viewModel.addConnection(connectingFromNodeId!!, node.id)
-                                connectingFromNodeId = null
-                            } else {
-                                connectingFromNodeId = null // Cancel if clicked again
+                    uiState.nodes.forEach { node ->
+                        DraggableNode(
+                            node = node,
+                            isConnecting = connectingFromNodeId == node.id,
+                            modifier = Modifier.offset {
+                                IntOffset(node.x.roundToInt(), node.y.roundToInt())
+                            },
+                            onPositionDelta = { id, dx, dy ->
+                                viewModel.moveNode(id, dx, dy)
+                            },
+                            onConnectClick = {
+                                if (connectingFromNodeId == null) {
+                                    connectingFromNodeId = node.id
+                                } else if (connectingFromNodeId != node.id) {
+                                    viewModel.addConnection(connectingFromNodeId!!, node.id)
+                                    connectingFromNodeId = null
+                                } else {
+                                    connectingFromNodeId = null
+                                }
+                            },
+                            onDeleteClick = {
+                                if (connectingFromNodeId == node.id) connectingFromNodeId = null
+                                viewModel.removeNode(node.id)
                             }
-                        },
-                        onDeleteClick = {
-                            if (connectingFromNodeId == node.id) connectingFromNodeId = null
-                            viewModel.removeNode(node.id)
-                        }
-                    )
+                        )
+                    }
                 }
             }
         }
