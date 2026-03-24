@@ -261,7 +261,8 @@ private fun DownloadedModelItem(
             Text(
                 text = modelName,
                 style = MaterialTheme.typography.bodyLarge,
-                color = if (isActive) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
+                color = if (isActive) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.weight(1f).padding(end = 8.dp)
             )
             if (!isActive) {
                 Button(onClick = onMakeActive) {

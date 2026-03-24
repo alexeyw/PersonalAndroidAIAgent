@@ -45,6 +45,10 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlin.math.roundToInt
 
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.List
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -73,6 +77,8 @@ fun VisualOrchestratorScreen(
     var showNodeMenu by remember { mutableStateOf(false) }
     var showClearDialog by remember { mutableStateOf(false) }
     var connectingFromNodeId by remember { mutableStateOf<String?>(null) }
+
+    var showLoadMenu by remember { mutableStateOf(false) }
 
     LaunchedEffect(uiState.errorMessage) {
         uiState.errorMessage?.let { error ->
@@ -115,37 +121,54 @@ fun VisualOrchestratorScreen(
                     }
                 },
                 actions = {
-                    Box {
-                        Button(onClick = { showNodeMenu = true }) {
-                            Text("Add Node")
+                    IconButton(onClick = { showNodeMenu = true }) {
+                        Icon(imageVector = Icons.Default.Add, contentDescription = "Add Node")
+                    }
+                    DropdownMenu(
+                        expanded = showNodeMenu,
+                        onDismissRequest = { showNodeMenu = false }
+                    ) {
+                        NodeType.entries.forEach { nodeType ->
+                            DropdownMenuItem(
+                                text = { Text(nodeType.name) },
+                                onClick = {
+                                    // Approximate center relative to current scale and pan
+                                    val centerX = (-panOffset.x + 400f) / scale
+                                    val centerY = (-panOffset.y + 400f) / scale
+                                    viewModel.addNode(nodeType, centerX, centerY)
+                                    showNodeMenu = false
+                                }
+                            )
                         }
-                        DropdownMenu(
-                            expanded = showNodeMenu,
-                            onDismissRequest = { showNodeMenu = false }
-                        ) {
-                            NodeType.entries.forEach { nodeType ->
+                    }
+                    
+                    IconButton(onClick = { showLoadMenu = true }) {
+                        Icon(imageVector = Icons.AutoMirrored.Filled.List, contentDescription = "Load Pipeline")
+                    }
+                    DropdownMenu(
+                        expanded = showLoadMenu,
+                        onDismissRequest = { showLoadMenu = false }
+                    ) {
+                        if (uiState.savedPipelines.isEmpty()) {
+                            DropdownMenuItem(text = { Text("No saved pipelines") }, onClick = { showLoadMenu = false })
+                        } else {
+                            uiState.savedPipelines.forEach { pipeline ->
                                 DropdownMenuItem(
-                                    text = { Text(nodeType.name) },
+                                    text = { Text(pipeline.name.ifBlank { "Unnamed (${pipeline.id.take(4)})" }) },
                                     onClick = {
-                                        // Approximate center relative to current scale and pan
-                                        val centerX = (-panOffset.x + 400f) / scale
-                                        val centerY = (-panOffset.y + 400f) / scale
-                                        viewModel.addNode(nodeType, centerX, centerY)
-                                        showNodeMenu = false
+                                        viewModel.loadPipeline(pipeline.id)
+                                        showLoadMenu = false
                                     }
                                 )
                             }
                         }
                     }
-                    Button(
-                        onClick = { showClearDialog = true },
-                        modifier = Modifier.padding(start = 8.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
-                    ) {
-                        Text("Clear")
+
+                    IconButton(onClick = { showClearDialog = true }) {
+                        Icon(imageVector = Icons.Default.Clear, contentDescription = "Clear Pipeline", tint = MaterialTheme.colorScheme.error)
                     }
-                    Button(onClick = { viewModel.saveCurrentPipeline() }, modifier = Modifier.padding(start = 8.dp)) {
-                        Text("Save")
+                    IconButton(onClick = { viewModel.saveCurrentPipeline() }) {
+                        Icon(imageVector = Icons.Default.Check, contentDescription = "Save Pipeline")
                     }
                 }
             )
