@@ -23,7 +23,7 @@ interface PipelineDao {
      * @return A [Flow] emitting a list of [PipelineWithNodesAndConnections].
      */
     @Transaction
-    @Query("SELECT * FROM pipelines")
+    @Query("SELECT * FROM pipelines ORDER BY updatedAt DESC")
     fun getAllPipelines(): Flow<List<PipelineWithNodesAndConnections>>
 
     /**

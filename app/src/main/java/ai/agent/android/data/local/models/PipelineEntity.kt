@@ -13,5 +13,6 @@ import androidx.room.PrimaryKey
 data class PipelineEntity(
     @PrimaryKey
     val id: String,
-    val name: String
+    val name: String,
+    val updatedAt: Long = System.currentTimeMillis()
 )

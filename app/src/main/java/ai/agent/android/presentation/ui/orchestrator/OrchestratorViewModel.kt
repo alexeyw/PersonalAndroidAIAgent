@@ -6,8 +6,11 @@ import ai.agent.android.domain.models.ConnectionModel
 import ai.agent.android.domain.models.NodeModel
 import ai.agent.android.domain.models.NodeType
 import ai.agent.android.domain.models.PipelineGraph
+import ai.agent.android.domain.repositories.ApiKeyRepository
+import ai.agent.android.domain.repositories.ToolRepository
 import ai.agent.android.domain.usecases.LoadPipelineUseCase
 import ai.agent.android.domain.usecases.SavePipelineUseCase
+import com.google.gson.Gson
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -25,7 +28,9 @@ import javax.inject.Inject
 @HiltViewModel
 class OrchestratorViewModel @Inject constructor(
     private val savePipelineUseCase: SavePipelineUseCase,
-    private val loadPipelineUseCase: LoadPipelineUseCase
+    private val loadPipelineUseCase: LoadPipelineUseCase,
+    private val apiKeyRepository: ApiKeyRepository,
+    private val toolRepository: ToolRepository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(OrchestratorUiState())
@@ -35,8 +40,12 @@ class OrchestratorViewModel @Inject constructor(
      */
     val uiState: StateFlow<OrchestratorUiState> = _uiState.asStateFlow()
 
+    private val gson = Gson()
+
     init {
         observeSavedPipelines()
+        observeProviderKeys()
+        loadAvailableTools()
     }
 
     private fun observeSavedPipelines() {
@@ -55,6 +64,48 @@ class OrchestratorViewModel @Inject constructor(
                         state.copy(savedPipelines = pipelines, currentPipeline = newCurrent) 
                     }
                 }
+        }
+    }
+
+    private fun observeProviderKeys() {
+        viewModelScope.launch {
+            apiKeyRepository.getOpenAIKey().collect { key ->
+                updateProviderKey(NodeType.OPENAI, !key.isNullOrBlank())
+            }
+        }
+        viewModelScope.launch {
+            apiKeyRepository.getAnthropicKey().collect { key ->
+                updateProviderKey(NodeType.ANTHROPIC, !key.isNullOrBlank())
+            }
+        }
+        viewModelScope.launch {
+            apiKeyRepository.getGoogleKey().collect { key ->
+                updateProviderKey(NodeType.GOOGLE, !key.isNullOrBlank())
+            }
+        }
+        viewModelScope.launch {
+            apiKeyRepository.getDeepSeekKey().collect { key ->
+                updateProviderKey(NodeType.DEEPSEEK, !key.isNullOrBlank())
+            }
+        }
+    }
+
+    private fun updateProviderKey(type: NodeType, hasKey: Boolean) {
+        _uiState.update { state ->
+            val updatedKeys = state.providerKeys.toMutableMap()
+            updatedKeys[type] = hasKey
+            state.copy(providerKeys = updatedKeys)
+        }
+    }
+
+    private fun loadAvailableTools() {
+        viewModelScope.launch {
+            try {
+                val tools = toolRepository.getAvailableTools()
+                _uiState.update { it.copy(availableTools = tools) }
+            } catch (e: Exception) {
+                _uiState.update { it.copy(errorMessage = e.message) }
+            }
         }
     }
 
@@ -145,6 +196,23 @@ class OrchestratorViewModel @Inject constructor(
     }
 
     /**
+     * Updates the tool assigned to a specific node.
+     * 
+     * @param nodeId The unique identifier of the node.
+     * @param toolName The name of the tool to assign.
+     */
+    fun updateNodeTool(nodeId: String, toolName: String) {
+        _uiState.update { state ->
+            val updatedNodes = state.currentPipeline.nodes.map {
+                if (it.id == nodeId) it.copy(toolName = toolName, label = toolName) else it
+            }
+            state.copy(
+                currentPipeline = state.currentPipeline.copy(nodes = updatedNodes)
+            )
+        }
+    }
+
+    /**
      * Clears the current pipeline.
      */
     fun clearPipeline() {
@@ -155,6 +223,58 @@ class OrchestratorViewModel @Inject constructor(
                     connections = emptyList()
                 )
             )
+        }
+    }
+
+    /**
+     * Applies the base preset consisting of Input -> LiteRT -> Output nodes.
+     */
+    fun applyBasePreset() {
+        val inputNode = NodeModel(id = UUID.randomUUID().toString(), type = NodeType.INPUT, x = 100f, y = 300f)
+        val liteRtNode = NodeModel(id = UUID.randomUUID().toString(), type = NodeType.LITE_RT, x = 400f, y = 300f)
+        val outputNode = NodeModel(id = UUID.randomUUID().toString(), type = NodeType.OUTPUT, x = 700f, y = 300f)
+
+        val connection1 = ConnectionModel(id = UUID.randomUUID().toString(), sourceNodeId = inputNode.id, targetNodeId = liteRtNode.id)
+        val connection2 = ConnectionModel(id = UUID.randomUUID().toString(), sourceNodeId = liteRtNode.id, targetNodeId = outputNode.id)
+
+        _uiState.update { state ->
+            state.copy(
+                currentPipeline = PipelineGraph(
+                    id = UUID.randomUUID().toString(),
+                    name = "Base Preset",
+                    nodes = listOf(inputNode, liteRtNode, outputNode),
+                    connections = listOf(connection1, connection2)
+                )
+            )
+        }
+    }
+
+    /**
+     * Exports the current pipeline to a JSON string.
+     *
+     * @return The JSON representation of the current pipeline.
+     */
+    fun exportPipelineToJson(): String {
+        return gson.toJson(_uiState.value.currentPipeline)
+    }
+
+    /**
+     * Imports a pipeline from a JSON string.
+     *
+     * @param jsonString The JSON string representing a pipeline.
+     */
+    fun importPipelineFromJson(jsonString: String) {
+        try {
+            val pipeline = gson.fromJson(jsonString, PipelineGraph::class.java)
+            if (pipeline != null) {
+                _uiState.update { state ->
+                    state.copy(currentPipeline = pipeline, errorMessage = null)
+                }
+            } else {
+                _uiState.update { it.copy(errorMessage = "Failed to parse JSON") }
+            }
+        } catch (e: Exception) {
+            _uiState.update { it.copy(errorMessage = "Invalid JSON format: ${e.message}") }
         }
     }
 
