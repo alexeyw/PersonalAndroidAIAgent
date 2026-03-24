@@ -156,4 +156,25 @@ class ModelsViewModelTest {
         advanceUntilIdle()
         coVerify { localModelRepository.setActiveModel(1L) }
     }
+
+    @Test
+    fun `clearError sets downloadError to null`() = runTest {
+        val url = "http://example.com/model.bin"
+        val fileName = "model.bin"
+        val error = AndroidModelDownloadManager.DownloadError("Network failed")
+        
+        every { downloadManager.downloadModel(url, fileName) } returns flowOf(
+            DownloadState.Error(error)
+        )
+        
+        viewModel.startDownload(url, fileName)
+        advanceUntilIdle()
+        
+        assertEquals(error, viewModel.uiState.value.downloadError)
+        
+        viewModel.clearError()
+        advanceUntilIdle()
+        
+        assertEquals(null, viewModel.uiState.value.downloadError)
+    }
 }

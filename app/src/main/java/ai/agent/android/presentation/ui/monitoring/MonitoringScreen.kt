@@ -16,6 +16,13 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -32,74 +39,97 @@ import java.util.Locale
  *
  * @param viewModel The ViewModel providing the monitoring state.
  * @param modifier The modifier for this composable.
+ * @param onBack Callback when the back button is pressed.
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MonitoringScreen(
     viewModel: MonitoringViewModel,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onBack: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsState()
 
-    Column(modifier = modifier.fillMaxSize().padding(16.dp)) {
-        Text(
-            text = "Monitoring & Tasks",
-            style = MaterialTheme.typography.headlineMedium,
-            fontWeight = FontWeight.Bold
-        )
-        
-        Spacer(modifier = Modifier.height(16.dp))
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("Monitoring & Tasks") },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "Back"
+                        )
+                    }
+                }
+            )
+        }
+    ) { paddingValues ->
+        Column(
+            modifier = modifier
+                .fillMaxSize()
+                .padding(paddingValues)
+                .padding(horizontal = 16.dp)
+        ) {
+            Spacer(modifier = Modifier.height(16.dp))
 
-        if (uiState.isPowerSavingActive) {
-            Card(
-                modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Text(
-                        text = "Power Saving Mode Active",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.onErrorContainer,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = "Battery is low. Agent model is unloaded and background tasks are paused.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onErrorContainer
-                    )
+            if (uiState.isPowerSavingActive) {
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 16.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Text(
+                            text = "Power Saving Mode Active",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.onErrorContainer,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "Battery is low. Agent model is unloaded and background tasks are paused.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onErrorContainer
+                        )
+                    }
                 }
             }
-        }
-        
-        // Metrics Section
-        MetricsCard(metrics = uiState.metrics)
-        
-        Spacer(modifier = Modifier.height(16.dp))
-        
-        Text(
-            text = "System Actions & Logs",
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.SemiBold
-        )
-        
-        Spacer(modifier = Modifier.height(8.dp))
-        
-        // Logs Section
-        if (uiState.isLoading && uiState.recentLogs.isEmpty()) {
-            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator()
-            }
-        } else if (uiState.recentLogs.isEmpty()) {
-            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Text(text = "No recent actions found.", color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-        } else {
-            LazyColumn(
-                modifier = Modifier.fillMaxSize(),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                items(uiState.recentLogs, key = { it.timestamp }) { log ->
-                    LogItemCard(log = log)
+
+            // Metrics Section
+            MetricsCard(metrics = uiState.metrics)
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Text(
+                text = "System Actions & Logs",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold
+            )
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Logs Section
+            if (uiState.isLoading && uiState.recentLogs.isEmpty()) {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator()
+                }
+            } else if (uiState.recentLogs.isEmpty()) {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Text(
+                        text = "No recent actions found.",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            } else {
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    items(uiState.recentLogs, key = { it.timestamp }) { log ->
+                        LogItemCard(log = log)
+                    }
                 }
             }
         }
@@ -129,7 +159,10 @@ fun MetricsCard(metrics: ai.agent.android.domain.models.AgentMetrics) {
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 MetricItem("Inference Time", "${metrics.lastInferenceTimeMs} ms")
-                MetricItem("Speed", String.format(Locale.US, "%.1f tokens/s", metrics.tokensPerSecond))
+                MetricItem(
+                    "Speed",
+                    String.format(Locale.US, "%.1f tokens/s", metrics.tokensPerSecond)
+                )
                 MetricItem("Total Tokens", "${metrics.totalTokensProcessed}")
             }
         }
@@ -145,7 +178,11 @@ fun MetricsCard(metrics: ai.agent.android.domain.models.AgentMetrics) {
 @Composable
 fun MetricItem(label: String, value: String) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(text = label, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
         Text(text = value, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
     }
 }
@@ -164,7 +201,7 @@ fun LogItemCard(log: ai.agent.android.domain.models.ChatMessage) {
         Column(modifier = Modifier.padding(12.dp)) {
             val formatter = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
             val timeString = formatter.format(Date(log.timestamp))
-            
+
             Text(
                 text = "[$timeString]",
                 style = MaterialTheme.typography.labelSmall,

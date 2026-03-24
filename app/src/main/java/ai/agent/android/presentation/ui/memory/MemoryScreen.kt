@@ -49,20 +49,31 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+
 /**
  * The main screen for viewing and managing the agent's short-term and long-term memory.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MemoryScreen(
-    viewModel: MemoryViewModel = hiltViewModel()
+    viewModel: MemoryViewModel = hiltViewModel(),
+    onBack: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsState()
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Memory Management") }
+                title = { Text("Memory Management") },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "Back"
+                        )
+                    }
+                }
             )
         }
     ) { paddingValues ->
@@ -94,6 +105,7 @@ fun MemoryScreen(
                             onDeleteSession = viewModel::deleteChatSession,
                             onDeleteMessage = viewModel::deleteChatMessage
                         )
+
                         1 -> VectorDatabaseTab(
                             memories = uiState.vectorMemories,
                             onDeleteMemory = viewModel::deleteVectorMemory
@@ -211,7 +223,10 @@ private fun ChatMessageItem(
     val clipboardManager = LocalClipboardManager.current
 
     Card(
-        modifier = Modifier.fillMaxWidth().clickable { expanded = !expanded }.animateContentSize(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { expanded = !expanded }
+            .animateContentSize(),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surface
         )
@@ -273,7 +288,10 @@ private fun MemoryChunkItem(
     val clipboardManager = LocalClipboardManager.current
 
     Card(
-        modifier = Modifier.fillMaxWidth().clickable { expanded = !expanded }.animateContentSize(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { expanded = !expanded }
+            .animateContentSize(),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.secondaryContainer
         )

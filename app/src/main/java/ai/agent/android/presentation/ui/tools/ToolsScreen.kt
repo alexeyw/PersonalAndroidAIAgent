@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -17,122 +18,139 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
  *
  * @param modifier The modifier to be applied to the layout.
  * @param viewModel The view model managing the state for this screen.
+ * @param onBack Callback when the back button is pressed.
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ToolsScreen(
     modifier: Modifier = Modifier,
-    viewModel: ToolsViewModel = hiltViewModel()
+    viewModel: ToolsViewModel = hiltViewModel(),
+    onBack: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsState()
 
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .padding(16.dp)
-    ) {
-        Text(
-            text = "Tools & Integrations",
-            style = MaterialTheme.typography.headlineMedium,
-            modifier = Modifier.padding(bottom = 16.dp)
-        )
-
-        Text(
-            text = "Local AppFunctions",
-            style = MaterialTheme.typography.titleMedium,
-            modifier = Modifier.padding(bottom = 8.dp)
-        )
-
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxWidth()
-                .weight(1f),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("Tools & Integrations") },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "Back"
+                        )
+                    }
+                }
+            )
+        }
+    ) { paddingValues ->
+        Column(
+            modifier = modifier
+                .fillMaxSize()
+                .padding(paddingValues)
+                .padding(horizontal = 16.dp)
         ) {
-            items(uiState.localTools) { tool ->
-                val isEnabled = !uiState.disabledAppFunctions.contains(tool.name)
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Text(
+                text = "Local AppFunctions",
+                style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier.padding(bottom = 8.dp)
+            )
+
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                items(uiState.localTools) { tool ->
+                    val isEnabled = !uiState.disabledAppFunctions.contains(tool.name)
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
                     ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(text = tool.name, style = MaterialTheme.typography.bodyLarge)
-                            if (tool.description.isNotBlank()) {
-                                Text(
-                                    text = tool.description, 
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(text = tool.name, style = MaterialTheme.typography.bodyLarge)
+                                if (tool.description.isNotBlank()) {
+                                    Text(
+                                        text = tool.description,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                            Switch(
+                                checked = isEnabled,
+                                onCheckedChange = { checked ->
+                                    viewModel.toggleLocalTool(tool.name, checked)
+                                },
+                                modifier = Modifier.padding(start = 16.dp)
+                            )
+                        }
+                    }
+                }
+
+                item {
+                    Spacer(modifier = Modifier.height(24.dp))
+                    Text(
+                        text = "MCP Servers",
+                        style = MaterialTheme.typography.titleMedium,
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    )
+                }
+
+                items(uiState.mcpServers) { url ->
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = url,
+                                style = MaterialTheme.typography.bodyLarge,
+                                modifier = Modifier.weight(1f)
+                            )
+                            IconButton(onClick = { viewModel.removeMcpServer(url) }) {
+                                Icon(Icons.Default.Delete, contentDescription = "Remove Server")
                             }
                         }
-                        Switch(
-                            checked = isEnabled,
-                            onCheckedChange = { checked ->
-                                viewModel.toggleLocalTool(tool.name, checked)
-                            },
-                            modifier = Modifier.padding(start = 16.dp)
-                        )
                     }
                 }
             }
-            
-            item {
-                Spacer(modifier = Modifier.height(24.dp))
-                Text(
-                    text = "MCP Servers",
-                    style = MaterialTheme.typography.titleMedium,
-                    modifier = Modifier.padding(bottom = 8.dp)
-                )
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            OutlinedTextField(
+                value = uiState.newMcpUrlInput,
+                onValueChange = viewModel::onMcpUrlInputChanged,
+                label = { Text("Add New MCP Server URL") },
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Button(
+                onClick = viewModel::addMcpServer,
+                enabled = uiState.newMcpUrlInput.isNotBlank(),
+                modifier = Modifier.align(Alignment.End)
+            ) {
+                Text("Add Server")
             }
-
-            items(uiState.mcpServers) { url ->
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = url,
-                            style = MaterialTheme.typography.bodyLarge,
-                            modifier = Modifier.weight(1f)
-                        )
-                        IconButton(onClick = { viewModel.removeMcpServer(url) }) {
-                            Icon(Icons.Default.Delete, contentDescription = "Remove Server")
-                        }
-                    }
-                }
-            }
-        }
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        OutlinedTextField(
-            value = uiState.newMcpUrlInput,
-            onValueChange = viewModel::onMcpUrlInputChanged,
-            label = { Text("Add New MCP Server URL") },
-            modifier = Modifier.fillMaxWidth()
-        )
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        Button(
-            onClick = viewModel::addMcpServer,
-            enabled = uiState.newMcpUrlInput.isNotBlank(),
-            modifier = Modifier.align(Alignment.End)
-        ) {
-            Text("Add Server")
         }
     }
 }
+

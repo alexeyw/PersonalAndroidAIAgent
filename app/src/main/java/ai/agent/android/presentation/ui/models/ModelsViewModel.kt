@@ -169,4 +169,11 @@ class ModelsViewModel @Inject constructor(
             localModelRepository.setActiveModel(modelId)
         }
     }
+
+    /**
+     * Clears the current download error from the UI state.
+     */
+    fun clearError() {
+        _uiState.update { it.copy(downloadError = null) }
+    }
 }

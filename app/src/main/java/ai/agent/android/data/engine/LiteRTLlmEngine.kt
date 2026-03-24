@@ -129,9 +129,13 @@ class LiteRTLlmEngine @Inject constructor(
 
         try {
             Timber.d("Starting inference for prompt: %s", prompt)
-            if (conversation == null) {
-                conversation = currentEngine.createConversation()
-            }
+            
+            // LiteRT-LM allows only one active session. Since the Orchestrator manually
+            // supplies the full history context every time, we must close the old conversation
+            // and create a fresh one to prevent token accumulation and OOM crashes.
+            conversation?.close()
+            conversation = currentEngine.createConversation()
+            
             // Stream the tokens directly from the LiteRT-LM conversation
             conversation?.let { conversation ->
                 conversation.sendMessageAsync(prompt).collect { chunk ->
@@ -154,13 +158,14 @@ class LiteRTLlmEngine @Inject constructor(
      */
     override fun unload() {
         try {
+            conversation?.close()
             engine?.close()
             Timber.i("LiteRT-LM engine unloaded successfully")
         } catch (e: Exception) {
             Timber.e(e, "Error unloading LiteRT-LM engine")
         } finally {
-            engine = null
             conversation = null
+            engine = null
             _currentModelPath = null
         }
     }

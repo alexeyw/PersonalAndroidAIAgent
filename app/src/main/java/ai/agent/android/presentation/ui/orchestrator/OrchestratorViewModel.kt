@@ -46,7 +46,14 @@ class OrchestratorViewModel @Inject constructor(
                     _uiState.update { it.copy(errorMessage = e.message) }
                 }
                 .collect { pipelines ->
-                    _uiState.update { it.copy(savedPipelines = pipelines) }
+                    _uiState.update { state -> 
+                        val newCurrent = if (state.currentPipeline.nodes.isEmpty() && pipelines.isNotEmpty()) {
+                            pipelines.first()
+                        } else {
+                            state.currentPipeline
+                        }
+                        state.copy(savedPipelines = pipelines, currentPipeline = newCurrent) 
+                    }
                 }
         }
     }
