@@ -2,6 +2,9 @@ package ai.agent.android.presentation.ui.orchestrator
 
 import ai.agent.android.domain.models.NodeType
 import ai.agent.android.domain.models.PipelineGraph
+import ai.agent.android.domain.models.AgentTool
+import ai.agent.android.domain.repositories.ApiKeyRepository
+import ai.agent.android.domain.repositories.ToolRepository
 import ai.agent.android.domain.usecases.LoadPipelineUseCase
 import ai.agent.android.domain.usecases.SavePipelineUseCase
 import io.mockk.coEvery
@@ -16,6 +19,7 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -25,6 +29,8 @@ class OrchestratorViewModelTest {
 
     private lateinit var savePipelineUseCase: SavePipelineUseCase
     private lateinit var loadPipelineUseCase: LoadPipelineUseCase
+    private lateinit var apiKeyRepository: ApiKeyRepository
+    private lateinit var toolRepository: ToolRepository
     private lateinit var viewModel: OrchestratorViewModel
 
     private val testDispatcher = StandardTestDispatcher()
@@ -34,15 +40,35 @@ class OrchestratorViewModelTest {
         Dispatchers.setMain(testDispatcher)
         savePipelineUseCase = mockk()
         loadPipelineUseCase = mockk()
+        apiKeyRepository = mockk()
+        toolRepository = mockk()
         
         every { loadPipelineUseCase.observeAllPipelines() } returns flowOf(emptyList())
         
-        viewModel = OrchestratorViewModel(savePipelineUseCase, loadPipelineUseCase)
+        every { apiKeyRepository.getOpenAIKey() } returns flowOf(null)
+        every { apiKeyRepository.getAnthropicKey() } returns flowOf("key")
+        every { apiKeyRepository.getGoogleKey() } returns flowOf(null)
+        every { apiKeyRepository.getDeepSeekKey() } returns flowOf(null)
+
+        coEvery { toolRepository.getAvailableTools() } returns listOf(AgentTool("Tool1", "Desc", "{}"))
+        
+        viewModel = OrchestratorViewModel(savePipelineUseCase, loadPipelineUseCase, apiKeyRepository, toolRepository)
     }
 
     @After
     fun tearDown() {
         Dispatchers.resetMain()
+    }
+
+    @Test
+    fun `init loads provider keys and tools`() = runTest {
+        testDispatcher.scheduler.advanceUntilIdle()
+        
+        val state = viewModel.uiState.value
+        assertEquals(true, state.providerKeys[NodeType.ANTHROPIC])
+        assertEquals(false, state.providerKeys[NodeType.OPENAI])
+        assertEquals(1, state.availableTools.size)
+        assertEquals("Tool1", state.availableTools[0].name)
     }
 
     @Test
@@ -179,5 +205,76 @@ class OrchestratorViewModelTest {
         
         viewModel.clearError()
         assertEquals(null, viewModel.uiState.value.errorMessage)
+    }
+
+    @Test
+    fun `updateNodeTool updates the tool assigned to a specific node`() {
+        viewModel.addNode(NodeType.TOOL, 0f, 0f)
+        val nodeId = viewModel.uiState.value.currentPipeline.nodes.first().id
+        
+        viewModel.updateNodeTool(nodeId, "CalendarTool")
+        
+        val updatedNode = viewModel.uiState.value.currentPipeline.nodes.first()
+        assertEquals("CalendarTool", updatedNode.toolName)
+        assertEquals("CalendarTool", updatedNode.label)
+    }
+
+    @Test
+    fun `applyBasePreset creates input liteRT and output nodes with connections`() {
+        viewModel.applyBasePreset()
+        
+        val state = viewModel.uiState.value
+        val nodes = state.currentPipeline.nodes
+        val connections = state.currentPipeline.connections
+        
+        assertEquals(3, nodes.size)
+        assertEquals(NodeType.INPUT, nodes[0].type)
+        assertEquals(NodeType.LITE_RT, nodes[1].type)
+        assertEquals(NodeType.OUTPUT, nodes[2].type)
+        
+        assertEquals(2, connections.size)
+        assertEquals(nodes[0].id, connections[0].sourceNodeId)
+        assertEquals(nodes[1].id, connections[0].targetNodeId)
+        assertEquals(nodes[1].id, connections[1].sourceNodeId)
+        assertEquals(nodes[2].id, connections[1].targetNodeId)
+        
+        assertEquals("Base Preset", state.currentPipeline.name)
+    }
+
+    @Test
+    fun `exportPipelineToJson returns valid json string`() {
+        viewModel.applyBasePreset()
+        
+        val json = viewModel.exportPipelineToJson()
+        
+        assertTrue(json.contains("Base Preset"))
+        assertTrue(json.contains("INPUT"))
+        assertTrue(json.contains("LITE_RT"))
+        assertTrue(json.contains("OUTPUT"))
+    }
+
+    @Test
+    fun `importPipelineFromJson updates current pipeline from json`() {
+        viewModel.applyBasePreset()
+        val json = viewModel.exportPipelineToJson()
+        
+        viewModel.clearPipeline()
+        assertEquals(0, viewModel.uiState.value.currentPipeline.nodes.size)
+        
+        viewModel.importPipelineFromJson(json)
+        
+        val state = viewModel.uiState.value
+        assertEquals("Base Preset", state.currentPipeline.name)
+        assertEquals(3, state.currentPipeline.nodes.size)
+        assertEquals(2, state.currentPipeline.connections.size)
+        assertEquals(null, state.errorMessage)
+    }
+
+    @Test
+    fun `importPipelineFromJson sets error on invalid json`() {
+        viewModel.importPipelineFromJson("{ invalid json }")
+        
+        assertNotNull(viewModel.uiState.value.errorMessage)
+        assertTrue(viewModel.uiState.value.errorMessage!!.contains("Invalid JSON format"))
     }
 }

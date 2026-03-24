@@ -1,5 +1,8 @@
 package ai.agent.android.presentation.ui.orchestrator.components
 
+import ai.agent.android.domain.models.AgentTool
+import ai.agent.android.domain.models.NodeModel
+import ai.agent.android.domain.models.NodeType
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectDragGestures
@@ -13,11 +16,18 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material3.Button
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -25,18 +35,18 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import ai.agent.android.domain.models.NodeModel
-import ai.agent.android.domain.models.NodeType
 
 /**
  * A draggable and interactive visual node component.
  *
  * @param node The [NodeModel] detailing type, id, and coordinates.
- * @param isConnecting Whether this node is currently selected to connect to another.
  * @param modifier The [Modifier] for this composable.
+ * @param isConnecting Whether this node is currently selected to connect to another.
  * @param onPositionDelta Callback invoked when the node is dragged, providing the delta x and y.
  * @param onConnectClick Callback invoked when the connect button is clicked.
  * @param onDeleteClick Callback invoked when the delete button is clicked.
+ * @param availableTools List of tools available for tool nodes.
+ * @param onToolSelected Callback invoked when a tool is selected for a tool node.
  */
 @Composable
 fun DraggableNode(
@@ -45,7 +55,9 @@ fun DraggableNode(
     isConnecting: Boolean = false,
     onPositionDelta: (String, Float, Float) -> Unit,
     onConnectClick: () -> Unit,
-    onDeleteClick: () -> Unit
+    onDeleteClick: () -> Unit,
+    availableTools: List<AgentTool> = emptyList(),
+    onToolSelected: (String, String) -> Unit = { _, _ -> }
 ) {
     val nodeColor = when (node.type) {
         NodeType.LITE_RT -> Color(0xFF4CAF50)
@@ -89,6 +101,30 @@ fun DraggableNode(
                 style = MaterialTheme.typography.labelSmall,
                 color = nodeColor
             )
+            
+            if (node.type == NodeType.TOOL) {
+                var expanded by remember { mutableStateOf(false) }
+                Box(modifier = Modifier.padding(top = 8.dp)) {
+                    Button(onClick = { expanded = true }) {
+                        Text(node.toolName ?: "Select Tool")
+                    }
+                    DropdownMenu(
+                        expanded = expanded,
+                        onDismissRequest = { expanded = false }
+                    ) {
+                        availableTools.forEach { tool ->
+                            DropdownMenuItem(
+                                text = { Text(tool.name) },
+                                onClick = {
+                                    onToolSelected(node.id, tool.name)
+                                    expanded = false
+                                }
+                            )
+                        }
+                    }
+                }
+            }
+
             Row(modifier = Modifier.padding(top = 8.dp)) {
                 IconButton(onClick = onConnectClick) {
                     Icon(

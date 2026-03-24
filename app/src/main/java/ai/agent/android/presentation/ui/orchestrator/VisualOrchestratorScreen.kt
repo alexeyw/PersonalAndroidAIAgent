@@ -2,6 +2,8 @@ package ai.agent.android.presentation.ui.orchestrator
 
 import ai.agent.android.domain.models.NodeType
 import ai.agent.android.presentation.ui.orchestrator.components.DraggableNode
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTransformGestures
@@ -14,22 +16,32 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.List
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -40,22 +52,14 @@ import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlin.math.roundToInt
-
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.List
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Clear
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.TopAppBar
 
 /**
  * The main screen for the Visual Orchestrator.
@@ -72,6 +76,8 @@ fun VisualOrchestratorScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
+    val context = LocalContext.current
+    val contentResolver = context.contentResolver
 
     var scale by remember { mutableFloatStateOf(1f) }
     var panOffset by remember { mutableStateOf(Offset.Zero) }
@@ -81,11 +87,70 @@ fun VisualOrchestratorScreen(
     var connectingFromNodeId by remember { mutableStateOf<String?>(null) }
 
     var showLoadMenu by remember { mutableStateOf(false) }
+    
+    var canvasSize by remember { mutableStateOf(IntSize.Zero) }
+
+    val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
+        uri?.let {
+            try {
+                contentResolver.openOutputStream(it)?.use { stream ->
+                    stream.write(viewModel.exportPipelineToJson().toByteArray())
+                }
+            } catch (e: Exception) {
+                // Ignore or handle
+            }
+        }
+    }
+
+    val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        uri?.let {
+            try {
+                contentResolver.openInputStream(it)?.use { stream ->
+                    val json = stream.bufferedReader().readText()
+                    viewModel.importPipelineFromJson(json)
+                }
+            } catch (e: Exception) {
+                // Ignore or handle
+            }
+        }
+    }
 
     LaunchedEffect(uiState.errorMessage) {
         uiState.errorMessage?.let { error ->
             snackbarHostState.showSnackbar(error)
             viewModel.clearError()
+        }
+    }
+
+    LaunchedEffect(uiState.nodes, canvasSize) {
+        if (uiState.nodes.isNotEmpty() && canvasSize.width > 0 && canvasSize.height > 0) {
+            val minX = uiState.nodes.minOf { it.x }
+            val maxX = uiState.nodes.maxOf { it.x + 200f } // Add width for node
+            val minY = uiState.nodes.minOf { it.y }
+            val maxY = uiState.nodes.maxOf { it.y + 100f } // Add height for node
+            
+            val graphWidth = maxX - minX
+            val graphHeight = maxY - minY
+            
+            val padding = 100f
+            val availableWidth = canvasSize.width - padding * 2
+            val availableHeight = canvasSize.height - padding * 2
+            
+            if (graphWidth > 0 && graphHeight > 0) {
+                val scaleX = availableWidth / graphWidth
+                val scaleY = availableHeight / graphHeight
+                val targetScale = minOf(scaleX, scaleY).coerceIn(0.1f, 1f)
+                
+                scale = targetScale
+                
+                val scaledGraphWidth = graphWidth * targetScale
+                val scaledGraphHeight = graphHeight * targetScale
+                
+                val offsetX = (canvasSize.width - scaledGraphWidth) / 2f - (minX * targetScale)
+                val offsetY = (canvasSize.height - scaledGraphHeight) / 2f - (minY * targetScale)
+                
+                panOffset = Offset(offsetX, offsetY)
+            }
         }
     }
 
@@ -152,17 +217,33 @@ fun VisualOrchestratorScreen(
                         onDismissRequest = { showNodeMenu = false }
                     ) {
                         NodeType.entries.forEach { nodeType ->
-                            DropdownMenuItem(
-                                text = { Text(nodeType.name) },
-                                onClick = {
-                                    val centerX = (-panOffset.x + 400f) / scale
-                                    val centerY = (-panOffset.y + 400f) / scale
-                                    viewModel.addNode(nodeType, centerX, centerY)
-                                    showNodeMenu = false
-                                }
-                            )
+                            val isProvider = nodeType == NodeType.OPENAI || 
+                                             nodeType == NodeType.ANTHROPIC || 
+                                             nodeType == NodeType.GOOGLE || 
+                                             nodeType == NodeType.DEEPSEEK
+                            
+                            val hasKey = uiState.providerKeys[nodeType] == true
+                            
+                            if (!isProvider || hasKey) {
+                                DropdownMenuItem(
+                                    text = { Text(nodeType.name) },
+                                    onClick = {
+                                        val centerX = (-panOffset.x + 400f) / scale
+                                        val centerY = (-panOffset.y + 400f) / scale
+                                        viewModel.addNode(nodeType, centerX, centerY)
+                                        showNodeMenu = false
+                                    }
+                                )
+                            }
                         }
                     }
+                }
+
+                Button(
+                    onClick = { viewModel.applyBasePreset() },
+                    modifier = Modifier.padding(end = 8.dp)
+                ) {
+                    Text("Base Preset")
                 }
 
                 Box {
@@ -202,6 +283,20 @@ fun VisualOrchestratorScreen(
                 }
 
                 Button(
+                    onClick = { exportLauncher.launch("pipeline.json") },
+                    modifier = Modifier.padding(end = 8.dp)
+                ) {
+                    Text("Export JSON")
+                }
+
+                Button(
+                    onClick = { importLauncher.launch(arrayOf("application/json")) },
+                    modifier = Modifier.padding(end = 8.dp)
+                ) {
+                    Text("Import JSON")
+                }
+
+                Button(
                     onClick = { showClearDialog = true },
                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
                 ) {
@@ -215,6 +310,9 @@ fun VisualOrchestratorScreen(
                     .fillMaxWidth()
                     .weight(1f)
                     .background(Color.DarkGray.copy(alpha = 0.1f))
+                    .onGloballyPositioned { coordinates ->
+                        canvasSize = coordinates.size
+                    }
                     .pointerInput(Unit) {
                         detectTransformGestures { centroid, pan, zoom, _ ->
                             val newScale = (scale * zoom).coerceIn(0.1f, 5f)
@@ -289,7 +387,9 @@ fun VisualOrchestratorScreen(
                             onDeleteClick = {
                                 if (connectingFromNodeId == node.id) connectingFromNodeId = null
                                 viewModel.removeNode(node.id)
-                            }
+                            },
+                            availableTools = uiState.availableTools,
+                            onToolSelected = viewModel::updateNodeTool
                         )
                     }
                 }

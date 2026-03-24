@@ -14,6 +14,7 @@ import androidx.room.PrimaryKey
  * @property x The X coordinate of the node on the canvas.
  * @property y The Y coordinate of the node on the canvas.
  * @property label The display label of the node.
+ * @property toolName The optional tool name associated with this node.
  */
 @Entity(
     tableName = "pipeline_nodes",
@@ -34,5 +35,6 @@ data class NodeEntity(
     val type: String,
     val x: Float,
     val y: Float,
-    val label: String
+    val label: String,
+    val toolName: String? = null
 )

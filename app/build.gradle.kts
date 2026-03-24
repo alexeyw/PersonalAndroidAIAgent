@@ -124,6 +124,9 @@ dependencies {
     implementation(libs.androidx.hilt.work)
     ksp(libs.androidx.hilt.compiler)
 
+    // JSON Serialization
+    implementation(libs.gson)
+
     testImplementation(libs.junit)
     testImplementation(libs.mockk)
     testImplementation(libs.coroutines.test)

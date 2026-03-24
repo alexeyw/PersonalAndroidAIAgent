@@ -28,7 +28,7 @@ import ai.agent.android.data.local.dao.PipelineDao
         NodeEntity::class,
         ConnectionEntity::class
     ],
-    version = 5,
+    version = 6,
     exportSchema = false
 )
 @TypeConverters(Converters::class)

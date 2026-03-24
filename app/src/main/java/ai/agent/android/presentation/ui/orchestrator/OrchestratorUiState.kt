@@ -3,6 +3,8 @@ package ai.agent.android.presentation.ui.orchestrator
 import ai.agent.android.domain.models.ConnectionModel
 import ai.agent.android.domain.models.NodeModel
 import ai.agent.android.domain.models.PipelineGraph
+import ai.agent.android.domain.models.AgentTool
+import ai.agent.android.domain.models.NodeType
 
 /**
  * Represents the UI state for the Visual Orchestrator screen.
@@ -11,12 +13,16 @@ import ai.agent.android.domain.models.PipelineGraph
  * @property savedPipelines List of all saved pipelines available to load.
  * @property isLoading Whether a loading operation is currently in progress.
  * @property errorMessage An error message if an operation fails.
+ * @property availableTools List of all available tools in the system.
+ * @property providerKeys Map indicating whether an API key is set for specific provider node types.
  */
 data class OrchestratorUiState(
     val currentPipeline: PipelineGraph = PipelineGraph(id = java.util.UUID.randomUUID().toString(), name = "New Pipeline"),
     val savedPipelines: List<PipelineGraph> = emptyList(),
     val isLoading: Boolean = false,
-    val errorMessage: String? = null
+    val errorMessage: String? = null,
+    val availableTools: List<AgentTool> = emptyList(),
+    val providerKeys: Map<NodeType, Boolean> = emptyMap()
 ) {
     /**
      * Helper to get nodes easily.

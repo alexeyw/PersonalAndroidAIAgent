@@ -33,7 +33,8 @@ class LocalPipelineRepositoryImpl @Inject constructor(
     override suspend fun savePipeline(pipeline: PipelineGraph) {
         val pipelineEntity = PipelineEntity(
             id = pipeline.id,
-            name = pipeline.name
+            name = pipeline.name,
+            updatedAt = System.currentTimeMillis()
         )
         val nodeEntities = pipeline.nodes.map {
             NodeEntity(
@@ -42,7 +43,8 @@ class LocalPipelineRepositoryImpl @Inject constructor(
                 type = it.type.name,
                 x = it.x,
                 y = it.y,
-                label = it.label
+                label = it.label,
+                toolName = it.toolName
             )
         }
         val connectionEntities = pipeline.connections.map {
@@ -65,13 +67,15 @@ class LocalPipelineRepositoryImpl @Inject constructor(
         return PipelineGraph(
             id = this.pipeline.id,
             name = this.pipeline.name,
+            updatedAt = this.pipeline.updatedAt,
             nodes = this.nodes.map {
                 NodeModel(
                     id = it.id,
                     type = runCatching { NodeType.valueOf(it.type) }.getOrDefault(NodeType.TOOL),
                     x = it.x,
                     y = it.y,
-                    label = it.label
+                    label = it.label,
+                    toolName = it.toolName
                 )
             },
             connections = this.connections.map {

@@ -8,12 +8,14 @@ package ai.agent.android.domain.models
  * @property name The display name of the pipeline.
  * @property nodes The list of [NodeModel]s present in the pipeline.
  * @property connections The list of [ConnectionModel]s linking the nodes.
+ * @property updatedAt Timestamp of the last update.
  */
 data class PipelineGraph(
     val id: String,
     val name: String,
     val nodes: List<NodeModel> = emptyList(),
-    val connections: List<ConnectionModel> = emptyList()
+    val connections: List<ConnectionModel> = emptyList(),
+    val updatedAt: Long = System.currentTimeMillis()
 ) {
     /**
      * Validates if the current graph is a valid Directed Acyclic Graph (DAG).
