@@ -107,6 +107,9 @@ class GraphExecutionEngine @Inject constructor(
 
         if (stepCount >= MAX_STEPS) {
             emit(AgentOrchestratorState.Error("Pipeline execution exceeded maximum steps ($MAX_STEPS)"))
+        } else {
+            // Loop exited because currentNode became null before reaching OUTPUT
+            emit(AgentOrchestratorState.Error("Pipeline execution terminated unexpectedly without reaching OUTPUT node."))
         }
     }
 

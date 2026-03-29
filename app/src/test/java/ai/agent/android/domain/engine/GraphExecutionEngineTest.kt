@@ -131,4 +131,27 @@ class GraphExecutionEngineTest {
         assertTrue(states.first() is AgentOrchestratorState.Error)
         assertTrue((states.first() as AgentOrchestratorState.Error).message.contains("cycles"))
     }
+
+    @Test
+    fun `emits Error if pipeline ends without reaching OUTPUT`() = runTest {
+        val inputNode = NodeModel("input_1", NodeType.INPUT, 0f, 0f)
+        val llmNode = NodeModel("llm_1", NodeType.LITE_RT, 0f, 0f)
+
+        val graph = PipelineGraph(
+            id = "g1", name = "Incomplete",
+            nodes = listOf(inputNode, llmNode),
+            connections = listOf(
+                ConnectionModel("c1", "input_1", "llm_1")
+                // No connection to an output node
+            )
+        )
+        
+        every { llmEngine.generateResponseStream(any()) } returns flowOf("Response")
+
+        val states = engine(sessionId, "Test", graph).toList()
+        
+        val lastState = states.last()
+        assertTrue(lastState is AgentOrchestratorState.Error)
+        assertTrue((lastState as AgentOrchestratorState.Error).message.contains("without reaching OUTPUT"))
+    }
 }
