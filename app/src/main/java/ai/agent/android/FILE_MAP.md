@@ -95,6 +95,7 @@ This file maps the contents of the main application package.
     - `ApprovalNotifier.kt` - Notifier for approval requests.
   - `usecases/` - Business logic Use Cases.
     - `AgentOrchestratorUseCase.kt` - Use case for agent orchestration.
+    - `EvaluateIfConditionUseCase.kt` - Use case for evaluating IF condition nodes.
     - `GetContextWindowUseCase.kt` - Use case to get context window.
     - `InitializeAppUseCase.kt` - Use case for app initialization.
     - `LoadModelUseCase.kt` - Use case to load a model.

@@ -85,6 +85,8 @@ fun VisualOrchestratorScreen(
     var showNodeMenu by remember { mutableStateOf(false) }
     var showClearDialog by remember { mutableStateOf(false) }
     var connectingFromNodeId by remember { mutableStateOf<String?>(null) }
+    var connectingLabel by remember { mutableStateOf<String?>(null) }
+    var configuringNodeId by remember { mutableStateOf<String?>(null) }
 
     var showLoadMenu by remember { mutableStateOf(false) }
     
@@ -175,6 +177,61 @@ fun VisualOrchestratorScreen(
                 }
             }
         )
+    }
+
+    if (configuringNodeId != null) {
+        val node = uiState.nodes.find { it.id == configuringNodeId }
+        if (node != null) {
+            var complexity by remember(node) { mutableStateOf(node.conditionComplexity?.toString() ?: "") }
+            var keywords by remember(node) { mutableStateOf(node.conditionKeywords ?: "") }
+            var prompt by remember(node) { mutableStateOf(node.conditionPrompt ?: "") }
+
+            AlertDialog(
+                onDismissRequest = { configuringNodeId = null },
+                title = { Text("Configure IF Condition") },
+                text = {
+                    Column {
+                        androidx.compose.material3.OutlinedTextField(
+                            value = complexity,
+                            onValueChange = { complexity = it },
+                            label = { Text("Complexity Threshold (Int)") }
+                        )
+                        androidx.compose.material3.OutlinedTextField(
+                            value = keywords,
+                            onValueChange = { keywords = it },
+                            label = { Text("Keywords (comma separated)") },
+                            modifier = Modifier.padding(top = 8.dp)
+                        )
+                        androidx.compose.material3.OutlinedTextField(
+                            value = prompt,
+                            onValueChange = { prompt = it },
+                            label = { Text("LLM Prompt") },
+                            modifier = Modifier.padding(top = 8.dp)
+                        )
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = {
+                        viewModel.updateNodeCondition(
+                            node.id,
+                            complexity.toIntOrNull(),
+                            keywords.takeIf { it.isNotBlank() },
+                            prompt.takeIf { it.isNotBlank() }
+                        )
+                        configuringNodeId = null
+                    }) {
+                        Text("Save")
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { configuringNodeId = null }) {
+                        Text("Cancel")
+                    }
+                }
+            )
+        } else {
+            configuringNodeId = null
+        }
     }
 
     Scaffold(
@@ -364,29 +421,58 @@ fun VisualOrchestratorScreen(
                         }
                     }
 
+                    // Draw labels for connections
+                    uiState.connections.forEach { conn ->
+                        val source = uiState.nodes.find { it.id == conn.sourceNodeId }
+                        val target = uiState.nodes.find { it.id == conn.targetNodeId }
+                        if (source != null && target != null && conn.label != null) {
+                            val midX = (source.x + 150f + target.x) / 2f
+                            val midY = (source.y + 80f + target.y + 80f) / 2f
+                            Text(
+                                text = conn.label,
+                                color = if (conn.label == "True") Color(0xFF4CAF50) else Color(0xFFF44336),
+                                fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                                modifier = Modifier
+                                    .offset { IntOffset(midX.roundToInt(), midY.roundToInt() - 20) }
+                                    .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.8f))
+                                    .padding(4.dp)
+                            )
+                        }
+                    }
+
                     uiState.nodes.forEach { node ->
                         DraggableNode(
                             node = node,
                             isConnecting = connectingFromNodeId == node.id,
+                            connectingLabel = connectingLabel,
                             modifier = Modifier.offset {
                                 IntOffset(node.x.roundToInt(), node.y.roundToInt())
                             },
                             onPositionDelta = { id, dx, dy ->
                                 viewModel.moveNode(id, dx, dy)
                             },
-                            onConnectClick = {
+                            onConnectClick = { label ->
                                 if (connectingFromNodeId == null) {
                                     connectingFromNodeId = node.id
+                                    connectingLabel = label
                                 } else if (connectingFromNodeId != node.id) {
-                                    viewModel.addConnection(connectingFromNodeId!!, node.id)
+                                    viewModel.addConnection(connectingFromNodeId!!, node.id, connectingLabel)
                                     connectingFromNodeId = null
+                                    connectingLabel = null
                                 } else {
                                     connectingFromNodeId = null
+                                    connectingLabel = null
                                 }
                             },
                             onDeleteClick = {
-                                if (connectingFromNodeId == node.id) connectingFromNodeId = null
+                                if (connectingFromNodeId == node.id) {
+                                    connectingFromNodeId = null
+                                    connectingLabel = null
+                                }
                                 viewModel.removeNode(node.id)
+                            },
+                            onConfigureClick = {
+                                configuringNodeId = node.id
                             },
                             availableTools = uiState.availableTools,
                             onToolSelected = viewModel::updateNodeTool

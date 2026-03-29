@@ -154,12 +154,14 @@ class OrchestratorViewModel @Inject constructor(
      *
      * @param sourceNodeId The unique identifier of the source node.
      * @param targetNodeId The unique identifier of the target node.
+     * @param label Optional label for the connection.
      */
-    fun addConnection(sourceNodeId: String, targetNodeId: String) {
+    fun addConnection(sourceNodeId: String, targetNodeId: String, label: String? = null) {
         val newConnection = ConnectionModel(
             id = UUID.randomUUID().toString(),
             sourceNodeId = sourceNodeId,
-            targetNodeId = targetNodeId
+            targetNodeId = targetNodeId,
+            label = label
         )
         _uiState.update { state ->
             val tempPipeline = state.currentPipeline.copy(
@@ -172,6 +174,31 @@ class OrchestratorViewModel @Inject constructor(
             } else {
                 state.copy(errorMessage = "Cannot connect: Cycle detected")
             }
+        }
+    }
+
+    /**
+     * Updates the condition configuration of an IF_CONDITION node.
+     *
+     * @param nodeId The unique identifier of the node.
+     * @param complexity Threshold for task complexity.
+     * @param keywords Comma-separated keywords.
+     * @param prompt Free-form prompt.
+     */
+    fun updateNodeCondition(nodeId: String, complexity: Int?, keywords: String?, prompt: String?) {
+        _uiState.update { state ->
+            val updatedNodes = state.currentPipeline.nodes.map {
+                if (it.id == nodeId) {
+                    it.copy(
+                        conditionComplexity = complexity,
+                        conditionKeywords = keywords,
+                        conditionPrompt = prompt
+                    )
+                } else it
+            }
+            state.copy(
+                currentPipeline = state.currentPipeline.copy(nodes = updatedNodes)
+            )
         }
     }
 

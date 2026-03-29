@@ -43,8 +43,9 @@ import androidx.compose.ui.unit.dp
  * @param modifier The [Modifier] for this composable.
  * @param isConnecting Whether this node is currently selected to connect to another.
  * @param onPositionDelta Callback invoked when the node is dragged, providing the delta x and y.
- * @param onConnectClick Callback invoked when the connect button is clicked.
+ * @param onConnectClick Callback invoked when the connect button is clicked. Passes an optional label for the connection.
  * @param onDeleteClick Callback invoked when the delete button is clicked.
+ * @param onConfigureClick Callback invoked when the configure button is clicked (used for IF_CONDITION).
  * @param availableTools List of tools available for tool nodes.
  * @param onToolSelected Callback invoked when a tool is selected for a tool node.
  */
@@ -53,9 +54,11 @@ fun DraggableNode(
     node: NodeModel,
     modifier: Modifier = Modifier,
     isConnecting: Boolean = false,
+    connectingLabel: String? = null,
     onPositionDelta: (String, Float, Float) -> Unit,
-    onConnectClick: () -> Unit,
+    onConnectClick: (String?) -> Unit,
     onDeleteClick: () -> Unit,
+    onConfigureClick: () -> Unit = {},
     availableTools: List<AgentTool> = emptyList(),
     onToolSelected: (String, String) -> Unit = { _, _ -> }
 ) {
@@ -66,6 +69,7 @@ fun DraggableNode(
         NodeType.ANTHROPIC -> Color(0xFF673AB7)
         NodeType.GOOGLE -> Color(0xFF00BCD4)
         NodeType.TOOL -> Color(0xFFFF9800)
+        NodeType.IF_CONDITION -> Color(0xFFFFC107)
         NodeType.INPUT -> Color(0xFF607D8B)
         NodeType.OUTPUT -> Color(0xFFF44336)
     }
@@ -125,15 +129,38 @@ fun DraggableNode(
                 }
             }
 
-            Row(modifier = Modifier.padding(top = 8.dp)) {
-                IconButton(onClick = onConnectClick) {
-                    Icon(
-                        imageVector = Icons.Default.Add,
-                        contentDescription = "Connect",
-                        tint = if (isConnecting) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
-                    )
+            if (node.type == NodeType.IF_CONDITION) {
+                Button(onClick = onConfigureClick, modifier = Modifier.padding(top = 8.dp)) {
+                    Text("Configure")
                 }
-                Spacer(modifier = Modifier.width(8.dp))
+                Row(modifier = Modifier.padding(top = 8.dp)) {
+                    Button(onClick = { onConnectClick("True") }) {
+                        Text(
+                            text = "True",
+                            color = if (isConnecting && connectingLabel == "True") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onPrimary
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Button(onClick = { onConnectClick("False") }) {
+                        Text(
+                            text = "False",
+                            color = if (isConnecting && connectingLabel == "False") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onPrimary
+                        )
+                    }
+                }
+            }
+
+            Row(modifier = Modifier.padding(top = 8.dp)) {
+                if (node.type != NodeType.IF_CONDITION) {
+                    IconButton(onClick = { onConnectClick(null) }) {
+                        Icon(
+                            imageVector = Icons.Default.Add,
+                            contentDescription = "Connect",
+                            tint = if (isConnecting) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                }
                 IconButton(onClick = onDeleteClick) {
                     Icon(
                         imageVector = Icons.Default.Close,

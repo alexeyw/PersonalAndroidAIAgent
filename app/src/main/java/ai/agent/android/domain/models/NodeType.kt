@@ -35,6 +35,11 @@ enum class NodeType {
     TOOL,
 
     /**
+     * Node representing a logical if condition for branching.
+     */
+    IF_CONDITION,
+
+    /**
      * The starting point of the pipeline.
      */
     INPUT,
