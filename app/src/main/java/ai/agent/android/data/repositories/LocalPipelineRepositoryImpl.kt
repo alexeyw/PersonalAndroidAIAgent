@@ -44,7 +44,10 @@ class LocalPipelineRepositoryImpl @Inject constructor(
                 x = it.x,
                 y = it.y,
                 label = it.label,
-                toolName = it.toolName
+                toolName = it.toolName,
+                conditionComplexity = it.conditionComplexity,
+                conditionKeywords = it.conditionKeywords,
+                conditionPrompt = it.conditionPrompt
             )
         }
         val connectionEntities = pipeline.connections.map {
@@ -75,14 +78,18 @@ class LocalPipelineRepositoryImpl @Inject constructor(
                     x = it.x,
                     y = it.y,
                     label = it.label,
-                    toolName = it.toolName
+                    toolName = it.toolName,
+                    conditionComplexity = it.conditionComplexity,
+                    conditionKeywords = it.conditionKeywords,
+                    conditionPrompt = it.conditionPrompt
                 )
             },
             connections = this.connections.map {
                 ConnectionModel(
                     id = it.id,
                     sourceNodeId = it.sourceNodeId,
-                    targetNodeId = it.targetNodeId
+                    targetNodeId = it.targetNodeId,
+                    label = it.label
                 )
             }
         )

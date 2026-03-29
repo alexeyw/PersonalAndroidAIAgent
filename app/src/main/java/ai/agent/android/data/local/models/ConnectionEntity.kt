@@ -12,6 +12,7 @@ import androidx.room.PrimaryKey
  * @property pipelineId The ID of the pipeline this connection belongs to.
  * @property sourceNodeId The ID of the starting node.
  * @property targetNodeId The ID of the ending node.
+ * @property label Optional label for the connection.
  */
 @Entity(
     tableName = "pipeline_connections",
@@ -30,5 +31,6 @@ data class ConnectionEntity(
     val id: String,
     val pipelineId: String,
     val sourceNodeId: String,
-    val targetNodeId: String
+    val targetNodeId: String,
+    val label: String? = null
 )
