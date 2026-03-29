@@ -41,10 +41,15 @@ class EvaluateIfConditionUseCase @Inject constructor(
         // 1. Check keywords
         val keywordsStr = node.conditionKeywords
         if (!keywordsStr.isNullOrBlank()) {
-            val keywords = keywordsStr.split(",").map { it.trim().lowercase() }
-            val lowerInput = inputText.lowercase()
-            if (keywords.any { lowerInput.contains(it) }) {
-                return true
+            val keywords = keywordsStr.split(",")
+                .map { it.trim().lowercase() }
+                .filter { it.isNotEmpty() }
+                
+            if (keywords.isNotEmpty()) {
+                val lowerInput = inputText.lowercase()
+                if (keywords.any { lowerInput.contains(it) }) {
+                    return true
+                }
             }
         }
 
