@@ -60,6 +60,7 @@ This file maps the contents of the main application package.
   - `constants/` - Domain-level constants.
     - `DefaultPrompts.kt` - Default system prompts.
   - `engine/` - Engine interfaces and abstractions.
+    - `GraphExecutionEngine.kt` - Engine responsible for executing PipelineGraphs.
     - `LlmInferenceEngine.kt` - LLM engine interface.
     - `TextEmbeddingEngine.kt` - Text embedding engine interface.
   - `models/` - Domain entity models.

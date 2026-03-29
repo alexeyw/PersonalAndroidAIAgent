@@ -1,23 +1,18 @@
 package ai.agent.android.domain.usecases
 
-import ai.agent.android.domain.engine.LlmInferenceEngine
+import ai.agent.android.domain.engine.GraphExecutionEngine
 import ai.agent.android.domain.models.AgentOrchestratorState
-import ai.agent.android.domain.models.AgentTool
+import ai.agent.android.domain.models.PipelineGraph
 import ai.agent.android.domain.repositories.ChatRepository
-import ai.agent.android.domain.repositories.MetricsRepository
-import ai.agent.android.domain.repositories.SettingsRepository
-import ai.agent.android.domain.repositories.ToolRepository
-import ai.agent.android.domain.services.ApprovalNotifier
-import ai.agent.android.domain.constants.DefaultPrompts
+import ai.agent.android.domain.repositories.PipelineRepository
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.verify
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.test.advanceUntilIdle
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -25,232 +20,56 @@ import org.junit.Test
 
 class AgentOrchestratorUseCaseTest {
 
-    private lateinit var llmEngine: LlmInferenceEngine
-    private lateinit var toolRepository: ToolRepository
     private lateinit var chatRepository: ChatRepository
-    private lateinit var getContextWindowUseCase: GetContextWindowUseCase
-    private lateinit var settingsRepository: SettingsRepository
-    private lateinit var metricsRepository: MetricsRepository
-    private lateinit var approvalNotifier: ApprovalNotifier
-    private lateinit var taskRouterUseCase: TaskRouterUseCase
-    private lateinit var koogClientFactory: ai.agent.android.data.engine.KoogClientFactory
-    private lateinit var retrieveRelevantMemoryUseCase: RetrieveRelevantMemoryUseCase
+    private lateinit var pipelineRepository: PipelineRepository
+    private lateinit var graphExecutionEngine: GraphExecutionEngine
     private lateinit var useCase: AgentOrchestratorUseCase
 
     private val sessionId = "test-session"
 
     @Before
     fun setup() {
-        llmEngine = mockk()
-        toolRepository = mockk()
         chatRepository = mockk(relaxed = true)
-        getContextWindowUseCase = mockk()
-        settingsRepository = mockk()
-        metricsRepository = mockk(relaxed = true)
-        approvalNotifier = mockk(relaxed = true)
-        taskRouterUseCase = mockk()
-        koogClientFactory = mockk()
-        retrieveRelevantMemoryUseCase = mockk()
-        useCase = AgentOrchestratorUseCase(llmEngine, toolRepository, chatRepository, getContextWindowUseCase, settingsRepository, metricsRepository, approvalNotifier, taskRouterUseCase, koogClientFactory, retrieveRelevantMemoryUseCase)
-
-        coEvery { toolRepository.getAvailableTools() } returns listOf(
-            AgentTool("test_tool", "A test tool", "{}")
-        )
-        coEvery { getContextWindowUseCase(sessionId) } returns "USER: hello"
-        coEvery { retrieveRelevantMemoryUseCase(any()) } returns emptyList()
-        coEvery { taskRouterUseCase(any()) } returns ai.agent.android.domain.models.RoutingDecision.LocalLiteRT
-        every { settingsRepository.systemPromptPrefix } returns flowOf(DefaultPrompts.SYSTEM_PROMPT_PREFIX)
-        every { settingsRepository.toolUsageInstruction } returns flowOf(DefaultPrompts.TOOL_USAGE_INSTRUCTION)
-        every { settingsRepository.requiresUserConfirmation } returns flowOf(false)
+        pipelineRepository = mockk()
+        graphExecutionEngine = mockk(relaxed = true)
+        useCase = AgentOrchestratorUseCase(chatRepository, pipelineRepository, graphExecutionEngine)
     }
 
     @Test
-    fun `direct answer without tool call`() = runTest {
+    fun `emits error when no active pipeline exists`() = runTest {
         val userPrompt = "Hello"
-        val llmResponse = "Hi there!"
 
-        every { llmEngine.generateResponseStream(any()) } returns flowOf("Hi ", "there!")
+        every { pipelineRepository.getAllPipelines() } returns flowOf(emptyList())
 
         val states = useCase(sessionId, userPrompt).toList()
 
         assertTrue(states[0] is AgentOrchestratorState.Loading)
-        assertTrue(states[1] is AgentOrchestratorState.Thinking)
-        assertEquals("Hi ", (states[1] as AgentOrchestratorState.Thinking).partialText)
-        assertTrue(states[2] is AgentOrchestratorState.Answering)
-        assertEquals("Hi there!", (states[2] as AgentOrchestratorState.Answering).partialText)
-        assertTrue(states[3] is AgentOrchestratorState.Completed)
-        assertEquals(llmResponse, (states[3] as AgentOrchestratorState.Completed).finalResponse)
+        assertTrue(states[1] is AgentOrchestratorState.Error)
+        assertEquals("No active pipeline found. Please create one in the Visual Orchestrator.", (states[1] as AgentOrchestratorState.Error).message)
 
         coVerify { chatRepository.saveMessage(match { it.content == userPrompt }) }
-        coVerify { chatRepository.saveMessage(match { it.content == llmResponse }) }
     }
 
     @Test
-    fun `tool call followed by answer`() = runTest {
-        val userPrompt = "Do something"
-        val toolCallResponse = """
-            Thought: I should use the test tool.
-            ```json
-            {
-              "tool": "test_tool",
-              "arguments": "{\"arg\":\"value\"}"
-            }
-            ```
-        """.trimIndent()
-        val finalResponse = "Tool execution completed."
+    fun `delegates execution to GraphExecutionEngine`() = runTest {
+        val userPrompt = "Hello"
+        val activePipeline = PipelineGraph(id = "1", name = "Test")
 
-        // Mock two iterations: first returns tool call, second returns final answer
-        var iteration = 0
-        every { llmEngine.generateResponseStream(any()) } answers {
-            if (iteration == 0) {
-                iteration++
-                flowOf(toolCallResponse)
-            } else {
-                flowOf(finalResponse)
-            }
-        }
-
-        coEvery { toolRepository.executeTool("test_tool", "{\"arg\":\"value\"}") } returns "Success"
+        every { pipelineRepository.getAllPipelines() } returns flowOf(listOf(activePipeline))
+        every { graphExecutionEngine.invoke(sessionId, userPrompt, activePipeline) } returns flowOf(
+            AgentOrchestratorState.Completed("Done")
+        )
 
         val states = useCase(sessionId, userPrompt).toList()
 
-        // Just check that we got an ExecutingTool state, an ObservationResult state, and Completed
-        val executingToolState = states.filterIsInstance<AgentOrchestratorState.ExecutingTool>().firstOrNull()
-        assertTrue(executingToolState != null)
-        assertEquals("test_tool", executingToolState?.toolName)
-
-        val observationState = states.filterIsInstance<AgentOrchestratorState.ObservationResult>().firstOrNull()
-        assertTrue(observationState != null)
-        assertEquals("Success", observationState?.result)
-
-        val completedState = states.filterIsInstance<AgentOrchestratorState.Completed>().firstOrNull()
-        assertTrue(completedState != null)
-        assertEquals(finalResponse, completedState?.finalResponse)
-
-        coVerify { toolRepository.executeTool("test_tool", "{\"arg\":\"value\"}") }
+        assertTrue(states[0] is AgentOrchestratorState.Loading)
+        assertTrue(states[1] is AgentOrchestratorState.Completed)
+        assertEquals("Done", (states[1] as AgentOrchestratorState.Completed).finalResponse)
     }
 
     @Test
-    fun `reaches max iterations and stops`() = runTest {
-        val userPrompt = "Infinite loop test"
-        val toolCallResponse = """
-            ```json
-            {
-              "tool": "test_tool",
-              "arguments": "{}"
-            }
-            ```
-        """.trimIndent()
-
-        // Always return a tool call
-        every { llmEngine.generateResponseStream(any()) } returns flowOf(toolCallResponse)
-        coEvery { toolRepository.executeTool(any(), any()) } returns "Looping"
-
-        val states = useCase(sessionId, userPrompt).toList()
-
-        val errors = states.filterIsInstance<AgentOrchestratorState.Error>()
-        assertTrue(errors.isNotEmpty())
-        assertTrue(errors.first().message.contains("maximum iterations"))
-    }
-
-    @Test
-    fun `emits WaitingForApproval and waits for approval, then executes on approve`() = runTest {
-        every { settingsRepository.requiresUserConfirmation } returns flowOf(true)
-
-        val userPrompt = "Do something dangerous"
-        val toolCallResponse = """
-            Thought: I need permission for this.
-            ```json
-            {
-              "tool": "test_tool",
-              "arguments": "{\"arg\":\"danger\"}"
-            }
-            ```
-        """.trimIndent()
-        val finalResponse = "Done."
-
-        var iteration = 0
-        every { llmEngine.generateResponseStream(any()) } answers {
-            if (iteration == 0) {
-                iteration++
-                flowOf(toolCallResponse)
-            } else {
-                flowOf(finalResponse)
-            }
-        }
-
-        coEvery { toolRepository.executeTool("test_tool", "{\"arg\":\"danger\"}") } returns "Success"
-
-        val states = mutableListOf<AgentOrchestratorState>()
-        val job = launch {
-            useCase(sessionId, userPrompt).toList(states)
-        }
-
-        advanceUntilIdle()
-
-        val confirmationState = states.filterIsInstance<AgentOrchestratorState.WaitingForApproval>().firstOrNull()
-        assertTrue(confirmationState != null)
-        assertEquals("test_tool", confirmationState?.toolName)
-        assertEquals("{\"arg\":\"danger\"}", confirmationState?.arguments)
-
-        coVerify { approvalNotifier.sendApprovalRequest(sessionId, "test_tool", "{\"arg\":\"danger\"}") }
-
-        // Resume with approval
+    fun `resumeWithApproval delegates to GraphExecutionEngine`() {
         useCase.resumeWithApproval(sessionId, true)
-        advanceUntilIdle()
-
-        val executingState = states.filterIsInstance<AgentOrchestratorState.ExecutingTool>().firstOrNull()
-        assertTrue(executingState != null)
-        
-        coVerify(exactly = 1) { toolRepository.executeTool("test_tool", "{\"arg\":\"danger\"}") }
-        job.cancel()
-    }
-
-    @Test
-    fun `emits WaitingForApproval and skips execution on deny`() = runTest {
-        every { settingsRepository.requiresUserConfirmation } returns flowOf(true)
-
-        val userPrompt = "Do something dangerous"
-        val toolCallResponse = """
-            Thought: I need permission for this.
-            ```json
-            {
-              "tool": "test_tool",
-              "arguments": "{\"arg\":\"danger\"}"
-            }
-            ```
-        """.trimIndent()
-        val finalResponse = "Okay, cancelled."
-
-        var iteration = 0
-        every { llmEngine.generateResponseStream(any()) } answers {
-            if (iteration == 0) {
-                iteration++
-                flowOf(toolCallResponse)
-            } else {
-                flowOf(finalResponse)
-            }
-        }
-
-        val states = mutableListOf<AgentOrchestratorState>()
-        val job = launch {
-            useCase(sessionId, userPrompt).toList(states)
-        }
-
-        advanceUntilIdle()
-
-        // Resume with deny
-        useCase.resumeWithApproval(sessionId, false)
-        advanceUntilIdle()
-
-        val executingState = states.filterIsInstance<AgentOrchestratorState.ExecutingTool>().firstOrNull()
-        assertTrue(executingState == null)
-
-        val observationState = states.filterIsInstance<AgentOrchestratorState.ObservationResult>().firstOrNull()
-        assertTrue(observationState != null)
-        assertEquals("Execution denied by user", observationState?.result)
-        
-        coVerify(exactly = 0) { toolRepository.executeTool(any(), any()) }
-        job.cancel()
+        verify { graphExecutionEngine.resumeWithApproval(sessionId, true) }
     }
 }

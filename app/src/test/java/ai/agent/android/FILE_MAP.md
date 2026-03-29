@@ -6,6 +6,8 @@ This file maps the contents of the local unit test package.
   - `AppModuleTest.kt` - Tests for AppModule.
   - `DataModuleTest.kt` - Tests for DataModule.
 - `domain/`
+  - `engine/`
+    - `GraphExecutionEngineTest.kt` - Tests for GraphExecutionEngine.
   - `models/`
     - `AppErrorTest.kt` - Tests for AppError.
     - `ResultTest.kt` - Tests for Result.

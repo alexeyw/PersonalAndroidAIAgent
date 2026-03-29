@@ -1,74 +1,45 @@
 package ai.agent.android.domain.usecases
 
-import ai.agent.android.data.engine.KoogClientFactory
-import ai.agent.android.domain.engine.LlmInferenceEngine
+import ai.agent.android.domain.engine.GraphExecutionEngine
 import ai.agent.android.domain.models.AgentOrchestratorState
 import ai.agent.android.domain.models.ChatMessage
 import ai.agent.android.domain.models.Role
-import ai.agent.android.domain.models.RoutingDecision
 import ai.agent.android.domain.repositories.ChatRepository
-import ai.agent.android.domain.repositories.MetricsRepository
-import ai.agent.android.domain.repositories.SettingsRepository
-import ai.agent.android.domain.repositories.ToolRepository
-import ai.agent.android.domain.services.ApprovalNotifier
-import ai.koog.prompt.dsl.prompt
-import ai.koog.prompt.executor.clients.anthropic.AnthropicModels
-import ai.koog.prompt.executor.clients.deepseek.DeepSeekModels
-import ai.koog.prompt.executor.clients.google.GoogleModels
-import ai.koog.prompt.executor.clients.openai.OpenAIModels
-import ai.koog.prompt.executor.ollama.client.OllamaModels
-import ai.koog.prompt.llm.LLModel
-import ai.koog.prompt.streaming.StreamFrame
-import kotlinx.coroutines.CompletableDeferred
+import ai.agent.android.domain.repositories.PipelineRepository
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.flow
-import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.flow.onCompletion
 import kotlinx.coroutines.flow.onEach
-import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Use case that orchestrates the ReAct (Reasoning and Acting) cycle of the AI Agent.
- * It manages the loop of generating thoughts, deciding on actions, executing tools,
- * and feeding observations back to the LLM.
+ * Use case that orchestrates the AI Agent's execution flow.
+ * It reads the user's input, loads the active pipeline from the repository,
+ * and delegates the execution to the [GraphExecutionEngine].
  */
 @Singleton
 class AgentOrchestratorUseCase @Inject constructor(
-    private val llmEngine: LlmInferenceEngine,
-    private val toolRepository: ToolRepository,
     private val chatRepository: ChatRepository,
-    private val getContextWindowUseCase: GetContextWindowUseCase,
-    private val settingsRepository: SettingsRepository,
-    private val metricsRepository: MetricsRepository,
-    private val approvalNotifier: ApprovalNotifier,
-    private val taskRouterUseCase: TaskRouterUseCase,
-    private val koogClientFactory: KoogClientFactory,
-    private val retrieveRelevantMemoryUseCase: RetrieveRelevantMemoryUseCase
+    private val pipelineRepository: PipelineRepository,
+    private val graphExecutionEngine: GraphExecutionEngine
 ) {
-    companion object {
-        const val MAX_ITERATIONS = 5
-    }
 
     private val _globalState = MutableStateFlow<AgentOrchestratorState>(AgentOrchestratorState.Idle)
     val globalState: StateFlow<AgentOrchestratorState> = _globalState.asStateFlow()
 
-    private val activeApprovalDeferreds = ConcurrentHashMap<String, CompletableDeferred<Boolean>>()
-
     /**
-     * Resumes the suspended ReAct cycle after the user has made a decision.
+     * Resumes the suspended execution cycle after the user has made a decision on tool usage.
      *
      * @param sessionId The session ID that was waiting for approval.
      * @param isApproved True if the user allowed the action, false otherwise.
      */
     fun resumeWithApproval(sessionId: String, isApproved: Boolean) {
-        val deferred = activeApprovalDeferreds.remove(sessionId)
-        deferred?.complete(isApproved)
+        graphExecutionEngine.resumeWithApproval(sessionId, isApproved)
     }
 
     /**
@@ -90,235 +61,23 @@ class AgentOrchestratorUseCase @Inject constructor(
         )
         chatRepository.saveMessage(userMessage)
 
-        // 2. Load available tools and construct the system prompt
-        val tools = toolRepository.getAvailableTools()
-        val toolsDescription = tools.joinToString("\n") { 
-            "- ${it.name}: ${it.description} | Params: ${it.parameters}" 
+        // 2. Load the active pipeline
+        val pipelines = pipelineRepository.getAllPipelines().firstOrNull() ?: emptyList()
+        val activePipeline = pipelines.firstOrNull()
+
+        if (activePipeline == null) {
+            emit(AgentOrchestratorState.Error("No active pipeline found. Please create one in the Visual Orchestrator."))
+            return@flow
         }
 
-        val systemPromptPrefix = settingsRepository.systemPromptPrefix.first()
-        val toolUsageInstructionTemplate = settingsRepository.toolUsageInstruction.first()
-        val toolUsageInstruction = String.format(toolUsageInstructionTemplate, toolsDescription)
-
-        val baseSystemPrompt = """
-            $systemPromptPrefix
-            $toolUsageInstruction
-            
-            CRITICAL RULE FOR REACT LOOP: 
-            If you see a "SYSTEM: Observation from <tool>" message in the chat history, it means your previous tool call succeeded. 
-            DO NOT output another JSON block for the same tool. 
-            Instead, synthesize the observation into a final natural language response and stop.
-        """.trimIndent()
-
-        // ReAct loop
-        var currentIteration = 0
-        var isCompleted = false
-
-        while (currentIteration < MAX_ITERATIONS && !isCompleted) {
-            currentIteration++
-
-            // 3. Get the context window (history + previous thoughts/observations)
-            val contextWindow = getContextWindowUseCase(sessionId)
-            
-            // 3.5. Retrieve relevant long-term memory
-            val relevantMemories = retrieveRelevantMemoryUseCase(userPrompt)
-            val memoryContext = if (relevantMemories.isNotEmpty()) {
-                "RELEVANT LONG-TERM MEMORIES:\n" + relevantMemories.joinToString("\n") { "- ${it.text}" } + "\n\n"
-            } else {
-                ""
-            }
-
-            val fullPrompt = "$baseSystemPrompt\n\n$memoryContext$contextWindow\nAGENT: "
-
-            // 4. Request generation from the routed LLM
-            val startTime = System.currentTimeMillis()
-            val decision = taskRouterUseCase(userPrompt)
-            
-            val responseStream = when (decision) {
-                is RoutingDecision.LocalLiteRT -> {
-                    llmEngine.generateResponseStream(fullPrompt)
-                }
-                is RoutingDecision.LocalOllama -> {
-                    val client = koogClientFactory.createOllamaExecutor()
-                    if (client != null) {
-                        val model = OllamaModels.Groq.LLAMA_3_GROK_TOOL_USE_8B
-                        client.executeStreaming(prompt("default") { user(fullPrompt) }, model).mapNotNull { frame ->
-                            (frame as? StreamFrame.TextDelta)?.text
-                        }
-                    } else {
-                        flow { emit("Error: Ollama not configured.") }
-                    }
-                }
-                is RoutingDecision.CloudLLM -> {
-                    val client = when (decision.provider) {
-                        "openai" -> koogClientFactory.createOpenAIExecutor()
-                        "google" -> koogClientFactory.createGoogleExecutor()
-                        "anthropic" -> koogClientFactory.createAnthropicExecutor()
-                        "deepseek" -> koogClientFactory.createDeepSeekExecutor()
-                        else -> null
-                    }
-                    if (client != null) {
-                        val model = when (decision.provider) {
-                            "anthropic" -> AnthropicModels.Sonnet_4_5
-                            "openai" -> OpenAIModels.Chat.GPT5_4
-                            "google" -> GoogleModels.Gemini3_Flash_Preview
-                            "deepseek" -> DeepSeekModels.DeepSeekChat
-                            else -> LLModel(client.llmProvider(), "default")
-                        }
-                        client.executeStreaming(prompt("default") { user(fullPrompt) }, model).mapNotNull { frame ->
-                            (frame as? StreamFrame.TextDelta)?.text
-                        }
-                    } else {
-                        flow { emit("Error: Cloud LLM provider not configured.") }
-                    }
-                }
-            }
-            
-            val accumulatedResponse = StringBuilder()
-            var emittedThinking = false
-            var approximateTokenCount = 0
-
-            try {
-                responseStream.collect { token ->
-                    accumulatedResponse.append(token)
-                    approximateTokenCount += token.length / 4 + 1
-                    
-                    if (!emittedThinking) {
-                        emit(AgentOrchestratorState.Thinking(accumulatedResponse.toString()))
-                        emittedThinking = true
-                    } else {
-                        emit(AgentOrchestratorState.Answering(accumulatedResponse.toString()))
-                    }
-                }
-            } catch (e: Exception) {
-                emit(AgentOrchestratorState.Error(e.message ?: "Unknown error during LLM generation"))
-                return@flow
-            }
-            
-            val endTime = System.currentTimeMillis()
-            metricsRepository.updateMetrics(endTime - startTime, approximateTokenCount)
-
-            val fullResponseText = accumulatedResponse.toString().trim()
-            
-            // 5. Save the agent's raw response to history
-            chatRepository.saveMessage(
-                ChatMessage(
-                    sessionId = sessionId,
-                    role = Role.AGENT,
-                    content = fullResponseText,
-                    timestamp = System.currentTimeMillis()
-                )
-            )
-
-            // 6. Parse the response to check if a tool needs to be called
-            val toolCall = parseToolCall(fullResponseText)
-            
-            if (toolCall != null) {
-                val (toolName, toolArgs) = toolCall
-                val requiresUserConfirmation = settingsRepository.requiresUserConfirmation.first()
-
-                if (requiresUserConfirmation) {
-                    emit(AgentOrchestratorState.WaitingForApproval(toolName, toolArgs))
-                    approvalNotifier.sendApprovalRequest(sessionId, toolName, toolArgs)
-                    
-                    val deferred = CompletableDeferred<Boolean>()
-                    activeApprovalDeferreds[sessionId] = deferred
-                    val isApproved = deferred.await()
-                    
-                    if (!isApproved) {
-                        chatRepository.saveMessage(
-                            ChatMessage(
-                                sessionId = sessionId,
-                                role = Role.SYSTEM,
-                                content = "User denied execution of tool: $toolName",
-                                timestamp = System.currentTimeMillis()
-                            )
-                        )
-                        emit(AgentOrchestratorState.ObservationResult(toolName, "Execution denied by user"))
-                        continue
-                    }
-                }
-                
-                emit(AgentOrchestratorState.ExecutingTool(toolName, toolArgs))
-
-                // Execute the tool
-                val result = try {
-                    toolRepository.executeTool(toolName, toolArgs)
-                } catch (e: Exception) {
-                    "Error executing $toolName: ${e.message}"
-                }
-
-                emit(AgentOrchestratorState.ObservationResult(toolName, result))
-
-                // Save the observation to the history as a SYSTEM message so the LLM sees it
-                chatRepository.saveMessage(
-                    ChatMessage(
-                        sessionId = sessionId,
-                        role = Role.SYSTEM,
-                        content = "Observation from $toolName: $result",
-                        timestamp = System.currentTimeMillis()
-                    )
-                )
-            } else {
-                // No tool called, the agent answered directly
-                isCompleted = true
-                emit(AgentOrchestratorState.Completed(fullResponseText))
-            }
+        // 3. Delegate execution to GraphExecutionEngine
+        graphExecutionEngine(sessionId, userPrompt, activePipeline).collect { state ->
+            emit(state)
         }
 
-        if (!isCompleted) {
-            emit(AgentOrchestratorState.Error("Reached maximum iterations ($MAX_ITERATIONS) without a final answer."))
-        }
     }.onEach { state ->
         _globalState.value = state
     }.onCompletion {
         _globalState.value = AgentOrchestratorState.Idle
-    }
-
-    /**
-     * Extremely simple parser to find a JSON block for tool calling.
-     * Real implementation might need more robust regex or a JSON parser.
-     */
-    private fun parseToolCall(response: String): Pair<String, String>? {
-        val blockRegex = """```json\s*(\{.*?\})\s*```""".toRegex(RegexOption.DOT_MATCHES_ALL)
-        val blockMatch = blockRegex.find(response) ?: return null
-        val jsonBlock = blockMatch.groups[1]?.value ?: return null
-        
-        val toolMatch = """"tool"\s*:\s*"([^"]+)"""".toRegex().find(jsonBlock)
-        val toolName = toolMatch?.groups?.get(1)?.value ?: return null
-        
-        val argsIndex = jsonBlock.indexOf("\"arguments\"")
-        if (argsIndex == -1) return null
-        
-        val colonIndex = jsonBlock.indexOf(":", argsIndex)
-        if (colonIndex == -1) return null
-        
-        val valueStart = jsonBlock.substring(colonIndex + 1).trimStart()
-        
-        var arguments = ""
-        if (valueStart.startsWith("\"")) {
-            // It's a JSON string, find the end of it, ignoring escaped quotes
-            var endQuoteIndex = -1
-            for (i in 1 until valueStart.length) {
-                if (valueStart[i] == '"' && valueStart[i - 1] != '\\') {
-                    endQuoteIndex = i
-                    break
-                }
-            }
-            if (endQuoteIndex != -1) {
-                arguments = valueStart.substring(1, endQuoteIndex)
-                arguments = arguments.replace("\\\"", "\"").replace("\\\\", "\\")
-            }
-        } else if (valueStart.startsWith("{")) {
-            // It's a JSON object
-            val endBraceIndex = valueStart.lastIndexOf("}")
-            if (endBraceIndex != -1) {
-                arguments = valueStart.substring(0, endBraceIndex + 1)
-            }
-        } else {
-            return null
-        }
-        
-        return Pair(toolName, arguments)
     }
 }
