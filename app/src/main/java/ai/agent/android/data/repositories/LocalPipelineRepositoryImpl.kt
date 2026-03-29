@@ -55,7 +55,8 @@ class LocalPipelineRepositoryImpl @Inject constructor(
                 id = it.id,
                 pipelineId = pipeline.id,
                 sourceNodeId = it.sourceNodeId,
-                targetNodeId = it.targetNodeId
+                targetNodeId = it.targetNodeId,
+                label = it.label
             )
         }
 
