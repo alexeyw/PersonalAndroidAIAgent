@@ -182,6 +182,13 @@ class ChatViewModel @Inject constructor(
         if (currentState.isGenerating || prompt.isBlank()) return
 
         viewModelScope.launch {
+            // Auto-rename logic for new chats
+            val currentSession = currentState.sessions.find { it.id == currentState.currentSessionId }
+            if (currentSession?.name == "New Chat") {
+                val newName = if (prompt.length > 20) prompt.take(20) + "..." else prompt
+                renameSession(currentState.currentSessionId, newName)
+            }
+
             _uiState.update { it.copy(isGenerating = true, errorMessage = null, orchestratorState = null) }
             
             agentOrchestratorUseCase(currentState.currentSessionId, prompt)
