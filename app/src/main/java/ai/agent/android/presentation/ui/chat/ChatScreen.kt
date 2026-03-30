@@ -26,8 +26,11 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -43,6 +46,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberDrawerState
@@ -120,6 +124,9 @@ fun ChatScreen(
                     },
                     onDeleteSession = { sessionId ->
                         viewModel.deleteSession(sessionId)
+                    },
+                    onRenameSession = { sessionId, newName ->
+                        viewModel.renameSession(sessionId, newName)
                     }
                 )
             }
@@ -127,8 +134,11 @@ fun ChatScreen(
     ) {
         Scaffold(
             topBar = {
+                val currentSession = uiState.sessions.find { it.id == uiState.currentSessionId }
+                val title = currentSession?.name ?: "Agent Chat"
+                
                 TopAppBar(
-                    title = { Text("Agent Chat") },
+                    title = { Text(title) },
                     navigationIcon = {
                         IconButton(onClick = onBack) {
                             Icon(
@@ -213,8 +223,44 @@ fun ChatDrawerContent(
     currentSessionId: String,
     onNewChat: () -> Unit,
     onSessionSelected: (String) -> Unit,
-    onDeleteSession: (String) -> Unit
+    onDeleteSession: (String) -> Unit,
+    onRenameSession: (String, String) -> Unit
 ) {
+    var sessionToRename by remember { mutableStateOf<ChatSession?>(null) }
+    var renameText by remember { mutableStateOf("") }
+
+    if (sessionToRename != null) {
+        AlertDialog(
+            onDismissRequest = { sessionToRename = null },
+            title = { Text("Rename Chat") },
+            text = {
+                OutlinedTextField(
+                    value = renameText,
+                    onValueChange = { renameText = it },
+                    singleLine = true,
+                    label = { Text("Chat Name") }
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        if (renameText.isNotBlank()) {
+                            onRenameSession(sessionToRename!!.id, renameText)
+                        }
+                        sessionToRename = null
+                    }
+                ) {
+                    Text("Save")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { sessionToRename = null }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
     Column(modifier = Modifier.fillMaxSize()) {
         Text(
             text = "Chat Sessions",
@@ -246,6 +292,12 @@ fun ChatDrawerContent(
                             selected = session.id == currentSessionId,
                             onClick = { onSessionSelected(session.id) }
                         )
+                    }
+                    IconButton(onClick = { 
+                        sessionToRename = session
+                        renameText = session.name 
+                    }) {
+                        Icon(Icons.Default.Edit, contentDescription = "Rename Session")
                     }
                     IconButton(onClick = { onDeleteSession(session.id) }) {
                         Icon(Icons.Default.Delete, contentDescription = "Delete Session")
