@@ -8,6 +8,7 @@ This file maps the contents of the main application package.
     - `KoogClientFactory.kt` - Factory for Koog clients.
     - `LiteRTLlmEngine.kt` - LiteRT LLM engine implementation.
     - `MediaPipeTextEmbeddingEngine.kt` - MediaPipe text embedding engine.
+    - `TaskQueueManagerImpl.kt` - Task queue manager implementation.
   - `local/` - Local database and data storage components (Room DB, DataStore).
     - `ApiKeyManager.kt` - API key manager.
     - `AppDatabase.kt` - Room database definition.
@@ -20,6 +21,7 @@ This file maps the contents of the main application package.
       - `PipelineDao.kt` - Pipelines DAO.
     - `models/` - Local DB entity models.
       - `ChatMessageEntity.kt` - Chat message entity.
+      - `ChatSessionEntity.kt` - Chat session entity.
       - `ConnectionEntity.kt` - Pipeline connection entity.
       - `LocalModelEntity.kt` - Local model entity.
       - `MemoryChunkEntity.kt` - Memory chunk entity.
@@ -28,6 +30,7 @@ This file maps the contents of the main application package.
       - `PipelineWithNodesAndConnections.kt` - Pipeline relational model.
   - `mappers/` - Data mapping layer.
     - `ChatMessageMapper.kt` - Mapper for chat messages.
+    - `ChatSessionMapper.kt` - Mapper for chat sessions.
   - `mcp/` - Model Context Protocol (MCP) clients.
     - `KoogMcpClient.kt` - Koog MCP client implementation.
     - `McpClient.kt` - Generic MCP client interface/impl.
@@ -62,13 +65,16 @@ This file maps the contents of the main application package.
   - `engine/` - Engine interfaces and abstractions.
     - `GraphExecutionEngine.kt` - Engine responsible for executing PipelineGraphs.
     - `LlmInferenceEngine.kt` - LLM engine interface.
+    - `TaskQueueManager.kt` - Task queue manager interface.
     - `TextEmbeddingEngine.kt` - Text embedding engine interface.
   - `models/` - Domain entity models.
     - `AgentMetrics.kt` - Agent metrics model.
     - `AgentOrchestratorState.kt` - Orchestrator state model.
+    - `AgentTask.kt` - Agent task model.
     - `AgentTool.kt` - Agent tool model.
     - `AppError.kt` - App error model.
     - `ChatMessage.kt` - Chat message model.
+    - `ChatSession.kt` - Chat session model.
     - `ConnectionModel.kt` - Connection model.
     - `DownloadState.kt` - Download state model.
     - `MemoryChunk.kt` - Memory chunk model.
@@ -80,6 +86,7 @@ This file maps the contents of the main application package.
     - `Result.kt` - Result wrapper model.
     - `Role.kt` - Chat role enum.
     - `RoutingDecision.kt` - Routing decision model.
+    - `TaskPriority.kt` - Task priority enum.
   - `repositories/` - Repository interfaces.
     - `ApiKeyRepository.kt` - API key repository interface.
     - `ChatRepository.kt` - Chat repository interface.

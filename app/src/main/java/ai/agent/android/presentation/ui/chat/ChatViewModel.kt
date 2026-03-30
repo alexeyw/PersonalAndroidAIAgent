@@ -3,12 +3,14 @@ package ai.agent.android.presentation.ui.chat
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import ai.agent.android.domain.models.AgentOrchestratorState
+import ai.agent.android.domain.models.ChatSession
 import ai.agent.android.domain.models.Result
 import ai.agent.android.domain.repositories.ChatRepository
 import ai.agent.android.domain.repositories.SettingsRepository
 import ai.agent.android.domain.usecases.AgentOrchestratorUseCase
 import ai.agent.android.domain.usecases.LoadModelUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -37,8 +39,19 @@ class ChatViewModel @Inject constructor(
      */
     val uiState: StateFlow<ChatUiState> = _uiState.asStateFlow()
 
+    private var messagesJob: Job? = null
+
     init {
+        loadSessions()
         initializeSession()
+    }
+
+    private fun loadSessions() {
+        viewModelScope.launch {
+            chatRepository.getSessionsFlow().collect { sessions ->
+                _uiState.update { it.copy(sessions = sessions) }
+            }
+        }
     }
 
     /**
@@ -48,8 +61,7 @@ class ChatViewModel @Inject constructor(
      */
     private fun initializeSession() {
         viewModelScope.launch {
-            // Check if model is loaded by attempting to load it (LoadModelUseCase handles already loaded state if needed,
-            // but primarily it ensures the current active model is initialized in the engine).
+            // Check if model is loaded by attempting to load it
             val modelResult = loadModelUseCase()
             if (modelResult is Result.Error) {
                 _uiState.update { 
@@ -61,6 +73,14 @@ class ChatViewModel @Inject constructor(
             val sessionId = if (savedSessionId.isNullOrBlank()) {
                 val newId = UUID.randomUUID().toString()
                 settingsRepository.setCurrentChatSessionId(newId)
+                
+                chatRepository.saveSession(
+                    ChatSession(
+                        id = newId,
+                        name = "New Chat",
+                        updatedAt = System.currentTimeMillis()
+                    )
+                )
                 newId
             } else {
                 savedSessionId
@@ -72,12 +92,79 @@ class ChatViewModel @Inject constructor(
     }
 
     /**
+     * Creates a new chat session and switches to it.
+     */
+    fun createNewSession() {
+        viewModelScope.launch {
+            val newId = UUID.randomUUID().toString()
+            chatRepository.saveSession(
+                ChatSession(
+                    id = newId,
+                    name = "New Chat",
+                    updatedAt = System.currentTimeMillis()
+                )
+            )
+            switchSession(newId)
+        }
+    }
+
+    /**
+     * Switches the active chat session.
+     *
+     * @param sessionId The ID of the session to switch to.
+     */
+    fun switchSession(sessionId: String) {
+        viewModelScope.launch {
+            settingsRepository.setCurrentChatSessionId(sessionId)
+            _uiState.update { it.copy(currentSessionId = sessionId, isGenerating = false, orchestratorState = null) }
+            loadMessages(sessionId)
+        }
+    }
+
+    /**
+     * Renames an existing chat session.
+     *
+     * @param sessionId The ID of the session to rename.
+     * @param newName The new name for the session.
+     */
+    fun renameSession(sessionId: String, newName: String) {
+        viewModelScope.launch {
+            val session = chatRepository.getSessionById(sessionId)
+            if (session != null) {
+                chatRepository.saveSession(session.copy(name = newName))
+            }
+        }
+    }
+
+    /**
+     * Deletes a chat session and its history.
+     *
+     * @param sessionId The ID of the session to delete.
+     */
+    fun deleteSession(sessionId: String) {
+        viewModelScope.launch {
+            chatRepository.deleteSession(sessionId)
+            val currentState = _uiState.value
+            if (currentState.currentSessionId == sessionId) {
+                // Switch to the first available or create new
+                val sessions = currentState.sessions.filter { it.id != sessionId }
+                if (sessions.isNotEmpty()) {
+                    switchSession(sessions.first().id)
+                } else {
+                    createNewSession()
+                }
+            }
+        }
+    }
+
+    /**
      * Loads the chat messages for the given session ID and observes changes.
      *
      * @param sessionId The ID of the chat session to load.
      */
     private fun loadMessages(sessionId: String) {
-        viewModelScope.launch {
+        messagesJob?.cancel()
+        messagesJob = viewModelScope.launch {
             chatRepository.getMessagesForSession(sessionId).collect { messages ->
                 _uiState.update { it.copy(messages = messages) }
             }
@@ -95,6 +182,13 @@ class ChatViewModel @Inject constructor(
         if (currentState.isGenerating || prompt.isBlank()) return
 
         viewModelScope.launch {
+            // Auto-rename logic for new chats
+            val currentSession = currentState.sessions.find { it.id == currentState.currentSessionId }
+            if (currentSession?.name == "New Chat") {
+                val newName = if (prompt.length > 20) prompt.take(20) + "..." else prompt
+                renameSession(currentState.currentSessionId, newName)
+            }
+
             _uiState.update { it.copy(isGenerating = true, errorMessage = null, orchestratorState = null) }
             
             agentOrchestratorUseCase(currentState.currentSessionId, prompt)

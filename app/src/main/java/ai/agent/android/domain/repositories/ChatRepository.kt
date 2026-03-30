@@ -1,10 +1,11 @@
 package ai.agent.android.domain.repositories
 
 import ai.agent.android.domain.models.ChatMessage
+import ai.agent.android.domain.models.ChatSession
 import kotlinx.coroutines.flow.Flow
 
 /**
- * Repository interface for managing chat history.
+ * Repository interface for managing chat history and sessions.
  */
 interface ChatRepository {
     /**
@@ -23,7 +24,7 @@ interface ChatRepository {
     fun getMessagesForSession(sessionId: String): Flow<List<ChatMessage>>
 
     /**
-     * Deletes all messages associated with the given session.
+     * Deletes all messages associated with the given session, and the session itself.
      *
      * @param sessionId The unique ID of the chat session to delete.
      */
@@ -31,6 +32,7 @@ interface ChatRepository {
 
     /**
      * Retrieves a list of all distinct chat session IDs.
+     * Deprecated: Use getSessionsFlow() instead.
      *
      * @return A list of unique session IDs.
      */
@@ -50,4 +52,26 @@ interface ChatRepository {
      * @return A [Flow] emitting a list of recent system [ChatMessage].
      */
     fun getRecentSystemMessages(limit: Int = 100): Flow<List<ChatMessage>>
+
+    /**
+     * Creates or updates a chat session.
+     *
+     * @param session The [ChatSession] to create or update.
+     */
+    suspend fun saveSession(session: ChatSession)
+
+    /**
+     * Retrieves all chat sessions as a flow, ordered by the last update time.
+     *
+     * @return A [Flow] emitting the list of [ChatSession].
+     */
+    fun getSessionsFlow(): Flow<List<ChatSession>>
+
+    /**
+     * Retrieves a specific chat session by its ID.
+     *
+     * @param id The ID of the session.
+     * @return The [ChatSession] if found, null otherwise.
+     */
+    suspend fun getSessionById(id: String): ChatSession?
 }

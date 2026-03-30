@@ -152,6 +152,15 @@ abstract class DataModule {
     ): ai.agent.android.domain.repositories.NetworkStateRepository
 
     /**
+     * Binds the [ai.agent.android.data.engine.TaskQueueManagerImpl] implementation to the [ai.agent.android.domain.engine.TaskQueueManager] interface.
+     */
+    @Binds
+    @Singleton
+    abstract fun bindTaskQueueManager(
+        taskQueueManager: ai.agent.android.data.engine.TaskQueueManagerImpl
+    ): ai.agent.android.domain.engine.TaskQueueManager
+
+    /**
      * Binds the [ai.agent.android.data.repositories.LocalPipelineRepositoryImpl] implementation to the [ai.agent.android.domain.repositories.PipelineRepository] interface.
      */
     @Binds
