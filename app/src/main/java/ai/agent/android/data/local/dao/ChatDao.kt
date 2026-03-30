@@ -4,7 +4,9 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.Update
 import ai.agent.android.data.local.models.ChatMessageEntity
+import ai.agent.android.data.local.models.ChatSessionEntity
 import kotlinx.coroutines.flow.Flow
 
 /**
@@ -37,10 +39,11 @@ interface ChatDao {
      * @param sessionId The ID of the session to delete.
      */
     @Query("DELETE FROM chat_messages WHERE sessionId = :sessionId")
-    suspend fun deleteSession(sessionId: String)
+    suspend fun deleteSessionMessages(sessionId: String)
 
     /**
-     * Retrieves a list of all distinct chat session IDs.
+     * Retrieves a list of all distinct chat session IDs from messages.
+     * Deprecated: Use getSessionsFlow() instead.
      *
      * @return A list of unique session IDs.
      */
@@ -64,4 +67,45 @@ interface ChatDao {
      */
     @Query("SELECT * FROM chat_messages WHERE role = :role ORDER BY timestamp DESC LIMIT :limit")
     fun getRecentMessagesByRole(role: String, limit: Int = 100): Flow<List<ChatMessageEntity>>
+
+    /**
+     * Inserts a new chat session into the database.
+     *
+     * @param session The [ChatSessionEntity] to insert.
+     */
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertSession(session: ChatSessionEntity)
+
+    /**
+     * Updates an existing chat session.
+     *
+     * @param session The [ChatSessionEntity] to update.
+     */
+    @Update
+    suspend fun updateSession(session: ChatSessionEntity)
+
+    /**
+     * Retrieves all chat sessions ordered by the last update time (descending).
+     *
+     * @return A [Flow] emitting a list of [ChatSessionEntity].
+     */
+    @Query("SELECT * FROM chat_sessions ORDER BY updatedAt DESC")
+    fun getSessionsFlow(): Flow<List<ChatSessionEntity>>
+
+    /**
+     * Retrieves a specific chat session by its ID.
+     *
+     * @param id The ID of the session.
+     * @return The [ChatSessionEntity] if found, null otherwise.
+     */
+    @Query("SELECT * FROM chat_sessions WHERE id = :id")
+    suspend fun getSessionById(id: String): ChatSessionEntity?
+
+    /**
+     * Deletes a chat session by its ID.
+     *
+     * @param id The ID of the session to delete.
+     */
+    @Query("DELETE FROM chat_sessions WHERE id = :id")
+    suspend fun deleteSession(id: String)
 }

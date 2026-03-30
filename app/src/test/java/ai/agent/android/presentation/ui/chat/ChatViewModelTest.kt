@@ -51,6 +51,10 @@ class ChatViewModelTest {
 
         // Mock chat repository flow for any session
         every { chatRepository.getMessagesForSession(any()) } returns flowOf(emptyList())
+        every { chatRepository.getSessionsFlow() } returns flowOf(emptyList())
+        coEvery { chatRepository.saveSession(any()) } returns Unit
+        coEvery { chatRepository.deleteSession(any()) } returns Unit
+        coEvery { chatRepository.getSessionById(any()) } returns null
         // Default: no saved session
         every { settingsRepository.currentChatSessionId } returns flowOf(null)
         // Default: model loads successfully

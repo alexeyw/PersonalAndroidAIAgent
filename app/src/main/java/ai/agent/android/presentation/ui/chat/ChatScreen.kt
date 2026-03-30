@@ -1,8 +1,10 @@
 package ai.agent.android.presentation.ui.chat
 
 import ai.agent.android.domain.models.ChatMessage
+import ai.agent.android.domain.models.ChatSession
 import ai.agent.android.domain.models.Role
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -15,18 +17,27 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.Send
-import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalDrawerSheet
+import androidx.compose.material3.ModalNavigationDrawer
+import androidx.compose.material3.NavigationDrawerItem
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
@@ -34,6 +45,7 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -66,6 +78,7 @@ fun ChatScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     val listState = rememberLazyListState()
     val coroutineScope = rememberCoroutineScope()
+    val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
 
     var inputText by remember { mutableStateOf(TextFieldValue("")) }
 
@@ -81,85 +94,164 @@ fun ChatScreen(
     LaunchedEffect(uiState.messages.size, uiState.isGenerating) {
         if (uiState.messages.isNotEmpty() || uiState.isGenerating) {
             val targetIndex =
-                uiState.messages.size + if (uiState.isGenerating) 2 else 1 // +1 for the top spacer, +1 for thought indicator if generating
+                uiState.messages.size + if (uiState.isGenerating) 2 else 1
             if (targetIndex > 0) {
                 coroutineScope.launch {
-                    // Use a slight delay or simple scrollToItem to avoid animation conflicts during layout passes
                     listState.scrollToItem(targetIndex)
                 }
             }
         }
     }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("Agent Chat") },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back"
-                        )
+    ModalNavigationDrawer(
+        drawerState = drawerState,
+        drawerContent = {
+            ModalDrawerSheet {
+                ChatDrawerContent(
+                    sessions = uiState.sessions,
+                    currentSessionId = uiState.currentSessionId,
+                    onNewChat = {
+                        viewModel.createNewSession()
+                        coroutineScope.launch { drawerState.close() }
+                    },
+                    onSessionSelected = { sessionId ->
+                        viewModel.switchSession(sessionId)
+                        coroutineScope.launch { drawerState.close() }
+                    },
+                    onDeleteSession = { sessionId ->
+                        viewModel.deleteSession(sessionId)
                     }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.primaryContainer,
-                    titleContentColor = MaterialTheme.colorScheme.onPrimaryContainer
                 )
-            )
-        },
-        snackbarHost = { SnackbarHost(snackbarHostState) }
-    ) { paddingValues ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
-        ) {
-            LazyColumn(
-                state = listState,
+            }
+        }
+    ) {
+        Scaffold(
+            topBar = {
+                TopAppBar(
+                    title = { Text("Agent Chat") },
+                    navigationIcon = {
+                        IconButton(onClick = onBack) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = "Back"
+                            )
+                        }
+                    },
+                    actions = {
+                        IconButton(onClick = { coroutineScope.launch { drawerState.open() } }) {
+                            Icon(
+                                imageVector = Icons.Default.Menu,
+                                contentDescription = "Menu"
+                            )
+                        }
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = MaterialTheme.colorScheme.primaryContainer,
+                        titleContentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
+                )
+            },
+            snackbarHost = { SnackbarHost(snackbarHostState) }
+        ) { paddingValues ->
+            Column(
                 modifier = Modifier
-                    .weight(1f)
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
+                    .fillMaxSize()
+                    .padding(paddingValues)
             ) {
-                item { Spacer(modifier = Modifier.height(16.dp)) }
+                LazyColumn(
+                    state = listState,
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    item { Spacer(modifier = Modifier.height(16.dp)) }
 
-                itemsIndexed(uiState.messages) { index, message ->
-                    if (uiState.messages.lastIndex == index) {
-                        ChatMessageItem(message = message, isGenerating = uiState.isGenerating)
-                    } else {
-                        ChatMessageItem(message = message)
-                    }
-                    Spacer(modifier = Modifier.height(8.dp))
-                }
-
-                if (uiState.orchestratorState != null && uiState.isGenerating) {
-                    item {
-                        AgentThoughtIndicator(
-                            state = uiState.orchestratorState!!,
-                            onApprove = { viewModel.resumeWithApproval(true) },
-                            onDeny = { viewModel.resumeWithApproval(false) }
-                        )
+                    itemsIndexed(uiState.messages) { index, message ->
+                        if (uiState.messages.lastIndex == index) {
+                            ChatMessageItem(message = message, isGenerating = uiState.isGenerating)
+                        } else {
+                            ChatMessageItem(message = message)
+                        }
                         Spacer(modifier = Modifier.height(8.dp))
                     }
+
+                    if (uiState.orchestratorState != null && uiState.isGenerating) {
+                        item {
+                            AgentThoughtIndicator(
+                                state = uiState.orchestratorState!!,
+                                onApprove = { viewModel.resumeWithApproval(true) },
+                                onDeny = { viewModel.resumeWithApproval(false) }
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                        }
+                    }
+
+                    item { Spacer(modifier = Modifier.height(8.dp)) }
                 }
 
-                item { Spacer(modifier = Modifier.height(8.dp)) }
+                ChatInputBar(
+                    inputText = inputText,
+                    onInputTextChanged = { inputText = it },
+                    onSendClicked = {
+                        if (inputText.text.isNotBlank()) {
+                            viewModel.sendMessage(inputText.text)
+                            inputText = TextFieldValue("")
+                        }
+                    },
+                    isGenerating = uiState.isGenerating
+                )
             }
+        }
+    }
+}
 
-            ChatInputBar(
-                inputText = inputText,
-                onInputTextChanged = { inputText = it },
-                onSendClicked = {
-                    if (inputText.text.isNotBlank()) {
-                        viewModel.sendMessage(inputText.text)
-                        inputText = TextFieldValue("")
+@Composable
+fun ChatDrawerContent(
+    sessions: List<ChatSession>,
+    currentSessionId: String,
+    onNewChat: () -> Unit,
+    onSessionSelected: (String) -> Unit,
+    onDeleteSession: (String) -> Unit
+) {
+    Column(modifier = Modifier.fillMaxSize()) {
+        Text(
+            text = "Chat Sessions",
+            style = MaterialTheme.typography.titleMedium,
+            modifier = Modifier.padding(16.dp)
+        )
+        HorizontalDivider()
+        
+        NavigationDrawerItem(
+            label = { Text("New Chat") },
+            selected = false,
+            onClick = onNewChat,
+            icon = { Icon(Icons.Default.Add, contentDescription = "New Chat") },
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
+        )
+        HorizontalDivider()
+
+        LazyColumn(modifier = Modifier.fillMaxWidth()) {
+            items(sessions) { session ->
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp, vertical = 4.dp)
+                ) {
+                    Box(modifier = Modifier.weight(1f)) {
+                        NavigationDrawerItem(
+                            label = { Text(session.name) },
+                            selected = session.id == currentSessionId,
+                            onClick = { onSessionSelected(session.id) }
+                        )
                     }
-                },
-                isGenerating = uiState.isGenerating
-            )
+                    IconButton(onClick = { onDeleteSession(session.id) }) {
+                        Icon(Icons.Default.Delete, contentDescription = "Delete Session")
+                    }
+                }
+            }
         }
     }
 }

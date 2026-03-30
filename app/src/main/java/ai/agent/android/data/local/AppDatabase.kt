@@ -6,6 +6,7 @@ import androidx.room.TypeConverters
 import ai.agent.android.data.local.models.LocalModelEntity
 import ai.agent.android.data.local.dao.LocalModelDao
 import ai.agent.android.data.local.models.ChatMessageEntity
+import ai.agent.android.data.local.models.ChatSessionEntity
 import ai.agent.android.data.local.dao.ChatDao
 import ai.agent.android.data.local.models.MemoryChunkEntity
 import ai.agent.android.data.local.dao.MemoryDao
@@ -23,12 +24,13 @@ import ai.agent.android.data.local.dao.PipelineDao
     entities = [
         LocalModelEntity::class, 
         ChatMessageEntity::class,
+        ChatSessionEntity::class,
         MemoryChunkEntity::class,
         PipelineEntity::class,
         NodeEntity::class,
         ConnectionEntity::class
     ],
-    version = 7,
+    version = 8,
     exportSchema = false
 )
 @TypeConverters(Converters::class)
