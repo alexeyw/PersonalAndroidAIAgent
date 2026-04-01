@@ -118,6 +118,8 @@ This file maps the contents of the main application package.
     - `ApprovalNotificationManager.kt` - Manager for approval notifications.
   - `receivers/` - Broadcast receivers.
     - `AgentApprovalReceiver.kt` - Receiver for agent approvals.
+  - `state/` - State management components.
+    - `ActiveSessionTracker.kt` - Tracker for active chat session.
   - `theme/` - Compose theme definitions.
     - `Color.kt` - Color palette.
     - `Theme.kt` - App theme definition.
