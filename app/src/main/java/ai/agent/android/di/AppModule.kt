@@ -136,9 +136,10 @@ object AppModule {
     @Provides
     @Singleton
     fun provideApprovalNotifier(
-        @ApplicationContext appContext: Context
+        @ApplicationContext appContext: Context,
+        activeSessionTracker: ai.agent.android.presentation.state.ActiveSessionTracker
     ): ai.agent.android.domain.services.ApprovalNotifier {
-        return ai.agent.android.presentation.notifications.ApprovalNotificationManager(appContext)
+        return ai.agent.android.presentation.notifications.ApprovalNotificationManager(appContext, activeSessionTracker)
     }
 }
 

@@ -8,7 +8,9 @@ import ai.agent.android.domain.models.Result
 import ai.agent.android.domain.repositories.ChatRepository
 import ai.agent.android.domain.repositories.SettingsRepository
 import ai.agent.android.domain.usecases.AgentOrchestratorUseCase
+import ai.agent.android.domain.usecases.GetContextWindowUseCase
 import ai.agent.android.domain.usecases.LoadModelUseCase
+import ai.agent.android.presentation.state.ActiveSessionTracker
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -30,7 +32,9 @@ class ChatViewModel @Inject constructor(
     private val agentOrchestratorUseCase: AgentOrchestratorUseCase,
     private val chatRepository: ChatRepository,
     private val settingsRepository: SettingsRepository,
-    private val loadModelUseCase: LoadModelUseCase
+    private val loadModelUseCase: LoadModelUseCase,
+    private val getContextWindowUseCase: GetContextWindowUseCase,
+    private val activeSessionTracker: ActiveSessionTracker
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ChatUiState())
@@ -44,6 +48,7 @@ class ChatViewModel @Inject constructor(
     init {
         loadSessions()
         initializeSession()
+        observeMaxContextSize()
     }
 
     private fun loadSessions() {
@@ -51,6 +56,29 @@ class ChatViewModel @Inject constructor(
             chatRepository.getSessionsFlow().collect { sessions ->
                 _uiState.update { it.copy(sessions = sessions) }
             }
+        }
+    }
+
+    private fun observeMaxContextSize() {
+        viewModelScope.launch {
+            settingsRepository.maxContextLength.collect { maxLength ->
+                _uiState.update { it.copy(maxContextSize = maxLength) }
+            }
+        }
+    }
+
+    /**
+     * Sets whether the chat screen is currently visible to the user.
+     * This helps suppress push notifications for approvals when the inline UI is active.
+     *
+     * @param isVisible True if the screen is actively displayed, false otherwise.
+     */
+    fun setChatVisible(isVisible: Boolean) {
+        val currentSessionId = _uiState.value.currentSessionId
+        if (isVisible && currentSessionId.isNotBlank()) {
+            activeSessionTracker.setActiveSessionId(currentSessionId)
+        } else {
+            activeSessionTracker.setActiveSessionId(null)
         }
     }
 
@@ -88,6 +116,7 @@ class ChatViewModel @Inject constructor(
             
             _uiState.update { it.copy(currentSessionId = sessionId) }
             loadMessages(sessionId)
+            // activeSessionTracker is managed exclusively by setChatVisible via Lifecycle events
         }
     }
 
@@ -118,6 +147,12 @@ class ChatViewModel @Inject constructor(
             settingsRepository.setCurrentChatSessionId(sessionId)
             _uiState.update { it.copy(currentSessionId = sessionId, isGenerating = false, orchestratorState = null) }
             loadMessages(sessionId)
+            
+            // Re-evaluate active session tracking if the UI is currently visible.
+            // setChatVisible logic relies on UI state, so we update the tracker if we were already active.
+            if (activeSessionTracker.activeSessionId.value != null) {
+                activeSessionTracker.setActiveSessionId(sessionId)
+            }
         }
     }
 
@@ -166,7 +201,13 @@ class ChatViewModel @Inject constructor(
         messagesJob?.cancel()
         messagesJob = viewModelScope.launch {
             chatRepository.getMessagesForSession(sessionId).collect { messages ->
-                _uiState.update { it.copy(messages = messages) }
+                val contextString = getContextWindowUseCase(sessionId)
+                _uiState.update { 
+                    it.copy(
+                        messages = messages,
+                        contextSize = contextString.length
+                    ) 
+                }
             }
         }
     }

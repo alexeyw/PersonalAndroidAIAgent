@@ -1,5 +1,9 @@
 package ai.agent.android.presentation.ui.chat
 
+import androidx.compose.runtime.DisposableEffect
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import ai.agent.android.domain.models.ChatMessage
 import ai.agent.android.domain.models.ChatSession
 import ai.agent.android.domain.models.Role
@@ -86,6 +90,25 @@ fun ChatScreen(
 
     var inputText by remember { mutableStateOf(TextFieldValue("")) }
 
+    val lifecycleOwner = LocalLifecycleOwner.current
+
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_START) {
+                viewModel.setChatVisible(true)
+            } else if (event == Lifecycle.Event.ON_STOP) {
+                viewModel.setChatVisible(false)
+            }
+        }
+
+        lifecycleOwner.lifecycle.addObserver(observer)
+
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+            viewModel.setChatVisible(false)
+        }
+    }
+
     // Show error message if present
     LaunchedEffect(uiState.errorMessage) {
         uiState.errorMessage?.let {
@@ -138,7 +161,24 @@ fun ChatScreen(
                 val title = currentSession?.name ?: "Agent Chat"
                 
                 TopAppBar(
-                    title = { Text(title) },
+                    title = { 
+                        Column {
+                            Text(title)
+                            if (uiState.maxContextSize > 0) {
+                                val contextPercentage = (uiState.contextSize.toFloat() / uiState.maxContextSize.toFloat()).coerceIn(0f, 1f)
+                                val color = when {
+                                    contextPercentage > 0.9f -> MaterialTheme.colorScheme.error
+                                    contextPercentage > 0.7f -> androidx.compose.ui.graphics.Color(0xFFFFA000) // Orange
+                                    else -> MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.6f)
+                                }
+                                Text(
+                                    text = "Context: ${uiState.contextSize} / ${uiState.maxContextSize}",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = color
+                                )
+                            }
+                        }
+                    },
                     navigationIcon = {
                         IconButton(onClick = onBack) {
                             Icon(
