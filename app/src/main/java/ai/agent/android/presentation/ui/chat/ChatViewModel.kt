@@ -116,7 +116,7 @@ class ChatViewModel @Inject constructor(
             
             _uiState.update { it.copy(currentSessionId = sessionId) }
             loadMessages(sessionId)
-            activeSessionTracker.setActiveSessionId(sessionId)
+            // activeSessionTracker is managed exclusively by setChatVisible via Lifecycle events
         }
     }
 
@@ -147,7 +147,12 @@ class ChatViewModel @Inject constructor(
             settingsRepository.setCurrentChatSessionId(sessionId)
             _uiState.update { it.copy(currentSessionId = sessionId, isGenerating = false, orchestratorState = null) }
             loadMessages(sessionId)
-            activeSessionTracker.setActiveSessionId(sessionId)
+            
+            // Re-evaluate active session tracking if the UI is currently visible.
+            // setChatVisible logic relies on UI state, so we update the tracker if we were already active.
+            if (activeSessionTracker.activeSessionId.value != null) {
+                activeSessionTracker.setActiveSessionId(sessionId)
+            }
         }
     }
 
