@@ -2,6 +2,7 @@ package ai.agent.android.presentation.notifications
 
 import ai.agent.android.domain.services.ApprovalNotifier
 import ai.agent.android.presentation.receivers.AgentApprovalReceiver
+import ai.agent.android.presentation.state.ActiveSessionTracker
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
@@ -17,7 +18,8 @@ import javax.inject.Inject
  * to execute a tool, as part of the Human-in-the-loop mechanism.
  */
 class ApprovalNotificationManager @Inject constructor(
-    @ApplicationContext private val context: Context
+    @ApplicationContext private val context: Context,
+    private val activeSessionTracker: ActiveSessionTracker
 ) : ApprovalNotifier {
 
     companion object {
@@ -27,12 +29,18 @@ class ApprovalNotificationManager @Inject constructor(
 
     /**
      * Sends a notification to request user approval for a tool execution.
+     * It suppresses the notification if the user is currently viewing the active session.
      *
      * @param sessionId The ID of the session requesting approval.
      * @param toolName The name of the tool to be executed.
      * @param arguments The arguments to be passed to the tool.
      */
     override fun sendApprovalRequest(sessionId: String, toolName: String, arguments: String) {
+        // If the user is currently on the chat screen for this session, they will see the inline prompt.
+        if (activeSessionTracker.activeSessionId.value == sessionId) {
+            return
+        }
+
         val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
         val channel = NotificationChannel(
