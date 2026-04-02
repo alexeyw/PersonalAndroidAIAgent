@@ -1,7 +1,10 @@
 package ai.agent.android.presentation.ui.taskmonitor
 
+import ai.agent.android.domain.engine.TaskQueueManager
+import ai.agent.android.domain.models.AgentOrchestratorState
 import ai.agent.android.domain.models.ChatSession
 import ai.agent.android.domain.repositories.ChatRepository
+import ai.agent.android.domain.repositories.SettingsRepository
 import androidx.work.WorkInfo
 import androidx.work.WorkManager
 import io.mockk.every
@@ -28,6 +31,8 @@ class TaskMonitorViewModelTest {
     private lateinit var viewModel: TaskMonitorViewModel
     private val chatRepository: ChatRepository = mockk(relaxed = true)
     private val workManager: WorkManager = mockk(relaxed = true)
+    private val settingsRepository: SettingsRepository = mockk(relaxed = true)
+    private val taskQueueManager: TaskQueueManager = mockk(relaxed = true)
     private val testDispatcher = StandardTestDispatcher()
 
     @Before
@@ -52,8 +57,14 @@ class TaskMonitorViewModelTest {
 
         every { chatRepository.getSessionsFlow() } returns flowOf(sessions)
         every { workManager.getWorkInfosFlow(any()) } returns flowOf(listOf(workInfo1, workInfo2))
+        
+        val activeMap = mapOf(
+            "session1" to AgentOrchestratorState.PipelineStage("LITE_RT"),
+            "session2" to AgentOrchestratorState.Idle
+        )
+        every { taskQueueManager.activeSessionsState } returns kotlinx.coroutines.flow.MutableStateFlow(activeMap)
 
-        viewModel = TaskMonitorViewModel(chatRepository, workManager)
+        viewModel = TaskMonitorViewModel(chatRepository, workManager, settingsRepository, taskQueueManager)
     }
 
     @After
@@ -66,10 +77,10 @@ class TaskMonitorViewModelTest {
         val uiState = viewModel.uiState.first { !it.isLoading }
         
         assertEquals(TaskFilterType.ACTIVE, uiState.filter)
-        assertEquals(3, uiState.tasks.size) // 2 active sessions + 1 running task
+        assertEquals(2, uiState.tasks.size) // 1 active session + 1 running task
         
         val sessions = uiState.tasks.filter { it.type == TaskType.SESSION }
-        assertEquals(2, sessions.size)
+        assertEquals(1, sessions.size)
         assertTrue(sessions.all { it.status == TaskStatus.RUNNING })
 
         val backgroundTasks = uiState.tasks.filter { it.type == TaskType.BACKGROUND_WORK }
@@ -82,7 +93,7 @@ class TaskMonitorViewModelTest {
         viewModel.onFilterChanged(TaskFilterType.ACTIVE)
         val uiState = viewModel.uiState.first { it.filter == TaskFilterType.ACTIVE }
 
-        assertEquals(3, uiState.tasks.size) // 2 sessions + 1 running task
+        assertEquals(2, uiState.tasks.size) // 1 active session + 1 running task
         assertTrue(uiState.tasks.all { it.status == TaskStatus.RUNNING })
     }
 
@@ -91,7 +102,7 @@ class TaskMonitorViewModelTest {
         viewModel.onFilterChanged(TaskFilterType.COMPLETED)
         val uiState = viewModel.uiState.first { it.filter == TaskFilterType.COMPLETED }
 
-        assertEquals(1, uiState.tasks.size) // 1 succeeded task
+        assertEquals(2, uiState.tasks.size) // 1 idle session + 1 succeeded task
         assertTrue(uiState.tasks.all { it.status == TaskStatus.COMPLETED })
     }
 

@@ -116,7 +116,11 @@ fun TaskMonitorScreen(
                         TaskCard(
                             task = task,
                             onCancel = { viewModel.onCancelTaskClicked(it) },
-                            onNavigateToChat = onNavigateToChat
+                            onNavigateToChat = { sessionId -> 
+                                viewModel.onOpenChatClicked(sessionId) {
+                                    onNavigateToChat(sessionId)
+                                }
+                            }
                         )
                     }
                 }

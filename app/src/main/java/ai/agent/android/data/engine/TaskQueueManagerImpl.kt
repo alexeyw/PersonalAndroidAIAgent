@@ -47,8 +47,16 @@ class TaskQueueManagerImpl @Inject constructor(
     // Channel to signal new tasks
     private val taskSignal = Channel<Unit>(Channel.CONFLATED)
 
+    private val _activeSessionsState = MutableStateFlow<Map<String, AgentOrchestratorState>>(emptyMap())
+    override val activeSessionsState: StateFlow<Map<String, AgentOrchestratorState>> = _activeSessionsState.asStateFlow()
+
     // State flows per session
     private val sessionStates = mutableMapOf<String, MutableStateFlow<AgentOrchestratorState>>()
+
+    private fun updateActiveSessionsState() {
+        val currentState = sessionStates.mapValues { it.value.value }
+        _activeSessionsState.value = currentState
+    }
 
     init {
         startWorker()
@@ -117,6 +125,7 @@ class TaskQueueManagerImpl @Inject constructor(
             val stateFlow = getOrCreateStateFlow(task.sessionId)
             if (stateFlow.value == AgentOrchestratorState.Idle || stateFlow.value is AgentOrchestratorState.Completed || stateFlow.value is AgentOrchestratorState.Error) {
                 stateFlow.value = AgentOrchestratorState.Loading
+                updateActiveSessionsState()
             }
             queueMutex.withLock {
                 taskQueue.offer(task)

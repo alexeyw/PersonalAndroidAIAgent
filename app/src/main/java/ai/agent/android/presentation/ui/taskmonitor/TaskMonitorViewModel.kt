@@ -1,6 +1,9 @@
 package ai.agent.android.presentation.ui.taskmonitor
 
+import ai.agent.android.domain.engine.TaskQueueManager
+import ai.agent.android.domain.models.AgentOrchestratorState
 import ai.agent.android.domain.repositories.ChatRepository
+import ai.agent.android.domain.repositories.SettingsRepository
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.work.WorkInfo
@@ -12,6 +15,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 import java.util.UUID
 import javax.inject.Inject
 
@@ -22,7 +26,9 @@ import javax.inject.Inject
 @HiltViewModel
 class TaskMonitorViewModel @Inject constructor(
     chatRepository: ChatRepository,
-    private val workManager: WorkManager
+    private val workManager: WorkManager,
+    private val settingsRepository: SettingsRepository,
+    private val taskQueueManager: TaskQueueManager
 ) : ViewModel() {
 
     private val _filter = MutableStateFlow(TaskFilterType.ACTIVE)
@@ -46,15 +52,38 @@ class TaskMonitorViewModel @Inject constructor(
     val uiState: StateFlow<TaskMonitorState> = combine(
         chatRepository.getSessionsFlow(),
         workInfosFlow,
+        taskQueueManager.activeSessionsState,
         _filter
-    ) { sessions, workInfos, filter ->
-        val sessionTasks = sessions.map {
+    ) { sessions, workInfos, activeSessionsMap, filter ->
+        val sessionTasks = sessions.mapNotNull { session ->
+            val orchestratorState = activeSessionsMap[session.id] ?: AgentOrchestratorState.Idle
+            
+            // Map Orchestrator State to TaskStatus
+            val status = when (orchestratorState) {
+                is AgentOrchestratorState.Idle -> TaskStatus.COMPLETED
+                is AgentOrchestratorState.Completed -> TaskStatus.COMPLETED
+                is AgentOrchestratorState.Error -> TaskStatus.FAILED
+                else -> TaskStatus.RUNNING
+            }
+            
+            // Map Orchestrator State to Pipeline Stage
+            val stage = when (orchestratorState) {
+                is AgentOrchestratorState.PipelineStage -> orchestratorState.nodeName
+                is AgentOrchestratorState.Thinking -> "Thinking"
+                is AgentOrchestratorState.ExecutingTool -> "Tool Execution"
+                is AgentOrchestratorState.WaitingForApproval -> "Waiting Approval"
+                is AgentOrchestratorState.Loading -> "Loading"
+                is AgentOrchestratorState.Answering -> "Answering"
+                else -> null
+            }
+
             TaskItem(
-                id = it.id,
-                title = "Chat Session: ${it.name}",
-                status = TaskStatus.RUNNING, // Active sessions are considered running from a user's perspective
+                id = session.id,
+                title = "Chat Session: ${session.name}",
+                status = status,
                 progress = null,
-                type = TaskType.SESSION
+                type = TaskType.SESSION,
+                pipelineStage = stage
             )
         }
 
@@ -118,6 +147,19 @@ class TaskMonitorViewModel @Inject constructor(
             workManager.cancelWorkById(UUID.fromString(taskId))
         } catch (e: IllegalArgumentException) {
             // Ignored: Invalid UUID format
+        }
+    }
+
+    /**
+     * Sets the current chat session before navigating.
+     *
+     * @param sessionId The ID of the chat session to open.
+     * @param onComplete Callback invoked when the session is set.
+     */
+    fun onOpenChatClicked(sessionId: String, onComplete: () -> Unit) {
+        viewModelScope.launch {
+            settingsRepository.setCurrentChatSessionId(sessionId)
+            onComplete()
         }
     }
 }
