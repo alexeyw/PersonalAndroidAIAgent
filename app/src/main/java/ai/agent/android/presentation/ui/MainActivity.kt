@@ -166,6 +166,15 @@ class MainActivity : ComponentActivity() {
                                 viewModel = monitoringViewModel,
                                 onBack = { navController.popBackStack() })
                         }
+                        composable("taskmonitor") {
+                            val taskMonitorViewModel: TaskMonitorViewModel = hiltViewModel()
+                            TaskMonitorScreen(
+                                viewModel = taskMonitorViewModel,
+                                onNavigateToChat = { sessionId -> 
+                                    navController.navigate("chat") { launchSingleTop = true }
+                                },
+                                onBack = { navController.popBackStack() })
+                        }
                         composable("settings") {
                             SettingsScreen(
                                 modifier = Modifier.fillMaxSize(),

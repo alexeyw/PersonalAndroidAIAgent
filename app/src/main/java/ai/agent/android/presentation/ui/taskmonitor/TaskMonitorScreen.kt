@@ -165,7 +165,7 @@ fun TaskCard(
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = "Status: \${task.status.name}",
+                        text = "Status: ${task.status.name}",
                         style = MaterialTheme.typography.bodySmall,
                         color = when (task.status) {
                             TaskStatus.RUNNING -> Color(0xFF4CAF50) // Green
