@@ -12,6 +12,9 @@ import ai.agent.android.presentation.ui.monitoring.MonitoringViewModel
 import ai.agent.android.presentation.ui.orchestrator.OrchestratorViewModel
 import ai.agent.android.presentation.ui.orchestrator.VisualOrchestratorScreen
 import ai.agent.android.presentation.ui.settings.SettingsScreen
+import ai.agent.android.presentation.ui.settings.SettingsViewModel
+import ai.agent.android.presentation.ui.taskmonitor.TaskMonitorScreen
+import ai.agent.android.presentation.ui.taskmonitor.TaskMonitorViewModel
 import ai.agent.android.presentation.ui.tools.ToolsScreen
 import android.Manifest
 import android.content.Intent
@@ -120,6 +123,11 @@ class MainActivity : ComponentActivity() {
                                         launchSingleTop = true
                                     }
                                 },
+                                onNavigateToTaskMonitor = {
+                                    navController.navigate("taskmonitor") {
+                                        launchSingleTop = true
+                                    }
+                                },
                                 onNavigateToSettings = {
                                     navController.navigate("settings") {
                                         launchSingleTop = true
@@ -195,6 +203,7 @@ fun HomeScreen(
     onNavigateToTools: () -> Unit,
     onNavigateToChat: () -> Unit,
     onNavigateToMonitoring: () -> Unit,
+    onNavigateToTaskMonitor: () -> Unit,
     onNavigateToSettings: () -> Unit,
     onNavigateToOrchestrator: () -> Unit,
     modifier: Modifier = Modifier
@@ -224,6 +233,10 @@ fun HomeScreen(
         Spacer(modifier = Modifier.height(16.dp))
         Button(onClick = onNavigateToMonitoring) {
             Text("Monitor Tasks & Logs")
+        }
+        Spacer(modifier = Modifier.height(16.dp))
+        Button(onClick = onNavigateToTaskMonitor) {
+            Text("Manage Active Tasks")
         }
         Spacer(modifier = Modifier.height(16.dp))
         Button(onClick = onNavigateToSettings) {
