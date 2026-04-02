@@ -17,6 +17,11 @@ interface TaskQueueManager {
     val globalState: StateFlow<AgentOrchestratorState>
 
     /**
+     * A flow emitting the map of active session IDs to their current states.
+     */
+    val activeSessionsState: StateFlow<Map<String, AgentOrchestratorState>>
+
+    /**
      * Enqueues a new task to be processed.
      *
      * @param task The [AgentTask] to add to the queue.

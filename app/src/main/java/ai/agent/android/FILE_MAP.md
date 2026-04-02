@@ -153,6 +153,10 @@ This file maps the contents of the main application package.
       - `SettingsScreen.kt` - Settings UI screen.
       - `SettingsUiState.kt` - Settings UI state.
       - `SettingsViewModel.kt` - Settings ViewModel.
+    - `taskmonitor/` - Task monitoring screen components.
+      - `TaskMonitorScreen.kt` - Task monitor UI screen.
+      - `TaskMonitorState.kt` - Task monitor UI state.
+      - `TaskMonitorViewModel.kt` - Task monitor ViewModel.
     - `tools/` - Tools screen components.
       - `ToolsScreen.kt` - Tools UI screen.
       - `ToolsUiState.kt` - Tools UI state.

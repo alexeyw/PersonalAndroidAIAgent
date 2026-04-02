@@ -107,6 +107,7 @@ class AgentForegroundService : Service() {
             is AgentOrchestratorState.Answering -> "Answering..."
             is AgentOrchestratorState.Completed -> "Task completed"
             is AgentOrchestratorState.Error -> "Error: ${state.message}"
+            is AgentOrchestratorState.PipelineStage -> "Pipeline stage: ${state.nodeName}"
         }
     }
 

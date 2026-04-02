@@ -60,6 +60,8 @@ This file maps the contents of the local unit test package.
       - `OrchestratorViewModelTest.kt` - Tests for OrchestratorViewModel.
     - `settings/`
       - `SettingsViewModelTest.kt` - Tests for SettingsViewModel.
+    - `taskmonitor/`
+      - `TaskMonitorViewModelTest.kt` - Tests for TaskMonitorViewModel.
     - `tools/`
       - `ToolsViewModelTest.kt` - Tests for ToolsViewModel.
 - `FILE_MAP.md` - This file mapping the current directory structure.
