@@ -65,4 +65,11 @@ sealed interface AgentOrchestratorState {
      * @property message The error message.
      */
     data class Error(val message: String) : AgentOrchestratorState
+
+    /**
+     * Indicates the current pipeline stage (node) the agent is executing.
+     *
+     * @property nodeName The name or type of the node.
+     */
+    data class PipelineStage(val nodeName: String) : AgentOrchestratorState
 }

@@ -174,6 +174,14 @@ fun TaskCard(
                             TaskStatus.COMPLETED -> MaterialTheme.colorScheme.onSurfaceVariant
                         }
                     )
+                    if (task.pipelineStage != null) {
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = "Stage: ${task.pipelineStage}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.secondary
+                        )
+                    }
                 }
             }
 

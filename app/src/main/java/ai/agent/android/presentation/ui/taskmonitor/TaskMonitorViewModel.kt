@@ -25,7 +25,7 @@ class TaskMonitorViewModel @Inject constructor(
     private val workManager: WorkManager
 ) : ViewModel() {
 
-    private val _filter = MutableStateFlow(TaskFilterType.ALL)
+    private val _filter = MutableStateFlow(TaskFilterType.ACTIVE)
 
     private val workInfosFlow = workManager.getWorkInfosFlow(
         WorkQuery.Builder.fromStates(
@@ -59,17 +59,23 @@ class TaskMonitorViewModel @Inject constructor(
         }
 
         val workTasks = workInfos.map { info ->
+            val stage = info.progress.getString("current_stage")
+            val isPassedOutput = stage == "OUTPUT" || stage == "COMPLETED"
+
             TaskItem(
                 id = info.id.toString(),
                 title = "Background Task (${info.tags.firstOrNull() ?: "AgentWorker"})",
-                status = when (info.state) {
-                    WorkInfo.State.RUNNING -> TaskStatus.RUNNING
-                    WorkInfo.State.ENQUEUED, WorkInfo.State.BLOCKED -> TaskStatus.QUEUED
-                    WorkInfo.State.FAILED -> TaskStatus.FAILED
-                    WorkInfo.State.SUCCEEDED, WorkInfo.State.CANCELLED -> TaskStatus.COMPLETED
+                status = when {
+                    isPassedOutput -> TaskStatus.COMPLETED
+                    info.state == WorkInfo.State.RUNNING -> TaskStatus.RUNNING
+                    info.state == WorkInfo.State.ENQUEUED || info.state == WorkInfo.State.BLOCKED -> TaskStatus.QUEUED
+                    info.state == WorkInfo.State.FAILED -> TaskStatus.FAILED
+                    info.state == WorkInfo.State.SUCCEEDED || info.state == WorkInfo.State.CANCELLED -> TaskStatus.COMPLETED
+                    else -> TaskStatus.QUEUED
                 },
                 progress = if (info.state == WorkInfo.State.RUNNING) -1f else 1f,
-                type = TaskType.BACKGROUND_WORK
+                type = TaskType.BACKGROUND_WORK,
+                pipelineStage = stage
             )
         }
 

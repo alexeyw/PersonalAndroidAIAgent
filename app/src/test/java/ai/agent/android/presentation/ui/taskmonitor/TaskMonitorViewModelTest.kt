@@ -62,20 +62,19 @@ class TaskMonitorViewModelTest {
     }
 
     @Test
-    fun `initial state shows all tasks correctly merged`() = runTest(testDispatcher) {
+    fun `initial state shows active tasks by default`() = runTest(testDispatcher) {
         val uiState = viewModel.uiState.first { !it.isLoading }
         
-        assertEquals(TaskFilterType.ALL, uiState.filter)
-        assertEquals(4, uiState.tasks.size) // 2 sessions + 2 work infos
+        assertEquals(TaskFilterType.ACTIVE, uiState.filter)
+        assertEquals(3, uiState.tasks.size) // 2 active sessions + 1 running task
         
         val sessions = uiState.tasks.filter { it.type == TaskType.SESSION }
         assertEquals(2, sessions.size)
         assertTrue(sessions.all { it.status == TaskStatus.RUNNING })
 
         val backgroundTasks = uiState.tasks.filter { it.type == TaskType.BACKGROUND_WORK }
-        assertEquals(2, backgroundTasks.size)
-        assertTrue(backgroundTasks.any { it.status == TaskStatus.RUNNING })
-        assertTrue(backgroundTasks.any { it.status == TaskStatus.COMPLETED })
+        assertEquals(1, backgroundTasks.size)
+        assertTrue(backgroundTasks.all { it.status == TaskStatus.RUNNING })
     }
 
     @Test

@@ -38,13 +38,15 @@ enum class TaskFilterType(val displayName: String) {
  * @property status The current execution status.
  * @property progress The progress from 0 to 1, or null if indeterminate/not applicable.
  * @property type The type of task (session vs background work).
+ * @property pipelineStage The current stage of the pipeline if applicable.
  */
 data class TaskItem(
     val id: String,
     val title: String,
     val status: TaskStatus,
     val progress: Float?,
-    val type: TaskType
+    val type: TaskType,
+    val pipelineStage: String? = null
 )
 
 /**

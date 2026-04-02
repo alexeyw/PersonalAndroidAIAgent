@@ -79,6 +79,9 @@ class GraphExecutionEngine @Inject constructor(
         while (currentNode != null && stepCount < MAX_STEPS) {
             stepCount++
             
+            // Emit the current pipeline stage
+            emit(AgentOrchestratorState.PipelineStage(currentNode.type.name))
+            
             // Execute the current node and collect its states to emit them
             var nodeResult: NodeExecutionResult? = null
             executeNode(currentNode, currentInputText, sessionId, userPrompt)
