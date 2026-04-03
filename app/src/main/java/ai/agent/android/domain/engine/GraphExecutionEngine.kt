@@ -86,6 +86,9 @@ class GraphExecutionEngine @Inject constructor(
             // Emit the current pipeline stage
             emit(AgentOrchestratorState.PipelineStage(currentNode.type.name))
             
+            // Give UI time to render the stage before CPU-heavy inference starts
+            kotlinx.coroutines.delay(500)
+            
             // Execute the current node and collect its states to emit them
             var nodeResult: NodeExecutionResult? = null
             executeNode(currentNode, currentInputText, sessionId, userPrompt)
@@ -319,17 +322,11 @@ class GraphExecutionEngine @Inject constructor(
                 
                 val responseStream = llmEngine.generateResponseStream(fullPrompt)
                 val accumulatedResponse = StringBuilder()
-                var emittedThinking = false
                 
                 try {
                     responseStream.collect { token ->
                         accumulatedResponse.append(token)
-                        if (!emittedThinking) {
-                            emit(AgentOrchestratorState.Thinking(accumulatedResponse.toString()))
-                            emittedThinking = true
-                        } else {
-                            emit(AgentOrchestratorState.Answering(accumulatedResponse.toString()))
-                        }
+                        emit(AgentOrchestratorState.Thinking(accumulatedResponse.toString()))
                     }
                 } catch (e: Exception) {
                     emit(AgentOrchestratorState.Error(e.message ?: "Unknown error"))
