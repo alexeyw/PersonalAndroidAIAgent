@@ -311,8 +311,36 @@ class GraphExecutionEngine @Inject constructor(
 
                 emit(NodeExecutionResult(outputText = fullResponseText))
             }
-            NodeType.INTENT_ROUTER, NodeType.DECOMPOSITION, NodeType.QUEUE_PROCESSOR, NodeType.EVALUATION, NodeType.SUMMARY -> {
-                // TODO: Implement execution logic for complex task nodes
+            NodeType.INTENT_ROUTER, NodeType.DECOMPOSITION, NodeType.EVALUATION, NodeType.SUMMARY -> {
+                val nodeSystemPrompt = node.systemPrompt ?: "You are an AI assistant."
+                val fullPrompt = "$nodeSystemPrompt\n\nInput: $inputText\nOutput: "
+                
+                val responseStream = llmEngine.generateResponseStream(fullPrompt)
+                val accumulatedResponse = StringBuilder()
+                var emittedThinking = false
+                
+                try {
+                    responseStream.collect { token ->
+                        accumulatedResponse.append(token)
+                        if (!emittedThinking) {
+                            emit(AgentOrchestratorState.Thinking(accumulatedResponse.toString()))
+                            emittedThinking = true
+                        } else {
+                            emit(AgentOrchestratorState.Answering(accumulatedResponse.toString()))
+                        }
+                    }
+                } catch (e: Exception) {
+                    emit(AgentOrchestratorState.Error(e.message ?: "Unknown error"))
+                    emit(NodeExecutionResult(error = e.message))
+                    return@flow
+                }
+                
+                val fullResponseText = accumulatedResponse.toString().trim()
+                val routingKey = if (node.type == NodeType.INTENT_ROUTER) fullResponseText else null
+                
+                emit(NodeExecutionResult(outputText = fullResponseText, routingKey = routingKey))
+            }
+            NodeType.QUEUE_PROCESSOR -> {
                 emit(NodeExecutionResult(outputText = inputText))
             }
         }
