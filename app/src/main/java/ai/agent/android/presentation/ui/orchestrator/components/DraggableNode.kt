@@ -70,6 +70,11 @@ fun DraggableNode(
         NodeType.GOOGLE -> Color(0xFF00BCD4)
         NodeType.TOOL -> Color(0xFFFF9800)
         NodeType.IF_CONDITION -> Color(0xFFFFC107)
+        NodeType.INTENT_ROUTER -> Color(0xFFE91E63)
+        NodeType.DECOMPOSITION -> Color(0xFF3F51B5)
+        NodeType.QUEUE_PROCESSOR -> Color(0xFF795548)
+        NodeType.EVALUATION -> Color(0xFF009688)
+        NodeType.SUMMARY -> Color(0xFF8BC34A)
         NodeType.INPUT -> Color(0xFF607D8B)
         NodeType.OUTPUT -> Color(0xFFF44336)
     }
@@ -129,10 +134,13 @@ fun DraggableNode(
                 }
             }
 
-            if (node.type == NodeType.IF_CONDITION) {
+            if (node.type != NodeType.INPUT && node.type != NodeType.OUTPUT) {
                 Button(onClick = onConfigureClick, modifier = Modifier.padding(top = 8.dp)) {
                     Text("Configure")
                 }
+            }
+
+            if (node.type == NodeType.IF_CONDITION) {
                 Row(modifier = Modifier.padding(top = 8.dp)) {
                     Button(onClick = { onConnectClick("True") }) {
                         Text(

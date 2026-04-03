@@ -40,6 +40,31 @@ enum class NodeType {
     IF_CONDITION,
 
     /**
+     * Node representing an intent router that determines the type of user input (e.g., simple message, complex question, task).
+     */
+    INTENT_ROUTER,
+
+    /**
+     * Node representing a decomposition unit that breaks down complex tasks into a list of simpler subtasks.
+     */
+    DECOMPOSITION,
+
+    /**
+     * Node representing a queue processor that iterates over a list of subtasks and executes them sequentially.
+     */
+    QUEUE_PROCESSOR,
+
+    /**
+     * Node representing an evaluation unit that analyzes the result of a subtask to determine if it was successful or needs rework.
+     */
+    EVALUATION,
+
+    /**
+     * Node representing a summarization unit that summarizes the results of multiple subtasks or actions.
+     */
+    SUMMARY,
+
+    /**
      * The starting point of the pipeline.
      */
     INPUT,

@@ -182,41 +182,52 @@ fun VisualOrchestratorScreen(
     if (configuringNodeId != null) {
         val node = uiState.nodes.find { it.id == configuringNodeId }
         if (node != null) {
+            var systemPrompt by remember(node) { mutableStateOf(node.systemPrompt ?: "") }
             var complexity by remember(node) { mutableStateOf(node.conditionComplexity?.toString() ?: "") }
             var keywords by remember(node) { mutableStateOf(node.conditionKeywords ?: "") }
             var prompt by remember(node) { mutableStateOf(node.conditionPrompt ?: "") }
 
             AlertDialog(
                 onDismissRequest = { configuringNodeId = null },
-                title = { Text("Configure IF Condition") },
+                title = { Text(if (node.type == NodeType.IF_CONDITION) "Configure IF Condition" else "Configure Node") },
                 text = {
                     Column {
                         androidx.compose.material3.OutlinedTextField(
-                            value = complexity,
-                            onValueChange = { complexity = it },
-                            label = { Text("Complexity Threshold (Int)") }
-                        )
-                        androidx.compose.material3.OutlinedTextField(
-                            value = keywords,
-                            onValueChange = { keywords = it },
-                            label = { Text("Keywords (comma separated)") },
+                            value = systemPrompt,
+                            onValueChange = { systemPrompt = it },
+                            label = { Text("System Prompt") },
                             modifier = Modifier.padding(top = 8.dp)
                         )
-                        androidx.compose.material3.OutlinedTextField(
-                            value = prompt,
-                            onValueChange = { prompt = it },
-                            label = { Text("LLM Prompt") },
-                            modifier = Modifier.padding(top = 8.dp)
-                        )
+                        if (node.type == NodeType.IF_CONDITION) {
+                            androidx.compose.material3.OutlinedTextField(
+                                value = complexity,
+                                onValueChange = { complexity = it },
+                                label = { Text("Complexity Threshold (Int)") },
+                                modifier = Modifier.padding(top = 8.dp)
+                            )
+                            androidx.compose.material3.OutlinedTextField(
+                                value = keywords,
+                                onValueChange = { keywords = it },
+                                label = { Text("Keywords (comma separated)") },
+                                modifier = Modifier.padding(top = 8.dp)
+                            )
+                            androidx.compose.material3.OutlinedTextField(
+                                value = prompt,
+                                onValueChange = { prompt = it },
+                                label = { Text("LLM Condition Prompt") },
+                                modifier = Modifier.padding(top = 8.dp)
+                            )
+                        }
                     }
                 },
                 confirmButton = {
                     TextButton(onClick = {
-                        viewModel.updateNodeCondition(
+                        viewModel.updateNodeConfiguration(
                             node.id,
-                            complexity.toIntOrNull(),
-                            keywords.takeIf { it.isNotBlank() },
-                            prompt.takeIf { it.isNotBlank() }
+                            if (node.type == NodeType.IF_CONDITION) complexity.toIntOrNull() else null,
+                            if (node.type == NodeType.IF_CONDITION) keywords.takeIf { it.isNotBlank() } else null,
+                            if (node.type == NodeType.IF_CONDITION) prompt.takeIf { it.isNotBlank() } else null,
+                            systemPrompt.takeIf { it.isNotBlank() }
                         )
                         configuringNodeId = null
                     }) {

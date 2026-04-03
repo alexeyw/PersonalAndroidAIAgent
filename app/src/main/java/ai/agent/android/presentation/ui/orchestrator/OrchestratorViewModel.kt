@@ -178,21 +178,23 @@ class OrchestratorViewModel @Inject constructor(
     }
 
     /**
-     * Updates the condition configuration of an IF_CONDITION node.
+     * Updates the condition configuration of an IF_CONDITION node and the system prompt for any node.
      *
      * @param nodeId The unique identifier of the node.
      * @param complexity Threshold for task complexity.
      * @param keywords Comma-separated keywords.
      * @param prompt Free-form prompt.
+     * @param systemPrompt The system prompt configuring the behavior of the node.
      */
-    fun updateNodeCondition(nodeId: String, complexity: Int?, keywords: String?, prompt: String?) {
+    fun updateNodeConfiguration(nodeId: String, complexity: Int?, keywords: String?, prompt: String?, systemPrompt: String?) {
         _uiState.update { state ->
             val updatedNodes = state.currentPipeline.nodes.map {
                 if (it.id == nodeId) {
                     it.copy(
                         conditionComplexity = complexity,
                         conditionKeywords = keywords,
-                        conditionPrompt = prompt
+                        conditionPrompt = prompt,
+                        systemPrompt = systemPrompt
                     )
                 } else it
             }

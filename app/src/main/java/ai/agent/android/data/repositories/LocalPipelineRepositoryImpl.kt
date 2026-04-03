@@ -47,7 +47,8 @@ class LocalPipelineRepositoryImpl @Inject constructor(
                 toolName = it.toolName,
                 conditionComplexity = it.conditionComplexity,
                 conditionKeywords = it.conditionKeywords,
-                conditionPrompt = it.conditionPrompt
+                conditionPrompt = it.conditionPrompt,
+                systemPrompt = it.systemPrompt
             )
         }
         val connectionEntities = pipeline.connections.map {
@@ -82,7 +83,8 @@ class LocalPipelineRepositoryImpl @Inject constructor(
                     toolName = it.toolName,
                     conditionComplexity = it.conditionComplexity,
                     conditionKeywords = it.conditionKeywords,
-                    conditionPrompt = it.conditionPrompt
+                    conditionPrompt = it.conditionPrompt,
+                    systemPrompt = it.systemPrompt ?: ai.agent.android.domain.constants.DefaultPrompts.getDefaultPromptForNodeType(runCatching { NodeType.valueOf(it.type) }.getOrDefault(NodeType.TOOL))
                 )
             },
             connections = this.connections.map {

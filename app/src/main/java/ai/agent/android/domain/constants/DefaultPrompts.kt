@@ -1,5 +1,7 @@
 package ai.agent.android.domain.constants
 
+import ai.agent.android.domain.models.NodeType
+
 /**
  * Contains all default prompts used by the AI Agent.
  * These are saved to the app's settings on first launch.
@@ -20,4 +22,26 @@ object DefaultPrompts {
         ```
         If you don't need to use a tool, just answer the user directly.
     """.trimIndent()
+
+    const val INTENT_ROUTER_PROMPT = "You are an Intent Router. Analyze the user input and determine if it's a message or task. Output a single keyword representing the category."
+    
+    const val DECOMPOSITION_PROMPT = "You are a Task Decomposer. Break down the given complex task into a list of simpler, actionable subtasks. Output the result as a JSON array of strings."
+    
+    const val EVALUATION_PROMPT = "You are a Task Evaluator. Analyze the result of the executed subtask and determine if it was successful. If not, explain what went wrong and how to fix it."
+    
+    const val SUMMARY_PROMPT = "You are a Summarizer. Given the results of multiple executed subtasks, provide a concise and comprehensive summary of the overall outcome."
+
+    /**
+     * Returns the default system prompt for a specific node type.
+     */
+    fun getDefaultPromptForNodeType(type: NodeType): String? {
+        return when (type) {
+            NodeType.INTENT_ROUTER -> INTENT_ROUTER_PROMPT
+            NodeType.DECOMPOSITION -> DECOMPOSITION_PROMPT
+            NodeType.EVALUATION -> EVALUATION_PROMPT
+            NodeType.SUMMARY -> SUMMARY_PROMPT
+            NodeType.LITE_RT, NodeType.OPENAI, NodeType.ANTHROPIC, NodeType.GOOGLE, NodeType.DEEPSEEK -> SYSTEM_PROMPT_PREFIX
+            else -> null
+        }
+    }
 }
