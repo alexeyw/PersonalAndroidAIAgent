@@ -17,8 +17,8 @@ import ai.agent.android.domain.models.AppError
  */
 data class ModelsUiState(
     val availablePresets: List<ModelPreset> = listOf(
-        ModelPreset("Gemma-3n-E4B-it", "https://huggingface.co/google/gemma-3n-E4B-it-litert-lm/resolve/main/gemma-3n-E4B-it-int4.litertlm"),
-        ModelPreset("Gemma-3n-E2B-it", "https://huggingface.co/google/gemma-3n-E2B-it-litert-lm/resolve/main/gemma-3n-E2B-it-int4.litertlm"),
+        ModelPreset("Gemma-4-E4B-it", "https://huggingface.co/litert-community/gemma-4-E4B-it-litert-lm/resolve/main/gemma-4-E4B-it.litertlm"),
+        ModelPreset("Gemma-4-E2B-it", "https://huggingface.co/litert-community/gemma-4-E2B-it-litert-lm/resolve/main/gemma-4-E2B-it.litertlm"),
         //ModelPreset("Qwen3.5-0.8B", "https://huggingface.co/g-ntovas/Qwen3.5-0.8B-LiteRT/resolve/main/qwen35_mm_q8_ekv2048.litertlm"),
         //ModelPreset("Qwen3.5-2B", "https://huggingface.co/g-ntovas/Qwen3.5-2B-LiteRT/resolve/main/qwen35_2b_mm_q4_block32_ekv4096.litertlm")
     ),
