@@ -338,6 +338,15 @@ class GraphExecutionEngine @Inject constructor(
                 val fullResponseText = accumulatedResponse.toString().trim()
                 val routingKey = if (node.type == NodeType.INTENT_ROUTER) fullResponseText else null
                 
+                chatRepository.saveMessage(
+                    ChatMessage(
+                        sessionId = sessionId,
+                        role = Role.AGENT,
+                        content = fullResponseText,
+                        timestamp = System.currentTimeMillis()
+                    )
+                )
+                
                 emit(NodeExecutionResult(outputText = fullResponseText, routingKey = routingKey))
             }
             NodeType.QUEUE_PROCESSOR -> {
