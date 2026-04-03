@@ -24,5 +24,5 @@ data class NodeModel(
     val conditionComplexity: Int? = null,
     val conditionKeywords: String? = null,
     val conditionPrompt: String? = null,
-    val systemPrompt: String? = null
+    val systemPrompt: String? = ai.agent.android.domain.constants.DefaultPrompts.getDefaultPromptForNodeType(type)
 )
