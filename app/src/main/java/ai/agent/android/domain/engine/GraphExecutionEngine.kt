@@ -275,6 +275,10 @@ class GraphExecutionEngine @Inject constructor(
 
                 emit(NodeExecutionResult(outputText = fullResponseText))
             }
+            NodeType.INTENT_ROUTER, NodeType.DECOMPOSITION, NodeType.QUEUE_PROCESSOR, NodeType.EVALUATION, NodeType.SUMMARY -> {
+                // TODO: Implement execution logic for complex task nodes
+                emit(NodeExecutionResult(outputText = inputText))
+            }
         }
     }
 

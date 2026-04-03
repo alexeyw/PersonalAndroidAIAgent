@@ -18,6 +18,7 @@ import androidx.room.PrimaryKey
  * @property conditionComplexity Threshold for task complexity.
  * @property conditionKeywords Comma-separated keywords for condition.
  * @property conditionPrompt Free-form prompt for condition classification.
+ * @property systemPrompt An optional system prompt to configure the behavior of the node.
  */
 @Entity(
     tableName = "pipeline_nodes",
@@ -42,5 +43,6 @@ data class NodeEntity(
     val toolName: String? = null,
     val conditionComplexity: Int? = null,
     val conditionKeywords: String? = null,
-    val conditionPrompt: String? = null
+    val conditionPrompt: String? = null,
+    val systemPrompt: String? = null
 )
