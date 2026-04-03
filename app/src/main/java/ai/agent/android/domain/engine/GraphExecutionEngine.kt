@@ -308,6 +308,8 @@ class GraphExecutionEngine @Inject constructor(
                         timestamp = System.currentTimeMillis()
                     )
                 )
+                
+                kotlinx.coroutines.delay(1000)
 
                 emit(NodeExecutionResult(outputText = fullResponseText))
             }
@@ -348,6 +350,8 @@ class GraphExecutionEngine @Inject constructor(
                         timestamp = System.currentTimeMillis()
                     )
                 )
+                
+                kotlinx.coroutines.delay(1000)
                 
                 emit(NodeExecutionResult(outputText = fullResponseText, routingKey = routingKey))
             }
