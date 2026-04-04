@@ -139,6 +139,11 @@ class MainActivity : ComponentActivity() {
                                         launchSingleTop = true
                                     }
                                 },
+                                onNavigateToPrompts = {
+                                    navController.navigate("prompts") {
+                                        launchSingleTop = true
+                                    }
+                                },
                                 modifier = Modifier.fillMaxSize()
                             )
                         }
@@ -226,6 +231,7 @@ fun HomeScreen(
     onNavigateToTaskMonitor: () -> Unit,
     onNavigateToSettings: () -> Unit,
     onNavigateToOrchestrator: () -> Unit,
+    onNavigateToPrompts: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -265,6 +271,10 @@ fun HomeScreen(
         Spacer(modifier = Modifier.height(16.dp))
         Button(onClick = onNavigateToOrchestrator) {
             Text("Visual Orchestrator")
+        }
+        Spacer(modifier = Modifier.height(16.dp))
+        Button(onClick = onNavigateToPrompts) {
+            Text("Prompt Library")
         }
     }
 }
