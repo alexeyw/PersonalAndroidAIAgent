@@ -191,7 +191,7 @@ fun VisualOrchestratorScreen(
 
             if (showPromptLibrary) {
                 ai.agent.android.presentation.ui.orchestrator.components.PromptLibraryDialog(
-                    prompts = uiState.promptTemplates,
+                    prompts = uiState.promptTemplates.filter { it.category == node.type.name },
                     onPromptSelected = { text ->
                         systemPrompt = text
                         showPromptLibrary = false
