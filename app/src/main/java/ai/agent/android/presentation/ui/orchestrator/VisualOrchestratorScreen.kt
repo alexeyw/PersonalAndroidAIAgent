@@ -72,6 +72,7 @@ import kotlin.math.roundToInt
 @Composable
 fun VisualOrchestratorScreen(
     viewModel: OrchestratorViewModel = hiltViewModel(),
+    onNavigateToPrompts: () -> Unit = {},
     onBack: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -278,6 +279,11 @@ fun VisualOrchestratorScreen(
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(imageVector = Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    }
+                },
+                actions = {
+                    IconButton(onClick = onNavigateToPrompts) {
+                        Icon(imageVector = Icons.AutoMirrored.Filled.List, contentDescription = "Prompt Library")
                     }
                 }
             )

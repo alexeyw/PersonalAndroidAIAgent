@@ -190,6 +190,11 @@ class MainActivity : ComponentActivity() {
                             val orchestratorViewModel: OrchestratorViewModel = hiltViewModel()
                             VisualOrchestratorScreen(
                                 viewModel = orchestratorViewModel,
+                                onNavigateToPrompts = {
+                                    navController.navigate("prompts") {
+                                        launchSingleTop = true
+                                    }
+                                },
                                 onBack = { navController.popBackStack() })
                         }
                     }
