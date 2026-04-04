@@ -27,4 +27,10 @@ interface PromptRepository {
      * @param id The ID of the prompt template to delete.
      */
     suspend fun deletePrompt(id: Long)
+    /**
+     * Gets the total number of saved prompt templates.
+     *
+     * @return The count of prompt templates.
+     */
+    suspend fun getPromptsCount(): Int
 }

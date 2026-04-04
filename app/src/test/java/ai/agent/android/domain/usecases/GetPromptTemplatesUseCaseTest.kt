@@ -34,6 +34,7 @@ class GetPromptTemplatesUseCaseTest {
             PromptTemplate(id = 2, name = "Test2", text = "Text2", category = "Cat2")
         )
         coEvery { repository.getAllPrompts() } returns flowOf(expectedPrompts)
+        coEvery { repository.getPromptsCount() } returns 2
 
         // Act
         val result = getPromptTemplatesUseCase().toList()
@@ -42,5 +43,6 @@ class GetPromptTemplatesUseCaseTest {
         assertEquals(1, result.size)
         assertEquals(expectedPrompts, result.first())
         coVerify(exactly = 1) { repository.getAllPrompts() }
+        coVerify(exactly = 1) { repository.getPromptsCount() }
     }
 }

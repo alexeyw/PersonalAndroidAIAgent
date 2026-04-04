@@ -31,6 +31,10 @@ class PromptRepositoryImpl @Inject constructor(
         dao.deletePrompt(id)
     }
 
+    override suspend fun getPromptsCount(): Int {
+        return dao.getPromptsCount()
+    }
+
     private fun PromptTemplateEntity.toDomainModel(): PromptTemplate {
         return PromptTemplate(
             id = id,
