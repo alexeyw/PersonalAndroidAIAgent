@@ -79,13 +79,11 @@ fun PromptLibraryDialog(
                                     style = MaterialTheme.typography.bodyLarge,
                                     fontWeight = FontWeight.Bold
                                 )
-                                if (prompt.category != null) {
-                                    Text(
-                                        text = " (${prompt.category})",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.primary
-                                    )
-                                }
+                                Text(
+                                    text = " (${prompt.category})",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
                             }
                             Text(
                                 text = prompt.text,

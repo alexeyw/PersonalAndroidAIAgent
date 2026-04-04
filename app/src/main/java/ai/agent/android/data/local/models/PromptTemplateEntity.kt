@@ -9,7 +9,7 @@ import androidx.room.PrimaryKey
  * @property id The unique identifier for the prompt, auto-generated.
  * @property name The display name of the prompt template.
  * @property text The actual prompt content.
- * @property category An optional category or tag for grouping prompts.
+ * @property category The category corresponding to a NodeType.
  */
 @Entity(tableName = "prompt_templates")
 data class PromptTemplateEntity(
@@ -17,5 +17,5 @@ data class PromptTemplateEntity(
     val id: Long = 0,
     val name: String,
     val text: String,
-    val category: String? = null
+    val category: String
 )

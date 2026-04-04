@@ -11,6 +11,7 @@ import ai.agent.android.presentation.ui.monitoring.MonitoringScreen
 import ai.agent.android.presentation.ui.monitoring.MonitoringViewModel
 import ai.agent.android.presentation.ui.orchestrator.OrchestratorViewModel
 import ai.agent.android.presentation.ui.orchestrator.VisualOrchestratorScreen
+import ai.agent.android.presentation.ui.prompts.PromptLibraryScreen
 import ai.agent.android.presentation.ui.settings.SettingsScreen
 import ai.agent.android.presentation.ui.settings.SettingsViewModel
 import ai.agent.android.presentation.ui.taskmonitor.TaskMonitorScreen
@@ -177,6 +178,11 @@ class MainActivity : ComponentActivity() {
                         }
                         composable("settings") {
                             SettingsScreen(
+                                modifier = Modifier.fillMaxSize(),
+                                onBack = { navController.popBackStack() })
+                        }
+                        composable("prompts") {
+                            PromptLibraryScreen(
                                 modifier = Modifier.fillMaxSize(),
                                 onBack = { navController.popBackStack() })
                         }

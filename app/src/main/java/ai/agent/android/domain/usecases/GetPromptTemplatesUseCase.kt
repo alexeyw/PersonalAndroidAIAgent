@@ -31,10 +31,10 @@ class GetPromptTemplatesUseCase @Inject constructor(
         try {
             if (repository.getPromptsCount() == 0) {
                 val defaults = listOf(
-                    PromptTemplate(name = "Classifier", text = DefaultPrompts.INTENT_ROUTER_PROMPT, category = "Default"),
-                    PromptTemplate(name = "Decomposer", text = DefaultPrompts.DECOMPOSITION_PROMPT, category = "Default"),
-                    PromptTemplate(name = "Summarizer", text = DefaultPrompts.SUMMARY_PROMPT, category = "Default"),
-                    PromptTemplate(name = "Tool Picker", text = DefaultPrompts.TOOL_USAGE_INSTRUCTION, category = "Default")
+                    PromptTemplate(name = "Classifier", text = DefaultPrompts.INTENT_ROUTER_PROMPT, category = ai.agent.android.domain.models.NodeType.INTENT_ROUTER.name),
+                    PromptTemplate(name = "Decomposer", text = DefaultPrompts.DECOMPOSITION_PROMPT, category = ai.agent.android.domain.models.NodeType.DECOMPOSITION.name),
+                    PromptTemplate(name = "Summarizer", text = DefaultPrompts.SUMMARY_PROMPT, category = ai.agent.android.domain.models.NodeType.SUMMARY.name),
+                    PromptTemplate(name = "Tool Picker", text = DefaultPrompts.TOOL_USAGE_INSTRUCTION, category = ai.agent.android.domain.models.NodeType.TOOL.name)
                 )
                 defaults.forEach { repository.savePrompt(it) }
             }

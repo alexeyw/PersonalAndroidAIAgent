@@ -88,7 +88,7 @@ abstract class AppDatabase : RoomDatabase() {
                         `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, 
                         `name` TEXT NOT NULL, 
                         `text` TEXT NOT NULL, 
-                        `category` TEXT
+                        `category` TEXT NOT NULL
                     )
                     """.trimIndent()
                 )

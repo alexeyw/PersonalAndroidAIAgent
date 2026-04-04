@@ -73,9 +73,9 @@ class OrchestratorViewModel @Inject constructor(
      * 
      * @param name The name of the prompt.
      * @param text The prompt content.
-     * @param category The optional category.
+     * @param category The category corresponding to NodeType.
      */
-    fun savePromptTemplate(name: String, text: String, category: String? = null) {
+    fun savePromptTemplate(name: String, text: String, category: String) {
         viewModelScope.launch {
             try {
                 savePromptTemplateUseCase(

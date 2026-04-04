@@ -150,6 +150,10 @@ This file maps the contents of the main application package.
       - `components/` - Orchestrator UI components.
         - `DraggableNode.kt` - Draggable node UI component.
         - `PromptLibraryDialog.kt` - Prompt library dialog UI component.
+    - `prompts/` - Prompt Library screen components.
+      - `PromptLibraryScreen.kt` - Prompt library UI screen.
+      - `PromptLibraryUiState.kt` - Prompt library UI state.
+      - `PromptLibraryViewModel.kt` - Prompt library ViewModel.
     - `settings/` - Settings screen components.
       - `SettingsScreen.kt` - Settings UI screen.
       - `SettingsUiState.kt` - Settings UI state.
