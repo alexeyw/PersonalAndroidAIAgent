@@ -149,6 +149,7 @@ This file maps the contents of the main application package.
       - `VisualOrchestratorScreen.kt` - Visual orchestrator UI screen.
       - `components/` - Orchestrator UI components.
         - `DraggableNode.kt` - Draggable node UI component.
+        - `PromptLibraryDialog.kt` - Prompt library dialog UI component.
     - `settings/` - Settings screen components.
       - `SettingsScreen.kt` - Settings UI screen.
       - `SettingsUiState.kt` - Settings UI state.
@@ -161,4 +162,5 @@ This file maps the contents of the main application package.
       - `ToolsScreen.kt` - Tools UI screen.
       - `ToolsUiState.kt` - Tools UI state.
       - `ToolsViewModel.kt` - Tools ViewModel.
+- `FILE_MAP.md` - This file mapping the current directory structure. ViewModel.
 - `FILE_MAP.md` - This file mapping the current directory structure.
