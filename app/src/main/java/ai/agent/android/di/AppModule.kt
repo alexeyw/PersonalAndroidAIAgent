@@ -91,6 +91,14 @@ object AppModule {
     }
 
     /**
+     * Provides the [ai.agent.android.data.local.dao.PromptTemplateDao] from the database.
+     */
+    @Provides
+    fun providePromptTemplateDao(database: AppDatabase): ai.agent.android.data.local.dao.PromptTemplateDao {
+        return database.promptTemplateDao()
+    }
+
+    /**
      * Provides the singleton instance of Converters for Room mapping.
      */
     @Provides

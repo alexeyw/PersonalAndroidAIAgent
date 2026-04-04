@@ -5,6 +5,7 @@ import ai.agent.android.domain.models.NodeModel
 import ai.agent.android.domain.models.PipelineGraph
 import ai.agent.android.domain.models.AgentTool
 import ai.agent.android.domain.models.NodeType
+import ai.agent.android.domain.models.PromptTemplate
 
 /**
  * Represents the UI state for the Visual Orchestrator screen.
@@ -15,6 +16,7 @@ import ai.agent.android.domain.models.NodeType
  * @property errorMessage An error message if an operation fails.
  * @property availableTools List of all available tools in the system.
  * @property providerKeys Map indicating whether an API key is set for specific provider node types.
+ * @property promptTemplates List of saved prompt templates.
  */
 data class OrchestratorUiState(
     val currentPipeline: PipelineGraph = PipelineGraph(id = java.util.UUID.randomUUID().toString(), name = "New Pipeline"),
@@ -22,7 +24,8 @@ data class OrchestratorUiState(
     val isLoading: Boolean = false,
     val errorMessage: String? = null,
     val availableTools: List<AgentTool> = emptyList(),
-    val providerKeys: Map<NodeType, Boolean> = emptyMap()
+    val providerKeys: Map<NodeType, Boolean> = emptyMap(),
+    val promptTemplates: List<PromptTemplate> = emptyList()
 ) {
     /**
      * Helper to get nodes easily.

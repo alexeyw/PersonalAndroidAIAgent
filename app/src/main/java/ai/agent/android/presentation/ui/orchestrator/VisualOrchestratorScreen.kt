@@ -89,6 +89,7 @@ fun VisualOrchestratorScreen(
     var configuringNodeId by remember { mutableStateOf<String?>(null) }
 
     var showLoadMenu by remember { mutableStateOf(false) }
+    var showPromptLibrary by remember { mutableStateOf(false) }
     
     var canvasSize by remember { mutableStateOf(IntSize.Zero) }
 
@@ -179,6 +180,27 @@ fun VisualOrchestratorScreen(
         )
     }
 
+    if (showPromptLibrary) {
+        ai.agent.android.presentation.ui.orchestrator.components.PromptLibraryDialog(
+            prompts = uiState.promptTemplates,
+            onPromptSelected = { text ->
+                // If a node is being configured, update its system prompt
+                val node = uiState.nodes.find { it.id == configuringNodeId }
+                if (node != null) {
+                    viewModel.updateNodeConfiguration(
+                        node.id,
+                        node.conditionComplexity,
+                        node.conditionKeywords,
+                        node.conditionPrompt,
+                        text
+                    )
+                }
+                showPromptLibrary = false
+            },
+            onDismissRequest = { showPromptLibrary = false }
+        )
+    }
+
     if (configuringNodeId != null) {
         val node = uiState.nodes.find { it.id == configuringNodeId }
         if (node != null) {
@@ -192,6 +214,19 @@ fun VisualOrchestratorScreen(
                 title = { Text(if (node.type == NodeType.IF_CONDITION) "Configure IF Condition" else "Configure Node") },
                 text = {
                     Column {
+                        Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                            TextButton(onClick = { showPromptLibrary = true }) {
+                                Text("Load from Library")
+                            }
+                            TextButton(onClick = {
+                                if (systemPrompt.isNotBlank()) {
+                                    viewModel.savePromptTemplate("${node.label} Template", systemPrompt, node.type.name)
+                                    viewModel.clearError() // Just in case, might want a success message
+                                }
+                            }) {
+                                Text("Save to Library")
+                            }
+                        }
                         androidx.compose.material3.OutlinedTextField(
                             value = systemPrompt,
                             onValueChange = { systemPrompt = it },

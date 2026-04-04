@@ -14,6 +14,8 @@ import ai.agent.android.data.local.models.PipelineEntity
 import ai.agent.android.data.local.models.NodeEntity
 import ai.agent.android.data.local.models.ConnectionEntity
 import ai.agent.android.data.local.dao.PipelineDao
+import ai.agent.android.data.local.models.PromptTemplateEntity
+import ai.agent.android.data.local.dao.PromptTemplateDao
 
 /**
  * Main Room Database for the Android AI Agent.
@@ -28,9 +30,10 @@ import ai.agent.android.data.local.dao.PipelineDao
         MemoryChunkEntity::class,
         PipelineEntity::class,
         NodeEntity::class,
-        ConnectionEntity::class
+        ConnectionEntity::class,
+        PromptTemplateEntity::class
     ],
-    version = 9,
+    version = 10,
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -62,4 +65,11 @@ abstract class AppDatabase : RoomDatabase() {
      * @return The [PipelineDao] instance.
      */
     abstract fun pipelineDao(): PipelineDao
+
+    /**
+     * Provides access to the PromptTemplateDao.
+     *
+     * @return The [PromptTemplateDao] instance.
+     */
+    abstract fun promptTemplateDao(): PromptTemplateDao
 }
