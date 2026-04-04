@@ -126,7 +126,7 @@ fun VisualOrchestratorScreen(
         }
     }
 
-    LaunchedEffect(uiState.nodes, canvasSize) {
+    LaunchedEffect(uiState.currentPipeline.id, canvasSize) {
         if (uiState.nodes.isNotEmpty() && canvasSize.width > 0 && canvasSize.height > 0) {
             val minX = uiState.nodes.minOf { it.x }
             val maxX = uiState.nodes.maxOf { it.x + 200f } // Add width for node
