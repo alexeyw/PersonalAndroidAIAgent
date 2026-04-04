@@ -72,6 +72,7 @@ import kotlin.math.roundToInt
 @Composable
 fun VisualOrchestratorScreen(
     viewModel: OrchestratorViewModel = hiltViewModel(),
+    onNavigateToPrompts: () -> Unit = {},
     onBack: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -89,6 +90,7 @@ fun VisualOrchestratorScreen(
     var configuringNodeId by remember { mutableStateOf<String?>(null) }
 
     var showLoadMenu by remember { mutableStateOf(false) }
+    var showPromptLibrary by remember { mutableStateOf(false) }
     
     var canvasSize by remember { mutableStateOf(IntSize.Zero) }
 
@@ -124,7 +126,7 @@ fun VisualOrchestratorScreen(
         }
     }
 
-    LaunchedEffect(uiState.nodes, canvasSize) {
+    LaunchedEffect(uiState.currentPipeline.id, canvasSize) {
         if (uiState.nodes.isNotEmpty() && canvasSize.width > 0 && canvasSize.height > 0) {
             val minX = uiState.nodes.minOf { it.x }
             val maxX = uiState.nodes.maxOf { it.x + 200f } // Add width for node
@@ -187,11 +189,35 @@ fun VisualOrchestratorScreen(
             var keywords by remember(node) { mutableStateOf(node.conditionKeywords ?: "") }
             var prompt by remember(node) { mutableStateOf(node.conditionPrompt ?: "") }
 
+            if (showPromptLibrary) {
+                ai.agent.android.presentation.ui.orchestrator.components.PromptLibraryDialog(
+                    prompts = uiState.promptTemplates.filter { it.category == node.type.name },
+                    onPromptSelected = { text ->
+                        systemPrompt = text
+                        showPromptLibrary = false
+                    },
+                    onDismissRequest = { showPromptLibrary = false }
+                )
+            }
+
             AlertDialog(
                 onDismissRequest = { configuringNodeId = null },
                 title = { Text(if (node.type == NodeType.IF_CONDITION) "Configure IF Condition" else "Configure Node") },
                 text = {
                     Column {
+                        Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                            TextButton(onClick = { showPromptLibrary = true }) {
+                                Text("Load from Library")
+                            }
+                            TextButton(onClick = {
+                                if (systemPrompt.isNotBlank()) {
+                                    viewModel.savePromptTemplate("${node.label} Template", systemPrompt, node.type.name)
+                                    viewModel.clearError() // Just in case, might want a success message
+                                }
+                            }) {
+                                Text("Save to Library")
+                            }
+                        }
                         androidx.compose.material3.OutlinedTextField(
                             value = systemPrompt,
                             onValueChange = { systemPrompt = it },
@@ -253,6 +279,11 @@ fun VisualOrchestratorScreen(
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(imageVector = Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    }
+                },
+                actions = {
+                    IconButton(onClick = onNavigateToPrompts) {
+                        Icon(imageVector = Icons.AutoMirrored.Filled.List, contentDescription = "Prompt Library")
                     }
                 }
             )

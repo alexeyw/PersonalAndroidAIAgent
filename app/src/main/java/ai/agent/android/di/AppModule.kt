@@ -55,7 +55,10 @@ object AppModule {
             appContext,
             AppDatabase::class.java,
             DATABASE_NAME
-        ).fallbackToDestructiveMigration(true).build()
+        )
+        .addMigrations(AppDatabase.MIGRATION_9_10, AppDatabase.MIGRATION_10_11, AppDatabase.MIGRATION_11_12)
+        .fallbackToDestructiveMigration(true)
+        .build()
     }
 
     /**
@@ -88,6 +91,14 @@ object AppModule {
     @Provides
     fun providePipelineDao(database: AppDatabase): ai.agent.android.data.local.dao.PipelineDao {
         return database.pipelineDao()
+    }
+
+    /**
+     * Provides the [ai.agent.android.data.local.dao.PromptTemplateDao] from the database.
+     */
+    @Provides
+    fun providePromptTemplateDao(database: AppDatabase): ai.agent.android.data.local.dao.PromptTemplateDao {
+        return database.promptTemplateDao()
     }
 
     /**

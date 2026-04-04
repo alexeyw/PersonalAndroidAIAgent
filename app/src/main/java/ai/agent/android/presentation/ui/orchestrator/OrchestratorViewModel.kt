@@ -6,10 +6,13 @@ import ai.agent.android.domain.models.ConnectionModel
 import ai.agent.android.domain.models.NodeModel
 import ai.agent.android.domain.models.NodeType
 import ai.agent.android.domain.models.PipelineGraph
+import ai.agent.android.domain.models.PromptTemplate
 import ai.agent.android.domain.repositories.ApiKeyRepository
 import ai.agent.android.domain.repositories.ToolRepository
 import ai.agent.android.domain.usecases.LoadPipelineUseCase
 import ai.agent.android.domain.usecases.SavePipelineUseCase
+import ai.agent.android.domain.usecases.GetPromptTemplatesUseCase
+import ai.agent.android.domain.usecases.SavePromptTemplateUseCase
 import com.google.gson.Gson
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -29,6 +32,8 @@ import javax.inject.Inject
 class OrchestratorViewModel @Inject constructor(
     private val savePipelineUseCase: SavePipelineUseCase,
     private val loadPipelineUseCase: LoadPipelineUseCase,
+    private val getPromptTemplatesUseCase: GetPromptTemplatesUseCase,
+    private val savePromptTemplateUseCase: SavePromptTemplateUseCase,
     private val apiKeyRepository: ApiKeyRepository,
     private val toolRepository: ToolRepository
 ) : ViewModel() {
@@ -46,6 +51,40 @@ class OrchestratorViewModel @Inject constructor(
         observeSavedPipelines()
         observeProviderKeys()
         loadAvailableTools()
+        observePromptTemplates()
+    }
+
+    private fun observePromptTemplates() {
+        viewModelScope.launch {
+            getPromptTemplatesUseCase()
+                .catch { e ->
+                    _uiState.update { it.copy(errorMessage = e.message) }
+                }
+                .collect { templates ->
+                    _uiState.update { state -> 
+                        state.copy(promptTemplates = templates) 
+                    }
+                }
+        }
+    }
+
+    /**
+     * Saves a new prompt template.
+     * 
+     * @param name The name of the prompt.
+     * @param text The prompt content.
+     * @param category The category corresponding to NodeType.
+     */
+    fun savePromptTemplate(name: String, text: String, category: String) {
+        viewModelScope.launch {
+            try {
+                savePromptTemplateUseCase(
+                    PromptTemplate(name = name, text = text, category = category)
+                )
+            } catch (e: Exception) {
+                _uiState.update { it.copy(errorMessage = e.message) }
+            }
+        }
     }
 
     private fun observeSavedPipelines() {

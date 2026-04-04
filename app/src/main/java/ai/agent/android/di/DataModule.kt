@@ -168,5 +168,14 @@ abstract class DataModule {
     abstract fun bindPipelineRepository(
         repository: ai.agent.android.data.repositories.LocalPipelineRepositoryImpl
     ): ai.agent.android.domain.repositories.PipelineRepository
+
+    /**
+     * Binds the [ai.agent.android.data.repositories.PromptRepositoryImpl] implementation to the [ai.agent.android.domain.repositories.PromptRepository] interface.
+     */
+    @Binds
+    @Singleton
+    abstract fun bindPromptRepository(
+        repository: ai.agent.android.data.repositories.PromptRepositoryImpl
+    ): ai.agent.android.domain.repositories.PromptRepository
 }
 

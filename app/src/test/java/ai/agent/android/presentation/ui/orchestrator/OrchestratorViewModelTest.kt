@@ -7,6 +7,8 @@ import ai.agent.android.domain.repositories.ApiKeyRepository
 import ai.agent.android.domain.repositories.ToolRepository
 import ai.agent.android.domain.usecases.LoadPipelineUseCase
 import ai.agent.android.domain.usecases.SavePipelineUseCase
+import ai.agent.android.domain.usecases.GetPromptTemplatesUseCase
+import ai.agent.android.domain.usecases.SavePromptTemplateUseCase
 import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
@@ -29,6 +31,8 @@ class OrchestratorViewModelTest {
 
     private lateinit var savePipelineUseCase: SavePipelineUseCase
     private lateinit var loadPipelineUseCase: LoadPipelineUseCase
+    private lateinit var getPromptTemplatesUseCase: GetPromptTemplatesUseCase
+    private lateinit var savePromptTemplateUseCase: SavePromptTemplateUseCase
     private lateinit var apiKeyRepository: ApiKeyRepository
     private lateinit var toolRepository: ToolRepository
     private lateinit var viewModel: OrchestratorViewModel
@@ -40,10 +44,13 @@ class OrchestratorViewModelTest {
         Dispatchers.setMain(testDispatcher)
         savePipelineUseCase = mockk()
         loadPipelineUseCase = mockk()
+        getPromptTemplatesUseCase = mockk()
+        savePromptTemplateUseCase = mockk()
         apiKeyRepository = mockk()
         toolRepository = mockk()
         
         every { loadPipelineUseCase.observeAllPipelines() } returns flowOf(emptyList())
+        every { getPromptTemplatesUseCase() } returns flowOf(emptyList())
         
         every { apiKeyRepository.getOpenAIKey() } returns flowOf(null)
         every { apiKeyRepository.getAnthropicKey() } returns flowOf("key")
@@ -52,7 +59,14 @@ class OrchestratorViewModelTest {
 
         coEvery { toolRepository.getAvailableTools() } returns listOf(AgentTool("Tool1", "Desc", "{}"))
         
-        viewModel = OrchestratorViewModel(savePipelineUseCase, loadPipelineUseCase, apiKeyRepository, toolRepository)
+        viewModel = OrchestratorViewModel(
+            savePipelineUseCase, 
+            loadPipelineUseCase, 
+            getPromptTemplatesUseCase,
+            savePromptTemplateUseCase,
+            apiKeyRepository, 
+            toolRepository
+        )
     }
 
     @After

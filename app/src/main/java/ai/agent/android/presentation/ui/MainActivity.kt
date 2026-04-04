@@ -11,6 +11,7 @@ import ai.agent.android.presentation.ui.monitoring.MonitoringScreen
 import ai.agent.android.presentation.ui.monitoring.MonitoringViewModel
 import ai.agent.android.presentation.ui.orchestrator.OrchestratorViewModel
 import ai.agent.android.presentation.ui.orchestrator.VisualOrchestratorScreen
+import ai.agent.android.presentation.ui.prompts.PromptLibraryScreen
 import ai.agent.android.presentation.ui.settings.SettingsScreen
 import ai.agent.android.presentation.ui.settings.SettingsViewModel
 import ai.agent.android.presentation.ui.taskmonitor.TaskMonitorScreen
@@ -138,6 +139,11 @@ class MainActivity : ComponentActivity() {
                                         launchSingleTop = true
                                     }
                                 },
+                                onNavigateToPrompts = {
+                                    navController.navigate("prompts") {
+                                        launchSingleTop = true
+                                    }
+                                },
                                 modifier = Modifier.fillMaxSize()
                             )
                         }
@@ -180,10 +186,20 @@ class MainActivity : ComponentActivity() {
                                 modifier = Modifier.fillMaxSize(),
                                 onBack = { navController.popBackStack() })
                         }
+                        composable("prompts") {
+                            PromptLibraryScreen(
+                                modifier = Modifier.fillMaxSize(),
+                                onBack = { navController.popBackStack() })
+                        }
                         composable("orchestrator") {
                             val orchestratorViewModel: OrchestratorViewModel = hiltViewModel()
                             VisualOrchestratorScreen(
                                 viewModel = orchestratorViewModel,
+                                onNavigateToPrompts = {
+                                    navController.navigate("prompts") {
+                                        launchSingleTop = true
+                                    }
+                                },
                                 onBack = { navController.popBackStack() })
                         }
                     }
@@ -215,6 +231,7 @@ fun HomeScreen(
     onNavigateToTaskMonitor: () -> Unit,
     onNavigateToSettings: () -> Unit,
     onNavigateToOrchestrator: () -> Unit,
+    onNavigateToPrompts: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -254,6 +271,10 @@ fun HomeScreen(
         Spacer(modifier = Modifier.height(16.dp))
         Button(onClick = onNavigateToOrchestrator) {
             Text("Visual Orchestrator")
+        }
+        Spacer(modifier = Modifier.height(16.dp))
+        Button(onClick = onNavigateToPrompts) {
+            Text("Prompt Library")
         }
     }
 }
