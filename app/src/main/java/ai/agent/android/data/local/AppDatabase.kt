@@ -3,6 +3,8 @@ package ai.agent.android.data.local
 import androidx.room.Database
 import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 import ai.agent.android.data.local.models.LocalModelEntity
 import ai.agent.android.data.local.dao.LocalModelDao
 import ai.agent.android.data.local.models.ChatMessageEntity
@@ -72,4 +74,25 @@ abstract class AppDatabase : RoomDatabase() {
      * @return The [PromptTemplateDao] instance.
      */
     abstract fun promptTemplateDao(): PromptTemplateDao
+
+    companion object {
+        /**
+         * Migration from version 9 to 10.
+         * Adds the `prompt_templates` table.
+         */
+        val MIGRATION_9_10 = object : Migration(9, 10) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `prompt_templates` (
+                        `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, 
+                        `name` TEXT NOT NULL, 
+                        `text` TEXT NOT NULL, 
+                        `category` TEXT
+                    )
+                    """.trimIndent()
+                )
+            }
+        }
+    }
 }

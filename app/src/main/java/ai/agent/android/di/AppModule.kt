@@ -55,7 +55,10 @@ object AppModule {
             appContext,
             AppDatabase::class.java,
             DATABASE_NAME
-        ).fallbackToDestructiveMigration(true).build()
+        )
+        .addMigrations(AppDatabase.MIGRATION_9_10)
+        .fallbackToDestructiveMigration(true)
+        .build()
     }
 
     /**

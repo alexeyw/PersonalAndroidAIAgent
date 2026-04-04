@@ -180,27 +180,6 @@ fun VisualOrchestratorScreen(
         )
     }
 
-    if (showPromptLibrary) {
-        ai.agent.android.presentation.ui.orchestrator.components.PromptLibraryDialog(
-            prompts = uiState.promptTemplates,
-            onPromptSelected = { text ->
-                // If a node is being configured, update its system prompt
-                val node = uiState.nodes.find { it.id == configuringNodeId }
-                if (node != null) {
-                    viewModel.updateNodeConfiguration(
-                        node.id,
-                        node.conditionComplexity,
-                        node.conditionKeywords,
-                        node.conditionPrompt,
-                        text
-                    )
-                }
-                showPromptLibrary = false
-            },
-            onDismissRequest = { showPromptLibrary = false }
-        )
-    }
-
     if (configuringNodeId != null) {
         val node = uiState.nodes.find { it.id == configuringNodeId }
         if (node != null) {
@@ -208,6 +187,17 @@ fun VisualOrchestratorScreen(
             var complexity by remember(node) { mutableStateOf(node.conditionComplexity?.toString() ?: "") }
             var keywords by remember(node) { mutableStateOf(node.conditionKeywords ?: "") }
             var prompt by remember(node) { mutableStateOf(node.conditionPrompt ?: "") }
+
+            if (showPromptLibrary) {
+                ai.agent.android.presentation.ui.orchestrator.components.PromptLibraryDialog(
+                    prompts = uiState.promptTemplates,
+                    onPromptSelected = { text ->
+                        systemPrompt = text
+                        showPromptLibrary = false
+                    },
+                    onDismissRequest = { showPromptLibrary = false }
+                )
+            }
 
             AlertDialog(
                 onDismissRequest = { configuringNodeId = null },
