@@ -9,6 +9,7 @@ package ai.agent.android.domain.models
  * @property y The Y coordinate of the node on the canvas.
  * @property label An optional label or name for the node.
  * @property toolName An optional name of the assigned tool if the node type is [NodeType.TOOL].
+ * @property modelPath An optional path to a specific model file (.tflite) for this node.
  * @property conditionComplexity Threshold for task complexity if type is [NodeType.IF_CONDITION].
  * @property conditionKeywords Comma-separated keywords for condition if type is [NodeType.IF_CONDITION].
  * @property conditionPrompt Free-form prompt for condition classification if type is [NodeType.IF_CONDITION].
@@ -21,6 +22,7 @@ data class NodeModel(
     val y: Float,
     val label: String = type.name,
     val toolName: String? = null,
+    val modelPath: String? = null,
     val conditionComplexity: Int? = null,
     val conditionKeywords: String? = null,
     val conditionPrompt: String? = null,

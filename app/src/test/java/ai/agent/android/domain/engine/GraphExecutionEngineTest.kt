@@ -7,6 +7,7 @@ import ai.agent.android.domain.services.ApprovalNotifier
 import ai.agent.android.domain.usecases.EvaluateIfConditionUseCase
 import ai.agent.android.domain.usecases.GetContextWindowUseCase
 import ai.agent.android.domain.usecases.RetrieveRelevantMemoryUseCase
+import ai.agent.android.domain.usecases.LoadModelUseCase
 import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
@@ -26,10 +27,12 @@ class GraphExecutionEngineTest {
     private lateinit var getContextWindowUseCase: GetContextWindowUseCase
     private lateinit var retrieveRelevantMemoryUseCase: RetrieveRelevantMemoryUseCase
     private lateinit var settingsRepository: SettingsRepository
+    private lateinit var apiKeyRepository: ApiKeyRepository
     private lateinit var metricsRepository: MetricsRepository
     private lateinit var approvalNotifier: ApprovalNotifier
     private lateinit var koogClientFactory: KoogClientFactory
     private lateinit var evaluateIfConditionUseCase: EvaluateIfConditionUseCase
+    private lateinit var loadModelUseCase: LoadModelUseCase
     
     private lateinit var engine: GraphExecutionEngine
 
@@ -43,15 +46,17 @@ class GraphExecutionEngineTest {
         getContextWindowUseCase = mockk()
         retrieveRelevantMemoryUseCase = mockk()
         settingsRepository = mockk()
+        apiKeyRepository = mockk(relaxed = true)
         metricsRepository = mockk(relaxed = true)
         approvalNotifier = mockk(relaxed = true)
         koogClientFactory = mockk()
         evaluateIfConditionUseCase = mockk()
+        loadModelUseCase = mockk()
 
         engine = GraphExecutionEngine(
             llmEngine, toolRepository, chatRepository, getContextWindowUseCase,
-            retrieveRelevantMemoryUseCase, settingsRepository, metricsRepository,
-            approvalNotifier, koogClientFactory, evaluateIfConditionUseCase
+            retrieveRelevantMemoryUseCase, settingsRepository, apiKeyRepository, metricsRepository,
+            approvalNotifier, koogClientFactory, evaluateIfConditionUseCase, loadModelUseCase
         )
 
         coEvery { getContextWindowUseCase(sessionId) } returns ""
@@ -60,6 +65,7 @@ class GraphExecutionEngineTest {
         every { settingsRepository.toolUsageInstruction } returns flowOf("")
         every { settingsRepository.requiresUserConfirmation } returns flowOf(false)
         coEvery { toolRepository.getAvailableTools() } returns emptyList()
+        coEvery { loadModelUseCase(any()) } returns Result.Success(Unit)
     }
 
     @Test

@@ -62,20 +62,44 @@ class SettingsViewModel @Inject constructor(
             _uiState.update { it.copy(openAiKey = value ?: "") }
         }.launchIn(viewModelScope)
 
+        apiKeyRepository.getOpenAIModel().onEach { value ->
+            _uiState.update { it.copy(openAiModel = value ?: "") }
+        }.launchIn(viewModelScope)
+
         apiKeyRepository.getAnthropicKey().onEach { value ->
             _uiState.update { it.copy(anthropicKey = value ?: "") }
+        }.launchIn(viewModelScope)
+
+        apiKeyRepository.getAnthropicModel().onEach { value ->
+            _uiState.update { it.copy(anthropicModel = value ?: "") }
         }.launchIn(viewModelScope)
 
         apiKeyRepository.getGoogleKey().onEach { value ->
             _uiState.update { it.copy(googleKey = value ?: "") }
         }.launchIn(viewModelScope)
 
+        apiKeyRepository.getGoogleModel().onEach { value ->
+            _uiState.update { it.copy(googleModel = value ?: "") }
+        }.launchIn(viewModelScope)
+
         apiKeyRepository.getDeepSeekKey().onEach { value ->
             _uiState.update { it.copy(deepSeekKey = value ?: "") }
         }.launchIn(viewModelScope)
 
+        apiKeyRepository.getDeepSeekModel().onEach { value ->
+            _uiState.update { it.copy(deepSeekModel = value ?: "") }
+        }.launchIn(viewModelScope)
+
         apiKeyRepository.getOllamaBaseUrl().onEach { value ->
             _uiState.update { it.copy(ollamaBaseUrl = value ?: "") }
+        }.launchIn(viewModelScope)
+
+        apiKeyRepository.getOllamaModelName().onEach { value ->
+            _uiState.update { it.copy(ollamaModel = value ?: "") }
+        }.launchIn(viewModelScope)
+
+        apiKeyRepository.getOllamaContextWindowSize().onEach { value ->
+            _uiState.update { it.copy(ollamaContextWindow = value.toString()) }
         }.launchIn(viewModelScope)
     }
 
@@ -157,6 +181,17 @@ class SettingsViewModel @Inject constructor(
     }
 
     /**
+     * Updates the OpenAI model name.
+     *
+     * @param model The new model or empty string to clear.
+     */
+    fun updateOpenAiModel(model: String) {
+        viewModelScope.launch {
+            apiKeyRepository.setOpenAIModel(model.takeIf { it.isNotBlank() })
+        }
+    }
+
+    /**
      * Updates the Anthropic API key.
      *
      * @param key The new key or empty string to clear.
@@ -164,6 +199,17 @@ class SettingsViewModel @Inject constructor(
     fun updateAnthropicKey(key: String) {
         viewModelScope.launch {
             apiKeyRepository.setAnthropicKey(key.takeIf { it.isNotBlank() })
+        }
+    }
+
+    /**
+     * Updates the Anthropic model name.
+     *
+     * @param model The new model or empty string to clear.
+     */
+    fun updateAnthropicModel(model: String) {
+        viewModelScope.launch {
+            apiKeyRepository.setAnthropicModel(model.takeIf { it.isNotBlank() })
         }
     }
 
@@ -179,6 +225,17 @@ class SettingsViewModel @Inject constructor(
     }
 
     /**
+     * Updates the Google model name.
+     *
+     * @param model The new model or empty string to clear.
+     */
+    fun updateGoogleModel(model: String) {
+        viewModelScope.launch {
+            apiKeyRepository.setGoogleModel(model.takeIf { it.isNotBlank() })
+        }
+    }
+
+    /**
      * Updates the DeepSeek API key.
      *
      * @param key The new key or empty string to clear.
@@ -190,6 +247,17 @@ class SettingsViewModel @Inject constructor(
     }
 
     /**
+     * Updates the DeepSeek model name.
+     *
+     * @param model The new model or empty string to clear.
+     */
+    fun updateDeepSeekModel(model: String) {
+        viewModelScope.launch {
+            apiKeyRepository.setDeepSeekModel(model.takeIf { it.isNotBlank() })
+        }
+    }
+
+    /**
      * Updates the Ollama local base URL.
      *
      * @param url The new URL or empty string to clear.
@@ -197,6 +265,29 @@ class SettingsViewModel @Inject constructor(
     fun updateOllamaBaseUrl(url: String) {
         viewModelScope.launch {
             apiKeyRepository.setOllamaBaseUrl(url.takeIf { it.isNotBlank() })
+        }
+    }
+
+    /**
+     * Updates the Ollama model name.
+     *
+     * @param model The new model or empty string to clear.
+     */
+    fun updateOllamaModel(model: String) {
+        viewModelScope.launch {
+            apiKeyRepository.setOllamaModelName(model.takeIf { it.isNotBlank() })
+        }
+    }
+
+    /**
+     * Updates the Ollama context window size.
+     *
+     * @param window The context window size string.
+     */
+    fun updateOllamaContextWindow(window: String) {
+        viewModelScope.launch {
+            val size = window.toIntOrNull() ?: 4096
+            apiKeyRepository.setOllamaContextWindowSize(size)
         }
     }
 }

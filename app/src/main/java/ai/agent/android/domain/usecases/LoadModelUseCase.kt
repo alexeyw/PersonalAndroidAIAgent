@@ -10,7 +10,8 @@ import java.io.File
 import javax.inject.Inject
 
 /**
- * UseCase for loading the active model into the inference engine.
+ * UseCase for loading a model into the inference engine.
+ * Supports loading a specific model by path, or the default active model.
  */
 class LoadModelUseCase @Inject constructor(
     private val localModelRepository: LocalModelRepository,
@@ -23,35 +24,36 @@ class LoadModelUseCase @Inject constructor(
     private object LlmSystemError : AppError.System
 
     /**
-     * Retrieves the currently active model from the repository, checks if the file exists on disk,
+     * Retrieves the specified model or the currently active model from the repository, checks if the file exists on disk,
      * and initializes the LLM engine with the model path.
      * 
-     * If the active model is already loaded in the engine, it returns [Result.Success] immediately.
+     * If the requested model is already loaded in the engine, it returns [Result.Success] immediately.
      * 
-     * @return [Result.Success] if the active model was successfully loaded, or [Result.Error] otherwise.
+     * @param modelPath Optional absolute path to the model file. If null, the globally active model is used.
+     * @return [Result.Success] if the model was successfully loaded, or [Result.Error] otherwise.
      */
-    suspend operator fun invoke(): Result<Unit, AppError> = withContext(Dispatchers.IO) {
+    suspend operator fun invoke(modelPath: String? = null): Result<Unit, AppError> = withContext(Dispatchers.IO) {
         try {
-            val activeModel = localModelRepository.getActiveModel()
+            val pathToLoad = modelPath ?: localModelRepository.getActiveModel()?.path
                 ?: return@withContext Result.Error(
                     error = LlmSystemError,
-                    message = "No active model found in the database. Please select a model in settings."
+                    message = "No active model found. Please select a model in settings or provide a path."
                 )
 
             // Check if the engine is already initialized with this exact model
-            if (llmInferenceEngine.isInitialized && llmInferenceEngine.currentModelPath == activeModel.path) {
+            if (llmInferenceEngine.isInitialized && llmInferenceEngine.currentModelPath == pathToLoad) {
                 return@withContext Result.Success(Unit)
             }
 
-            val file = File(activeModel.path)
+            val file = File(pathToLoad)
             if (!file.exists()) {
                 return@withContext Result.Error(
                     error = LlmSystemError,
-                    message = "Active model file not found at: ${activeModel.path}. Please download it again."
+                    message = "Model file not found at: $pathToLoad. Please download it again."
                 )
             }
 
-            return@withContext llmInferenceEngine.initialize(activeModel.path)
+            return@withContext llmInferenceEngine.initialize(pathToLoad)
         } catch (e: Exception) {
             return@withContext Result.Error(
                 error = LlmSystemError,
