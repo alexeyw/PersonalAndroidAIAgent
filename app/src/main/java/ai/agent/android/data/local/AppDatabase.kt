@@ -35,7 +35,7 @@ import ai.agent.android.data.local.dao.PromptTemplateDao
         ConnectionEntity::class,
         PromptTemplateEntity::class
     ],
-    version = 10,
+    version = 13,
     exportSchema = false
 )
 @TypeConverters(Converters::class)
