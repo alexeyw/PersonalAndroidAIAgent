@@ -1,18 +1,19 @@
 package ai.agent.android.domain.engine
 
 import ai.agent.android.data.engine.KoogClientFactory
+import ai.agent.android.data.engine.KoogModelMapper
 import ai.agent.android.domain.models.*
 import ai.agent.android.domain.repositories.*
 import ai.agent.android.domain.services.ApprovalNotifier
 import ai.agent.android.domain.usecases.EvaluateIfConditionUseCase
 import ai.agent.android.domain.usecases.GetContextWindowUseCase
 import ai.agent.android.domain.usecases.RetrieveRelevantMemoryUseCase
+import ai.agent.android.domain.usecases.LoadModelUseCase
 import ai.koog.prompt.dsl.prompt
 import ai.koog.prompt.executor.clients.anthropic.AnthropicModels
 import ai.koog.prompt.executor.clients.deepseek.DeepSeekModels
 import ai.koog.prompt.executor.clients.google.GoogleModels
 import ai.koog.prompt.executor.clients.openai.OpenAIModels
-import ai.koog.prompt.executor.ollama.client.OllamaModels
 import ai.koog.prompt.llm.LLModel
 import ai.koog.prompt.streaming.StreamFrame
 import kotlinx.coroutines.CompletableDeferred
@@ -34,10 +35,12 @@ class GraphExecutionEngine @Inject constructor(
     private val getContextWindowUseCase: GetContextWindowUseCase,
     private val retrieveRelevantMemoryUseCase: RetrieveRelevantMemoryUseCase,
     private val settingsRepository: SettingsRepository,
+    private val apiKeyRepository: ApiKeyRepository,
     private val metricsRepository: MetricsRepository,
     private val approvalNotifier: ApprovalNotifier,
     private val koogClientFactory: KoogClientFactory,
-    private val evaluateIfConditionUseCase: EvaluateIfConditionUseCase
+    private val evaluateIfConditionUseCase: EvaluateIfConditionUseCase,
+    private val loadModelUseCase: LoadModelUseCase
 ) {
     companion object {
         const val MAX_STEPS = 15
@@ -253,25 +256,36 @@ class GraphExecutionEngine @Inject constructor(
                 val startTime = System.currentTimeMillis()
                 
                 val responseStream = when (node.type) {
-                    NodeType.LITE_RT -> llmEngine.generateResponseStream(fullPrompt)
+                    NodeType.LITE_RT -> {
+                        val loadResult = loadModelUseCase(node.modelPath)
+                        if (loadResult is Result.Error) {
+                            flowOf("Error loading local model: ${loadResult.message}")
+                        } else {
+                            llmEngine.generateResponseStream(fullPrompt)
+                        }
+                    }
                     NodeType.OPENAI -> {
                         val client = koogClientFactory.createOpenAIExecutor()
-                        client?.executeStreaming(prompt("default") { user(fullPrompt) }, OpenAIModels.Chat.GPT5_4)
+                        val modelName = apiKeyRepository.getOpenAIModel().first() ?: OpenAIModels.Chat.GPT5_4.id
+                        client?.executeStreaming(prompt("default") { user(fullPrompt) }, KoogModelMapper.getOpenAIModel(modelName))
                             ?.mapNotNull { (it as? StreamFrame.TextDelta)?.text } ?: flowOf("Error: OpenAI not configured")
                     }
                     NodeType.ANTHROPIC -> {
                         val client = koogClientFactory.createAnthropicExecutor()
-                        client?.executeStreaming(prompt("default") { user(fullPrompt) }, AnthropicModels.Sonnet_4_5)
+                        val modelName = apiKeyRepository.getAnthropicModel().first() ?: AnthropicModels.Sonnet_4_5.id
+                        client?.executeStreaming(prompt("default") { user(fullPrompt) }, KoogModelMapper.getAnthropicModel(modelName))
                             ?.mapNotNull { (it as? StreamFrame.TextDelta)?.text } ?: flowOf("Error: Anthropic not configured")
                     }
                     NodeType.GOOGLE -> {
                         val client = koogClientFactory.createGoogleExecutor()
-                        client?.executeStreaming(prompt("default") { user(fullPrompt) }, GoogleModels.Gemini3_Flash_Preview)
+                        val modelName = apiKeyRepository.getGoogleModel().first() ?: GoogleModels.Gemini3_Flash_Preview.id
+                        client?.executeStreaming(prompt("default") { user(fullPrompt) }, KoogModelMapper.getGoogleModel(modelName))
                             ?.mapNotNull { (it as? StreamFrame.TextDelta)?.text } ?: flowOf("Error: Google not configured")
                     }
                     NodeType.DEEPSEEK -> {
                         val client = koogClientFactory.createDeepSeekExecutor()
-                        client?.executeStreaming(prompt("default") { user(fullPrompt) }, DeepSeekModels.DeepSeekChat)
+                        val modelName = apiKeyRepository.getDeepSeekModel().first() ?: DeepSeekModels.DeepSeekChat.id
+                        client?.executeStreaming(prompt("default") { user(fullPrompt) }, KoogModelMapper.getDeepSeekModel(modelName))
                             ?.mapNotNull { (it as? StreamFrame.TextDelta)?.text } ?: flowOf("Error: DeepSeek not configured")
                     }
                     else -> flowOf("Error: Unknown LLM provider")
@@ -320,6 +334,13 @@ class GraphExecutionEngine @Inject constructor(
                 val nodeSystemPrompt = node.systemPrompt ?: "You are an AI assistant."
                 val fullPrompt = "$nodeSystemPrompt\n\nUSER: $inputText\nAGENT: "
                 
+                val loadResult = loadModelUseCase(node.modelPath)
+                if (loadResult is Result.Error) {
+                    val errorMsg = "Error loading local model for system node: ${loadResult.message}"
+                    emit(AgentOrchestratorState.Error(errorMsg))
+                    emit(NodeExecutionResult(error = errorMsg))
+                    return@flow
+                }
                 val responseStream = llmEngine.generateResponseStream(fullPrompt)
                 val accumulatedResponse = StringBuilder()
                 

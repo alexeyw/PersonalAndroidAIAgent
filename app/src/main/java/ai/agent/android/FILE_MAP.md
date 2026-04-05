@@ -6,6 +6,7 @@ This file maps the contents of the main application package.
 - `data/` - Data layer encompassing local, remote, and repository implementations.
   - `engine/` - Core LLM and inference engines.
     - `KoogClientFactory.kt` - Factory for Koog clients.
+    - `KoogModelMapper.kt` - Maps string identifiers to Koog LLModel constants.
     - `LiteRTLlmEngine.kt` - LiteRT LLM engine implementation.
     - `MediaPipeTextEmbeddingEngine.kt` - MediaPipe text embedding engine.
     - `TaskQueueManagerImpl.kt` - Task queue manager implementation.
@@ -166,5 +167,4 @@ This file maps the contents of the main application package.
       - `ToolsScreen.kt` - Tools UI screen.
       - `ToolsUiState.kt` - Tools UI state.
       - `ToolsViewModel.kt` - Tools ViewModel.
-- `FILE_MAP.md` - This file mapping the current directory structure. ViewModel.
 - `FILE_MAP.md` - This file mapping the current directory structure.

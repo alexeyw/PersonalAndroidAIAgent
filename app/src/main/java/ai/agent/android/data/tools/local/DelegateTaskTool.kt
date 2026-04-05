@@ -1,17 +1,22 @@
 package ai.agent.android.data.tools.local
 
 import ai.agent.android.data.engine.KoogClientFactory
+import ai.agent.android.data.engine.KoogModelMapper
 import ai.agent.android.domain.engine.TextEmbeddingEngine
+import ai.agent.android.domain.repositories.ApiKeyRepository
 import ai.agent.android.domain.repositories.MemoryRepository
 import ai.koog.prompt.dsl.prompt
 import ai.koog.prompt.executor.clients.anthropic.AnthropicModels
 import ai.koog.prompt.executor.clients.deepseek.DeepSeekModels
 import ai.koog.prompt.executor.clients.google.GoogleModels
 import ai.koog.prompt.executor.clients.openai.OpenAIModels
-import ai.koog.prompt.executor.ollama.client.OllamaModels
+import ai.koog.prompt.llm.LLMCapability
+import ai.koog.prompt.llm.LLMProvider
+import ai.koog.prompt.llm.LLMProvider.Companion
 import ai.koog.prompt.llm.LLModel
 import ai.koog.prompt.streaming.StreamFrame
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.withContext
@@ -34,11 +39,13 @@ import javax.inject.Inject
  * @property koogClientFactory A factory used to instantiate the appropriate external LLM client.
  * @property memoryRepository The repository responsible for persisting long-term memories.
  * @property textEmbeddingEngine The engine used to convert text into vector embeddings for semantic search.
+ * @property apiKeyRepository The repository responsible for persisting selected model configurations.
  */
 class DelegateTaskTool @Inject constructor(
     private val koogClientFactory: KoogClientFactory,
     private val memoryRepository: MemoryRepository,
-    private val textEmbeddingEngine: TextEmbeddingEngine
+    private val textEmbeddingEngine: TextEmbeddingEngine,
+    private val apiKeyRepository: ApiKeyRepository
 ) {
 
     /**
@@ -76,11 +83,31 @@ class DelegateTaskTool @Inject constructor(
 
         return@withContext try {
             val model = when (targetModel.lowercase()) {
-                "anthropic" -> AnthropicModels.Sonnet_4_5
-                "openai" -> OpenAIModels.Chat.GPT5_4
-                "google", "gemini" -> GoogleModels.Gemini3_Flash_Preview
-                "deepseek" -> DeepSeekModels.DeepSeekChat
-                "ollama" -> OllamaModels.Groq.LLAMA_3_GROK_TOOL_USE_8B
+                "anthropic" -> KoogModelMapper.getAnthropicModel(
+                    apiKeyRepository.getAnthropicModel().first() ?: AnthropicModels.Sonnet_4_5.id
+                )
+
+                "openai" -> KoogModelMapper.getOpenAIModel(
+                    apiKeyRepository.getOpenAIModel().first() ?: OpenAIModels.Chat.GPT5_4.id
+                )
+
+                "google", "gemini" -> KoogModelMapper.getGoogleModel(
+                    apiKeyRepository.getGoogleModel().first() ?: GoogleModels.Gemini3_Flash_Preview.id
+                )
+
+                "deepseek" -> KoogModelMapper.getDeepSeekModel(
+                    apiKeyRepository.getDeepSeekModel().first() ?: DeepSeekModels.DeepSeekChat.id
+                )
+
+                "ollama" -> LLModel(
+                    provider = LLMProvider.Ollama,
+                    id = apiKeyRepository.getOllamaModelName().first() ?: "llama3",
+                    capabilities = listOf(
+                        LLMCapability.Completion
+                    ),
+                    contextLength = apiKeyRepository.getOllamaContextWindowSize().first().toLong(),
+                )
+
                 else -> LLModel(client.llmProvider(), "default")
             }
 
@@ -96,7 +123,7 @@ class DelegateTaskTool @Inject constructor(
                 // Task succeeded. Generate embedding for the result.
                 val responseText = result
                 val embedding = textEmbeddingEngine.generateEmbedding(responseText)
-                
+
                 // Save to long-term memory so the local agent can recall it later
                 memoryRepository.saveMemory(responseText, embedding)
 

@@ -2,6 +2,7 @@ package ai.agent.android.data.tools.local
 
 import ai.agent.android.data.engine.KoogClientFactory
 import ai.agent.android.domain.engine.TextEmbeddingEngine
+import ai.agent.android.domain.repositories.ApiKeyRepository
 import ai.agent.android.domain.repositories.MemoryRepository
 import ai.koog.prompt.dsl.Prompt
 import ai.koog.prompt.executor.clients.LLMClient
@@ -12,6 +13,7 @@ import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -25,6 +27,7 @@ class DelegateTaskToolTest {
     private lateinit var koogClientFactory: KoogClientFactory
     private lateinit var memoryRepository: MemoryRepository
     private lateinit var textEmbeddingEngine: TextEmbeddingEngine
+    private lateinit var apiKeyRepository: ApiKeyRepository
     private lateinit var delegateTaskTool: DelegateTaskTool
     private lateinit var mockClient: LLMClient
 
@@ -33,12 +36,20 @@ class DelegateTaskToolTest {
         koogClientFactory = mockk()
         memoryRepository = mockk(relaxed = true)
         textEmbeddingEngine = mockk()
+        apiKeyRepository = mockk(relaxed = true)
         mockClient = mockk(relaxed = true)
+        
+        every { apiKeyRepository.getAnthropicModel() } returns flowOf("claude-3-5-sonnet-20240620")
+        every { apiKeyRepository.getOpenAIModel() } returns flowOf("gpt-4o")
+        every { apiKeyRepository.getGoogleModel() } returns flowOf("gemini-1.5-pro-preview-0409")
+        every { apiKeyRepository.getDeepSeekModel() } returns flowOf("deepseek-chat")
+        every { apiKeyRepository.getOllamaModelName() } returns flowOf("llama3")
         
         delegateTaskTool = DelegateTaskTool(
             koogClientFactory = koogClientFactory,
             memoryRepository = memoryRepository,
-            textEmbeddingEngine = textEmbeddingEngine
+            textEmbeddingEngine = textEmbeddingEngine,
+            apiKeyRepository = apiKeyRepository
         )
     }
 

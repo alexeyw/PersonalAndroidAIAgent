@@ -1,5 +1,6 @@
 package ai.agent.android.presentation.ui.settings
 
+import ai.agent.android.data.engine.KoogModelMapper
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -9,9 +10,13 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -25,13 +30,74 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import java.util.Locale
 import kotlin.math.roundToInt
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun ProviderSettingsSection(
+    title: String,
+    keyValue: String,
+    onKeyChange: (String) -> Unit,
+    modelValue: String,
+    onModelChange: (String) -> Unit,
+    availableModels: List<String>
+) {
+    var expanded by remember { mutableStateOf(false) }
+
+    Text(
+        text = title,
+        style = MaterialTheme.typography.titleSmall,
+        color = MaterialTheme.colorScheme.onSurface
+    )
+    Spacer(modifier = Modifier.height(8.dp))
+    OutlinedTextField(
+        value = keyValue,
+        onValueChange = onKeyChange,
+        label = { Text("$title API Key") },
+        modifier = Modifier.fillMaxWidth(),
+        visualTransformation = PasswordVisualTransformation(),
+        singleLine = true
+    )
+    Spacer(modifier = Modifier.height(8.dp))
+    ExposedDropdownMenuBox(
+        expanded = expanded,
+        onExpandedChange = { expanded = it }
+    ) {
+        OutlinedTextField(
+            value = modelValue,
+            onValueChange = onModelChange,
+            label = { Text("$title Model") },
+            modifier = Modifier.fillMaxWidth().menuAnchor(),
+            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
+            colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors()
+        )
+        ExposedDropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false }
+        ) {
+            availableModels.forEach { model ->
+                DropdownMenuItem(
+                    text = { Text(model) },
+                    onClick = {
+                        onModelChange(model)
+                        expanded = false
+                    }
+                )
+            }
+        }
+    }
+    Spacer(modifier = Modifier.height(16.dp))
+}
 
 /**
  * Composable screen for managing agent settings.
@@ -49,6 +115,11 @@ fun SettingsScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val scrollState = rememberScrollState()
+
+    val openAiModels = KoogModelMapper.getOpenAIModelIdList()
+    val anthropicModels = KoogModelMapper.getAnthropicModelIdList()
+    val googleModels = KoogModelMapper.getGoogleModelIdList()
+    val deepSeekModels = KoogModelMapper.getDeepSeekModelIdList()
 
     Scaffold(
         topBar = {
@@ -174,61 +245,58 @@ fun SettingsScreen(
                 value = uiState.maxContextLength.toFloat(),
                 onValueChange = { viewModel.updateMaxContextLength(it.roundToInt()) },
                 valueRange = 512f..8192f,
-                steps = 14 // 512 step increments roughly
+                steps = 14
             )
 
             Spacer(modifier = Modifier.height(24.dp))
             HorizontalDivider()
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Section: External Providers (API Keys)
+            // Section: External Providers (API Keys & Models)
             Text(
-                text = "External Providers (API Keys)",
+                text = "External Providers (API Keys & Models)",
                 style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.primary
             )
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(16.dp))
 
-            OutlinedTextField(
-                value = uiState.openAiKey,
-                onValueChange = { viewModel.updateOpenAiKey(it) },
-                label = { Text("OpenAI API Key") },
-                modifier = Modifier.fillMaxWidth(),
-                visualTransformation = PasswordVisualTransformation(),
-                singleLine = true
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-
-            OutlinedTextField(
-                value = uiState.anthropicKey,
-                onValueChange = { viewModel.updateAnthropicKey(it) },
-                label = { Text("Anthropic API Key") },
-                modifier = Modifier.fillMaxWidth(),
-                visualTransformation = PasswordVisualTransformation(),
-                singleLine = true
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-
-            OutlinedTextField(
-                value = uiState.googleKey,
-                onValueChange = { viewModel.updateGoogleKey(it) },
-                label = { Text("Google API Key") },
-                modifier = Modifier.fillMaxWidth(),
-                visualTransformation = PasswordVisualTransformation(),
-                singleLine = true
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-
-            OutlinedTextField(
-                value = uiState.deepSeekKey,
-                onValueChange = { viewModel.updateDeepSeekKey(it) },
-                label = { Text("DeepSeek API Key") },
-                modifier = Modifier.fillMaxWidth(),
-                visualTransformation = PasswordVisualTransformation(),
-                singleLine = true
+            ProviderSettingsSection(
+                title = "OpenAI",
+                keyValue = uiState.openAiKey,
+                onKeyChange = { viewModel.updateOpenAiKey(it) },
+                modelValue = uiState.openAiModel,
+                onModelChange = { viewModel.updateOpenAiModel(it) },
+                availableModels = openAiModels
             )
 
-            Spacer(modifier = Modifier.height(24.dp))
+            ProviderSettingsSection(
+                title = "Anthropic",
+                keyValue = uiState.anthropicKey,
+                onKeyChange = { viewModel.updateAnthropicKey(it) },
+                modelValue = uiState.anthropicModel,
+                onModelChange = { viewModel.updateAnthropicModel(it) },
+                availableModels = anthropicModels
+            )
+
+            ProviderSettingsSection(
+                title = "Google",
+                keyValue = uiState.googleKey,
+                onKeyChange = { viewModel.updateGoogleKey(it) },
+                modelValue = uiState.googleModel,
+                onModelChange = { viewModel.updateGoogleModel(it) },
+                availableModels = googleModels
+            )
+
+            ProviderSettingsSection(
+                title = "DeepSeek",
+                keyValue = uiState.deepSeekKey,
+                onKeyChange = { viewModel.updateDeepSeekKey(it) },
+                modelValue = uiState.deepSeekModel,
+                onModelChange = { viewModel.updateDeepSeekModel(it) },
+                availableModels = deepSeekModels
+            )
+
+            Spacer(modifier = Modifier.height(8.dp))
             HorizontalDivider()
             Spacer(modifier = Modifier.height(16.dp))
 
@@ -244,6 +312,23 @@ fun SettingsScreen(
                 onValueChange = { viewModel.updateOllamaBaseUrl(it) },
                 label = { Text("Ollama Base URL (e.g., http://192.168.1.100:11434)") },
                 modifier = Modifier.fillMaxWidth(),
+                singleLine = true
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            OutlinedTextField(
+                value = uiState.ollamaModel,
+                onValueChange = { viewModel.updateOllamaModel(it) },
+                label = { Text("Ollama Model Name") },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            OutlinedTextField(
+                value = uiState.ollamaContextWindow,
+                onValueChange = { viewModel.updateOllamaContextWindow(it) },
+                label = { Text("Ollama Context Window Size") },
+                modifier = Modifier.fillMaxWidth(),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 singleLine = true
             )
 

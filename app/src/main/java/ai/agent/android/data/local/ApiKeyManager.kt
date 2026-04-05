@@ -71,102 +71,108 @@ class ApiKeyManager @Inject constructor(
 
     private object Keys {
         const val OPENAI_KEY = "openai_api_key"
+        const val OPENAI_MODEL = "openai_model"
         const val ANTHROPIC_KEY = "anthropic_api_key"
+        const val ANTHROPIC_MODEL = "anthropic_model"
         const val GOOGLE_KEY = "google_api_key"
+        const val GOOGLE_MODEL = "google_model"
         const val DEEPSEEK_KEY = "deepseek_api_key"
+        const val DEEPSEEK_MODEL = "deepseek_model"
         const val OLLAMA_URL = "ollama_base_url"
+        const val OLLAMA_MODEL = "ollama_model"
+        const val OLLAMA_CONTEXT = "ollama_context"
     }
 
     // Mutable state flows to allow reactive observing of key changes
     private val _openAIKeyFlow by lazy { MutableStateFlow(sharedPreferences.getString(Keys.OPENAI_KEY, null)) }
+    private val _openAIModelFlow by lazy { MutableStateFlow(sharedPreferences.getString(Keys.OPENAI_MODEL, null)) }
     private val _anthropicKeyFlow by lazy { MutableStateFlow(sharedPreferences.getString(Keys.ANTHROPIC_KEY, null)) }
+    private val _anthropicModelFlow by lazy { MutableStateFlow(sharedPreferences.getString(Keys.ANTHROPIC_MODEL, null)) }
     private val _googleKeyFlow by lazy { MutableStateFlow(sharedPreferences.getString(Keys.GOOGLE_KEY, null)) }
+    private val _googleModelFlow by lazy { MutableStateFlow(sharedPreferences.getString(Keys.GOOGLE_MODEL, null)) }
     private val _deepSeekKeyFlow by lazy { MutableStateFlow(sharedPreferences.getString(Keys.DEEPSEEK_KEY, null)) }
+    private val _deepSeekModelFlow by lazy { MutableStateFlow(sharedPreferences.getString(Keys.DEEPSEEK_MODEL, null)) }
     private val _ollamaUrlFlow by lazy { MutableStateFlow(sharedPreferences.getString(Keys.OLLAMA_URL, null)) }
+    private val _ollamaModelFlow by lazy { MutableStateFlow(sharedPreferences.getString(Keys.OLLAMA_MODEL, null)) }
+    private val _ollamaContextFlow by lazy { MutableStateFlow(sharedPreferences.getInt(Keys.OLLAMA_CONTEXT, 4096)) }
 
-    /**
-     * Retrieves the OpenAI API key flow.
-     * 
-     * @return A flow emitting the current OpenAI API key or null if not set.
-     */
     override fun getOpenAIKey(): Flow<String?> = _openAIKeyFlow.asStateFlow()
 
-    /**
-     * Sets or removes the OpenAI API key securely.
-     * 
-     * @param key The new API key, or null to remove it.
-     */
     override suspend fun setOpenAIKey(key: String?) {
         saveString(Keys.OPENAI_KEY, key)
         _openAIKeyFlow.value = key
     }
 
-    /**
-     * Retrieves the Anthropic API key flow.
-     * 
-     * @return A flow emitting the current Anthropic API key or null if not set.
-     */
+    override fun getOpenAIModel(): Flow<String?> = _openAIModelFlow.asStateFlow()
+
+    override suspend fun setOpenAIModel(model: String?) {
+        saveString(Keys.OPENAI_MODEL, model)
+        _openAIModelFlow.value = model
+    }
+
     override fun getAnthropicKey(): Flow<String?> = _anthropicKeyFlow.asStateFlow()
 
-    /**
-     * Sets or removes the Anthropic API key securely.
-     * 
-     * @param key The new API key, or null to remove it.
-     */
     override suspend fun setAnthropicKey(key: String?) {
         saveString(Keys.ANTHROPIC_KEY, key)
         _anthropicKeyFlow.value = key
     }
 
-    /**
-     * Retrieves the Google API key flow.
-     * 
-     * @return A flow emitting the current Google API key or null if not set.
-     */
+    override fun getAnthropicModel(): Flow<String?> = _anthropicModelFlow.asStateFlow()
+
+    override suspend fun setAnthropicModel(model: String?) {
+        saveString(Keys.ANTHROPIC_MODEL, model)
+        _anthropicModelFlow.value = model
+    }
+
     override fun getGoogleKey(): Flow<String?> = _googleKeyFlow.asStateFlow()
 
-    /**
-     * Sets or removes the Google API key securely.
-     * 
-     * @param key The new API key, or null to remove it.
-     */
     override suspend fun setGoogleKey(key: String?) {
         saveString(Keys.GOOGLE_KEY, key)
         _googleKeyFlow.value = key
     }
 
-    /**
-     * Retrieves the DeepSeek API key flow.
-     * 
-     * @return A flow emitting the current DeepSeek API key or null if not set.
-     */
+    override fun getGoogleModel(): Flow<String?> = _googleModelFlow.asStateFlow()
+
+    override suspend fun setGoogleModel(model: String?) {
+        saveString(Keys.GOOGLE_MODEL, model)
+        _googleModelFlow.value = model
+    }
+
     override fun getDeepSeekKey(): Flow<String?> = _deepSeekKeyFlow.asStateFlow()
 
-    /**
-     * Sets or removes the DeepSeek API key securely.
-     * 
-     * @param key The new API key, or null to remove it.
-     */
     override suspend fun setDeepSeekKey(key: String?) {
         saveString(Keys.DEEPSEEK_KEY, key)
         _deepSeekKeyFlow.value = key
     }
 
-    /**
-     * Retrieves the Ollama Base URL flow.
-     * 
-     * @return A flow emitting the current Ollama Base URL or null if not set.
-     */
+    override fun getDeepSeekModel(): Flow<String?> = _deepSeekModelFlow.asStateFlow()
+
+    override suspend fun setDeepSeekModel(model: String?) {
+        saveString(Keys.DEEPSEEK_MODEL, model)
+        _deepSeekModelFlow.value = model
+    }
+
     override fun getOllamaBaseUrl(): Flow<String?> = _ollamaUrlFlow.asStateFlow()
 
-    /**
-     * Sets or removes the Ollama Base URL securely.
-     * 
-     * @param url The new base URL, or null to remove it.
-     */
     override suspend fun setOllamaBaseUrl(url: String?) {
         saveString(Keys.OLLAMA_URL, url)
         _ollamaUrlFlow.value = url
+    }
+
+    override fun getOllamaModelName(): Flow<String?> = _ollamaModelFlow.asStateFlow()
+
+    override suspend fun setOllamaModelName(model: String?) {
+        saveString(Keys.OLLAMA_MODEL, model)
+        _ollamaModelFlow.value = model
+    }
+
+    override fun getOllamaContextWindowSize(): Flow<Int> = _ollamaContextFlow.asStateFlow()
+
+    override suspend fun setOllamaContextWindowSize(size: Int) {
+        sharedPreferences.edit {
+            putInt(Keys.OLLAMA_CONTEXT, size)
+        }
+        _ollamaContextFlow.value = size
     }
 
     private fun saveString(key: String, value: String?) {

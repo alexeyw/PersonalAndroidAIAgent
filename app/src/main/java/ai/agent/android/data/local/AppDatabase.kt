@@ -35,7 +35,7 @@ import ai.agent.android.data.local.dao.PromptTemplateDao
         ConnectionEntity::class,
         PromptTemplateEntity::class
     ],
-    version = 10,
+    version = 13,
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -135,6 +135,16 @@ abstract class AppDatabase : RoomDatabase() {
                 
                 // For any other prompts that somehow ended up as 'Default', reassign them to CUSTOM or something safe, or leave them. 
                 // We'll leave the rest as is, but users can edit them.
+            }
+        }
+
+        /**
+         * Migration from version 12 to 13.
+         * Adds `modelPath` column to `pipeline_nodes` table.
+         */
+        val MIGRATION_12_13 = object : Migration(12, 13) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `pipeline_nodes` ADD COLUMN `modelPath` TEXT")
             }
         }
     }
