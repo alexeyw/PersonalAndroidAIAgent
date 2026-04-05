@@ -15,6 +15,7 @@ import androidx.room.PrimaryKey
  * @property y The Y coordinate of the node on the canvas.
  * @property label The display label of the node.
  * @property toolName The optional tool name associated with this node.
+ * @property modelPath An optional path to a specific model file (.tflite) for this node.
  * @property conditionComplexity Threshold for task complexity.
  * @property conditionKeywords Comma-separated keywords for condition.
  * @property conditionPrompt Free-form prompt for condition classification.
@@ -41,6 +42,7 @@ data class NodeEntity(
     val y: Float,
     val label: String,
     val toolName: String? = null,
+    val modelPath: String? = null,
     val conditionComplexity: Int? = null,
     val conditionKeywords: String? = null,
     val conditionPrompt: String? = null,

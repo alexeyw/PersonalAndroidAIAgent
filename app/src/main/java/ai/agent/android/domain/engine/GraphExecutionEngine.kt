@@ -335,11 +335,13 @@ class GraphExecutionEngine @Inject constructor(
                 val fullPrompt = "$nodeSystemPrompt\n\nUSER: $inputText\nAGENT: "
                 
                 val loadResult = loadModelUseCase(node.modelPath)
-                val responseStream = if (loadResult is Result.Error) {
-                    flowOf("Error loading local model for system node: ${loadResult.message}")
-                } else {
-                    llmEngine.generateResponseStream(fullPrompt)
+                if (loadResult is Result.Error) {
+                    val errorMsg = "Error loading local model for system node: ${loadResult.message}"
+                    emit(AgentOrchestratorState.Error(errorMsg))
+                    emit(NodeExecutionResult(error = errorMsg))
+                    return@flow
                 }
+                val responseStream = llmEngine.generateResponseStream(fullPrompt)
                 val accumulatedResponse = StringBuilder()
                 
                 try {
