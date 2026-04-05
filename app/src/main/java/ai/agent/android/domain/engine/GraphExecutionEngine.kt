@@ -1,6 +1,7 @@
 package ai.agent.android.domain.engine
 
 import ai.agent.android.data.engine.KoogClientFactory
+import ai.agent.android.data.engine.KoogModelMapper
 import ai.agent.android.domain.models.*
 import ai.agent.android.domain.repositories.*
 import ai.agent.android.domain.services.ApprovalNotifier
@@ -9,6 +10,10 @@ import ai.agent.android.domain.usecases.GetContextWindowUseCase
 import ai.agent.android.domain.usecases.RetrieveRelevantMemoryUseCase
 import ai.agent.android.domain.usecases.LoadModelUseCase
 import ai.koog.prompt.dsl.prompt
+import ai.koog.prompt.executor.clients.anthropic.AnthropicModels
+import ai.koog.prompt.executor.clients.deepseek.DeepSeekModels
+import ai.koog.prompt.executor.clients.google.GoogleModels
+import ai.koog.prompt.executor.clients.openai.OpenAIModels
 import ai.koog.prompt.llm.LLModel
 import ai.koog.prompt.streaming.StreamFrame
 import kotlinx.coroutines.CompletableDeferred
@@ -261,26 +266,26 @@ class GraphExecutionEngine @Inject constructor(
                     }
                     NodeType.OPENAI -> {
                         val client = koogClientFactory.createOpenAIExecutor()
-                        val modelName = apiKeyRepository.getOpenAIModel().first() ?: "gpt-4o"
-                        client?.executeStreaming(prompt("default") { user(fullPrompt) }, ai.agent.android.data.engine.KoogModelMapper.getOpenAIModel(modelName))
+                        val modelName = apiKeyRepository.getOpenAIModel().first() ?: OpenAIModels.Chat.GPT5_4.id
+                        client?.executeStreaming(prompt("default") { user(fullPrompt) }, KoogModelMapper.getOpenAIModel(modelName))
                             ?.mapNotNull { (it as? StreamFrame.TextDelta)?.text } ?: flowOf("Error: OpenAI not configured")
                     }
                     NodeType.ANTHROPIC -> {
                         val client = koogClientFactory.createAnthropicExecutor()
-                        val modelName = apiKeyRepository.getAnthropicModel().first() ?: "claude-sonnet-4-5"
-                        client?.executeStreaming(prompt("default") { user(fullPrompt) }, ai.agent.android.data.engine.KoogModelMapper.getAnthropicModel(modelName))
+                        val modelName = apiKeyRepository.getAnthropicModel().first() ?: AnthropicModels.Sonnet_4_5.id
+                        client?.executeStreaming(prompt("default") { user(fullPrompt) }, KoogModelMapper.getAnthropicModel(modelName))
                             ?.mapNotNull { (it as? StreamFrame.TextDelta)?.text } ?: flowOf("Error: Anthropic not configured")
                     }
                     NodeType.GOOGLE -> {
                         val client = koogClientFactory.createGoogleExecutor()
-                        val modelName = apiKeyRepository.getGoogleModel().first() ?: "gemini-3-flash-preview"
-                        client?.executeStreaming(prompt("default") { user(fullPrompt) }, ai.agent.android.data.engine.KoogModelMapper.getGoogleModel(modelName))
+                        val modelName = apiKeyRepository.getGoogleModel().first() ?: GoogleModels.Gemini3_Flash_Preview.id
+                        client?.executeStreaming(prompt("default") { user(fullPrompt) }, KoogModelMapper.getGoogleModel(modelName))
                             ?.mapNotNull { (it as? StreamFrame.TextDelta)?.text } ?: flowOf("Error: Google not configured")
                     }
                     NodeType.DEEPSEEK -> {
                         val client = koogClientFactory.createDeepSeekExecutor()
-                        val modelName = apiKeyRepository.getDeepSeekModel().first() ?: "deepseek-chat"
-                        client?.executeStreaming(prompt("default") { user(fullPrompt) }, ai.agent.android.data.engine.KoogModelMapper.getDeepSeekModel(modelName))
+                        val modelName = apiKeyRepository.getDeepSeekModel().first() ?: DeepSeekModels.DeepSeekChat.id
+                        client?.executeStreaming(prompt("default") { user(fullPrompt) }, KoogModelMapper.getDeepSeekModel(modelName))
                             ?.mapNotNull { (it as? StreamFrame.TextDelta)?.text } ?: flowOf("Error: DeepSeek not configured")
                     }
                     else -> flowOf("Error: Unknown LLM provider")

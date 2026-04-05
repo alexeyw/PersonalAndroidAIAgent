@@ -1,5 +1,6 @@
 package ai.agent.android.presentation.ui.settings
 
+import ai.agent.android.data.engine.KoogModelMapper
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -115,10 +116,10 @@ fun SettingsScreen(
     val uiState by viewModel.uiState.collectAsState()
     val scrollState = rememberScrollState()
 
-    val openAiModels = listOf("gpt-4o", "gpt-4o-mini", "gpt-4.1", "o1", "o3-mini", "gpt-5")
-    val anthropicModels = listOf("claude-3-haiku", "claude-haiku-4-5", "claude-sonnet-4-5", "claude-opus-4-6")
-    val googleModels = listOf("gemini-2.0-flash", "gemini-2.5-pro", "gemini-3-flash-preview", "gemini-3-pro-preview")
-    val deepSeekModels = listOf("deepseek-chat", "deepseek-reasoner")
+    val openAiModels = KoogModelMapper.getOpenAIModelIdList()
+    val anthropicModels = KoogModelMapper.getAnthropicModelIdList()
+    val googleModels = KoogModelMapper.getGoogleModelIdList()
+    val deepSeekModels = KoogModelMapper.getDeepSeekModelIdList()
 
     Scaffold(
         topBar = {
