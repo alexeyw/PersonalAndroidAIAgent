@@ -23,7 +23,8 @@ class ToolRepositoryImpl @Inject constructor(
     private val localAppFunctionManager: LocalAppFunctionManager,
     private val scheduleTaskUseCase: ScheduleTaskUseCase,
     private val delegateTaskTool: ai.agent.android.data.tools.local.DelegateTaskTool,
-    private val apiKeyRepository: ApiKeyRepository
+    private val apiKeyRepository: ApiKeyRepository,
+    private val searchTool: ai.agent.android.data.tools.local.SearchTool
 ) : ToolRepository {
 
     private val mcpClients = mutableMapOf<String, McpClient>()
@@ -52,8 +53,10 @@ class ToolRepositoryImpl @Inject constructor(
             """.trimIndent()
         )
 
+        val baseTools = mutableListOf(scheduleTool, searchTool.asAgentTool())
+
         if (availableModels.isEmpty()) {
-            return listOf(scheduleTool)
+            return baseTools
         }
 
         val modelsString = availableModels.joinToString(", ")
@@ -73,7 +76,8 @@ class ToolRepositoryImpl @Inject constructor(
             """.trimIndent()
         )
         
-        return listOf(scheduleTool, delegateTool)
+        baseTools.add(delegateTool)
+        return baseTools
     }
 
     private suspend fun syncMcpClients() {
@@ -165,6 +169,15 @@ class ToolRepositoryImpl @Inject constructor(
                 val taskDescription = json.getString("taskDescription")
                 val targetModel = if (json.has("targetModel")) json.getString("targetModel") else "anthropic"
                 return delegateTaskTool.executeDelegation(taskDescription, targetModel)
+            }
+            
+            if (name == ai.agent.android.data.tools.local.SearchTool.TOOL_NAME) {
+                val json = JSONObject(arguments)
+                val query = json.optString("query", "")
+                if (query.isBlank()) {
+                    return "Error: Missing 'query' argument."
+                }
+                return searchTool.executeSearch(query)
             }
             
             return "Local tool executed: \$name with \$arguments" // Dummy implementation

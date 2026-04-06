@@ -234,24 +234,20 @@ class OrchestratorViewModelTest {
     }
 
     @Test
-    fun `applyBasePreset creates input liteRT and output nodes with connections`() {
+    fun `applyBasePreset creates complex routing pipeline with nodes and connections`() {
         viewModel.applyBasePreset()
         
         val state = viewModel.uiState.value
         val nodes = state.currentPipeline.nodes
         val connections = state.currentPipeline.connections
         
-        assertEquals(3, nodes.size)
-        assertEquals(NodeType.INPUT, nodes[0].type)
-        assertEquals(NodeType.LITE_RT, nodes[1].type)
-        assertEquals(NodeType.OUTPUT, nodes[2].type)
+        assertEquals(10, nodes.size)
+        assertEquals(NodeType.INPUT, nodes.find { it.type == NodeType.INPUT }?.type)
+        assertEquals(NodeType.INTENT_ROUTER, nodes.find { it.type == NodeType.INTENT_ROUTER }?.type)
+        assertEquals(NodeType.DECOMPOSITION, nodes.find { it.type == NodeType.DECOMPOSITION }?.type)
+        assertEquals(NodeType.OUTPUT, nodes.find { it.type == NodeType.OUTPUT }?.type)
         
-        assertEquals(2, connections.size)
-        assertEquals(nodes[0].id, connections[0].sourceNodeId)
-        assertEquals(nodes[1].id, connections[0].targetNodeId)
-        assertEquals(nodes[1].id, connections[1].sourceNodeId)
-        assertEquals(nodes[2].id, connections[1].targetNodeId)
-        
+        assertEquals(12, connections.size)
         assertEquals("Base Preset", state.currentPipeline.name)
     }
 
@@ -279,8 +275,8 @@ class OrchestratorViewModelTest {
         
         val state = viewModel.uiState.value
         assertEquals("Base Preset", state.currentPipeline.name)
-        assertEquals(3, state.currentPipeline.nodes.size)
-        assertEquals(2, state.currentPipeline.connections.size)
+        assertEquals(10, state.currentPipeline.nodes.size)
+        assertEquals(12, state.currentPipeline.connections.size)
         assertEquals(null, state.errorMessage)
     }
 

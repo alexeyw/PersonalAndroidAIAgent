@@ -25,6 +25,7 @@ class ToolRepositoryImplTest {
     private val scheduleTaskUseCase: ai.agent.android.domain.usecases.ScheduleTaskUseCase = mockk()
     private val delegateTaskTool: ai.agent.android.data.tools.local.DelegateTaskTool = mockk()
     private val apiKeyRepository: ai.agent.android.domain.repositories.ApiKeyRepository = mockk()
+    private val searchTool: ai.agent.android.data.tools.local.SearchTool = mockk(relaxed = true)
     
     private lateinit var repository: ToolRepositoryImpl
 
@@ -42,8 +43,10 @@ class ToolRepositoryImplTest {
         every { apiKeyRepository.getGoogleKey() } returns flowOf(null)
         every { apiKeyRepository.getDeepSeekKey() } returns flowOf(null)
         every { apiKeyRepository.getOllamaBaseUrl() } returns flowOf(null)
+
+        every { searchTool.asAgentTool() } returns AgentTool("search_tool", "desc", "{}")
         
-        repository = ToolRepositoryImpl(settingsRepository, mcpClientFactory, localAppFunctionManager, scheduleTaskUseCase, delegateTaskTool, apiKeyRepository)
+        repository = ToolRepositoryImpl(settingsRepository, mcpClientFactory, localAppFunctionManager, scheduleTaskUseCase, delegateTaskTool, apiKeyRepository, searchTool)
     }
 
     @Test
