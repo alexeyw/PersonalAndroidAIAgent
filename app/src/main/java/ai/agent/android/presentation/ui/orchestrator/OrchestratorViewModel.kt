@@ -295,23 +295,63 @@ class OrchestratorViewModel @Inject constructor(
     }
 
     /**
-     * Applies the base preset consisting of Input -> LiteRT -> Output nodes.
+     * Applies the base preset consisting of a complex task routing pipeline.
      */
     fun applyBasePreset() {
-        val inputNode = NodeModel(id = UUID.randomUUID().toString(), type = NodeType.INPUT, x = 100f, y = 300f)
-        val liteRtNode = NodeModel(id = UUID.randomUUID().toString(), type = NodeType.LITE_RT, x = 400f, y = 300f)
-        val outputNode = NodeModel(id = UUID.randomUUID().toString(), type = NodeType.OUTPUT, x = 700f, y = 300f)
+        val inputNode = NodeModel(id = UUID.randomUUID().toString(), type = NodeType.INPUT, label = "Input", x = 100f, y = 300f)
+        val intentRouterNode = NodeModel(id = UUID.randomUUID().toString(), type = NodeType.INTENT_ROUTER, label = "Classifier", x = 300f, y = 300f)
+        
+        // Simple Branch
+        val liteRtNode = NodeModel(id = UUID.randomUUID().toString(), type = NodeType.LITE_RT, label = "Local LLM", x = 500f, y = 100f)
+        
+        // Data Branch
+        val searchToolNode = NodeModel(id = UUID.randomUUID().toString(), type = NodeType.TOOL, label = "Search Tool", toolName = "search_tool", x = 500f, y = 250f)
+        
+        // Complex Branch
+        val cloudNode = NodeModel(id = UUID.randomUUID().toString(), type = NodeType.GOOGLE, label = "Google API", x = 500f, y = 400f)
+        
+        // Task Branch
+        val decompositionNode = NodeModel(id = UUID.randomUUID().toString(), type = NodeType.DECOMPOSITION, label = "Decompose", x = 500f, y = 550f)
+        val queueProcessorNode = NodeModel(id = UUID.randomUUID().toString(), type = NodeType.QUEUE_PROCESSOR, label = "Queue", x = 700f, y = 550f)
+        val taskToolNode = NodeModel(id = UUID.randomUUID().toString(), type = NodeType.LITE_RT, label = "Execute Subtask", x = 900f, y = 550f)
+        val summaryNode = NodeModel(id = UUID.randomUUID().toString(), type = NodeType.SUMMARY, label = "Summary", x = 1100f, y = 550f)
 
-        val connection1 = ConnectionModel(id = UUID.randomUUID().toString(), sourceNodeId = inputNode.id, targetNodeId = liteRtNode.id)
-        val connection2 = ConnectionModel(id = UUID.randomUUID().toString(), sourceNodeId = liteRtNode.id, targetNodeId = outputNode.id)
+        val outputNode = NodeModel(id = UUID.randomUUID().toString(), type = NodeType.OUTPUT, label = "Output", x = 1300f, y = 300f)
+
+        val nodesList = listOf(inputNode, intentRouterNode, liteRtNode, searchToolNode, cloudNode, decompositionNode, queueProcessorNode, taskToolNode, summaryNode, outputNode)
+        
+        val connectionsList = listOf(
+            ConnectionModel(id = UUID.randomUUID().toString(), sourceNodeId = inputNode.id, targetNodeId = intentRouterNode.id),
+            
+            // Routing edges
+            ConnectionModel(id = UUID.randomUUID().toString(), sourceNodeId = intentRouterNode.id, targetNodeId = liteRtNode.id, label = "Simple"),
+            ConnectionModel(id = UUID.randomUUID().toString(), sourceNodeId = intentRouterNode.id, targetNodeId = searchToolNode.id, label = "Data"),
+            ConnectionModel(id = UUID.randomUUID().toString(), sourceNodeId = intentRouterNode.id, targetNodeId = cloudNode.id, label = "Complex"),
+            ConnectionModel(id = UUID.randomUUID().toString(), sourceNodeId = intentRouterNode.id, targetNodeId = decompositionNode.id, label = "Task"),
+            
+            // Simple Path
+            ConnectionModel(id = UUID.randomUUID().toString(), sourceNodeId = liteRtNode.id, targetNodeId = outputNode.id),
+            
+            // Data Path
+            ConnectionModel(id = UUID.randomUUID().toString(), sourceNodeId = searchToolNode.id, targetNodeId = outputNode.id),
+            
+            // Complex Path
+            ConnectionModel(id = UUID.randomUUID().toString(), sourceNodeId = cloudNode.id, targetNodeId = outputNode.id),
+            
+            // Task Path
+            ConnectionModel(id = UUID.randomUUID().toString(), sourceNodeId = decompositionNode.id, targetNodeId = queueProcessorNode.id),
+            ConnectionModel(id = UUID.randomUUID().toString(), sourceNodeId = queueProcessorNode.id, targetNodeId = taskToolNode.id),
+            ConnectionModel(id = UUID.randomUUID().toString(), sourceNodeId = taskToolNode.id, targetNodeId = summaryNode.id),
+            ConnectionModel(id = UUID.randomUUID().toString(), sourceNodeId = summaryNode.id, targetNodeId = outputNode.id)
+        )
 
         _uiState.update { state ->
             state.copy(
                 currentPipeline = PipelineGraph(
                     id = UUID.randomUUID().toString(),
                     name = "Base Preset",
-                    nodes = listOf(inputNode, liteRtNode, outputNode),
-                    connections = listOf(connection1, connection2)
+                    nodes = nodesList,
+                    connections = connectionsList
                 )
             )
         }
