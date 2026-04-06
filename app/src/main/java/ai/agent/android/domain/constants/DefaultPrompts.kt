@@ -23,7 +23,7 @@ object DefaultPrompts {
         If you don't need to use a tool, just answer the user directly.
     """.trimIndent()
 
-    const val INTENT_ROUTER_PROMPT = "You are an Intent Router. Analyze the user input and determine if it's a message or task. Output a single keyword representing the category."
+    const val INTENT_ROUTER_PROMPT = "You are an Intent Router. Analyze the user input and determine its category. Output strictly ONE of the following keywords:\n- Simple (if it's a simple chat message or greeting)\n- Data (if it requires searching the web or current data)\n- Complex (if it requires complex coding, math, or deep reasoning)\n- Task (if it's a multi-step task or requires executing an action/tool)"
     
     const val DECOMPOSITION_PROMPT = "You are a Task Decomposer. Break down the given complex task into a list of simpler, actionable subtasks. Output the result as a JSON array of strings."
     

@@ -57,6 +57,7 @@ This file maps the contents of the main application package.
       - `AgentAppFunctionService.kt` - Service for app functions.
       - `DelegateTaskTool.kt` - Task delegation tool.
       - `LocalAppFunctionManager.kt` - Manager for local app functions.
+      - `SearchTool.kt` - Local web search tool.
 - `di/` - Dependency Injection configurations (Hilt).
   - `AppModule.kt` - General app-level DI module.
   - `DataModule.kt` - Data layer DI module.
