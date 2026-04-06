@@ -50,8 +50,8 @@ class SearchTool @Inject constructor() {
      */
     suspend fun executeSearch(query: String): String = withContext(Dispatchers.IO) {
         try {
-            val encodedQuery = URLEncoder.encode(query, "UTF-8")
-            val urlString = "https://en.wikipedia.org/w/api.php?action=query&format=json&prop=extracts&exintro=true&explaintext=true&titles=${encodedQuery}"
+            val encodedQuery = URLEncoder.encode(query, Charsets.UTF_8.name())
+            val urlString = "https://en.wikipedia.org/w/api.php?action=query&format=json&prop=extracts&exintro=true&explaintext=true&redirects=1&titles=${encodedQuery}"
             val url = URL(urlString)
             val connection = url.openConnection() as HttpURLConnection
             connection.requestMethod = "GET"
