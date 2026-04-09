@@ -5,6 +5,7 @@ import ai.agent.android.domain.models.AgentOrchestratorState
 import ai.agent.android.domain.models.ChatMessage
 import ai.agent.android.domain.models.NodeExecutionResult
 import ai.agent.android.domain.models.NodeModel
+import ai.agent.android.domain.models.Result
 import ai.agent.android.domain.models.Role
 import ai.agent.android.domain.repositories.ChatRepository
 import ai.agent.android.domain.repositories.MetricsRepository
@@ -57,7 +58,7 @@ class LiteRtNodeExecutor @Inject constructor(
         val startTime = System.currentTimeMillis()
         
         val loadResult = loadModelUseCase(node.modelPath)
-        if (loadResult.javaClass.simpleName == "Error") {
+        if (loadResult is Result.Error) {
             emit(AgentOrchestratorState.Error("Error loading local model"))
             emit(NodeExecutionResult(error = "Error loading local model"))
             return@flow

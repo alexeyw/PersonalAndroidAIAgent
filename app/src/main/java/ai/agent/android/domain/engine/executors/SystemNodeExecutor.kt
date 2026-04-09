@@ -6,6 +6,7 @@ import ai.agent.android.domain.models.ChatMessage
 import ai.agent.android.domain.models.NodeExecutionResult
 import ai.agent.android.domain.models.NodeModel
 import ai.agent.android.domain.models.NodeType
+import ai.agent.android.domain.models.Result
 import ai.agent.android.domain.models.Role
 import ai.agent.android.domain.repositories.ChatRepository
 import ai.agent.android.domain.usecases.LoadModelUseCase
@@ -29,10 +30,7 @@ class SystemNodeExecutor @Inject constructor(
         val fullPrompt = "$nodeSystemPrompt\n\nUSER: $inputText\nAGENT: "
         
         val loadResult = loadModelUseCase(node.modelPath)
-        // Note: loadResult is checked for is Result.Error in GraphExecutionEngine, but Result might be an interface or sealed class.
-        // If it throws an error or returns a specific class, we should check its package.
-        // Assuming loadResult has an `isError` or we check via its type. We'll use the exact code from GEE.
-        if (loadResult.javaClass.simpleName == "Error") {
+        if (loadResult is Result.Error) {
             val errorMsg = "Error loading local model for system node"
             emit(AgentOrchestratorState.Error(errorMsg))
             emit(NodeExecutionResult(error = errorMsg))
