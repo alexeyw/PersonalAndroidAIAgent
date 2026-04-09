@@ -1,6 +1,7 @@
 package ai.agent.android.domain.engine
 
 import ai.agent.android.data.engine.KoogClientFactory
+import ai.agent.android.domain.engine.executors.*
 import ai.agent.android.domain.models.*
 import ai.agent.android.domain.repositories.*
 import ai.agent.android.domain.services.ApprovalNotifier
@@ -53,11 +54,37 @@ class GraphExecutionEngineTest {
         evaluateIfConditionUseCase = mockk()
         loadModelUseCase = mockk()
 
-        engine = GraphExecutionEngine(
-            llmEngine, toolRepository, chatRepository, getContextWindowUseCase,
-            retrieveRelevantMemoryUseCase, settingsRepository, apiKeyRepository, metricsRepository,
-            approvalNotifier, koogClientFactory, evaluateIfConditionUseCase, loadModelUseCase
+        val inputNodeExecutor = InputNodeExecutor()
+        val outputNodeExecutor = OutputNodeExecutor()
+        val ifConditionNodeExecutor = IfConditionNodeExecutor(evaluateIfConditionUseCase)
+        val queueProcessorNodeExecutor = QueueProcessorNodeExecutor()
+        
+        val toolNodeExecutor = ToolNodeExecutor(
+            toolRepository, settingsRepository, approvalNotifier, chatRepository
         )
+        
+        val liteRtNodeExecutor = LiteRtNodeExecutor(
+            llmEngine, toolRepository, chatRepository, getContextWindowUseCase,
+            retrieveRelevantMemoryUseCase, settingsRepository, metricsRepository, loadModelUseCase
+        )
+        
+        val cloudLlmNodeExecutor = CloudLlmNodeExecutor(
+            toolRepository, chatRepository, getContextWindowUseCase,
+            retrieveRelevantMemoryUseCase, settingsRepository, apiKeyRepository,
+            metricsRepository, koogClientFactory
+        )
+        
+        val systemNodeExecutor = SystemNodeExecutor(
+            llmEngine, loadModelUseCase, chatRepository
+        )
+
+        val nodeExecutorFactory = NodeExecutorFactory(
+            inputNodeExecutor, outputNodeExecutor, ifConditionNodeExecutor,
+            toolNodeExecutor, liteRtNodeExecutor, cloudLlmNodeExecutor,
+            systemNodeExecutor, queueProcessorNodeExecutor
+        )
+
+        engine = GraphExecutionEngine(nodeExecutorFactory, toolNodeExecutor)
 
         coEvery { getContextWindowUseCase(sessionId) } returns ""
         coEvery { retrieveRelevantMemoryUseCase(any()) } returns emptyList()
@@ -65,7 +92,8 @@ class GraphExecutionEngineTest {
         every { settingsRepository.toolUsageInstruction } returns flowOf("")
         every { settingsRepository.requiresUserConfirmation } returns flowOf(false)
         coEvery { toolRepository.getAvailableTools() } returns emptyList()
-        coEvery { loadModelUseCase(any()) } returns Result.Success(Unit)
+        
+        coEvery { loadModelUseCase(any()) } returns ai.agent.android.domain.models.Result.Success(Unit)
     }
 
     @Test
