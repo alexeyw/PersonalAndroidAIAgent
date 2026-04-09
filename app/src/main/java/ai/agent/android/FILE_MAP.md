@@ -81,6 +81,7 @@ This file maps the contents of the main application package.
     - `DownloadState.kt` - Download state model.
     - `MemoryChunk.kt` - Memory chunk model.
     - `NetworkState.kt` - Network state model.
+    - `NodeExecutionResult.kt` - Result of a node execution.
     - `NodeModel.kt` - Node model.
     - `NodeType.kt` - Node type enum.
     - `PipelineGraph.kt` - Pipeline graph model.
@@ -155,6 +156,20 @@ This file maps the contents of the main application package.
     - `prompts/` - Prompt Library screen components.
       - `PromptLibraryScreen.kt` - Prompt library UI screen.
       - `PromptLibraryUiState.kt` - Prompt library UI state.
+      - `PromptLibraryViewModel.kt` - Prompt library ViewModel.
+    - `settings/` - Settings screen components.
+      - `SettingsScreen.kt` - Settings UI screen.
+      - `SettingsUiState.kt` - Settings UI state.
+      - `SettingsViewModel.kt` - Settings ViewModel.
+    - `taskmonitor/` - Task monitoring screen components.
+      - `TaskMonitorScreen.kt` - Task monitor UI screen.
+      - `TaskMonitorState.kt` - Task monitor UI state.
+      - `TaskMonitorViewModel.kt` - Task monitor ViewModel.
+    - `tools/` - Tools screen components.
+      - `ToolsScreen.kt` - Tools UI screen.
+      - `ToolsUiState.kt` - Tools UI state.
+      - `ToolsViewModel.kt` - Tools ViewModel.
+- `FILE_MAP.md` - This file mapping the current directory structure.State.kt` - Prompt library UI state.
       - `PromptLibraryViewModel.kt` - Prompt library ViewModel.
     - `settings/` - Settings screen components.
       - `SettingsScreen.kt` - Settings UI screen.

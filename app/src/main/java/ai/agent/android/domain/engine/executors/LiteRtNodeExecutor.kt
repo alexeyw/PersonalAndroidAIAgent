@@ -1,0 +1,108 @@
+package ai.agent.android.domain.engine.executors
+
+import ai.agent.android.domain.engine.LlmInferenceEngine
+import ai.agent.android.domain.models.AgentOrchestratorState
+import ai.agent.android.domain.models.ChatMessage
+import ai.agent.android.domain.models.NodeExecutionResult
+import ai.agent.android.domain.models.NodeModel
+import ai.agent.android.domain.models.Result
+import ai.agent.android.domain.models.Role
+import ai.agent.android.domain.repositories.ChatRepository
+import ai.agent.android.domain.repositories.MetricsRepository
+import ai.agent.android.domain.repositories.SettingsRepository
+import ai.agent.android.domain.repositories.ToolRepository
+import ai.agent.android.domain.usecases.GetContextWindowUseCase
+import ai.agent.android.domain.usecases.LoadModelUseCase
+import ai.agent.android.domain.usecases.RetrieveRelevantMemoryUseCase
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOf
+import javax.inject.Inject
+
+class LiteRtNodeExecutor @Inject constructor(
+    private val llmEngine: LlmInferenceEngine,
+    private val toolRepository: ToolRepository,
+    private val chatRepository: ChatRepository,
+    private val getContextWindowUseCase: GetContextWindowUseCase,
+    private val retrieveRelevantMemoryUseCase: RetrieveRelevantMemoryUseCase,
+    private val settingsRepository: SettingsRepository,
+    private val metricsRepository: MetricsRepository,
+    private val loadModelUseCase: LoadModelUseCase
+) : NodeExecutor {
+
+    override fun execute(
+        node: NodeModel,
+        inputText: String,
+        sessionId: String,
+        originalPrompt: String
+    ): Flow<Any> = flow {
+        val tools = toolRepository.getAvailableTools()
+        val toolsDescription = tools.joinToString("\n") { "- ${it.name}: ${it.description} | Params: ${it.parameters}" }
+        val systemPromptPrefix = settingsRepository.systemPromptPrefix.first()
+        val toolUsageInstructionTemplate = settingsRepository.toolUsageInstruction.first()
+        val toolUsageInstruction = String.format(toolUsageInstructionTemplate, toolsDescription)
+
+        val baseSystemPrompt = "$systemPromptPrefix\n$toolUsageInstruction\n"
+        val contextWindow = getContextWindowUseCase(sessionId)
+        
+        val relevantMemories = retrieveRelevantMemoryUseCase(originalPrompt)
+        val memoryContext = if (relevantMemories.isNotEmpty()) {
+            "RELEVANT LONG-TERM MEMORIES:\n" + relevantMemories.joinToString("\n") { "- ${it.text}" } + "\n\n"
+        } else {
+            ""
+        }
+
+        val fullPrompt = "$baseSystemPrompt\n\n$memoryContext$contextWindow\nAGENT: "
+        
+        val startTime = System.currentTimeMillis()
+        
+        val loadResult = loadModelUseCase(node.modelPath)
+        if (loadResult is Result.Error) {
+            emit(AgentOrchestratorState.Error("Error loading local model"))
+            emit(NodeExecutionResult(error = "Error loading local model"))
+            return@flow
+        }
+
+        val responseStream = llmEngine.generateResponseStream(fullPrompt)
+        
+        val accumulatedResponse = StringBuilder()
+        var emittedThinking = false
+        var approximateTokenCount = 0
+
+        try {
+            responseStream.collect { token ->
+                accumulatedResponse.append(token)
+                approximateTokenCount += token.length / 4 + 1
+                
+                if (!emittedThinking) {
+                    emit(AgentOrchestratorState.Thinking(accumulatedResponse.toString()))
+                    emittedThinking = true
+                } else {
+                    emit(AgentOrchestratorState.Answering(accumulatedResponse.toString()))
+                }
+            }
+        } catch (e: Exception) {
+            emit(AgentOrchestratorState.Error(e.message ?: "Unknown error during LLM generation"))
+            emit(NodeExecutionResult(error = e.message))
+            return@flow
+        }
+        
+        val endTime = System.currentTimeMillis()
+        metricsRepository.updateMetrics(endTime - startTime, approximateTokenCount)
+
+        val fullResponseText = accumulatedResponse.toString().trim()
+        chatRepository.saveMessage(
+            ChatMessage(
+                sessionId = sessionId,
+                role = Role.AGENT,
+                content = fullResponseText,
+                timestamp = System.currentTimeMillis()
+            )
+        )
+        
+        kotlinx.coroutines.delay(1000)
+
+        emit(NodeExecutionResult(outputText = fullResponseText))
+    }
+}
