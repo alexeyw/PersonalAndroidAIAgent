@@ -1,6 +1,6 @@
 package ai.agent.android.presentation.ui.models
 
-import ai.agent.android.data.local.models.LocalModelEntity
+import ai.agent.android.domain.models.LocalModel
 import ai.agent.android.data.network.AndroidModelDownloadManager
 import ai.agent.android.domain.models.DownloadState
 import ai.agent.android.domain.repositories.LocalModelRepository
@@ -54,8 +54,8 @@ class ModelsViewModelTest {
     @Test
     fun `initial state loads downloaded models and active model`() = runTest {
         val models = listOf(
-            LocalModelEntity(id = 1, name = "Model 1", path = "/path", size = 100, isActive = false),
-            LocalModelEntity(id = 2, name = "Model 2", path = "/path", size = 100, isActive = true)
+            LocalModel(id = 1, name = "Model 1", path = "/path", size = 100, isActive = false),
+            LocalModel(id = 2, name = "Model 2", path = "/path", size = 100, isActive = true)
         )
         
         every { localModelRepository.getAllModels() } returns flowOf(models)

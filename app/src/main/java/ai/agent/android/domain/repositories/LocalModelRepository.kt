@@ -1,6 +1,6 @@
 package ai.agent.android.domain.repositories
 
-import ai.agent.android.data.local.models.LocalModelEntity
+import ai.agent.android.domain.models.LocalModel
 import kotlinx.coroutines.flow.Flow
 
 /**
@@ -10,31 +10,31 @@ interface LocalModelRepository {
     /**
      * Retrieves all saved models as a Flow.
      * 
-     * @return Flow containing a list of [LocalModelEntity].
+     * @return Flow containing a list of [LocalModel].
      */
-    fun getAllModels(): Flow<List<LocalModelEntity>>
+    fun getAllModels(): Flow<List<LocalModel>>
 
     /**
      * Retrieves the currently active model if one exists.
      * 
-     * @return The active [LocalModelEntity] or null.
+     * @return The active [LocalModel] or null.
      */
-    suspend fun getActiveModel(): LocalModelEntity?
+    suspend fun getActiveModel(): LocalModel?
 
     /**
      * Inserts a new model record.
      * 
-     * @param model The [LocalModelEntity] to insert.
+     * @param model The [LocalModel] to insert.
      * @return The row ID of the newly inserted item.
      */
-    suspend fun insertModel(model: LocalModelEntity): Long
+    suspend fun insertModel(model: LocalModel): Long
 
     /**
      * Updates an existing model record.
      * 
-     * @param model The [LocalModelEntity] to update.
+     * @param model The [LocalModel] to update.
      */
-    suspend fun updateModel(model: LocalModelEntity)
+    suspend fun updateModel(model: LocalModel)
 
     /**
      * Deletes a model record by its ID.

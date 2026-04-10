@@ -1,10 +1,13 @@
 package ai.agent.android.data.repositories
 
 import ai.agent.android.data.local.dao.LocalModelDao
-import ai.agent.android.data.local.models.LocalModelEntity
+import ai.agent.android.data.mappers.toDomain
+import ai.agent.android.data.mappers.toEntity
+import ai.agent.android.domain.models.LocalModel
 import ai.agent.android.domain.repositories.LocalModelRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -17,20 +20,22 @@ class LocalModelRepositoryImpl @Inject constructor(
     private val localModelDao: LocalModelDao
 ) : LocalModelRepository {
 
-    override fun getAllModels(): Flow<List<LocalModelEntity>> {
-        return localModelDao.getAllModels()
+    override fun getAllModels(): Flow<List<LocalModel>> {
+        return localModelDao.getAllModels().map { entities -> 
+            entities.map { it.toDomain() } 
+        }
     }
 
-    override suspend fun getActiveModel(): LocalModelEntity? = withContext(Dispatchers.IO) {
-        localModelDao.getActiveModel()
+    override suspend fun getActiveModel(): LocalModel? = withContext(Dispatchers.IO) {
+        localModelDao.getActiveModel()?.toDomain()
     }
 
-    override suspend fun insertModel(model: LocalModelEntity): Long = withContext(Dispatchers.IO) {
-        localModelDao.insertModel(model)
+    override suspend fun insertModel(model: LocalModel): Long = withContext(Dispatchers.IO) {
+        localModelDao.insertModel(model.toEntity())
     }
 
-    override suspend fun updateModel(model: LocalModelEntity): Unit = withContext(Dispatchers.IO) {
-        localModelDao.updateModel(model)
+    override suspend fun updateModel(model: LocalModel): Unit = withContext(Dispatchers.IO) {
+        localModelDao.updateModel(model.toEntity())
     }
 
     override suspend fun deleteModelById(id: Long): Unit = withContext(Dispatchers.IO) {

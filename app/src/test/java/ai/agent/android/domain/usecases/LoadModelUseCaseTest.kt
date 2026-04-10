@@ -1,6 +1,6 @@
 package ai.agent.android.domain.usecases
 
-import ai.agent.android.data.local.models.LocalModelEntity
+import ai.agent.android.domain.models.LocalModel
 import ai.agent.android.domain.engine.LlmInferenceEngine
 import ai.agent.android.domain.models.AppError
 import ai.agent.android.domain.models.Result
@@ -45,7 +45,7 @@ class LoadModelUseCaseTest {
     @Test
     fun `invoke returns Success and does not reload if model is already loaded`() = runTest {
         val path = "/path/to/model.bin"
-        val model = LocalModelEntity(1, "Model", path, 100, true)
+        val model = LocalModel(1, "Model", path, 100, true)
         coEvery { localModelRepository.getActiveModel() } returns model
         
         every { llmInferenceEngine.isInitialized } returns true
@@ -59,7 +59,7 @@ class LoadModelUseCaseTest {
 
     @Test
     fun `invoke returns Error if model file does not exist`() = runTest {
-        val model = LocalModelEntity(1, "Model", "/invalid/path/that/does/not/exist", 100, true)
+        val model = LocalModel(1, "Model", "/invalid/path/that/does/not/exist", 100, true)
         coEvery { localModelRepository.getActiveModel() } returns model
 
         val result = loadModelUseCase()
@@ -74,7 +74,7 @@ class LoadModelUseCaseTest {
         val tempFile = File.createTempFile("test_model", ".bin")
         tempFile.deleteOnExit()
 
-        val model = LocalModelEntity(1, "Model", tempFile.absolutePath, 100, true)
+        val model = LocalModel(1, "Model", tempFile.absolutePath, 100, true)
         coEvery { localModelRepository.getActiveModel() } returns model
         coEvery { llmInferenceEngine.initialize(tempFile.absolutePath) } returns Result.Success(Unit)
 

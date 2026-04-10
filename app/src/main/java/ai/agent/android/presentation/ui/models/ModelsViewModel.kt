@@ -2,7 +2,7 @@ package ai.agent.android.presentation.ui.models
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import ai.agent.android.data.local.models.LocalModelEntity
+import ai.agent.android.domain.models.LocalModel
 import ai.agent.android.data.network.AndroidModelDownloadManager
 import ai.agent.android.domain.models.DownloadState
 import ai.agent.android.domain.repositories.LocalModelRepository
@@ -127,7 +127,7 @@ class ModelsViewModel @Inject constructor(
                         }
                         // Save the downloaded model metadata to the local database
                         viewModelScope.launch {
-                            val newModel = LocalModelEntity(
+                            val newModel = LocalModel(
                                 name = fileName,
                                 path = state.fileUri,
                                 size = 0L, // Size is not provided by OkHttp DownloadManager currently, could be added later

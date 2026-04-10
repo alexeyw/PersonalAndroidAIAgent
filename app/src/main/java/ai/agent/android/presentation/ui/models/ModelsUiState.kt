@@ -1,7 +1,7 @@
 package ai.agent.android.presentation.ui.models
 
-import ai.agent.android.data.local.models.LocalModelEntity
 import ai.agent.android.domain.models.AppError
+import ai.agent.android.domain.models.LocalModel
 
 /**
  * Represents the UI state for the Models management screen.
@@ -22,8 +22,8 @@ data class ModelsUiState(
         //ModelPreset("Qwen3.5-0.8B", "https://huggingface.co/g-ntovas/Qwen3.5-0.8B-LiteRT/resolve/main/qwen35_mm_q8_ekv2048.litertlm"),
         //ModelPreset("Qwen3.5-2B", "https://huggingface.co/g-ntovas/Qwen3.5-2B-LiteRT/resolve/main/qwen35_2b_mm_q4_block32_ekv4096.litertlm")
     ),
-    val downloadedModels: List<LocalModelEntity> = emptyList(),
-    val activeModel: LocalModelEntity? = null,
+    val downloadedModels: List<LocalModel> = emptyList(),
+    val activeModel: LocalModel? = null,
     val downloadProgress: Int? = null,
     val isDownloading: Boolean = false,
     val downloadError: AppError? = null,

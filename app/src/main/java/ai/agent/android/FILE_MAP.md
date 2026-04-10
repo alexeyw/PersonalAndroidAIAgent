@@ -30,6 +30,7 @@ This file maps the contents of the main application package.
       - `PipelineEntity.kt` - Pipeline entity.
       - `PipelineWithNodesAndConnections.kt` - Pipeline relational model.
   - `mappers/` - Data mapping layer.
+    - `LocalModelMapper.kt` - Mapper for local models.
     - `ChatMessageMapper.kt` - Mapper for chat messages.
     - `ChatSessionMapper.kt` - Mapper for chat sessions.
   - `mcp/` - Model Context Protocol (MCP) clients.
@@ -79,6 +80,7 @@ This file maps the contents of the main application package.
     - `ChatSession.kt` - Chat session model.
     - `ConnectionModel.kt` - Connection model.
     - `DownloadState.kt` - Download state model.
+    - `LocalModel.kt` - Domain model for local models.
     - `MemoryChunk.kt` - Memory chunk model.
     - `NetworkState.kt` - Network state model.
     - `NodeExecutionResult.kt` - Result of a node execution.
