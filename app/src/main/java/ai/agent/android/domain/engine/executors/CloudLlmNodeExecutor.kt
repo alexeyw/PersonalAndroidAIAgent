@@ -49,7 +49,11 @@ class CloudLlmNodeExecutor @Inject constructor(
         val toolsDescription = tools.joinToString("\n") { "- ${it.name}: ${it.description} | Params: ${it.parameters}" }
         val systemPromptPrefix = settingsRepository.systemPromptPrefix.first()
         val toolUsageInstructionTemplate = settingsRepository.toolUsageInstruction.first()
-        val toolUsageInstruction = String.format(toolUsageInstructionTemplate, toolsDescription)
+        val toolUsageInstruction = if (toolUsageInstructionTemplate.contains("%s")) {
+            toolUsageInstructionTemplate.replace("%s", toolsDescription)
+        } else {
+            "$toolUsageInstructionTemplate\n\n$toolsDescription"
+        }
 
         val baseSystemPrompt = "$systemPromptPrefix\n$toolUsageInstruction\n"
         val contextWindow = getContextWindowUseCase(sessionId)
