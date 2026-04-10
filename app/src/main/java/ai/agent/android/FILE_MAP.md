@@ -1,0 +1,188 @@
+# Directory Map: ai.agent.android
+
+This file maps the contents of the main application package.
+
+- `App.kt` - Main Android Application class.
+- `data/` - Data layer encompassing local, remote, and repository implementations.
+  - `engine/` - Core LLM and inference engines.
+    - `KoogClientFactory.kt` - Factory for Koog clients.
+    - `KoogModelMapper.kt` - Maps string identifiers to Koog LLModel constants.
+    - `LiteRTLlmEngine.kt` - LiteRT LLM engine implementation.
+    - `MediaPipeTextEmbeddingEngine.kt` - MediaPipe text embedding engine.
+    - `TaskQueueManagerImpl.kt` - Task queue manager implementation.
+  - `local/` - Local database and data storage components (Room DB, DataStore).
+    - `ApiKeyManager.kt` - API key manager.
+    - `AppDatabase.kt` - Room database definition.
+    - `Converters.kt` - Type converters for Room.
+    - `SettingsManager.kt` - App settings manager.
+    - `dao/` - Data Access Objects (DAOs).
+      - `ChatDao.kt` - Chat messages DAO.
+      - `LocalModelDao.kt` - Local models DAO.
+      - `MemoryDao.kt` - Memory chunks DAO.
+      - `PipelineDao.kt` - Pipelines DAO.
+    - `models/` - Local DB entity models.
+      - `ChatMessageEntity.kt` - Chat message entity.
+      - `ChatSessionEntity.kt` - Chat session entity.
+      - `ConnectionEntity.kt` - Pipeline connection entity.
+      - `LocalModelEntity.kt` - Local model entity.
+      - `LocalModel.kt` - Domain model for local models.
+      - `MemoryChunkEntity.kt` - Memory chunk entity.
+      - `NodeEntity.kt` - Pipeline node entity.
+      - `PipelineEntity.kt` - Pipeline entity.
+      - `PipelineWithNodesAndConnections.kt` - Pipeline relational model.
+  - `mappers/` - Data mapping layer.
+    - `LocalModelMapper.kt` - Mapper for local models.
+    - `ChatMessageMapper.kt` - Mapper for chat messages.
+    - `ChatSessionMapper.kt` - Mapper for chat sessions.
+  - `mcp/` - Model Context Protocol (MCP) clients.
+    - `KoogMcpClient.kt` - Koog MCP client implementation.
+    - `McpClient.kt` - Generic MCP client interface/impl.
+  - `network/` - Network handling.
+    - `AndroidModelDownloadManager.kt` - Download manager for models.
+  - `remote/` - Remote API components.
+  - `repositories/` - Repository implementations.
+    - `ChatRepositoryImpl.kt` - Chat repository implementation.
+    - `LocalModelRepositoryImpl.kt` - Local model repository implementation.
+    - `LocalPipelineRepositoryImpl.kt` - Local pipeline repository implementation.
+    - `MemoryRepositoryImpl.kt` - Memory repository implementation.
+    - `MetricsRepositoryImpl.kt` - Metrics repository implementation.
+    - `NetworkStateRepositoryImpl.kt` - Network state repository implementation.
+    - `PowerStateRepositoryImpl.kt` - Power state repository implementation.
+    - `ToolRepositoryImpl.kt` - Tool repository implementation.
+  - `services/` - Android Background/Foreground Services.
+    - `AgentForegroundService.kt` - Foreground service for agent.
+    - `AgentIdleManager.kt` - Manager for device idle state.
+    - `AgentPowerManager.kt` - Manager for power states.
+    - `AgentWorker.kt` - WorkManager worker for agent tasks.
+  - `tools/` - Tool and action implementations.
+    - `local/` - Local tools implementations.
+      - `AgentAppFunctionService.kt` - Service for app functions.
+      - `DelegateTaskTool.kt` - Task delegation tool.
+      - `LocalAppFunctionManager.kt` - Manager for local app functions.
+      - `SearchTool.kt` - Local web search tool.
+- `di/` - Dependency Injection configurations (Hilt).
+  - `AppModule.kt` - General app-level DI module.
+  - `DataModule.kt` - Data layer DI module.
+- `domain/` - Domain layer containing core business logic and Use Cases.
+  - `constants/` - Domain-level constants.
+    - `DefaultPrompts.kt` - Default system prompts.
+  - `engine/` - Engine interfaces and abstractions.
+    - `GraphExecutionEngine.kt` - Engine responsible for executing PipelineGraphs.
+    - `LlmInferenceEngine.kt` - LLM engine interface.
+    - `TaskQueueManager.kt` - Task queue manager interface.
+    - `TextEmbeddingEngine.kt` - Text embedding engine interface.
+  - `models/` - Domain entity models.
+    - `AgentMetrics.kt` - Agent metrics model.
+    - `AgentOrchestratorState.kt` - Orchestrator state model.
+    - `AgentTask.kt` - Agent task model.
+    - `AgentTool.kt` - Agent tool model.
+    - `AppError.kt` - App error model.
+    - `ChatMessage.kt` - Chat message model.
+    - `ChatSession.kt` - Chat session model.
+    - `ConnectionModel.kt` - Connection model.
+    - `DownloadState.kt` - Download state model.
+    - `MemoryChunk.kt` - Memory chunk model.
+    - `NetworkState.kt` - Network state model.
+    - `NodeExecutionResult.kt` - Result of a node execution.
+    - `NodeModel.kt` - Node model.
+    - `NodeType.kt` - Node type enum.
+    - `PipelineGraph.kt` - Pipeline graph model.
+    - `PowerState.kt` - Power state model.
+    - `Result.kt` - Result wrapper model.
+    - `Role.kt` - Chat role enum.
+    - `RoutingDecision.kt` - Routing decision model.
+    - `TaskPriority.kt` - Task priority enum.
+  - `repositories/` - Repository interfaces.
+    - `ApiKeyRepository.kt` - API key repository interface.
+    - `ChatRepository.kt` - Chat repository interface.
+    - `LocalModelRepository.kt` - Local model repository interface.
+    - `MemoryRepository.kt` - Memory repository interface.
+    - `MetricsRepository.kt` - Metrics repository interface.
+    - `ModelDownloadManager.kt` - Model download manager interface.
+    - `NetworkStateRepository.kt` - Network state repository interface.
+    - `PipelineRepository.kt` - Pipeline repository interface.
+    - `PowerStateRepository.kt` - Power state repository interface.
+    - `SettingsRepository.kt` - Settings repository interface.
+    - `ToolRepository.kt` - Tool repository interface.
+  - `services/` - Domain-level services.
+    - `ApprovalNotifier.kt` - Notifier for approval requests.
+  - `usecases/` - Business logic Use Cases.
+    - `AgentOrchestratorUseCase.kt` - Use case for agent orchestration.
+    - `EvaluateIfConditionUseCase.kt` - Use case for evaluating IF condition nodes.
+    - `GetContextWindowUseCase.kt` - Use case to get context window.
+    - `InitializeAppUseCase.kt` - Use case for app initialization.
+    - `LoadModelUseCase.kt` - Use case to load a model.
+    - `LoadPipelineUseCase.kt` - Use case to load a pipeline.
+    - `RetrieveRelevantMemoryUseCase.kt` - Use case to retrieve memories.
+    - `SavePipelineUseCase.kt` - Use case to save a pipeline.
+    - `ScheduleTaskUseCase.kt` - Use case to schedule tasks.
+    - `TaskRouterUseCase.kt` - Use case to route tasks.
+- `presentation/` - UI and presentation layer.
+  - `components/` - Reusable UI components.
+  - `notifications/` - Notification handling.
+    - `ApprovalNotificationManager.kt` - Manager for approval notifications.
+  - `receivers/` - Broadcast receivers.
+    - `AgentApprovalReceiver.kt` - Receiver for agent approvals.
+  - `state/` - State management components.
+    - `ActiveSessionTracker.kt` - Tracker for active chat session.
+  - `theme/` - Compose theme definitions.
+    - `Color.kt` - Color palette.
+    - `Theme.kt` - App theme definition.
+    - `Type.kt` - Typography settings.
+  - `ui/` - UI screens and ViewModels.
+    - `MainActivity.kt` - Main activity.
+    - `chat/` - Chat screen components.
+      - `AgentThoughtIndicator.kt` - Indicator for agent thinking.
+      - `ChatScreen.kt` - Chat UI screen.
+      - `ChatUiState.kt` - Chat UI state.
+      - `ChatViewModel.kt` - Chat ViewModel.
+    - `memory/` - Memory screen components.
+      - `MemoryScreen.kt` - Memory UI screen.
+      - `MemoryUiState.kt` - Memory UI state.
+      - `MemoryViewModel.kt` - Memory ViewModel.
+    - `models/` - Models screen components.
+      - `ModelsScreen.kt` - Models UI screen.
+      - `ModelsUiState.kt` - Models UI state.
+      - `ModelsViewModel.kt` - Models ViewModel.
+    - `monitoring/` - Monitoring screen components.
+      - `MonitoringScreen.kt` - Monitoring UI screen.
+      - `MonitoringUiState.kt` - Monitoring UI state.
+      - `MonitoringViewModel.kt` - Monitoring ViewModel.
+    - `orchestrator/` - Orchestrator screen components.
+      - `OrchestratorUiState.kt` - Orchestrator UI state.
+      - `OrchestratorViewModel.kt` - Orchestrator ViewModel.
+      - `VisualOrchestratorScreen.kt` - Visual orchestrator UI screen.
+      - `components/` - Orchestrator UI components.
+        - `DraggableNode.kt` - Draggable node UI component.
+        - `PromptLibraryDialog.kt` - Prompt library dialog UI component.
+    - `prompts/` - Prompt Library screen components.
+      - `PromptLibraryScreen.kt` - Prompt library UI screen.
+      - `PromptLibraryUiState.kt` - Prompt library UI state.
+      - `PromptLibraryViewModel.kt` - Prompt library ViewModel.
+    - `settings/` - Settings screen components.
+      - `SettingsScreen.kt` - Settings UI screen.
+      - `SettingsUiState.kt` - Settings UI state.
+      - `SettingsViewModel.kt` - Settings ViewModel.
+    - `taskmonitor/` - Task monitoring screen components.
+      - `TaskMonitorScreen.kt` - Task monitor UI screen.
+      - `TaskMonitorState.kt` - Task monitor UI state.
+      - `TaskMonitorViewModel.kt` - Task monitor ViewModel.
+    - `tools/` - Tools screen components.
+      - `ToolsScreen.kt` - Tools UI screen.
+      - `ToolsUiState.kt` - Tools UI state.
+      - `ToolsViewModel.kt` - Tools ViewModel.
+- `FILE_MAP.md` - This file mapping the current directory structure.State.kt` - Prompt library UI state.
+      - `PromptLibraryViewModel.kt` - Prompt library ViewModel.
+    - `settings/` - Settings screen components.
+      - `SettingsScreen.kt` - Settings UI screen.
+      - `SettingsUiState.kt` - Settings UI state.
+      - `SettingsViewModel.kt` - Settings ViewModel.
+    - `taskmonitor/` - Task monitoring screen components.
+      - `TaskMonitorScreen.kt` - Task monitor UI screen.
+      - `TaskMonitorState.kt` - Task monitor UI state.
+      - `TaskMonitorViewModel.kt` - Task monitor ViewModel.
+    - `tools/` - Tools screen components.
+      - `ToolsScreen.kt` - Tools UI screen.
+      - `ToolsUiState.kt` - Tools UI state.
+      - `ToolsViewModel.kt` - Tools ViewModel.
+- `FILE_MAP.md` - This file mapping the current directory structure.
