@@ -2,6 +2,7 @@ package ai.agent.android.data.repositories
 
 import ai.agent.android.data.local.dao.LocalModelDao
 import ai.agent.android.data.local.models.LocalModelEntity
+import ai.agent.android.domain.models.LocalModel
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -24,12 +25,12 @@ class LocalModelRepositoryImplTest {
     }
 
     @Test
-    fun `getAllModels returns flow from dao`() {
-        val models = listOf(
+    fun `getAllModels returns flow from dao mapped to domain`() {
+        val entities = listOf(
             LocalModelEntity(1, "Model A", "/path/a", 100L, true),
             LocalModelEntity(2, "Model B", "/path/b", 200L, false)
         )
-        every { localModelDao.getAllModels() } returns flowOf(models)
+        every { localModelDao.getAllModels() } returns flowOf(entities)
 
         val result = repository.getAllModels()
 
@@ -38,9 +39,10 @@ class LocalModelRepositoryImplTest {
     }
 
     @Test
-    fun `getActiveModel returns model from dao`() = runTest {
-        val expectedModel = LocalModelEntity(1, "Model A", "/path/a", 100L, true)
-        coEvery { localModelDao.getActiveModel() } returns expectedModel
+    fun `getActiveModel returns model from dao mapped to domain`() = runTest {
+        val entity = LocalModelEntity(1, "Model A", "/path/a", 100L, true)
+        val expectedModel = LocalModel(1, "Model A", "/path/a", 100L, true)
+        coEvery { localModelDao.getActiveModel() } returns entity
 
         val result = repository.getActiveModel()
 
@@ -49,15 +51,16 @@ class LocalModelRepositoryImplTest {
     }
 
     @Test
-    fun `insertModel calls dao and returns id`() = runTest {
-        val model = LocalModelEntity(0, "Model A", "/path/a", 100L, false)
+    fun `insertModel maps to entity, calls dao and returns id`() = runTest {
+        val model = LocalModel(0, "Model A", "/path/a", 100L, false)
+        val entity = LocalModelEntity(0, "Model A", "/path/a", 100L, false)
         val expectedId = 5L
-        coEvery { localModelDao.insertModel(model) } returns expectedId
+        coEvery { localModelDao.insertModel(entity) } returns expectedId
 
         val result = repository.insertModel(model)
 
         assertEquals(expectedId, result)
-        coVerify(exactly = 1) { localModelDao.insertModel(model) }
+        coVerify(exactly = 1) { localModelDao.insertModel(entity) }
     }
 
     @Test
