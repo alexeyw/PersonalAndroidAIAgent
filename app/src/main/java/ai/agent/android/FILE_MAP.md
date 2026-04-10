@@ -25,7 +25,6 @@ This file maps the contents of the main application package.
       - `ChatSessionEntity.kt` - Chat session entity.
       - `ConnectionEntity.kt` - Pipeline connection entity.
       - `LocalModelEntity.kt` - Local model entity.
-      - `LocalModel.kt` - Domain model for local models.
       - `MemoryChunkEntity.kt` - Memory chunk entity.
       - `NodeEntity.kt` - Pipeline node entity.
       - `PipelineEntity.kt` - Pipeline entity.
@@ -81,6 +80,7 @@ This file maps the contents of the main application package.
     - `ChatSession.kt` - Chat session model.
     - `ConnectionModel.kt` - Connection model.
     - `DownloadState.kt` - Download state model.
+    - `LocalModel.kt` - Domain model for local models.
     - `MemoryChunk.kt` - Memory chunk model.
     - `NetworkState.kt` - Network state model.
     - `NodeExecutionResult.kt` - Result of a node execution.
