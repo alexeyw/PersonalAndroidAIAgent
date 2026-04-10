@@ -1,5 +1,6 @@
 package ai.agent.android.data.engine
 
+import androidx.annotation.VisibleForTesting
 import ai.agent.android.domain.engine.GraphExecutionEngine
 import ai.agent.android.domain.engine.TaskQueueManager
 import ai.agent.android.domain.models.AgentOrchestratorState
@@ -11,6 +12,8 @@ import ai.agent.android.domain.repositories.PipelineRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -24,6 +27,11 @@ import java.util.PriorityQueue
 import javax.inject.Inject
 import javax.inject.Singleton
 
+/**
+ * Implementation of [TaskQueueManager] that manages agent tasks in a priority queue.
+ * Handles task execution via [GraphExecutionEngine] and state tracking.
+ * Operations are thread-safe and atomized to prevent race conditions.
+ */
 @Singleton
 class TaskQueueManagerImpl @Inject constructor(
     private val chatRepository: ChatRepository,
@@ -31,7 +39,16 @@ class TaskQueueManagerImpl @Inject constructor(
     private val graphExecutionEngine: GraphExecutionEngine
 ) : TaskQueueManager {
 
-    private val scope = CoroutineScope(Dispatchers.IO + Job())
+    @VisibleForTesting
+    internal var dispatcher: kotlinx.coroutines.CoroutineDispatcher = Dispatchers.IO
+        set(value) {
+            field = value
+            scope.cancel()
+            scope = CoroutineScope(value + SupervisorJob())
+            startWorker()
+        }
+
+    internal var scope = CoroutineScope(dispatcher + SupervisorJob())
     
     private val _globalState = MutableStateFlow<AgentOrchestratorState>(AgentOrchestratorState.Idle)
     override val globalState: StateFlow<AgentOrchestratorState> = _globalState.asStateFlow()
@@ -62,7 +79,7 @@ class TaskQueueManagerImpl @Inject constructor(
         startWorker()
     }
 
-    private fun startWorker() {
+    internal fun startWorker() {
         scope.launch {
             for (signal in taskSignal) {
                 while (true) {
@@ -120,14 +137,21 @@ class TaskQueueManagerImpl @Inject constructor(
         }
     }
 
+    /**
+     * Enqueues a new [AgentTask] for execution.
+     * Atomically checks the current session state and adds the task to the queue
+     * to prevent race conditions during state updates.
+     *
+     * @param task The task to be executed.
+     */
     override fun enqueueTask(task: AgentTask) {
         scope.launch {
-            val stateFlow = getOrCreateStateFlow(task.sessionId)
-            if (stateFlow.value == AgentOrchestratorState.Idle || stateFlow.value is AgentOrchestratorState.Completed || stateFlow.value is AgentOrchestratorState.Error) {
-                stateFlow.value = AgentOrchestratorState.Loading
-                updateActiveSessionsState()
-            }
             queueMutex.withLock {
+                val stateFlow = getOrCreateStateFlow(task.sessionId)
+                if (stateFlow.value == AgentOrchestratorState.Idle || stateFlow.value is AgentOrchestratorState.Completed || stateFlow.value is AgentOrchestratorState.Error) {
+                    stateFlow.value = AgentOrchestratorState.Loading
+                    updateActiveSessionsState()
+                }
                 taskQueue.offer(task)
             }
             taskSignal.trySend(Unit)

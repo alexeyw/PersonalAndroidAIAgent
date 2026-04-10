@@ -58,7 +58,9 @@ class TaskQueueManagerImplTest {
             chatRepository = chatRepository,
             pipelineRepository = pipelineRepository,
             graphExecutionEngine = graphExecutionEngine
-        )
+        ).apply {
+            dispatcher = testDispatcher
+        }
     }
 
     @After
@@ -66,8 +68,12 @@ class TaskQueueManagerImplTest {
         Dispatchers.resetMain()
     }
 
+    /**
+     * Tests that enqueuing a task processes it successfully and updates the session state
+     * without race conditions or deadlocks.
+     */
     @Test
-    fun `enqueueTask processes task successfully`() = kotlinx.coroutines.runBlocking {
+    fun `enqueueTask processes task successfully`() = testScope.runTest {
         val sessionId = "session_1"
         val prompt = "Hello"
         
@@ -83,7 +89,7 @@ class TaskQueueManagerImplTest {
 
         taskQueueManager.enqueueTask(task)
         
-        kotlinx.coroutines.delay(500) // Wait for the IO dispatcher to process the task
+        advanceUntilIdle() // Wait for the IO dispatcher to process the task without delay
 
         val state = taskQueueManager.observeTaskState(sessionId).first()
         println("Final state: $state")
