@@ -8,6 +8,8 @@ This file maps the contents of the local unit test package.
 - `domain/`
   - `engine/`
     - `GraphExecutionEngineTest.kt` - Tests for GraphExecutionEngine.
+    - `executors/`
+      - `ToolNodeExecutorTest.kt` - Tests for ToolNodeExecutor.
   - `models/`
     - `AppErrorTest.kt` - Tests for AppError.
     - `ResultTest.kt` - Tests for Result.

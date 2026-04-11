@@ -127,6 +127,7 @@ dependencies {
     // JSON Serialization
     implementation(libs.gson)
 
+    testImplementation(libs.json)
     testImplementation(libs.junit)
     testImplementation(libs.mockk)
     testImplementation(libs.coroutines.test)

@@ -90,41 +90,28 @@ class ToolNodeExecutor @Inject constructor(
         emit(NodeExecutionResult(outputText = result))
     }
 
-    private fun parseToolArguments(response: String): String? {
+    @androidx.annotation.VisibleForTesting
+    internal fun parseToolArguments(response: String): String? {
         val blockRegex = """```json\s*(\{.*?\})\s*```""".toRegex(RegexOption.DOT_MATCHES_ALL)
-        val blockMatch = blockRegex.find(response) ?: return null
-        val jsonBlock = blockMatch.groups[1]?.value ?: return null
+        var jsonBlock = blockRegex.find(response)?.groups?.get(1)?.value
         
-        val argsIndex = jsonBlock.indexOf("\"arguments\"")
-        if (argsIndex == -1) return null
-        
-        val colonIndex = jsonBlock.indexOf(":", argsIndex)
-        if (colonIndex == -1) return null
-        
-        val valueStart = jsonBlock.substring(colonIndex + 1).trimStart()
-        
-        var arguments = ""
-        if (valueStart.startsWith("\"")) {
-            var endQuoteIndex = -1
-            for (i in 1 until valueStart.length) {
-                if (valueStart[i] == '"' && valueStart[i - 1] != '\\') {
-                    endQuoteIndex = i
-                    break
-                }
+        if (jsonBlock == null) {
+            val startIndex = response.indexOf('{')
+            val endIndex = response.lastIndexOf('}')
+            jsonBlock = if (startIndex != -1 && endIndex != -1 && startIndex < endIndex) {
+                response.substring(startIndex, endIndex + 1)
+            } else {
+                response
             }
-            if (endQuoteIndex != -1) {
-                arguments = valueStart.substring(1, endQuoteIndex)
-                arguments = arguments.replace("\\\"", "\"").replace("\\\\", "\\")
-            }
-        } else if (valueStart.startsWith("{")) {
-            val endBraceIndex = valueStart.lastIndexOf("}")
-            if (endBraceIndex != -1) {
-                arguments = valueStart.substring(0, endBraceIndex + 1)
-            }
-        } else {
-            return null
         }
         
-        return arguments
+        return try {
+            val jsonObject = org.json.JSONObject(jsonBlock)
+            if (!jsonObject.has("arguments")) return null
+            
+            jsonObject.get("arguments").toString()
+        } catch (e: org.json.JSONException) {
+            null
+        }
     }
 }
