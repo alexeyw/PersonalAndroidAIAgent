@@ -37,9 +37,15 @@ class ToolNodeExecutorTest {
     }
 
     @Test
-    fun `parseToolArguments returns null when response contains no json block`() {
+    fun `parseToolArguments returns null when response contains no json block and is not valid json`() {
         val response = "Here is my thinking: I need to use the tool, but I forgot to output JSON."
         assertNull(executor.parseToolArguments(response))
+    }
+
+    @Test
+    fun `parseToolArguments extracts string arguments from raw json without markdown block`() {
+        val response = """{"tool": "search", "arguments": "how to build android app"}"""
+        assertEquals("how to build android app", executor.parseToolArguments(response))
     }
 
     @Test

@@ -93,8 +93,7 @@ class ToolNodeExecutor @Inject constructor(
     @androidx.annotation.VisibleForTesting
     internal fun parseToolArguments(response: String): String? {
         val blockRegex = """```json\s*(\{.*?\})\s*```""".toRegex(RegexOption.DOT_MATCHES_ALL)
-        val blockMatch = blockRegex.find(response) ?: return null
-        val jsonBlock = blockMatch.groups[1]?.value ?: return null
+        val jsonBlock = blockRegex.find(response)?.groups?.get(1)?.value ?: response
         
         return try {
             val jsonObject = org.json.JSONObject(jsonBlock)
