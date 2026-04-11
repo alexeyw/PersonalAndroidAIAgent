@@ -80,6 +80,15 @@ abstract class DataModule {
     ): TextEmbeddingEngine
 
     /**
+     * Binds the [ai.agent.android.data.engine.DefaultTextEmbedderFactory] implementation to the [ai.agent.android.data.engine.TextEmbedderFactory] interface.
+     */
+    @Binds
+    @Singleton
+    abstract fun bindTextEmbedderFactory(
+        factory: ai.agent.android.data.engine.DefaultTextEmbedderFactory
+    ): ai.agent.android.data.engine.TextEmbedderFactory
+
+    /**
      * Binds the [MemoryRepositoryImpl] implementation to the [MemoryRepository] interface.
      */
     @Binds

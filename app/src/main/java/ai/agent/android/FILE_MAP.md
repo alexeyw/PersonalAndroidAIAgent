@@ -10,6 +10,7 @@ This file maps the contents of the main application package.
     - `LiteRTLlmEngine.kt` - LiteRT LLM engine implementation.
     - `MediaPipeTextEmbeddingEngine.kt` - MediaPipe text embedding engine.
     - `TaskQueueManagerImpl.kt` - Task queue manager implementation.
+    - `TextEmbedderFactory.kt` - Factory for text embedders.
   - `local/` - Local database and data storage components (Room DB, DataStore).
     - `ApiKeyManager.kt` - API key manager.
     - `AppDatabase.kt` - Room database definition.

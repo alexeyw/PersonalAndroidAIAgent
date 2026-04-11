@@ -18,7 +18,8 @@ import javax.inject.Inject
  * @property context The application context used to initialize the MediaPipe embedder.
  */
 class MediaPipeTextEmbeddingEngine @Inject constructor(
-    @ApplicationContext private val context: Context
+    @ApplicationContext private val context: Context,
+    private val embedderFactory: TextEmbedderFactory
 ) : TextEmbeddingEngine {
 
     private var textEmbedder: TextEmbedder? = null
@@ -49,7 +50,7 @@ class MediaPipeTextEmbeddingEngine @Inject constructor(
                 // .setQuantize(true) // Removed because we need floatEmbedding(), not quantized bytes
                 .build()
 
-            textEmbedder = TextEmbedder.createFromOptions(context, options)
+            textEmbedder = embedderFactory.createFromOptions(context, options)
         }
     }
 

@@ -188,4 +188,15 @@ class GraphExecutionEngineTest {
         assertTrue(lastState is AgentOrchestratorState.Error)
         assertTrue((lastState as AgentOrchestratorState.Error).message.contains("without reaching OUTPUT"))
     }
+
+    @Test
+    fun `resumeWithApproval delegates to toolNodeExecutor`() {
+        val mockToolNodeExecutor = mockk<ToolNodeExecutor>(relaxed = true)
+        val mockFactory = mockk<NodeExecutorFactory>()
+        val engineWithMock = GraphExecutionEngine(mockFactory, mockToolNodeExecutor)
+        
+        engineWithMock.resumeWithApproval("session_id_123", true)
+        
+        io.mockk.verify { mockToolNodeExecutor.resumeWithApproval("session_id_123", true) }
+    }
 }

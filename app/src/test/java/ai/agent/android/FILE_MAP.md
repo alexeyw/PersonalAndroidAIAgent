@@ -29,6 +29,7 @@ This file maps the contents of the local unit test package.
     - `LiteRTLlmEngineTest.kt` - Tests for LiteRTLlmEngine.
     - `MediaPipeTextEmbeddingEngineTest.kt` - Tests for MediaPipeTextEmbeddingEngine.
   - `local/`
+    - `ApiKeyManagerTest.kt` - Tests for ApiKeyManager.
     - `SettingsManagerTest.kt` - Tests for SettingsManager.
   - `mappers/`
     - `ChatMessageMapperTest.kt` - Tests for ChatMessageMapper.
@@ -46,6 +47,7 @@ This file maps the contents of the local unit test package.
   - `services/`
     - `AgentIdleManagerTest.kt` - Tests for AgentIdleManager.
     - `AgentPowerManagerTest.kt` - Tests for AgentPowerManager.
+    - `AgentWorkerTest.kt` - Tests for AgentWorker.
   - `tools/local/`
     - `DelegateTaskToolTest.kt` - Tests for DelegateTaskTool.
 - `presentation/`
