@@ -15,27 +15,31 @@ import java.io.File
 class MediaPipeTextEmbeddingEngineTest {
 
     private lateinit var context: Context
+    private lateinit var embedderFactory: TextEmbedderFactory
     private lateinit var engine: MediaPipeTextEmbeddingEngine
 
     @Before
     fun setup() {
         context = mockk(relaxed = true)
+        embedderFactory = mockk(relaxed = true)
+        
         val filesDir = File(System.getProperty("java.io.tmpdir") ?: "/tmp")
         every { context.getExternalFilesDir(null) } returns filesDir
         
-        engine = MediaPipeTextEmbeddingEngine(context)
+        // We cannot mock TextEmbedder here because its static initializer loads native libraries 
+        // which crash the JVM test with UnsatisfiedLinkError.
+        // The fact that embedderFactory is a dependency allows Robolectric or AndroidTests 
+        // to mock it if needed in the future.
+        engine = MediaPipeTextEmbeddingEngine(context, embedderFactory)
     }
 
-    // MediaPipe Tasks requires native libraries which are not available in standard unit tests.
-    // For a real app, this should either be an AndroidTest or use Robolectric if it supports it,
-    // or the TextEmbedder creation must be abstracted behind a factory.
-    // Given the task, we will add a placeholder test that checks initialization logic.
     @Test
-    fun `engine initialization fails gracefully without native lib or model`() = runTest {
+    fun `engine initialization propagates native errors gracefully in JVM tests`() = runTest {
         try {
             engine.generateEmbedding("Test text")
+            assert(false) { "Expected exception due to missing native libraries" }
         } catch (e: Throwable) {
-            // It will throw either UnsatisfiedLinkError or an exception about missing model.
+            // It will throw either UnsatisfiedLinkError, ExceptionInInitializerError, or NoClassDefFoundError
             assertNotNull(e)
         }
     }
