@@ -108,7 +108,8 @@ fun MemoryScreen(
 
                         1 -> VectorDatabaseTab(
                             memories = uiState.vectorMemories,
-                            onDeleteMemory = viewModel::deleteVectorMemory
+                            onDeleteMemory = viewModel::deleteVectorMemory,
+                            onCompactMemory = viewModel::compactMemory
                         )
                     }
                 }
@@ -155,23 +156,45 @@ private fun ChatHistoryTab(
 @Composable
 private fun VectorDatabaseTab(
     memories: List<MemoryChunk>,
-    onDeleteMemory: (Long) -> Unit
+    onDeleteMemory: (Long) -> Unit,
+    onCompactMemory: () -> Unit
 ) {
-    if (memories.isEmpty()) {
-        EmptyStateMessage("No vector memories stored yet.")
-        return
-    }
-
-    LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        items(memories, key = { it.id }) { memory ->
-            MemoryChunkItem(
-                memory = memory,
-                onDelete = { onDeleteMemory(memory.id) }
+    Column(modifier = Modifier.fillMaxSize()) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "${memories.size} chunks stored",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
+            androidx.compose.material3.OutlinedButton(onClick = onCompactMemory) {
+                Text("Compact Memory")
+            }
+        }
+
+        if (memories.isEmpty()) {
+            Box(modifier = Modifier.weight(1f)) {
+                EmptyStateMessage("No vector memories stored yet.")
+            }
+            return
+        }
+
+        LazyColumn(
+            modifier = Modifier.weight(1f),
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            items(memories, key = { it.id }) { memory ->
+                MemoryChunkItem(
+                    memory = memory,
+                    onDelete = { onDeleteMemory(memory.id) }
+                )
+            }
         }
     }
 }

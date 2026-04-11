@@ -75,4 +75,27 @@ class MemoryRepositoryImplTest {
 
         assertEquals(0.0f, similarity, 0.0f)
     }
+
+    @Test
+    fun `findSimilarMemories uses getRecentMemories and returns correct pairs`() = kotlinx.coroutines.test.runTest {
+        val queryEmbedding = floatArrayOf(1f, 0f)
+        val entity1 = ai.agent.android.data.local.models.MemoryChunkEntity(1, "Text 1", "1.0,0.0", 1000L)
+        val entity2 = ai.agent.android.data.local.models.MemoryChunkEntity(2, "Text 2", "0.0,1.0", 2000L)
+
+        io.mockk.coEvery { memoryDao.getRecentMemories(100) } returns listOf(entity1, entity2)
+
+        val results = repository.findSimilarMemories(queryEmbedding, searchPoolLimit = 100, limit = 2)
+
+        assertEquals(2, results.size)
+        assertEquals(1L, results[0].first.id) // Most similar first
+        assertEquals(1.0f, results[0].second, 0.001f)
+        assertEquals(2L, results[1].first.id)
+        assertEquals(0.0f, results[1].second, 0.001f)
+    }
+
+    @Test
+    fun `compactMemory calls dao deleteOldestMemories`() = kotlinx.coroutines.test.runTest {
+        repository.compactMemory(500)
+        io.mockk.coVerify(exactly = 1) { memoryDao.deleteOldestMemories(500) }
+    }
 }

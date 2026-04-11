@@ -31,6 +31,7 @@ class SettingsManagerTest {
     private val topKKey = androidx.datastore.preferences.core.intPreferencesKey("top_k")
     private val topPKey = androidx.datastore.preferences.core.floatPreferencesKey("top_p")
     private val requiresUserConfirmationKey = booleanPreferencesKey("requires_user_confirmation")
+    private val maxMemoryChunksForSearchKey = androidx.datastore.preferences.core.intPreferencesKey("max_memory_chunks_for_search")
 
     @Test
     fun `isFirstLaunch returns true by default`() = runTest {
@@ -85,6 +86,17 @@ class SettingsManagerTest {
         val settingsManager = SettingsManager(dataStore)
         val result = settingsManager.requiresUserConfirmation.first()
         assertTrue(result)
+    }
+
+    @Test
+    fun `maxMemoryChunksForSearch returns default value`() = runTest {
+        val prefs = mockk<Preferences>()
+        every { prefs[maxMemoryChunksForSearchKey] } returns null
+        every { dataStore.data } returns flowOf(prefs)
+
+        val settingsManager = SettingsManager(dataStore)
+        val result = settingsManager.maxMemoryChunksForSearch.first()
+        assertEquals(1000, result)
     }
 
     @Test

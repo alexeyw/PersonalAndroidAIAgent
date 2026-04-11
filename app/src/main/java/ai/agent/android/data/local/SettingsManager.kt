@@ -40,6 +40,7 @@ class SettingsManager @Inject constructor(
         val MCP_SERVER_URLS = stringSetPreferencesKey("mcp_server_urls")
         val DISABLED_APP_FUNCTIONS = stringSetPreferencesKey("disabled_app_functions")
         val CURRENT_CHAT_SESSION_ID = stringPreferencesKey("current_chat_session_id")
+        val MAX_MEMORY_CHUNKS_FOR_SEARCH = intPreferencesKey("max_memory_chunks_for_search")
     }
 
     override val isFirstLaunch: Flow<Boolean> = dataStore.data
@@ -283,6 +284,25 @@ class SettingsManager @Inject constructor(
             } else {
                 preferences[PreferencesKeys.CURRENT_CHAT_SESSION_ID] = sessionId
             }
+        }
+    }
+
+    override val maxMemoryChunksForSearch: Flow<Int> = dataStore.data
+        .catch { exception ->
+            if (exception is IOException) {
+                Timber.e(exception, "Error reading preferences")
+                emit(emptyPreferences())
+            } else {
+                throw exception
+            }
+        }
+        .map { preferences ->
+            preferences[PreferencesKeys.MAX_MEMORY_CHUNKS_FOR_SEARCH] ?: 1000
+        }
+
+    override suspend fun setMaxMemoryChunksForSearch(limit: Int) {
+        dataStore.edit { preferences ->
+            preferences[PreferencesKeys.MAX_MEMORY_CHUNKS_FOR_SEARCH] = limit
         }
     }
 }

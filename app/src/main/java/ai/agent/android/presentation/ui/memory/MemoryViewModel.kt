@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import ai.agent.android.domain.models.ChatMessage
 import ai.agent.android.domain.repositories.ChatRepository
 import ai.agent.android.domain.repositories.MemoryRepository
+import ai.agent.android.domain.repositories.SettingsRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -22,7 +23,8 @@ import javax.inject.Inject
 @HiltViewModel
 class MemoryViewModel @Inject constructor(
     private val chatRepository: ChatRepository,
-    private val memoryRepository: MemoryRepository
+    private val memoryRepository: MemoryRepository,
+    private val settingsRepository: SettingsRepository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(MemoryUiState(isLoading = true))
@@ -108,6 +110,18 @@ class MemoryViewModel @Inject constructor(
     fun deleteVectorMemory(memoryId: Long) {
         viewModelScope.launch {
             memoryRepository.deleteMemory(memoryId)
+            loadAllData()
+        }
+    }
+
+    /**
+     * Deletes the oldest memory chunks, keeping only the configured limit.
+     */
+    fun compactMemory() {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isLoading = true) }
+            val limit = settingsRepository.maxMemoryChunksForSearch.first()
+            memoryRepository.compactMemory(limit)
             loadAllData()
         }
     }

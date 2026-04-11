@@ -3,7 +3,9 @@ package ai.agent.android.domain.usecases
 import ai.agent.android.domain.engine.TextEmbeddingEngine
 import ai.agent.android.domain.models.MemoryChunk
 import ai.agent.android.domain.repositories.MemoryRepository
+import ai.agent.android.domain.repositories.SettingsRepository
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
@@ -14,7 +16,8 @@ import javax.inject.Inject
  */
 class RetrieveRelevantMemoryUseCase @Inject constructor(
     private val textEmbeddingEngine: TextEmbeddingEngine,
-    private val memoryRepository: MemoryRepository
+    private val memoryRepository: MemoryRepository,
+    private val settingsRepository: SettingsRepository
 ) {
     /**
      * Executes the retrieval process.
@@ -34,7 +37,8 @@ class RetrieveRelevantMemoryUseCase @Inject constructor(
         val queryEmbedding = textEmbeddingEngine.generateEmbedding(query)
         
         // 2. Find similar memories
-        val similarMemories = memoryRepository.findSimilarMemories(queryEmbedding, limit)
+        val searchPoolLimit = settingsRepository.maxMemoryChunksForSearch.first()
+        val similarMemories = memoryRepository.findSimilarMemories(queryEmbedding, searchPoolLimit, limit)
         
         // 3. Filter by threshold and extract just the chunks
         similarMemories

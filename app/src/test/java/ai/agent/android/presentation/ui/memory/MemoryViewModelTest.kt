@@ -5,6 +5,7 @@ import ai.agent.android.domain.models.MemoryChunk
 import ai.agent.android.domain.models.Role
 import ai.agent.android.domain.repositories.ChatRepository
 import ai.agent.android.domain.repositories.MemoryRepository
+import ai.agent.android.domain.repositories.SettingsRepository
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
@@ -29,6 +30,7 @@ class MemoryViewModelTest {
 
     private lateinit var chatRepository: ChatRepository
     private lateinit var memoryRepository: MemoryRepository
+    private lateinit var settingsRepository: SettingsRepository
     private lateinit var viewModel: MemoryViewModel
 
     private val testDispatcher = StandardTestDispatcher()
@@ -38,6 +40,8 @@ class MemoryViewModelTest {
         Dispatchers.setMain(testDispatcher)
         chatRepository = mockk(relaxed = true)
         memoryRepository = mockk(relaxed = true)
+        settingsRepository = mockk(relaxed = true)
+        coEvery { settingsRepository.maxMemoryChunksForSearch } returns flowOf(1000)
     }
 
     @After
@@ -57,7 +61,7 @@ class MemoryViewModelTest {
         coEvery { chatRepository.getMessagesForSession(sessionId) } returns flowOf(messages)
 
         // Act
-        viewModel = MemoryViewModel(chatRepository, memoryRepository)
+        viewModel = MemoryViewModel(chatRepository, memoryRepository, settingsRepository)
         testDispatcher.scheduler.advanceUntilIdle()
 
         // Assert
@@ -70,7 +74,7 @@ class MemoryViewModelTest {
 
     @Test
     fun `deleteChatSession calls repository and reloads data`() = runTest {
-        viewModel = MemoryViewModel(chatRepository, memoryRepository)
+        viewModel = MemoryViewModel(chatRepository, memoryRepository, settingsRepository)
         testDispatcher.scheduler.advanceUntilIdle()
 
         viewModel.deleteChatSession("session-1")
@@ -82,7 +86,7 @@ class MemoryViewModelTest {
 
     @Test
     fun `deleteChatMessage calls repository and reloads data`() = runTest {
-        viewModel = MemoryViewModel(chatRepository, memoryRepository)
+        viewModel = MemoryViewModel(chatRepository, memoryRepository, settingsRepository)
         testDispatcher.scheduler.advanceUntilIdle()
 
         viewModel.deleteChatMessage(100L)
@@ -94,7 +98,7 @@ class MemoryViewModelTest {
 
     @Test
     fun `deleteVectorMemory calls repository and reloads data`() = runTest {
-        viewModel = MemoryViewModel(chatRepository, memoryRepository)
+        viewModel = MemoryViewModel(chatRepository, memoryRepository, settingsRepository)
         testDispatcher.scheduler.advanceUntilIdle()
 
         viewModel.deleteVectorMemory(200L)
@@ -105,8 +109,20 @@ class MemoryViewModelTest {
     }
     
     @Test
+    fun `compactMemory calls repository and reloads data`() = runTest {
+        viewModel = MemoryViewModel(chatRepository, memoryRepository, settingsRepository)
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        viewModel.compactMemory()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        coVerify(exactly = 1) { memoryRepository.compactMemory(1000) }
+        coVerify(atLeast = 2) { memoryRepository.getAllMemories() }
+    }
+
+    @Test
     fun `setTab updates currentTab state`() = runTest {
-        viewModel = MemoryViewModel(chatRepository, memoryRepository)
+        viewModel = MemoryViewModel(chatRepository, memoryRepository, settingsRepository)
         
         viewModel.setTab(1)
         assertEquals(1, viewModel.uiState.value.currentTab)

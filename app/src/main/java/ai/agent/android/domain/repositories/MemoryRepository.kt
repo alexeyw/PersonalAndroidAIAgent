@@ -28,12 +28,20 @@ interface MemoryRepository {
      * using cosine similarity.
      *
      * @param queryEmbedding The vector embedding of the user's query.
+     * @param searchPoolLimit The maximum number of recent memories to load into memory for searching.
      * @param limit The maximum number of results to return.
      * @return A list of pairs containing the [MemoryChunk] and its similarity score (0.0 to 1.0),
      *         sorted by similarity in descending order (highest first).
      */
-    suspend fun findSimilarMemories(queryEmbedding: FloatArray, limit: Int = 5): List<Pair<MemoryChunk, Float>>
+    suspend fun findSimilarMemories(queryEmbedding: FloatArray, searchPoolLimit: Int, limit: Int = 5): List<Pair<MemoryChunk, Float>>
     
+    /**
+     * Deletes older memory chunks, keeping only the specified number of the most recent ones.
+     *
+     * @param keepLimit The number of recent memory chunks to keep.
+     */
+    suspend fun compactMemory(keepLimit: Int)
+
     /**
      * Deletes a memory chunk by its unique ID.
      *

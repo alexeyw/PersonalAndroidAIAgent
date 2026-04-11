@@ -144,4 +144,16 @@ interface SettingsRepository {
      * Updates the current active chat session ID.
      */
     suspend fun setCurrentChatSessionId(sessionId: String?)
+
+    /**
+     * A [Flow] representing the maximum number of memory chunks to load for similarity search.
+     */
+    val maxMemoryChunksForSearch: Flow<Int>
+
+    /**
+     * Updates the maximum number of memory chunks for similarity search.
+     *
+     * @param limit The new limit.
+     */
+    suspend fun setMaxMemoryChunksForSearch(limit: Int)
 }
