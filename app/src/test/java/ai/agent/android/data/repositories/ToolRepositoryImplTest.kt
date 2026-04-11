@@ -15,6 +15,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import kotlinx.coroutines.launch
 
 class ToolRepositoryImplTest {
 
@@ -75,5 +76,27 @@ class ToolRepositoryImplTest {
 
         assertEquals(expectedResult, result)
         coVerify(exactly = 1) { mcpClient.executeTool(name, args) }
+    }
+
+    @Test
+    fun `concurrent getAvailableTools and executeTool does not throw`() = runTest {
+        val mcpTools = listOf(AgentTool("test_mcp", "desc", "params"))
+        coEvery { mcpClient.getTools() } returns mcpTools
+        coEvery { mcpClient.executeTool(any(), any()) } returns "success"
+
+        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+            val jobs = (1..100).map {
+                launch {
+                    if (it % 2 == 0) {
+                        repository.getAvailableTools()
+                    } else {
+                        repository.executeTool("test_mcp", "{}")
+                    }
+                }
+            }
+            jobs.forEach { it.join() }
+        }
+
+        assertTrue(true) // Should reach here without exceptions
     }
 }

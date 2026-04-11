@@ -11,6 +11,7 @@ import ai.agent.android.domain.usecases.ScheduleTaskUseCase
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.firstOrNull
 import org.json.JSONObject
+import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 
 /**
@@ -27,7 +28,7 @@ class ToolRepositoryImpl @Inject constructor(
     private val searchTool: ai.agent.android.data.tools.local.SearchTool
 ) : ToolRepository {
 
-    private val mcpClients = mutableMapOf<String, McpClient>()
+    private val mcpClients = ConcurrentHashMap<String, McpClient>()
 
     private suspend fun getBuiltinTools(): List<AgentTool> {
         val availableModels = mutableListOf<String>()
