@@ -37,4 +37,21 @@ interface MemoryDao {
      */
     @Query("DELETE FROM memory_chunks WHERE id = :id")
     suspend fun deleteMemoryById(id: Long)
+    /**
+     * Retrieves a limited number of the most recent memory chunks from the database.
+     * This is used to load a bounded number of embeddings into memory for vector similarity search.
+     *
+     * @param limit The maximum number of recent chunks to return.
+     * @return A list of the most recent [MemoryChunkEntity] items.
+     */
+    @Query("SELECT * FROM memory_chunks ORDER BY timestamp DESC LIMIT :limit")
+    suspend fun getRecentMemories(limit: Int): List<MemoryChunkEntity>
+
+    /**
+     * Deletes older memory chunks, keeping only the specified number of the most recent ones.
+     *
+     * @param keepLimit The number of recent memory chunks to keep.
+     */
+    @Query("DELETE FROM memory_chunks WHERE id NOT IN (SELECT id FROM memory_chunks ORDER BY timestamp DESC LIMIT :keepLimit)")
+    suspend fun deleteOldestMemories(keepLimit: Int)
 }

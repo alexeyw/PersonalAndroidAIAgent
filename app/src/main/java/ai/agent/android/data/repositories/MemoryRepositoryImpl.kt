@@ -51,16 +51,33 @@ class MemoryRepositoryImpl @Inject constructor(
 
     override suspend fun findSimilarMemories(
         queryEmbedding: FloatArray,
+        searchPoolLimit: Int,
         limit: Int
     ): List<Pair<MemoryChunk, Float>> = withContext(Dispatchers.Default) {
-        val allMemories = getAllMemories()
+        val recentMemories = memoryDao.getRecentMemories(searchPoolLimit).mapNotNull { entity ->
+            val embeddingArray = converters.toFloatArray(entity.embedding)
+            if (embeddingArray != null) {
+                MemoryChunk(
+                    id = entity.id,
+                    text = entity.text,
+                    embedding = embeddingArray,
+                    timestamp = entity.timestamp
+                )
+            } else {
+                null
+            }
+        }
         
-        allMemories.map { memory ->
+        recentMemories.map { memory ->
             val similarity = cosineSimilarity(queryEmbedding, memory.embedding)
             memory to similarity
         }
         .sortedByDescending { it.second }
         .take(limit)
+    }
+
+    override suspend fun compactMemory(keepLimit: Int) = withContext(Dispatchers.IO) {
+        memoryDao.deleteOldestMemories(keepLimit)
     }
 
     override suspend fun deleteMemory(id: Long) = withContext(Dispatchers.IO) {
