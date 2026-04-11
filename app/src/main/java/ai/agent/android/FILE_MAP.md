@@ -66,6 +66,7 @@ This file maps the contents of the main application package.
   - `constants/` - Domain-level constants.
     - `DefaultPrompts.kt` - Default system prompts.
   - `engine/` - Engine interfaces and abstractions.
+    - `DefaultPipelineFactory.kt` - Factory for default pipelines.
     - `GraphExecutionEngine.kt` - Engine responsible for executing PipelineGraphs.
     - `LlmInferenceEngine.kt` - LLM engine interface.
     - `TaskQueueManager.kt` - Task queue manager interface.
