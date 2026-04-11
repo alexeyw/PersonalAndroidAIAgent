@@ -49,6 +49,12 @@ class ToolNodeExecutorTest {
     }
 
     @Test
+    fun `parseToolArguments extracts json from conversational text without markdown block`() {
+        val response = """I will use the tool now: {"tool": "search", "arguments": "how to build android app"}"""
+        assertEquals("how to build android app", executor.parseToolArguments(response))
+    }
+
+    @Test
     fun `parseToolArguments returns null when json block is invalid json`() {
         val response = """
             Here is the tool call:
