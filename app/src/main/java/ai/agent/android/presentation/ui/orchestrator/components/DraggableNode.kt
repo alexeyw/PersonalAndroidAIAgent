@@ -173,23 +173,7 @@ fun DraggableNode(
                     }
                 }
 
-                if (node.type == NodeType.IF_CONDITION) {
-                    Row(modifier = Modifier.padding(top = 8.dp)) {
-                        Button(onClick = { onConnectClick(true, "True") }) {
-                            Text(
-                                text = "True",
-                                color = if (isConnecting && connectingIsOutput && connectingLabel == "True") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onPrimary
-                            )
-                        }
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Button(onClick = { onConnectClick(true, "False") }) {
-                            Text(
-                                text = "False",
-                                color = if (isConnecting && connectingIsOutput && connectingLabel == "False") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onPrimary
-                            )
-                        }
-                    }
-                }
+
 
                 Row(modifier = Modifier.padding(top = 8.dp)) {
                     IconButton(onClick = onDeleteClick) {
@@ -218,15 +202,48 @@ fun DraggableNode(
 
         // Output port
         if (node.type != NodeType.OUTPUT) {
-            Box(
-                modifier = Modifier
-                    .align(Alignment.CenterEnd)
-                    .size(16.dp)
-                    .clip(CircleShape)
-                    .background(if (isConnecting && connectingIsOutput) MaterialTheme.colorScheme.primary else nodeColor)
-                    .border(2.dp, MaterialTheme.colorScheme.onSurface, CircleShape)
-                    .clickable { onConnectClick(true, null) }
-            )
+            if (node.type == NodeType.IF_CONDITION) {
+                var expanded by remember { mutableStateOf(false) }
+                Box(modifier = Modifier.align(Alignment.CenterEnd)) {
+                    Box(
+                        modifier = Modifier
+                            .size(16.dp)
+                            .clip(CircleShape)
+                            .background(if (isConnecting && connectingIsOutput) MaterialTheme.colorScheme.primary else nodeColor)
+                            .border(2.dp, MaterialTheme.colorScheme.onSurface, CircleShape)
+                            .clickable { expanded = true }
+                    )
+                    DropdownMenu(
+                        expanded = expanded,
+                        onDismissRequest = { expanded = false }
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text("True") },
+                            onClick = { 
+                                onConnectClick(true, "True")
+                                expanded = false 
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("False") },
+                            onClick = { 
+                                onConnectClick(true, "False")
+                                expanded = false 
+                            }
+                        )
+                    }
+                }
+            } else {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.CenterEnd)
+                        .size(16.dp)
+                        .clip(CircleShape)
+                        .background(if (isConnecting && connectingIsOutput) MaterialTheme.colorScheme.primary else nodeColor)
+                        .border(2.dp, MaterialTheme.colorScheme.onSurface, CircleShape)
+                        .clickable { onConnectClick(true, null) }
+                )
+            }
         }
     }
 }
