@@ -55,7 +55,7 @@ class GraphExecutionEngineTest {
         loadModelUseCase = mockk()
 
         val inputNodeExecutor = InputNodeExecutor()
-        val outputNodeExecutor = OutputNodeExecutor()
+        val outputNodeExecutor = OutputNodeExecutor(llmEngine, loadModelUseCase)
         val ifConditionNodeExecutor = IfConditionNodeExecutor(evaluateIfConditionUseCase)
         val queueProcessorNodeExecutor = QueueProcessorNodeExecutor()
         
@@ -138,12 +138,36 @@ class GraphExecutionEngineTest {
 
         // Evaluate to true
         coEvery { evaluateIfConditionUseCase(ifNode, "Test prompt") } returns true
+        every { llmEngine.generateResponseStream(any()) } returns flowOf("Test prompt")
 
         val statesTrue = engine(sessionId, "Test prompt", graph).toList()
         assertTrue(statesTrue.last() is AgentOrchestratorState.Completed)
         
         // Output text is preserved as input text across nodes if not modified
         assertEquals("Test prompt", (statesTrue.last() as AgentOrchestratorState.Completed).finalResponse)
+    }
+
+    @Test
+    fun `output node uses systemPrompt and llmEngine if prompt is provided`() = runTest {
+        val inputNode = NodeModel("input_1", NodeType.INPUT, 0f, 0f)
+        val outputNode = NodeModel("output_1", NodeType.OUTPUT, 0f, 0f, systemPrompt = "Format this text:")
+
+        val graph = PipelineGraph(
+            id = "g1", name = "Output Test",
+            nodes = listOf(inputNode, outputNode),
+            connections = listOf(
+                ConnectionModel("c1", "input_1", "output_1")
+            )
+        )
+
+        every { llmEngine.generateResponseStream(any()) } returns flowOf("Formatted Response")
+
+        val states = engine(sessionId, "Raw User Input", graph).toList()
+        
+        val completedState = states.last() as AgentOrchestratorState.Completed
+        assertEquals("Formatted Response", completedState.finalResponse)
+        
+        io.mockk.verify { llmEngine.generateResponseStream(match { it.contains("Format this text:") && it.contains("Raw User Input") }) }
     }
 
     @Test

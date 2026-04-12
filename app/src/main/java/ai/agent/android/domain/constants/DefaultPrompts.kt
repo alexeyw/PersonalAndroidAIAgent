@@ -31,6 +31,8 @@ object DefaultPrompts {
     
     const val SUMMARY_PROMPT = "You are a Summarizer. Given the results of multiple executed subtasks, provide a concise and comprehensive summary of the overall outcome."
 
+    const val OUTPUT_FORMAT_PROMPT = "You are a Formatter. Please format the provided input text into a clear, readable markdown response for the user."
+
     /**
      * Returns the default system prompt for a specific node type.
      */
@@ -40,6 +42,7 @@ object DefaultPrompts {
             NodeType.DECOMPOSITION -> DECOMPOSITION_PROMPT
             NodeType.EVALUATION -> EVALUATION_PROMPT
             NodeType.SUMMARY -> SUMMARY_PROMPT
+            NodeType.OUTPUT -> OUTPUT_FORMAT_PROMPT
             NodeType.LITE_RT, NodeType.CLOUD -> SYSTEM_PROMPT_PREFIX
             else -> null
         }

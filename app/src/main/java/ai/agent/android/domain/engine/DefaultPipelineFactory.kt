@@ -36,7 +36,7 @@ object DefaultPipelineFactory {
         val taskToolNode = NodeModel(id = UUID.randomUUID().toString(), type = NodeType.LITE_RT, label = "Execute Subtask", x = 900f, y = 550f)
         val summaryNode = NodeModel(id = UUID.randomUUID().toString(), type = NodeType.SUMMARY, label = "Summary", x = 1100f, y = 550f)
 
-        val outputNode = NodeModel(id = UUID.randomUUID().toString(), type = NodeType.OUTPUT, label = "Output", x = 1300f, y = 300f)
+        val outputNode = NodeModel(id = UUID.randomUUID().toString(), type = NodeType.OUTPUT, label = "Output", systemPrompt = ai.agent.android.domain.constants.DefaultPrompts.OUTPUT_FORMAT_PROMPT, x = 1300f, y = 300f)
 
         val nodes = listOf(inputNode, intentRouterNode, liteRtNode, searchToolNode, cloudNode, decompositionNode, queueProcessorNode, taskToolNode, summaryNode, outputNode)
         
