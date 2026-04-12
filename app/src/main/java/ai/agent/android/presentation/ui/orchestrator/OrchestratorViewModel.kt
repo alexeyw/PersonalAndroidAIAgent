@@ -109,30 +109,30 @@ class OrchestratorViewModel @Inject constructor(
     private fun observeProviderKeys() {
         viewModelScope.launch {
             apiKeyRepository.getOpenAIKey().collect { key ->
-                updateProviderKey(NodeType.OPENAI, !key.isNullOrBlank())
+                updateProviderKey("openai", !key.isNullOrBlank())
             }
         }
         viewModelScope.launch {
             apiKeyRepository.getAnthropicKey().collect { key ->
-                updateProviderKey(NodeType.ANTHROPIC, !key.isNullOrBlank())
+                updateProviderKey("anthropic", !key.isNullOrBlank())
             }
         }
         viewModelScope.launch {
             apiKeyRepository.getGoogleKey().collect { key ->
-                updateProviderKey(NodeType.GOOGLE, !key.isNullOrBlank())
+                updateProviderKey("google", !key.isNullOrBlank())
             }
         }
         viewModelScope.launch {
             apiKeyRepository.getDeepSeekKey().collect { key ->
-                updateProviderKey(NodeType.DEEPSEEK, !key.isNullOrBlank())
+                updateProviderKey("deepseek", !key.isNullOrBlank())
             }
         }
     }
 
-    private fun updateProviderKey(type: NodeType, hasKey: Boolean) {
+    private fun updateProviderKey(provider: String, hasKey: Boolean) {
         _uiState.update { state ->
             val updatedKeys = state.providerKeys.toMutableMap()
-            updatedKeys[type] = hasKey
+            updatedKeys[provider] = hasKey
             state.copy(providerKeys = updatedKeys)
         }
     }
@@ -160,7 +160,8 @@ class OrchestratorViewModel @Inject constructor(
             id = UUID.randomUUID().toString(),
             type = type,
             x = x,
-            y = y
+            y = y,
+            cloudProvider = if (type == NodeType.CLOUD) "auto" else null
         )
         _uiState.update { state ->
             val updatedPipeline = state.currentPipeline.copy(
@@ -273,6 +274,23 @@ class OrchestratorViewModel @Inject constructor(
         _uiState.update { state ->
             val updatedNodes = state.currentPipeline.nodes.map {
                 if (it.id == nodeId) it.copy(toolName = toolName, label = toolName) else it
+            }
+            state.copy(
+                currentPipeline = state.currentPipeline.copy(nodes = updatedNodes)
+            )
+        }
+    }
+
+    /**
+     * Updates the cloud provider for a CLOUD node.
+     *
+     * @param nodeId The unique identifier of the node.
+     * @param provider The name of the provider.
+     */
+    fun updateNodeCloudProvider(nodeId: String, provider: String) {
+        _uiState.update { state ->
+            val updatedNodes = state.currentPipeline.nodes.map {
+                if (it.id == nodeId) it.copy(cloudProvider = provider) else it
             }
             state.copy(
                 currentPipeline = state.currentPipeline.copy(nodes = updatedNodes)

@@ -20,7 +20,7 @@ class NodeExecutorFactory @Inject constructor(
             NodeType.IF_CONDITION -> ifConditionNodeExecutor
             NodeType.TOOL -> toolNodeExecutor
             NodeType.LITE_RT -> liteRtNodeExecutor
-            NodeType.OPENAI, NodeType.ANTHROPIC, NodeType.GOOGLE, NodeType.DEEPSEEK -> cloudLlmNodeExecutor
+            NodeType.CLOUD -> cloudLlmNodeExecutor
             NodeType.INTENT_ROUTER, NodeType.DECOMPOSITION, NodeType.EVALUATION, NodeType.SUMMARY -> systemNodeExecutor
             NodeType.QUEUE_PROCESSOR -> queueProcessorNodeExecutor
         }

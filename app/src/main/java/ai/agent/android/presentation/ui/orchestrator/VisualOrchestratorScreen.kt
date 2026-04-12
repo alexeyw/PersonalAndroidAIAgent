@@ -316,12 +316,11 @@ fun VisualOrchestratorScreen(
                         onDismissRequest = { showNodeMenu = false }
                     ) {
                         NodeType.entries.forEach { nodeType ->
-                            val isProvider = nodeType == NodeType.OPENAI || 
-                                             nodeType == NodeType.ANTHROPIC || 
-                                             nodeType == NodeType.GOOGLE || 
-                                             nodeType == NodeType.DEEPSEEK
+                            val isProvider = nodeType == NodeType.CLOUD
                             
-                            val hasKey = uiState.providerKeys[nodeType] == true
+                            val hasKey = if (isProvider) {
+                                uiState.providerKeys.values.any { it }
+                            } else true
                             
                             if (!isProvider || hasKey) {
                                 DropdownMenuItem(
@@ -517,7 +516,8 @@ fun VisualOrchestratorScreen(
                                 configuringNodeId = node.id
                             },
                             availableTools = uiState.availableTools,
-                            onToolSelected = viewModel::updateNodeTool
+                            onToolSelected = viewModel::updateNodeTool,
+                            onCloudProviderSelected = viewModel::updateNodeCloudProvider
                         )
                     }
                 }

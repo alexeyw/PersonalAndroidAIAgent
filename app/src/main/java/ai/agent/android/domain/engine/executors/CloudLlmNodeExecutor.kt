@@ -68,33 +68,49 @@ class CloudLlmNodeExecutor @Inject constructor(
         val fullPrompt = "$baseSystemPrompt\n\n$memoryContext$contextWindow\nAGENT: "
         
         val startTime = System.currentTimeMillis()
+
+        var selectedProvider = node.cloudProvider ?: "auto"
+        if (selectedProvider == "auto") {
+            val googleKey = apiKeyRepository.getGoogleKey().first()
+            val anthropicKey = apiKeyRepository.getAnthropicKey().first()
+            val openAIKey = apiKeyRepository.getOpenAIKey().first()
+            val deepSeekKey = apiKeyRepository.getDeepSeekKey().first()
+
+            selectedProvider = when {
+                !googleKey.isNullOrBlank() -> "google"
+                !anthropicKey.isNullOrBlank() -> "anthropic"
+                !openAIKey.isNullOrBlank() -> "openai"
+                !deepSeekKey.isNullOrBlank() -> "deepseek"
+                else -> "none"
+            }
+        }
         
-        val responseStream = when (node.type) {
-            NodeType.OPENAI -> {
+        val responseStream = when (selectedProvider) {
+            "openai" -> {
                 val client = koogClientFactory.createOpenAIExecutor()
                 val modelName = apiKeyRepository.getOpenAIModel().first() ?: OpenAIModels.Chat.GPT5_4.id
                 client?.executeStreaming(prompt("default") { user(fullPrompt) }, KoogModelMapper.getOpenAIModel(modelName))
                     ?.mapNotNull { (it as? StreamFrame.TextDelta)?.text } ?: flowOf("Error: OpenAI not configured")
             }
-            NodeType.ANTHROPIC -> {
+            "anthropic" -> {
                 val client = koogClientFactory.createAnthropicExecutor()
                 val modelName = apiKeyRepository.getAnthropicModel().first() ?: AnthropicModels.Sonnet_4_5.id
                 client?.executeStreaming(prompt("default") { user(fullPrompt) }, KoogModelMapper.getAnthropicModel(modelName))
                     ?.mapNotNull { (it as? StreamFrame.TextDelta)?.text } ?: flowOf("Error: Anthropic not configured")
             }
-            NodeType.GOOGLE -> {
+            "google" -> {
                 val client = koogClientFactory.createGoogleExecutor()
                 val modelName = apiKeyRepository.getGoogleModel().first() ?: GoogleModels.Gemini3_Flash_Preview.id
                 client?.executeStreaming(prompt("default") { user(fullPrompt) }, KoogModelMapper.getGoogleModel(modelName))
                     ?.mapNotNull { (it as? StreamFrame.TextDelta)?.text } ?: flowOf("Error: Google not configured")
             }
-            NodeType.DEEPSEEK -> {
+            "deepseek" -> {
                 val client = koogClientFactory.createDeepSeekExecutor()
                 val modelName = apiKeyRepository.getDeepSeekModel().first() ?: DeepSeekModels.DeepSeekChat.id
                 client?.executeStreaming(prompt("default") { user(fullPrompt) }, KoogModelMapper.getDeepSeekModel(modelName))
                     ?.mapNotNull { (it as? StreamFrame.TextDelta)?.text } ?: flowOf("Error: DeepSeek not configured")
             }
-            else -> flowOf("Error: Unknown LLM provider")
+            else -> flowOf("Error: No cloud provider configured or selected")
         }
         
         val accumulatedResponse = StringBuilder()

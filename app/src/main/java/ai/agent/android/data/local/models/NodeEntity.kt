@@ -20,6 +20,7 @@ import androidx.room.PrimaryKey
  * @property conditionKeywords Comma-separated keywords for condition.
  * @property conditionPrompt Free-form prompt for condition classification.
  * @property systemPrompt An optional system prompt to configure the behavior of the node.
+ * @property cloudProvider An optional provider for a CLOUD node.
  */
 @Entity(
     tableName = "pipeline_nodes",
@@ -46,5 +47,6 @@ data class NodeEntity(
     val conditionComplexity: Int? = null,
     val conditionKeywords: String? = null,
     val conditionPrompt: String? = null,
-    val systemPrompt: String? = null
+    val systemPrompt: String? = null,
+    val cloudProvider: String? = null
 )

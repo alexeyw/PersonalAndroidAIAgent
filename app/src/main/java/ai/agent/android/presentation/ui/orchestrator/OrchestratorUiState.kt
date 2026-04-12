@@ -24,7 +24,7 @@ data class OrchestratorUiState(
     val isLoading: Boolean = false,
     val errorMessage: String? = null,
     val availableTools: List<AgentTool> = emptyList(),
-    val providerKeys: Map<NodeType, Boolean> = emptyMap(),
+    val providerKeys: Map<String, Boolean> = emptyMap(),
     val promptTemplates: List<PromptTemplate> = emptyList()
 ) {
     /**
