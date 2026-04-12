@@ -5,16 +5,18 @@ import ai.agent.android.domain.models.NodeModel
 import ai.agent.android.domain.models.NodeType
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenu
@@ -42,21 +44,25 @@ import androidx.compose.ui.unit.dp
  * @param node The [NodeModel] detailing type, id, and coordinates.
  * @param modifier The [Modifier] for this composable.
  * @param isConnecting Whether this node is currently selected to connect to another.
+ * @param connectingIsOutput Whether the currently selected port is an output port.
+ * @param connectingLabel The label for the connection.
  * @param onPositionDelta Callback invoked when the node is dragged, providing the delta x and y.
- * @param onConnectClick Callback invoked when the connect button is clicked. Passes an optional label for the connection.
+ * @param onConnectClick Callback invoked when the connect button/port is clicked. Passes a boolean indicating if it's an output port and an optional label.
  * @param onDeleteClick Callback invoked when the delete button is clicked.
  * @param onConfigureClick Callback invoked when the configure button is clicked (used for IF_CONDITION).
  * @param availableTools List of tools available for tool nodes.
  * @param onToolSelected Callback invoked when a tool is selected for a tool node.
+ * @param onCloudProviderSelected Callback invoked when a cloud provider is selected for a CLOUD node.
  */
 @Composable
 fun DraggableNode(
     node: NodeModel,
     modifier: Modifier = Modifier,
     isConnecting: Boolean = false,
+    connectingIsOutput: Boolean = true,
     connectingLabel: String? = null,
     onPositionDelta: (String, Float, Float) -> Unit,
-    onConnectClick: (String?) -> Unit,
+    onConnectClick: (Boolean, String?) -> Unit,
     onDeleteClick: () -> Unit,
     onConfigureClick: () -> Unit = {},
     availableTools: List<AgentTool> = emptyList(),
@@ -77,7 +83,7 @@ fun DraggableNode(
         NodeType.OUTPUT -> Color(0xFFF44336)
     }
 
-    Box(
+    Row(
         modifier = modifier
             .pointerInput(node.id) {
                 detectDragGestures { change, dragAmount ->
@@ -85,119 +91,141 @@ fun DraggableNode(
                     // dragAmount is in the local scaled coordinate space, which perfectly maps to our logical space
                     onPositionDelta(node.id, dragAmount.x, dragAmount.y)
                 }
-            }
-            .clip(RoundedCornerShape(8.dp))
-            .background(MaterialTheme.colorScheme.surface)
-            .border(
-                width = if (isConnecting) 4.dp else 2.dp, 
-                color = if (isConnecting) MaterialTheme.colorScheme.primary else nodeColor, 
-                shape = RoundedCornerShape(8.dp)
-            )
-            .padding(16.dp),
-        contentAlignment = Alignment.Center
+            },
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(
-                text = node.label,
-                style = MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurface
+        // Input port
+        if (node.type != NodeType.INPUT) {
+            Box(
+                modifier = Modifier
+                    .size(16.dp)
+                    .clip(CircleShape)
+                    .background(if (isConnecting && !connectingIsOutput) MaterialTheme.colorScheme.primary else nodeColor)
+                    .border(2.dp, MaterialTheme.colorScheme.onSurface, CircleShape)
+                    .clickable { onConnectClick(false, null) }
             )
-            Text(
-                text = node.type.name,
-                style = MaterialTheme.typography.labelSmall,
-                color = nodeColor
-            )
-            
-            if (node.type == NodeType.TOOL) {
-                var expanded by remember { mutableStateOf(false) }
-                Box(modifier = Modifier.padding(top = 8.dp)) {
-                    Button(onClick = { expanded = true }) {
-                        Text(node.toolName ?: "Select Tool")
+            Spacer(modifier = Modifier.width(4.dp))
+        }
+
+        // Main Node Box
+        Box(
+            modifier = Modifier
+                .clip(RoundedCornerShape(8.dp))
+                .background(MaterialTheme.colorScheme.surface)
+                .border(
+                    width = if (isConnecting) 4.dp else 2.dp, 
+                    color = if (isConnecting) MaterialTheme.colorScheme.primary else nodeColor, 
+                    shape = RoundedCornerShape(8.dp)
+                )
+                .padding(16.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(
+                    text = node.label,
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    text = node.type.name,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = nodeColor
+                )
+                
+                if (node.type == NodeType.TOOL) {
+                    var expanded by remember { mutableStateOf(false) }
+                    Box(modifier = Modifier.padding(top = 8.dp)) {
+                        Button(onClick = { expanded = true }) {
+                            Text(node.toolName ?: "Select Tool")
+                        }
+                        DropdownMenu(
+                            expanded = expanded,
+                            onDismissRequest = { expanded = false }
+                        ) {
+                            availableTools.forEach { tool ->
+                                DropdownMenuItem(
+                                    text = { Text(tool.name) },
+                                    onClick = {
+                                        onToolSelected(node.id, tool.name)
+                                        expanded = false
+                                    }
+                                )
+                            }
+                        }
                     }
-                    DropdownMenu(
-                        expanded = expanded,
-                        onDismissRequest = { expanded = false }
-                    ) {
-                        availableTools.forEach { tool ->
-                            DropdownMenuItem(
-                                text = { Text(tool.name) },
-                                onClick = {
-                                    onToolSelected(node.id, tool.name)
-                                    expanded = false
-                                }
+                }
+
+                if (node.type == NodeType.CLOUD) {
+                    var expanded by remember { mutableStateOf(false) }
+                    Box(modifier = Modifier.padding(top = 8.dp)) {
+                        Button(onClick = { expanded = true }) {
+                            Text(node.cloudProvider?.replaceFirstChar { it.uppercase() } ?: "Auto")
+                        }
+                        DropdownMenu(
+                            expanded = expanded,
+                            onDismissRequest = { expanded = false }
+                        ) {
+                            listOf("auto", "google", "anthropic", "openai", "deepseek").forEach { provider ->
+                                DropdownMenuItem(
+                                    text = { Text(provider.replaceFirstChar { it.uppercase() }) },
+                                    onClick = {
+                                        onCloudProviderSelected(node.id, provider)
+                                        expanded = false
+                                    }
+                                )
+                            }
+                        }
+                    }
+                }
+
+                if (node.type != NodeType.INPUT && node.type != NodeType.OUTPUT) {
+                    Button(onClick = onConfigureClick, modifier = Modifier.padding(top = 8.dp)) {
+                        Text("Configure")
+                    }
+                }
+
+                if (node.type == NodeType.IF_CONDITION) {
+                    Row(modifier = Modifier.padding(top = 8.dp)) {
+                        Button(onClick = { onConnectClick(true, "True") }) {
+                            Text(
+                                text = "True",
+                                color = if (isConnecting && connectingIsOutput && connectingLabel == "True") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onPrimary
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Button(onClick = { onConnectClick(true, "False") }) {
+                            Text(
+                                text = "False",
+                                color = if (isConnecting && connectingIsOutput && connectingLabel == "False") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onPrimary
                             )
                         }
                     }
                 }
-            }
 
-            if (node.type == NodeType.CLOUD) {
-                var expanded by remember { mutableStateOf(false) }
-                Box(modifier = Modifier.padding(top = 8.dp)) {
-                    Button(onClick = { expanded = true }) {
-                        Text(node.cloudProvider?.replaceFirstChar { it.uppercase() } ?: "Auto")
-                    }
-                    DropdownMenu(
-                        expanded = expanded,
-                        onDismissRequest = { expanded = false }
-                    ) {
-                        listOf("auto", "google", "anthropic", "openai", "deepseek").forEach { provider ->
-                            DropdownMenuItem(
-                                text = { Text(provider.replaceFirstChar { it.uppercase() }) },
-                                onClick = {
-                                    onCloudProviderSelected(node.id, provider)
-                                    expanded = false
-                                }
-                            )
-                        }
-                    }
-                }
-            }
-
-            if (node.type != NodeType.INPUT && node.type != NodeType.OUTPUT) {
-                Button(onClick = onConfigureClick, modifier = Modifier.padding(top = 8.dp)) {
-                    Text("Configure")
-                }
-            }
-
-            if (node.type == NodeType.IF_CONDITION) {
                 Row(modifier = Modifier.padding(top = 8.dp)) {
-                    Button(onClick = { onConnectClick("True") }) {
-                        Text(
-                            text = "True",
-                            color = if (isConnecting && connectingLabel == "True") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onPrimary
-                        )
-                    }
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Button(onClick = { onConnectClick("False") }) {
-                        Text(
-                            text = "False",
-                            color = if (isConnecting && connectingLabel == "False") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onPrimary
-                        )
-                    }
-                }
-            }
-
-            Row(modifier = Modifier.padding(top = 8.dp)) {
-                if (node.type != NodeType.IF_CONDITION) {
-                    IconButton(onClick = { onConnectClick(null) }) {
+                    IconButton(onClick = onDeleteClick) {
                         Icon(
-                            imageVector = Icons.Default.Add,
-                            contentDescription = "Connect",
-                            tint = if (isConnecting) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                            imageVector = Icons.Default.Close,
+                            contentDescription = "Delete",
+                            tint = MaterialTheme.colorScheme.error
                         )
                     }
-                    Spacer(modifier = Modifier.width(8.dp))
-                }
-                IconButton(onClick = onDeleteClick) {
-                    Icon(
-                        imageVector = Icons.Default.Close,
-                        contentDescription = "Delete",
-                        tint = MaterialTheme.colorScheme.error
-                    )
                 }
             }
+        }
+
+        // Output port
+        if (node.type != NodeType.OUTPUT) {
+            Spacer(modifier = Modifier.width(4.dp))
+            Box(
+                modifier = Modifier
+                    .size(16.dp)
+                    .clip(CircleShape)
+                    .background(if (isConnecting && connectingIsOutput) MaterialTheme.colorScheme.primary else nodeColor)
+                    .border(2.dp, MaterialTheme.colorScheme.onSurface, CircleShape)
+                    .clickable { onConnectClick(true, null) }
+            )
         }
     }
 }

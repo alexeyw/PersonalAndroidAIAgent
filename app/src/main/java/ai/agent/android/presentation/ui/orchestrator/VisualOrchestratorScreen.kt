@@ -86,6 +86,7 @@ fun VisualOrchestratorScreen(
     var showNodeMenu by remember { mutableStateOf(false) }
     var showClearDialog by remember { mutableStateOf(false) }
     var connectingFromNodeId by remember { mutableStateOf<String?>(null) }
+    var connectingIsOutput by remember { mutableStateOf<Boolean?>(null) }
     var connectingLabel by remember { mutableStateOf<String?>(null) }
     var configuringNodeId by remember { mutableStateOf<String?>(null) }
 
@@ -441,9 +442,9 @@ fun VisualOrchestratorScreen(
 
                             if (source != null && target != null) {
                                 val path = Path().apply {
-                                    val startX = source.x + 150f 
+                                    val startX = source.x + 170f 
                                     val startY = source.y + 80f  
-                                    val endX = target.x
+                                    val endX = target.x - 10f
                                     val endY = target.y + 80f
 
                                     moveTo(startX, startY)
@@ -457,6 +458,19 @@ fun VisualOrchestratorScreen(
                                     path = path,
                                     color = Color.Gray,
                                     style = Stroke(width = 4.dp.toPx()) 
+                                )
+                                val arrowPath = Path().apply {
+                                    val endX = target.x - 10f
+                                    val endY = target.y + 80f
+                                    moveTo(endX, endY)
+                                    lineTo(endX - 15f, endY - 10f)
+                                    lineTo(endX - 15f, endY + 10f)
+                                    close()
+                                }
+                                drawPath(
+                                    path = arrowPath,
+                                    color = Color.Gray,
+                                    style = androidx.compose.ui.graphics.drawscope.Fill
                                 )
                             }
                         }
@@ -485,6 +499,7 @@ fun VisualOrchestratorScreen(
                         DraggableNode(
                             node = node,
                             isConnecting = connectingFromNodeId == node.id,
+                            connectingIsOutput = connectingIsOutput ?: true,
                             connectingLabel = connectingLabel,
                             modifier = Modifier.offset {
                                 IntOffset(node.x.roundToInt(), node.y.roundToInt())
@@ -492,22 +507,30 @@ fun VisualOrchestratorScreen(
                             onPositionDelta = { id, dx, dy ->
                                 viewModel.moveNode(id, dx, dy)
                             },
-                            onConnectClick = { label ->
+                            onConnectClick = { isOutput, label ->
                                 if (connectingFromNodeId == null) {
                                     connectingFromNodeId = node.id
+                                    connectingIsOutput = isOutput
                                     connectingLabel = label
-                                } else if (connectingFromNodeId != node.id) {
-                                    viewModel.addConnection(connectingFromNodeId!!, node.id, connectingLabel)
+                                } else if (connectingFromNodeId != node.id && connectingIsOutput != isOutput) {
+                                    val sourceId = if (connectingIsOutput == true) connectingFromNodeId!! else node.id
+                                    val targetId = if (connectingIsOutput == false) connectingFromNodeId!! else node.id
+                                    val connLabel = if (connectingIsOutput == true) connectingLabel else label
+                                    
+                                    viewModel.addConnection(sourceId, targetId, connLabel)
                                     connectingFromNodeId = null
+                                    connectingIsOutput = null
                                     connectingLabel = null
                                 } else {
                                     connectingFromNodeId = null
+                                    connectingIsOutput = null
                                     connectingLabel = null
                                 }
                             },
                             onDeleteClick = {
                                 if (connectingFromNodeId == node.id) {
                                     connectingFromNodeId = null
+                                    connectingIsOutput = null
                                     connectingLabel = null
                                 }
                                 viewModel.removeNode(node.id)
