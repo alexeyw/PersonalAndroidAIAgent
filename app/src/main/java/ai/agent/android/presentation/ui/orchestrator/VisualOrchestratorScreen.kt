@@ -53,6 +53,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -94,6 +95,7 @@ fun VisualOrchestratorScreen(
     var showPromptLibrary by remember { mutableStateOf(false) }
     
     var canvasSize by remember { mutableStateOf(IntSize.Zero) }
+    var nodeSizes by remember { mutableStateOf(mapOf<String, IntSize>()) }
 
     val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
         uri?.let {
@@ -432,6 +434,9 @@ fun VisualOrchestratorScreen(
                             transformOrigin = TransformOrigin(0f, 0f)
                         }
                 ) {
+                    val density = LocalDensity.current
+                    val portRadiusPx = with(density) { 8.dp.toPx() }
+
                     Canvas(modifier = Modifier.fillMaxSize()) {
                         val nodes = uiState.nodes
                         val connections = uiState.connections
@@ -441,12 +446,18 @@ fun VisualOrchestratorScreen(
                             val target = nodes.find { it.id == conn.targetNodeId }
 
                             if (source != null && target != null) {
-                                val path = Path().apply {
-                                    val startX = source.x + 170f 
-                                    val startY = source.y + 80f  
-                                    val endX = target.x - 10f
-                                    val endY = target.y + 80f
+                                val sourceSize = nodeSizes[source.id] ?: IntSize(0, 0)
+                                val targetSize = nodeSizes[target.id] ?: IntSize(0, 0)
 
+                                if (sourceSize.width == 0 || targetSize.width == 0) return@forEach
+
+                                val startX = source.x + if (source.type == NodeType.OUTPUT) sourceSize.width.toFloat() / 2f else sourceSize.width.toFloat() - portRadiusPx
+                                val startY = source.y + sourceSize.height.toFloat() / 2f
+                                
+                                val endX = target.x + if (target.type == NodeType.INPUT) targetSize.width.toFloat() / 2f else portRadiusPx
+                                val endY = target.y + targetSize.height.toFloat() / 2f
+
+                                val path = Path().apply {
                                     moveTo(startX, startY)
                                     cubicTo(
                                         startX + 100f, startY,
@@ -459,12 +470,12 @@ fun VisualOrchestratorScreen(
                                     color = Color.Gray,
                                     style = Stroke(width = 4.dp.toPx()) 
                                 )
+                                
+                                val arrowTipX = endX - portRadiusPx
                                 val arrowPath = Path().apply {
-                                    val endX = target.x - 10f
-                                    val endY = target.y + 80f
-                                    moveTo(endX, endY)
-                                    lineTo(endX - 15f, endY - 10f)
-                                    lineTo(endX - 15f, endY + 10f)
+                                    moveTo(arrowTipX, endY)
+                                    lineTo(arrowTipX - 24f, endY - 14f)
+                                    lineTo(arrowTipX - 24f, endY + 14f)
                                     close()
                                 }
                                 drawPath(
@@ -481,17 +492,28 @@ fun VisualOrchestratorScreen(
                         val source = uiState.nodes.find { it.id == conn.sourceNodeId }
                         val target = uiState.nodes.find { it.id == conn.targetNodeId }
                         if (source != null && target != null && conn.label != null) {
-                            val midX = (source.x + 150f + target.x) / 2f
-                            val midY = (source.y + 80f + target.y + 80f) / 2f
-                            Text(
-                                text = conn.label,
-                                color = if (conn.label == "True") Color(0xFF4CAF50) else Color(0xFFF44336),
-                                fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
-                                modifier = Modifier
-                                    .offset { IntOffset(midX.roundToInt(), midY.roundToInt() - 20) }
-                                    .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.8f))
-                                    .padding(4.dp)
-                            )
+                            val sourceSize = nodeSizes[source.id] ?: IntSize(0, 0)
+                            val targetSize = nodeSizes[target.id] ?: IntSize(0, 0)
+
+                            if (sourceSize.width > 0 && targetSize.width > 0) {
+                                val startX = source.x + sourceSize.width.toFloat() - portRadiusPx
+                                val startY = source.y + sourceSize.height.toFloat() / 2f
+                                val endX = target.x + portRadiusPx
+                                val endY = target.y + targetSize.height.toFloat() / 2f
+                                
+                                val midX = (startX + endX) / 2f
+                                val midY = (startY + endY) / 2f
+
+                                Text(
+                                    text = conn.label,
+                                    color = if (conn.label == "True") Color(0xFF4CAF50) else Color(0xFFF44336),
+                                    fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                                    modifier = Modifier
+                                        .offset { IntOffset(midX.roundToInt(), midY.roundToInt() - 20) }
+                                        .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.8f))
+                                        .padding(4.dp)
+                                )
+                            }
                         }
                     }
 
@@ -501,9 +523,13 @@ fun VisualOrchestratorScreen(
                             isConnecting = connectingFromNodeId == node.id,
                             connectingIsOutput = connectingIsOutput ?: true,
                             connectingLabel = connectingLabel,
-                            modifier = Modifier.offset {
-                                IntOffset(node.x.roundToInt(), node.y.roundToInt())
-                            },
+                            modifier = Modifier
+                                .offset { IntOffset(node.x.roundToInt(), node.y.roundToInt()) }
+                                .onGloballyPositioned { coordinates ->
+                                    if (nodeSizes[node.id] != coordinates.size) {
+                                        nodeSizes = nodeSizes + (node.id to coordinates.size)
+                                    }
+                                },
                             onPositionDelta = { id, dx, dy ->
                                 viewModel.moveNode(id, dx, dy)
                             },

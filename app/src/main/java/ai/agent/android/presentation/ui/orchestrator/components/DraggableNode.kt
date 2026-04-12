@@ -83,7 +83,7 @@ fun DraggableNode(
         NodeType.OUTPUT -> Color(0xFFF44336)
     }
 
-    Row(
+    Box(
         modifier = modifier
             .pointerInput(node.id) {
                 detectDragGestures { change, dragAmount ->
@@ -92,24 +92,12 @@ fun DraggableNode(
                     onPositionDelta(node.id, dragAmount.x, dragAmount.y)
                 }
             },
-        verticalAlignment = Alignment.CenterVertically
+        contentAlignment = Alignment.Center
     ) {
-        // Input port
-        if (node.type != NodeType.INPUT) {
-            Box(
-                modifier = Modifier
-                    .size(16.dp)
-                    .clip(CircleShape)
-                    .background(if (isConnecting && !connectingIsOutput) MaterialTheme.colorScheme.primary else nodeColor)
-                    .border(2.dp, MaterialTheme.colorScheme.onSurface, CircleShape)
-                    .clickable { onConnectClick(false, null) }
-            )
-            Spacer(modifier = Modifier.width(4.dp))
-        }
-
         // Main Node Box
         Box(
             modifier = Modifier
+                .padding(horizontal = 8.dp) // Reserve space for ports
                 .clip(RoundedCornerShape(8.dp))
                 .background(MaterialTheme.colorScheme.surface)
                 .border(
@@ -215,11 +203,24 @@ fun DraggableNode(
             }
         }
 
-        // Output port
-        if (node.type != NodeType.OUTPUT) {
-            Spacer(modifier = Modifier.width(4.dp))
+        // Input port
+        if (node.type != NodeType.INPUT) {
             Box(
                 modifier = Modifier
+                    .align(Alignment.CenterStart)
+                    .size(16.dp)
+                    .clip(CircleShape)
+                    .background(if (isConnecting && !connectingIsOutput) MaterialTheme.colorScheme.primary else nodeColor)
+                    .border(2.dp, MaterialTheme.colorScheme.onSurface, CircleShape)
+                    .clickable { onConnectClick(false, null) }
+            )
+        }
+
+        // Output port
+        if (node.type != NodeType.OUTPUT) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.CenterEnd)
                     .size(16.dp)
                     .clip(CircleShape)
                     .background(if (isConnecting && connectingIsOutput) MaterialTheme.colorScheme.primary else nodeColor)
