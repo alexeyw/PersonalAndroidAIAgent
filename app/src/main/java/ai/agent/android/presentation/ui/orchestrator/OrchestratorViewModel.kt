@@ -204,10 +204,17 @@ class OrchestratorViewModel @Inject constructor(
             label = label
         )
         _uiState.update { state ->
+            // Remove previous connection if it's between the same source and target, 
+            // OR if it's from the same source with the same label (e.g. "True" / "False")
+            val filteredConnections = state.currentPipeline.connections.filterNot { 
+                (it.sourceNodeId == sourceNodeId && it.targetNodeId == targetNodeId) ||
+                (it.sourceNodeId == sourceNodeId && it.label == label && label != null)
+            }
+
             val tempPipeline = state.currentPipeline.copy(
-                connections = state.currentPipeline.connections + newConnection
+                connections = filteredConnections + newConnection
             )
-            
+
             // Validate DAG
             if (tempPipeline.isValidDAG()) {
                 state.copy(currentPipeline = tempPipeline, errorMessage = null)
@@ -216,7 +223,6 @@ class OrchestratorViewModel @Inject constructor(
             }
         }
     }
-
     /**
      * Updates the condition configuration of an IF_CONDITION node and the system prompt for any node.
      *
