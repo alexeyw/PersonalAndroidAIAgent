@@ -6,6 +6,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Box
@@ -90,6 +91,7 @@ fun VisualOrchestratorScreen(
     var connectingIsOutput by remember { mutableStateOf<Boolean?>(null) }
     var connectingLabel by remember { mutableStateOf<String?>(null) }
     var configuringNodeId by remember { mutableStateOf<String?>(null) }
+    var editingConnectionId by remember { mutableStateOf<String?>(null) }
 
     var showLoadMenu by remember { mutableStateOf(false) }
     var showPromptLibrary by remember { mutableStateOf(false) }
@@ -182,6 +184,50 @@ fun VisualOrchestratorScreen(
                 }
             }
         )
+    }
+
+    if (editingConnectionId != null) {
+        val connection = uiState.connections.find { it.id == editingConnectionId }
+        if (connection != null) {
+            var connLabel by remember(connection) { mutableStateOf(connection.label ?: "") }
+            AlertDialog(
+                onDismissRequest = { editingConnectionId = null },
+                title = { Text("Connection Properties") },
+                text = {
+                    Column {
+                        androidx.compose.material3.OutlinedTextField(
+                            value = connLabel,
+                            onValueChange = { connLabel = it },
+                            label = { Text("Label (e.g., Intent Name)") },
+                            modifier = Modifier.padding(top = 8.dp)
+                        )
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = {
+                        viewModel.updateConnectionLabel(connection.id, connLabel.takeIf { it.isNotBlank() })
+                        editingConnectionId = null
+                    }) {
+                        Text("Save")
+                    }
+                },
+                dismissButton = {
+                    Row {
+                        TextButton(onClick = {
+                            viewModel.removeConnection(connection.id)
+                            editingConnectionId = null
+                        }) {
+                            Text("Delete Connection", color = MaterialTheme.colorScheme.error)
+                        }
+                        TextButton(onClick = { editingConnectionId = null }) {
+                            Text("Cancel")
+                        }
+                    }
+                }
+            )
+        } else {
+            editingConnectionId = null
+        }
     }
 
     if (configuringNodeId != null) {
@@ -414,6 +460,41 @@ fun VisualOrchestratorScreen(
                     .onGloballyPositioned { coordinates ->
                         canvasSize = coordinates.size
                     }
+                    .pointerInput(uiState.connections, nodeSizes, scale, panOffset) {
+                        detectTapGestures { offset ->
+                            val logicX = (offset.x - panOffset.x) / scale
+                            val logicY = (offset.y - panOffset.y) / scale
+                            val clickLogicPoint = Offset(logicX, logicY)
+                            val threshold = 12.dp.toPx() / scale
+
+                            val clickedConnection = uiState.connections.find { conn ->
+                                val source = uiState.nodes.find { it.id == conn.sourceNodeId }
+                                val target = uiState.nodes.find { it.id == conn.targetNodeId }
+                                if (source != null && target != null) {
+                                    val sourceSize = nodeSizes[source.id] ?: IntSize(0, 0)
+                                    val targetSize = nodeSizes[target.id] ?: IntSize(0, 0)
+                                    if (sourceSize.width > 0 && targetSize.width > 0) {
+                                        val portRadiusPx = 8.dp.toPx()
+                                        val startX = source.x + if (source.type == NodeType.OUTPUT) sourceSize.width.toFloat() / 2f else sourceSize.width.toFloat() - portRadiusPx
+                                        val startY = source.y + sourceSize.height.toFloat() / 2f
+                                        val endX = target.x + if (target.type == NodeType.INPUT) targetSize.width.toFloat() / 2f else portRadiusPx
+                                        val endY = target.y + targetSize.height.toFloat() / 2f
+                                        isPointNearCubicBezier(
+                                            clickLogicPoint,
+                                            Offset(startX, startY),
+                                            Offset(startX + 100f, startY),
+                                            Offset(endX - 100f, endY),
+                                            Offset(endX, endY),
+                                            threshold
+                                        )
+                                    } else false
+                                } else false
+                            }
+                            if (clickedConnection != null) {
+                                editingConnectionId = clickedConnection.id
+                            }
+                        }
+                    }
                     .pointerInput(Unit) {
                         detectTransformGestures { centroid, pan, zoom, _ ->
                             val newScale = (scale * zoom).coerceIn(0.1f, 5f)
@@ -543,7 +624,12 @@ fun VisualOrchestratorScreen(
                                     val targetId = if (connectingIsOutput == false) connectingFromNodeId!! else node.id
                                     val connLabel = if (connectingIsOutput == true) connectingLabel else label
                                     
-                                    viewModel.addConnection(sourceId, targetId, connLabel)
+                                    val newConnectionId = viewModel.addConnection(sourceId, targetId, connLabel)
+                                    val sourceNode = uiState.nodes.find { it.id == sourceId }
+                                    if (sourceNode?.type == NodeType.INTENT_ROUTER && newConnectionId != null) {
+                                        editingConnectionId = newConnectionId
+                                    }
+                                    
                                     connectingFromNodeId = null
                                     connectingIsOutput = null
                                     connectingLabel = null
@@ -573,4 +659,38 @@ fun VisualOrchestratorScreen(
             }
         }
     }
+}
+
+private fun isPointNearCubicBezier(
+    point: Offset,
+    p0: Offset,
+    p1: Offset,
+    p2: Offset,
+    p3: Offset,
+    threshold: Float
+): Boolean {
+    val steps = 20
+    var prev = p0
+    for (i in 1..steps) {
+        val t = i / steps.toFloat()
+        val u = 1 - t
+        val current = Offset(
+            u * u * u * p0.x + 3 * u * u * t * p1.x + 3 * u * t * t * p2.x + t * t * t * p3.x,
+            u * u * u * p0.y + 3 * u * u * t * p1.y + 3 * u * t * t * p2.y + t * t * t * p3.y
+        )
+        if (distanceFromPointToLineSegment(point, prev, current) <= threshold) {
+            return true
+        }
+        prev = current
+    }
+    return false
+}
+
+private fun distanceFromPointToLineSegment(p: Offset, v: Offset, w: Offset): Float {
+    val l2 = (v.x - w.x) * (v.x - w.x) + (v.y - w.y) * (v.y - w.y)
+    if (l2 == 0f) return (p - v).getDistance()
+    var t = ((p.x - v.x) * (w.x - v.x) + (p.y - v.y) * (w.y - v.y)) / l2
+    t = Math.max(0f, Math.min(1f, t))
+    val projection = Offset(v.x + t * (w.x - v.x), v.y + t * (w.y - v.y))
+    return (p - projection).getDistance()
 }

@@ -115,7 +115,7 @@ class OrchestratorViewModelTest {
     }
 
     @Test
-    fun `addConnection creates connection if DAG is valid`() {
+    fun `addConnection creates connection if DAG is valid and returns its ID`() {
         // Arrange
         viewModel.addNode(NodeType.INPUT, 0f, 0f)
         viewModel.addNode(NodeType.OUTPUT, 100f, 100f)
@@ -124,18 +124,20 @@ class OrchestratorViewModelTest {
         val n2 = nodes[1].id
 
         // Act
-        viewModel.addConnection(n1, n2)
+        val connectionId = viewModel.addConnection(n1, n2)
 
         // Assert
+        assertNotNull(connectionId)
         val connections = viewModel.uiState.value.currentPipeline.connections
         assertEquals(1, connections.size)
+        assertEquals(connectionId, connections[0].id)
         assertEquals(n1, connections[0].sourceNodeId)
         assertEquals(n2, connections[0].targetNodeId)
         assertEquals(null, viewModel.uiState.value.errorMessage)
     }
 
     @Test
-    fun `addConnection sets error if DAG becomes invalid (cycle)`() {
+    fun `addConnection sets error if DAG becomes invalid (cycle) and returns null`() {
         // Arrange
         viewModel.addNode(NodeType.INPUT, 0f, 0f)
         viewModel.addNode(NodeType.OUTPUT, 100f, 100f)
@@ -146,12 +148,50 @@ class OrchestratorViewModelTest {
         viewModel.addConnection(n1, n2)
 
         // Act
-        viewModel.addConnection(n2, n1) // This should create a cycle
+        val connectionId = viewModel.addConnection(n2, n1) // This should create a cycle
 
         // Assert
+        assertEquals(null, connectionId)
         val connections = viewModel.uiState.value.currentPipeline.connections
         assertEquals(1, connections.size) // The cyclic connection should not be added
         assertTrue(viewModel.uiState.value.errorMessage?.contains("Cycle detected") == true)
+    }
+
+    @Test
+    fun `updateConnectionLabel updates the label of a connection`() {
+        // Arrange
+        viewModel.addNode(NodeType.INPUT, 0f, 0f)
+        viewModel.addNode(NodeType.OUTPUT, 100f, 100f)
+        val nodes = viewModel.uiState.value.currentPipeline.nodes
+        val n1 = nodes[0].id
+        val n2 = nodes[1].id
+        val connectionId = viewModel.addConnection(n1, n2)
+
+        // Act
+        viewModel.updateConnectionLabel(connectionId!!, "NewLabel")
+
+        // Assert
+        val connections = viewModel.uiState.value.currentPipeline.connections
+        assertEquals(1, connections.size)
+        assertEquals("NewLabel", connections[0].label)
+    }
+
+    @Test
+    fun `removeConnection removes connection by ID`() {
+        // Arrange
+        viewModel.addNode(NodeType.INPUT, 0f, 0f)
+        viewModel.addNode(NodeType.OUTPUT, 100f, 100f)
+        val nodes = viewModel.uiState.value.currentPipeline.nodes
+        val n1 = nodes[0].id
+        val n2 = nodes[1].id
+        val connectionId = viewModel.addConnection(n1, n2)
+
+        // Act
+        viewModel.removeConnection(connectionId!!)
+
+        // Assert
+        val connections = viewModel.uiState.value.currentPipeline.connections
+        assertEquals(0, connections.size)
     }
 
     @Test

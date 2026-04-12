@@ -195,14 +195,16 @@ class OrchestratorViewModel @Inject constructor(
      * @param sourceNodeId The unique identifier of the source node.
      * @param targetNodeId The unique identifier of the target node.
      * @param label Optional label for the connection.
+     * @return The ID of the newly created connection, or null if it was not created (e.g. cycle).
      */
-    fun addConnection(sourceNodeId: String, targetNodeId: String, label: String? = null) {
+    fun addConnection(sourceNodeId: String, targetNodeId: String, label: String? = null): String? {
         val newConnection = ConnectionModel(
             id = UUID.randomUUID().toString(),
             sourceNodeId = sourceNodeId,
             targetNodeId = targetNodeId,
             label = label
         )
+        var createdConnectionId: String? = null
         _uiState.update { state ->
             // Remove previous connection if it's between the same source and target, 
             // OR if it's from the same source with the same label (e.g. "True" / "False")
@@ -217,12 +219,48 @@ class OrchestratorViewModel @Inject constructor(
 
             // Validate DAG
             if (tempPipeline.isValidDAG()) {
+                createdConnectionId = newConnection.id
                 state.copy(currentPipeline = tempPipeline, errorMessage = null)
             } else {
                 state.copy(errorMessage = "Cannot connect: Cycle detected")
             }
         }
+        return createdConnectionId
     }
+
+    /**
+     * Updates the label of an existing connection.
+     *
+     * @param connectionId The unique identifier of the connection.
+     * @param label The new label for the connection, or null to remove it.
+     */
+    fun updateConnectionLabel(connectionId: String, label: String?) {
+        _uiState.update { state ->
+            val updatedConnections = state.currentPipeline.connections.map {
+                if (it.id == connectionId) it.copy(label = label) else it
+            }
+            state.copy(
+                currentPipeline = state.currentPipeline.copy(connections = updatedConnections)
+            )
+        }
+    }
+
+    /**
+     * Removes an existing connection.
+     *
+     * @param connectionId The unique identifier of the connection to remove.
+     */
+    fun removeConnection(connectionId: String) {
+        _uiState.update { state ->
+            val updatedConnections = state.currentPipeline.connections.filter {
+                it.id != connectionId
+            }
+            state.copy(
+                currentPipeline = state.currentPipeline.copy(connections = updatedConnections)
+            )
+        }
+    }
+
     /**
      * Updates the condition configuration of an IF_CONDITION node and the system prompt for any node.
      *
