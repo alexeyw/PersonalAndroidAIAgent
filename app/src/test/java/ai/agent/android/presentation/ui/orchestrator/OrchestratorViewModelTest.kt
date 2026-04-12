@@ -79,8 +79,8 @@ class OrchestratorViewModelTest {
         testDispatcher.scheduler.advanceUntilIdle()
         
         val state = viewModel.uiState.value
-        assertEquals(true, state.providerKeys[NodeType.ANTHROPIC])
-        assertEquals(false, state.providerKeys[NodeType.OPENAI])
+        assertEquals(true, state.providerKeys["anthropic"])
+        assertEquals(false, state.providerKeys["openai"])
         assertEquals(1, state.availableTools.size)
         assertEquals("Tool1", state.availableTools[0].name)
     }

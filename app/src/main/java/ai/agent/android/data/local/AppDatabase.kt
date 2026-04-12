@@ -35,7 +35,7 @@ import ai.agent.android.data.local.dao.PromptTemplateDao
         ConnectionEntity::class,
         PromptTemplateEntity::class
     ],
-    version = 13,
+    version = 14,
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -145,6 +145,16 @@ abstract class AppDatabase : RoomDatabase() {
         val MIGRATION_12_13 = object : Migration(12, 13) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE `pipeline_nodes` ADD COLUMN `modelPath` TEXT")
+            }
+        }
+
+        /**
+         * Migration from version 13 to 14.
+         * Adds `cloudProvider` column to `pipeline_nodes` table.
+         */
+        val MIGRATION_13_14 = object : Migration(13, 14) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `pipeline_nodes` ADD COLUMN `cloudProvider` TEXT")
             }
         }
     }

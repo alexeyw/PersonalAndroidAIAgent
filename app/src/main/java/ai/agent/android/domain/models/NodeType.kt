@@ -10,24 +10,9 @@ enum class NodeType {
     LITE_RT,
 
     /**
-     * Node representing the external DeepSeek API client.
+     * Node representing an external Cloud API client (e.g. OpenAI, Anthropic, Google, DeepSeek).
      */
-    DEEPSEEK,
-
-    /**
-     * Node representing an external OpenAI API client.
-     */
-    OPENAI,
-
-    /**
-     * Node representing an Anthropic Claude API client.
-     */
-    ANTHROPIC,
-
-    /**
-     * Node representing an Google API client.
-     */
-    GOOGLE,
+    CLOUD,
 
     /**
      * Node representing a Tool or AppFunction that can be executed.

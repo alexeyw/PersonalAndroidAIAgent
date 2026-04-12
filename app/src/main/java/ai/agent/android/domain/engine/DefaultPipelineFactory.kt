@@ -28,7 +28,7 @@ object DefaultPipelineFactory {
         val searchToolNode = NodeModel(id = UUID.randomUUID().toString(), type = NodeType.TOOL, label = "Search Tool", toolName = "search_tool", x = 500f, y = 250f)
         
         // Complex Branch
-        val cloudNode = NodeModel(id = UUID.randomUUID().toString(), type = NodeType.GOOGLE, label = "Google API", x = 500f, y = 400f)
+        val cloudNode = NodeModel(id = UUID.randomUUID().toString(), type = NodeType.CLOUD, label = "Cloud API", cloudProvider = "auto", x = 500f, y = 400f)
         
         // Task Branch
         val decompositionNode = NodeModel(id = UUID.randomUUID().toString(), type = NodeType.DECOMPOSITION, label = "Decompose", x = 500f, y = 550f)

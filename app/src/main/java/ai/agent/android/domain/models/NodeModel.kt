@@ -14,6 +14,7 @@ package ai.agent.android.domain.models
  * @property conditionKeywords Comma-separated keywords for condition if type is [NodeType.IF_CONDITION].
  * @property conditionPrompt Free-form prompt for condition classification if type is [NodeType.IF_CONDITION].
  * @property systemPrompt An optional system prompt to configure the behavior of the node.
+ * @property cloudProvider An optional provider for a CLOUD node ("auto", "openai", "anthropic", "google", "deepseek").
  */
 data class NodeModel(
     val id: String,
@@ -26,5 +27,6 @@ data class NodeModel(
     val conditionComplexity: Int? = null,
     val conditionKeywords: String? = null,
     val conditionPrompt: String? = null,
-    val systemPrompt: String? = ai.agent.android.domain.constants.DefaultPrompts.getDefaultPromptForNodeType(type)
+    val systemPrompt: String? = ai.agent.android.domain.constants.DefaultPrompts.getDefaultPromptForNodeType(type),
+    val cloudProvider: String? = null
 )

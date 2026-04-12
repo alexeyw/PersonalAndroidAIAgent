@@ -60,14 +60,12 @@ fun DraggableNode(
     onDeleteClick: () -> Unit,
     onConfigureClick: () -> Unit = {},
     availableTools: List<AgentTool> = emptyList(),
-    onToolSelected: (String, String) -> Unit = { _, _ -> }
+    onToolSelected: (String, String) -> Unit = { _, _ -> },
+    onCloudProviderSelected: (String, String) -> Unit = { _, _ -> }
 ) {
     val nodeColor = when (node.type) {
         NodeType.LITE_RT -> Color(0xFF4CAF50)
-        NodeType.DEEPSEEK -> Color(0xFF2196F3)
-        NodeType.OPENAI -> Color(0xFF9C27B0)
-        NodeType.ANTHROPIC -> Color(0xFF673AB7)
-        NodeType.GOOGLE -> Color(0xFF00BCD4)
+        NodeType.CLOUD -> Color(0xFF2196F3)
         NodeType.TOOL -> Color(0xFFFF9800)
         NodeType.IF_CONDITION -> Color(0xFFFFC107)
         NodeType.INTENT_ROUTER -> Color(0xFFE91E63)
@@ -126,6 +124,29 @@ fun DraggableNode(
                                 text = { Text(tool.name) },
                                 onClick = {
                                     onToolSelected(node.id, tool.name)
+                                    expanded = false
+                                }
+                            )
+                        }
+                    }
+                }
+            }
+
+            if (node.type == NodeType.CLOUD) {
+                var expanded by remember { mutableStateOf(false) }
+                Box(modifier = Modifier.padding(top = 8.dp)) {
+                    Button(onClick = { expanded = true }) {
+                        Text(node.cloudProvider?.replaceFirstChar { it.uppercase() } ?: "Auto")
+                    }
+                    DropdownMenu(
+                        expanded = expanded,
+                        onDismissRequest = { expanded = false }
+                    ) {
+                        listOf("auto", "google", "anthropic", "openai", "deepseek").forEach { provider ->
+                            DropdownMenuItem(
+                                text = { Text(provider.replaceFirstChar { it.uppercase() }) },
+                                onClick = {
+                                    onCloudProviderSelected(node.id, provider)
                                     expanded = false
                                 }
                             )

@@ -40,7 +40,7 @@ object DefaultPrompts {
             NodeType.DECOMPOSITION -> DECOMPOSITION_PROMPT
             NodeType.EVALUATION -> EVALUATION_PROMPT
             NodeType.SUMMARY -> SUMMARY_PROMPT
-            NodeType.LITE_RT, NodeType.OPENAI, NodeType.ANTHROPIC, NodeType.GOOGLE, NodeType.DEEPSEEK -> SYSTEM_PROMPT_PREFIX
+            NodeType.LITE_RT, NodeType.CLOUD -> SYSTEM_PROMPT_PREFIX
             else -> null
         }
     }
