@@ -167,7 +167,7 @@ fun DraggableNode(
                     }
                 }
 
-                if (node.type != NodeType.INPUT && node.type != NodeType.OUTPUT) {
+                if (node.type != NodeType.INPUT) {
                     Button(onClick = onConfigureClick, modifier = Modifier.padding(top = 8.dp)) {
                         Text("Configure")
                     }
