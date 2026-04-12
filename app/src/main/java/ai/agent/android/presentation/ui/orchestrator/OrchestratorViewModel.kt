@@ -204,9 +204,11 @@ class OrchestratorViewModel @Inject constructor(
             label = label
         )
         _uiState.update { state ->
-            // If the source node already has a connection with the same label (e.g., "True" or "False"), remove it
+            // Remove previous connection if it's between the same source and target, 
+            // OR if it's from the same source with the same label (e.g. "True" / "False")
             val filteredConnections = state.currentPipeline.connections.filterNot { 
-                it.sourceNodeId == sourceNodeId && it.label == label && label != null
+                (it.sourceNodeId == sourceNodeId && it.targetNodeId == targetNodeId) ||
+                (it.sourceNodeId == sourceNodeId && it.label == label && label != null)
             }
 
             val tempPipeline = state.currentPipeline.copy(
