@@ -230,7 +230,7 @@ class ChatViewModel @Inject constructor(
                 renameSession(currentState.currentSessionId, newName)
             }
 
-            _uiState.update { it.copy(isGenerating = true, errorMessage = null, orchestratorState = null) }
+            _uiState.update { it.copy(isGenerating = true, errorMessage = null, orchestratorState = null, pipelineTrace = emptyList()) }
             
             agentOrchestratorUseCase(currentState.currentSessionId, prompt)
                 .catch { error ->
@@ -244,6 +244,10 @@ class ChatViewModel @Inject constructor(
                 }
                 .collect { state ->
                     _uiState.update { it.copy(orchestratorState = state) }
+                    
+                    if (state is AgentOrchestratorState.PipelineTrace) {
+                        _uiState.update { it.copy(pipelineTrace = state.steps) }
+                    }
                     
                     if (state is AgentOrchestratorState.Completed || state is AgentOrchestratorState.Error) {
                         _uiState.update { it.copy(isGenerating = false) }

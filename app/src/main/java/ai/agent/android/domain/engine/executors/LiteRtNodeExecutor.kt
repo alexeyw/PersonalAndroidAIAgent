@@ -96,14 +96,6 @@ class LiteRtNodeExecutor @Inject constructor(
         metricsRepository.updateMetrics(endTime - startTime, approximateTokenCount)
 
         val fullResponseText = accumulatedResponse.toString().trim()
-        chatRepository.saveMessage(
-            ChatMessage(
-                sessionId = sessionId,
-                role = Role.AGENT,
-                content = fullResponseText,
-                timestamp = System.currentTimeMillis()
-            )
-        )
         
         kotlinx.coroutines.delay(1000)
 

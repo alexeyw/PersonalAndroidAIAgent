@@ -24,5 +24,6 @@ data class ChatUiState(
     val errorMessage: String? = null,
     val sessions: List<ChatSession> = emptyList(),
     val contextSize: Int = 0,
-    val maxContextSize: Int = 0
+    val maxContextSize: Int = 0,
+    val pipelineTrace: List<AgentOrchestratorState.TraceStep> = emptyList()
 )

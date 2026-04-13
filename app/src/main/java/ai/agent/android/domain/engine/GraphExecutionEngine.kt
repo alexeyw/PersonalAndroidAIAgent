@@ -3,6 +3,7 @@ package ai.agent.android.domain.engine
 import ai.agent.android.domain.engine.executors.NodeExecutorFactory
 import ai.agent.android.domain.engine.executors.ToolNodeExecutor
 import ai.agent.android.domain.models.*
+import ai.agent.android.domain.repositories.ChatRepository
 import kotlinx.coroutines.flow.*
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -15,7 +16,8 @@ import javax.inject.Singleton
 @Singleton
 class GraphExecutionEngine @Inject constructor(
     private val nodeExecutorFactory: NodeExecutorFactory,
-    private val toolNodeExecutor: ToolNodeExecutor
+    private val toolNodeExecutor: ToolNodeExecutor,
+    private val chatRepository: ChatRepository
 ) {
     companion object {
         const val MAX_STEPS = 15
@@ -54,6 +56,7 @@ class GraphExecutionEngine @Inject constructor(
         val activeQueue = mutableListOf<String>()
         var queueLoopStartNodeId: String? = null
         val queueResults = mutableListOf<String>()
+        val traceSteps = mutableListOf<AgentOrchestratorState.TraceStep>()
 
         while (currentNode != null && stepCount < MAX_STEPS) {
             stepCount++
@@ -77,8 +80,15 @@ class GraphExecutionEngine @Inject constructor(
                 }
             
             if (nodeResult?.error != null) {
-                emit(AgentOrchestratorState.Error(nodeResult!!.error!!))
+                emit(AgentOrchestratorState.Error(nodeResult?.error!!))
                 return@flow
+            }
+
+            if (currentNode.type != NodeType.INPUT && currentNode.type != NodeType.OUTPUT) {
+                val outputText = nodeResult?.outputText ?: currentInputText
+                traceSteps.add(AgentOrchestratorState.TraceStep(currentNode.type.name, outputText))
+                chatRepository.saveTraceStep(sessionId, currentNode.type.name, outputText)
+                emit(AgentOrchestratorState.PipelineTrace(traceSteps.toList()))
             }
 
             if (currentNode.type == NodeType.OUTPUT) {

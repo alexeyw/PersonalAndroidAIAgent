@@ -2,9 +2,12 @@ package ai.agent.android.domain.engine.executors
 
 import ai.agent.android.domain.engine.LlmInferenceEngine
 import ai.agent.android.domain.models.AgentOrchestratorState
+import ai.agent.android.domain.models.ChatMessage
 import ai.agent.android.domain.models.NodeExecutionResult
 import ai.agent.android.domain.models.NodeModel
 import ai.agent.android.domain.models.Result
+import ai.agent.android.domain.models.Role
+import ai.agent.android.domain.repositories.ChatRepository
 import ai.agent.android.domain.usecases.LoadModelUseCase
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
@@ -12,7 +15,8 @@ import javax.inject.Inject
 
 class OutputNodeExecutor @Inject constructor(
     private val llmEngine: LlmInferenceEngine,
-    private val loadModelUseCase: LoadModelUseCase
+    private val loadModelUseCase: LoadModelUseCase,
+    private val chatRepository: ChatRepository
 ) : NodeExecutor {
     override fun execute(
         node: NodeModel,
@@ -53,9 +57,25 @@ class OutputNodeExecutor @Inject constructor(
             
             val generatedText = accumulatedResponse.toString().trim()
             val finalOutput = if (generatedText.isNotEmpty()) generatedText else inputText
+            chatRepository.saveMessage(
+                ChatMessage(
+                    sessionId = sessionId,
+                    role = Role.AGENT,
+                    content = finalOutput,
+                    timestamp = System.currentTimeMillis()
+                )
+            )
             emit(AgentOrchestratorState.Completed(finalOutput))
             emit(NodeExecutionResult(outputText = finalOutput))
         } else {
+            chatRepository.saveMessage(
+                ChatMessage(
+                    sessionId = sessionId,
+                    role = Role.AGENT,
+                    content = inputText,
+                    timestamp = System.currentTimeMillis()
+                )
+            )
             emit(AgentOrchestratorState.Completed(inputText))
             emit(NodeExecutionResult(outputText = inputText))
         }

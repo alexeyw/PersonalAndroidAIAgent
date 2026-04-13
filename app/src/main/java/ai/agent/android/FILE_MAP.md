@@ -21,6 +21,8 @@ This file maps the contents of the main application package.
       - `LocalModelDao.kt` - Local models DAO.
       - `MemoryDao.kt` - Memory chunks DAO.
       - `PipelineDao.kt` - Pipelines DAO.
+      - `PromptTemplateDao.kt` - Prompt templates DAO.
+      - `TraceStepDao.kt` - Trace steps DAO.
     - `models/` - Local DB entity models.
       - `ChatMessageEntity.kt` - Chat message entity.
       - `ChatSessionEntity.kt` - Chat session entity.
@@ -30,6 +32,8 @@ This file maps the contents of the main application package.
       - `NodeEntity.kt` - Pipeline node entity.
       - `PipelineEntity.kt` - Pipeline entity.
       - `PipelineWithNodesAndConnections.kt` - Pipeline relational model.
+      - `PromptTemplateEntity.kt` - Prompt template entity.
+      - `TraceStepEntity.kt` - Trace step entity.
   - `mappers/` - Data mapping layer.
     - `LocalModelMapper.kt` - Mapper for local models.
     - `ChatMessageMapper.kt` - Mapper for chat messages.
@@ -138,6 +142,7 @@ This file maps the contents of the main application package.
       - `ChatScreen.kt` - Chat UI screen.
       - `ChatUiState.kt` - Chat UI state.
       - `ChatViewModel.kt` - Chat ViewModel.
+      - `PipelineTraceCard.kt` - Pipeline trace UI component.
     - `memory/` - Memory screen components.
       - `MemoryScreen.kt` - Memory UI screen.
       - `MemoryUiState.kt` - Memory UI state.
