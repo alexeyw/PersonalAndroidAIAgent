@@ -55,7 +55,7 @@ class GraphExecutionEngineTest {
         loadModelUseCase = mockk()
 
         val inputNodeExecutor = InputNodeExecutor()
-        val outputNodeExecutor = OutputNodeExecutor(llmEngine, loadModelUseCase)
+        val outputNodeExecutor = OutputNodeExecutor(llmEngine, loadModelUseCase, chatRepository)
         val ifConditionNodeExecutor = IfConditionNodeExecutor(evaluateIfConditionUseCase)
         val queueProcessorNodeExecutor = QueueProcessorNodeExecutor()
         
@@ -84,7 +84,7 @@ class GraphExecutionEngineTest {
             systemNodeExecutor, queueProcessorNodeExecutor
         )
 
-        engine = GraphExecutionEngine(nodeExecutorFactory, toolNodeExecutor)
+        engine = GraphExecutionEngine(nodeExecutorFactory, toolNodeExecutor, chatRepository)
 
         coEvery { getContextWindowUseCase(sessionId) } returns ""
         coEvery { retrieveRelevantMemoryUseCase(any()) } returns emptyList()
@@ -217,7 +217,7 @@ class GraphExecutionEngineTest {
     fun `resumeWithApproval delegates to toolNodeExecutor`() {
         val mockToolNodeExecutor = mockk<ToolNodeExecutor>(relaxed = true)
         val mockFactory = mockk<NodeExecutorFactory>()
-        val engineWithMock = GraphExecutionEngine(mockFactory, mockToolNodeExecutor)
+        val engineWithMock = GraphExecutionEngine(mockFactory, mockToolNodeExecutor, mockk(relaxed = true))
         
         engineWithMock.resumeWithApproval("session_id_123", true)
         

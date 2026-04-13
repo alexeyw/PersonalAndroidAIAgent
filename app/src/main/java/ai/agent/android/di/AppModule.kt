@@ -56,7 +56,7 @@ object AppModule {
             AppDatabase::class.java,
             DATABASE_NAME
         )
-        .addMigrations(AppDatabase.MIGRATION_9_10, AppDatabase.MIGRATION_10_11, AppDatabase.MIGRATION_11_12, AppDatabase.MIGRATION_12_13, AppDatabase.MIGRATION_13_14)
+        .addMigrations(AppDatabase.MIGRATION_9_10, AppDatabase.MIGRATION_10_11, AppDatabase.MIGRATION_11_12, AppDatabase.MIGRATION_12_13, AppDatabase.MIGRATION_13_14, AppDatabase.MIGRATION_14_15)
         .fallbackToDestructiveMigration(true)
         .build()
     }
@@ -99,6 +99,14 @@ object AppModule {
     @Provides
     fun providePromptTemplateDao(database: AppDatabase): ai.agent.android.data.local.dao.PromptTemplateDao {
         return database.promptTemplateDao()
+    }
+
+    /**
+     * Provides the [ai.agent.android.data.local.dao.TraceStepDao] from the database.
+     */
+    @Provides
+    fun provideTraceStepDao(database: AppDatabase): ai.agent.android.data.local.dao.TraceStepDao {
+        return database.traceStepDao()
     }
 
     /**
@@ -153,4 +161,3 @@ object AppModule {
         return ai.agent.android.presentation.notifications.ApprovalNotificationManager(appContext, activeSessionTracker)
     }
 }
-

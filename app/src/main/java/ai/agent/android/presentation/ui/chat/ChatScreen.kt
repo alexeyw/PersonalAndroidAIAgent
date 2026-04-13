@@ -227,6 +227,13 @@ fun ChatScreen(
                         Spacer(modifier = Modifier.height(8.dp))
                     }
 
+                    if (uiState.pipelineTrace.isNotEmpty()) {
+                        item {
+                            PipelineTraceCard(steps = uiState.pipelineTrace)
+                            Spacer(modifier = Modifier.height(8.dp))
+                        }
+                    }
+
                     if (uiState.orchestratorState != null && uiState.isGenerating) {
                         item {
                             AgentThoughtIndicator(

@@ -138,6 +138,7 @@ This file maps the contents of the main application package.
       - `ChatScreen.kt` - Chat UI screen.
       - `ChatUiState.kt` - Chat UI state.
       - `ChatViewModel.kt` - Chat ViewModel.
+      - `PipelineTraceCard.kt` - Pipeline trace UI component.
     - `memory/` - Memory screen components.
       - `MemoryScreen.kt` - Memory UI screen.
       - `MemoryUiState.kt` - Memory UI state.

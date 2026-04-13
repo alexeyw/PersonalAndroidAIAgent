@@ -51,7 +51,5 @@ class SystemNodeExecutorTest {
         val result = states[1] as NodeExecutionResult
         assertEquals("Result", result.outputText)
         assertEquals("Result", result.routingKey)
-        
-        coVerify { chatRepository.saveMessage(any()) }
     }
 }

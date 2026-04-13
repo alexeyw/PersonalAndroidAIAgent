@@ -33,9 +33,10 @@ import ai.agent.android.data.local.dao.PromptTemplateDao
         PipelineEntity::class,
         NodeEntity::class,
         ConnectionEntity::class,
-        PromptTemplateEntity::class
+        PromptTemplateEntity::class,
+        ai.agent.android.data.local.models.TraceStepEntity::class
     ],
-    version = 14,
+    version = 15,
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -74,6 +75,13 @@ abstract class AppDatabase : RoomDatabase() {
      * @return The [PromptTemplateDao] instance.
      */
     abstract fun promptTemplateDao(): PromptTemplateDao
+
+    /**
+     * Provides access to the TraceStepDao.
+     *
+     * @return The [ai.agent.android.data.local.dao.TraceStepDao] instance.
+     */
+    abstract fun traceStepDao(): ai.agent.android.data.local.dao.TraceStepDao
 
     companion object {
         /**
@@ -155,6 +163,28 @@ abstract class AppDatabase : RoomDatabase() {
         val MIGRATION_13_14 = object : Migration(13, 14) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE `pipeline_nodes` ADD COLUMN `cloudProvider` TEXT")
+            }
+        }
+
+        /**
+         * Migration from version 14 to 15.
+         * Adds `trace_steps` table.
+         */
+        val MIGRATION_14_15 = object : Migration(14, 15) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `trace_steps` (
+                        `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        `sessionId` TEXT NOT NULL,
+                        `nodeName` TEXT NOT NULL,
+                        `outputText` TEXT NOT NULL,
+                        `timestamp` INTEGER NOT NULL,
+                        FOREIGN KEY(`sessionId`) REFERENCES `chat_sessions`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_trace_steps_sessionId` ON `trace_steps` (`sessionId`)")
             }
         }
     }

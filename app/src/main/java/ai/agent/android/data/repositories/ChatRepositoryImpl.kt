@@ -1,6 +1,7 @@
 package ai.agent.android.data.repositories
 
 import ai.agent.android.data.local.dao.ChatDao
+import ai.agent.android.data.local.dao.TraceStepDao
 import ai.agent.android.data.mappers.toDomain
 import ai.agent.android.data.mappers.toEntity
 import ai.agent.android.domain.models.ChatMessage
@@ -18,7 +19,8 @@ import javax.inject.Singleton
  */
 @Singleton
 class ChatRepositoryImpl @Inject constructor(
-    private val chatDao: ChatDao
+    private val chatDao: ChatDao,
+    private val traceStepDao: TraceStepDao
 ) : ChatRepository {
 
     override suspend fun saveMessage(message: ChatMessage) {
@@ -82,5 +84,22 @@ class ChatRepositoryImpl @Inject constructor(
 
     override suspend fun getSessionById(id: String): ChatSession? {
         return chatDao.getSessionById(id)?.toDomain()
+    }
+
+    override suspend fun saveTraceStep(sessionId: String, nodeName: String, outputText: String) {
+        traceStepDao.insertTraceStep(
+            ai.agent.android.data.local.models.TraceStepEntity(
+                sessionId = sessionId,
+                nodeName = nodeName,
+                outputText = outputText,
+                timestamp = System.currentTimeMillis()
+            )
+        )
+    }
+
+    override fun getTraceSteps(sessionId: String): Flow<List<ai.agent.android.domain.models.AgentOrchestratorState.TraceStep>> {
+        return traceStepDao.getTraceStepsForSession(sessionId).map { entities ->
+            entities.map { ai.agent.android.domain.models.AgentOrchestratorState.TraceStep(it.nodeName, it.outputText) }
+        }
     }
 }
