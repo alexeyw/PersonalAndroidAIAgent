@@ -1,5 +1,7 @@
 package ai.agent.android.presentation.ui.settings
 
+import ai.agent.android.domain.usecases.LoadModelUseCase
+import ai.agent.android.domain.repositories.LocalModelRepository
 import ai.agent.android.domain.repositories.ApiKeyRepository
 import ai.agent.android.domain.repositories.SettingsRepository
 import io.mockk.coVerify
@@ -23,6 +25,8 @@ class SettingsViewModelTest {
 
     private val settingsRepository = mockk<SettingsRepository>(relaxed = true)
     private val apiKeyRepository = mockk<ApiKeyRepository>(relaxed = true)
+    private val loadModelUseCase = mockk<LoadModelUseCase>(relaxed = true)
+    private val localModelRepository = mockk<LocalModelRepository>(relaxed = true)
     private lateinit var viewModel: SettingsViewModel
     private val testDispatcher = StandardTestDispatcher()
 
@@ -37,15 +41,22 @@ class SettingsViewModelTest {
         every { settingsRepository.maxContextLength } returns MutableStateFlow(4096)
         every { settingsRepository.systemPromptPrefix } returns MutableStateFlow("Default Prompt")
         every { settingsRepository.requiresUserConfirmation } returns MutableStateFlow(true)
+        every { settingsRepository.localModelBackend } returns MutableStateFlow("CPU")
 
         // Setup default flows for API keys repository
         every { apiKeyRepository.getOpenAIKey() } returns MutableStateFlow("sk-open")
+        every { apiKeyRepository.getOpenAIModel() } returns MutableStateFlow("")
         every { apiKeyRepository.getAnthropicKey() } returns MutableStateFlow(null)
+        every { apiKeyRepository.getAnthropicModel() } returns MutableStateFlow("")
         every { apiKeyRepository.getGoogleKey() } returns MutableStateFlow(null)
+        every { apiKeyRepository.getGoogleModel() } returns MutableStateFlow("")
         every { apiKeyRepository.getDeepSeekKey() } returns MutableStateFlow(null)
+        every { apiKeyRepository.getDeepSeekModel() } returns MutableStateFlow("")
         every { apiKeyRepository.getOllamaBaseUrl() } returns MutableStateFlow("http://localhost:11434")
+        every { apiKeyRepository.getOllamaModelName() } returns MutableStateFlow("")
+        every { apiKeyRepository.getOllamaContextWindowSize() } returns MutableStateFlow(4096)
 
-        viewModel = SettingsViewModel(settingsRepository, apiKeyRepository)
+        viewModel = SettingsViewModel(settingsRepository, apiKeyRepository, loadModelUseCase, localModelRepository)
     }
 
     @After

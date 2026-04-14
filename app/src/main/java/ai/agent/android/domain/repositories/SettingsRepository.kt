@@ -156,4 +156,15 @@ interface SettingsRepository {
      * @param limit The new limit.
      */
     suspend fun setMaxMemoryChunksForSearch(limit: Int)
+    /**
+     * A [Flow] representing the selected backend for the local model (CPU, GPU, or NPU).
+     */
+    val localModelBackend: Flow<String>
+
+    /**
+     * Updates the selected backend for the local model.
+     *
+     * @param backend The new backend (e.g., "CPU", "GPU", "NPU").
+     */
+    suspend fun setLocalModelBackend(backend: String)
 }

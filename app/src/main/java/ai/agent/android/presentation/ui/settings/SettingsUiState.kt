@@ -38,5 +38,6 @@ data class SettingsUiState(
     val deepSeekModel: String = "",
     val ollamaBaseUrl: String = "",
     val ollamaModel: String = "",
-    val ollamaContextWindow: String = "4096"
+    val ollamaContextWindow: String = "4096",
+    val localModelBackend: String = "CPU"
 )
