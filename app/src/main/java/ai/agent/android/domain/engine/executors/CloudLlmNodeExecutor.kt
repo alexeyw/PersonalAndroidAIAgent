@@ -46,17 +46,10 @@ class CloudLlmNodeExecutor @Inject constructor(
         sessionId: String,
         originalPrompt: String
     ): Flow<Any> = flow {
-        val tools = toolRepository.getAvailableTools()
-        val toolsDescription = tools.joinToString("\n") { "- ${it.name}: ${it.description} | Params: ${it.parameters}" }
         val systemPromptPrefix = settingsRepository.systemPromptPrefix.first()
-        val toolUsageInstructionTemplate = settingsRepository.toolUsageInstruction.first()
-        val toolUsageInstruction = if (toolUsageInstructionTemplate.contains("%s")) {
-            toolUsageInstructionTemplate.replace("%s", toolsDescription)
-        } else {
-            "$toolUsageInstructionTemplate\n\n$toolsDescription"
-        }
+        val nodeSystemPrompt = node.systemPrompt ?: "You are a helpful AI assistant."
+        val baseSystemPrompt = "$systemPromptPrefix\n$nodeSystemPrompt\n"
 
-        val baseSystemPrompt = "$systemPromptPrefix\n$toolUsageInstruction\n"
         val contextWindow = getContextWindowUseCase(sessionId)
         
         val relevantMemories = retrieveRelevantMemoryUseCase(originalPrompt)
