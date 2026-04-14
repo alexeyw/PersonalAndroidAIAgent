@@ -35,6 +35,8 @@
         <!-- Required for LiteRT GPU (OpenCL) acceleration -->
         <uses-native-library android:name="libOpenCL.so" android:required="false" />
         <uses-native-library android:name="libvndksupport.so" android:required="false" />
+        <!-- Required for LiteRT NPU (Qualcomm DSP) acceleration -->
+        <uses-native-library android:name="libcdsprpc.so" android:required="false" />
 
         <provider
             android:name="androidx.startup.InitializationProvider"
