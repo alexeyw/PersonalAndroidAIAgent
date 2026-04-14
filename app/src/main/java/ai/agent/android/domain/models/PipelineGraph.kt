@@ -63,4 +63,88 @@ data class PipelineGraph(
 
         return true
     }
+
+    /**
+     * Validates the pipeline graph and returns a list of validation errors.
+     *
+     * @return A list of [PipelineValidationError]s. Empty if valid.
+     */
+    fun validate(): List<PipelineValidationError> {
+        val errors = mutableListOf<PipelineValidationError>()
+        
+        val inputs = nodes.filter { it.type == NodeType.INPUT }
+        if (inputs.isEmpty()) errors.add(PipelineValidationError.MissingInput)
+        if (inputs.size > 1) errors.add(PipelineValidationError.MultipleInputs)
+
+        val outputs = nodes.filter { it.type == NodeType.OUTPUT }
+        if (outputs.isEmpty()) errors.add(PipelineValidationError.MissingOutput)
+        if (outputs.size > 1) errors.add(PipelineValidationError.MultipleOutputs)
+
+        if (!isValidDAG()) {
+            errors.add(PipelineValidationError.HasCycles)
+        }
+
+        if (nodes.isNotEmpty()) {
+            val adjForward = mutableMapOf<String, MutableList<String>>()
+            val adjBackward = mutableMapOf<String, MutableList<String>>()
+            nodes.forEach { 
+                adjForward[it.id] = mutableListOf()
+                adjBackward[it.id] = mutableListOf()
+            }
+            connections.forEach { 
+                if (adjForward.containsKey(it.sourceNodeId)) {
+                    adjForward[it.sourceNodeId]?.add(it.targetNodeId)
+                }
+                if (adjBackward.containsKey(it.targetNodeId)) {
+                    adjBackward[it.targetNodeId]?.add(it.sourceNodeId)
+                }
+            }
+
+            val hasDisconnectedInput = inputs.any { adjForward[it.id]?.isEmpty() == true }
+            if (hasDisconnectedInput) errors.add(PipelineValidationError.DisconnectedInput)
+
+            val hasDisconnectedOutput = outputs.any { adjBackward[it.id]?.isEmpty() == true }
+            if (hasDisconnectedOutput) errors.add(PipelineValidationError.DisconnectedOutput)
+
+            val reachableFromInput = mutableSetOf<String>()
+            val inputQueue = ArrayDeque<String>()
+            inputs.forEach { 
+                reachableFromInput.add(it.id)
+                inputQueue.add(it.id)
+            }
+            while (inputQueue.isNotEmpty()) {
+                val curr = inputQueue.removeFirst()
+                adjForward[curr]?.forEach { next ->
+                    if (reachableFromInput.add(next)) {
+                        inputQueue.add(next)
+                    }
+                }
+            }
+
+            val canReachOutput = mutableSetOf<String>()
+            val outputQueue = ArrayDeque<String>()
+            outputs.forEach { 
+                canReachOutput.add(it.id)
+                outputQueue.add(it.id)
+            }
+            while (outputQueue.isNotEmpty()) {
+                val curr = outputQueue.removeFirst()
+                adjBackward[curr]?.forEach { prev ->
+                    if (canReachOutput.add(prev)) {
+                        outputQueue.add(prev)
+                    }
+                }
+            }
+
+            if (nodes.any { it.id !in reachableFromInput }) {
+                errors.add(PipelineValidationError.UnreachableNode)
+            }
+
+            if (nodes.any { it.id !in canReachOutput }) {
+                errors.add(PipelineValidationError.DeadEndNode)
+            }
+        }
+
+        return errors
+    }
 }

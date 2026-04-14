@@ -425,7 +425,18 @@ fun VisualOrchestratorScreen(
                     onClick = { viewModel.saveCurrentPipeline() },
                     modifier = Modifier.padding(end = 8.dp)
                 ) {
-                    Icon(imageVector = Icons.Default.Check, contentDescription = "Save Pipeline", modifier = Modifier.padding(end = 4.dp))
+                    androidx.compose.material3.BadgedBox(
+                        badge = {
+                            if (uiState.validationErrors.isNotEmpty()) {
+                                androidx.compose.material3.Badge {
+                                    Text(uiState.validationErrors.size.toString())
+                                }
+                            }
+                        },
+                        modifier = Modifier.padding(end = 8.dp)
+                    ) {
+                        Icon(imageVector = Icons.Default.Check, contentDescription = "Save Pipeline")
+                    }
                     Text("Save")
                 }
 

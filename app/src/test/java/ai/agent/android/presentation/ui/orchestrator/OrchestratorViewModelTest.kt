@@ -236,6 +236,24 @@ class OrchestratorViewModelTest {
     }
 
     @Test
+    fun `saveCurrentPipeline handles validation errors and updates errorMessage`() = runTest {
+        val errors = listOf(
+            ai.agent.android.domain.models.PipelineValidationError.MissingInput,
+            ai.agent.android.domain.models.PipelineValidationError.MissingOutput
+        )
+        val exception = ai.agent.android.domain.models.PipelineValidationException(errors)
+        coEvery { savePipelineUseCase(any()) } returns Result.failure(exception)
+        
+        viewModel.saveCurrentPipeline()
+        testDispatcher.scheduler.advanceUntilIdle()
+        
+        val errorMessage = viewModel.uiState.value.errorMessage
+        assertEquals(false, viewModel.uiState.value.isLoading)
+        assertTrue(errorMessage?.contains("Missing INPUT node") == true)
+        assertTrue(errorMessage?.contains("Missing OUTPUT node") == true)
+    }
+
+    @Test
     fun `loadPipeline loads from use case and updates current pipeline`() = runTest {
         val mockPipeline = PipelineGraph(id = "test-1", name = "Test Pipeline")
         coEvery { loadPipelineUseCase.getPipelineById("test-1") } returns mockPipeline
