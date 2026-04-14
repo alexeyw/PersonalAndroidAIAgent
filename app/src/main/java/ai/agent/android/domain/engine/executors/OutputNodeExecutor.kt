@@ -51,7 +51,7 @@ class OutputNodeExecutor @Inject constructor(
                     }
                 }
             } catch (e: Exception) {
-                Timber.tag("PipelineDebug").e(e, "Error in OutputNodeExecutor generation")
+                Timber.tag("PipelineDebug").e(e, "[NODE_ERR] type=${node.type.name} id=${node.id} error in OutputNodeExecutor generation")
                 emit(AgentOrchestratorState.Error(e.message ?: "Unknown error"))
                 emit(NodeExecutionResult(error = e.message))
                 return@flow

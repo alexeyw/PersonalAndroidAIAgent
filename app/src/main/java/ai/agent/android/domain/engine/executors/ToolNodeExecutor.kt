@@ -76,7 +76,7 @@ class ToolNodeExecutor @Inject constructor(
         val result = try {
             toolRepository.executeTool(toolName, toolArgs)
         } catch (e: Exception) {
-            Timber.tag("PipelineDebug").e(e, "Error executing tool: $toolName")
+            Timber.tag("PipelineDebug").e(e, "[NODE_ERR] type=${node.type.name} id=${node.id} error executing tool: $toolName")
             "Error executing $toolName: ${e.message}"
         }
 
