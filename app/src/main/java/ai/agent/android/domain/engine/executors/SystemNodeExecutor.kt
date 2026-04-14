@@ -28,7 +28,11 @@ class SystemNodeExecutor @Inject constructor(
         originalPrompt: String
     ): Flow<Any> = flow {
         val nodeSystemPrompt = node.systemPrompt ?: "You are an AI assistant."
-        val fullPrompt = "$nodeSystemPrompt\n\nUSER: $inputText\nAGENT: "
+        val fullPrompt = if (node.type == NodeType.SUMMARY) {
+            "$nodeSystemPrompt\n\nORIGINAL TASK: $originalPrompt\n\nRESULTS TO SUMMARIZE:\n$inputText\n\nAGENT: "
+        } else {
+            "$nodeSystemPrompt\n\nUSER: $inputText\nAGENT: "
+        }
         
         val loadResult = loadModelUseCase(node.modelPath)
         if (loadResult is Result.Error) {
