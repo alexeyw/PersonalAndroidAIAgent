@@ -58,7 +58,7 @@ class LiteRtNodeExecutor @Inject constructor(
             ""
         }
 
-        val fullPrompt = "$baseSystemPrompt\n\n$memoryContext$contextWindow\nAGENT: "
+        val fullPrompt = "$baseSystemPrompt\n\n$memoryContext$contextWindow\n\nUSER/INPUT: $inputText\nAGENT: "
         
         val startTime = System.currentTimeMillis()
         
