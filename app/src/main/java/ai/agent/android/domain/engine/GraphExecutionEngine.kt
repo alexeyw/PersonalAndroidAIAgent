@@ -119,7 +119,13 @@ class GraphExecutionEngine @Inject constructor(
                     ?: edges.firstOrNull()?.targetNodeId
                 
                 if (activeQueue.isNotEmpty() && itemNodeId != null) {
-                    currentInputText = activeQueue.removeAt(0)
+                    val nextItem = activeQueue.removeAt(0)
+                    val contextStr = queueResults.mapIndexed { i, res -> "Result of Subtask ${i+1}:\n$res" }.joinToString("\n\n")
+                    if (contextStr.isNotEmpty()) {
+                        currentInputText = "PREVIOUS RESULTS CONTEXT:\n$contextStr\n\n---\n\nCURRENT SUBTASK TO EXECUTE:\n$nextItem"
+                    } else {
+                        currentInputText = "CURRENT SUBTASK TO EXECUTE:\n$nextItem"
+                    }
                     currentNode = graph.nodes.find { it.id == itemNodeId }
                     continue
                 } else {
@@ -144,7 +150,13 @@ class GraphExecutionEngine @Inject constructor(
                 val doneNodeId = edges.find { it.label.equals("Done", ignoreCase = true) }?.targetNodeId
                 
                 if (activeQueue.isNotEmpty() && itemNodeId != null) {
-                    currentInputText = activeQueue.removeAt(0)
+                    val nextItem = activeQueue.removeAt(0)
+                    val contextStr = queueResults.mapIndexed { i, res -> "Result of Subtask ${i+1}:\n$res" }.joinToString("\n\n")
+                    if (contextStr.isNotEmpty()) {
+                        currentInputText = "PREVIOUS RESULTS CONTEXT:\n$contextStr\n\n---\n\nCURRENT SUBTASK TO EXECUTE:\n$nextItem"
+                    } else {
+                        currentInputText = "CURRENT SUBTASK TO EXECUTE:\n$nextItem"
+                    }
                     currentNode = graph.nodes.find { it.id == itemNodeId }
                     continue
                 } else {

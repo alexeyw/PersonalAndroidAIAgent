@@ -11,7 +11,8 @@ class NodeExecutorFactory @Inject constructor(
     private val liteRtNodeExecutor: LiteRtNodeExecutor,
     private val cloudLlmNodeExecutor: CloudLlmNodeExecutor,
     private val systemNodeExecutor: SystemNodeExecutor,
-    private val queueProcessorNodeExecutor: QueueProcessorNodeExecutor
+    private val queueProcessorNodeExecutor: QueueProcessorNodeExecutor,
+    private val summaryNodeExecutor: SummaryNodeExecutor
 ) {
     fun getExecutor(type: NodeType): NodeExecutor {
         return when (type) {
@@ -21,7 +22,8 @@ class NodeExecutorFactory @Inject constructor(
             NodeType.TOOL -> toolNodeExecutor
             NodeType.LITE_RT -> liteRtNodeExecutor
             NodeType.CLOUD -> cloudLlmNodeExecutor
-            NodeType.INTENT_ROUTER, NodeType.DECOMPOSITION, NodeType.EVALUATION, NodeType.SUMMARY -> systemNodeExecutor
+            NodeType.INTENT_ROUTER, NodeType.DECOMPOSITION, NodeType.EVALUATION -> systemNodeExecutor
+            NodeType.SUMMARY -> summaryNodeExecutor
             NodeType.QUEUE_PROCESSOR -> queueProcessorNodeExecutor
         }
     }

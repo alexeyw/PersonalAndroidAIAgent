@@ -78,10 +78,14 @@ class GraphExecutionEngineTest {
             llmEngine, loadModelUseCase, chatRepository
         )
 
+        val summaryNodeExecutor = ai.agent.android.domain.engine.executors.SummaryNodeExecutor(
+            llmEngine, loadModelUseCase
+        )
+
         val nodeExecutorFactory = NodeExecutorFactory(
             inputNodeExecutor, outputNodeExecutor, ifConditionNodeExecutor,
             toolNodeExecutor, liteRtNodeExecutor, cloudLlmNodeExecutor,
-            systemNodeExecutor, queueProcessorNodeExecutor
+            systemNodeExecutor, queueProcessorNodeExecutor, summaryNodeExecutor
         )
 
         engine = GraphExecutionEngine(nodeExecutorFactory, toolNodeExecutor, chatRepository)
