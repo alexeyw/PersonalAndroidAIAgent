@@ -76,7 +76,7 @@ class ToolNodeExecutor @Inject constructor(
         val result = try {
             toolRepository.executeTool(toolName, toolArgs)
         } catch (e: Exception) {
-            Timber.e(e, "Error executing tool: $toolName")
+            Timber.tag("PipelineDebug").e(e, "Error executing tool: $toolName")
             "Error executing $toolName: ${e.message}"
         }
 
@@ -113,7 +113,7 @@ class ToolNodeExecutor @Inject constructor(
             
             jsonObject.get("arguments").toString()
         } catch (e: org.json.JSONException) {
-            Timber.e(e, "Error parsing tool arguments JSON")
+            Timber.tag("PipelineDebug").e(e, "Error parsing tool arguments JSON")
             null
         }
     }

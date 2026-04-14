@@ -47,7 +47,7 @@ class SystemNodeExecutor @Inject constructor(
                 emit(AgentOrchestratorState.Thinking(accumulatedResponse.toString()))
             }
         } catch (e: Exception) {
-            Timber.e(e, "Error in SystemNodeExecutor generation")
+            Timber.tag("PipelineDebug").e(e, "Error in SystemNodeExecutor generation")
             emit(AgentOrchestratorState.Error(e.message ?: "Unknown error"))
             emit(NodeExecutionResult(error = e.message))
             return@flow

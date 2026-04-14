@@ -88,7 +88,7 @@ class LiteRtNodeExecutor @Inject constructor(
                 }
             }
         } catch (e: Exception) {
-            Timber.e(e, "Error in LiteRtNodeExecutor generation")
+            Timber.tag("PipelineDebug").e(e, "Error in LiteRtNodeExecutor generation")
             emit(AgentOrchestratorState.Error(e.message ?: "Unknown error during LLM generation"))
             emit(NodeExecutionResult(error = e.message))
             return@flow

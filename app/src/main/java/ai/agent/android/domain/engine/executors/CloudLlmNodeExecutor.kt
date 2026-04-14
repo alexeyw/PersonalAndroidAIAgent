@@ -131,7 +131,7 @@ class CloudLlmNodeExecutor @Inject constructor(
                 }
             }
         } catch (e: Exception) {
-            Timber.e(e, "Error in CloudLlmNodeExecutor generation")
+            Timber.tag("PipelineDebug").e(e, "Error in CloudLlmNodeExecutor generation")
             emit(AgentOrchestratorState.Error(e.message ?: "Unknown error during LLM generation"))
             emit(NodeExecutionResult(error = e.message))
             return@flow

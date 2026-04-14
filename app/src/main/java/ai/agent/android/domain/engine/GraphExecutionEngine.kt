@@ -71,7 +71,7 @@ class GraphExecutionEngine @Inject constructor(
             var nodeResult: NodeExecutionResult? = null
             
             val executor = nodeExecutorFactory.getExecutor(currentNode.type)
-            Timber.d("[NODE_IN] type=${currentNode.type.name} id=${currentNode.id} input=${currentInputText.take(1000)}")
+            Timber.tag("PipelineDebug").d("[NODE_IN] type=${currentNode.type.name} id=${currentNode.id} input=${currentInputText.take(1000)}")
             
             try {
                 executor.execute(currentNode, currentInputText, sessionId, userPrompt)
@@ -83,15 +83,15 @@ class GraphExecutionEngine @Inject constructor(
                         }
                     }
                 
-                Timber.d("[NODE_OUT] type=${currentNode.type.name} id=${currentNode.id} output=${nodeResult?.outputText?.take(1000)}")
+                Timber.tag("PipelineDebug").d("[NODE_OUT] type=${currentNode.type.name} id=${currentNode.id} output=${nodeResult?.outputText?.take(1000)}")
             } catch (e: Exception) {
-                Timber.e(e, "[NODE_ERR] type=${currentNode.type.name} id=${currentNode.id} error=${e.message}")
+                Timber.tag("PipelineDebug").e(e, "[NODE_ERR] type=${currentNode.type.name} id=${currentNode.id} error=${e.message}")
                 emit(AgentOrchestratorState.Error(e.message ?: "Unknown error"))
                 return@flow
             }
             
             if (nodeResult?.error != null) {
-                Timber.e("[NODE_ERR] type=${currentNode.type.name} id=${currentNode.id} error=${nodeResult?.error}")
+                Timber.tag("PipelineDebug").e("[NODE_ERR] type=${currentNode.type.name} id=${currentNode.id} error=${nodeResult?.error}")
                 emit(AgentOrchestratorState.Error(nodeResult?.error!!))
                 return@flow
             }
@@ -160,7 +160,7 @@ class GraphExecutionEngine @Inject constructor(
     ): String? {
         val edges = graph.connections.filter { it.sourceNodeId == currentNode.id }
         if (edges.isEmpty()) {
-            Timber.d("[ROUTE] from=${currentNode.id} label=null -> to=null")
+            Timber.tag("PipelineDebug").d("[ROUTE] from=${currentNode.id} label=null -> to=null")
             return null
         }
 
@@ -177,7 +177,7 @@ class GraphExecutionEngine @Inject constructor(
         }
         
         val edgeLabel = edges.find { it.targetNodeId == targetNodeId }?.label ?: "null"
-        Timber.d("[ROUTE] from=${currentNode.id} label=$edgeLabel -> to=$targetNodeId")
+        Timber.tag("PipelineDebug").d("[ROUTE] from=${currentNode.id} label=$edgeLabel -> to=$targetNodeId")
         return targetNodeId
     }
 
@@ -197,7 +197,7 @@ class GraphExecutionEngine @Inject constructor(
             }
         } catch (e: Exception) {
             // Ignore JSON parse errors and fallback
-            Timber.e(e, "Error parsing JSON list")
+            Timber.tag("PipelineDebug").e(e, "Error parsing JSON list")
         }
         
         val lines = text.lines().map { it.trim() }.filter { it.matches(Regex("""^(\d+\.|-|\*)\s+.*""")) }
