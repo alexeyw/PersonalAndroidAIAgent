@@ -413,6 +413,10 @@ class OrchestratorViewModel @Inject constructor(
                                 is ai.agent.android.domain.models.PipelineValidationError.MultipleInputs -> "Multiple INPUT nodes are not allowed"
                                 is ai.agent.android.domain.models.PipelineValidationError.MultipleOutputs -> "Multiple OUTPUT nodes are not allowed"
                                 is ai.agent.android.domain.models.PipelineValidationError.HasCycles -> "Pipeline contains cycles"
+                                is ai.agent.android.domain.models.PipelineValidationError.DisconnectedInput -> "INPUT node is not connected"
+                                is ai.agent.android.domain.models.PipelineValidationError.DisconnectedOutput -> "OUTPUT node is not connected"
+                                is ai.agent.android.domain.models.PipelineValidationError.UnreachableNode -> "Some nodes are unreachable from INPUT"
+                                is ai.agent.android.domain.models.PipelineValidationError.DeadEndNode -> "Some nodes do not reach OUTPUT"
                             }
                         }
                     } else {
