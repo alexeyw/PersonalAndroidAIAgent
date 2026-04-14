@@ -13,6 +13,7 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
+import timber.log.Timber
 import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -75,6 +76,7 @@ class ToolNodeExecutor @Inject constructor(
         val result = try {
             toolRepository.executeTool(toolName, toolArgs)
         } catch (e: Exception) {
+            Timber.e(e, "Error executing tool: $toolName")
             "Error executing $toolName: ${e.message}"
         }
 
@@ -111,6 +113,7 @@ class ToolNodeExecutor @Inject constructor(
             
             jsonObject.get("arguments").toString()
         } catch (e: org.json.JSONException) {
+            Timber.e(e, "Error parsing tool arguments JSON")
             null
         }
     }

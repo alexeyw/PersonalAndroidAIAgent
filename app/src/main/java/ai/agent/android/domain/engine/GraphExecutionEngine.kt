@@ -5,6 +5,7 @@ import ai.agent.android.domain.engine.executors.ToolNodeExecutor
 import ai.agent.android.domain.models.*
 import ai.agent.android.domain.repositories.ChatRepository
 import kotlinx.coroutines.flow.*
+import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -70,16 +71,27 @@ class GraphExecutionEngine @Inject constructor(
             var nodeResult: NodeExecutionResult? = null
             
             val executor = nodeExecutorFactory.getExecutor(currentNode.type)
-            executor.execute(currentNode, currentInputText, sessionId, userPrompt)
-                .collect { stateOrResult ->
-                    if (stateOrResult is AgentOrchestratorState) {
-                        emit(stateOrResult)
-                    } else if (stateOrResult is NodeExecutionResult) {
-                        nodeResult = stateOrResult
+            Timber.d("[NODE_IN] type=${currentNode.type.name} id=${currentNode.id} input=${currentInputText.take(1000)}")
+            
+            try {
+                executor.execute(currentNode, currentInputText, sessionId, userPrompt)
+                    .collect { stateOrResult ->
+                        if (stateOrResult is AgentOrchestratorState) {
+                            emit(stateOrResult)
+                        } else if (stateOrResult is NodeExecutionResult) {
+                            nodeResult = stateOrResult
+                        }
                     }
-                }
+                
+                Timber.d("[NODE_OUT] type=${currentNode.type.name} id=${currentNode.id} output=${nodeResult?.outputText?.take(1000)}")
+            } catch (e: Exception) {
+                Timber.e(e, "[NODE_ERR] type=${currentNode.type.name} id=${currentNode.id} error=${e.message}")
+                emit(AgentOrchestratorState.Error(e.message ?: "Unknown error"))
+                return@flow
+            }
             
             if (nodeResult?.error != null) {
+                Timber.e("[NODE_ERR] type=${currentNode.type.name} id=${currentNode.id} error=${nodeResult?.error}")
                 emit(AgentOrchestratorState.Error(nodeResult?.error!!))
                 return@flow
             }
@@ -147,21 +159,26 @@ class GraphExecutionEngine @Inject constructor(
         routingKey: String? = null
     ): String? {
         val edges = graph.connections.filter { it.sourceNodeId == currentNode.id }
-        if (edges.isEmpty()) return null
-
-        if (currentNode.type == NodeType.IF_CONDITION) {
-            val expectedLabel = if (conditionResult == true) "True" else "False"
-            return edges.find { it.label.equals(expectedLabel, ignoreCase = true) }?.targetNodeId 
-                ?: edges.firstOrNull()?.targetNodeId
+        if (edges.isEmpty()) {
+            Timber.d("[ROUTE] from=${currentNode.id} label=null -> to=null")
+            return null
         }
 
-        if (currentNode.type == NodeType.INTENT_ROUTER && routingKey != null) {
+        val targetNodeId = if (currentNode.type == NodeType.IF_CONDITION) {
+            val expectedLabel = if (conditionResult == true) "True" else "False"
+            edges.find { it.label.equals(expectedLabel, ignoreCase = true) }?.targetNodeId 
+                ?: edges.firstOrNull()?.targetNodeId
+        } else if (currentNode.type == NodeType.INTENT_ROUTER && routingKey != null) {
             val matchedEdge = edges.find { it.label?.equals(routingKey, ignoreCase = true) == true }
                 ?: edges.find { !it.label.isNullOrBlank() && routingKey.contains(it.label, ignoreCase = true) }
-            if (matchedEdge != null) return matchedEdge.targetNodeId
+            matchedEdge?.targetNodeId ?: edges.firstOrNull()?.targetNodeId
+        } else {
+            edges.firstOrNull()?.targetNodeId
         }
-
-        return edges.firstOrNull()?.targetNodeId
+        
+        val edgeLabel = edges.find { it.targetNodeId == targetNodeId }?.label ?: "null"
+        Timber.d("[ROUTE] from=${currentNode.id} label=$edgeLabel -> to=$targetNodeId")
+        return targetNodeId
     }
 
     private fun parseListFromText(text: String): List<String> {
@@ -180,6 +197,7 @@ class GraphExecutionEngine @Inject constructor(
             }
         } catch (e: Exception) {
             // Ignore JSON parse errors and fallback
+            Timber.e(e, "Error parsing JSON list")
         }
         
         val lines = text.lines().map { it.trim() }.filter { it.matches(Regex("""^(\d+\.|-|\*)\s+.*""")) }

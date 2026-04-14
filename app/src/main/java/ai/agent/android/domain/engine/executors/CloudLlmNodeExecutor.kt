@@ -26,6 +26,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.mapNotNull
+import timber.log.Timber
 import javax.inject.Inject
 
 class CloudLlmNodeExecutor @Inject constructor(
@@ -130,6 +131,7 @@ class CloudLlmNodeExecutor @Inject constructor(
                 }
             }
         } catch (e: Exception) {
+            Timber.e(e, "Error in CloudLlmNodeExecutor generation")
             emit(AgentOrchestratorState.Error(e.message ?: "Unknown error during LLM generation"))
             emit(NodeExecutionResult(error = e.message))
             return@flow

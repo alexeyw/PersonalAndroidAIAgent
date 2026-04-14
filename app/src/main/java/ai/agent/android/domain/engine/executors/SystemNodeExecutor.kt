@@ -12,6 +12,7 @@ import ai.agent.android.domain.repositories.ChatRepository
 import ai.agent.android.domain.usecases.LoadModelUseCase
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
+import timber.log.Timber
 import javax.inject.Inject
 
 class SystemNodeExecutor @Inject constructor(
@@ -46,6 +47,7 @@ class SystemNodeExecutor @Inject constructor(
                 emit(AgentOrchestratorState.Thinking(accumulatedResponse.toString()))
             }
         } catch (e: Exception) {
+            Timber.e(e, "Error in SystemNodeExecutor generation")
             emit(AgentOrchestratorState.Error(e.message ?: "Unknown error"))
             emit(NodeExecutionResult(error = e.message))
             return@flow

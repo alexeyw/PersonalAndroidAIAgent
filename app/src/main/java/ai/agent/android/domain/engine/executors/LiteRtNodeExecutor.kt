@@ -18,6 +18,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
+import timber.log.Timber
 import javax.inject.Inject
 
 class LiteRtNodeExecutor @Inject constructor(
@@ -87,6 +88,7 @@ class LiteRtNodeExecutor @Inject constructor(
                 }
             }
         } catch (e: Exception) {
+            Timber.e(e, "Error in LiteRtNodeExecutor generation")
             emit(AgentOrchestratorState.Error(e.message ?: "Unknown error during LLM generation"))
             emit(NodeExecutionResult(error = e.message))
             return@flow
