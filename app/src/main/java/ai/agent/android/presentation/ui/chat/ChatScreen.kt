@@ -419,7 +419,7 @@ fun ChatMessageItem(
                 } else {
                     Markdown(
                         content = message.content,
-                        typography = markdownTypography(
+                        typography = com.mikepenz.markdown.m3.markdownTypography(
                             h1 = MaterialTheme.typography.titleLarge,
                             h2 = MaterialTheme.typography.titleMedium,
                             h3 = MaterialTheme.typography.titleSmall,

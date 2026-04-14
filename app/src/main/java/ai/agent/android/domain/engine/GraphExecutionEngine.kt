@@ -55,7 +55,7 @@ class GraphExecutionEngine @Inject constructor(
         var currentInputText = userPrompt
         
         val activeQueue = mutableListOf<String>()
-        var queueLoopStartNodeId: String? = null
+        var activeQueueProcessorId: String? = null
         val queueResults = mutableListOf<String>()
         val traceSteps = mutableListOf<AgentOrchestratorState.TraceStep>()
 
@@ -112,11 +112,20 @@ class GraphExecutionEngine @Inject constructor(
                 activeQueue.clear()
                 activeQueue.addAll(list)
                 queueResults.clear()
-                queueLoopStartNodeId = findNextNodeId(currentNode, graph, nodeResult?.conditionResult, nodeResult?.routingKey)
+                activeQueueProcessorId = currentNode.id
                 
-                if (activeQueue.isNotEmpty()) {
+                val edges = graph.connections.filter { it.sourceNodeId == currentNode.id }
+                val itemNodeId = edges.find { it.label.equals("Item", ignoreCase = true) }?.targetNodeId 
+                    ?: edges.firstOrNull()?.targetNodeId
+                
+                if (activeQueue.isNotEmpty() && itemNodeId != null) {
                     currentInputText = activeQueue.removeAt(0)
-                    currentNode = graph.nodes.find { it.id == queueLoopStartNodeId }
+                    currentNode = graph.nodes.find { it.id == itemNodeId }
+                    continue
+                } else {
+                    val doneNodeId = edges.find { it.label.equals("Done", ignoreCase = true) }?.targetNodeId
+                    activeQueueProcessorId = null
+                    currentNode = graph.nodes.find { it.id == doneNodeId }
                     continue
                 }
             }
@@ -126,17 +135,22 @@ class GraphExecutionEngine @Inject constructor(
             val nextNodeId = findNextNodeId(currentNode, graph, nodeResult?.conditionResult, nodeResult?.routingKey)
             val nextNode = graph.nodes.find { it.id == nextNodeId }
             
-            if (queueLoopStartNodeId != null && (nextNode == null || nextNode.type == NodeType.SUMMARY)) {
+            if (activeQueueProcessorId != null && (nextNode == null || nextNode.type == NodeType.QUEUE_PROCESSOR)) {
                 queueResults.add(currentInputText)
                 
-                if (activeQueue.isNotEmpty()) {
+                val edges = graph.connections.filter { it.sourceNodeId == activeQueueProcessorId }
+                val itemNodeId = edges.find { it.label.equals("Item", ignoreCase = true) }?.targetNodeId 
+                    ?: edges.firstOrNull()?.targetNodeId
+                val doneNodeId = edges.find { it.label.equals("Done", ignoreCase = true) }?.targetNodeId
+                
+                if (activeQueue.isNotEmpty() && itemNodeId != null) {
                     currentInputText = activeQueue.removeAt(0)
-                    currentNode = graph.nodes.find { it.id == queueLoopStartNodeId }
+                    currentNode = graph.nodes.find { it.id == itemNodeId }
                     continue
                 } else {
                     currentInputText = "Queue execution completed.\nResults:\n" + queueResults.mapIndexed { i, res -> "${i+1}. $res" }.joinToString("\n")
-                    queueLoopStartNodeId = null
-                    currentNode = nextNode
+                    activeQueueProcessorId = null
+                    currentNode = graph.nodes.find { it.id == doneNodeId }
                     continue
                 }
             }
