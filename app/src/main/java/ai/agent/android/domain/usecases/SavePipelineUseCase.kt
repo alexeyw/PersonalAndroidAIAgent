@@ -19,8 +19,9 @@ class SavePipelineUseCase @Inject constructor(
      * @return A [Result] indicating success or containing an exception if validation fails.
      */
     suspend operator fun invoke(pipeline: PipelineGraph): Result<Unit> {
-        if (!pipeline.isValidDAG()) {
-            return Result.failure(IllegalStateException("The pipeline graph contains cycles and is not a valid DAG."))
+        val errors = pipeline.validate()
+        if (errors.isNotEmpty()) {
+            return Result.failure(ai.agent.android.domain.models.PipelineValidationException(errors))
         }
         
         return try {

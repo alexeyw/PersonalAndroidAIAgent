@@ -93,6 +93,8 @@ This file maps the contents of the main application package.
     - `NodeModel.kt` - Node model.
     - `NodeType.kt` - Node type enum.
     - `PipelineGraph.kt` - Pipeline graph model.
+    - `PipelineValidationError.kt` - Pipeline validation error model.
+    - `PipelineValidationException.kt` - Pipeline validation exception model.
     - `PowerState.kt` - Power state model.
     - `Result.kt` - Result wrapper model.
     - `Role.kt` - Chat role enum.

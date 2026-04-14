@@ -63,4 +63,27 @@ data class PipelineGraph(
 
         return true
     }
+
+    /**
+     * Validates the pipeline graph and returns a list of validation errors.
+     *
+     * @return A list of [PipelineValidationError]s. Empty if valid.
+     */
+    fun validate(): List<PipelineValidationError> {
+        val errors = mutableListOf<PipelineValidationError>()
+        
+        val inputCount = nodes.count { it.type == NodeType.INPUT }
+        if (inputCount == 0) errors.add(PipelineValidationError.MissingInput)
+        if (inputCount > 1) errors.add(PipelineValidationError.MultipleInputs)
+
+        val outputCount = nodes.count { it.type == NodeType.OUTPUT }
+        if (outputCount == 0) errors.add(PipelineValidationError.MissingOutput)
+        if (outputCount > 1) errors.add(PipelineValidationError.MultipleOutputs)
+
+        if (!isValidDAG()) {
+            errors.add(PipelineValidationError.HasCycles)
+        }
+
+        return errors
+    }
 }

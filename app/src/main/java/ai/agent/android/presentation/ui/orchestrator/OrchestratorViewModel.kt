@@ -404,9 +404,24 @@ class OrchestratorViewModel @Inject constructor(
             _uiState.update { it.copy(isLoading = true) }
             val result = savePipelineUseCase(_uiState.value.currentPipeline)
             _uiState.update { state ->
+                val errorMsg = result.exceptionOrNull()?.let { e ->
+                    if (e is ai.agent.android.domain.models.PipelineValidationException) {
+                        e.errors.joinToString(", ") { err ->
+                            when (err) {
+                                is ai.agent.android.domain.models.PipelineValidationError.MissingInput -> "Missing INPUT node"
+                                is ai.agent.android.domain.models.PipelineValidationError.MissingOutput -> "Missing OUTPUT node"
+                                is ai.agent.android.domain.models.PipelineValidationError.MultipleInputs -> "Multiple INPUT nodes are not allowed"
+                                is ai.agent.android.domain.models.PipelineValidationError.MultipleOutputs -> "Multiple OUTPUT nodes are not allowed"
+                                is ai.agent.android.domain.models.PipelineValidationError.HasCycles -> "Pipeline contains cycles"
+                            }
+                        }
+                    } else {
+                        e.message
+                    }
+                }
                 state.copy(
                     isLoading = false,
-                    errorMessage = result.exceptionOrNull()?.message
+                    errorMessage = errorMsg
                 )
             }
         }

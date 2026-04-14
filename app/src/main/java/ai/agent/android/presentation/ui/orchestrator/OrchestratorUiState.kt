@@ -5,6 +5,7 @@ import ai.agent.android.domain.models.NodeModel
 import ai.agent.android.domain.models.PipelineGraph
 import ai.agent.android.domain.models.AgentTool
 import ai.agent.android.domain.models.NodeType
+import ai.agent.android.domain.models.PipelineValidationError
 import ai.agent.android.domain.models.PromptTemplate
 
 /**
@@ -36,4 +37,9 @@ data class OrchestratorUiState(
      * Helper to get connections easily.
      */
     val connections: List<ConnectionModel> get() = currentPipeline.connections
+
+    /**
+     * Dynamically computed list of validation errors for the current pipeline.
+     */
+    val validationErrors: List<PipelineValidationError> get() = currentPipeline.validate()
 }
