@@ -121,10 +121,11 @@ class GraphExecutionEngine @Inject constructor(
                 if (activeQueue.isNotEmpty() && itemNodeId != null) {
                     val nextItem = activeQueue.removeAt(0)
                     val contextStr = queueResults.mapIndexed { i, res -> "Result of Subtask ${i+1}:\n$res" }.joinToString("\n\n")
+                    val subtaskInstruction = "CRITICAL INSTRUCTION: You are executing a single subtask within a larger workflow. Focus ONLY on this specific subtask. Do NOT provide conversational filler, and do NOT attempt to solve the overall task or future steps."
                     if (contextStr.isNotEmpty()) {
-                        currentInputText = "PREVIOUS RESULTS CONTEXT:\n$contextStr\n\n---\n\nCURRENT SUBTASK TO EXECUTE:\n$nextItem"
+                        currentInputText = "PREVIOUS RESULTS CONTEXT:\n$contextStr\n\n---\n\n$subtaskInstruction\n\nCURRENT SUBTASK TO EXECUTE:\n$nextItem"
                     } else {
-                        currentInputText = "CURRENT SUBTASK TO EXECUTE:\n$nextItem"
+                        currentInputText = "$subtaskInstruction\n\nCURRENT SUBTASK TO EXECUTE:\n$nextItem"
                     }
                     currentNode = graph.nodes.find { it.id == itemNodeId }
                     continue
@@ -152,10 +153,11 @@ class GraphExecutionEngine @Inject constructor(
                 if (activeQueue.isNotEmpty() && itemNodeId != null) {
                     val nextItem = activeQueue.removeAt(0)
                     val contextStr = queueResults.mapIndexed { i, res -> "Result of Subtask ${i+1}:\n$res" }.joinToString("\n\n")
+                    val subtaskInstruction = "CRITICAL INSTRUCTION: You are executing a single subtask within a larger workflow. Focus ONLY on this specific subtask. Do NOT provide conversational filler, and do NOT attempt to solve the overall task or future steps."
                     if (contextStr.isNotEmpty()) {
-                        currentInputText = "PREVIOUS RESULTS CONTEXT:\n$contextStr\n\n---\n\nCURRENT SUBTASK TO EXECUTE:\n$nextItem"
+                        currentInputText = "PREVIOUS RESULTS CONTEXT:\n$contextStr\n\n---\n\n$subtaskInstruction\n\nCURRENT SUBTASK TO EXECUTE:\n$nextItem"
                     } else {
-                        currentInputText = "CURRENT SUBTASK TO EXECUTE:\n$nextItem"
+                        currentInputText = "$subtaskInstruction\n\nCURRENT SUBTASK TO EXECUTE:\n$nextItem"
                     }
                     currentNode = graph.nodes.find { it.id == itemNodeId }
                     continue
