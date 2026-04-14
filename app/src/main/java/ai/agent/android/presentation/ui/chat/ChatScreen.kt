@@ -417,7 +417,7 @@ fun ChatMessageItem(
                         text = message.content,
                     )
                 } else {
-                    val safeMarkdown = message.content.replace(Regex("(?<!\\\\)\\$"), "\\\\$")
+                    val safeMarkdown = message.content.replace("$", "\\$")
                     Markdown(
                         content = safeMarkdown,
                         typography = com.mikepenz.markdown.m3.markdownTypography(
