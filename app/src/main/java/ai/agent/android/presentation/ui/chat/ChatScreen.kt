@@ -419,6 +419,15 @@ fun ChatMessageItem(
                 } else {
                     Markdown(
                         content = message.content,
+                        typography = com.mikepenz.markdown.m3.markdownTypography(
+                            h1 = MaterialTheme.typography.titleLarge,
+                            h2 = MaterialTheme.typography.titleMedium,
+                            h3 = MaterialTheme.typography.titleSmall,
+                            h4 = MaterialTheme.typography.bodyLarge,
+                            h5 = MaterialTheme.typography.bodyMedium,
+                            h6 = MaterialTheme.typography.bodySmall,
+                            text = MaterialTheme.typography.bodyMedium
+                        )
                     )
                 }
             }

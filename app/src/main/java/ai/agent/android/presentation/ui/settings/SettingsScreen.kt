@@ -26,6 +26,9 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.Button
+import android.widget.Toast
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -251,6 +254,69 @@ fun SettingsScreen(
             Spacer(modifier = Modifier.height(24.dp))
             HorizontalDivider()
             Spacer(modifier = Modifier.height(16.dp))
+
+            // Section: Local Model Settings
+            Text(
+                text = "Local Model Settings",
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.primary
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+
+            var backendExpanded by remember { mutableStateOf(false) }
+            val context = LocalContext.current
+
+            Text(
+                text = "Inference Backend",
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            ExposedDropdownMenuBox(
+                expanded = backendExpanded,
+                onExpandedChange = { backendExpanded = it }
+            ) {
+                OutlinedTextField(
+                    value = uiState.localModelBackend,
+                    onValueChange = { },
+                    readOnly = true,
+                    label = { Text("Select Backend") },
+                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = backendExpanded) },
+                    modifier = Modifier.menuAnchor(androidx.compose.material3.ExposedDropdownMenuAnchorType.PrimaryNotEditable, true).fillMaxWidth(),
+                    colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors()
+                )
+                ExposedDropdownMenu(
+                    expanded = backendExpanded,
+                    onDismissRequest = { backendExpanded = false }
+                ) {
+                    listOf("CPU", "GPU", "NPU").forEach { backend ->
+                        DropdownMenuItem(
+                            text = { Text(backend) },
+                            onClick = {
+                                viewModel.updateLocalModelBackend(backend)
+                                backendExpanded = false
+                            }
+                        )
+                    }
+                }
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Button(
+                onClick = {
+                    viewModel.testBackend { resultMsg ->
+                        Toast.makeText(context, resultMsg, Toast.LENGTH_LONG).show()
+                    }
+                },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("Test Local Model with ${uiState.localModelBackend}")
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
+            HorizontalDivider()
+            Spacer(modifier = Modifier.height(16.dp))
+
 
             // Section: External Providers (API Keys & Models)
             Text(

@@ -84,11 +84,18 @@ class LiteRTLlmEngine @Inject constructor(
             unload()
 
             val maxTokens = settingsRepository.maxContextLength.first()
+            val backendStr = settingsRepository.localModelBackend.first()
+
+            val backend = when (backendStr) {
+                "GPU" -> Backend.GPU()
+                "NPU" -> Backend.NPU()
+                else -> Backend.CPU()
+            }
 
             // Initialize Engine Configuration
             val config = EngineConfig(
                 modelPath = modelPath,
-                backend = Backend.CPU(),
+                backend = backend,
                 visionBackend = null,
                 audioBackend = null,
                 maxNumTokens = maxTokens,

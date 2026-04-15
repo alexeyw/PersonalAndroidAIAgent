@@ -29,8 +29,12 @@ data class PipelineGraph(
         nodes.forEach { adjacencyList[it.id] = mutableListOf() }
         
         connections.forEach { connection ->
-            if (adjacencyList.containsKey(connection.sourceNodeId)) {
-                adjacencyList[connection.sourceNodeId]?.add(connection.targetNodeId)
+            val targetNode = nodes.find { it.id == connection.targetNodeId }
+            // Ignore back-edges to QUEUE_PROCESSOR for DAG validation
+            if (targetNode?.type != NodeType.QUEUE_PROCESSOR) {
+                if (adjacencyList.containsKey(connection.sourceNodeId)) {
+                    adjacencyList[connection.sourceNodeId]?.add(connection.targetNodeId)
+                }
             }
         }
 

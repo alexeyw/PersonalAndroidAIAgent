@@ -1,5 +1,8 @@
 package ai.agent.android.presentation.ui.settings
 
+import ai.agent.android.domain.usecases.LoadModelUseCase
+import ai.agent.android.domain.repositories.LocalModelRepository
+import ai.agent.android.domain.models.Result
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import ai.agent.android.domain.repositories.ApiKeyRepository
@@ -12,6 +15,7 @@ import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 import javax.inject.Inject
 
 /**
@@ -23,7 +27,9 @@ import javax.inject.Inject
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
     private val settingsRepository: SettingsRepository,
-    private val apiKeyRepository: ApiKeyRepository
+    private val apiKeyRepository: ApiKeyRepository,
+    private val loadModelUseCase: LoadModelUseCase,
+    private val localModelRepository: LocalModelRepository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(SettingsUiState())
@@ -101,6 +107,38 @@ class SettingsViewModel @Inject constructor(
         apiKeyRepository.getOllamaContextWindowSize().onEach { value ->
             _uiState.update { it.copy(ollamaContextWindow = value.toString()) }
         }.launchIn(viewModelScope)
+        settingsRepository.localModelBackend.onEach { value ->
+            _uiState.update { it.copy(localModelBackend = value) }
+        }.launchIn(viewModelScope)
+    }
+
+    fun updateLocalModelBackend(backend: String) {
+        viewModelScope.launch {
+            settingsRepository.setLocalModelBackend(backend)
+        }
+    }
+
+    fun testBackend(onResult: (String) -> Unit) {
+        viewModelScope.launch {
+            val activeModel = localModelRepository.getActiveModel()
+            if (activeModel == null) {
+                onResult("No active local model found. Please download and select one first.")
+                return@launch
+            }
+            
+            try {
+                // Ensure settings are flushed
+                delay(500)
+                val result = loadModelUseCase(activeModel.path)
+                if (result is Result.Success) {
+                    onResult("Success! Backend initialized correctly.")
+                } else if (result is Result.Error) {
+                    onResult("Failed: ${result.message}")
+                }
+            } catch (e: Exception) {
+                onResult("Exception: ${e.message}")
+            }
+        }
     }
 
     /**

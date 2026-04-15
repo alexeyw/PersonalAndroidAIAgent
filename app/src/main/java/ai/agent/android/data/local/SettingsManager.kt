@@ -41,6 +41,7 @@ class SettingsManager @Inject constructor(
         val DISABLED_APP_FUNCTIONS = stringSetPreferencesKey("disabled_app_functions")
         val CURRENT_CHAT_SESSION_ID = stringPreferencesKey("current_chat_session_id")
         val MAX_MEMORY_CHUNKS_FOR_SEARCH = intPreferencesKey("max_memory_chunks_for_search")
+        val LOCAL_MODEL_BACKEND = stringPreferencesKey("local_model_backend")
     }
 
     override val isFirstLaunch: Flow<Boolean> = dataStore.data
@@ -303,6 +304,25 @@ class SettingsManager @Inject constructor(
     override suspend fun setMaxMemoryChunksForSearch(limit: Int) {
         dataStore.edit { preferences ->
             preferences[PreferencesKeys.MAX_MEMORY_CHUNKS_FOR_SEARCH] = limit
+        }
+    }
+
+    override val localModelBackend: Flow<String> = dataStore.data
+        .catch { exception ->
+            if (exception is IOException) {
+                Timber.e(exception, "Error reading preferences")
+                emit(emptyPreferences())
+            } else {
+                throw exception
+            }
+        }
+        .map { preferences ->
+            preferences[PreferencesKeys.LOCAL_MODEL_BACKEND] ?: "CPU"
+        }
+
+    override suspend fun setLocalModelBackend(backend: String) {
+        dataStore.edit { preferences ->
+            preferences[PreferencesKeys.LOCAL_MODEL_BACKEND] = backend
         }
     }
 }

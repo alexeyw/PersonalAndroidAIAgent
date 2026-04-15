@@ -5,6 +5,7 @@ import ai.agent.android.domain.engine.executors.ToolNodeExecutor
 import ai.agent.android.domain.models.*
 import ai.agent.android.domain.repositories.ChatRepository
 import kotlinx.coroutines.flow.*
+import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -54,7 +55,7 @@ class GraphExecutionEngine @Inject constructor(
         var currentInputText = userPrompt
         
         val activeQueue = mutableListOf<String>()
-        var queueLoopStartNodeId: String? = null
+        var activeQueueProcessorId: String? = null
         val queueResults = mutableListOf<String>()
         val traceSteps = mutableListOf<AgentOrchestratorState.TraceStep>()
 
@@ -70,16 +71,27 @@ class GraphExecutionEngine @Inject constructor(
             var nodeResult: NodeExecutionResult? = null
             
             val executor = nodeExecutorFactory.getExecutor(currentNode.type)
-            executor.execute(currentNode, currentInputText, sessionId, userPrompt)
-                .collect { stateOrResult ->
-                    if (stateOrResult is AgentOrchestratorState) {
-                        emit(stateOrResult)
-                    } else if (stateOrResult is NodeExecutionResult) {
-                        nodeResult = stateOrResult
+            Timber.tag("PipelineDebug").d("[NODE_IN] type=${currentNode.type.name} id=${currentNode.id} input=${currentInputText.take(1000)}")
+            
+            try {
+                executor.execute(currentNode, currentInputText, sessionId, userPrompt)
+                    .collect { stateOrResult ->
+                        if (stateOrResult is AgentOrchestratorState) {
+                            emit(stateOrResult)
+                        } else if (stateOrResult is NodeExecutionResult) {
+                            nodeResult = stateOrResult
+                        }
                     }
-                }
+                
+                Timber.tag("PipelineDebug").d("[NODE_OUT] type=${currentNode.type.name} id=${currentNode.id} output=${nodeResult?.outputText?.take(1000)}")
+            } catch (e: Exception) {
+                Timber.tag("PipelineDebug").e(e, "[NODE_ERR] type=${currentNode.type.name} id=${currentNode.id} error=${e.message}")
+                emit(AgentOrchestratorState.Error(e.message ?: "Unknown error"))
+                return@flow
+            }
             
             if (nodeResult?.error != null) {
+                Timber.tag("PipelineDebug").e("[NODE_ERR] type=${currentNode.type.name} id=${currentNode.id} error=${nodeResult?.error}")
                 emit(AgentOrchestratorState.Error(nodeResult?.error!!))
                 return@flow
             }
@@ -100,11 +112,27 @@ class GraphExecutionEngine @Inject constructor(
                 activeQueue.clear()
                 activeQueue.addAll(list)
                 queueResults.clear()
-                queueLoopStartNodeId = findNextNodeId(currentNode, graph, nodeResult?.conditionResult, nodeResult?.routingKey)
+                activeQueueProcessorId = currentNode.id
                 
-                if (activeQueue.isNotEmpty()) {
-                    currentInputText = activeQueue.removeAt(0)
-                    currentNode = graph.nodes.find { it.id == queueLoopStartNodeId }
+                val edges = graph.connections.filter { it.sourceNodeId == currentNode.id }
+                val itemNodeId = edges.find { it.label.equals("Item", ignoreCase = true) }?.targetNodeId 
+                    ?: edges.firstOrNull()?.targetNodeId
+                
+                if (activeQueue.isNotEmpty() && itemNodeId != null) {
+                    val nextItem = activeQueue.removeAt(0)
+                    val contextStr = queueResults.mapIndexed { i, res -> "Result of Subtask ${i+1}:\n$res" }.joinToString("\n\n")
+                    val subtaskInstruction = "CRITICAL INSTRUCTION: You are executing a single subtask within a larger workflow. Focus ONLY on this specific subtask. Do NOT provide conversational filler, and do NOT attempt to solve the overall task or future steps."
+                    if (contextStr.isNotEmpty()) {
+                        currentInputText = "PREVIOUS RESULTS CONTEXT:\n$contextStr\n\n---\n\n$subtaskInstruction\n\nCURRENT SUBTASK TO EXECUTE:\n$nextItem"
+                    } else {
+                        currentInputText = "$subtaskInstruction\n\nCURRENT SUBTASK TO EXECUTE:\n$nextItem"
+                    }
+                    currentNode = graph.nodes.find { it.id == itemNodeId }
+                    continue
+                } else {
+                    val doneNodeId = edges.find { it.label.equals("Done", ignoreCase = true) }?.targetNodeId
+                    activeQueueProcessorId = null
+                    currentNode = graph.nodes.find { it.id == doneNodeId }
                     continue
                 }
             }
@@ -114,17 +142,29 @@ class GraphExecutionEngine @Inject constructor(
             val nextNodeId = findNextNodeId(currentNode, graph, nodeResult?.conditionResult, nodeResult?.routingKey)
             val nextNode = graph.nodes.find { it.id == nextNodeId }
             
-            if (queueLoopStartNodeId != null && (nextNode == null || nextNode.type == NodeType.SUMMARY)) {
+            if (activeQueueProcessorId != null && (nextNode == null || nextNode.type == NodeType.QUEUE_PROCESSOR)) {
                 queueResults.add(currentInputText)
                 
-                if (activeQueue.isNotEmpty()) {
-                    currentInputText = activeQueue.removeAt(0)
-                    currentNode = graph.nodes.find { it.id == queueLoopStartNodeId }
+                val edges = graph.connections.filter { it.sourceNodeId == activeQueueProcessorId }
+                val itemNodeId = edges.find { it.label.equals("Item", ignoreCase = true) }?.targetNodeId 
+                    ?: edges.firstOrNull()?.targetNodeId
+                val doneNodeId = edges.find { it.label.equals("Done", ignoreCase = true) }?.targetNodeId
+                
+                if (activeQueue.isNotEmpty() && itemNodeId != null) {
+                    val nextItem = activeQueue.removeAt(0)
+                    val contextStr = queueResults.mapIndexed { i, res -> "Result of Subtask ${i+1}:\n$res" }.joinToString("\n\n")
+                    val subtaskInstruction = "CRITICAL INSTRUCTION: You are executing a single subtask within a larger workflow. Focus ONLY on this specific subtask. Do NOT provide conversational filler, and do NOT attempt to solve the overall task or future steps."
+                    if (contextStr.isNotEmpty()) {
+                        currentInputText = "PREVIOUS RESULTS CONTEXT:\n$contextStr\n\n---\n\n$subtaskInstruction\n\nCURRENT SUBTASK TO EXECUTE:\n$nextItem"
+                    } else {
+                        currentInputText = "$subtaskInstruction\n\nCURRENT SUBTASK TO EXECUTE:\n$nextItem"
+                    }
+                    currentNode = graph.nodes.find { it.id == itemNodeId }
                     continue
                 } else {
                     currentInputText = "Queue execution completed.\nResults:\n" + queueResults.mapIndexed { i, res -> "${i+1}. $res" }.joinToString("\n")
-                    queueLoopStartNodeId = null
-                    currentNode = nextNode
+                    activeQueueProcessorId = null
+                    currentNode = graph.nodes.find { it.id == doneNodeId }
                     continue
                 }
             }
@@ -147,21 +187,26 @@ class GraphExecutionEngine @Inject constructor(
         routingKey: String? = null
     ): String? {
         val edges = graph.connections.filter { it.sourceNodeId == currentNode.id }
-        if (edges.isEmpty()) return null
-
-        if (currentNode.type == NodeType.IF_CONDITION) {
-            val expectedLabel = if (conditionResult == true) "True" else "False"
-            return edges.find { it.label.equals(expectedLabel, ignoreCase = true) }?.targetNodeId 
-                ?: edges.firstOrNull()?.targetNodeId
+        if (edges.isEmpty()) {
+            Timber.tag("PipelineDebug").d("[ROUTE] from=${currentNode.id} label=null -> to=null")
+            return null
         }
 
-        if (currentNode.type == NodeType.INTENT_ROUTER && routingKey != null) {
+        val targetNodeId = if (currentNode.type == NodeType.IF_CONDITION) {
+            val expectedLabel = if (conditionResult == true) "True" else "False"
+            edges.find { it.label.equals(expectedLabel, ignoreCase = true) }?.targetNodeId 
+                ?: edges.firstOrNull()?.targetNodeId
+        } else if (currentNode.type == NodeType.INTENT_ROUTER && routingKey != null) {
             val matchedEdge = edges.find { it.label?.equals(routingKey, ignoreCase = true) == true }
                 ?: edges.find { !it.label.isNullOrBlank() && routingKey.contains(it.label, ignoreCase = true) }
-            if (matchedEdge != null) return matchedEdge.targetNodeId
+            matchedEdge?.targetNodeId ?: edges.firstOrNull()?.targetNodeId
+        } else {
+            edges.firstOrNull()?.targetNodeId
         }
-
-        return edges.firstOrNull()?.targetNodeId
+        
+        val edgeLabel = edges.find { it.targetNodeId == targetNodeId }?.label ?: "null"
+        Timber.tag("PipelineDebug").d("[ROUTE] from=${currentNode.id} label=$edgeLabel -> to=$targetNodeId")
+        return targetNodeId
     }
 
     private fun parseListFromText(text: String): List<String> {
@@ -180,6 +225,7 @@ class GraphExecutionEngine @Inject constructor(
             }
         } catch (e: Exception) {
             // Ignore JSON parse errors and fallback
+            Timber.tag("PipelineDebug").e(e, "Error parsing JSON list")
         }
         
         val lines = text.lines().map { it.trim() }.filter { it.matches(Regex("""^(\d+\.|-|\*)\s+.*""")) }

@@ -233,6 +233,37 @@ fun DraggableNode(
                         )
                     }
                 }
+            } else if (node.type == NodeType.QUEUE_PROCESSOR) {
+                var expanded by remember { mutableStateOf(false) }
+                Box(modifier = Modifier.align(Alignment.CenterEnd)) {
+                    Box(
+                        modifier = Modifier
+                            .size(16.dp)
+                            .clip(CircleShape)
+                            .background(if (isConnecting && connectingIsOutput) MaterialTheme.colorScheme.primary else nodeColor)
+                            .border(2.dp, MaterialTheme.colorScheme.onSurface, CircleShape)
+                            .clickable { expanded = true }
+                    )
+                    DropdownMenu(
+                        expanded = expanded,
+                        onDismissRequest = { expanded = false }
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text("Task Input (Item)") },
+                            onClick = { 
+                                onConnectClick(true, "Item")
+                                expanded = false 
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Return (Done)") },
+                            onClick = { 
+                                onConnectClick(true, "Done")
+                                expanded = false 
+                            }
+                        )
+                    }
+                }
             } else {
                 Box(
                     modifier = Modifier

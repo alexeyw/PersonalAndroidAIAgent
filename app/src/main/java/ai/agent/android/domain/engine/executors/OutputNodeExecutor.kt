@@ -11,6 +11,7 @@ import ai.agent.android.domain.repositories.ChatRepository
 import ai.agent.android.domain.usecases.LoadModelUseCase
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
+import timber.log.Timber
 import javax.inject.Inject
 
 class OutputNodeExecutor @Inject constructor(
@@ -25,7 +26,7 @@ class OutputNodeExecutor @Inject constructor(
         originalPrompt: String
     ): Flow<Any> = flow {
         if (!node.systemPrompt.isNullOrBlank()) {
-            val fullPrompt = "${node.systemPrompt}\n\nINPUT: $inputText\nFORMATTED OUTPUT: "
+            val fullPrompt = "${node.systemPrompt}\n\nCRITICAL INSTRUCTION: Output ONLY the requested format. Do NOT include any conversational filler, explanations, or preambles (e.g., \"Here is the formatted output:\").\n\nINPUT: $inputText\nFORMATTED OUTPUT: "
             
             val loadResult = loadModelUseCase(node.modelPath)
             if (loadResult is Result.Error) {
@@ -50,13 +51,30 @@ class OutputNodeExecutor @Inject constructor(
                     }
                 }
             } catch (e: Exception) {
+                Timber.tag("PipelineDebug").e(e, "[NODE_ERR] type=${node.type.name} id=${node.id} error in OutputNodeExecutor generation")
                 emit(AgentOrchestratorState.Error(e.message ?: "Unknown error"))
                 emit(NodeExecutionResult(error = e.message))
                 return@flow
             }
             
             val generatedText = accumulatedResponse.toString().trim()
-            val finalOutput = if (generatedText.isNotEmpty()) generatedText else inputText
+            var finalOutput = if (generatedText.isNotEmpty()) generatedText else inputText
+            
+            // Heuristic cleanup for common LLM conversational fillers
+            val lowerCaseOutput = finalOutput.lowercase()
+            val prefixesToRemove = listOf(
+                "here is the formatted output:",
+                "here is the output:",
+                "formatted output:",
+                "here is the result:"
+            )
+            for (prefix in prefixesToRemove) {
+                if (lowerCaseOutput.startsWith(prefix)) {
+                    finalOutput = finalOutput.substring(prefix.length).trim()
+                    break
+                }
+            }
+
             chatRepository.saveMessage(
                 ChatMessage(
                     sessionId = sessionId,

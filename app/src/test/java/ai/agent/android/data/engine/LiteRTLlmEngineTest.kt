@@ -36,7 +36,8 @@ class LiteRTLlmEngineTest {
         every { context.cacheDir } returns File(System.getProperty("java.io.tmpdir") ?: "/tmp")
         settingsRepository = mockk(relaxed = true)
         every { settingsRepository.maxContextLength } returns flowOf(4096)
-        
+        every { settingsRepository.localModelBackend } returns flowOf("CPU")
+
         mockkConstructor(Engine::class)
         every { anyConstructed<Engine>().initialize() } returns Unit
         every { anyConstructed<Engine>().close() } returns Unit

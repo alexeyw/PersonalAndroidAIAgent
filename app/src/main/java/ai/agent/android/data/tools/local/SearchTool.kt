@@ -1,5 +1,6 @@
 package ai.agent.android.data.tools.local
 
+import ai.agent.android.domain.engine.LlmInferenceEngine
 import ai.agent.android.domain.models.AgentTool
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -15,7 +16,9 @@ import javax.inject.Singleton
  * This is used for queries that require fetching external data.
  */
 @Singleton
-class SearchTool @Inject constructor() {
+class SearchTool @Inject constructor(
+    private val llmEngine: LlmInferenceEngine
+) {
 
     companion object {
         const val TOOL_NAME = "search_tool"
@@ -24,9 +27,10 @@ class SearchTool @Inject constructor() {
             {
               "type": "object",
               "properties": {
-                "query": { "type": "string", "description": "The topic to search for" }
+                "query": { "type": "string", "description": "The topic to search for" },
+                "lang": { "type": "string", "description": "Required. The 2-letter language code. This code MUST match the language of the keywords you provided in the query field. Use standard codes, e.g., \"en\" (English), \"es\" (Spanish), \"zh\" (Chinese), \"fr\" (French), \"de\" (German), \"ja\" (Japanese), \"ko\" (Korean), \"it\" (Italian), \"pt\" (Portuguese), \"ru\" (Russian), \"ar\" (Arabic), \"hi\" (Hindi)." }
               },
-              "required": ["query"]
+              "required": ["query", "lang"]
             }
         """
     }
@@ -42,16 +46,38 @@ class SearchTool @Inject constructor() {
         )
     }
 
+    private fun truncateCleanly(extract: String): String {
+        val substring = extract.substring(0, 2000)
+        val lastPunctuation = maxOf(
+            substring.lastIndexOf('.'),
+            maxOf(substring.lastIndexOf('!'), substring.lastIndexOf('?'))
+        )
+        
+        if (lastPunctuation > 0) {
+            return substring.substring(0, lastPunctuation + 1)
+        }
+        
+        val lastSpace = substring.lastIndexOf(' ')
+        if (lastSpace > 0) {
+            return substring.substring(0, lastSpace) + "..."
+        }
+        
+        return "$substring..."
+    }
+
     /**
      * Executes the search query against Wikipedia.
      *
      * @param query The search query.
+     * @param lang The 2-letter language code.
      * @return A summary of the search results as a string.
      */
-    suspend fun executeSearch(query: String): String = withContext(Dispatchers.IO) {
+    suspend fun executeSearch(query: String, lang: String): String = withContext(Dispatchers.IO) {
         try {
             val encodedQuery = URLEncoder.encode(query, Charsets.UTF_8.name())
-            val urlString = "https://en.wikipedia.org/w/api.php?action=query&format=json&prop=extracts&exintro=true&explaintext=true&redirects=1&titles=${encodedQuery}"
+            
+            // Using generator=search is much more flexible than titles= because it does a real search.
+            val urlString = "https://$lang.wikipedia.org/w/api.php?action=query&format=json&prop=extracts&exintro=true&explaintext=true&generator=search&gsrsearch=${encodedQuery}&gsrlimit=1"
             val url = URL(urlString)
             val connection = url.openConnection() as HttpURLConnection
             connection.requestMethod = "GET"
@@ -61,10 +87,18 @@ class SearchTool @Inject constructor() {
             if (connection.responseCode == HttpURLConnection.HTTP_OK) {
                 val response = connection.inputStream.bufferedReader().use { it.readText() }
                 val jsonResponse = JSONObject(response)
-                val queryObj = jsonResponse.getJSONObject("query")
-                val pagesObj = queryObj.getJSONObject("pages")
+                
+                val queryObj = jsonResponse.optJSONObject("query")
+                if (queryObj == null) {
+                    return@withContext "No results found for '$query'."
+                }
+                
+                val pagesObj = queryObj.optJSONObject("pages")
+                if (pagesObj == null || pagesObj.keys().hasNext().not()) {
+                    return@withContext "No results found for '$query'."
+                }
+                
                 val firstKey = pagesObj.keys().next()
-
                 if (firstKey == "-1") {
                     return@withContext "No results found for '$query'."
                 }
@@ -72,9 +106,23 @@ class SearchTool @Inject constructor() {
                 val page = pagesObj.getJSONObject(firstKey)
                 val extract = page.optString("extract", "No summary available.")
                 
-                // Limit the extract to avoid token explosion
-                if (extract.length > 1000) {
-                    return@withContext extract.substring(0, 1000) + "..."
+                // If the extract is too long, try to summarize it with LLM
+                if (extract.length > 2000) {
+                    if (llmEngine.isInitialized) {
+                        try {
+                            val prompt = "Summarize the following text within 2000 characters retaining the main factual information:\n\n$extract\n\nSUMMARY: "
+                            val responseStream = llmEngine.generateResponseStream(prompt)
+                            val summary = java.lang.StringBuilder()
+                            responseStream.collect { token ->
+                                summary.append(token)
+                            }
+                            return@withContext summary.toString()
+                        } catch (e: Exception) {
+                            return@withContext truncateCleanly(extract)
+                        }
+                    } else {
+                        return@withContext truncateCleanly(extract)
+                    }
                 }
                 return@withContext extract
             } else {

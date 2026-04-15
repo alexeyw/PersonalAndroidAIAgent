@@ -18,6 +18,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
+import timber.log.Timber
 import javax.inject.Inject
 
 class LiteRtNodeExecutor @Inject constructor(
@@ -37,17 +38,10 @@ class LiteRtNodeExecutor @Inject constructor(
         sessionId: String,
         originalPrompt: String
     ): Flow<Any> = flow {
-        val tools = toolRepository.getAvailableTools()
-        val toolsDescription = tools.joinToString("\n") { "- ${it.name}: ${it.description} | Params: ${it.parameters}" }
         val systemPromptPrefix = settingsRepository.systemPromptPrefix.first()
-        val toolUsageInstructionTemplate = settingsRepository.toolUsageInstruction.first()
-        val toolUsageInstruction = if (toolUsageInstructionTemplate.contains("%s")) {
-            toolUsageInstructionTemplate.replace("%s", toolsDescription)
-        } else {
-            "$toolUsageInstructionTemplate\n\n$toolsDescription"
-        }
+        val nodeSystemPrompt = node.systemPrompt ?: "You are a helpful AI assistant."
+        val baseSystemPrompt = "$systemPromptPrefix\n$nodeSystemPrompt\n"
 
-        val baseSystemPrompt = "$systemPromptPrefix\n$toolUsageInstruction\n"
         val contextWindow = getContextWindowUseCase(sessionId)
         
         val relevantMemories = retrieveRelevantMemoryUseCase(originalPrompt)
@@ -57,7 +51,7 @@ class LiteRtNodeExecutor @Inject constructor(
             ""
         }
 
-        val fullPrompt = "$baseSystemPrompt\n\n$memoryContext$contextWindow\nAGENT: "
+        val fullPrompt = "$baseSystemPrompt\n\n$memoryContext$contextWindow\n\nUSER/INPUT: $inputText\nAGENT: "
         
         val startTime = System.currentTimeMillis()
         
@@ -87,6 +81,7 @@ class LiteRtNodeExecutor @Inject constructor(
                 }
             }
         } catch (e: Exception) {
+            Timber.tag("PipelineDebug").e(e, "[NODE_ERR] type=${node.type.name} id=${node.id} error in LiteRtNodeExecutor generation")
             emit(AgentOrchestratorState.Error(e.message ?: "Unknown error during LLM generation"))
             emit(NodeExecutionResult(error = e.message))
             return@flow

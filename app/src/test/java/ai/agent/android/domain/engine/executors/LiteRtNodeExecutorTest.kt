@@ -60,13 +60,10 @@ class LiteRtNodeExecutorTest {
     }
 
     @Test
-    fun `execute forms prompt with %s placeholder correctly`() = runTest {
-        val node = NodeModel("1", NodeType.LITE_RT, 0f, 0f)
-        val tool = AgentTool(name = "test_tool", description = "Test tool", parameters = "{}")
+    fun `execute forms prompt using node systemPrompt`() = runTest {
+        val node = NodeModel("1", NodeType.LITE_RT, 0f, 0f, systemPrompt = "Custom Node Prompt")
         
-        coEvery { toolRepository.getAvailableTools() } returns listOf(tool)
         every { settingsRepository.systemPromptPrefix } returns flowOf("Prefix")
-        every { settingsRepository.toolUsageInstruction } returns flowOf("Instruction with %s placeholder")
         coEvery { getContextWindowUseCase(any()) } returns "Context Window"
         coEvery { retrieveRelevantMemoryUseCase(any()) } returns emptyList()
         coEvery { loadModelUseCase(any()) } returns ai.agent.android.domain.models.Result.Success(Unit)
@@ -77,17 +74,15 @@ class LiteRtNodeExecutorTest {
         executor.execute(node, "input", "session-1", "prompt").toList()
 
         val capturedPrompt = promptSlot.captured
-        assertTrue(capturedPrompt.contains("Instruction with - test_tool: Test tool | Params: {} placeholder"))
+        assertTrue(capturedPrompt.contains("Custom Node Prompt"))
+        assertTrue(capturedPrompt.contains("USER/INPUT: input"))
     }
 
     @Test
-    fun `execute forms prompt without %s placeholder by appending fallback`() = runTest {
+    fun `execute forms prompt using default systemPrompt when node prompt is empty`() = runTest {
         val node = NodeModel("1", NodeType.LITE_RT, 0f, 0f)
-        val tool = AgentTool(name = "test_tool", description = "Test tool", parameters = "{}")
         
-        coEvery { toolRepository.getAvailableTools() } returns listOf(tool)
         every { settingsRepository.systemPromptPrefix } returns flowOf("Prefix")
-        every { settingsRepository.toolUsageInstruction } returns flowOf("Instruction without placeholder")
         coEvery { getContextWindowUseCase(any()) } returns "Context Window"
         coEvery { retrieveRelevantMemoryUseCase(any()) } returns emptyList()
         coEvery { loadModelUseCase(any()) } returns ai.agent.android.domain.models.Result.Success(Unit)
@@ -98,6 +93,6 @@ class LiteRtNodeExecutorTest {
         executor.execute(node, "input", "session-1", "prompt").toList()
 
         val capturedPrompt = promptSlot.captured
-        assertTrue(capturedPrompt.contains("Instruction without placeholder\n\n- test_tool: Test tool | Params: {}"))
+        assertTrue(capturedPrompt.contains("You are a helpful AI assistant"))
     }
 }
