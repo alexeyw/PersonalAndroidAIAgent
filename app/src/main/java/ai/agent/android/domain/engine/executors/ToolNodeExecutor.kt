@@ -1,5 +1,6 @@
 package ai.agent.android.domain.engine.executors
 
+import ai.agent.android.domain.engine.LlmInferenceEngine
 import ai.agent.android.domain.models.AgentOrchestratorState
 import ai.agent.android.domain.models.ChatMessage
 import ai.agent.android.domain.models.NodeExecutionResult
@@ -9,6 +10,7 @@ import ai.agent.android.domain.repositories.ChatRepository
 import ai.agent.android.domain.repositories.SettingsRepository
 import ai.agent.android.domain.repositories.ToolRepository
 import ai.agent.android.domain.services.ApprovalNotifier
+import ai.agent.android.domain.usecases.LoadModelUseCase
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
@@ -20,6 +22,8 @@ import javax.inject.Singleton
 
 @Singleton
 class ToolNodeExecutor @Inject constructor(
+    private val llmEngine: LlmInferenceEngine,
+    private val loadModelUseCase: LoadModelUseCase,
     private val toolRepository: ToolRepository,
     private val settingsRepository: SettingsRepository,
     private val approvalNotifier: ApprovalNotifier,
@@ -39,19 +43,137 @@ class ToolNodeExecutor @Inject constructor(
         sessionId: String,
         originalPrompt: String
     ): Flow<Any> = flow {
-        val toolName = node.toolName
-        if (toolName.isNullOrBlank()) {
+        val toolNameConfig = node.toolName
+        if (toolNameConfig.isNullOrBlank()) {
             emit(NodeExecutionResult(error = "Tool node is missing toolName configuration."))
             return@flow
         }
 
-        val toolArgs = parseToolArguments(inputText) ?: inputText
+        emit(AgentOrchestratorState.Thinking("Analyzing task for tool execution..."))
+
+        val loadResult = loadModelUseCase(node.modelPath)
+        if (loadResult is ai.agent.android.domain.models.Result.Error) {
+            val errorMsg = "Error loading local model for tool node"
+            emit(AgentOrchestratorState.Error(errorMsg))
+            emit(NodeExecutionResult(error = errorMsg))
+            return@flow
+        }
+
+        val resolvedToolName: String
+        val resolvedToolArgs: String
+
+        if (toolNameConfig.equals("auto", ignoreCase = true)) {
+            val availableTools = toolRepository.getAvailableTools()
+            if (availableTools.isEmpty()) {
+                val errorMsg = "No tools available for auto selection"
+                emit(AgentOrchestratorState.Error(errorMsg))
+                emit(NodeExecutionResult(error = errorMsg))
+                return@flow
+            }
+
+            val toolsDescriptions = availableTools.joinToString("\n\n") {
+                "Tool: ${it.name}\nDescription: ${it.description}\nParameters: ${it.parameters}"
+            }
+
+            val prompt = """
+                You are an AI assistant that selects the best tool for a given task and generates arguments.
+                
+                AVAILABLE TOOLS:
+                $toolsDescriptions
+                
+                TASK:
+                $inputText
+                
+                INSTRUCTIONS:
+                Choose the most appropriate tool to solve the task. 
+                Generate strictly valid JSON with two fields: "tool" and "arguments".
+                "tool" should be the exact name of the selected tool.
+                "arguments" should contain the parameters matching the tool's schema.
+                
+                JSON OUTPUT: 
+            """.trimIndent()
+
+            val responseStream = llmEngine.generateResponseStream(prompt)
+            val accumulatedResponse = StringBuilder()
+            try {
+                responseStream.collect { token ->
+                    accumulatedResponse.append(token)
+                }
+            } catch (e: Exception) {
+                Timber.tag("PipelineDebug").e(e, "Error generating tool selection via LLM")
+                val errorMsg = "Error generating tool selection: ${e.message}"
+                emit(AgentOrchestratorState.Error(errorMsg))
+                emit(NodeExecutionResult(error = errorMsg))
+                return@flow
+            }
+
+            val parsedSelection = parseToolSelection(accumulatedResponse.toString())
+            if (parsedSelection == null) {
+                val errorMsg = "Failed to parse tool selection JSON from LLM output"
+                emit(AgentOrchestratorState.Error(errorMsg))
+                emit(NodeExecutionResult(error = errorMsg))
+                return@flow
+            }
+
+            resolvedToolName = parsedSelection.first
+            resolvedToolArgs = parsedSelection.second
+        } else {
+            val tools = toolRepository.getAvailableTools()
+            val selectedTool = tools.find { it.name == toolNameConfig }
+            if (selectedTool == null) {
+                val errorMsg = "Tool $toolNameConfig not found in available tools"
+                emit(AgentOrchestratorState.Error(errorMsg))
+                emit(NodeExecutionResult(error = errorMsg))
+                return@flow
+            }
+
+            val prompt = """
+                You are an AI assistant that generates arguments for a specific tool.
+                
+                TOOL: ${selectedTool.name}
+                DESCRIPTION: ${selectedTool.description}
+                PARAMETERS SCHEMA: ${selectedTool.parameters}
+                
+                TASK:
+                $inputText
+                
+                INSTRUCTIONS:
+                Based on the task description, generate strictly valid JSON for the tool's "arguments" according to its schema.
+                Do not wrap in anything else, just the JSON for the arguments. If it's a primitive, output {"tool": "${selectedTool.name}", "arguments": <value>}.
+                
+                JSON OUTPUT: 
+            """.trimIndent()
+
+            val responseStream = llmEngine.generateResponseStream(prompt)
+            val accumulatedResponse = StringBuilder()
+            try {
+                responseStream.collect { token ->
+                    accumulatedResponse.append(token)
+                }
+            } catch (e: Exception) {
+                Timber.tag("PipelineDebug").e(e, "Error generating tool arguments via LLM")
+                val errorMsg = "Error generating tool arguments: ${e.message}"
+                emit(AgentOrchestratorState.Error(errorMsg))
+                emit(NodeExecutionResult(error = errorMsg))
+                return@flow
+            }
+
+            val parsedSelection = parseToolSelection(accumulatedResponse.toString())
+            if (parsedSelection != null && parsedSelection.first == toolNameConfig) {
+                resolvedToolName = parsedSelection.first
+                resolvedToolArgs = parsedSelection.second
+            } else {
+                resolvedToolName = toolNameConfig
+                resolvedToolArgs = parseToolArguments(accumulatedResponse.toString()) ?: accumulatedResponse.toString().trim()
+            }
+        }
+
         val requiresUserConfirmation = settingsRepository.requiresUserConfirmation.first()
         var isApproved = true
 
         if (requiresUserConfirmation) {
-            emit(AgentOrchestratorState.WaitingForApproval(toolName, toolArgs))
-            approvalNotifier.sendApprovalRequest(sessionId, toolName, toolArgs)
+            emit(AgentOrchestratorState.WaitingForApproval(resolvedToolName, resolvedToolArgs))
+            approvalNotifier.sendApprovalRequest(sessionId, resolvedToolName, resolvedToolArgs)
 
             val deferred = CompletableDeferred<Boolean>()
             activeApprovalDeferreds[sessionId] = deferred
@@ -62,34 +184,72 @@ class ToolNodeExecutor @Inject constructor(
                     ChatMessage(
                         sessionId = sessionId,
                         role = Role.SYSTEM,
-                        content = "User denied execution of tool: $toolName",
+                        content = "User denied execution of tool: $resolvedToolName",
                         timestamp = System.currentTimeMillis()
                     )
                 )
-                emit(AgentOrchestratorState.ObservationResult(toolName, "Execution denied by user"))
+                emit(AgentOrchestratorState.ObservationResult(resolvedToolName, "Execution denied by user"))
                 emit(NodeExecutionResult(outputText = "Execution denied by user"))
                 return@flow
             }
         }
 
-        emit(AgentOrchestratorState.ExecutingTool(toolName, toolArgs))
+        emit(AgentOrchestratorState.ExecutingTool(resolvedToolName, resolvedToolArgs))
         val result = try {
-            toolRepository.executeTool(toolName, toolArgs)
+            toolRepository.executeTool(resolvedToolName, resolvedToolArgs)
         } catch (e: Exception) {
-            Timber.tag("PipelineDebug").e(e, "[NODE_ERR] type=${node.type.name} id=${node.id} error executing tool: $toolName")
-            "Error executing $toolName: ${e.message}"
+            Timber.tag("PipelineDebug").e(e, "[NODE_ERR] type=${node.type.name} id=${node.id} error executing tool: $resolvedToolName")
+            "Error executing $resolvedToolName: ${e.message}"
         }
 
-        emit(AgentOrchestratorState.ObservationResult(toolName, result))
+        emit(AgentOrchestratorState.ObservationResult(resolvedToolName, result))
         chatRepository.saveMessage(
             ChatMessage(
                 sessionId = sessionId,
                 role = Role.SYSTEM,
-                content = "Observation from $toolName: $result",
+                content = "Observation from $resolvedToolName: $result",
                 timestamp = System.currentTimeMillis()
             )
         )
         emit(NodeExecutionResult(outputText = result))
+    }
+
+    @androidx.annotation.VisibleForTesting
+    internal fun parseToolSelection(response: String): Pair<String, String>? {
+        val blockRegex = """```json\s*(\{.*?\})\s*```""".toRegex(RegexOption.DOT_MATCHES_ALL)
+        var jsonBlock = blockRegex.find(response)?.groups?.get(1)?.value
+        
+        if (jsonBlock == null) {
+            val startIndex = response.indexOf('{')
+            val endIndex = response.lastIndexOf('}')
+            jsonBlock = if (startIndex != -1 && endIndex != -1 && startIndex < endIndex) {
+                response.substring(startIndex, endIndex + 1)
+            } else {
+                response
+            }
+        }
+        
+        return try {
+            val jsonObject = org.json.JSONObject(jsonBlock)
+            val tool = if (jsonObject.has("tool")) jsonObject.getString("tool") else null
+            val args = if (jsonObject.has("arguments")) {
+                val argsObj = jsonObject.get("arguments")
+                if (argsObj is org.json.JSONObject || argsObj is org.json.JSONArray) {
+                    argsObj.toString()
+                } else {
+                    argsObj.toString()
+                }
+            } else null
+            
+            if (tool != null && args != null) {
+                Pair(tool, args)
+            } else {
+                null
+            }
+        } catch (e: org.json.JSONException) {
+            Timber.tag("PipelineDebug").e(e, "Error parsing tool selection JSON")
+            null
+        }
     }
 
     @androidx.annotation.VisibleForTesting

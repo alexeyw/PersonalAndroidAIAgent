@@ -60,7 +60,7 @@ class GraphExecutionEngineTest {
         val queueProcessorNodeExecutor = QueueProcessorNodeExecutor()
         
         val toolNodeExecutor = ToolNodeExecutor(
-            toolRepository, settingsRepository, approvalNotifier, chatRepository
+            llmEngine, loadModelUseCase, toolRepository, settingsRepository, approvalNotifier, chatRepository
         )
         
         val liteRtNodeExecutor = LiteRtNodeExecutor(
