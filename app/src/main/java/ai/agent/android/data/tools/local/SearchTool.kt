@@ -51,7 +51,11 @@ class SearchTool @Inject constructor() {
     suspend fun executeSearch(query: String): String = withContext(Dispatchers.IO) {
         try {
             val encodedQuery = URLEncoder.encode(query, Charsets.UTF_8.name())
-            val urlString = "https://en.wikipedia.org/w/api.php?action=query&format=json&prop=extracts&exintro=true&explaintext=true&redirects=1&titles=${encodedQuery}"
+            val isRussian = query.any { it.code in 0x0400..0x04FF }
+            val lang = if (isRussian) "ru" else "en"
+            
+            // Using generator=search is much more flexible than titles= because it does a real search.
+            val urlString = "https://$lang.wikipedia.org/w/api.php?action=query&format=json&prop=extracts&exintro=true&explaintext=true&generator=search&gsrsearch=${encodedQuery}&gsrlimit=1"
             val url = URL(urlString)
             val connection = url.openConnection() as HttpURLConnection
             connection.requestMethod = "GET"
@@ -61,10 +65,18 @@ class SearchTool @Inject constructor() {
             if (connection.responseCode == HttpURLConnection.HTTP_OK) {
                 val response = connection.inputStream.bufferedReader().use { it.readText() }
                 val jsonResponse = JSONObject(response)
-                val queryObj = jsonResponse.getJSONObject("query")
-                val pagesObj = queryObj.getJSONObject("pages")
+                
+                val queryObj = jsonResponse.optJSONObject("query")
+                if (queryObj == null) {
+                    return@withContext "No results found for '$query'."
+                }
+                
+                val pagesObj = queryObj.optJSONObject("pages")
+                if (pagesObj == null || pagesObj.keys().hasNext().not()) {
+                    return@withContext "No results found for '$query'."
+                }
+                
                 val firstKey = pagesObj.keys().next()
-
                 if (firstKey == "-1") {
                     return@withContext "No results found for '$query'."
                 }
