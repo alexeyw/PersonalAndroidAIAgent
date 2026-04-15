@@ -1,5 +1,6 @@
 package ai.agent.android.data.tools.local
 
+import ai.agent.android.domain.engine.LlmInferenceEngine
 import ai.agent.android.domain.models.AgentTool
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -15,7 +16,9 @@ import javax.inject.Singleton
  * This is used for queries that require fetching external data.
  */
 @Singleton
-class SearchTool @Inject constructor() {
+class SearchTool @Inject constructor(
+    private val llmEngine: LlmInferenceEngine
+) {
 
     companion object {
         const val TOOL_NAME = "search_tool"
@@ -41,6 +44,25 @@ class SearchTool @Inject constructor() {
             description = TOOL_DESCRIPTION,
             parameters = TOOL_PARAMETERS.trimIndent()
         )
+    }
+
+    private fun truncateCleanly(extract: String): String {
+        val substring = extract.substring(0, 2000)
+        val lastPunctuation = maxOf(
+            substring.lastIndexOf('.'),
+            maxOf(substring.lastIndexOf('!'), substring.lastIndexOf('?'))
+        )
+        
+        if (lastPunctuation > 0) {
+            return substring.substring(0, lastPunctuation + 1)
+        }
+        
+        val lastSpace = substring.lastIndexOf(' ')
+        if (lastSpace > 0) {
+            return substring.substring(0, lastSpace) + "..."
+        }
+        
+        return "$substring..."
     }
 
     /**
@@ -84,24 +106,23 @@ class SearchTool @Inject constructor() {
                 val page = pagesObj.getJSONObject(firstKey)
                 val extract = page.optString("extract", "No summary available.")
                 
-                // Limit the extract to avoid token explosion and cut off cleanly at a sentence
-                if (extract.length > 1000) {
-                    val substring = extract.substring(0, 1000)
-                    val lastPunctuation = maxOf(
-                        substring.lastIndexOf('.'),
-                        maxOf(substring.lastIndexOf('!'), substring.lastIndexOf('?'))
-                    )
-                    
-                    if (lastPunctuation > 0) {
-                        return@withContext substring.substring(0, lastPunctuation + 1)
+                // If the extract is too long, try to summarize it with LLM
+                if (extract.length > 2000) {
+                    if (llmEngine.isInitialized) {
+                        try {
+                            val prompt = "Summarize the following text within 2000 characters retaining the main factual information:\n\n$extract\n\nSUMMARY: "
+                            val responseStream = llmEngine.generateResponseStream(prompt)
+                            val summary = java.lang.StringBuilder()
+                            responseStream.collect { token ->
+                                summary.append(token)
+                            }
+                            return@withContext summary.toString()
+                        } catch (e: Exception) {
+                            return@withContext truncateCleanly(extract)
+                        }
+                    } else {
+                        return@withContext truncateCleanly(extract)
                     }
-                    
-                    val lastSpace = substring.lastIndexOf(' ')
-                    if (lastSpace > 0) {
-                        return@withContext substring.substring(0, lastSpace) + "..."
-                    }
-                    
-                    return@withContext "$substring..."
                 }
                 return@withContext extract
             } else {

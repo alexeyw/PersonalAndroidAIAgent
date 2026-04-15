@@ -1,5 +1,7 @@
 package ai.agent.android.data.tools.local
 
+import ai.agent.android.domain.engine.LlmInferenceEngine
+import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -8,7 +10,8 @@ import org.junit.Test
 
 class SearchToolTest {
 
-    private val searchTool = SearchTool()
+    private val llmEngine = mockk<LlmInferenceEngine>(relaxed = true)
+    private val searchTool = SearchTool(llmEngine)
 
     @Test
     fun `asAgentTool should return correct tool definition`() {
