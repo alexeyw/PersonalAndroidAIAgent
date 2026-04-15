@@ -175,10 +175,11 @@ class ToolRepositoryImpl @Inject constructor(
             if (name == ai.agent.android.data.tools.local.SearchTool.TOOL_NAME) {
                 val json = JSONObject(arguments)
                 val query = json.optString("query", "")
+                val lang = json.optString("lang", "en")
                 if (query.isBlank()) {
                     return "Error: Missing 'query' argument."
                 }
-                return searchTool.executeSearch(query)
+                return searchTool.executeSearch(query, lang)
             }
             
             return "Local tool executed: \$name with \$arguments" // Dummy implementation

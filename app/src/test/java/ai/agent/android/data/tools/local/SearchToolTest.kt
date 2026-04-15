@@ -16,11 +16,12 @@ class SearchToolTest {
         assertEquals("search_tool", tool.name)
         assertNotNull(tool.description)
         assertTrue(tool.parameters.contains("query"))
+        assertTrue(tool.parameters.contains("lang"))
     }
 
     @Test
     fun `executeSearch should handle empty query gracefully`() = runTest {
-        val result = searchTool.executeSearch("")
+        val result = searchTool.executeSearch("", "en")
         assertNotNull(result)
         // Should not crash, will likely return an error string or "No results found"
         assertTrue(result.isNotEmpty())

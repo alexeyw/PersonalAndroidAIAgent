@@ -24,9 +24,10 @@ class SearchTool @Inject constructor() {
             {
               "type": "object",
               "properties": {
-                "query": { "type": "string", "description": "The topic to search for" }
+                "query": { "type": "string", "description": "The topic to search for" },
+                "lang": { "type": "string", "description": "Required. The 2-letter language code. This code MUST match the language of the keywords you provided in the query field. Use standard codes, e.g., \"en\" (English), \"es\" (Spanish), \"zh\" (Chinese), \"fr\" (French), \"de\" (German), \"ja\" (Japanese), \"ko\" (Korean), \"it\" (Italian), \"pt\" (Portuguese), \"ru\" (Russian), \"ar\" (Arabic), \"hi\" (Hindi)." }
               },
-              "required": ["query"]
+              "required": ["query", "lang"]
             }
         """
     }
@@ -46,13 +47,12 @@ class SearchTool @Inject constructor() {
      * Executes the search query against Wikipedia.
      *
      * @param query The search query.
+     * @param lang The 2-letter language code.
      * @return A summary of the search results as a string.
      */
-    suspend fun executeSearch(query: String): String = withContext(Dispatchers.IO) {
+    suspend fun executeSearch(query: String, lang: String): String = withContext(Dispatchers.IO) {
         try {
             val encodedQuery = URLEncoder.encode(query, Charsets.UTF_8.name())
-            val isRussian = query.any { it.code in 0x0400..0x04FF }
-            val lang = if (isRussian) "ru" else "en"
             
             // Using generator=search is much more flexible than titles= because it does a real search.
             val urlString = "https://$lang.wikipedia.org/w/api.php?action=query&format=json&prop=extracts&exintro=true&explaintext=true&generator=search&gsrsearch=${encodedQuery}&gsrlimit=1"
