@@ -84,9 +84,24 @@ class SearchTool @Inject constructor() {
                 val page = pagesObj.getJSONObject(firstKey)
                 val extract = page.optString("extract", "No summary available.")
                 
-                // Limit the extract to avoid token explosion
+                // Limit the extract to avoid token explosion and cut off cleanly at a sentence
                 if (extract.length > 1000) {
-                    return@withContext extract.substring(0, 1000) + "..."
+                    val substring = extract.substring(0, 1000)
+                    val lastPunctuation = maxOf(
+                        substring.lastIndexOf('.'),
+                        maxOf(substring.lastIndexOf('!'), substring.lastIndexOf('?'))
+                    )
+                    
+                    if (lastPunctuation > 0) {
+                        return@withContext substring.substring(0, lastPunctuation + 1)
+                    }
+                    
+                    val lastSpace = substring.lastIndexOf(' ')
+                    if (lastSpace > 0) {
+                        return@withContext substring.substring(0, lastSpace) + "..."
+                    }
+                    
+                    return@withContext "$substring..."
                 }
                 return@withContext extract
             } else {
