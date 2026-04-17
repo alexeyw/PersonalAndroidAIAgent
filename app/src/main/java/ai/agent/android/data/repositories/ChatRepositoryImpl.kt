@@ -15,6 +15,10 @@ import javax.inject.Singleton
 /**
  * Implementation of [ChatRepository] that uses a local Room database via [ChatDao].
  *
+ * Caches the most recently seen [cachedSessionId] to avoid an N+1 SELECT pattern during
+ * token streaming: once a session is confirmed to exist, subsequent [saveMessage] calls for
+ * the same session skip the [ChatDao.getSessionById] round-trip and update only the timestamp.
+ *
  * @property chatDao The Data Access Object for chat messages.
  */
 @Singleton
@@ -23,22 +27,28 @@ class ChatRepositoryImpl @Inject constructor(
     private val traceStepDao: TraceStepDao
 ) : ChatRepository {
 
+    @Volatile
+    private var cachedSessionId: String? = null
+
     override suspend fun saveMessage(message: ChatMessage) {
         chatDao.insertMessage(message.toEntity())
-        
-        // Auto-create or update session timestamp
-        val existingSession = chatDao.getSessionById(message.sessionId)
-        if (existingSession != null) {
-            chatDao.updateSession(existingSession.copy(updatedAt = message.timestamp))
+
+        if (cachedSessionId == message.sessionId) {
+            chatDao.updateSessionTimestamp(message.sessionId, message.timestamp)
         } else {
-            val sessionName = "Chat " + message.sessionId.take(6)
-            chatDao.insertSession(
-                ai.agent.android.data.local.models.ChatSessionEntity(
-                    id = message.sessionId,
-                    name = sessionName,
-                    updatedAt = message.timestamp
+            val existingSession = chatDao.getSessionById(message.sessionId)
+            if (existingSession != null) {
+                chatDao.updateSession(existingSession.copy(updatedAt = message.timestamp))
+            } else {
+                chatDao.insertSession(
+                    ai.agent.android.data.local.models.ChatSessionEntity(
+                        id = message.sessionId,
+                        name = "Chat " + message.sessionId.take(6),
+                        updatedAt = message.timestamp
+                    )
                 )
-            )
+            }
+            cachedSessionId = message.sessionId
         }
     }
 

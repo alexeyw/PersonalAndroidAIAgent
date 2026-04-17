@@ -91,8 +91,6 @@ class LiteRtNodeExecutor @Inject constructor(
         metricsRepository.updateMetrics(endTime - startTime, approximateTokenCount)
 
         val fullResponseText = accumulatedResponse.toString().trim()
-        
-        kotlinx.coroutines.delay(1000)
 
         emit(NodeExecutionResult(outputText = fullResponseText))
     }

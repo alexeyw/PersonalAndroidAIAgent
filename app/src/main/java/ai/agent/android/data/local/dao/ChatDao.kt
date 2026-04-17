@@ -108,4 +108,15 @@ interface ChatDao {
      */
     @Query("DELETE FROM chat_sessions WHERE id = :id")
     suspend fun deleteSession(id: String)
+
+    /**
+     * Updates only the [updatedAt] timestamp of an existing session without a SELECT round-trip.
+     * Used by [ai.agent.android.data.repositories.ChatRepositoryImpl] to avoid an N+1 query
+     * pattern during streaming, where the session is already known to exist.
+     *
+     * @param sessionId The ID of the session to update.
+     * @param timestamp The new timestamp in milliseconds since epoch.
+     */
+    @Query("UPDATE chat_sessions SET updatedAt = :timestamp WHERE id = :sessionId")
+    suspend fun updateSessionTimestamp(sessionId: String, timestamp: Long)
 }
