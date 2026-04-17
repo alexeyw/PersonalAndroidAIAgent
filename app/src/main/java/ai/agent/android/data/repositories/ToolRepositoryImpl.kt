@@ -154,7 +154,7 @@ class ToolRepositoryImpl @Inject constructor(
         val disabled = settingsRepository.disabledAppFunctions.first()
         if (localTools.any { it.name == name }) {
             if (name in disabled) {
-                throw IllegalArgumentException("Tool \$name is disabled")
+                throw IllegalArgumentException("Tool $name is disabled")
             }
             
             if (name == "schedule_task") {
@@ -182,7 +182,7 @@ class ToolRepositoryImpl @Inject constructor(
                 return searchTool.executeSearch(query, lang)
             }
             
-            return "Local tool executed: \$name with \$arguments" // Dummy implementation
+            return "Local tool executed: $name with $arguments"
         }
 
         // Ensure MCP clients are synced before searching for the tool
@@ -199,6 +199,6 @@ class ToolRepositoryImpl @Inject constructor(
             }
         }
         
-        throw IllegalArgumentException("Tool \$name not found across active providers")
+        throw IllegalArgumentException("Tool $name not found across active providers")
     }
 }
