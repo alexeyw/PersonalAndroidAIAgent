@@ -13,6 +13,7 @@ import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
+import android.os.PowerManager
 import androidx.core.app.NotificationCompat
 import androidx.work.WorkManager
 import dagger.hilt.android.AndroidEntryPoint
@@ -59,20 +60,27 @@ class AgentForegroundService : Service() {
     private val serviceScope = CoroutineScope(Dispatchers.Main + Job())
     private lateinit var idleManager: AgentIdleManager
     private lateinit var powerManager: AgentPowerManager
+    private var wakeLock: PowerManager.WakeLock? = null
 
     companion object {
         private const val NOTIFICATION_CHANNEL_ID = "AgentForegroundServiceChannel"
         private const val NOTIFICATION_ID = 101
+        private const val WAKE_LOCK_TAG = "AndroidAIAgent:InferenceLock"
+        private const val WAKE_LOCK_TIMEOUT_MS = 10 * 60 * 1000L
     }
 
     /**
      * Called by the system when the service is first created.
-     * Initializes the notification channel, idle manager, power manager, and starts observing state.
+     * Initializes the notification channel, WakeLock, idle manager, power manager,
+     * and starts observing agent state.
      */
     override fun onCreate() {
         super.onCreate()
         createNotificationChannel()
         startForegroundServiceWithNotification("Initializing...")
+
+        wakeLock = (getSystemService(Context.POWER_SERVICE) as PowerManager)
+            .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, WAKE_LOCK_TAG)
 
         idleManager = AgentIdleManager(
             scope = serviceScope,
@@ -92,7 +100,36 @@ class AgentForegroundService : Service() {
         serviceScope.launch {
             agentOrchestratorUseCase.globalState.collectLatest { state ->
                 updateNotification(getStatusTextForState(state))
+                when (state) {
+                    is AgentOrchestratorState.Loading,
+                    is AgentOrchestratorState.Thinking,
+                    is AgentOrchestratorState.ExecutingTool -> acquireWakeLock()
+                    is AgentOrchestratorState.Idle,
+                    is AgentOrchestratorState.Completed,
+                    is AgentOrchestratorState.Error -> releaseWakeLock()
+                    else -> Unit
+                }
             }
+        }
+    }
+
+    /**
+     * Acquires [wakeLock] if it is not already held, preventing the CPU from sleeping
+     * during active inference or tool execution.
+     */
+    private fun acquireWakeLock() {
+        if (wakeLock?.isHeld == false) {
+            wakeLock?.acquire(WAKE_LOCK_TIMEOUT_MS)
+        }
+    }
+
+    /**
+     * Releases [wakeLock] if it is currently held, allowing the CPU to sleep
+     * once inference completes or an error occurs.
+     */
+    private fun releaseWakeLock() {
+        if (wakeLock?.isHeld == true) {
+            wakeLock?.release()
         }
     }
 
@@ -175,6 +212,7 @@ class AgentForegroundService : Service() {
      */
     override fun onDestroy() {
         super.onDestroy()
+        releaseWakeLock()
         serviceScope.cancel()
         if (llmEngine.isInitialized) {
             llmEngine.close()
