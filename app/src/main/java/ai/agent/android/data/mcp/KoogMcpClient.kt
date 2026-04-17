@@ -2,6 +2,8 @@ package ai.agent.android.data.mcp
 
 import ai.agent.android.domain.models.AgentTool
 import ai.koog.agents.core.tools.ToolRegistry
+import org.json.JSONArray
+import org.json.JSONObject
 import ai.koog.agents.mcp.McpToolRegistryProvider
 import ai.koog.agents.mcp.metadata.McpServerInfo
 import ai.koog.serialization.kotlinx.KotlinxSerializer
@@ -58,8 +60,22 @@ class KoogMcpClient : McpClient {
                 AgentTool(
                     name = tool.name,
                     description = tool.descriptor.description,
-                    parameters = tool.descriptor.requiredParameters.joinToString { it.name } + 
-                                 tool.descriptor.optionalParameters.joinToString { it.name }
+                    parameters = run {
+                        val root = JSONObject()
+                        root.put("type", "object")
+                        val props = JSONObject()
+                        val required = JSONArray()
+                        tool.descriptor.requiredParameters.forEach { param ->
+                            props.put(param.name, JSONObject().put("type", "string"))
+                            required.put(param.name)
+                        }
+                        tool.descriptor.optionalParameters.forEach { param ->
+                            props.put(param.name, JSONObject().put("type", "string"))
+                        }
+                        root.put("properties", props)
+                        if (required.length() > 0) root.put("required", required)
+                        root.toString()
+                    }
                 )
             } ?: emptyList()
         }
@@ -77,7 +93,7 @@ class KoogMcpClient : McpClient {
     override suspend fun executeTool(name: String, arguments: String): String {
         return withContext(Dispatchers.IO) {
             val tool = registry?.getToolOrNull(name) 
-                ?: throw IllegalArgumentException("Tool \$name not found")
+                ?: throw IllegalArgumentException("Tool $name not found")
             
             val kotlinxJsonArgs = Json.parseToJsonElement(arguments).jsonObject
             val koogJsonArgs = kotlinxJsonArgs.toKoogJSONObject()

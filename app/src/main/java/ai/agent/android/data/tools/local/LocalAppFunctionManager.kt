@@ -60,7 +60,7 @@ class LocalAppFunctionManager(private val context: Context) {
                     pkg.appFunctions.map { metadata ->
                         AgentTool(
                             name = metadata.id,
-                            description = metadata.description ?: "App function \${metadata.id}",
+                            description = metadata.description ?: "App function ${metadata.id}",
                             parameters = generateJsonSchema(metadata.parameters)
                         )
                     }

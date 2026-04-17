@@ -24,16 +24,22 @@ class AgentAppFunctionService : AppFunctionService() {
         cancellationSignal: CancellationSignal,
         callback: OutcomeReceiver<ExecuteAppFunctionResponse, AppFunctionException>
     ) {
-        // With androidx.appfunctions, the Jetpack library usually handles the routing
-        // via generated code if we use the provided base classes, but since this API
-        // is very new (1.0.0-alpha08), we declare the service here to ensure the 
-        // system can bind to it. The actual routing to GetSystemTimeTool and 
-        // SetAlarmTool methods annotated with @AppFunction will be handled by the 
-        // Jetpack compiler's generated code when properly integrated.
-        
-        // This is an abstract method in the Android 16 SDK, so we must not call super.
-        // The Jetpack appfunctions library will typically provide its own service implementation
-        // that handles this routing if configured fully via its provided BaseAppFunctionService.
-        // For now, we leave it as a stub.
+        try {
+            val result = dispatchFunction(request)
+            callback.onResult(result)
+        } catch (e: AppFunctionException) {
+            callback.onError(e)
+        } catch (e: Exception) {
+            callback.onError(
+                AppFunctionException(AppFunctionException.ERROR_APP_UNKNOWN_ERROR, e.message ?: "")
+            )
+        }
+    }
+
+    private fun dispatchFunction(request: ExecuteAppFunctionRequest): ExecuteAppFunctionResponse {
+        throw AppFunctionException(
+            AppFunctionException.ERROR_APP_UNKNOWN_ERROR,
+            "AppFunction '${request.functionIdentifier}' routing not implemented"
+        )
     }
 }

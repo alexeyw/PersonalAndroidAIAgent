@@ -79,6 +79,31 @@ class ToolRepositoryImplTest {
     }
 
     @Test
+    fun `executeTool throws with tool name interpolated when tool is disabled`() = runTest {
+        val toolName = "get_system_time"
+        every { settingsRepository.disabledAppFunctions } returns flowOf(setOf(toolName))
+        coEvery { mcpClient.getTools() } returns emptyList()
+
+        val exception = runCatching { repository.executeTool(toolName, "{}") }
+            .exceptionOrNull()
+
+        assertTrue(exception is IllegalArgumentException)
+        assertTrue(exception!!.message!!.contains(toolName))
+    }
+
+    @Test
+    fun `executeTool throws with tool name interpolated when tool not found`() = runTest {
+        val toolName = "nonexistent_tool"
+        coEvery { mcpClient.getTools() } returns emptyList()
+
+        val exception = runCatching { repository.executeTool(toolName, "{}") }
+            .exceptionOrNull()
+
+        assertTrue(exception is IllegalArgumentException)
+        assertTrue(exception!!.message!!.contains(toolName))
+    }
+
+    @Test
     fun `concurrent getAvailableTools and executeTool does not throw`() = runTest {
         val mcpTools = listOf(AgentTool("test_mcp", "desc", "params"))
         coEvery { mcpClient.getTools() } returns mcpTools
