@@ -177,9 +177,10 @@ class ToolNodeExecutor @Inject constructor(
             emit(AgentOrchestratorState.WaitingForApproval(resolvedToolName, resolvedToolArgs))
             approvalNotifier.sendApprovalRequest(sessionId, resolvedToolName, resolvedToolArgs)
 
-            val timeoutMs = settingsRepository.toolCallTimeoutMs.first()
+            // Register deferred before any suspension point so a fast approval is not dropped
             val deferred = CompletableDeferred<Boolean>()
             activeApprovalDeferreds[sessionId] = deferred
+            val timeoutMs = settingsRepository.toolCallTimeoutMs.first()
             isApproved = try {
                 withTimeout(timeoutMs) { deferred.await() }
             } catch (e: TimeoutCancellationException) {
