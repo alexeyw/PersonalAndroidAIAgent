@@ -12,9 +12,11 @@ import ai.agent.android.domain.repositories.ToolRepository
 import ai.agent.android.domain.services.ApprovalNotifier
 import ai.agent.android.domain.usecases.LoadModelUseCase
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.withTimeout
 import timber.log.Timber
 import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
@@ -175,9 +177,18 @@ class ToolNodeExecutor @Inject constructor(
             emit(AgentOrchestratorState.WaitingForApproval(resolvedToolName, resolvedToolArgs))
             approvalNotifier.sendApprovalRequest(sessionId, resolvedToolName, resolvedToolArgs)
 
+            val timeoutMs = settingsRepository.toolCallTimeoutMs.first()
             val deferred = CompletableDeferred<Boolean>()
             activeApprovalDeferreds[sessionId] = deferred
-            isApproved = deferred.await()
+            isApproved = try {
+                withTimeout(timeoutMs) { deferred.await() }
+            } catch (e: TimeoutCancellationException) {
+                activeApprovalDeferreds.remove(sessionId)
+                Timber.tag("PipelineDebug").w("Approval timed out for session: $sessionId")
+                emit(AgentOrchestratorState.Error("Approval request timed out"))
+                emit(NodeExecutionResult(error = "Approval request timed out"))
+                return@flow
+            }
 
             if (!isApproved) {
                 chatRepository.saveMessage(

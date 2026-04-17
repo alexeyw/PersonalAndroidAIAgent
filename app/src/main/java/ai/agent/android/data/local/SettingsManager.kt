@@ -42,6 +42,7 @@ class SettingsManager @Inject constructor(
         val CURRENT_CHAT_SESSION_ID = stringPreferencesKey("current_chat_session_id")
         val MAX_MEMORY_CHUNKS_FOR_SEARCH = intPreferencesKey("max_memory_chunks_for_search")
         val LOCAL_MODEL_BACKEND = stringPreferencesKey("local_model_backend")
+        val TOOL_CALL_TIMEOUT_MS = androidx.datastore.preferences.core.longPreferencesKey("tool_call_timeout_ms")
     }
 
     override val isFirstLaunch: Flow<Boolean> = dataStore.data
@@ -323,6 +324,25 @@ class SettingsManager @Inject constructor(
     override suspend fun setLocalModelBackend(backend: String) {
         dataStore.edit { preferences ->
             preferences[PreferencesKeys.LOCAL_MODEL_BACKEND] = backend
+        }
+    }
+
+    override val toolCallTimeoutMs: Flow<Long> = dataStore.data
+        .catch { exception ->
+            if (exception is IOException) {
+                Timber.e(exception, "Error reading preferences")
+                emit(emptyPreferences())
+            } else {
+                throw exception
+            }
+        }
+        .map { preferences ->
+            preferences[PreferencesKeys.TOOL_CALL_TIMEOUT_MS] ?: 60_000L
+        }
+
+    override suspend fun setToolCallTimeoutMs(timeoutMs: Long) {
+        dataStore.edit { preferences ->
+            preferences[PreferencesKeys.TOOL_CALL_TIMEOUT_MS] = timeoutMs
         }
     }
 }

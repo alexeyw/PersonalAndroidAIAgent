@@ -67,8 +67,19 @@ class TaskQueueManagerImpl @Inject constructor(
     private val _activeSessionsState = MutableStateFlow<Map<String, AgentOrchestratorState>>(emptyMap())
     override val activeSessionsState: StateFlow<Map<String, AgentOrchestratorState>> = _activeSessionsState.asStateFlow()
 
-    // State flows per session
-    private val sessionStates = mutableMapOf<String, MutableStateFlow<AgentOrchestratorState>>()
+    // State flows per session — bounded to MAX_SESSION_STATES entries (oldest-inserted evicted first)
+    @VisibleForTesting
+    internal val sessionStates = object : LinkedHashMap<String, MutableStateFlow<AgentOrchestratorState>>(
+        16, 0.75f, false,
+    ) {
+        override fun removeEldestEntry(
+            eldest: Map.Entry<String, MutableStateFlow<AgentOrchestratorState>>,
+        ): Boolean = size > MAX_SESSION_STATES
+    }
+
+    companion object {
+        private const val MAX_SESSION_STATES = 20
+    }
 
     private fun updateActiveSessionsState() {
         val currentState = sessionStates.mapValues { it.value.value }

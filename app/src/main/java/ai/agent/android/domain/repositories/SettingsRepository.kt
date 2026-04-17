@@ -167,4 +167,17 @@ interface SettingsRepository {
      * @param backend The new backend (e.g., "CPU", "GPU", "NPU").
      */
     suspend fun setLocalModelBackend(backend: String)
+
+    /**
+     * A [Flow] representing the timeout in milliseconds for tool approval requests.
+     * After this duration without a user response, the approval is considered timed out.
+     */
+    val toolCallTimeoutMs: Flow<Long>
+
+    /**
+     * Updates the tool call approval timeout.
+     *
+     * @param timeoutMs The new timeout in milliseconds.
+     */
+    suspend fun setToolCallTimeoutMs(timeoutMs: Long)
 }

@@ -68,6 +68,17 @@ class TaskQueueManagerImplTest {
         Dispatchers.resetMain()
     }
 
+    @Test
+    fun `given 21 sessions observed when state flows created then oldest session is evicted`() {
+        repeat(21) { i ->
+            taskQueueManager.observeTaskState("session_$i")
+        }
+
+        assertEquals(20, taskQueueManager.sessionStates.size)
+        assertTrue("session_0 should be evicted", !taskQueueManager.sessionStates.containsKey("session_0"))
+        assertTrue("session_20 should be present", taskQueueManager.sessionStates.containsKey("session_20"))
+    }
+
     /**
      * Tests that enqueuing a task processes it successfully and updates the session state
      * without race conditions or deadlocks.

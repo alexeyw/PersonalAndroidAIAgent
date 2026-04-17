@@ -13,10 +13,15 @@ import ai.agent.android.domain.usecases.LoadModelUseCase
 import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.toList
+import kotlinx.coroutines.test.advanceTimeBy
+import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -25,6 +30,7 @@ import org.junit.Test
 /**
  * Unit tests for [ToolNodeExecutor].
  */
+@OptIn(ExperimentalCoroutinesApi::class)
 class ToolNodeExecutorTest {
 
     private lateinit var llmEngine: LlmInferenceEngine
@@ -55,6 +61,7 @@ class ToolNodeExecutorTest {
 
         coEvery { loadModelUseCase(any()) } returns Result.Success(Unit)
         every { settingsRepository.requiresUserConfirmation } returns flowOf(false)
+        every { settingsRepository.toolCallTimeoutMs } returns flowOf(60_000L)
     }
 
     @Test
@@ -113,6 +120,31 @@ class ToolNodeExecutorTest {
         // Checking last state
         val lastState = states.last() as ai.agent.android.domain.models.NodeExecutionResult
         assertEquals("Tool Success", lastState.outputText)
+    }
+
+    @Test
+    fun `given approval times out when waiting for user response then emits timeout error`() = runTest {
+        every { settingsRepository.requiresUserConfirmation } returns flowOf(true)
+        every { settingsRepository.toolCallTimeoutMs } returns flowOf(100L)
+
+        val toolName = "MyTool"
+        val node = NodeModel("1", NodeType.TOOL, 0f, 0f, toolName = toolName)
+        coEvery { toolRepository.getAvailableTools() } returns listOf(AgentTool(toolName, "Desc", "Schema"))
+        every { llmEngine.generateResponseStream(any()) } returns flowOf("""{"tool": "MyTool", "arguments": "args"}""")
+
+        val results = mutableListOf<Any>()
+        val job = launch {
+            executor.execute(node, "Do something", "session-1", "").collect { results.add(it) }
+        }
+
+        advanceTimeBy(200L)
+        advanceUntilIdle()
+
+        val lastResult = results.filterIsInstance<ai.agent.android.domain.models.NodeExecutionResult>().lastOrNull()
+        assertNotNull("Expected NodeExecutionResult with error", lastResult)
+        assertNotNull("Expected error field to be set", lastResult?.error)
+        assertTrue(lastResult!!.error!!.contains("timed out", ignoreCase = true))
+        job.cancel()
     }
 
     @Test

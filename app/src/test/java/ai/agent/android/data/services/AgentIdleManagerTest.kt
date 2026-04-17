@@ -103,4 +103,22 @@ class AgentIdleManagerTest {
         advanceTimeBy(1100L)
         verify(exactly = 1) { llmEngine.unload() }
     }
+
+    @Test
+    fun `given engine not initialized when timer fires then unload is not called`() = runTest(testDispatcher) {
+        every { llmEngine.isInitialized } returns false
+
+        idleManager = AgentIdleManager(
+            scope = CoroutineScope(testDispatcher),
+            engine = llmEngine,
+            agentState = stateFlow,
+            idleTimeoutMs = 1000L
+        )
+        idleManager.startObserving()
+
+        stateFlow.value = AgentOrchestratorState.Idle
+        advanceTimeBy(1100L)
+
+        verify(exactly = 0) { llmEngine.unload() }
+    }
 }
