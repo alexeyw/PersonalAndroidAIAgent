@@ -68,6 +68,29 @@ class TaskQueueManagerImplTest {
         Dispatchers.resetMain()
     }
 
+    @Test
+    fun `given 21 terminal sessions when state flows created then oldest terminal is evicted`() {
+        repeat(21) { i ->
+            taskQueueManager.observeTaskState("session_$i")
+        }
+        // All sessions start as Idle (terminal), so session_0 must be evicted to make room for session_20
+        assertEquals(20, taskQueueManager.sessionStates.size)
+        assertTrue("session_0 should be evicted", !taskQueueManager.sessionStates.containsKey("session_0"))
+        assertTrue("session_20 should be present", taskQueueManager.sessionStates.containsKey("session_20"))
+    }
+
+    @Test
+    fun `given all sessions are active when at capacity then no session is evicted`() {
+        repeat(20) { i ->
+            taskQueueManager.observeTaskState("session_$i")
+            taskQueueManager.sessionStates["session_$i"]?.value = AgentOrchestratorState.Loading
+        }
+        taskQueueManager.observeTaskState("session_20")
+        // No terminal session to evict, so size grows beyond MAX_SESSION_STATES
+        assertEquals(21, taskQueueManager.sessionStates.size)
+        assertTrue("active session_0 must not be evicted", taskQueueManager.sessionStates.containsKey("session_0"))
+    }
+
     /**
      * Tests that enqueuing a task processes it successfully and updates the session state
      * without race conditions or deadlocks.

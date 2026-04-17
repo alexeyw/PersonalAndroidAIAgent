@@ -67,8 +67,14 @@ class TaskQueueManagerImpl @Inject constructor(
     private val _activeSessionsState = MutableStateFlow<Map<String, AgentOrchestratorState>>(emptyMap())
     override val activeSessionsState: StateFlow<Map<String, AgentOrchestratorState>> = _activeSessionsState.asStateFlow()
 
-    // State flows per session
-    private val sessionStates = mutableMapOf<String, MutableStateFlow<AgentOrchestratorState>>()
+    // State flows per session — capped by evicting only terminal (non-running) sessions
+    @VisibleForTesting
+    internal val sessionStates = LinkedHashMap<String, MutableStateFlow<AgentOrchestratorState>>()
+
+    companion object {
+        @VisibleForTesting
+        internal const val MAX_SESSION_STATES = 20
+    }
 
     private fun updateActiveSessionsState() {
         val currentState = sessionStates.mapValues { it.value.value }
@@ -169,8 +175,23 @@ class TaskQueueManagerImpl @Inject constructor(
     private fun getOrCreateStateFlow(sessionId: String): MutableStateFlow<AgentOrchestratorState> {
         synchronized(sessionStates) {
             return sessionStates.getOrPut(sessionId) {
+                if (sessionStates.size >= MAX_SESSION_STATES) {
+                    evictOldestTerminalSession()
+                }
                 MutableStateFlow(AgentOrchestratorState.Idle)
             }
         }
+    }
+
+    // Evicts the oldest session whose state is terminal (Idle/Completed/Error).
+    // If all sessions are still running, no eviction occurs — active flows are never dropped.
+    private fun evictOldestTerminalSession() {
+        val entry = sessionStates.entries.firstOrNull { (_, flow) ->
+            val state = flow.value
+            state is AgentOrchestratorState.Idle ||
+                state is AgentOrchestratorState.Completed ||
+                state is AgentOrchestratorState.Error
+        }
+        entry?.let { sessionStates.remove(it.key) }
     }
 }

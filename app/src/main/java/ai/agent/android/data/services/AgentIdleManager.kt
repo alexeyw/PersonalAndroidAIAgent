@@ -54,8 +54,10 @@ class AgentIdleManager(
         cancelIdleTimer()
         idleJob = scope.launch {
             delay(idleTimeoutMs)
-            if (engine.isInitialized) {
-                engine.unload()
+            synchronized(engine) {
+                if (engine.isInitialized) {
+                    engine.unload()
+                }
             }
         }
     }
