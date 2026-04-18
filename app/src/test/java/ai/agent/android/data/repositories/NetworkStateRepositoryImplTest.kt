@@ -25,7 +25,7 @@ class NetworkStateRepositoryImplTest {
     @Before
     fun setup() {
         mockkConstructor(NetworkRequest.Builder::class)
-        every { anyConstructed<NetworkRequest.Builder>().addCapability(any()) } returns mockk(relaxed = true)
+        every { anyConstructed<NetworkRequest.Builder>().addCapability(any()) } answers { self as NetworkRequest.Builder }
         every { anyConstructed<NetworkRequest.Builder>().build() } returns mockk()
 
         connectivityManager = mockk(relaxed = true)
