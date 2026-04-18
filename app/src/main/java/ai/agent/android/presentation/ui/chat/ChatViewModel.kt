@@ -283,7 +283,7 @@ class ChatViewModel @Inject constructor(
                     ChatMessage(
                         sessionId = _uiState.value.currentSessionId,
                         role = Role.AGENT,
-                        content = "$partial [остановлено]",
+                        content = "$partial [stopped]",
                         timestamp = System.currentTimeMillis(),
                     )
                 )

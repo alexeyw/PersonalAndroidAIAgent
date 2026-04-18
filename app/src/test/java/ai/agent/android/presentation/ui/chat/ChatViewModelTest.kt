@@ -285,7 +285,7 @@ class ChatViewModelTest {
 
         coVerify {
             chatRepository.saveMessage(
-                match { it.content.contains(partialText) && it.content.contains("[остановлено]") }
+                match { it.content.contains(partialText) && it.content.contains("[stopped]") }
             )
         }
     }

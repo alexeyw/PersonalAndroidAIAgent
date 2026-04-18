@@ -239,7 +239,7 @@ fun ChatScreen(
                         item {
                             val step = uiState.currentStep!!
                             Text(
-                                text = "Шаг ${step.stepIndex} из ${step.totalSteps}: ${step.nodeName}",
+                                text = "Step ${step.stepIndex} of ${step.totalSteps}: ${step.nodeName}",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier
