@@ -50,6 +50,7 @@ class GraphExecutionEngine @Inject constructor(
         }
 
         val maxSteps = settingsRepository.pipelineMaxSteps.first()
+        val totalSteps = graph.nodes.size
         var currentNode: NodeModel? = inputNode
         var stepCount = 0
         var currentInputText = userPrompt
@@ -62,8 +63,14 @@ class GraphExecutionEngine @Inject constructor(
         while (currentNode != null && stepCount < maxSteps) {
             stepCount++
             
-            // Emit the current pipeline stage
-            emit(AgentOrchestratorState.PipelineStage(currentNode.type.name))
+            // Emit the current pipeline stage with progress info
+            emit(AgentOrchestratorState.PipelineStage(
+                AgentOrchestratorState.PipelineStepInfo(
+                    stepIndex = stepCount,
+                    totalSteps = totalSteps,
+                    nodeName = currentNode.type.name,
+                )
+            ))
             
             // Give UI time to render the stage before CPU-heavy inference starts
             kotlinx.coroutines.delay(500)

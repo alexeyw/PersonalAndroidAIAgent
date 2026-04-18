@@ -114,7 +114,7 @@ fun AgentThoughtIndicator(
                                 is AgentOrchestratorState.WaitingForApproval -> "Action requires approval!"
                                 is AgentOrchestratorState.ExecutingTool -> "Using tool: ${targetState.toolName}..."
                                 is AgentOrchestratorState.ObservationResult -> "Observation received..."
-                                is AgentOrchestratorState.PipelineStage -> "Executing stage: ${targetState.nodeName}..."
+                                is AgentOrchestratorState.PipelineStage -> "Executing stage: ${targetState.stepInfo.nodeName}..."
                                 else -> "Processing..."
                             },
                             style = MaterialTheme.typography.labelMedium,

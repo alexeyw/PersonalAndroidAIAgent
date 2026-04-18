@@ -67,11 +67,24 @@ sealed interface AgentOrchestratorState {
     data class Error(val message: String) : AgentOrchestratorState
 
     /**
+     * Holds the progress metadata of a single pipeline execution step.
+     *
+     * @property stepIndex The 1-based index of the current step.
+     * @property totalSteps The total number of nodes in the pipeline graph.
+     * @property nodeName The type name of the node currently being executed.
+     */
+    data class PipelineStepInfo(
+        val stepIndex: Int,
+        val totalSteps: Int,
+        val nodeName: String,
+    )
+
+    /**
      * Indicates the current pipeline stage (node) the agent is executing.
      *
-     * @property nodeName The name or type of the node.
+     * @property stepInfo Progress metadata for the current step.
      */
-    data class PipelineStage(val nodeName: String) : AgentOrchestratorState
+    data class PipelineStage(val stepInfo: PipelineStepInfo) : AgentOrchestratorState
 
     /**
      * Represents a single step in the pipeline execution trace.

@@ -50,7 +50,7 @@ class AgentWorker @AssistedInject constructor(
             agentOrchestratorUseCase(sessionId, prompt).collect { state ->
                 finalState = state
                 if (state is AgentOrchestratorState.PipelineStage) {
-                    setProgress(Data.Builder().putString(KEY_CURRENT_STAGE, state.nodeName).build())
+                    setProgress(Data.Builder().putString(KEY_CURRENT_STAGE, state.stepInfo.nodeName).build())
                 } else if (state is AgentOrchestratorState.Completed) {
                     setProgress(Data.Builder().putString(KEY_CURRENT_STAGE, "COMPLETED").build())
                 } else if (state is AgentOrchestratorState.Error) {

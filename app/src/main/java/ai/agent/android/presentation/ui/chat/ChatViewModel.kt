@@ -3,8 +3,10 @@ package ai.agent.android.presentation.ui.chat
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import ai.agent.android.domain.models.AgentOrchestratorState
+import ai.agent.android.domain.models.ChatMessage
 import ai.agent.android.domain.models.ChatSession
 import ai.agent.android.domain.models.Result
+import ai.agent.android.domain.models.Role
 import ai.agent.android.domain.repositories.ChatRepository
 import ai.agent.android.domain.repositories.SettingsRepository
 import ai.agent.android.domain.usecases.AgentOrchestratorUseCase
@@ -44,6 +46,7 @@ class ChatViewModel @Inject constructor(
     val uiState: StateFlow<ChatUiState> = _uiState.asStateFlow()
 
     private var messagesJob: Job? = null
+    private var generationJob: Job? = null
 
     init {
         loadSessions()
@@ -222,7 +225,7 @@ class ChatViewModel @Inject constructor(
         val currentState = _uiState.value
         if (currentState.isGenerating || prompt.isBlank()) return
 
-        viewModelScope.launch {
+        generationJob = viewModelScope.launch {
             // Auto-rename logic for new chats
             val currentSession = currentState.sessions.find { it.id == currentState.currentSessionId }
             if (currentSession?.name == "New Chat") {
@@ -230,32 +233,65 @@ class ChatViewModel @Inject constructor(
                 renameSession(currentState.currentSessionId, newName)
             }
 
-            _uiState.update { it.copy(isGenerating = true, errorMessage = null, orchestratorState = null, pipelineTrace = emptyList()) }
-            
+            _uiState.update { it.copy(isGenerating = true, errorMessage = null, orchestratorState = null, pipelineTrace = emptyList(), currentStep = null) }
+
             agentOrchestratorUseCase(currentState.currentSessionId, prompt)
                 .catch { error ->
-                    _uiState.update { 
+                    _uiState.update {
                         it.copy(
-                            isGenerating = false, 
+                            isGenerating = false,
+                            currentStep = null,
                             errorMessage = error.message ?: "An unexpected error occurred",
                             orchestratorState = AgentOrchestratorState.Error(error.message ?: "Unknown error")
-                        ) 
+                        )
                     }
                 }
                 .collect { state ->
                     _uiState.update { it.copy(orchestratorState = state) }
-                    
+
+                    if (state is AgentOrchestratorState.PipelineStage) {
+                        _uiState.update { it.copy(currentStep = state.stepInfo) }
+                    }
+
                     if (state is AgentOrchestratorState.PipelineTrace) {
                         _uiState.update { it.copy(pipelineTrace = state.steps) }
                     }
-                    
+
                     if (state is AgentOrchestratorState.Completed || state is AgentOrchestratorState.Error) {
-                        _uiState.update { it.copy(isGenerating = false) }
+                        _uiState.update { it.copy(isGenerating = false, currentStep = null) }
                     }
                 }
         }
     }
     
+    /**
+     * Cancels the active generation job and saves the partial response as a stopped message.
+     * If the orchestrator was in a [AgentOrchestratorState.Thinking] or [AgentOrchestratorState.Answering]
+     * state, the accumulated text is persisted with a "[остановлено]" suffix so the user
+     * does not lose the partial output.
+     */
+    fun stopGeneration() {
+        generationJob?.cancel()
+        val partial = when (val s = _uiState.value.orchestratorState) {
+            is AgentOrchestratorState.Thinking  -> s.partialText
+            is AgentOrchestratorState.Answering -> s.partialText
+            else -> null
+        }
+        if (!partial.isNullOrBlank()) {
+            viewModelScope.launch {
+                chatRepository.saveMessage(
+                    ChatMessage(
+                        sessionId = _uiState.value.currentSessionId,
+                        role = Role.AGENT,
+                        content = "$partial [остановлено]",
+                        timestamp = System.currentTimeMillis(),
+                    )
+                )
+            }
+        }
+        _uiState.update { it.copy(isGenerating = false, currentStep = null, orchestratorState = null) }
+    }
+
     /**
      * Clears the current error message from the UI state.
      */
