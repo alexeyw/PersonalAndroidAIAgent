@@ -20,6 +20,7 @@ package ai.agent.android.presentation.ui.settings
  * @property ollamaBaseUrl The Ollama local base URL.
  * @property ollamaModel The Ollama model name.
  * @property ollamaContextWindow The Ollama context window size.
+ * @property pipelineMaxSteps The maximum number of pipeline execution steps (5–100).
  */
 data class SettingsUiState(
     val temperature: Float = 0.7f,
@@ -39,5 +40,6 @@ data class SettingsUiState(
     val ollamaBaseUrl: String = "",
     val ollamaModel: String = "",
     val ollamaContextWindow: String = "4096",
-    val localModelBackend: String = "CPU"
+    val localModelBackend: String = "CPU",
+    val pipelineMaxSteps: Int = 15,
 )

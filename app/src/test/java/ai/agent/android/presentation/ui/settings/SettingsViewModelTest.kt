@@ -42,6 +42,7 @@ class SettingsViewModelTest {
         every { settingsRepository.systemPromptPrefix } returns MutableStateFlow("Default Prompt")
         every { settingsRepository.requiresUserConfirmation } returns MutableStateFlow(true)
         every { settingsRepository.localModelBackend } returns MutableStateFlow("CPU")
+        every { settingsRepository.pipelineMaxSteps } returns MutableStateFlow(15)
 
         // Setup default flows for API keys repository
         every { apiKeyRepository.getOpenAIKey() } returns MutableStateFlow("sk-open")
@@ -151,5 +152,34 @@ class SettingsViewModelTest {
         viewModel.updateOllamaBaseUrl("http://192.168.0.1:11434")
         advanceUntilIdle()
         coVerify { apiKeyRepository.setOllamaBaseUrl("http://192.168.0.1:11434") }
+    }
+
+    @Test
+    fun `updatePipelineMaxSteps calls repository with valid value`() = runTest {
+        viewModel.updatePipelineMaxSteps(25)
+        advanceUntilIdle()
+        coVerify { settingsRepository.setPipelineMaxSteps(25) }
+    }
+
+    @Test
+    fun `updatePipelineMaxSteps coerces value below minimum`() = runTest {
+        viewModel.updatePipelineMaxSteps(1)
+        advanceUntilIdle()
+        coVerify { settingsRepository.setPipelineMaxSteps(5) }
+    }
+
+    @Test
+    fun `updatePipelineMaxSteps coerces value above maximum`() = runTest {
+        viewModel.updatePipelineMaxSteps(200)
+        advanceUntilIdle()
+        coVerify { settingsRepository.setPipelineMaxSteps(100) }
+    }
+
+    @Test
+    fun `pipelineMaxSteps is populated from repository in initial state`() = runTest {
+        every { settingsRepository.pipelineMaxSteps } returns MutableStateFlow(42)
+        val vm = SettingsViewModel(settingsRepository, apiKeyRepository, loadModelUseCase, localModelRepository)
+        advanceUntilIdle()
+        assertEquals(42, vm.uiState.value.pipelineMaxSteps)
     }
 }

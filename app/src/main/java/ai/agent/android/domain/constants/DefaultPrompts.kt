@@ -11,8 +11,8 @@ object DefaultPrompts {
     
     val TOOL_USAGE_INSTRUCTION = """
         You have access to the following tools:
-        %s
-        
+        [TOOL_LIST]
+
         To use a tool, output a JSON block like this:
         ```json
         {

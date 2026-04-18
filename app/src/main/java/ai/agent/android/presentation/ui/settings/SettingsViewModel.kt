@@ -110,11 +110,27 @@ class SettingsViewModel @Inject constructor(
         settingsRepository.localModelBackend.onEach { value ->
             _uiState.update { it.copy(localModelBackend = value) }
         }.launchIn(viewModelScope)
+
+        settingsRepository.pipelineMaxSteps.onEach { value ->
+            _uiState.update { it.copy(pipelineMaxSteps = value) }
+        }.launchIn(viewModelScope)
     }
 
     fun updateLocalModelBackend(backend: String) {
         viewModelScope.launch {
             settingsRepository.setLocalModelBackend(backend)
+        }
+    }
+
+    /**
+     * Updates the maximum number of pipeline execution steps.
+     * The value is coerced to the valid range of 5–100.
+     *
+     * @param steps The desired maximum steps value.
+     */
+    fun updatePipelineMaxSteps(steps: Int) {
+        viewModelScope.launch {
+            settingsRepository.setPipelineMaxSteps(steps.coerceIn(5, 100))
         }
     }
 

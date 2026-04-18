@@ -250,6 +250,32 @@ fun SettingsScreen(
                 valueRange = 512f..8192f,
                 steps = 14
             )
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Pipeline Max Steps
+            var pipelineMaxStepsText by remember(uiState.pipelineMaxSteps) {
+                mutableStateOf(uiState.pipelineMaxSteps.toString())
+            }
+            OutlinedTextField(
+                value = pipelineMaxStepsText,
+                onValueChange = { input ->
+                    pipelineMaxStepsText = input
+                    val parsed = input.toIntOrNull()
+                    if (parsed != null && parsed in 5..100) {
+                        viewModel.updatePipelineMaxSteps(parsed)
+                    }
+                },
+                label = { Text("Pipeline Max Steps (5–100)") },
+                modifier = Modifier.fillMaxWidth(),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                singleLine = true,
+                isError = pipelineMaxStepsText.toIntOrNull()?.let { it !in 5..100 } ?: true,
+                supportingText = {
+                    if (pipelineMaxStepsText.toIntOrNull()?.let { it !in 5..100 } != false) {
+                        Text("Enter a value between 5 and 100")
+                    }
+                }
+            )
 
             Spacer(modifier = Modifier.height(24.dp))
             HorizontalDivider()

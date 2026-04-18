@@ -1,8 +1,32 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+    Android network-security-config does not support IP range wildcards.
+    Each private IP must be listed individually. Add your specific Ollama server
+    IP address to the domain-config block below.
+-->
 <network-security-config>
     <base-config cleartextTrafficPermitted="false">
         <trust-anchors>
             <certificates src="system" />
         </trust-anchors>
     </base-config>
+
+    <!-- Cleartext HTTP permitted for local/private network hosts (e.g. Ollama) -->
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">localhost</domain>
+        <domain includeSubdomains="false">127.0.0.1</domain>
+        <!-- Android emulator: host machine loopback -->
+        <domain includeSubdomains="false">10.0.2.2</domain>
+        <!-- Common home LAN addresses; add your Ollama server IP here if different -->
+        <domain includeSubdomains="false">192.168.0.1</domain>
+        <domain includeSubdomains="false">192.168.1.1</domain>
+        <domain includeSubdomains="false">192.168.1.100</domain>
+        <domain includeSubdomains="false">192.168.0.100</domain>
+        <domain includeSubdomains="false">10.0.0.1</domain>
+        <domain includeSubdomains="false">10.0.1.1</domain>
+        <!-- Corporate / Docker bridge networks (172.16–172.31 prefix) -->
+        <domain includeSubdomains="false">172.16.0.1</domain>
+        <domain includeSubdomains="false">172.17.0.1</domain>
+        <domain includeSubdomains="false">172.18.0.1</domain>
+    </domain-config>
 </network-security-config>
