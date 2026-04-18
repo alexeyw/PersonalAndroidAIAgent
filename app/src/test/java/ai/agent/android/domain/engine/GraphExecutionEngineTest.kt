@@ -88,13 +88,14 @@ class GraphExecutionEngineTest {
             systemNodeExecutor, queueProcessorNodeExecutor, summaryNodeExecutor
         )
 
-        engine = GraphExecutionEngine(nodeExecutorFactory, toolNodeExecutor, chatRepository)
+        engine = GraphExecutionEngine(nodeExecutorFactory, toolNodeExecutor, chatRepository, settingsRepository)
 
         coEvery { getContextWindowUseCase(sessionId) } returns ""
         coEvery { retrieveRelevantMemoryUseCase(any()) } returns emptyList()
         every { settingsRepository.systemPromptPrefix } returns flowOf("")
         every { settingsRepository.toolUsageInstruction } returns flowOf("")
         every { settingsRepository.requiresUserConfirmation } returns flowOf(false)
+        every { settingsRepository.pipelineMaxSteps } returns flowOf(15)
         coEvery { toolRepository.getAvailableTools() } returns emptyList()
         
         coEvery { loadModelUseCase(any()) } returns ai.agent.android.domain.models.Result.Success(Unit)
@@ -221,10 +222,52 @@ class GraphExecutionEngineTest {
     fun `resumeWithApproval delegates to toolNodeExecutor`() {
         val mockToolNodeExecutor = mockk<ToolNodeExecutor>(relaxed = true)
         val mockFactory = mockk<NodeExecutorFactory>()
-        val engineWithMock = GraphExecutionEngine(mockFactory, mockToolNodeExecutor, mockk(relaxed = true))
-        
+        val mockSettings = mockk<SettingsRepository>(relaxed = true)
+        every { mockSettings.pipelineMaxSteps } returns flowOf(15)
+        val engineWithMock = GraphExecutionEngine(mockFactory, mockToolNodeExecutor, mockk(relaxed = true), mockSettings)
+
         engineWithMock.resumeWithApproval("session_id_123", true)
-        
+
         io.mockk.verify { mockToolNodeExecutor.resumeWithApproval("session_id_123", true) }
+    }
+
+    @Test
+    fun `given maxSteps exceeded when pipeline loops then emits error`() = runTest {
+        every { settingsRepository.pipelineMaxSteps } returns flowOf(2)
+
+        val inputNode = NodeModel("input_1", NodeType.INPUT, 0f, 0f)
+        val llmNode = NodeModel("llm_1", NodeType.LITE_RT, 0f, 0f)
+
+        val graph = PipelineGraph(
+            id = "g1", name = "Long Graph",
+            nodes = listOf(inputNode, llmNode),
+            connections = listOf(ConnectionModel("c1", "input_1", "llm_1"))
+        )
+        every { llmEngine.generateResponseStream(any()) } returns flowOf("response")
+
+        val states = engine(sessionId, "prompt", graph).toList()
+
+        val last = states.last()
+        assertTrue(last is AgentOrchestratorState.Error)
+        assertTrue((last as AgentOrchestratorState.Error).message.contains("2"))
+    }
+
+    @Test
+    fun `given maxSteps from settings when pipeline completes within limit then succeeds`() = runTest {
+        every { settingsRepository.pipelineMaxSteps } returns flowOf(5)
+
+        val inputNode = NodeModel("input_1", NodeType.INPUT, 0f, 0f)
+        val outputNode = NodeModel("output_1", NodeType.OUTPUT, 0f, 0f)
+
+        val graph = PipelineGraph(
+            id = "g1", name = "Short Graph",
+            nodes = listOf(inputNode, outputNode),
+            connections = listOf(ConnectionModel("c1", "input_1", "output_1"))
+        )
+        every { llmEngine.generateResponseStream(any()) } returns flowOf("done")
+
+        val states = engine(sessionId, "prompt", graph).toList()
+
+        assertTrue(states.last() is AgentOrchestratorState.Completed)
     }
 }

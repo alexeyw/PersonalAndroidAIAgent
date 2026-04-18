@@ -31,6 +31,7 @@ import android.widget.Toast
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -249,6 +250,37 @@ fun SettingsScreen(
                 onValueChange = { viewModel.updateMaxContextLength(it.roundToInt()) },
                 valueRange = 512f..8192f,
                 steps = 14
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Pipeline Max Steps
+            // State is kept independent of uiState to preserve cursor position while typing.
+            // LaunchedEffect syncs only when the value changes from an external source.
+            var pipelineMaxStepsText by remember { mutableStateOf(uiState.pipelineMaxSteps.toString()) }
+            LaunchedEffect(uiState.pipelineMaxSteps) {
+                if (pipelineMaxStepsText.toIntOrNull()?.coerceIn(5, 100) != uiState.pipelineMaxSteps) {
+                    pipelineMaxStepsText = uiState.pipelineMaxSteps.toString()
+                }
+            }
+            OutlinedTextField(
+                value = pipelineMaxStepsText,
+                onValueChange = { input ->
+                    pipelineMaxStepsText = input
+                    val parsed = input.toIntOrNull()
+                    if (parsed != null && parsed in 5..100) {
+                        viewModel.updatePipelineMaxSteps(parsed)
+                    }
+                },
+                label = { Text("Pipeline Max Steps (5–100)") },
+                modifier = Modifier.fillMaxWidth(),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                singleLine = true,
+                isError = pipelineMaxStepsText.toIntOrNull()?.let { it !in 5..100 } ?: true,
+                supportingText = {
+                    if (pipelineMaxStepsText.toIntOrNull()?.let { it !in 5..100 } != false) {
+                        Text("Enter a value between 5 and 100")
+                    }
+                }
             )
 
             Spacer(modifier = Modifier.height(24.dp))

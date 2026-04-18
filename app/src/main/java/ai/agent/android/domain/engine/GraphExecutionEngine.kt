@@ -4,6 +4,7 @@ import ai.agent.android.domain.engine.executors.NodeExecutorFactory
 import ai.agent.android.domain.engine.executors.ToolNodeExecutor
 import ai.agent.android.domain.models.*
 import ai.agent.android.domain.repositories.ChatRepository
+import ai.agent.android.domain.repositories.SettingsRepository
 import kotlinx.coroutines.flow.*
 import timber.log.Timber
 import javax.inject.Inject
@@ -18,11 +19,9 @@ import javax.inject.Singleton
 class GraphExecutionEngine @Inject constructor(
     private val nodeExecutorFactory: NodeExecutorFactory,
     private val toolNodeExecutor: ToolNodeExecutor,
-    private val chatRepository: ChatRepository
+    private val chatRepository: ChatRepository,
+    private val settingsRepository: SettingsRepository,
 ) {
-    companion object {
-        const val MAX_STEPS = 15
-    }
 
     /**
      * Resumes execution after user approval.
@@ -50,6 +49,7 @@ class GraphExecutionEngine @Inject constructor(
             return@flow
         }
 
+        val maxSteps = settingsRepository.pipelineMaxSteps.first()
         var currentNode: NodeModel? = inputNode
         var stepCount = 0
         var currentInputText = userPrompt
@@ -59,7 +59,7 @@ class GraphExecutionEngine @Inject constructor(
         val queueResults = mutableListOf<String>()
         val traceSteps = mutableListOf<AgentOrchestratorState.TraceStep>()
 
-        while (currentNode != null && stepCount < MAX_STEPS) {
+        while (currentNode != null && stepCount < maxSteps) {
             stepCount++
             
             // Emit the current pipeline stage
@@ -172,8 +172,8 @@ class GraphExecutionEngine @Inject constructor(
             currentNode = nextNode
         }
 
-        if (stepCount >= MAX_STEPS) {
-            emit(AgentOrchestratorState.Error("Pipeline execution exceeded maximum steps ($MAX_STEPS)"))
+        if (stepCount >= maxSteps) {
+            emit(AgentOrchestratorState.Error("Pipeline execution exceeded maximum steps ($maxSteps)"))
         } else {
             // Loop exited because currentNode became null before reaching OUTPUT
             emit(AgentOrchestratorState.Error("Pipeline execution terminated unexpectedly without reaching OUTPUT node."))

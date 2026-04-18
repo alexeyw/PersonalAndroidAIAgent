@@ -180,4 +180,17 @@ interface SettingsRepository {
      * @param timeoutMs The new timeout in milliseconds.
      */
     suspend fun setToolCallTimeoutMs(timeoutMs: Long)
+
+    /**
+     * A [Flow] representing the maximum number of pipeline execution steps.
+     * Prevents infinite loops in pipeline graphs. Valid range: 5–100.
+     */
+    val pipelineMaxSteps: Flow<Int>
+
+    /**
+     * Updates the maximum number of pipeline execution steps.
+     *
+     * @param steps The new limit. Will be coerced to the range 5–100.
+     */
+    suspend fun setPipelineMaxSteps(steps: Int)
 }
