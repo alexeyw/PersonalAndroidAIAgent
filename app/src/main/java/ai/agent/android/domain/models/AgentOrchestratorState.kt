@@ -70,12 +70,13 @@ sealed interface AgentOrchestratorState {
      * Holds the progress metadata of a single pipeline execution step.
      *
      * @property stepIndex The 1-based index of the current step.
-     * @property totalSteps The total number of nodes in the pipeline graph.
+     * @property totalSteps The estimated total steps for the current branch, or null when unknown
+     *   (e.g. before a routing decision is made or a queue is populated).
      * @property nodeName The type name of the node currently being executed.
      */
     data class PipelineStepInfo(
         val stepIndex: Int,
-        val totalSteps: Int,
+        val totalSteps: Int?,
         val nodeName: String,
     )
 
