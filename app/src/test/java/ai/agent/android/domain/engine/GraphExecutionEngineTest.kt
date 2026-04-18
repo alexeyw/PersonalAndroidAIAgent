@@ -270,4 +270,107 @@ class GraphExecutionEngineTest {
 
         assertTrue(states.last() is AgentOrchestratorState.Completed)
     }
+
+    // ─── QUEUE_PROCESSOR tests ────────────────────────────────────────────────
+
+    @Test
+    fun `given QUEUE_PROCESSOR when LLM returns JSON list then each item is processed and pipeline completes`() = runTest {
+        every { settingsRepository.pipelineMaxSteps } returns flowOf(20)
+
+        val inputNode = NodeModel("input", NodeType.INPUT, 0f, 0f)
+        val listGenNode = NodeModel("list_gen", NodeType.LITE_RT, 0f, 0f)
+        val queueNode = NodeModel("queue", NodeType.QUEUE_PROCESSOR, 0f, 0f)
+        val itemProcNode = NodeModel("item_proc", NodeType.LITE_RT, 0f, 0f)
+        val outputNode = NodeModel("output", NodeType.OUTPUT, 0f, 0f)
+
+        // item_proc has no outgoing connection — engine treats it as end-of-subtask
+        val graph = PipelineGraph(
+            id = "g1", name = "Queue Test",
+            nodes = listOf(inputNode, listGenNode, queueNode, itemProcNode, outputNode),
+            connections = listOf(
+                ConnectionModel("c1", "input", "list_gen"),
+                ConnectionModel("c2", "list_gen", "queue"),
+                ConnectionModel("c3", "queue", "item_proc", label = "Item"),
+                ConnectionModel("c4", "queue", "output", label = "Done"),
+            )
+        )
+
+        every { llmEngine.generateResponseStream(any()) } returnsMany listOf(
+            flowOf("""["subtask_one", "subtask_two"]"""),
+            flowOf("result_one"),
+            flowOf("result_two"),
+        )
+
+        val states = engine(sessionId, "Process the list", graph).toList()
+
+        assertTrue("Expected Completed but got: ${states.last()}", states.last() is AgentOrchestratorState.Completed)
+    }
+
+    @Test
+    fun `given QUEUE_PROCESSOR when maxSteps exceeded during queue iteration then emits error`() = runTest {
+        // maxSteps=3 is not enough to process INPUT + list_gen + queue + item_proc × 2 + output
+        every { settingsRepository.pipelineMaxSteps } returns flowOf(3)
+
+        val inputNode = NodeModel("input", NodeType.INPUT, 0f, 0f)
+        val listGenNode = NodeModel("list_gen", NodeType.LITE_RT, 0f, 0f)
+        val queueNode = NodeModel("queue", NodeType.QUEUE_PROCESSOR, 0f, 0f)
+        val itemProcNode = NodeModel("item_proc", NodeType.LITE_RT, 0f, 0f)
+        val outputNode = NodeModel("output", NodeType.OUTPUT, 0f, 0f)
+
+        val graph = PipelineGraph(
+            id = "g2", name = "Queue MaxSteps",
+            nodes = listOf(inputNode, listGenNode, queueNode, itemProcNode, outputNode),
+            connections = listOf(
+                ConnectionModel("c1", "input", "list_gen"),
+                ConnectionModel("c2", "list_gen", "queue"),
+                ConnectionModel("c3", "queue", "item_proc", label = "Item"),
+                ConnectionModel("c4", "queue", "output", label = "Done"),
+            )
+        )
+
+        every { llmEngine.generateResponseStream(any()) } returnsMany listOf(
+            flowOf("""["item_a", "item_b"]"""),
+            flowOf("result_a"),
+            flowOf("result_b"),
+        )
+
+        val states = engine(sessionId, "Too many steps", graph).toList()
+
+        val last = states.last()
+        assertTrue("Expected Error but got: $last", last is AgentOrchestratorState.Error)
+        assertTrue((last as AgentOrchestratorState.Error).message.contains("3"))
+    }
+
+    @Test
+    fun `given QUEUE_PROCESSOR when item processor throws exception then emits error`() = runTest {
+        every { settingsRepository.pipelineMaxSteps } returns flowOf(20)
+
+        val inputNode = NodeModel("input", NodeType.INPUT, 0f, 0f)
+        val listGenNode = NodeModel("list_gen", NodeType.LITE_RT, 0f, 0f)
+        val queueNode = NodeModel("queue", NodeType.QUEUE_PROCESSOR, 0f, 0f)
+        val itemProcNode = NodeModel("item_proc", NodeType.LITE_RT, 0f, 0f)
+        val outputNode = NodeModel("output", NodeType.OUTPUT, 0f, 0f)
+
+        val graph = PipelineGraph(
+            id = "g3", name = "Queue Error",
+            nodes = listOf(inputNode, listGenNode, queueNode, itemProcNode, outputNode),
+            connections = listOf(
+                ConnectionModel("c1", "input", "list_gen"),
+                ConnectionModel("c2", "list_gen", "queue"),
+                ConnectionModel("c3", "queue", "item_proc", label = "Item"),
+                ConnectionModel("c4", "queue", "output", label = "Done"),
+            )
+        )
+
+        every { llmEngine.generateResponseStream(any()) } returnsMany listOf(
+            flowOf("""["item_x"]"""),
+            kotlinx.coroutines.flow.flow { throw RuntimeException("item processor crashed") },
+        )
+
+        val states = engine(sessionId, "Will crash", graph).toList()
+
+        val last = states.last()
+        assertTrue("Expected Error but got: $last", last is AgentOrchestratorState.Error)
+        assertTrue((last as AgentOrchestratorState.Error).message.contains("item processor crashed"))
+    }
 }
