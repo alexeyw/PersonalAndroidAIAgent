@@ -15,6 +15,8 @@ import ai.agent.android.domain.models.ChatSession
  * @property sessions The list of available chat sessions.
  * @property contextSize The calculated size of the current prompt context window (e.g., character count).
  * @property maxContextSize The maximum allowed size for the prompt context window.
+ * @property pipelineTrace The list of pipeline trace steps accumulated during execution.
+ * @property currentStep Progress metadata for the pipeline step currently being executed, or null when idle.
  */
 data class ChatUiState(
     val messages: List<ChatMessage> = emptyList(),
@@ -25,5 +27,6 @@ data class ChatUiState(
     val sessions: List<ChatSession> = emptyList(),
     val contextSize: Int = 0,
     val maxContextSize: Int = 0,
-    val pipelineTrace: List<AgentOrchestratorState.TraceStep> = emptyList()
+    val pipelineTrace: List<AgentOrchestratorState.TraceStep> = emptyList(),
+    val currentStep: AgentOrchestratorState.PipelineStepInfo? = null,
 )

@@ -60,7 +60,7 @@ class AgentWorkerTest {
         every { workerParams.inputData } returns inputData
 
         coEvery { useCase(any(), "test prompt") } returns flowOf(
-            AgentOrchestratorState.PipelineStage("INPUT"),
+            AgentOrchestratorState.PipelineStage(AgentOrchestratorState.PipelineStepInfo(1, 3, "INPUT")),
             AgentOrchestratorState.Completed("Done")
         )
 
@@ -75,7 +75,7 @@ class AgentWorkerTest {
         every { workerParams.inputData } returns inputData
 
         coEvery { useCase(any(), "test prompt") } returns flowOf(
-            AgentOrchestratorState.PipelineStage("INPUT"),
+            AgentOrchestratorState.PipelineStage(AgentOrchestratorState.PipelineStepInfo(1, 3, "INPUT")),
             AgentOrchestratorState.Error("Some error")
         )
 

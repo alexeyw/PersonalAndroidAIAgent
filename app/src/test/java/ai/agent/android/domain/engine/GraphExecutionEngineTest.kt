@@ -271,6 +271,118 @@ class GraphExecutionEngineTest {
         assertTrue(states.last() is AgentOrchestratorState.Completed)
     }
 
+    // ─── Dynamic progress (totalSteps) tests ─────────────────────────────────
+
+    @Test
+    fun `given linear graph with no branching then totalSteps is known from first step`() = runTest {
+        every { settingsRepository.pipelineMaxSteps } returns flowOf(15)
+
+        val inputNode = NodeModel("input", NodeType.INPUT, 0f, 0f)
+        val liteRtNode = NodeModel("lite_rt", NodeType.LITE_RT, 0f, 0f)
+        val outputNode = NodeModel("output", NodeType.OUTPUT, 0f, 0f)
+
+        val graph = PipelineGraph(
+            id = "g1", name = "Linear",
+            nodes = listOf(inputNode, liteRtNode, outputNode),
+            connections = listOf(
+                ConnectionModel("c1", "input", "lite_rt"),
+                ConnectionModel("c2", "lite_rt", "output"),
+            )
+        )
+        every { llmEngine.generateResponseStream(any()) } returns flowOf("answer")
+
+        val stages = engine(sessionId, "query", graph).toList()
+            .filterIsInstance<AgentOrchestratorState.PipelineStage>()
+
+        // All stages should have totalSteps = 3 (graph.nodes.size) from the start
+        assertTrue("First stage should have known total", stages.first().stepInfo.totalSteps == 3)
+        assertTrue("All stages must have same totalSteps = 3", stages.all { it.stepInfo.totalSteps == 3 })
+    }
+
+    @Test
+    fun `given branching graph then totalSteps is null before routing and concrete after`() = runTest {
+        every { settingsRepository.pipelineMaxSteps } returns flowOf(15)
+
+        val inputNode = NodeModel("input", NodeType.INPUT, 0f, 0f)
+        val routerNode = NodeModel("router", NodeType.INTENT_ROUTER, 0f, 0f)
+        val liteRtNode = NodeModel("lite_rt", NodeType.LITE_RT, 0f, 0f)
+        val outputNode = NodeModel("output", NodeType.OUTPUT, 0f, 0f)
+
+        val graph = PipelineGraph(
+            id = "g1", name = "Branching",
+            nodes = listOf(inputNode, routerNode, liteRtNode, outputNode),
+            connections = listOf(
+                ConnectionModel("c1", "input", "router"),
+                ConnectionModel("c2", "router", "lite_rt", label = "Data"),
+                ConnectionModel("c3", "lite_rt", "output"),
+            )
+        )
+        every { llmEngine.generateResponseStream(any()) } returnsMany listOf(
+            flowOf("Data"),
+            flowOf("answer"),
+            flowOf("final"),
+        )
+
+        val stages = engine(sessionId, "query", graph).toList()
+            .filterIsInstance<AgentOrchestratorState.PipelineStage>()
+
+        // INPUT and INTENT_ROUTER stages must show unknown total
+        val unknownStages = stages.take(2)
+        assertTrue("INPUT and INTENT_ROUTER should have null totalSteps",
+            unknownStages.all { it.stepInfo.totalSteps == null })
+
+        // After routing resolves, LITE_RT and OUTPUT stages must have a concrete total
+        val knownStages = stages.drop(2)
+        assertTrue("Post-routing stages should have concrete totalSteps",
+            knownStages.all { it.stepInfo.totalSteps != null })
+        // stepIndex must never exceed totalSteps
+        knownStages.forEach { stage ->
+            assertTrue("stepIndex ${stage.stepInfo.stepIndex} must not exceed totalSteps ${stage.stepInfo.totalSteps}",
+                stage.stepInfo.stepIndex <= stage.stepInfo.totalSteps!!)
+        }
+    }
+
+    // ─── INTENT_ROUTER tests ─────────────────────────────────────────────────
+
+    @Test
+    fun `given INTENT_ROUTER when routing key emitted then downstream node receives original user query not routing key`() = runTest {
+        every { settingsRepository.pipelineMaxSteps } returns flowOf(15)
+
+        val inputNode = NodeModel("input", NodeType.INPUT, 0f, 0f)
+        val routerNode = NodeModel("router", NodeType.INTENT_ROUTER, 0f, 0f)
+        val liteRtNode = NodeModel("lite_rt", NodeType.LITE_RT, 0f, 0f)
+        val outputNode = NodeModel("output", NodeType.OUTPUT, 0f, 0f)
+
+        val graph = PipelineGraph(
+            id = "g1", name = "Router Fix Test",
+            nodes = listOf(inputNode, routerNode, liteRtNode, outputNode),
+            connections = listOf(
+                ConnectionModel("c1", "input", "router"),
+                ConnectionModel("c2", "router", "lite_rt", label = "Data"),
+                ConnectionModel("c3", "lite_rt", "output"),
+            )
+        )
+
+        every { llmEngine.generateResponseStream(any()) } returnsMany listOf(
+            flowOf("Data"),           // INTENT_ROUTER routing decision
+            flowOf("Correct answer"), // LITE_RT processes original prompt
+            flowOf("Final"),          // OUTPUT formats the response
+        )
+
+        val states = engine(sessionId, "fuel consumption query", graph).toList()
+
+        assertTrue("Expected Completed but got: ${states.last()}", states.last() is AgentOrchestratorState.Completed)
+
+        // LITE_RT must receive the original user query, not the routing key
+        io.mockk.verify {
+            llmEngine.generateResponseStream(match { it.contains("USER/INPUT: fuel consumption query") })
+        }
+        // No downstream node must receive the routing key as its user input
+        io.mockk.verify(exactly = 0) {
+            llmEngine.generateResponseStream(match { it.contains("USER/INPUT: Data") })
+        }
+    }
+
     // ─── QUEUE_PROCESSOR tests ────────────────────────────────────────────────
 
     @Test

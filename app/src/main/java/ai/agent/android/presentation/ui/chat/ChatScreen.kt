@@ -33,6 +33,7 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -234,6 +235,20 @@ fun ChatScreen(
                         }
                     }
 
+                    if (uiState.currentStep != null && uiState.isGenerating) {
+                        item {
+                            val step = uiState.currentStep!!
+                            Text(
+                                text = "Step ${step.stepIndex} of ${step.totalSteps ?: "?"}: ${step.nodeName}",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 8.dp, vertical = 2.dp)
+                            )
+                        }
+                    }
+
                     if (uiState.orchestratorState != null && uiState.isGenerating) {
                         item {
                             AgentThoughtIndicator(
@@ -257,6 +272,7 @@ fun ChatScreen(
                             inputText = TextFieldValue("")
                         }
                     },
+                    onStopClicked = { viewModel.stopGeneration() },
                     isGenerating = uiState.isGenerating
                 )
             }
@@ -441,6 +457,7 @@ fun ChatMessageItem(
  * @param inputText The current text in the input field.
  * @param onInputTextChanged Callback when the text changes.
  * @param onSendClicked Callback when the send button is clicked.
+ * @param onStopClicked Callback when the stop button is clicked during active generation.
  * @param isGenerating Indicates if the agent is generating a response.
  */
 @Composable
@@ -448,7 +465,8 @@ fun ChatInputBar(
     inputText: TextFieldValue,
     onInputTextChanged: (TextFieldValue) -> Unit,
     onSendClicked: () -> Unit,
-    isGenerating: Boolean
+    onStopClicked: () -> Unit,
+    isGenerating: Boolean,
 ) {
     Row(
         modifier = Modifier
@@ -465,13 +483,19 @@ fun ChatInputBar(
             maxLines = 4
         )
         Spacer(modifier = Modifier.width(8.dp))
-        IconButton(
-            onClick = onSendClicked,
-            enabled = !isGenerating && inputText.text.isNotBlank()
-        ) {
-            if (isGenerating) {
-                CircularProgressIndicator(modifier = Modifier.size(24.dp))
-            } else {
+        if (isGenerating) {
+            IconButton(onClick = onStopClicked) {
+                Icon(
+                    imageVector = Icons.Default.Stop,
+                    contentDescription = "Stop generation",
+                    tint = MaterialTheme.colorScheme.error
+                )
+            }
+        } else {
+            IconButton(
+                onClick = onSendClicked,
+                enabled = inputText.text.isNotBlank()
+            ) {
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.Send,
                     contentDescription = "Send"

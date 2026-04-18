@@ -59,7 +59,7 @@ class TaskMonitorViewModelTest {
         every { workManager.getWorkInfosFlow(any()) } returns flowOf(listOf(workInfo1, workInfo2))
         
         val activeMap = mapOf(
-            "session1" to AgentOrchestratorState.PipelineStage("LITE_RT"),
+            "session1" to AgentOrchestratorState.PipelineStage(AgentOrchestratorState.PipelineStepInfo(1, 3, "LITE_RT")),
             "session2" to AgentOrchestratorState.Idle
         )
         every { taskQueueManager.activeSessionsState } returns kotlinx.coroutines.flow.MutableStateFlow(activeMap)

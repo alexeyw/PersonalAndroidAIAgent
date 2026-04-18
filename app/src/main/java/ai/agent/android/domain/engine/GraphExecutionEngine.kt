@@ -50,6 +50,12 @@ class GraphExecutionEngine @Inject constructor(
         }
 
         val maxSteps = settingsRepository.pipelineMaxSteps.first()
+        // For deterministic graphs (no routing/queue nodes) the total is fixed from the start.
+        // For branching graphs it stays null until the active branch is resolved.
+        val hasBranching = graph.nodes.any {
+            it.type == NodeType.INTENT_ROUTER || it.type == NodeType.IF_CONDITION || it.type == NodeType.QUEUE_PROCESSOR
+        }
+        var estimatedTotalSteps: Int? = if (hasBranching) null else graph.nodes.size
         var currentNode: NodeModel? = inputNode
         var stepCount = 0
         var currentInputText = userPrompt
@@ -62,8 +68,14 @@ class GraphExecutionEngine @Inject constructor(
         while (currentNode != null && stepCount < maxSteps) {
             stepCount++
             
-            // Emit the current pipeline stage
-            emit(AgentOrchestratorState.PipelineStage(currentNode.type.name))
+            // Emit current step with dynamically estimated total (null = still unknown).
+            emit(AgentOrchestratorState.PipelineStage(
+                AgentOrchestratorState.PipelineStepInfo(
+                    stepIndex = stepCount,
+                    totalSteps = estimatedTotalSteps,
+                    nodeName = currentNode.type.name,
+                )
+            ))
             
             // Give UI time to render the stage before CPU-heavy inference starts
             kotlinx.coroutines.delay(500)
@@ -113,34 +125,53 @@ class GraphExecutionEngine @Inject constructor(
                 activeQueue.addAll(list)
                 queueResults.clear()
                 activeQueueProcessorId = currentNode.id
-                
+
                 val edges = graph.connections.filter { it.sourceNodeId == currentNode.id }
-                val itemNodeId = edges.find { it.label.equals("Item", ignoreCase = true) }?.targetNodeId 
+                val itemNodeId = edges.find { it.label.equals("Item", ignoreCase = true) }?.targetNodeId
                     ?: edges.firstOrNull()?.targetNodeId
-                
+                val doneNodeId = edges.find { it.label.equals("Done", ignoreCase = true) }?.targetNodeId
+
                 if (activeQueue.isNotEmpty() && itemNodeId != null) {
+                    // Compute dynamic total: current steps already done + all queue iterations + tail after queue.
+                    val itemNode = graph.nodes.find { it.id == itemNodeId }
+                    val doneNode = graph.nodes.find { it.id == doneNodeId }
+                    val nodesPerItem = countNodesOnPath(itemNode, graph, stopNodeIds = setOf(currentNode.id))
+                    val nodesAfterQueue = countNodesOnPath(doneNode, graph)
+                    val totalItems = activeQueue.size // before removeAt — full queue size
+                    estimatedTotalSteps = stepCount + totalItems * nodesPerItem + nodesAfterQueue
+
                     val nextItem = activeQueue.removeAt(0)
                     val contextStr = queueResults.mapIndexed { i, res -> "Result of Subtask ${i+1}:\n$res" }.joinToString("\n\n")
                     val subtaskInstruction = "CRITICAL INSTRUCTION: You are executing a single subtask within a larger workflow. Focus ONLY on this specific subtask. Do NOT provide conversational filler, and do NOT attempt to solve the overall task or future steps."
-                    if (contextStr.isNotEmpty()) {
-                        currentInputText = "PREVIOUS RESULTS CONTEXT:\n$contextStr\n\n---\n\n$subtaskInstruction\n\nCURRENT SUBTASK TO EXECUTE:\n$nextItem"
+                    currentInputText = if (contextStr.isNotEmpty()) {
+                        "PREVIOUS RESULTS CONTEXT:\n$contextStr\n\n---\n\n$subtaskInstruction\n\nCURRENT SUBTASK TO EXECUTE:\n$nextItem"
                     } else {
-                        currentInputText = "$subtaskInstruction\n\nCURRENT SUBTASK TO EXECUTE:\n$nextItem"
+                        "$subtaskInstruction\n\nCURRENT SUBTASK TO EXECUTE:\n$nextItem"
                     }
                     currentNode = graph.nodes.find { it.id == itemNodeId }
                     continue
                 } else {
-                    val doneNodeId = edges.find { it.label.equals("Done", ignoreCase = true) }?.targetNodeId
                     activeQueueProcessorId = null
                     currentNode = graph.nodes.find { it.id == doneNodeId }
                     continue
                 }
             }
 
-            currentInputText = nodeResult?.outputText ?: currentInputText
+            // INTENT_ROUTER's outputText is the routing key — a control signal, not a content payload.
+            // Preserve currentInputText so downstream nodes receive the original data, not the routing label.
+            currentInputText = if (currentNode.type == NodeType.INTENT_ROUTER) {
+                currentInputText
+            } else {
+                nodeResult?.outputText ?: currentInputText
+            }
             
             val nextNodeId = findNextNodeId(currentNode, graph, nodeResult?.conditionResult, nodeResult?.routingKey)
             val nextNode = graph.nodes.find { it.id == nextNodeId }
+
+            // After a branching node resolves its path, compute the estimated total for that branch.
+            if (currentNode.type == NodeType.INTENT_ROUTER || currentNode.type == NodeType.IF_CONDITION) {
+                estimatedTotalSteps = stepCount + countNodesOnPath(nextNode, graph)
+            }
             
             if (activeQueueProcessorId != null && (nextNode == null || nextNode.type == NodeType.QUEUE_PROCESSOR)) {
                 queueResults.add(currentInputText)
@@ -178,6 +209,37 @@ class GraphExecutionEngine @Inject constructor(
             // Loop exited because currentNode became null before reaching OUTPUT
             emit(AgentOrchestratorState.Error("Pipeline execution terminated unexpectedly without reaching OUTPUT node."))
         }
+    }
+
+    /**
+     * Counts the number of nodes reachable from [startNode] by following the first outgoing edge
+     * of each node, including [startNode] itself. Stops at [NodeType.OUTPUT] (inclusive),
+     * dead ends, already-visited nodes, or any node whose ID is in [stopNodeIds].
+     *
+     * Used to estimate the remaining steps on the active branch after a routing decision
+     * or to measure the item-subgraph depth inside a [NodeType.QUEUE_PROCESSOR].
+     *
+     * @param startNode The node to start counting from, or null (returns 0).
+     * @param graph The pipeline graph to traverse.
+     * @param stopNodeIds IDs of nodes that act as exclusive stop boundaries (not counted).
+     * @return The number of nodes on the path.
+     */
+    private fun countNodesOnPath(
+        startNode: NodeModel?,
+        graph: PipelineGraph,
+        stopNodeIds: Set<String> = emptySet(),
+    ): Int {
+        var count = 0
+        var node = startNode
+        val visited = mutableSetOf<String>()
+        while (node != null && node.id !in visited && node.id !in stopNodeIds) {
+            visited.add(node.id)
+            count++
+            if (node.type == NodeType.OUTPUT) break
+            val nextId = graph.connections.firstOrNull { it.sourceNodeId == node.id }?.targetNodeId
+            node = graph.nodes.find { it.id == nextId }
+        }
+        return count
     }
 
     private fun findNextNodeId(

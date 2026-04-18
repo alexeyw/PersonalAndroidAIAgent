@@ -68,7 +68,7 @@ class TaskMonitorViewModel @Inject constructor(
             
             // Map Orchestrator State to Pipeline Stage
             val stage = when (orchestratorState) {
-                is AgentOrchestratorState.PipelineStage -> orchestratorState.nodeName
+                is AgentOrchestratorState.PipelineStage -> orchestratorState.stepInfo.nodeName
                 is AgentOrchestratorState.Thinking -> "Thinking"
                 is AgentOrchestratorState.ExecutingTool -> "Tool Execution"
                 is AgentOrchestratorState.WaitingForApproval -> "Waiting Approval"
