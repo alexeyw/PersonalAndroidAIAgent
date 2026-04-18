@@ -63,10 +63,11 @@ class GraphExecutionEngine @Inject constructor(
         while (currentNode != null && stepCount < maxSteps) {
             stepCount++
             
-            // Emit the current pipeline stage with progress info
+            // Emit the current pipeline stage with progress info.
+            // stepIndex is capped at totalSteps to avoid "Step 6 of 5" in looping graphs.
             emit(AgentOrchestratorState.PipelineStage(
                 AgentOrchestratorState.PipelineStepInfo(
-                    stepIndex = stepCount,
+                    stepIndex = minOf(stepCount, totalSteps),
                     totalSteps = totalSteps,
                     nodeName = currentNode.type.name,
                 )

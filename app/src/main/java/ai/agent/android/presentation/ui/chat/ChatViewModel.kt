@@ -247,18 +247,18 @@ class ChatViewModel @Inject constructor(
                     }
                 }
                 .collect { state ->
-                    _uiState.update { it.copy(orchestratorState = state) }
-
-                    if (state is AgentOrchestratorState.PipelineStage) {
-                        _uiState.update { it.copy(currentStep = state.stepInfo) }
-                    }
-
-                    if (state is AgentOrchestratorState.PipelineTrace) {
-                        _uiState.update { it.copy(pipelineTrace = state.steps) }
-                    }
-
-                    if (state is AgentOrchestratorState.Completed || state is AgentOrchestratorState.Error) {
-                        _uiState.update { it.copy(isGenerating = false, currentStep = null) }
+                    val isTerminal = state is AgentOrchestratorState.Completed || state is AgentOrchestratorState.Error
+                    _uiState.update { current ->
+                        current.copy(
+                            orchestratorState = state,
+                            currentStep = when {
+                                isTerminal -> null
+                                state is AgentOrchestratorState.PipelineStage -> state.stepInfo
+                                else -> current.currentStep
+                            },
+                            pipelineTrace = if (state is AgentOrchestratorState.PipelineTrace) state.steps else current.pipelineTrace,
+                            isGenerating = if (isTerminal) false else current.isGenerating,
+                        )
                     }
                 }
         }
