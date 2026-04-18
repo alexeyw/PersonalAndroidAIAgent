@@ -271,6 +271,47 @@ class GraphExecutionEngineTest {
         assertTrue(states.last() is AgentOrchestratorState.Completed)
     }
 
+    // ─── INTENT_ROUTER tests ─────────────────────────────────────────────────
+
+    @Test
+    fun `given INTENT_ROUTER when routing key emitted then downstream node receives original user query not routing key`() = runTest {
+        every { settingsRepository.pipelineMaxSteps } returns flowOf(15)
+
+        val inputNode = NodeModel("input", NodeType.INPUT, 0f, 0f)
+        val routerNode = NodeModel("router", NodeType.INTENT_ROUTER, 0f, 0f)
+        val liteRtNode = NodeModel("lite_rt", NodeType.LITE_RT, 0f, 0f)
+        val outputNode = NodeModel("output", NodeType.OUTPUT, 0f, 0f)
+
+        val graph = PipelineGraph(
+            id = "g1", name = "Router Fix Test",
+            nodes = listOf(inputNode, routerNode, liteRtNode, outputNode),
+            connections = listOf(
+                ConnectionModel("c1", "input", "router"),
+                ConnectionModel("c2", "router", "lite_rt", label = "Data"),
+                ConnectionModel("c3", "lite_rt", "output"),
+            )
+        )
+
+        every { llmEngine.generateResponseStream(any()) } returnsMany listOf(
+            flowOf("Data"),           // INTENT_ROUTER routing decision
+            flowOf("Correct answer"), // LITE_RT processes original prompt
+            flowOf("Final"),          // OUTPUT formats the response
+        )
+
+        val states = engine(sessionId, "fuel consumption query", graph).toList()
+
+        assertTrue("Expected Completed but got: ${states.last()}", states.last() is AgentOrchestratorState.Completed)
+
+        // LITE_RT must receive the original user query, not the routing key
+        io.mockk.verify {
+            llmEngine.generateResponseStream(match { it.contains("USER/INPUT: fuel consumption query") })
+        }
+        // No downstream node must receive the routing key as its user input
+        io.mockk.verify(exactly = 0) {
+            llmEngine.generateResponseStream(match { it.contains("USER/INPUT: Data") })
+        }
+    }
+
     // ─── QUEUE_PROCESSOR tests ────────────────────────────────────────────────
 
     @Test

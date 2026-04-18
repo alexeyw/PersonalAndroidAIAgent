@@ -145,7 +145,13 @@ class GraphExecutionEngine @Inject constructor(
                 }
             }
 
-            currentInputText = nodeResult?.outputText ?: currentInputText
+            // INTENT_ROUTER's outputText is the routing key — a control signal, not a content payload.
+            // Preserve currentInputText so downstream nodes receive the original data, not the routing label.
+            currentInputText = if (currentNode.type == NodeType.INTENT_ROUTER) {
+                currentInputText
+            } else {
+                nodeResult?.outputText ?: currentInputText
+            }
             
             val nextNodeId = findNextNodeId(currentNode, graph, nodeResult?.conditionResult, nodeResult?.routingKey)
             val nextNode = graph.nodes.find { it.id == nextNodeId }
