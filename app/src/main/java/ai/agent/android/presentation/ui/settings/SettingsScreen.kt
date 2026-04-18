@@ -31,6 +31,7 @@ import android.widget.Toast
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -253,8 +254,13 @@ fun SettingsScreen(
             Spacer(modifier = Modifier.height(8.dp))
 
             // Pipeline Max Steps
-            var pipelineMaxStepsText by remember(uiState.pipelineMaxSteps) {
-                mutableStateOf(uiState.pipelineMaxSteps.toString())
+            // State is kept independent of uiState to preserve cursor position while typing.
+            // LaunchedEffect syncs only when the value changes from an external source.
+            var pipelineMaxStepsText by remember { mutableStateOf(uiState.pipelineMaxSteps.toString()) }
+            LaunchedEffect(uiState.pipelineMaxSteps) {
+                if (pipelineMaxStepsText.toIntOrNull()?.coerceIn(5, 100) != uiState.pipelineMaxSteps) {
+                    pipelineMaxStepsText = uiState.pipelineMaxSteps.toString()
+                }
             }
             OutlinedTextField(
                 value = pipelineMaxStepsText,
