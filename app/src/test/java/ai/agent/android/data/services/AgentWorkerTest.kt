@@ -45,6 +45,16 @@ class AgentWorkerTest {
     }
 
     @Test
+    fun `doWork returns failure when prompt is blank`() = runTest {
+        val inputData = Data.Builder().putString(AgentWorker.KEY_PROMPT, "").build()
+        every { workerParams.inputData } returns inputData
+
+        val result = worker.doWork()
+
+        assertEquals(Result.failure(), result)
+    }
+
+    @Test
     fun `doWork processes prompt and returns success on completion`() = runTest {
         val inputData = Data.Builder().putString(AgentWorker.KEY_PROMPT, "test prompt").build()
         every { workerParams.inputData } returns inputData
