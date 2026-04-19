@@ -92,6 +92,6 @@ class LiteRtNodeExecutor @Inject constructor(
 
         val fullResponseText = accumulatedResponse.toString().trim()
 
-        emit(NodeExecutionResult(outputText = fullResponseText))
+        emit(NodeExecutionResult(outputText = fullResponseText, tokenCount = approximateTokenCount))
     }
 }

@@ -3,12 +3,16 @@ package ai.agent.android.data.repositories
 import ai.agent.android.data.local.dao.ChatDao
 import ai.agent.android.data.local.dao.TraceStepDao
 import ai.agent.android.data.local.models.ChatSessionEntity
+import ai.agent.android.data.local.models.TraceStepEntity
 import ai.agent.android.domain.models.ChatMessage
 import ai.agent.android.domain.models.Role
+import io.mockk.CapturingSlot
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
+import io.mockk.slot
 import kotlinx.coroutines.test.runTest
+import org.junit.Assert.assertEquals
 import org.junit.Before
 import org.junit.Test
 
@@ -79,6 +83,43 @@ class ChatRepositoryImplTest {
 
         coVerify(exactly = 1) { chatDao.getSessionById(sessionId1) }
         coVerify(exactly = 1) { chatDao.getSessionById(sessionId2) }
+    }
+
+    @Test
+    fun `given saveTraceStep when called then entity carries durationMs and tokenCount`() = runTest {
+        val captured: CapturingSlot<TraceStepEntity> = slot()
+        coEvery { traceStepDao.insertTraceStep(capture(captured)) } returns Unit
+
+        repository.saveTraceStep(
+            sessionId = "s1",
+            nodeName = "LITE_RT",
+            outputText = "hello",
+            durationMs = 234L,
+            tokenCount = 18,
+        )
+
+        assertEquals("s1", captured.captured.sessionId)
+        assertEquals("LITE_RT", captured.captured.nodeName)
+        assertEquals("hello", captured.captured.outputText)
+        assertEquals(234L, captured.captured.durationMs)
+        assertEquals(18, captured.captured.tokenCount)
+    }
+
+    @Test
+    fun `given saveTraceStep when tokenCount is null then entity preserves null`() = runTest {
+        val captured: CapturingSlot<TraceStepEntity> = slot()
+        coEvery { traceStepDao.insertTraceStep(capture(captured)) } returns Unit
+
+        repository.saveTraceStep(
+            sessionId = "s2",
+            nodeName = "INTENT_ROUTER",
+            outputText = "Route=Data",
+            durationMs = 10L,
+            tokenCount = null,
+        )
+
+        assertEquals(null, captured.captured.tokenCount)
+        assertEquals(10L, captured.captured.durationMs)
     }
 
     @Test

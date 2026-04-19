@@ -4,6 +4,7 @@ import ai.agent.android.domain.engine.executors.NodeExecutorFactory
 import ai.agent.android.domain.engine.executors.ToolNodeExecutor
 import ai.agent.android.domain.models.*
 import ai.agent.android.domain.repositories.ChatRepository
+import ai.agent.android.domain.repositories.MetricsRepository
 import ai.agent.android.domain.repositories.SettingsRepository
 import kotlinx.coroutines.flow.*
 import timber.log.Timber
@@ -21,6 +22,7 @@ class GraphExecutionEngine @Inject constructor(
     private val toolNodeExecutor: ToolNodeExecutor,
     private val chatRepository: ChatRepository,
     private val settingsRepository: SettingsRepository,
+    private val metricsRepository: MetricsRepository,
 ) {
 
     /**
@@ -81,10 +83,11 @@ class GraphExecutionEngine @Inject constructor(
             kotlinx.coroutines.delay(500)
             
             var nodeResult: NodeExecutionResult? = null
-            
+
             val executor = nodeExecutorFactory.getExecutor(currentNode.type)
             Timber.tag("PipelineDebug").d("[NODE_IN] type=${currentNode.type.name} id=${currentNode.id} input=${currentInputText.take(1000)}")
-            
+
+            val nodeStartMs = System.currentTimeMillis()
             try {
                 executor.execute(currentNode, currentInputText, sessionId, userPrompt)
                     .collect { stateOrResult ->
@@ -94,14 +97,17 @@ class GraphExecutionEngine @Inject constructor(
                             nodeResult = stateOrResult
                         }
                     }
-                
+
                 Timber.tag("PipelineDebug").d("[NODE_OUT] type=${currentNode.type.name} id=${currentNode.id} output=${nodeResult?.outputText?.take(1000)}")
             } catch (e: Exception) {
                 Timber.tag("PipelineDebug").e(e, "[NODE_ERR] type=${currentNode.type.name} id=${currentNode.id} error=${e.message}")
                 emit(AgentOrchestratorState.Error(e.message ?: "Unknown error"))
                 return@flow
             }
-            
+            val nodeDurationMs = System.currentTimeMillis() - nodeStartMs
+            val nodeTokenCount = nodeResult?.tokenCount
+            metricsRepository.recordNodeExecution(currentNode.type.name, nodeDurationMs, nodeTokenCount)
+
             if (nodeResult?.error != null) {
                 Timber.tag("PipelineDebug").e("[NODE_ERR] type=${currentNode.type.name} id=${currentNode.id} error=${nodeResult?.error}")
                 emit(AgentOrchestratorState.Error(nodeResult?.error!!))
@@ -110,8 +116,21 @@ class GraphExecutionEngine @Inject constructor(
 
             if (currentNode.type != NodeType.INPUT && currentNode.type != NodeType.OUTPUT) {
                 val outputText = nodeResult?.outputText ?: currentInputText
-                traceSteps.add(AgentOrchestratorState.TraceStep(currentNode.type.name, outputText))
-                chatRepository.saveTraceStep(sessionId, currentNode.type.name, outputText)
+                traceSteps.add(
+                    AgentOrchestratorState.TraceStep(
+                        nodeName = currentNode.type.name,
+                        outputText = outputText,
+                        durationMs = nodeDurationMs,
+                        tokenCount = nodeTokenCount,
+                    )
+                )
+                chatRepository.saveTraceStep(
+                    sessionId = sessionId,
+                    nodeName = currentNode.type.name,
+                    outputText = outputText,
+                    durationMs = nodeDurationMs,
+                    tokenCount = nodeTokenCount,
+                )
                 emit(AgentOrchestratorState.PipelineTrace(traceSteps.toList()))
             }
 

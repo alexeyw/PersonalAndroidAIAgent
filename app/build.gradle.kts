@@ -112,6 +112,9 @@ dependencies {
     // Security Crypto
     implementation(libs.androidx.security.crypto)
 
+    // SQLCipher for Android (encrypted Room database)
+    implementation(libs.sqlcipher.android)
+
     // AppFunctions
     implementation(libs.androidx.appfunctions)
     implementation(libs.androidx.appfunctions.service)

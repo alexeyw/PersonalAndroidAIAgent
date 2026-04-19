@@ -15,6 +15,7 @@ This file maps the contents of the main application package.
     - `ApiKeyManager.kt` - API key manager.
     - `AppDatabase.kt` - Room database definition.
     - `Converters.kt` - Type converters for Room.
+    - `EncryptedDbPassphraseProvider.kt` - Provides the SQLCipher passphrase stored in EncryptedSharedPreferences.
     - `SettingsManager.kt` - App settings manager.
     - `dao/` - Data Access Objects (DAOs).
       - `ChatDao.kt` - Chat messages DAO.

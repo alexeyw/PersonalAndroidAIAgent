@@ -139,6 +139,9 @@ fun MonitoringScreen(
 /**
  * Displays a card containing performance metrics.
  *
+ * Shows both live stats (last inference time, speed) and session-wide aggregates
+ * (total execution time across all nodes, cumulative tokens, per-node-type totals).
+ *
  * @param metrics The metrics to display.
  */
 @Composable
@@ -164,6 +167,41 @@ fun MetricsCard(metrics: ai.agent.android.domain.models.AgentMetrics) {
                     String.format(Locale.US, "%.1f tokens/s", metrics.tokensPerSecond)
                 )
                 MetricItem("Total Tokens", "${metrics.totalTokensProcessed}")
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+            Text(
+                text = "Session aggregates",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                fontWeight = FontWeight.SemiBold,
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = "Total execution time: ${metrics.totalExecutionTimeMs} ms",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+
+            if (metrics.timePerNodeType.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = "Time per node type",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                metrics.timePerNodeType
+                    .toList()
+                    .sortedByDescending { it.second }
+                    .forEach { (nodeName, durationMs) ->
+                        Text(
+                            text = "• $nodeName: $durationMs ms",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
             }
         }
     }

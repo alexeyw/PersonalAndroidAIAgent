@@ -7,11 +7,13 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.preferencesDataStoreFile
 import androidx.room.Room
 import ai.agent.android.data.local.AppDatabase
+import ai.agent.android.data.local.EncryptedDbPassphraseProvider
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
+import net.zetetic.database.sqlcipher.SupportOpenHelperFactory
 import okhttp3.OkHttpClient
 import javax.inject.Singleton
 
@@ -45,18 +47,40 @@ object AppModule {
 
     /**
      * Provides the singleton instance of the Room Database.
+     *
+     * The database is encrypted at rest via SQLCipher. A random 32-byte passphrase is stored
+     * in [androidx.security.crypto.EncryptedSharedPreferences] (master key in Android Keystore).
+     * If a legacy plaintext database from an earlier build exists, SQLCipher will fail to open
+     * it and Room will recreate it via [fallbackToDestructiveMigration] — acceptable because
+     * the project has no shipped users yet.
      */
     @Provides
     @Singleton
     fun provideAppDatabase(
-        @ApplicationContext appContext: Context
+        @ApplicationContext appContext: Context,
+        passphraseProvider: EncryptedDbPassphraseProvider,
     ): AppDatabase {
+        val passphrase = passphraseProvider.getOrCreatePassphrase()
+
+        // SupportOpenHelperFactory zeroes the byte array after consumption, so pass a copy
+        // and keep the retrievable copy inside EncryptedSharedPreferences untouched.
+        val factory = SupportOpenHelperFactory(passphrase)
+
         return Room.databaseBuilder(
             appContext,
             AppDatabase::class.java,
             DATABASE_NAME
         )
-        .addMigrations(AppDatabase.MIGRATION_9_10, AppDatabase.MIGRATION_10_11, AppDatabase.MIGRATION_11_12, AppDatabase.MIGRATION_12_13, AppDatabase.MIGRATION_13_14, AppDatabase.MIGRATION_14_15)
+        .openHelperFactory(factory)
+        .addMigrations(
+            AppDatabase.MIGRATION_9_10,
+            AppDatabase.MIGRATION_10_11,
+            AppDatabase.MIGRATION_11_12,
+            AppDatabase.MIGRATION_12_13,
+            AppDatabase.MIGRATION_13_14,
+            AppDatabase.MIGRATION_14_15,
+            AppDatabase.MIGRATION_15_16,
+        )
         .fallbackToDestructiveMigration(true)
         .build()
     }
