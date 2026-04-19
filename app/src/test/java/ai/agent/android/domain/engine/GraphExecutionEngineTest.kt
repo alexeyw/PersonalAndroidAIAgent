@@ -10,8 +10,10 @@ import ai.agent.android.domain.usecases.GetContextWindowUseCase
 import ai.agent.android.domain.usecases.RetrieveRelevantMemoryUseCase
 import ai.agent.android.domain.usecases.LoadModelUseCase
 import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.verify
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.runTest
@@ -88,7 +90,7 @@ class GraphExecutionEngineTest {
             systemNodeExecutor, queueProcessorNodeExecutor, summaryNodeExecutor
         )
 
-        engine = GraphExecutionEngine(nodeExecutorFactory, toolNodeExecutor, chatRepository, settingsRepository)
+        engine = GraphExecutionEngine(nodeExecutorFactory, toolNodeExecutor, chatRepository, settingsRepository, metricsRepository)
 
         coEvery { getContextWindowUseCase(sessionId) } returns ""
         coEvery { retrieveRelevantMemoryUseCase(any()) } returns emptyList()
@@ -224,7 +226,7 @@ class GraphExecutionEngineTest {
         val mockFactory = mockk<NodeExecutorFactory>()
         val mockSettings = mockk<SettingsRepository>(relaxed = true)
         every { mockSettings.pipelineMaxSteps } returns flowOf(15)
-        val engineWithMock = GraphExecutionEngine(mockFactory, mockToolNodeExecutor, mockk(relaxed = true), mockSettings)
+        val engineWithMock = GraphExecutionEngine(mockFactory, mockToolNodeExecutor, mockk(relaxed = true), mockSettings, mockk(relaxed = true))
 
         engineWithMock.resumeWithApproval("session_id_123", true)
 
@@ -451,6 +453,76 @@ class GraphExecutionEngineTest {
         val last = states.last()
         assertTrue("Expected Error but got: $last", last is AgentOrchestratorState.Error)
         assertTrue((last as AgentOrchestratorState.Error).message.contains("3"))
+    }
+
+    // ─── Per-node metrics tests ───────────────────────────────────────────────
+
+    @Test
+    fun `given pipeline executes LITE_RT node then metricsRepository records node execution with tokenCount`() = runTest {
+        every { settingsRepository.pipelineMaxSteps } returns flowOf(15)
+
+        val inputNode = NodeModel("input", NodeType.INPUT, 0f, 0f)
+        val llmNode = NodeModel("llm", NodeType.LITE_RT, 0f, 0f)
+        val outputNode = NodeModel("output", NodeType.OUTPUT, 0f, 0f)
+
+        val graph = PipelineGraph(
+            id = "g1", name = "Metrics Test",
+            nodes = listOf(inputNode, llmNode, outputNode),
+            connections = listOf(
+                ConnectionModel("c1", "input", "llm"),
+                ConnectionModel("c2", "llm", "output"),
+            )
+        )
+
+        // LITE_RT should emit 3 tokens, OUTPUT executor also calls generateResponseStream.
+        every { llmEngine.generateResponseStream(any()) } returnsMany listOf(
+            flowOf("one ", "two ", "three"),
+            flowOf("final"),
+        )
+
+        engine(sessionId, "prompt", graph).toList()
+
+        // INPUT, LITE_RT, OUTPUT — three nodes, three recordings
+        verify(exactly = 1) { metricsRepository.recordNodeExecution("INPUT", any(), any()) }
+        verify(exactly = 1) { metricsRepository.recordNodeExecution("LITE_RT", any(), match { it != null && it > 0 }) }
+        verify(exactly = 1) { metricsRepository.recordNodeExecution("OUTPUT", any(), any()) }
+    }
+
+    @Test
+    fun `given pipeline executes node then trace step includes durationMs and tokenCount`() = runTest {
+        every { settingsRepository.pipelineMaxSteps } returns flowOf(15)
+
+        val inputNode = NodeModel("input", NodeType.INPUT, 0f, 0f)
+        val llmNode = NodeModel("llm", NodeType.LITE_RT, 0f, 0f)
+        val outputNode = NodeModel("output", NodeType.OUTPUT, 0f, 0f)
+
+        val graph = PipelineGraph(
+            id = "g1", name = "Trace Timing",
+            nodes = listOf(inputNode, llmNode, outputNode),
+            connections = listOf(
+                ConnectionModel("c1", "input", "llm"),
+                ConnectionModel("c2", "llm", "output"),
+            )
+        )
+        every { llmEngine.generateResponseStream(any()) } returnsMany listOf(
+            flowOf("tok1 tok2"),
+            flowOf("final"),
+        )
+
+        val states = engine(sessionId, "prompt", graph).toList()
+
+        val trace = states.filterIsInstance<AgentOrchestratorState.PipelineTrace>().last()
+        assertTrue(trace.steps.any { it.nodeName == "LITE_RT" && (it.tokenCount ?: 0) > 0 })
+        assertTrue(trace.steps.all { it.durationMs >= 0 })
+        coVerify(atLeast = 1) {
+            chatRepository.saveTraceStep(
+                sessionId = any(),
+                nodeName = "LITE_RT",
+                outputText = any(),
+                durationMs = any(),
+                tokenCount = match { it != null && it > 0 },
+            )
+        }
     }
 
     @Test

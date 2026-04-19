@@ -137,6 +137,6 @@ class CloudLlmNodeExecutor @Inject constructor(
         
         kotlinx.coroutines.delay(1000)
 
-        emit(NodeExecutionResult(outputText = fullResponseText))
+        emit(NodeExecutionResult(outputText = fullResponseText, tokenCount = approximateTokenCount))
     }
 }

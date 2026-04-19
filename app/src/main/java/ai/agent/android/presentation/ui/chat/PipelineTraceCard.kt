@@ -76,9 +76,14 @@ fun PipelineTraceCard(steps: List<AgentOrchestratorState.TraceStep>) {
                         } else {
                             step.outputText
                         }
-                        
+                        val metaParts = buildList {
+                            add("${step.durationMs} ms")
+                            step.tokenCount?.let { add("$it tokens") }
+                        }
+                        val metaLabel = metaParts.joinToString(", ")
+
                         Text(
-                            text = "${index + 1}. [${step.nodeName}] -> $outputPreview",
+                            text = "${index + 1}. [${step.nodeName}] ($metaLabel) -> $outputPreview",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.padding(vertical = 4.dp)

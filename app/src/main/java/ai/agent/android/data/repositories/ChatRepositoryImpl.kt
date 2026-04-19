@@ -96,20 +96,35 @@ class ChatRepositoryImpl @Inject constructor(
         return chatDao.getSessionById(id)?.toDomain()
     }
 
-    override suspend fun saveTraceStep(sessionId: String, nodeName: String, outputText: String) {
+    override suspend fun saveTraceStep(
+        sessionId: String,
+        nodeName: String,
+        outputText: String,
+        durationMs: Long,
+        tokenCount: Int?,
+    ) {
         traceStepDao.insertTraceStep(
             ai.agent.android.data.local.models.TraceStepEntity(
                 sessionId = sessionId,
                 nodeName = nodeName,
                 outputText = outputText,
-                timestamp = System.currentTimeMillis()
+                timestamp = System.currentTimeMillis(),
+                durationMs = durationMs,
+                tokenCount = tokenCount,
             )
         )
     }
 
     override fun getTraceSteps(sessionId: String): Flow<List<ai.agent.android.domain.models.AgentOrchestratorState.TraceStep>> {
         return traceStepDao.getTraceStepsForSession(sessionId).map { entities ->
-            entities.map { ai.agent.android.domain.models.AgentOrchestratorState.TraceStep(it.nodeName, it.outputText) }
+            entities.map {
+                ai.agent.android.domain.models.AgentOrchestratorState.TraceStep(
+                    nodeName = it.nodeName,
+                    outputText = it.outputText,
+                    durationMs = it.durationMs,
+                    tokenCount = it.tokenCount,
+                )
+            }
         }
     }
 }
