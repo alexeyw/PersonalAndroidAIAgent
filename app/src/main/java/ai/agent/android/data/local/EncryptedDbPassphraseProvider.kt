@@ -68,7 +68,10 @@ class EncryptedDbPassphraseProvider @Inject constructor(
             Timber.w("Stored DB passphrase is malformed; regenerating.")
         }
         val generated = ByteArray(passphraseByteLength).also { SecureRandom().nextBytes(it) }
-        sharedPreferences.edit {
+        // commit = true forces synchronous fsync: a freshly generated passphrase must hit disk
+        // before it is ever used to open the DB, otherwise a process crash between creating the
+        // encrypted DB and flushing the prefs would leave the DB permanently unreadable.
+        sharedPreferences.edit(commit = true) {
             putString(passphraseKey, encodeHex(generated))
         }
         return generated.copyOf()

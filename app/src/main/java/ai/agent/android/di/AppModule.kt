@@ -60,10 +60,15 @@ object AppModule {
         @ApplicationContext appContext: Context,
         passphraseProvider: EncryptedDbPassphraseProvider,
     ): AppDatabase {
+        // net.zetetic:sqlcipher-android does NOT auto-load its native library the way the
+        // legacy android-database-sqlcipher did. Without this explicit load, the first call
+        // into SupportOpenHelperFactory would crash with UnsatisfiedLinkError. loadLibrary is
+        // idempotent, so calling it here (inside the @Singleton provider) is safe.
+        System.loadLibrary("sqlcipher")
+
         val passphrase = passphraseProvider.getOrCreatePassphrase()
 
-        // SupportOpenHelperFactory zeroes the byte array after consumption, so pass a copy
-        // and keep the retrievable copy inside EncryptedSharedPreferences untouched.
+        // SupportOpenHelperFactory zeroes the byte array after consumption.
         val factory = SupportOpenHelperFactory(passphrase)
 
         return Room.databaseBuilder(
