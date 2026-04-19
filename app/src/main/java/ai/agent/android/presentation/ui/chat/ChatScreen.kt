@@ -1,5 +1,8 @@
 package ai.agent.android.presentation.ui.chat
 
+import android.content.Intent
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.DisposableEffect
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -30,14 +33,20 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material.icons.filled.Upload
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DrawerValue
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -50,6 +59,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -65,11 +75,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.mikepenz.markdown.m3.Markdown
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
  * The main Chat screen composable.
@@ -88,8 +101,44 @@ fun ChatScreen(
     val listState = rememberLazyListState()
     val coroutineScope = rememberCoroutineScope()
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
+    val context = LocalContext.current
 
     var inputText by remember { mutableStateOf(TextFieldValue("")) }
+    var menuExpanded by remember { mutableStateOf(false) }
+
+    val importLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument(),
+    ) { uri ->
+        if (uri != null) {
+            coroutineScope.launch {
+                val json = withContext(Dispatchers.IO) {
+                    runCatching {
+                        context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
+                    }.getOrNull()
+                }
+                if (json.isNullOrBlank()) {
+                    snackbarHostState.showSnackbar("Could not read selected file")
+                } else {
+                    viewModel.importChat(json)
+                    drawerState.close()
+                }
+            }
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        viewModel.exportEvents.collect { payload ->
+            val sendIntent = Intent(Intent.ACTION_SEND).apply {
+                type = "application/json"
+                putExtra(Intent.EXTRA_SUBJECT, payload.sessionName)
+                putExtra(Intent.EXTRA_TEXT, payload.json)
+            }
+            val chooser = Intent.createChooser(sendIntent, "Export chat").apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            context.startActivity(chooser)
+        }
+    }
 
     val lifecycleOwner = LocalLifecycleOwner.current
 
@@ -142,6 +191,9 @@ fun ChatScreen(
                         viewModel.createNewSession()
                         coroutineScope.launch { drawerState.close() }
                     },
+                    onImportChat = {
+                        importLauncher.launch(arrayOf("application/json", "text/plain", "*/*"))
+                    },
                     onSessionSelected = { sessionId ->
                         viewModel.switchSession(sessionId)
                         coroutineScope.launch { drawerState.close() }
@@ -151,7 +203,7 @@ fun ChatScreen(
                     },
                     onRenameSession = { sessionId, newName ->
                         viewModel.renameSession(sessionId, newName)
-                    }
+                    },
                 )
             }
         }
@@ -194,6 +246,32 @@ fun ChatScreen(
                                 imageVector = Icons.Default.Menu,
                                 contentDescription = "Menu"
                             )
+                        }
+                        Box {
+                            IconButton(onClick = { menuExpanded = true }) {
+                                Icon(
+                                    imageVector = Icons.Default.MoreVert,
+                                    contentDescription = "More options",
+                                )
+                            }
+                            DropdownMenu(
+                                expanded = menuExpanded,
+                                onDismissRequest = { menuExpanded = false },
+                            ) {
+                                DropdownMenuItem(
+                                    text = { Text("Export chat") },
+                                    onClick = {
+                                        menuExpanded = false
+                                        val sessionId = uiState.currentSessionId
+                                        if (sessionId.isNotBlank()) {
+                                            viewModel.exportChat(sessionId)
+                                        }
+                                    },
+                                    leadingIcon = {
+                                        Icon(Icons.Default.Upload, contentDescription = null)
+                                    },
+                                )
+                            }
                         }
                     },
                     colors = TopAppBarDefaults.topAppBarColors(
@@ -263,13 +341,27 @@ fun ChatScreen(
                     item { Spacer(modifier = Modifier.height(8.dp)) }
                 }
 
+                uiState.inlineError?.let { inlineError ->
+                    InlineErrorBanner(
+                        text = inlineError,
+                        onDismiss = { viewModel.clearInlineError() },
+                    )
+                }
+
                 ChatInputBar(
                     inputText = inputText,
-                    onInputTextChanged = { inputText = it },
+                    onInputTextChanged = { newValue ->
+                        if (newValue.text != inputText.text) {
+                            viewModel.clearInlineError()
+                        }
+                        inputText = newValue
+                    },
                     onSendClicked = {
                         if (inputText.text.isNotBlank()) {
                             viewModel.sendMessage(inputText.text)
-                            inputText = TextFieldValue("")
+                            if (viewModel.uiState.value.inlineError == null) {
+                                inputText = TextFieldValue("")
+                            }
                         }
                     },
                     onStopClicked = { viewModel.stopGeneration() },
@@ -285,9 +377,10 @@ fun ChatDrawerContent(
     sessions: List<ChatSession>,
     currentSessionId: String,
     onNewChat: () -> Unit,
+    onImportChat: () -> Unit,
     onSessionSelected: (String) -> Unit,
     onDeleteSession: (String) -> Unit,
-    onRenameSession: (String, String) -> Unit
+    onRenameSession: (String, String) -> Unit,
 ) {
     var sessionToRename by remember { mutableStateOf<ChatSession?>(null) }
     var renameText by remember { mutableStateOf("") }
@@ -338,6 +431,13 @@ fun ChatDrawerContent(
             onClick = onNewChat,
             icon = { Icon(Icons.Default.Add, contentDescription = "New Chat") },
             modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
+        )
+        NavigationDrawerItem(
+            label = { Text("Import Chat") },
+            selected = false,
+            onClick = onImportChat,
+            icon = { Icon(Icons.Default.Download, contentDescription = "Import Chat") },
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
         )
         HorizontalDivider()
 
@@ -500,6 +600,50 @@ fun ChatInputBar(
                     imageVector = Icons.AutoMirrored.Filled.Send,
                     contentDescription = "Send"
                 )
+            }
+        }
+    }
+}
+
+/**
+ * Persistent inline banner displayed above the chat input to surface recoverable
+ * preconditions (for example, when no model is loaded and the user tries to send a message).
+ *
+ * @param text The message to display to the user.
+ * @param onDismiss Callback invoked when the user dismisses the banner.
+ */
+@Composable
+fun InlineErrorBanner(
+    text: String,
+    onDismiss: () -> Unit,
+) {
+    Surface(
+        color = MaterialTheme.colorScheme.errorContainer,
+        contentColor = MaterialTheme.colorScheme.onErrorContainer,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 4.dp),
+        shape = RoundedCornerShape(8.dp),
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                imageVector = Icons.Default.Warning,
+                contentDescription = null,
+                modifier = Modifier.size(18.dp),
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                text = text,
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.weight(1f),
+            )
+            TextButton(onClick = onDismiss) {
+                Text("Dismiss")
             }
         }
     }

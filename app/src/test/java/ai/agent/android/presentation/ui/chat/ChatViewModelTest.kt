@@ -1,7 +1,9 @@
 package ai.agent.android.presentation.ui.chat
 
+import ai.agent.android.domain.engine.LlmInferenceEngine
 import ai.agent.android.domain.models.AgentOrchestratorState
 import ai.agent.android.domain.models.ChatMessage
+import ai.agent.android.domain.models.ChatSession
 import ai.agent.android.domain.models.Role
 import kotlinx.coroutines.delay
 import ai.agent.android.domain.models.Result
@@ -15,15 +17,19 @@ import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
+import org.json.JSONArray
+import org.json.JSONObject
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -44,7 +50,18 @@ class ChatViewModelTest {
     private lateinit var loadModelUseCase: LoadModelUseCase
     private lateinit var getContextWindowUseCase: GetContextWindowUseCase
     private lateinit var activeSessionTracker: ActiveSessionTracker
+    private lateinit var llmInferenceEngine: LlmInferenceEngine
     private lateinit var viewModel: ChatViewModel
+
+    private fun createViewModel(): ChatViewModel = ChatViewModel(
+        agentOrchestratorUseCase,
+        chatRepository,
+        settingsRepository,
+        loadModelUseCase,
+        getContextWindowUseCase,
+        activeSessionTracker,
+        llmInferenceEngine,
+    )
 
     @Before
     fun setup() {
@@ -55,6 +72,8 @@ class ChatViewModelTest {
         loadModelUseCase = mockk()
         getContextWindowUseCase = mockk()
         activeSessionTracker = mockk(relaxed = true)
+        llmInferenceEngine = mockk(relaxed = true)
+        every { llmInferenceEngine.isInitialized } returns true
 
         // Mock chat repository flow for any session
         every { chatRepository.getMessagesForSession(any()) } returns flowOf(emptyList())
@@ -78,7 +97,7 @@ class ChatViewModelTest {
 
     @Test
     fun `init should generate session id when none saved`() = runTest {
-        viewModel = ChatViewModel(agentOrchestratorUseCase, chatRepository, settingsRepository, loadModelUseCase, getContextWindowUseCase, activeSessionTracker)
+        viewModel = createViewModel()
         advanceUntilIdle()
 
         val state = viewModel.uiState.value
@@ -91,7 +110,7 @@ class ChatViewModelTest {
         val errorMsg = "Model file not found"
         coEvery { loadModelUseCase() } returns Result.Error(mockk(), errorMsg)
 
-        viewModel = ChatViewModel(agentOrchestratorUseCase, chatRepository, settingsRepository, loadModelUseCase, getContextWindowUseCase, activeSessionTracker)
+        viewModel = createViewModel()
         advanceUntilIdle()
 
         val state = viewModel.uiState.value
@@ -104,7 +123,7 @@ class ChatViewModelTest {
         val savedId = "saved-session-123"
         every { settingsRepository.currentChatSessionId } returns flowOf(savedId)
         
-        viewModel = ChatViewModel(agentOrchestratorUseCase, chatRepository, settingsRepository, loadModelUseCase, getContextWindowUseCase, activeSessionTracker)
+        viewModel = createViewModel()
         advanceUntilIdle()
 
         assertEquals(savedId, viewModel.uiState.value.currentSessionId)
@@ -113,7 +132,7 @@ class ChatViewModelTest {
 
     @Test
     fun `sendMessage should ignore blank prompt`() = runTest {
-        viewModel = ChatViewModel(agentOrchestratorUseCase, chatRepository, settingsRepository, loadModelUseCase, getContextWindowUseCase, activeSessionTracker)
+        viewModel = createViewModel()
         advanceUntilIdle()
 
         viewModel.sendMessage("   ")
@@ -127,7 +146,7 @@ class ChatViewModelTest {
     fun `sendMessage should update state to generating and collect orchestrator states`() = runTest {
         val userPrompt = "Test prompt"
         
-        viewModel = ChatViewModel(agentOrchestratorUseCase, chatRepository, settingsRepository, loadModelUseCase, getContextWindowUseCase, activeSessionTracker)
+        viewModel = createViewModel()
         advanceUntilIdle()
 
         val actualSessionId = viewModel.uiState.value.currentSessionId
@@ -154,7 +173,7 @@ class ChatViewModelTest {
         val userPrompt = "Test prompt"
         val exceptionMessage = "Network failure"
         
-        viewModel = ChatViewModel(agentOrchestratorUseCase, chatRepository, settingsRepository, loadModelUseCase, getContextWindowUseCase, activeSessionTracker)
+        viewModel = createViewModel()
         advanceUntilIdle()
 
         val actualSessionId = viewModel.uiState.value.currentSessionId
@@ -175,7 +194,7 @@ class ChatViewModelTest {
 
     @Test
     fun `clearError should set errorMessage to null`() = runTest {
-        viewModel = ChatViewModel(agentOrchestratorUseCase, chatRepository, settingsRepository, loadModelUseCase, getContextWindowUseCase, activeSessionTracker)
+        viewModel = createViewModel()
         advanceUntilIdle()
 
         // Force an error state
@@ -198,7 +217,7 @@ class ChatViewModelTest {
         val userPrompt = "pipeline test"
         val stepInfo = AgentOrchestratorState.PipelineStepInfo(stepIndex = 1, totalSteps = 3, nodeName = "LITERT")
 
-        viewModel = ChatViewModel(agentOrchestratorUseCase, chatRepository, settingsRepository, loadModelUseCase, getContextWindowUseCase, activeSessionTracker)
+        viewModel = createViewModel()
         advanceUntilIdle()
 
         val sessionId = viewModel.uiState.value.currentSessionId
@@ -221,7 +240,7 @@ class ChatViewModelTest {
         val userPrompt = "reset step test"
         val stepInfo = AgentOrchestratorState.PipelineStepInfo(stepIndex = 2, totalSteps = 4, nodeName = "CLOUD")
 
-        viewModel = ChatViewModel(agentOrchestratorUseCase, chatRepository, settingsRepository, loadModelUseCase, getContextWindowUseCase, activeSessionTracker)
+        viewModel = createViewModel()
         advanceUntilIdle()
 
         val sessionId = viewModel.uiState.value.currentSessionId
@@ -240,7 +259,7 @@ class ChatViewModelTest {
     fun `stopGeneration should cancel job and reset isGenerating and currentStep`() = runTest {
         val userPrompt = "long task"
 
-        viewModel = ChatViewModel(agentOrchestratorUseCase, chatRepository, settingsRepository, loadModelUseCase, getContextWindowUseCase, activeSessionTracker)
+        viewModel = createViewModel()
         advanceUntilIdle()
 
         val sessionId = viewModel.uiState.value.currentSessionId
@@ -268,7 +287,7 @@ class ChatViewModelTest {
         val userPrompt = "thinking task"
         val partialText = "Here is what I know so far"
 
-        viewModel = ChatViewModel(agentOrchestratorUseCase, chatRepository, settingsRepository, loadModelUseCase, getContextWindowUseCase, activeSessionTracker)
+        viewModel = createViewModel()
         advanceUntilIdle()
 
         val sessionId = viewModel.uiState.value.currentSessionId
@@ -294,7 +313,7 @@ class ChatViewModelTest {
     fun `resumeWithApproval should call orchestrator usecase with correct session id and approval state`() = runTest {
         every { agentOrchestratorUseCase.resumeWithApproval(any(), any()) } returns Unit
         
-        viewModel = ChatViewModel(agentOrchestratorUseCase, chatRepository, settingsRepository, loadModelUseCase, getContextWindowUseCase, activeSessionTracker)
+        viewModel = createViewModel()
         advanceUntilIdle()
 
         val actualSessionId = viewModel.uiState.value.currentSessionId
@@ -304,5 +323,167 @@ class ChatViewModelTest {
 
         viewModel.resumeWithApproval(false)
         io.mockk.verify { agentOrchestratorUseCase.resumeWithApproval(actualSessionId, false) }
+    }
+
+    @Test
+    fun `sendMessage should set inlineError and skip orchestrator when engine not initialized`() = runTest {
+        every { llmInferenceEngine.isInitialized } returns false
+
+        viewModel = createViewModel()
+        advanceUntilIdle()
+
+        viewModel.sendMessage("hello")
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertNotNull(state.inlineError)
+        assertFalse(state.isGenerating)
+        coVerify(exactly = 0) { agentOrchestratorUseCase(any(), any()) }
+    }
+
+    @Test
+    fun `sendMessage should clear inlineError once engine becomes initialized and user retries`() = runTest {
+        every { llmInferenceEngine.isInitialized } returns false
+
+        viewModel = createViewModel()
+        advanceUntilIdle()
+
+        viewModel.sendMessage("hello")
+        advanceUntilIdle()
+        assertNotNull(viewModel.uiState.value.inlineError)
+
+        every { llmInferenceEngine.isInitialized } returns true
+        val sessionId = viewModel.uiState.value.currentSessionId
+        coEvery { agentOrchestratorUseCase(sessionId, "hello again") } returns flow {
+            emit(AgentOrchestratorState.Completed("ok"))
+        }
+
+        viewModel.sendMessage("hello again")
+        advanceUntilIdle()
+
+        assertNull(viewModel.uiState.value.inlineError)
+    }
+
+    @Test
+    fun `clearInlineError should reset inlineError to null`() = runTest {
+        every { llmInferenceEngine.isInitialized } returns false
+
+        viewModel = createViewModel()
+        advanceUntilIdle()
+
+        viewModel.sendMessage("hello")
+        advanceUntilIdle()
+        assertNotNull(viewModel.uiState.value.inlineError)
+
+        viewModel.clearInlineError()
+
+        assertNull(viewModel.uiState.value.inlineError)
+    }
+
+    @Test
+    fun `exportChat should emit payload with JSON containing role text and timestamp`() = runTest {
+        val sessionId = "session-x"
+        val messages = listOf(
+            ChatMessage(id = 1L, sessionId = sessionId, role = Role.USER, content = "hi", timestamp = 1_000L),
+            ChatMessage(id = 2L, sessionId = sessionId, role = Role.AGENT, content = "hello", timestamp = 2_000L),
+        )
+        every { chatRepository.getMessagesForSession(sessionId) } returns flowOf(messages)
+        coEvery { chatRepository.getSessionById(sessionId) } returns ChatSession(
+            id = sessionId,
+            name = "My Chat",
+            updatedAt = 3_000L,
+        )
+
+        viewModel = createViewModel()
+        advanceUntilIdle()
+
+        val collected = mutableListOf<ChatExportPayload>()
+        val job = CoroutineScope(testDispatcher).launch {
+            viewModel.exportEvents.collect { collected.add(it) }
+        }
+
+        viewModel.exportChat(sessionId)
+        advanceUntilIdle()
+
+        assertEquals(1, collected.size)
+        val payload = collected.first()
+        assertEquals("My Chat", payload.sessionName)
+
+        val root = JSONObject(payload.json)
+        assertEquals(sessionId, root.getString("sessionId"))
+        assertEquals("My Chat", root.getString("sessionName"))
+        val arr = root.getJSONArray("messages")
+        assertEquals(2, arr.length())
+        val first = arr.getJSONObject(0)
+        assertEquals("USER", first.getString("role"))
+        assertEquals("hi", first.getString("text"))
+        assertEquals(1_000L, first.getLong("timestamp"))
+        val second = arr.getJSONObject(1)
+        assertEquals("AGENT", second.getString("role"))
+        assertEquals("hello", second.getString("text"))
+        assertEquals(2_000L, second.getLong("timestamp"))
+
+        job.cancel()
+    }
+
+    @Test
+    fun `importChat should create new session and save each message`() = runTest {
+        viewModel = createViewModel()
+        advanceUntilIdle()
+
+        val array = JSONArray()
+            .put(JSONObject().put("role", "USER").put("text", "hello").put("timestamp", 111L))
+            .put(JSONObject().put("role", "AGENT").put("text", "hi there").put("timestamp", 222L))
+        val doc = JSONObject()
+            .put("sessionName", "Restored Chat")
+            .put("messages", array)
+
+        viewModel.importChat(doc.toString())
+        advanceUntilIdle()
+
+        coVerify { chatRepository.saveSession(match { it.name == "Restored Chat" }) }
+        coVerify {
+            chatRepository.saveMessage(
+                match { it.role == Role.USER && it.content == "hello" && it.timestamp == 111L },
+            )
+        }
+        coVerify {
+            chatRepository.saveMessage(
+                match { it.role == Role.AGENT && it.content == "hi there" && it.timestamp == 222L },
+            )
+        }
+    }
+
+    @Test
+    fun `importChat with invalid JSON should set errorMessage`() = runTest {
+        viewModel = createViewModel()
+        advanceUntilIdle()
+
+        viewModel.importChat("not-a-json")
+        advanceUntilIdle()
+
+        assertNotNull(viewModel.uiState.value.errorMessage)
+        // Init creates a "New Chat" session; the import path must not create any additional session.
+        coVerify(exactly = 0) { chatRepository.saveMessage(any()) }
+        coVerify(exactly = 0) { chatRepository.saveSession(match { it.name == "Imported Chat" }) }
+    }
+
+    @Test
+    fun `importChat should accept bare JSON array of messages`() = runTest {
+        viewModel = createViewModel()
+        advanceUntilIdle()
+
+        val array = JSONArray()
+            .put(JSONObject().put("role", "USER").put("text", "a").put("timestamp", 1L))
+
+        viewModel.importChat(array.toString())
+        advanceUntilIdle()
+
+        coVerify { chatRepository.saveSession(match { it.name == "Imported Chat" }) }
+        coVerify {
+            chatRepository.saveMessage(
+                match { it.role == Role.USER && it.content == "a" && it.timestamp == 1L },
+            )
+        }
     }
 }

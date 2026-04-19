@@ -141,6 +141,7 @@ This file maps the contents of the main application package.
     - `MainActivity.kt` - Main activity.
     - `chat/` - Chat screen components.
       - `AgentThoughtIndicator.kt` - Indicator for agent thinking.
+      - `ChatExportPayload.kt` - Payload carrying exported chat JSON to the share sheet.
       - `ChatScreen.kt` - Chat UI screen.
       - `ChatUiState.kt` - Chat UI state.
       - `ChatViewModel.kt` - Chat ViewModel.
