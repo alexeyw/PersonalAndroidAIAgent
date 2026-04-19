@@ -2,6 +2,7 @@ package ai.agent.android.presentation.ui.chat
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import ai.agent.android.domain.engine.LlmInferenceEngine
 import ai.agent.android.domain.models.AgentOrchestratorState
 import ai.agent.android.domain.models.ChatMessage
 import ai.agent.android.domain.models.ChatSession
@@ -15,13 +16,19 @@ import ai.agent.android.domain.usecases.LoadModelUseCase
 import ai.agent.android.presentation.state.ActiveSessionTracker
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import org.json.JSONArray
+import org.json.JSONException
+import org.json.JSONObject
 import java.util.UUID
 import javax.inject.Inject
 
@@ -36,7 +43,8 @@ class ChatViewModel @Inject constructor(
     private val settingsRepository: SettingsRepository,
     private val loadModelUseCase: LoadModelUseCase,
     private val getContextWindowUseCase: GetContextWindowUseCase,
-    private val activeSessionTracker: ActiveSessionTracker
+    private val activeSessionTracker: ActiveSessionTracker,
+    private val llmInferenceEngine: LlmInferenceEngine,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ChatUiState())
@@ -44,6 +52,13 @@ class ChatViewModel @Inject constructor(
      * The current UI state of the Chat screen.
      */
     val uiState: StateFlow<ChatUiState> = _uiState.asStateFlow()
+
+    private val _exportEvents = MutableSharedFlow<ChatExportPayload>(extraBufferCapacity = 1)
+    /**
+     * One-shot events emitted when the user triggers a chat export. Consumed by the UI to
+     * launch a system share sheet ([android.content.Intent.ACTION_SEND]).
+     */
+    val exportEvents: SharedFlow<ChatExportPayload> = _exportEvents.asSharedFlow()
 
     private var messagesJob: Job? = null
     private var generationJob: Job? = null
@@ -225,6 +240,13 @@ class ChatViewModel @Inject constructor(
         val currentState = _uiState.value
         if (currentState.isGenerating || prompt.isBlank()) return
 
+        if (!llmInferenceEngine.isInitialized) {
+            _uiState.update {
+                it.copy(inlineError = "Please load a model in Settings before sending a message.")
+            }
+            return
+        }
+
         generationJob = viewModelScope.launch {
             // Auto-rename logic for new chats
             val currentSession = currentState.sessions.find { it.id == currentState.currentSessionId }
@@ -233,7 +255,16 @@ class ChatViewModel @Inject constructor(
                 renameSession(currentState.currentSessionId, newName)
             }
 
-            _uiState.update { it.copy(isGenerating = true, errorMessage = null, orchestratorState = null, pipelineTrace = emptyList(), currentStep = null) }
+            _uiState.update {
+                it.copy(
+                    isGenerating = true,
+                    errorMessage = null,
+                    inlineError = null,
+                    orchestratorState = null,
+                    pipelineTrace = emptyList(),
+                    currentStep = null,
+                )
+            }
 
             agentOrchestratorUseCase(currentState.currentSessionId, prompt)
                 .catch { error ->
@@ -297,6 +328,129 @@ class ChatViewModel @Inject constructor(
      */
     fun clearError() {
         _uiState.update { it.copy(errorMessage = null) }
+    }
+
+    /**
+     * Clears the inline error banner (e.g. after the user starts typing a new message or loads a model).
+     */
+    fun clearInlineError() {
+        if (_uiState.value.inlineError != null) {
+            _uiState.update { it.copy(inlineError = null) }
+        }
+    }
+
+    /**
+     * Exports the chat history for the given session as a JSON document and emits a
+     * [ChatExportPayload] through [exportEvents]. The UI layer is responsible for handing
+     * the payload to the Android share sheet via [android.content.Intent.ACTION_SEND].
+     *
+     * The exported JSON has the shape:
+     * ```
+     * {
+     *   "sessionId": "...",
+     *   "sessionName": "...",
+     *   "exportedAt": 1700000000000,
+     *   "messages": [
+     *     { "role": "USER", "text": "...", "timestamp": 1700000000000 },
+     *     ...
+     *   ]
+     * }
+     * ```
+     *
+     * @param sessionId The ID of the session to export.
+     */
+    fun exportChat(sessionId: String) {
+        viewModelScope.launch {
+            try {
+                val messages = chatRepository.getMessagesForSession(sessionId).first()
+                val session = chatRepository.getSessionById(sessionId)
+                val sessionName = session?.name ?: "Chat"
+
+                val messagesArray = JSONArray()
+                messages.forEach { message ->
+                    val item = JSONObject()
+                        .put("role", message.role.name)
+                        .put("text", message.content)
+                        .put("timestamp", message.timestamp)
+                    messagesArray.put(item)
+                }
+                val root = JSONObject()
+                    .put("sessionId", sessionId)
+                    .put("sessionName", sessionName)
+                    .put("exportedAt", System.currentTimeMillis())
+                    .put("messages", messagesArray)
+
+                _exportEvents.emit(ChatExportPayload(sessionName = sessionName, json = root.toString(2)))
+            } catch (e: Exception) {
+                _uiState.update {
+                    it.copy(errorMessage = "Failed to export chat: ${e.localizedMessage ?: "unknown error"}")
+                }
+            }
+        }
+    }
+
+    /**
+     * Imports a chat from the provided JSON string into a newly-created session.
+     * Messages are parsed and stored via [ChatRepository], and the UI switches to the
+     * newly created session on success.
+     *
+     * Accepted shapes are the one produced by [exportChat] (`{ messages: [...] }`) and
+     * a bare top-level array of message objects.
+     *
+     * @param json The JSON content to import.
+     */
+    fun importChat(json: String) {
+        viewModelScope.launch {
+            try {
+                val trimmed = json.trim()
+                val messagesArray: JSONArray
+                var importedSessionName = "Imported Chat"
+                when {
+                    trimmed.startsWith("{") -> {
+                        val root = JSONObject(trimmed)
+                        importedSessionName = root.optString("sessionName").takeIf { it.isNotBlank() }
+                            ?: importedSessionName
+                        messagesArray = root.optJSONArray("messages")
+                            ?: throw JSONException("Missing 'messages' array")
+                    }
+                    trimmed.startsWith("[") -> {
+                        messagesArray = JSONArray(trimmed)
+                    }
+                    else -> throw JSONException("Unsupported JSON root")
+                }
+
+                val newId = UUID.randomUUID().toString()
+                chatRepository.saveSession(
+                    ChatSession(
+                        id = newId,
+                        name = importedSessionName,
+                        updatedAt = System.currentTimeMillis(),
+                    ),
+                )
+
+                for (i in 0 until messagesArray.length()) {
+                    val item = messagesArray.getJSONObject(i)
+                    val roleStr = item.optString("role").ifBlank { Role.USER.name }
+                    val role = runCatching { Role.valueOf(roleStr) }.getOrDefault(Role.USER)
+                    val text = item.optString("text")
+                    val timestamp = item.optLong("timestamp", System.currentTimeMillis())
+                    chatRepository.saveMessage(
+                        ChatMessage(
+                            sessionId = newId,
+                            role = role,
+                            content = text,
+                            timestamp = timestamp,
+                        ),
+                    )
+                }
+
+                switchSession(newId)
+            } catch (e: Exception) {
+                _uiState.update {
+                    it.copy(errorMessage = "Failed to import chat: ${e.localizedMessage ?: "invalid JSON"}")
+                }
+            }
+        }
     }
 
     /**

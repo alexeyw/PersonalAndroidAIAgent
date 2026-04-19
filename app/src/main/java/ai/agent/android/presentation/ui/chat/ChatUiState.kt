@@ -11,7 +11,9 @@ import ai.agent.android.domain.models.ChatSession
  * @property isGenerating Indicates whether the agent is currently generating a response.
  * @property orchestratorState The current state of the agent orchestrator, if active.
  * @property currentSessionId The ID of the active chat session.
- * @property errorMessage An optional error message to display to the user.
+ * @property errorMessage An optional error message to display to the user (transient, shown as a Snackbar).
+ * @property inlineError An optional inline error displayed as a persistent banner above the input bar.
+ *                       Used e.g. when the user tries to send a message while no model is loaded.
  * @property sessions The list of available chat sessions.
  * @property contextSize The calculated size of the current prompt context window (e.g., character count).
  * @property maxContextSize The maximum allowed size for the prompt context window.
@@ -24,6 +26,7 @@ data class ChatUiState(
     val orchestratorState: AgentOrchestratorState? = null,
     val currentSessionId: String = "",
     val errorMessage: String? = null,
+    val inlineError: String? = null,
     val sessions: List<ChatSession> = emptyList(),
     val contextSize: Int = 0,
     val maxContextSize: Int = 0,
