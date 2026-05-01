@@ -68,6 +68,7 @@ This file maps the contents of the main application package.
 - `di/` - Dependency Injection configurations (Hilt).
   - `AppModule.kt` - General app-level DI module.
   - `DataModule.kt` - Data layer DI module.
+  - `PromptTemplateModule.kt` - Hilt multibinding module for prompt variable providers.
 - `domain/` - Domain layer containing core business logic and Use Cases.
   - `constants/` - Domain-level constants.
     - `DefaultPrompts.kt` - Default system prompts.
@@ -77,6 +78,9 @@ This file maps the contents of the main application package.
     - `LlmInferenceEngine.kt` - LLM engine interface.
     - `TaskQueueManager.kt` - Task queue manager interface.
     - `TextEmbeddingEngine.kt` - Text embedding engine interface.
+  - `prompt/` - Prompt templating layer.
+    - `PromptVariableProvider.kt` - Contract for a single substitutable prompt variable.
+    - `PromptTemplateEngine.kt` - Renders templates by substituting `$KEY` placeholders.
   - `models/` - Domain entity models.
     - `AgentMetrics.kt` - Agent metrics model.
     - `AgentOrchestratorState.kt` - Orchestrator state model.
