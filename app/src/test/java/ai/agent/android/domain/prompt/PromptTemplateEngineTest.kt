@@ -113,6 +113,19 @@ class PromptTemplateEngineTest {
     }
 
     @Test
+    fun `given provider key throws when render then skips it and renders rest`() = runTest {
+        val brokenKey = mockk<PromptVariableProvider>()
+        every { brokenKey.key() } throws IllegalStateException("init failed")
+        val ok = providerOf("TIME", "15:30")
+
+        val result = engine.render("[\$DATE] [\$TIME]", listOf(brokenKey, ok))
+
+        // Broken provider is silently skipped; $DATE has no provider and stays verbatim,
+        // $TIME from the healthy provider is substituted as usual.
+        assertEquals("[\$DATE] [15:30]", result)
+    }
+
+    @Test
     fun `given duplicate keys when render then last provider wins`() = runTest {
         val first = providerOf("DATE", "first")
         val second = providerOf("DATE", "second")

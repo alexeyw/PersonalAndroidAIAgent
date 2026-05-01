@@ -34,7 +34,17 @@ class PromptTemplateEngine @Inject constructor() {
     suspend fun render(template: String, providers: List<PromptVariableProvider>): String {
         if (template.isEmpty()) return template
 
-        val providerByKey: Map<String, PromptVariableProvider> = providers.associateBy { it.key() }
+        val providerByKey: Map<String, PromptVariableProvider> = buildMap(providers.size) {
+            for (provider in providers) {
+                // Guard key() the same way we guard resolve(): a single broken provider
+                // (e.g. one that throws during lazy initialisation inside key()) MUST NOT
+                // prevent the rest of the prompt from being rendered. Skip it and log.
+                val key = runCatching { provider.key() }
+                    .onFailure { Timber.e(it, "Prompt variable provider key() threw; skipping") }
+                    .getOrNull() ?: continue
+                put(key, provider)
+            }
+        }
         val out = StringBuilder(template.length)
         var cursor = 0
 
