@@ -13,6 +13,8 @@ This file maps the contents of the local unit test package.
   - `models/`
     - `AppErrorTest.kt` - Tests for AppError.
     - `ResultTest.kt` - Tests for Result.
+  - `prompt/`
+    - `PromptTemplateEngineTest.kt` - Tests for PromptTemplateEngine.
   - `usecases/`
     - `AgentOrchestratorUseCaseTest.kt` - Tests for AgentOrchestratorUseCase.
     - `GetContextWindowUseCaseTest.kt` - Tests for GetContextWindowUseCase.
