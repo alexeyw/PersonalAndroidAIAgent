@@ -1,6 +1,9 @@
 package ai.agent.android.presentation.ui.orchestrator
 
 import ai.agent.android.domain.models.NodeType
+import ai.agent.android.presentation.ui.components.PromptPreviewBottomSheet
+import ai.agent.android.presentation.ui.components.VariableChipsRow
+import ai.agent.android.presentation.ui.components.insertAtCursor
 import ai.agent.android.presentation.ui.orchestrator.components.DraggableNode
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -23,6 +26,7 @@ import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -55,6 +59,8 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -233,7 +239,14 @@ fun VisualOrchestratorScreen(
     if (configuringNodeId != null) {
         val node = uiState.nodes.find { it.id == configuringNodeId }
         if (node != null) {
-            var systemPrompt by remember(node) { mutableStateOf(node.systemPrompt ?: "") }
+            var systemPromptValue by remember(node) {
+                mutableStateOf(
+                    TextFieldValue(
+                        text = node.systemPrompt ?: "",
+                        selection = TextRange((node.systemPrompt ?: "").length),
+                    ),
+                )
+            }
             var complexity by remember(node) { mutableStateOf(node.conditionComplexity?.toString() ?: "") }
             var keywords by remember(node) { mutableStateOf(node.conditionKeywords ?: "") }
             var prompt by remember(node) { mutableStateOf(node.conditionPrompt ?: "") }
@@ -242,7 +255,7 @@ fun VisualOrchestratorScreen(
                 ai.agent.android.presentation.ui.orchestrator.components.PromptLibraryDialog(
                     prompts = uiState.promptTemplates.filter { it.category == node.type.name },
                     onPromptSelected = { text ->
-                        systemPrompt = text
+                        systemPromptValue = TextFieldValue(text = text, selection = TextRange(text.length))
                         showPromptLibrary = false
                     },
                     onDismissRequest = { showPromptLibrary = false }
@@ -259,19 +272,42 @@ fun VisualOrchestratorScreen(
                                 Text("Load from Library")
                             }
                             TextButton(onClick = {
-                                if (systemPrompt.isNotBlank()) {
-                                    viewModel.savePromptTemplate("${node.label} Template", systemPrompt, node.type.name)
+                                val current = systemPromptValue.text
+                                if (current.isNotBlank()) {
+                                    viewModel.savePromptTemplate("${node.label} Template", current, node.type.name)
                                     viewModel.clearError() // Just in case, might want a success message
                                 }
                             }) {
                                 Text("Save to Library")
                             }
                         }
-                        androidx.compose.material3.OutlinedTextField(
-                            value = systemPrompt,
-                            onValueChange = { systemPrompt = it },
-                            label = { Text("System Prompt") },
-                            modifier = Modifier.padding(top = 8.dp)
+                        Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                            androidx.compose.material3.OutlinedTextField(
+                                value = systemPromptValue,
+                                onValueChange = { systemPromptValue = it },
+                                label = { Text("System Prompt") },
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .padding(top = 8.dp),
+                            )
+                            IconButton(
+                                onClick = { viewModel.requestPromptPreview(systemPromptValue.text) },
+                                modifier = Modifier.padding(top = 8.dp, start = 4.dp),
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Visibility,
+                                    contentDescription = "Preview prompt",
+                                )
+                            }
+                        }
+                        VariableChipsRow(
+                            variables = uiState.availableVariables,
+                            onChipClick = { token ->
+                                systemPromptValue = systemPromptValue.insertAtCursor(token)
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 4.dp),
                         )
                         if (node.type == NodeType.IF_CONDITION) {
                             androidx.compose.material3.OutlinedTextField(
@@ -302,7 +338,7 @@ fun VisualOrchestratorScreen(
                             if (node.type == NodeType.IF_CONDITION) complexity.toIntOrNull() else null,
                             if (node.type == NodeType.IF_CONDITION) keywords.takeIf { it.isNotBlank() } else null,
                             if (node.type == NodeType.IF_CONDITION) prompt.takeIf { it.isNotBlank() } else null,
-                            systemPrompt.takeIf { it.isNotBlank() }
+                            systemPromptValue.text.takeIf { it.isNotBlank() }
                         )
                         configuringNodeId = null
                     }) {
@@ -318,6 +354,14 @@ fun VisualOrchestratorScreen(
         } else {
             configuringNodeId = null
         }
+    }
+
+    val previewState = uiState.previewState
+    if (previewState is PromptPreviewState.Ready) {
+        PromptPreviewBottomSheet(
+            segments = previewState.segments,
+            onDismiss = { viewModel.dismissPromptPreview() },
+        )
     }
 
     Scaffold(

@@ -2,6 +2,9 @@ package ai.agent.android.presentation.ui.prompts
 
 import ai.agent.android.domain.models.NodeType
 import ai.agent.android.domain.models.PromptTemplate
+import ai.agent.android.presentation.ui.components.PromptPreviewBottomSheet
+import ai.agent.android.presentation.ui.components.VariableChipsRow
+import ai.agent.android.presentation.ui.components.insertAtCursor
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -20,6 +23,7 @@ import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -49,6 +53,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -91,11 +97,21 @@ fun PromptLibraryScreen(
         EditPromptDialog(
             prompt = editingPrompt,
             availableCategories = categories,
+            availableVariables = uiState.availableVariables,
             onSave = { prompt ->
                 viewModel.savePrompt(prompt)
                 showEditDialog = false
             },
+            onPreviewRequested = { template -> viewModel.requestPromptPreview(template) },
             onDismiss = { showEditDialog = false }
+        )
+    }
+
+    val previewState = uiState.previewState
+    if (previewState is PromptPreviewState.Ready) {
+        PromptPreviewBottomSheet(
+            segments = previewState.segments,
+            onDismiss = { viewModel.dismissPromptPreview() }
         )
     }
 
@@ -228,11 +244,16 @@ private fun PromptCard(
 private fun EditPromptDialog(
     prompt: PromptTemplate?,
     availableCategories: List<String>,
+    availableVariables: List<String>,
     onSave: (PromptTemplate) -> Unit,
-    onDismiss: () -> Unit
+    onPreviewRequested: (String) -> Unit,
+    onDismiss: () -> Unit,
 ) {
     var name by remember { mutableStateOf(prompt?.name ?: "") }
-    var text by remember { mutableStateOf(prompt?.text ?: "") }
+    var text by remember {
+        val initial = prompt?.text ?: ""
+        mutableStateOf(TextFieldValue(text = initial, selection = TextRange(initial.length)))
+    }
     var category by remember { mutableStateOf(prompt?.category ?: availableCategories.firstOrNull() ?: NodeType.INTENT_ROUTER.name) }
     var expanded by remember { mutableStateOf(false) }
 
@@ -281,31 +302,46 @@ private fun EditPromptDialog(
                 }
                 
                 Spacer(modifier = Modifier.height(8.dp))
-                OutlinedTextField(
-                    value = text,
-                    onValueChange = { text = it },
-                    label = { Text("Prompt Text") },
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    OutlinedTextField(
+                        value = text,
+                        onValueChange = { text = it },
+                        label = { Text("Prompt Text") },
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(150.dp)
+                    )
+                    IconButton(
+                        onClick = { onPreviewRequested(text.text) },
+                        modifier = Modifier.padding(start = 4.dp),
+                    ) {
+                        Icon(Icons.Default.Visibility, contentDescription = "Preview prompt")
+                    }
+                }
+                VariableChipsRow(
+                    variables = availableVariables,
+                    onChipClick = { token -> text = text.insertAtCursor(token) },
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(150.dp)
+                        .padding(top = 4.dp),
                 )
             }
         },
         confirmButton = {
             Button(
                 onClick = {
-                    if (name.isNotBlank() && text.isNotBlank()) {
+                    if (name.isNotBlank() && text.text.isNotBlank()) {
                         onSave(
                             PromptTemplate(
                                 id = prompt?.id ?: 0,
                                 name = name,
-                                text = text,
+                                text = text.text,
                                 category = category
                             )
                         )
                     }
                 },
-                enabled = name.isNotBlank() && text.isNotBlank()
+                enabled = name.isNotBlank() && text.text.isNotBlank()
             ) {
                 Text("Save")
             }
