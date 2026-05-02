@@ -3,6 +3,8 @@ package ai.agent.android.domain.engine
 import ai.agent.android.domain.engine.executors.NodeExecutorFactory
 import ai.agent.android.domain.engine.executors.ToolNodeExecutor
 import ai.agent.android.domain.models.*
+import ai.agent.android.domain.prompt.PromptTemplateEngine
+import ai.agent.android.domain.prompt.PromptVariableProvider
 import ai.agent.android.domain.repositories.ChatRepository
 import ai.agent.android.domain.repositories.MetricsRepository
 import ai.agent.android.domain.repositories.SettingsRepository
@@ -23,6 +25,8 @@ class GraphExecutionEngine @Inject constructor(
     private val chatRepository: ChatRepository,
     private val settingsRepository: SettingsRepository,
     private val metricsRepository: MetricsRepository,
+    private val promptTemplateEngine: PromptTemplateEngine,
+    private val promptVariableProviders: Set<@JvmSuppressWildcards PromptVariableProvider>,
 ) {
 
     /**
@@ -87,9 +91,15 @@ class GraphExecutionEngine @Inject constructor(
             val executor = nodeExecutorFactory.getExecutor(currentNode.type)
             Timber.tag("PipelineDebug").d("[NODE_IN] type=${currentNode.type.name} id=${currentNode.id} input=${currentInputText.take(1000)}")
 
+            // Render `$VARIABLE` placeholders in the node's system prompt before the LLM
+            // sees it. We only touch nodes whose system prompt is actually fed into an LLM
+            // engine — the others (TOOL, IF_CONDITION, INPUT, QUEUE_PROCESSOR) either ignore
+            // `systemPrompt` or use it for non-LLM logic where placeholders are not expected.
+            val nodeForExecution = renderNodeSystemPrompt(currentNode)
+
             val nodeStartMs = System.currentTimeMillis()
             try {
-                executor.execute(currentNode, currentInputText, sessionId, userPrompt)
+                executor.execute(nodeForExecution, currentInputText, sessionId, userPrompt)
                     .collect { stateOrResult ->
                         if (stateOrResult is AgentOrchestratorState) {
                             emit(stateOrResult)
@@ -290,6 +300,22 @@ class GraphExecutionEngine @Inject constructor(
         return targetNodeId
     }
 
+    /**
+     * Returns a copy of [node] with its `systemPrompt` rendered through
+     * [PromptTemplateEngine], substituting all `$VARIABLE` placeholders using the
+     * injected [PromptVariableProvider] set. For nodes whose `systemPrompt` is
+     * not consumed by an LLM (e.g. [NodeType.TOOL], [NodeType.IF_CONDITION]) the
+     * original [node] instance is returned unchanged to avoid wasted work and
+     * accidental substitution inside fields that happen to share the syntax.
+     */
+    private suspend fun renderNodeSystemPrompt(node: NodeModel): NodeModel {
+        val rawPrompt = node.systemPrompt
+        if (rawPrompt.isNullOrEmpty() || node.type !in LLM_NODE_TYPES) return node
+        val rendered = promptTemplateEngine.render(rawPrompt, promptVariableProviders.toList())
+        if (rendered === rawPrompt || rendered == rawPrompt) return node
+        return node.copy(systemPrompt = rendered)
+    }
+
     private fun parseListFromText(text: String): List<String> {
         try {
             val blockRegex = """```json\s*(\[.*?\])\s*```""".toRegex(RegexOption.DOT_MATCHES_ALL)
@@ -315,5 +341,24 @@ class GraphExecutionEngine @Inject constructor(
         }
         
         return listOf(text)
+    }
+
+    private companion object {
+        /**
+         * Node types whose `systemPrompt` is forwarded to an LLM engine and
+         * therefore needs `$VARIABLE` placeholders resolved before execution.
+         * Includes [NodeType.LITE_RT], [NodeType.CLOUD], [NodeType.OUTPUT] from
+         * the explicit task spec plus the other LLM-driven node types in this
+         * codebase (`SUMMARY`, `INTENT_ROUTER`, `DECOMPOSITION`, `EVALUATION`).
+         */
+        private val LLM_NODE_TYPES: Set<NodeType> = setOf(
+            NodeType.LITE_RT,
+            NodeType.CLOUD,
+            NodeType.OUTPUT,
+            NodeType.SUMMARY,
+            NodeType.INTENT_ROUTER,
+            NodeType.DECOMPOSITION,
+            NodeType.EVALUATION,
+        )
     }
 }

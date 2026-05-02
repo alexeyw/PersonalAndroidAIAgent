@@ -1,6 +1,7 @@
 package ai.agent.android.domain.repositories
 
 import ai.agent.android.domain.models.MemoryChunk
+import ai.agent.android.domain.models.MemorySummary
 
 /**
  * Repository interface for managing and searching long-term memory.
@@ -22,6 +23,21 @@ interface MemoryRepository {
      * @return A list of [MemoryChunk] objects.
      */
     suspend fun getAllMemories(): List<MemoryChunk>
+
+    /**
+     * Retrieves the most recent memories as a lightweight [MemorySummary]
+     * projection that omits embeddings.
+     *
+     * Use this when only the textual content / ordering is needed (e.g. the
+     * `$MEMORY_SUMMARY` prompt variable). Pulling a few hundred rows of
+     * `getAllMemories()` just to take the top N would needlessly deserialise
+     * every embedding from its column-encoded string form.
+     *
+     * @param limit Maximum number of recent memories to return; values `<= 0`
+     * yield an empty list.
+     * @return Recent memories ordered newest-first.
+     */
+    suspend fun getRecentMemorySummaries(limit: Int): List<MemorySummary>
 
     /**
      * Finds the most semantically similar memories to a given query embedding
