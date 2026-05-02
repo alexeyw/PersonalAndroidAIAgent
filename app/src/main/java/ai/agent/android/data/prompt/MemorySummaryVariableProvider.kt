@@ -43,11 +43,12 @@ class MemorySummaryVariableProvider @Inject constructor(
     override suspend fun resolve(): String {
         val limit = settingsRepository.memorySummaryDefaultLimit.first()
         if (limit <= 0) return ""
-        val all = memoryRepository.getAllMemories()
-        if (all.isEmpty()) return ""
-        return all
-            .sortedByDescending { it.timestamp }
-            .take(limit)
+        // Fetch only the rows we render (newest-first, no embeddings) — loading
+        // every memory just to take(N) would scan and deserialise the entire
+        // history on every prompt render.
+        val recent = memoryRepository.getRecentMemorySummaries(limit)
+        if (recent.isEmpty()) return ""
+        return recent
             .mapIndexed { index, chunk -> "${index + 1}. ${chunk.text}" }
             .joinToString(separator = "\n")
     }

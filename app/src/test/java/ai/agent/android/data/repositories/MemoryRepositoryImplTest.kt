@@ -98,4 +98,26 @@ class MemoryRepositoryImplTest {
         repository.compactMemory(500)
         io.mockk.coVerify(exactly = 1) { memoryDao.deleteOldestMemories(500) }
     }
+
+    @Test
+    fun `getRecentMemorySummaries forwards limit to dao and returns projections`() = kotlinx.coroutines.test.runTest {
+        val expected = listOf(
+            ai.agent.android.domain.models.MemorySummary(id = 2L, text = "newer", timestamp = 200L),
+            ai.agent.android.domain.models.MemorySummary(id = 1L, text = "older", timestamp = 100L),
+        )
+        io.mockk.coEvery { memoryDao.getRecentMemorySummaries(2) } returns expected
+
+        val result = repository.getRecentMemorySummaries(2)
+
+        assertEquals(expected, result)
+        io.mockk.coVerify(exactly = 1) { memoryDao.getRecentMemorySummaries(2) }
+    }
+
+    @Test
+    fun `getRecentMemorySummaries with non positive limit short-circuits without dao call`() = kotlinx.coroutines.test.runTest {
+        val result = repository.getRecentMemorySummaries(0)
+
+        assertEquals(emptyList<ai.agent.android.domain.models.MemorySummary>(), result)
+        io.mockk.coVerify(exactly = 0) { memoryDao.getRecentMemorySummaries(any()) }
+    }
 }

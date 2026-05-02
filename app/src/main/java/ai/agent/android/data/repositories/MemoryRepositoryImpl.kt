@@ -4,6 +4,7 @@ import ai.agent.android.data.local.Converters
 import ai.agent.android.data.local.dao.MemoryDao
 import ai.agent.android.data.local.models.MemoryChunkEntity
 import ai.agent.android.domain.models.MemoryChunk
+import ai.agent.android.domain.models.MemorySummary
 import ai.agent.android.domain.repositories.MemoryRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -48,6 +49,15 @@ class MemoryRepositoryImpl @Inject constructor(
             }
         }
     }
+
+    override suspend fun getRecentMemorySummaries(limit: Int): List<MemorySummary> =
+        if (limit <= 0) {
+            emptyList()
+        } else {
+            withContext(Dispatchers.IO) {
+                memoryDao.getRecentMemorySummaries(limit)
+            }
+        }
 
     override suspend fun findSimilarMemories(
         queryEmbedding: FloatArray,

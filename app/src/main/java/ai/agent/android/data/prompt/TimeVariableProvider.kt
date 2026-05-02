@@ -11,43 +11,47 @@ import javax.inject.Singleton
  * Provides the value for the `$TIME` placeholder.
  *
  * Resolves to the current local wall-clock time formatted as 24-hour `HH:mm`
- * (for example `09:07`). The clock's configured time zone is used, which in
- * production matches the device's system time zone via
- * [Clock.systemDefaultZone].
+ * (for example `09:07`).
  *
- * Constructor exposes [Clock] for deterministic unit testing.
+ * The [Clock] is obtained through [clockProvider] on every [resolve] call so
+ * the device's current time zone applies even when it changes after process
+ * start (travel across zones, manual zone change, DST transitions). A
+ * `@Singleton` that captures `Clock.systemDefaultZone()` once would freeze the
+ * zone for the app's lifetime and emit stale times until restart.
  *
- * @property clock Source of the current instant and time zone; defaults to the
- * system clock in the device time zone, which is what production code uses.
+ * @property clockProvider Returns the [Clock] used to read "now"; in production
+ * it returns a fresh `Clock.systemDefaultZone()` each call. Tests override
+ * with a fixed clock for deterministic assertions.
  */
 @Singleton
 class TimeVariableProvider internal constructor(
-    private val clock: Clock,
+    private val clockProvider: () -> Clock,
 ) : PromptVariableProvider {
 
     /**
-     * Hilt-visible no-arg constructor that wires the production default: the
-     * system-default zoned [Clock]. Kept as a secondary constructor because
-     * Dagger/Hilt rejects classes with multiple `@Inject` constructors, and
-     * a parameter default on the primary one would synthesise a second
-     * `@Inject` no-arg constructor under the hood.
+     * Hilt-visible no-arg constructor wiring the production default: a fresh
+     * system-default zoned [Clock] resolved at each call. Kept as a secondary
+     * constructor because Dagger/Hilt rejects classes with multiple `@Inject`
+     * constructors, and a parameter default on the primary one would
+     * synthesise a second `@Inject` no-arg constructor under the hood.
      */
     @Inject
-    constructor() : this(clock = Clock.systemDefaultZone())
+    constructor() : this(clockProvider = { Clock.systemDefaultZone() })
 
     override fun key(): String = KEY
 
     /**
      * Computes the formatted current time.
      *
-     * Reads the wall-clock time from [clock] and formats it with a fixed,
-     * locale-independent `HH:mm` pattern — hour and minute representation is
-     * stable across locales, so no [java.util.Locale] is involved.
+     * Reads a fresh [Clock] on every invocation, so the device's current zone
+     * is picked up. The `HH:mm` pattern is locale-independent — hour/minute
+     * formatting does not vary by language — so no [java.util.Locale] is
+     * involved.
      *
      * @return The current time in the `HH:mm` 24-hour pattern with zero padding.
      */
     override suspend fun resolve(): String =
-        LocalTime.now(clock).format(FORMATTER)
+        LocalTime.now(clockProvider()).format(FORMATTER)
 
     private companion object {
         const val KEY = "TIME"
