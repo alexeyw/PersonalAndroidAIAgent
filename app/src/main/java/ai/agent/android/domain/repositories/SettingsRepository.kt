@@ -193,4 +193,18 @@ interface SettingsRepository {
      * @param steps The new limit. Will be coerced to the range 5–100.
      */
     suspend fun setPipelineMaxSteps(steps: Int)
+
+    /**
+     * A [Flow] representing the default number of recent memory chunks rendered
+     * by the `$MEMORY_SUMMARY` prompt variable. Defaults to 5.
+     */
+    val memorySummaryDefaultLimit: Flow<Int>
+
+    /**
+     * Updates the default number of recent memory chunks shown by `$MEMORY_SUMMARY`.
+     *
+     * @param limit The new chunk count. Values `<= 0` are valid and disable the
+     * variable (it resolves to an empty string).
+     */
+    suspend fun setMemorySummaryDefaultLimit(limit: Int)
 }

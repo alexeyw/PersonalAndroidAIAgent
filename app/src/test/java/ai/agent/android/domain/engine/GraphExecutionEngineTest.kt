@@ -3,6 +3,8 @@ package ai.agent.android.domain.engine
 import ai.agent.android.data.engine.KoogClientFactory
 import ai.agent.android.domain.engine.executors.*
 import ai.agent.android.domain.models.*
+import ai.agent.android.domain.prompt.PromptTemplateEngine
+import ai.agent.android.domain.prompt.PromptVariableProvider
 import ai.agent.android.domain.repositories.*
 import ai.agent.android.domain.services.ApprovalNotifier
 import ai.agent.android.domain.usecases.EvaluateIfConditionUseCase
@@ -38,6 +40,8 @@ class GraphExecutionEngineTest {
     private lateinit var loadModelUseCase: LoadModelUseCase
     
     private lateinit var engine: GraphExecutionEngine
+    private lateinit var promptTemplateEngine: PromptTemplateEngine
+    private var promptVariableProviders: Set<PromptVariableProvider> = emptySet()
 
     private val sessionId = "test-session"
 
@@ -90,7 +94,17 @@ class GraphExecutionEngineTest {
             systemNodeExecutor, queueProcessorNodeExecutor, summaryNodeExecutor
         )
 
-        engine = GraphExecutionEngine(nodeExecutorFactory, toolNodeExecutor, chatRepository, settingsRepository, metricsRepository)
+        promptTemplateEngine = PromptTemplateEngine()
+        promptVariableProviders = emptySet()
+        engine = GraphExecutionEngine(
+            nodeExecutorFactory,
+            toolNodeExecutor,
+            chatRepository,
+            settingsRepository,
+            metricsRepository,
+            promptTemplateEngine,
+            promptVariableProviders,
+        )
 
         coEvery { getContextWindowUseCase(sessionId) } returns ""
         coEvery { retrieveRelevantMemoryUseCase(any()) } returns emptyList()
@@ -226,7 +240,15 @@ class GraphExecutionEngineTest {
         val mockFactory = mockk<NodeExecutorFactory>()
         val mockSettings = mockk<SettingsRepository>(relaxed = true)
         every { mockSettings.pipelineMaxSteps } returns flowOf(15)
-        val engineWithMock = GraphExecutionEngine(mockFactory, mockToolNodeExecutor, mockk(relaxed = true), mockSettings, mockk(relaxed = true))
+        val engineWithMock = GraphExecutionEngine(
+            mockFactory,
+            mockToolNodeExecutor,
+            mockk(relaxed = true),
+            mockSettings,
+            mockk(relaxed = true),
+            PromptTemplateEngine(),
+            emptySet(),
+        )
 
         engineWithMock.resumeWithApproval("session_id_123", true)
 
@@ -556,5 +578,68 @@ class GraphExecutionEngineTest {
         val last = states.last()
         assertTrue("Expected Error but got: $last", last is AgentOrchestratorState.Error)
         assertTrue((last as AgentOrchestratorState.Error).message.contains("item processor crashed"))
+    }
+
+    // ─── PromptTemplateEngine integration ────────────────────────────────────
+
+    @Test
+    fun `given LITE_RT node with DATE placeholder when execute then substitutes value before LLM call`() = runTest {
+        every { settingsRepository.pipelineMaxSteps } returns flowOf(15)
+
+        val dateProvider = mockk<PromptVariableProvider>()
+        every { dateProvider.key() } returns "DATE"
+        coEvery { dateProvider.resolve() } returns "01 May 2026"
+
+        // Rebuild the engine with the provider set wired in. We construct a fresh
+        // executor factory so the engine instance is completely owned by this test
+        // and there is no risk of state from setUp() leaking in.
+        val realFactory = NodeExecutorFactory(
+            InputNodeExecutor(),
+            OutputNodeExecutor(llmEngine, loadModelUseCase, chatRepository),
+            IfConditionNodeExecutor(evaluateIfConditionUseCase),
+            ToolNodeExecutor(llmEngine, loadModelUseCase, toolRepository, settingsRepository, approvalNotifier, chatRepository),
+            LiteRtNodeExecutor(
+                llmEngine, toolRepository, chatRepository, getContextWindowUseCase,
+                retrieveRelevantMemoryUseCase, settingsRepository, metricsRepository, loadModelUseCase,
+            ),
+            CloudLlmNodeExecutor(
+                toolRepository, chatRepository, getContextWindowUseCase,
+                retrieveRelevantMemoryUseCase, settingsRepository, apiKeyRepository,
+                metricsRepository, koogClientFactory,
+            ),
+            SystemNodeExecutor(llmEngine, loadModelUseCase, chatRepository),
+            QueueProcessorNodeExecutor(),
+            ai.agent.android.domain.engine.executors.SummaryNodeExecutor(llmEngine, loadModelUseCase),
+        )
+        val engineWithProvider = GraphExecutionEngine(
+            realFactory,
+            ToolNodeExecutor(llmEngine, loadModelUseCase, toolRepository, settingsRepository, approvalNotifier, chatRepository),
+            chatRepository,
+            settingsRepository,
+            metricsRepository,
+            PromptTemplateEngine(),
+            setOf(dateProvider),
+        )
+
+        val inputNode = NodeModel("input", NodeType.INPUT, 0f, 0f)
+        val llmNode = NodeModel("llm", NodeType.LITE_RT, 0f, 0f, systemPrompt = "Today is \$DATE.")
+        val outputNode = NodeModel("output", NodeType.OUTPUT, 0f, 0f)
+
+        val graph = PipelineGraph(
+            id = "g1", name = "Render Test",
+            nodes = listOf(inputNode, llmNode, outputNode),
+            connections = listOf(
+                ConnectionModel("c1", "input", "llm"),
+                ConnectionModel("c2", "llm", "output"),
+            ),
+        )
+
+        every { llmEngine.generateResponseStream(any()) } returns flowOf("ok")
+
+        engineWithProvider(sessionId, "user query", graph).toList()
+
+        // The rendered prompt — and ONLY the rendered prompt — must reach the LLM.
+        verify { llmEngine.generateResponseStream(match { it.contains("Today is 01 May 2026.") }) }
+        verify(exactly = 0) { llmEngine.generateResponseStream(match { it.contains("Today is \$DATE") }) }
     }
 }

@@ -44,6 +44,7 @@ class SettingsManager @Inject constructor(
         val LOCAL_MODEL_BACKEND = stringPreferencesKey("local_model_backend")
         val TOOL_CALL_TIMEOUT_MS = androidx.datastore.preferences.core.longPreferencesKey("tool_call_timeout_ms")
         val PIPELINE_MAX_STEPS = intPreferencesKey("pipeline_max_steps")
+        val MEMORY_SUMMARY_DEFAULT_LIMIT = intPreferencesKey("memory_summary_default_limit")
     }
 
     override val isFirstLaunch: Flow<Boolean> = dataStore.data
@@ -364,5 +365,28 @@ class SettingsManager @Inject constructor(
         dataStore.edit { preferences ->
             preferences[PreferencesKeys.PIPELINE_MAX_STEPS] = steps.coerceIn(5, 100)
         }
+    }
+
+    override val memorySummaryDefaultLimit: Flow<Int> = dataStore.data
+        .catch { exception ->
+            if (exception is IOException) {
+                Timber.e(exception, "Error reading preferences")
+                emit(emptyPreferences())
+            } else {
+                throw exception
+            }
+        }
+        .map { preferences ->
+            preferences[PreferencesKeys.MEMORY_SUMMARY_DEFAULT_LIMIT] ?: DEFAULT_MEMORY_SUMMARY_LIMIT
+        }
+
+    override suspend fun setMemorySummaryDefaultLimit(limit: Int) {
+        dataStore.edit { preferences ->
+            preferences[PreferencesKeys.MEMORY_SUMMARY_DEFAULT_LIMIT] = limit
+        }
+    }
+
+    private companion object {
+        const val DEFAULT_MEMORY_SUMMARY_LIMIT = 5
     }
 }

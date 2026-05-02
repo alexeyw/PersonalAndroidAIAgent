@@ -35,6 +35,12 @@ This file maps the contents of the main application package.
       - `PipelineWithNodesAndConnections.kt` - Pipeline relational model.
       - `PromptTemplateEntity.kt` - Prompt template entity.
       - `TraceStepEntity.kt` - Trace step entity.
+  - `prompt/` - Built-in `PromptVariableProvider` implementations.
+    - `DateVariableProvider.kt` - Resolves `$DATE` to the current device-local date (`dd MMMM yyyy`).
+    - `TimeVariableProvider.kt` - Resolves `$TIME` to the current device-local time (`HH:mm`).
+    - `ToolsVariableProvider.kt` - Resolves `$TOOLS` to the active tools list (`name — description`, one per line).
+    - `ModelVariableProvider.kt` - Resolves `$MODEL` to the currently active local model display name.
+    - `MemorySummaryVariableProvider.kt` - Resolves `$MEMORY_SUMMARY` to a numbered list of recent long-term memory chunks.
   - `mappers/` - Data mapping layer.
     - `LocalModelMapper.kt` - Mapper for local models.
     - `ChatMessageMapper.kt` - Mapper for chat messages.

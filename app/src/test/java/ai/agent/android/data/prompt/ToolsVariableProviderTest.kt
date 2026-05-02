@@ -1,0 +1,59 @@
+package ai.agent.android.data.prompt
+
+import ai.agent.android.domain.models.AgentTool
+import ai.agent.android.domain.repositories.ToolRepository
+import io.mockk.coEvery
+import io.mockk.mockk
+import kotlinx.coroutines.test.runTest
+import org.junit.Assert.assertEquals
+import org.junit.Test
+
+/**
+ * Unit tests for [ToolsVariableProvider].
+ */
+class ToolsVariableProviderTest {
+
+    private val toolRepository: ToolRepository = mockk()
+    private val provider = ToolsVariableProvider(toolRepository)
+
+    @Test
+    fun `given key when called then returns TOOLS`() {
+        assertEquals("TOOLS", provider.key())
+    }
+
+    @Test
+    fun `given multiple tools when resolve then formats name dash description per line`() = runTest {
+        coEvery { toolRepository.getAvailableTools() } returns listOf(
+            AgentTool(name = "search", description = "Searches the web", parameters = "{}"),
+            AgentTool(name = "calendar", description = "Reads the calendar", parameters = "{}"),
+        )
+
+        val result = provider.resolve()
+
+        assertEquals(
+            "search — Searches the web\n" +
+                "calendar — Reads the calendar",
+            result,
+        )
+    }
+
+    @Test
+    fun `given empty tools list when resolve then returns empty string`() = runTest {
+        coEvery { toolRepository.getAvailableTools() } returns emptyList()
+
+        val result = provider.resolve()
+
+        assertEquals("", result)
+    }
+
+    @Test
+    fun `given single tool when resolve then renders one line without trailing newline`() = runTest {
+        coEvery { toolRepository.getAvailableTools() } returns listOf(
+            AgentTool(name = "ping", description = "Pings a host", parameters = "{}"),
+        )
+
+        val result = provider.resolve()
+
+        assertEquals("ping — Pings a host", result)
+    }
+}
