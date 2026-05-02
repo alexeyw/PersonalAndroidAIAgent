@@ -99,6 +99,7 @@ This file maps the contents of the main application package.
     - `DownloadState.kt` - Download state model.
     - `LocalModel.kt` - Domain model for local models.
     - `MemoryChunk.kt` - Memory chunk model.
+    - `MemorySummary.kt` - Lightweight memory projection (id/text/timestamp) used by `$MEMORY_SUMMARY`.
     - `NetworkState.kt` - Network state model.
     - `NodeExecutionResult.kt` - Result of a node execution.
     - `NodeModel.kt` - Node model.
