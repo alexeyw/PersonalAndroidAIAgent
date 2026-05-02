@@ -54,4 +54,16 @@ class TextFieldValueExtTest {
         assertEquals(TextRange(11), result.selection)
     }
 
+    @Test
+    fun `given reversed selection when insert then replaces range correctly`() {
+        // Right-to-left drag: anchor is at index 11, caret is at index 6 → start > end.
+        val value = TextFieldValue("Hello world", selection = TextRange(11, 6))
+
+        val result = value.insertAtCursor("\$TIME")
+
+        // Selection covered "world"; replacing it should leave "Hello \$TIME" (no
+        // duplication of "world" or the surrounding text).
+        assertEquals("Hello \$TIME", result.text)
+        assertEquals(TextRange(11), result.selection)
+    }
 }

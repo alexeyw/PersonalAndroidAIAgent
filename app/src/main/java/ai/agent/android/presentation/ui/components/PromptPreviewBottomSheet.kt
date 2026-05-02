@@ -1,6 +1,8 @@
 package ai.agent.android.presentation.ui.components
 
 import ai.agent.android.domain.prompt.PromptSegment
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -17,10 +19,19 @@ import androidx.compose.material3.TooltipDefaults
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.rememberTooltipState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.foundation.text.InlineTextContent
+import androidx.compose.foundation.text.appendInlineContent
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.Placeholder
+import androidx.compose.ui.text.PlaceholderVerticalAlign
 import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 
@@ -63,16 +74,17 @@ fun PromptPreviewBottomSheet(
                 text = "Prompt preview",
                 style = MaterialTheme.typography.titleMedium,
             )
-            // Spacer between title and content kept implicit via paragraph styling below.
             PreviewBody(segments = segments, modifier = Modifier.padding(top = 12.dp))
         }
     }
 }
 
 /**
- * Renders the body of [PromptPreviewBottomSheet]. Extracted so the unknown-segment tooltip
- * can wrap each individual `Unknown` segment without creating a dedicated composable per
- * call site.
+ * Renders [segments] as a single flowing [Text] so the preview matches the layout of the
+ * final prompt string (line breaks come from the prompt itself, not from segment
+ * boundaries). Unknown placeholders are embedded as `inlineContent` slots so each one
+ * can host its own tooltip without breaking the inline flow — line wrapping treats them
+ * as ordinary glyph runs.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -84,90 +96,46 @@ private fun PreviewBody(
     val resolvedFg = MaterialTheme.colorScheme.onTertiaryContainer
     val unknownBg = MaterialTheme.colorScheme.errorContainer
     val unknownFg = MaterialTheme.colorScheme.onErrorContainer
+    val textStyle = MaterialTheme.typography.bodyMedium
+    val measurer = rememberTextMeasurer()
+    val density = LocalDensity.current
 
-    if (segments.none { it is PromptSegment.Unknown }) {
-        // Fast path: no tooltips needed, render the whole thing as one annotated Text.
-        Text(
-            text = buildPreviewAnnotatedString(
-                segments = segments,
-                resolvedBg = resolvedBg,
-                resolvedFg = resolvedFg,
-                unknownBg = unknownBg,
-                unknownFg = unknownFg,
-            ),
-            style = MaterialTheme.typography.bodyMedium,
-            modifier = modifier,
+    // Pre-compute the inline-placeholder dimensions for every unknown segment so the
+    // slot inside `Text` reserves exactly the space the literal `$KEY` would occupy.
+    val inlineContent = remember(segments, textStyle, density) {
+        buildInlineContent(
+            segments = segments,
+            textStyle = textStyle,
+            measurer = measurer,
+            density = density,
+            unknownBg = unknownBg,
+            unknownFg = unknownFg,
         )
-        return
     }
 
-    // Slow path: split rendering into runs so each Unknown can host its own tooltip.
-    Column(modifier = modifier) {
-        val runs = mutableListOf<List<PromptSegment>>()
-        var current = mutableListOf<PromptSegment>()
-        for (segment in segments) {
-            if (segment is PromptSegment.Unknown) {
-                if (current.isNotEmpty()) {
-                    runs.add(current)
-                    current = mutableListOf()
-                }
-                runs.add(listOf(segment))
-            } else {
-                current.add(segment)
-            }
-        }
-        if (current.isNotEmpty()) runs.add(current)
-
-        for (run in runs) {
-            val onlyUnknown = run.singleOrNull() as? PromptSegment.Unknown
-            if (onlyUnknown != null) {
-                val tooltipState = rememberTooltipState()
-                TooltipBox(
-                    positionProvider = TooltipDefaults.rememberTooltipPositionProvider(
-                        TooltipAnchorPosition.Above,
-                    ),
-                    tooltip = { PlainTooltip { Text("Variable not found") } },
-                    state = tooltipState,
-                ) {
-                    Text(
-                        text = buildAnnotatedString {
-                            withStyle(SpanStyle(color = unknownFg, background = unknownBg)) {
-                                append('$').append(onlyUnknown.key)
-                            }
-                        },
-                        style = MaterialTheme.typography.bodyMedium,
-                    )
-                }
-            } else {
-                Text(
-                    text = buildPreviewAnnotatedString(
-                        segments = run,
-                        resolvedBg = resolvedBg,
-                        resolvedFg = resolvedFg,
-                        unknownBg = unknownBg,
-                        unknownFg = unknownFg,
-                    ),
-                    style = MaterialTheme.typography.bodyMedium,
-                )
-            }
-        }
-    }
+    Text(
+        text = buildPreviewAnnotatedString(
+            segments = segments,
+            resolvedBg = resolvedBg,
+            resolvedFg = resolvedFg,
+        ),
+        style = textStyle,
+        inlineContent = inlineContent,
+        modifier = modifier,
+    )
 }
 
 /**
- * Builds an [AnnotatedString] that styles each segment according to its kind.
- *
- * Kept separate so the no-unknowns fast path can render the whole prompt as a single
- * `Text`, preserving line wrapping across segment boundaries — a per-segment `Text`
- * would force every segment onto its own line.
+ * Builds the [AnnotatedString] consumed by the preview [Text]. Unknown segments are
+ * emitted as inline-content placeholders keyed by [unknownInlineId] so the
+ * `inlineContent` map can substitute a tooltip-wrapped composable at render time.
  */
 private fun buildPreviewAnnotatedString(
     segments: List<PromptSegment>,
     resolvedBg: androidx.compose.ui.graphics.Color,
     resolvedFg: androidx.compose.ui.graphics.Color,
-    unknownBg: androidx.compose.ui.graphics.Color,
-    unknownFg: androidx.compose.ui.graphics.Color,
 ): AnnotatedString = buildAnnotatedString {
+    var unknownIndex = 0
     for (segment in segments) {
         when (segment) {
             is PromptSegment.Literal -> append(segment.text)
@@ -176,11 +144,77 @@ private fun buildPreviewAnnotatedString(
             ) {
                 append(segment.value)
             }
-            is PromptSegment.Unknown -> withStyle(
-                SpanStyle(color = unknownFg, background = unknownBg),
-            ) {
-                append('$').append(segment.key)
+            is PromptSegment.Unknown -> {
+                appendInlineContent(
+                    id = unknownInlineId(unknownIndex),
+                    alternateText = "$" + segment.key,
+                )
+                unknownIndex++
             }
         }
     }
 }
+
+/**
+ * For every unknown segment, produces an [InlineTextContent] entry whose [Placeholder]
+ * dimensions match the rendered width and height of `$KEY` under [textStyle], so the
+ * inline slot does not disturb the surrounding line layout. The slot composable wraps a
+ * [TooltipBox] that surfaces "Variable not found" on long-press.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+private fun buildInlineContent(
+    segments: List<PromptSegment>,
+    textStyle: TextStyle,
+    measurer: androidx.compose.ui.text.TextMeasurer,
+    density: androidx.compose.ui.unit.Density,
+    unknownBg: androidx.compose.ui.graphics.Color,
+    unknownFg: androidx.compose.ui.graphics.Color,
+): Map<String, InlineTextContent> {
+    val map = mutableMapOf<String, InlineTextContent>()
+    var unknownIndex = 0
+    for (segment in segments) {
+        if (segment !is PromptSegment.Unknown) continue
+        val token = "$" + segment.key
+        val measured = measurer.measure(AnnotatedString(token), style = textStyle)
+        val width = with(density) { measured.size.width.toSp() }
+        val height = with(density) { measured.size.height.toSp() }
+        val id = unknownInlineId(unknownIndex)
+        map[id] = InlineTextContent(
+            placeholder = Placeholder(
+                width = width,
+                height = height,
+                placeholderVerticalAlign = PlaceholderVerticalAlign.Center,
+            ),
+            children = { _ ->
+                val tooltipState = rememberTooltipState()
+                TooltipBox(
+                    positionProvider = TooltipDefaults.rememberTooltipPositionProvider(
+                        TooltipAnchorPosition.Above,
+                    ),
+                    tooltip = { PlainTooltip { Text("Variable not found") } },
+                    state = tooltipState,
+                ) {
+                    Box(
+                        modifier = Modifier.background(unknownBg),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(
+                            text = token,
+                            style = textStyle.copy(color = unknownFg),
+                        )
+                    }
+                }
+            },
+        )
+        unknownIndex++
+    }
+    return map
+}
+
+/**
+ * Stable id used to bind an inline placeholder in the [AnnotatedString] to its
+ * `InlineTextContent` slot. The index disambiguates multiple unknown placeholders in the
+ * same prompt; the actual key is intentionally NOT part of the id because two unknowns
+ * with the same key still need separate slots.
+ */
+private fun unknownInlineId(index: Int): String = "prompt_unknown_$index"
