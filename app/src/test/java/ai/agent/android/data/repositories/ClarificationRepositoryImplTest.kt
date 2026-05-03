@@ -7,10 +7,11 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.yield
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 
@@ -19,8 +20,9 @@ import org.junit.Test
  *
  * Cover: happy path (submit resolves the suspended request), default-answer behaviour
  * on timeout for both option-list and free-form requests, the visible
- * `pendingRequest` flow lifecycle, and tolerance for stray submissions
- * (unknown id, submission before any request).
+ * `pendingRequests` flow lifecycle, tolerance for stray submissions (unknown id,
+ * submission before any request), and concurrent multi-request use where every
+ * pending request must remain addressable.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class ClarificationRepositoryImplTest {
@@ -99,7 +101,7 @@ class ClarificationRepositoryImplTest {
     }
 
     @Test
-    fun `given requestAnswer in flight then pendingRequest exposes the request and clears after resolve`() = runTest {
+    fun `given requestAnswer in flight then pendingRequests exposes the request and clears after resolve`() = runTest {
         val request = ClarificationRequest(
             id = "req-5",
             question = "What is your name?",
@@ -110,12 +112,12 @@ class ClarificationRepositoryImplTest {
         val deferredAnswer = async { repository.requestAnswer(request) }
         yield()
 
-        assertEquals(request, repository.pendingRequest.first())
+        assertEquals(listOf(request), repository.pendingRequests.first())
 
         repository.submitClarification("req-5", "Alice")
         deferredAnswer.await()
 
-        assertNull(repository.pendingRequest.first())
+        assertEquals(emptyList<ClarificationRequest>(), repository.pendingRequests.first())
     }
 
     @Test
@@ -183,7 +185,7 @@ class ClarificationRepositoryImplTest {
     }
 
     @Test
-    fun `given pending request resolved by timeout then pendingRequest flow is reset to null`() = runTest {
+    fun `given pending request resolved by timeout then pendingRequests flow is reset to empty`() = runTest {
         val request = ClarificationRequest(
             id = "req-9",
             question = "Will time out",
@@ -197,6 +199,76 @@ class ClarificationRepositoryImplTest {
         advanceUntilIdle()
         deferredAnswer.join()
 
-        assertNull(repository.pendingRequest.first())
+        assertEquals(emptyList<ClarificationRequest>(), repository.pendingRequests.first())
+    }
+
+    @Test
+    fun `given two concurrent requests then both are visible and each is answered independently`() = runTest {
+        val first = ClarificationRequest(
+            id = "concurrent-a",
+            question = "Q-A?",
+            options = listOf("a1", "a2"),
+            timeoutMs = 60_000L,
+        )
+        val second = ClarificationRequest(
+            id = "concurrent-b",
+            question = "Q-B?",
+            options = null,
+            timeoutMs = 60_000L,
+        )
+
+        val firstAnswer = async { repository.requestAnswer(first) }
+        val secondAnswer = async { repository.requestAnswer(second) }
+        yield()
+
+        // Both requests must remain visible to the UI: a newer request must not hide
+        // an older one that is still awaiting an answer.
+        val visible = repository.pendingRequests.first()
+        assertEquals(2, visible.size)
+        assertTrue(visible.containsAll(listOf(first, second)))
+
+        // Answer them in reverse order to prove neither was masked.
+        repository.submitClarification("concurrent-b", "free-form-reply")
+        repository.submitClarification("concurrent-a", "a2")
+
+        assertEquals("a2", firstAnswer.await())
+        assertEquals("free-form-reply", secondAnswer.await())
+
+        assertEquals(emptyList<ClarificationRequest>(), repository.pendingRequests.first())
+    }
+
+    @Test
+    fun `given two concurrent requests when one times out then the other remains answerable`() = runTest {
+        val shortLived = ClarificationRequest(
+            id = "short",
+            question = "Will time out",
+            options = listOf("default-short"),
+            timeoutMs = 50L,
+        )
+        val longLived = ClarificationRequest(
+            id = "long",
+            question = "Stays around",
+            options = listOf("default-long"),
+            timeoutMs = 60_000L,
+        )
+
+        val shortAnswer = async { repository.requestAnswer(shortLived) }
+        val longAnswer = async { repository.requestAnswer(longLived) }
+        // Let both coroutines run up to their suspension point at the current time
+        // without advancing virtual time (which would also fire the long timeout).
+        runCurrent()
+
+        // Trigger the short timeout but stay well below the long timeout.
+        advanceTimeBy(100L)
+        runCurrent()
+
+        assertEquals("default-short", shortAnswer.await())
+
+        // The long request must still be pending and answerable.
+        val stillPending = repository.pendingRequests.first()
+        assertEquals(listOf(longLived), stillPending)
+
+        repository.submitClarification("long", "user-reply")
+        assertEquals("user-reply", longAnswer.await())
     }
 }

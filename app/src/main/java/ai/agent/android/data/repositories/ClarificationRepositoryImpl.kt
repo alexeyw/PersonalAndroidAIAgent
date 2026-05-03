@@ -7,6 +7,7 @@ import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.withTimeout
 import timber.log.Timber
 import java.util.concurrent.ConcurrentHashMap
@@ -18,8 +19,10 @@ import javax.inject.Singleton
  *
  * Tracks each pending request in a thread-safe map of [CompletableDeferred] keyed by
  * request id, mirroring the approval-resume pattern used in
- * [ai.agent.android.domain.engine.executors.ToolNodeExecutor]. The currently visible
- * request (if any) is exposed via a [MutableStateFlow] so the UI can react.
+ * [ai.agent.android.domain.engine.executors.ToolNodeExecutor]. The full set of
+ * currently pending requests is exposed via a [MutableStateFlow] so the UI can render
+ * every active question — concurrent pipelines may issue overlapping requests and each
+ * must remain answerable.
  *
  * No persistence: on process death any pending clarifications are lost; this is
  * intentional because the suspended pipeline coroutine is also lost in that case.
@@ -27,8 +30,8 @@ import javax.inject.Singleton
 @Singleton
 class ClarificationRepositoryImpl @Inject constructor() : ClarificationRepository {
 
-    private val _pendingRequest = MutableStateFlow<ClarificationRequest?>(null)
-    override val pendingRequest: Flow<ClarificationRequest?> = _pendingRequest.asStateFlow()
+    private val _pendingRequests = MutableStateFlow<List<ClarificationRequest>>(emptyList())
+    override val pendingRequests: Flow<List<ClarificationRequest>> = _pendingRequests.asStateFlow()
 
     private val activeRequests = ConcurrentHashMap<String, CompletableDeferred<String>>()
 
@@ -37,7 +40,7 @@ class ClarificationRepositoryImpl @Inject constructor() : ClarificationRepositor
         // cannot be dropped between publish and registration.
         val deferred = CompletableDeferred<String>()
         activeRequests[request.id] = deferred
-        _pendingRequest.value = request
+        _pendingRequests.update { current -> current + request }
 
         return try {
             withTimeout(request.timeoutMs) { deferred.await() }
@@ -52,9 +55,7 @@ class ClarificationRepositoryImpl @Inject constructor() : ClarificationRepositor
             defaultAnswer
         } finally {
             activeRequests.remove(request.id)
-            // Clear visible request only if it still points to ours: a concurrent
-            // request may have superseded it on another coroutine.
-            _pendingRequest.compareAndSet(request, null)
+            _pendingRequests.update { current -> current.filterNot { it.id == request.id } }
         }
     }
 

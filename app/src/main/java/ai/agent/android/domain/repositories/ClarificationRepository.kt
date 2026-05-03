@@ -10,23 +10,30 @@ import kotlinx.coroutines.flow.Flow
  * Lifecycle of a single clarification round:
  * 1. A node executor calls [requestAnswer] with a [ClarificationRequest]; the call
  *    suspends.
- * 2. The repository publishes the request via [pendingRequest] so the UI can render it.
+ * 2. The repository appends the request to [pendingRequests] so the UI can render it.
  * 3. The UI calls [submitClarification] with the user's reply; [requestAnswer] resumes
  *    and returns that reply.
  * 4. If no reply arrives within [ClarificationRequest.timeoutMs], a default answer is
  *    used (first option, or empty string for free-form requests) and the timeout is
  *    logged.
  *
- * Implementations must be thread-safe — multiple concurrent pipelines may issue
- * requests, and the UI may submit answers from arbitrary dispatchers.
+ * Implementations must be thread-safe and must keep every pending request addressable
+ * via [pendingRequests] — multiple concurrent pipelines may issue overlapping requests
+ * and each must remain answerable, so a newer request must NOT supersede or hide an
+ * older one. The UI may submit answers from arbitrary dispatchers.
  */
 interface ClarificationRepository {
     /**
-     * Stream of the currently pending clarification request, or `null` when the agent
-     * is not waiting on the user. The UI subscribes to render/dismiss the clarification
-     * card.
+     * Stream of all currently pending clarification requests. Empty when the agent is
+     * not waiting on the user. Each new request is appended; resolving a request (by
+     * answer or timeout) removes it. Order within the list is the order in which the
+     * requests were issued.
+     *
+     * The UI subscribes to render and dismiss clarification cards; each request is
+     * uniquely addressable by [ClarificationRequest.id] when calling
+     * [submitClarification].
      */
-    val pendingRequest: Flow<ClarificationRequest?>
+    val pendingRequests: Flow<List<ClarificationRequest>>
 
     /**
      * Publishes [request] and suspends until the user submits an answer via
