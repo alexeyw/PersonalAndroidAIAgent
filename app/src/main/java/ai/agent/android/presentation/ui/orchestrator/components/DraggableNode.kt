@@ -79,6 +79,7 @@ fun DraggableNode(
         NodeType.QUEUE_PROCESSOR -> Color(0xFF795548)
         NodeType.EVALUATION -> Color(0xFF009688)
         NodeType.SUMMARY -> Color(0xFF8BC34A)
+        NodeType.CLARIFICATION -> Color(0xFF9C27B0)
         NodeType.INPUT -> Color(0xFF607D8B)
         NodeType.OUTPUT -> Color(0xFFF44336)
     }

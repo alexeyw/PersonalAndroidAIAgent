@@ -250,6 +250,11 @@ fun VisualOrchestratorScreen(
             var complexity by remember(node) { mutableStateOf(node.conditionComplexity?.toString() ?: "") }
             var keywords by remember(node) { mutableStateOf(node.conditionKeywords ?: "") }
             var prompt by remember(node) { mutableStateOf(node.conditionPrompt ?: "") }
+            // Clarification: timeout is edited as seconds for ergonomics; we round-trip
+            // the configured millis (or the engine default 60_000) into the field.
+            var clarificationTimeoutSeconds by remember(node) {
+                mutableStateOf(((node.clarificationTimeoutMs ?: 60_000L) / 1000L).toString())
+            }
 
             if (showPromptLibrary) {
                 ai.agent.android.presentation.ui.orchestrator.components.PromptLibraryDialog(
@@ -264,7 +269,15 @@ fun VisualOrchestratorScreen(
 
             AlertDialog(
                 onDismissRequest = { configuringNodeId = null },
-                title = { Text(if (node.type == NodeType.IF_CONDITION) "Configure IF Condition" else "Configure Node") },
+                title = {
+                    Text(
+                        when (node.type) {
+                            NodeType.IF_CONDITION -> "Configure IF Condition"
+                            NodeType.CLARIFICATION -> "Configure Clarification"
+                            else -> "Configure Node"
+                        }
+                    )
+                },
                 text = {
                     Column {
                         Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
@@ -285,7 +298,15 @@ fun VisualOrchestratorScreen(
                             androidx.compose.material3.OutlinedTextField(
                                 value = systemPromptValue,
                                 onValueChange = { systemPromptValue = it },
-                                label = { Text("System Prompt") },
+                                label = {
+                                    Text(
+                                        if (node.type == NodeType.CLARIFICATION) {
+                                            "Clarification instruction (LLM)"
+                                        } else {
+                                            "System Prompt"
+                                        }
+                                    )
+                                },
                                 modifier = Modifier
                                     .weight(1f)
                                     .padding(top = 8.dp),
@@ -329,6 +350,16 @@ fun VisualOrchestratorScreen(
                                 modifier = Modifier.padding(top = 8.dp)
                             )
                         }
+                        if (node.type == NodeType.CLARIFICATION) {
+                            androidx.compose.material3.OutlinedTextField(
+                                value = clarificationTimeoutSeconds,
+                                onValueChange = { new ->
+                                    clarificationTimeoutSeconds = new.filter { it.isDigit() }
+                                },
+                                label = { Text("Reply timeout (seconds)") },
+                                modifier = Modifier.padding(top = 8.dp),
+                            )
+                        }
                     }
                 },
                 confirmButton = {
@@ -340,6 +371,13 @@ fun VisualOrchestratorScreen(
                             if (node.type == NodeType.IF_CONDITION) prompt.takeIf { it.isNotBlank() } else null,
                             systemPromptValue.text.takeIf { it.isNotBlank() }
                         )
+                        if (node.type == NodeType.CLARIFICATION) {
+                            val timeoutMs = clarificationTimeoutSeconds
+                                .toLongOrNull()
+                                ?.takeIf { it > 0L }
+                                ?.let { it * 1000L }
+                            viewModel.updateNodeClarificationTimeout(node.id, timeoutMs)
+                        }
                         configuringNodeId = null
                     }) {
                         Text("Save")

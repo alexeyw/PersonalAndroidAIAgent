@@ -36,7 +36,7 @@ import ai.agent.android.data.local.dao.PromptTemplateDao
         PromptTemplateEntity::class,
         ai.agent.android.data.local.models.TraceStepEntity::class
     ],
-    version = 16,
+    version = 17,
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -197,6 +197,18 @@ abstract class AppDatabase : RoomDatabase() {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE `trace_steps` ADD COLUMN `durationMs` INTEGER NOT NULL DEFAULT 0")
                 db.execSQL("ALTER TABLE `trace_steps` ADD COLUMN `tokenCount` INTEGER")
+            }
+        }
+
+        /**
+         * Migration from version 16 to 17.
+         * Adds `clarificationTimeoutMs` column to `pipeline_nodes` for the new
+         * CLARIFICATION node type, which suspends the pipeline until the user replies
+         * (or the configured timeout elapses).
+         */
+        val MIGRATION_16_17 = object : Migration(16, 17) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `pipeline_nodes` ADD COLUMN `clarificationTimeoutMs` INTEGER")
             }
         }
     }
