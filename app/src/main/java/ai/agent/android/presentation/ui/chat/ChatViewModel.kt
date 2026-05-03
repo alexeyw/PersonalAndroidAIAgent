@@ -492,10 +492,19 @@ class ChatViewModel @Inject constructor(
 
     /**
      * Forwards the user's reply to the suspended pipeline coroutine via
-     * [ClarificationRepository.submitClarification] and flips the matching
-     * [ClarificationCardUiModel] to [ClarificationCardUiModel.Status.ANSWERED] so the
-     * card collapses to a non-editable summary. A no-op if [requestId] does not match
-     * any currently pending card.
+     * [ClarificationRepository.submitClarification] and updates the matching
+     * [ClarificationCardUiModel] based on whether the repository accepted the reply.
+     *
+     * - When the repository returns `true` (the suspended coroutine consumed
+     *   [answer]), the card flips to [ClarificationCardUiModel.Status.ANSWERED]
+     *   showing what the user typed.
+     * - When the repository returns `false` (the request already timed out,
+     *   was already answered, or the id is unknown), the card flips to
+     *   [ClarificationCardUiModel.Status.TIMED_OUT] showing the default answer the
+     *   pipeline actually consumed. This prevents "You answered: …" from being
+     *   shown when the agent in fact moved on with a different value.
+     *
+     * No-op if [requestId] does not match any currently pending card.
      *
      * @param requestId The id of the clarification card being answered.
      * @param answer The user's reply text (option label or free-form input).
@@ -505,19 +514,29 @@ class ChatViewModel @Inject constructor(
             it.id == requestId && it.status == ClarificationCardUiModel.Status.PENDING
         } ?: return
 
-        _uiState.update { current ->
-            current.copy(
-                clarificationCards = current.clarificationCards.map { card ->
-                    if (card.id == requestId && card.status == ClarificationCardUiModel.Status.PENDING) {
-                        card.copy(status = ClarificationCardUiModel.Status.ANSWERED, answer = answer)
-                    } else {
-                        card
-                    }
-                },
-            )
-        }
         viewModelScope.launch {
-            clarificationRepository.submitClarification(matched.id, answer)
+            val accepted = clarificationRepository.submitClarification(matched.id, answer)
+            _uiState.update { current ->
+                current.copy(
+                    clarificationCards = current.clarificationCards.map { card ->
+                        if (card.id == requestId && card.status == ClarificationCardUiModel.Status.PENDING) {
+                            if (accepted) {
+                                card.copy(
+                                    status = ClarificationCardUiModel.Status.ANSWERED,
+                                    answer = answer,
+                                )
+                            } else {
+                                card.copy(
+                                    status = ClarificationCardUiModel.Status.TIMED_OUT,
+                                    answer = card.options?.firstOrNull().orEmpty(),
+                                )
+                            }
+                        } else {
+                            card
+                        }
+                    },
+                )
+            }
         }
     }
 

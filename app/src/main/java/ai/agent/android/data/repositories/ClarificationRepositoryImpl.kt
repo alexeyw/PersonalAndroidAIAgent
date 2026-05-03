@@ -59,16 +59,20 @@ class ClarificationRepositoryImpl @Inject constructor() : ClarificationRepositor
         }
     }
 
-    override suspend fun submitClarification(requestId: String, answer: String) {
+    override suspend fun submitClarification(requestId: String, answer: String): Boolean {
         val deferred = activeRequests[requestId]
         if (deferred == null) {
             Timber.tag(TAG).w(
                 "submitClarification called for unknown or already-resolved request id: %s",
                 requestId,
             )
-            return
+            return false
         }
-        deferred.complete(answer)
+        // CompletableDeferred.complete returns false when the deferred was already
+        // completed (e.g. by the withTimeout in requestAnswer firing first). The UI
+        // relies on this distinction to avoid displaying "you answered" after the
+        // pipeline already consumed the default answer.
+        return deferred.complete(answer)
     }
 
     private companion object {

@@ -79,6 +79,9 @@ class ChatViewModelTest {
         llmInferenceEngine = mockk(relaxed = true)
         every { llmInferenceEngine.isInitialized } returns true
         clarificationRepository = mockk(relaxed = true)
+        // Default: every reply is accepted by the repository. Tests that exercise
+        // the rejection path override this on the specific request id.
+        coEvery { clarificationRepository.submitClarification(any(), any()) } returns true
 
         // Mock chat repository flow for any session
         every { chatRepository.getMessagesForSession(any()) } returns flowOf(emptyList())
@@ -567,6 +570,44 @@ class ChatViewModelTest {
         assertEquals(ClarificationCardUiModel.Status.ANSWERED, card.status)
         assertEquals("the answer", card.answer)
         coVerify { clarificationRepository.submitClarification("clr-2", "the answer") }
+
+        viewModel.stopGeneration()
+        advanceUntilIdle()
+    }
+
+    @Test
+    fun `submitClarification should flip card to TIMED_OUT when repository rejects the reply`() = runTest {
+        val userPrompt = "ask me late"
+        val request = ClarificationRequest(
+            id = "clr-late",
+            question = "Pick one",
+            options = listOf("X", "Y"),
+            timeoutMs = 60_000L,
+        )
+        // Simulate the timeout firing before the user's reply reaches the repo.
+        coEvery { clarificationRepository.submitClarification("clr-late", any()) } returns false
+
+        viewModel = createViewModel()
+        advanceUntilIdle()
+
+        val sessionId = viewModel.uiState.value.currentSessionId
+        coEvery { agentOrchestratorUseCase(sessionId, userPrompt) } returns flow {
+            emit(AgentOrchestratorState.AwaitingClarification(request))
+            delay(10_000)
+        }
+
+        viewModel.sendMessage(userPrompt)
+        testScheduler.advanceTimeBy(100)
+
+        viewModel.submitClarification("clr-late", "Y")
+        advanceUntilIdle()
+
+        val card = viewModel.uiState.value.clarificationCards.single()
+        assertEquals(ClarificationCardUiModel.Status.TIMED_OUT, card.status)
+        // Card must show what the agent actually consumed (the default), not the user's
+        // discarded reply.
+        assertEquals("X", card.answer)
+        coVerify { clarificationRepository.submitClarification("clr-late", "Y") }
 
         viewModel.stopGeneration()
         advanceUntilIdle()
