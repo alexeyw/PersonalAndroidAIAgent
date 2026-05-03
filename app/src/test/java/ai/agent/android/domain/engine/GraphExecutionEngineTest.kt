@@ -1,6 +1,7 @@
 package ai.agent.android.domain.engine
 
 import ai.agent.android.data.engine.KoogClientFactory
+import ai.agent.android.data.repositories.ClarificationRepositoryImpl
 import ai.agent.android.domain.engine.executors.*
 import ai.agent.android.domain.models.*
 import ai.agent.android.domain.prompt.PromptTemplateEngine
@@ -11,10 +12,15 @@ import ai.agent.android.domain.usecases.EvaluateIfConditionUseCase
 import ai.agent.android.domain.usecases.GetContextWindowUseCase
 import ai.agent.android.domain.usecases.RetrieveRelevantMemoryUseCase
 import ai.agent.android.domain.usecases.LoadModelUseCase
+import ai.koog.prompt.dsl.Prompt
+import ai.koog.prompt.executor.clients.LLMClient
+import ai.koog.prompt.llm.LLModel
+import ai.koog.prompt.streaming.StreamFrame
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.slot
 import io.mockk.verify
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.toList
@@ -694,5 +700,168 @@ class GraphExecutionEngineTest {
         // The rendered prompt — and ONLY the rendered prompt — must reach the LLM.
         verify { llmEngine.generateResponseStream(match { it.contains("Today is 01 May 2026.") }) }
         verify(exactly = 0) { llmEngine.generateResponseStream(match { it.contains("Today is \$DATE") }) }
+    }
+
+    // ─── End-to-end clarification scenarios ──────────────────────────────────
+
+    @Test
+    fun `given INPUT to CLARIFICATION to CLOUD to OUTPUT pipeline when user replies then clarification answer flows through CLOUD into final response`() = runTest {
+        every { settingsRepository.pipelineMaxSteps } returns flowOf(15)
+
+        // Wire CLOUD to a mocked Anthropic client so we can capture the prompt it
+        // receives and verify that the user's clarification reply flows downstream.
+        val mockAnthropicClient: LLMClient = mockk(relaxed = true)
+        val capturedPrompt = slot<Prompt>()
+        coEvery {
+            mockAnthropicClient.executeStreaming(capture(capturedPrompt), any<LLModel>())
+        } returns flowOf(StreamFrame.TextDelta("cloud_response_for_user_reply"))
+        coEvery { koogClientFactory.createAnthropicExecutor() } returns mockAnthropicClient
+
+        every { apiKeyRepository.getAnthropicKey() } returns flowOf("anthropic-test-key")
+        every { apiKeyRepository.getAnthropicModel() } returns flowOf("claude-sonnet-4-5")
+        // Other providers are unconfigured so the auto-selection path also lands on Anthropic.
+        every { apiKeyRepository.getOpenAIKey() } returns flowOf(null)
+        every { apiKeyRepository.getGoogleKey() } returns flowOf(null)
+        every { apiKeyRepository.getDeepSeekKey() } returns flowOf(null)
+
+        // CLARIFICATION uses llmEngine to generate the JSON question; OUTPUT has no
+        // systemPrompt so it just echoes its input — that lets us assert that the
+        // CLOUD response is what the user finally sees.
+        every { llmEngine.generateResponseStream(any()) } returns flowOf(
+            "{\"question\":\"Confirm?\",\"options\":[\"yes\",\"no\"]}",
+        )
+        coEvery { clarificationRepository.requestAnswer(any()) } returns "user reply"
+
+        val inputNode = NodeModel("input_1", NodeType.INPUT, 0f, 0f)
+        val clarificationNode = NodeModel(
+            id = "clar_1",
+            type = NodeType.CLARIFICATION,
+            x = 0f,
+            y = 0f,
+            systemPrompt = "Ask user for clarification.",
+            clarificationTimeoutMs = 5_000L,
+        )
+        val cloudNode = NodeModel(
+            id = "cloud_1",
+            type = NodeType.CLOUD,
+            x = 0f,
+            y = 0f,
+            cloudProvider = "anthropic",
+            systemPrompt = "Answer the user.",
+        )
+        val outputNode = NodeModel("output_1", NodeType.OUTPUT, 0f, 0f, systemPrompt = null)
+
+        val graph = PipelineGraph(
+            id = "g1", name = "Clarification → Cloud Graph",
+            nodes = listOf(inputNode, clarificationNode, cloudNode, outputNode),
+            connections = listOf(
+                ConnectionModel("c1", "input_1", "clar_1"),
+                ConnectionModel("c2", "clar_1", "cloud_1"),
+                ConnectionModel("c3", "cloud_1", "output_1"),
+            ),
+        )
+
+        val states = engine(sessionId, "User prompt", graph).toList()
+
+        // The clarification request reached the user.
+        val awaiting = states.filterIsInstance<AgentOrchestratorState.AwaitingClarification>().single()
+        assertEquals("Confirm?", awaiting.request.question)
+        assertEquals(listOf("yes", "no"), awaiting.request.options)
+        coVerify { clarificationRepository.requestAnswer(any()) }
+
+        // The CLOUD node was invoked with the user's reply embedded in its prompt.
+        coVerify { mockAnthropicClient.executeStreaming(any<Prompt>(), any<LLModel>()) }
+        val cloudPromptText = capturedPrompt.captured.messages.joinToString("\n") { it.content }
+        assertTrue(
+            "Cloud prompt must contain the clarification reply, was: $cloudPromptText",
+            cloudPromptText.contains("user reply"),
+        )
+
+        // OUTPUT (no systemPrompt) echoes its input verbatim, so the cloud's response
+        // is what propagates to the final Completed state.
+        val completed = states.last() as AgentOrchestratorState.Completed
+        assertEquals("cloud_response_for_user_reply", completed.finalResponse)
+    }
+
+    @Test
+    fun `given CLARIFICATION node when no answer arrives before timeout then pipeline continues with default option`() = runTest {
+        every { settingsRepository.pipelineMaxSteps } returns flowOf(15)
+
+        // Use a real ClarificationRepositoryImpl to exercise the actual withTimeout
+        // behaviour: when no reply arrives, the suspended request resolves with the
+        // first option and the pipeline keeps going. A mock would only prove that
+        // the executor consumes whatever the repository returns — not that the
+        // timeout machinery itself works under the engine.
+        val realClarificationRepository = ClarificationRepositoryImpl()
+
+        val realFactory = NodeExecutorFactory(
+            InputNodeExecutor(),
+            OutputNodeExecutor(llmEngine, loadModelUseCase, chatRepository),
+            IfConditionNodeExecutor(evaluateIfConditionUseCase),
+            ToolNodeExecutor(llmEngine, loadModelUseCase, toolRepository, settingsRepository, approvalNotifier, chatRepository),
+            LiteRtNodeExecutor(
+                llmEngine, toolRepository, chatRepository, getContextWindowUseCase,
+                retrieveRelevantMemoryUseCase, settingsRepository, metricsRepository, loadModelUseCase,
+            ),
+            CloudLlmNodeExecutor(
+                toolRepository, chatRepository, getContextWindowUseCase,
+                retrieveRelevantMemoryUseCase, settingsRepository, apiKeyRepository,
+                metricsRepository, koogClientFactory,
+            ),
+            SystemNodeExecutor(llmEngine, loadModelUseCase, chatRepository),
+            QueueProcessorNodeExecutor(),
+            SummaryNodeExecutor(llmEngine, loadModelUseCase),
+            ClarificationNodeExecutor(llmEngine, loadModelUseCase, realClarificationRepository),
+        )
+        val engineWithRealRepo = GraphExecutionEngine(
+            realFactory,
+            ToolNodeExecutor(llmEngine, loadModelUseCase, toolRepository, settingsRepository, approvalNotifier, chatRepository),
+            chatRepository,
+            settingsRepository,
+            metricsRepository,
+            PromptTemplateEngine(),
+            emptySet(),
+        )
+
+        // Generate a question with two options; the first one is the default the
+        // repository falls back to on timeout.
+        every { llmEngine.generateResponseStream(any()) } returns flowOf(
+            "{\"question\":\"Pick one\",\"options\":[\"default-option\",\"other\"]}",
+        )
+
+        val inputNode = NodeModel("input_1", NodeType.INPUT, 0f, 0f)
+        val clarificationNode = NodeModel(
+            id = "clar_1",
+            type = NodeType.CLARIFICATION,
+            x = 0f,
+            y = 0f,
+            systemPrompt = "Ask user for clarification.",
+            // Short timeout — runTest virtual time advances past it without any
+            // submitClarification call, so the repository returns the default.
+            clarificationTimeoutMs = 50L,
+        )
+        val outputNode = NodeModel("output_1", NodeType.OUTPUT, 0f, 0f, systemPrompt = null)
+
+        val graph = PipelineGraph(
+            id = "g1", name = "Clarification Timeout Graph",
+            nodes = listOf(inputNode, clarificationNode, outputNode),
+            connections = listOf(
+                ConnectionModel("c1", "input_1", "clar_1"),
+                ConnectionModel("c2", "clar_1", "output_1"),
+            ),
+        )
+
+        val states = engineWithRealRepo(sessionId, "User prompt", graph).toList()
+
+        // The clarification was published before timing out.
+        val awaiting = states.filterIsInstance<AgentOrchestratorState.AwaitingClarification>().single()
+        assertEquals("Pick one", awaiting.request.question)
+        assertEquals(50L, awaiting.request.timeoutMs)
+
+        // The default option (first in the list) reached OUTPUT and surfaced as the
+        // final completed response — proving the pipeline did NOT stall on the
+        // unanswered request.
+        val completed = states.last() as AgentOrchestratorState.Completed
+        assertEquals("default-option", completed.finalResponse)
     }
 }
