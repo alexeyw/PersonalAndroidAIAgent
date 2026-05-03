@@ -87,6 +87,7 @@ This file maps the contents of the main application package.
   - `prompt/` - Prompt templating layer.
     - `PromptVariableProvider.kt` - Contract for a single substitutable prompt variable.
     - `PromptTemplateEngine.kt` - Renders templates by substituting `$KEY` placeholders.
+    - `PromptSegment.kt` - Sealed interface modelling rendered prompt chunks (literal/resolved/unknown) for previews.
   - `models/` - Domain entity models.
     - `AgentMetrics.kt` - Agent metrics model.
     - `AgentOrchestratorState.kt` - Orchestrator state model.
@@ -139,6 +140,9 @@ This file maps the contents of the main application package.
     - `TaskRouterUseCase.kt` - Use case to route tasks.
 - `presentation/` - UI and presentation layer.
   - `components/` - Reusable UI components.
+    - `VariableChipsRow.kt` - Horizontal chip row for inserting `$VARIABLE` tokens into prompt editors.
+    - `PromptPreviewBottomSheet.kt` - Modal bottom sheet that renders a prompt with substituted values highlighted.
+    - `TextFieldValueExt.kt` - `insertAtCursor` extension for splicing chip-selected tokens at the caret.
   - `notifications/` - Notification handling.
     - `ApprovalNotificationManager.kt` - Manager for approval notifications.
   - `receivers/` - Broadcast receivers.

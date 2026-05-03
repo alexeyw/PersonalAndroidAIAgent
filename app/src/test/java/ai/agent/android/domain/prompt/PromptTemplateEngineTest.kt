@@ -3,8 +3,10 @@ package ai.agent.android.domain.prompt
 import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertThrows
 import org.junit.Before
 import org.junit.Test
 
@@ -133,6 +135,131 @@ class PromptTemplateEngineTest {
         val result = engine.render("\$DATE", listOf(first, second))
 
         assertEquals("second", result)
+    }
+
+    @Test
+    fun `given empty template when renderSegments then returns empty list`() = runTest {
+        val result = engine.renderSegments("", listOf(providerOf("DATE", "01 May 2026")))
+
+        assertEquals(emptyList<PromptSegment>(), result)
+    }
+
+    @Test
+    fun `given plain template when renderSegments then returns single literal`() = runTest {
+        val result = engine.renderSegments("Plain text", emptyList())
+
+        assertEquals(listOf(PromptSegment.Literal("Plain text")), result)
+    }
+
+    @Test
+    fun `given known variable when renderSegments then emits literal and resolved`() = runTest {
+        val provider = providerOf("DATE", "01 May 2026")
+
+        val result = engine.renderSegments("Today is \$DATE.", listOf(provider))
+
+        assertEquals(
+            listOf(
+                PromptSegment.Literal("Today is "),
+                PromptSegment.Resolved("DATE", "01 May 2026"),
+                PromptSegment.Literal("."),
+            ),
+            result,
+        )
+    }
+
+    @Test
+    fun `given unknown variable when renderSegments then emits Unknown segment`() = runTest {
+        val result = engine.renderSegments("Hello \$UNKNOWN!", emptyList())
+
+        assertEquals(
+            listOf(
+                PromptSegment.Literal("Hello "),
+                PromptSegment.Unknown("UNKNOWN"),
+                PromptSegment.Literal("!"),
+            ),
+            result,
+        )
+    }
+
+    @Test
+    fun `given mixed template when renderSegments then preserves order`() = runTest {
+        val date = providerOf("DATE", "01 May 2026")
+
+        val result = engine.renderSegments(
+            "[\$DATE] and [\$MISSING] and [\$DATE]",
+            listOf(date),
+        )
+
+        assertEquals(
+            listOf(
+                PromptSegment.Literal("["),
+                PromptSegment.Resolved("DATE", "01 May 2026"),
+                PromptSegment.Literal("] and ["),
+                PromptSegment.Unknown("MISSING"),
+                PromptSegment.Literal("] and ["),
+                PromptSegment.Resolved("DATE", "01 May 2026"),
+                PromptSegment.Literal("]"),
+            ),
+            result,
+        )
+    }
+
+    @Test
+    fun `given escaped variable when renderSegments then folds dollar into literal`() = runTest {
+        val provider = providerOf("DATE", "01 May 2026")
+
+        val result = engine.renderSegments("Lit \\\$DATE then \$DATE", listOf(provider))
+
+        assertEquals(
+            listOf(
+                PromptSegment.Literal("Lit \$DATE then "),
+                PromptSegment.Resolved("DATE", "01 May 2026"),
+            ),
+            result,
+        )
+    }
+
+    @Test
+    fun `given provider throws when renderSegments then resolves to empty value`() = runTest {
+        val failing = mockk<PromptVariableProvider>()
+        every { failing.key() } returns "DATE"
+        coEvery { failing.resolve() } throws RuntimeException("boom")
+
+        val result = engine.renderSegments("[\$DATE]", listOf(failing))
+
+        assertEquals(
+            listOf(
+                PromptSegment.Literal("["),
+                PromptSegment.Resolved("DATE", ""),
+                PromptSegment.Literal("]"),
+            ),
+            result,
+        )
+    }
+
+    @Test
+    fun `given resolve throws CancellationException when render then rethrows`() = runTest {
+        val cancelling = mockk<PromptVariableProvider>()
+        every { cancelling.key() } returns "DATE"
+        coEvery { cancelling.resolve() } throws CancellationException("cancelled")
+
+        assertThrows(CancellationException::class.java) {
+            kotlinx.coroutines.runBlocking {
+                engine.render("[\$DATE]", listOf(cancelling))
+            }
+        }
+    }
+
+    @Test
+    fun `given key throws CancellationException when render then rethrows`() = runTest {
+        val cancelling = mockk<PromptVariableProvider>()
+        every { cancelling.key() } throws CancellationException("cancelled")
+
+        assertThrows(CancellationException::class.java) {
+            kotlinx.coroutines.runBlocking {
+                engine.render("[\$DATE]", listOf(cancelling))
+            }
+        }
     }
 
     private fun providerOf(key: String, value: String): PromptVariableProvider =

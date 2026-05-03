@@ -7,6 +7,8 @@ import ai.agent.android.domain.models.NodeModel
 import ai.agent.android.domain.models.NodeType
 import ai.agent.android.domain.models.PipelineGraph
 import ai.agent.android.domain.models.PromptTemplate
+import ai.agent.android.domain.prompt.PromptTemplateEngine
+import ai.agent.android.domain.prompt.PromptVariableProvider
 import ai.agent.android.domain.repositories.ApiKeyRepository
 import ai.agent.android.domain.repositories.ToolRepository
 import ai.agent.android.domain.usecases.LoadPipelineUseCase
@@ -35,10 +37,14 @@ class OrchestratorViewModel @Inject constructor(
     private val getPromptTemplatesUseCase: GetPromptTemplatesUseCase,
     private val savePromptTemplateUseCase: SavePromptTemplateUseCase,
     private val apiKeyRepository: ApiKeyRepository,
-    private val toolRepository: ToolRepository
+    private val toolRepository: ToolRepository,
+    private val promptTemplateEngine: PromptTemplateEngine,
+    private val promptVariableProviders: Set<@JvmSuppressWildcards PromptVariableProvider>,
 ) : ViewModel() {
 
-    private val _uiState = MutableStateFlow(OrchestratorUiState())
+    private val _uiState = MutableStateFlow(
+        OrchestratorUiState(availableVariables = computeAvailableVariables(promptVariableProviders)),
+    )
     
     /**
      * The current UI state of the Orchestrator screen.
@@ -455,5 +461,49 @@ class OrchestratorViewModel @Inject constructor(
      */
     fun clearError() {
         _uiState.update { it.copy(errorMessage = null) }
+    }
+
+    /**
+     * Renders [template] through [PromptTemplateEngine] and exposes the resulting
+     * segments via [OrchestratorUiState.previewState].
+     *
+     * Resolution may suspend on I/O (the `$MEMORY_SUMMARY` provider hits the database),
+     * so the call runs on [viewModelScope]. The intermediate `Loading` state lets the UI
+     * show a spinner if the user opens the sheet against a slow provider.
+     *
+     * @param template the raw prompt that may contain `$VARIABLE` placeholders.
+     */
+    fun requestPromptPreview(template: String) {
+        _uiState.update { it.copy(previewState = PromptPreviewState.Loading) }
+        viewModelScope.launch {
+            val segments = promptTemplateEngine.renderSegments(
+                template,
+                promptVariableProviders.toList(),
+            )
+            _uiState.update { it.copy(previewState = PromptPreviewState.Ready(segments)) }
+        }
+    }
+
+    /**
+     * Closes the prompt-preview bottom sheet, returning the UI to its idle state.
+     */
+    fun dismissPromptPreview() {
+        _uiState.update { it.copy(previewState = PromptPreviewState.Hidden) }
+    }
+
+    private companion object {
+        /**
+         * Computes the deterministic, sorted list of `$KEY` tokens advertised by the
+         * registered [PromptVariableProvider]s. A provider whose `key()` throws is
+         * silently skipped — this mirrors the engine's tolerance for broken providers
+         * so a single misbehaving DI binding cannot empty the chip row.
+         */
+        private fun computeAvailableVariables(
+            providers: Set<PromptVariableProvider>,
+        ): List<String> = providers
+            .mapNotNull { runCatching { it.key() }.getOrNull() }
+            .distinct()
+            .sorted()
+            .map { "$$it" }
     }
 }

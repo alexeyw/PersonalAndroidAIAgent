@@ -3,6 +3,9 @@ package ai.agent.android.presentation.ui.orchestrator
 import ai.agent.android.domain.models.NodeType
 import ai.agent.android.domain.models.PipelineGraph
 import ai.agent.android.domain.models.AgentTool
+import ai.agent.android.domain.prompt.PromptSegment
+import ai.agent.android.domain.prompt.PromptTemplateEngine
+import ai.agent.android.domain.prompt.PromptVariableProvider
 import ai.agent.android.domain.repositories.ApiKeyRepository
 import ai.agent.android.domain.repositories.ToolRepository
 import ai.agent.android.domain.usecases.LoadPipelineUseCase
@@ -10,6 +13,7 @@ import ai.agent.android.domain.usecases.SavePipelineUseCase
 import ai.agent.android.domain.usecases.GetPromptTemplatesUseCase
 import ai.agent.android.domain.usecases.SavePromptTemplateUseCase
 import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
@@ -35,6 +39,9 @@ class OrchestratorViewModelTest {
     private lateinit var savePromptTemplateUseCase: SavePromptTemplateUseCase
     private lateinit var apiKeyRepository: ApiKeyRepository
     private lateinit var toolRepository: ToolRepository
+    private lateinit var promptTemplateEngine: PromptTemplateEngine
+    private lateinit var providerDate: PromptVariableProvider
+    private lateinit var providerTime: PromptVariableProvider
     private lateinit var viewModel: OrchestratorViewModel
 
     private val testDispatcher = StandardTestDispatcher()
@@ -58,14 +65,26 @@ class OrchestratorViewModelTest {
         every { apiKeyRepository.getDeepSeekKey() } returns flowOf(null)
 
         coEvery { toolRepository.getAvailableTools() } returns listOf(AgentTool("Tool1", "Desc", "{}"))
-        
+
+        promptTemplateEngine = mockk()
+        providerDate = mockk {
+            every { key() } returns "DATE"
+            coEvery { resolve() } returns "01 May 2026"
+        }
+        providerTime = mockk {
+            every { key() } returns "TIME"
+            coEvery { resolve() } returns "15:30"
+        }
+
         viewModel = OrchestratorViewModel(
-            savePipelineUseCase, 
-            loadPipelineUseCase, 
+            savePipelineUseCase,
+            loadPipelineUseCase,
             getPromptTemplatesUseCase,
             savePromptTemplateUseCase,
-            apiKeyRepository, 
-            toolRepository
+            apiKeyRepository,
+            toolRepository,
+            promptTemplateEngine,
+            setOf(providerDate, providerTime),
         )
     }
 
@@ -341,8 +360,44 @@ class OrchestratorViewModelTest {
     @Test
     fun `importPipelineFromJson sets error on invalid json`() {
         viewModel.importPipelineFromJson("{ invalid json }")
-        
+
         assertNotNull(viewModel.uiState.value.errorMessage)
         assertTrue(viewModel.uiState.value.errorMessage!!.contains("Invalid JSON format"))
+    }
+
+    @Test
+    fun `availableVariables are derived from injected providers and sorted`() {
+        val state = viewModel.uiState.value
+
+        assertEquals(listOf("\$DATE", "\$TIME"), state.availableVariables)
+    }
+
+    @Test
+    fun `requestPromptPreview transitions Hidden to Ready with engine segments`() = runTest {
+        val template = "Hello \$DATE"
+        val segments = listOf(
+            PromptSegment.Literal("Hello "),
+            PromptSegment.Resolved("DATE", "01 May 2026"),
+        )
+        coEvery { promptTemplateEngine.renderSegments(template, any()) } returns segments
+
+        viewModel.requestPromptPreview(template)
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        val readyState = viewModel.uiState.value.previewState
+        assertTrue(readyState is PromptPreviewState.Ready)
+        assertEquals(segments, (readyState as PromptPreviewState.Ready).segments)
+        coVerify { promptTemplateEngine.renderSegments(template, any()) }
+    }
+
+    @Test
+    fun `dismissPromptPreview resets state to Hidden`() = runTest {
+        coEvery { promptTemplateEngine.renderSegments(any(), any()) } returns emptyList()
+        viewModel.requestPromptPreview("anything")
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        viewModel.dismissPromptPreview()
+
+        assertEquals(PromptPreviewState.Hidden, viewModel.uiState.value.previewState)
     }
 }
