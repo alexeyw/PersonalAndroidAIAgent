@@ -53,6 +53,7 @@ This file maps the contents of the main application package.
   - `remote/` - Remote API components.
   - `repositories/` - Repository implementations.
     - `ChatRepositoryImpl.kt` - Chat repository implementation.
+    - `ClarificationRepositoryImpl.kt` - In-memory implementation of `ClarificationRepository` that suspends pipeline coroutines until the user answers (or the request times out).
     - `LocalModelRepositoryImpl.kt` - Local model repository implementation.
     - `LocalPipelineRepositoryImpl.kt` - Local pipeline repository implementation.
     - `MemoryRepositoryImpl.kt` - Memory repository implementation.
@@ -96,6 +97,7 @@ This file maps the contents of the main application package.
     - `AppError.kt` - App error model.
     - `ChatMessage.kt` - Chat message model.
     - `ChatSession.kt` - Chat session model.
+    - `ClarificationRequest.kt` - Domain model describing a clarification question issued by the agent (id, question, options, timeoutMs).
     - `ConnectionModel.kt` - Connection model.
     - `DownloadState.kt` - Download state model.
     - `LocalModel.kt` - Domain model for local models.
@@ -116,6 +118,7 @@ This file maps the contents of the main application package.
   - `repositories/` - Repository interfaces.
     - `ApiKeyRepository.kt` - API key repository interface.
     - `ChatRepository.kt` - Chat repository interface.
+    - `ClarificationRepository.kt` - Bridges the agent (suspending until the user answers) and the UI (publishing the pending question, forwarding the reply).
     - `LocalModelRepository.kt` - Local model repository interface.
     - `MemoryRepository.kt` - Memory repository interface.
     - `MetricsRepository.kt` - Metrics repository interface.

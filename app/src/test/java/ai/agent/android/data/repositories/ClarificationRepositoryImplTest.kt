@@ -1,0 +1,202 @@
+package ai.agent.android.data.repositories
+
+import ai.agent.android.domain.models.ClarificationRequest
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.async
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.advanceTimeBy
+import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.yield
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
+import org.junit.Before
+import org.junit.Test
+
+/**
+ * Unit tests for [ClarificationRepositoryImpl].
+ *
+ * Cover: happy path (submit resolves the suspended request), default-answer behaviour
+ * on timeout for both option-list and free-form requests, the visible
+ * `pendingRequest` flow lifecycle, and tolerance for stray submissions
+ * (unknown id, submission before any request).
+ */
+@OptIn(ExperimentalCoroutinesApi::class)
+class ClarificationRepositoryImplTest {
+
+    private lateinit var repository: ClarificationRepositoryImpl
+
+    @Before
+    fun setup() {
+        repository = ClarificationRepositoryImpl()
+    }
+
+    @Test
+    fun `given pending request when submitClarification called then requestAnswer returns submitted answer`() = runTest {
+        val request = ClarificationRequest(
+            id = "req-1",
+            question = "Pick a colour",
+            options = listOf("red", "blue"),
+            timeoutMs = 60_000L,
+        )
+
+        val deferredAnswer = async { repository.requestAnswer(request) }
+        // Allow requestAnswer to register the deferred and publish the request.
+        yield()
+
+        repository.submitClarification("req-1", "blue")
+
+        assertEquals("blue", deferredAnswer.await())
+    }
+
+    @Test
+    fun `given options non-empty and timeout elapses then returns first option`() = runTest {
+        val request = ClarificationRequest(
+            id = "req-2",
+            question = "Pick a colour",
+            options = listOf("red", "blue"),
+            timeoutMs = 100L,
+        )
+
+        val deferredAnswer = async { repository.requestAnswer(request) }
+        advanceTimeBy(150L)
+        advanceUntilIdle()
+
+        assertEquals("red", deferredAnswer.await())
+    }
+
+    @Test
+    fun `given options is null and timeout elapses then returns empty string`() = runTest {
+        val request = ClarificationRequest(
+            id = "req-3",
+            question = "Free-form question",
+            options = null,
+            timeoutMs = 100L,
+        )
+
+        val deferredAnswer = async { repository.requestAnswer(request) }
+        advanceTimeBy(150L)
+        advanceUntilIdle()
+
+        assertEquals("", deferredAnswer.await())
+    }
+
+    @Test
+    fun `given options is empty list and timeout elapses then returns empty string`() = runTest {
+        val request = ClarificationRequest(
+            id = "req-4",
+            question = "Edge case",
+            options = emptyList(),
+            timeoutMs = 100L,
+        )
+
+        val deferredAnswer = async { repository.requestAnswer(request) }
+        advanceTimeBy(150L)
+        advanceUntilIdle()
+
+        assertEquals("", deferredAnswer.await())
+    }
+
+    @Test
+    fun `given requestAnswer in flight then pendingRequest exposes the request and clears after resolve`() = runTest {
+        val request = ClarificationRequest(
+            id = "req-5",
+            question = "What is your name?",
+            options = null,
+            timeoutMs = 60_000L,
+        )
+
+        val deferredAnswer = async { repository.requestAnswer(request) }
+        yield()
+
+        assertEquals(request, repository.pendingRequest.first())
+
+        repository.submitClarification("req-5", "Alice")
+        deferredAnswer.await()
+
+        assertNull(repository.pendingRequest.first())
+    }
+
+    @Test
+    fun `given two sequential requests when each gets its own answer then both resolve correctly`() = runTest {
+        val firstRequest = ClarificationRequest(
+            id = "req-6a",
+            question = "Q1?",
+            options = null,
+            timeoutMs = 60_000L,
+        )
+        val firstAnswer = async { repository.requestAnswer(firstRequest) }
+        yield()
+        repository.submitClarification("req-6a", "answer-a")
+        assertEquals("answer-a", firstAnswer.await())
+
+        val secondRequest = ClarificationRequest(
+            id = "req-6b",
+            question = "Q2?",
+            options = listOf("yes", "no"),
+            timeoutMs = 60_000L,
+        )
+        val secondAnswer = async { repository.requestAnswer(secondRequest) }
+        yield()
+        repository.submitClarification("req-6b", "yes")
+        assertEquals("yes", secondAnswer.await())
+    }
+
+    @Test
+    fun `given mismatched requestId in submitClarification then waiting request is not resolved`() = runTest {
+        val request = ClarificationRequest(
+            id = "req-7",
+            question = "Real question",
+            options = listOf("a", "b"),
+            timeoutMs = 100L,
+        )
+
+        val deferredAnswer = async { repository.requestAnswer(request) }
+        yield()
+
+        // Wrong id: must be a no-op, the suspended deferred is untouched.
+        repository.submitClarification("totally-different-id", "ignored")
+        advanceTimeBy(150L)
+        advanceUntilIdle()
+
+        // Falls through to default (first option) because the real request still timed out.
+        assertEquals("a", deferredAnswer.await())
+    }
+
+    @Test
+    fun `given submitClarification called before any request then call is silently dropped`() = runTest {
+        // Must not throw and must not affect a later request.
+        repository.submitClarification("ghost-id", "ghost-answer")
+
+        val request = ClarificationRequest(
+            id = "req-8",
+            question = "After ghost",
+            options = null,
+            timeoutMs = 60_000L,
+        )
+        val deferredAnswer = async { repository.requestAnswer(request) }
+        yield()
+        repository.submitClarification("req-8", "real-answer")
+
+        assertEquals("real-answer", deferredAnswer.await())
+    }
+
+    @Test
+    fun `given pending request resolved by timeout then pendingRequest flow is reset to null`() = runTest {
+        val request = ClarificationRequest(
+            id = "req-9",
+            question = "Will time out",
+            options = null,
+            timeoutMs = 50L,
+        )
+
+        val deferredAnswer = launch { repository.requestAnswer(request) }
+        yield()
+        advanceTimeBy(100L)
+        advanceUntilIdle()
+        deferredAnswer.join()
+
+        assertNull(repository.pendingRequest.first())
+    }
+}
