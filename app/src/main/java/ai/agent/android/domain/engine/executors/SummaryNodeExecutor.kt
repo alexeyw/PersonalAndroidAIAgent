@@ -6,6 +6,7 @@ import ai.agent.android.domain.models.NodeExecutionResult
 import ai.agent.android.domain.models.NodeModel
 import ai.agent.android.domain.models.Result
 import ai.agent.android.domain.usecases.LoadModelUseCase
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import timber.log.Timber
@@ -48,6 +49,10 @@ class SummaryNodeExecutor @Inject constructor(
                     emit(AgentOrchestratorState.Answering(accumulatedResponse.toString()))
                 }
             }
+        } catch (e: CancellationException) {
+            // Preserve structured-concurrency cancellation: a broad `catch (Exception)`
+            // would silently swallow cancellation and leave the parent coroutine running.
+            throw e
         } catch (e: Exception) {
             Timber.tag("PipelineDebug").e(e, "[NODE_ERR] type=${node.type.name} id=${node.id} error in SummaryNodeExecutor generation")
             emit(AgentOrchestratorState.Error(e.message ?: "Unknown error"))

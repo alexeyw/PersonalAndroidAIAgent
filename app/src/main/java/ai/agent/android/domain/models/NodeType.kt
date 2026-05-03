@@ -50,6 +50,17 @@ enum class NodeType {
     SUMMARY,
 
     /**
+     * Node that pauses the pipeline to ask the user a clarifying question.
+     *
+     * The node uses a local LLM (configured via `systemPrompt` and `modelPath`) to
+     * generate a context-aware question and an optional list of answer options based
+     * on the upstream input. While waiting for the user's reply, the engine emits
+     * [AgentOrchestratorState.AwaitingClarification]. The user's answer becomes the
+     * node's output and is forwarded downstream as `inputText`.
+     */
+    CLARIFICATION,
+
+    /**
      * The starting point of the pipeline.
      */
     INPUT,

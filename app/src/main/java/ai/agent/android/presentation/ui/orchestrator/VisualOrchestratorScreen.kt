@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.List
@@ -250,6 +251,11 @@ fun VisualOrchestratorScreen(
             var complexity by remember(node) { mutableStateOf(node.conditionComplexity?.toString() ?: "") }
             var keywords by remember(node) { mutableStateOf(node.conditionKeywords ?: "") }
             var prompt by remember(node) { mutableStateOf(node.conditionPrompt ?: "") }
+            // Clarification: timeout is edited as seconds for ergonomics; we round-trip
+            // the configured millis (or the engine default 60_000) into the field.
+            var clarificationTimeoutSeconds by remember(node) {
+                mutableStateOf(((node.clarificationTimeoutMs ?: 60_000L) / 1000L).toString())
+            }
 
             if (showPromptLibrary) {
                 ai.agent.android.presentation.ui.orchestrator.components.PromptLibraryDialog(
@@ -264,12 +270,24 @@ fun VisualOrchestratorScreen(
 
             AlertDialog(
                 onDismissRequest = { configuringNodeId = null },
-                title = { Text(if (node.type == NodeType.IF_CONDITION) "Configure IF Condition" else "Configure Node") },
+                title = {
+                    Text(
+                        when (node.type) {
+                            NodeType.IF_CONDITION -> "Configure IF Condition"
+                            NodeType.CLARIFICATION -> "Configure Clarification"
+                            else -> "Configure Node"
+                        }
+                    )
+                },
                 text = {
-                    Column {
+                    // The dialog body can grow with several optional sections (variable chips,
+                    // IF_CONDITION fields, CLARIFICATION timeout). Wrap in verticalScroll so the
+                    // tail of the column stays reachable instead of being clipped behind the
+                    // confirm/dismiss buttons.
+                    Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
                         Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
                             TextButton(onClick = { showPromptLibrary = true }) {
-                                Text("Load from Library")
+                                Text("Load")
                             }
                             TextButton(onClick = {
                                 val current = systemPromptValue.text
@@ -278,28 +296,33 @@ fun VisualOrchestratorScreen(
                                     viewModel.clearError() // Just in case, might want a success message
                                 }
                             }) {
-                                Text("Save to Library")
+                                Text("Save")
                             }
-                        }
-                        Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-                            androidx.compose.material3.OutlinedTextField(
-                                value = systemPromptValue,
-                                onValueChange = { systemPromptValue = it },
-                                label = { Text("System Prompt") },
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .padding(top = 8.dp),
-                            )
-                            IconButton(
-                                onClick = { viewModel.requestPromptPreview(systemPromptValue.text) },
-                                modifier = Modifier.padding(top = 8.dp, start = 4.dp),
-                            ) {
+                            TextButton(onClick = { viewModel.requestPromptPreview(systemPromptValue.text) }) {
                                 Icon(
                                     imageVector = Icons.Default.Visibility,
-                                    contentDescription = "Preview prompt",
+                                    contentDescription = null,
+                                    modifier = Modifier.padding(end = 4.dp),
                                 )
+                                Text("Preview")
                             }
                         }
+                        androidx.compose.material3.OutlinedTextField(
+                            value = systemPromptValue,
+                            onValueChange = { systemPromptValue = it },
+                            label = {
+                                Text(
+                                    if (node.type == NodeType.CLARIFICATION) {
+                                        "Clarification instruction (LLM)"
+                                    } else {
+                                        "System Prompt"
+                                    }
+                                )
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 8.dp),
+                        )
                         VariableChipsRow(
                             variables = uiState.availableVariables,
                             onChipClick = { token ->
@@ -329,6 +352,16 @@ fun VisualOrchestratorScreen(
                                 modifier = Modifier.padding(top = 8.dp)
                             )
                         }
+                        if (node.type == NodeType.CLARIFICATION) {
+                            androidx.compose.material3.OutlinedTextField(
+                                value = clarificationTimeoutSeconds,
+                                onValueChange = { new ->
+                                    clarificationTimeoutSeconds = new.filter { it.isDigit() }
+                                },
+                                label = { Text("Reply timeout (seconds)") },
+                                modifier = Modifier.padding(top = 8.dp),
+                            )
+                        }
                     }
                 },
                 confirmButton = {
@@ -340,6 +373,13 @@ fun VisualOrchestratorScreen(
                             if (node.type == NodeType.IF_CONDITION) prompt.takeIf { it.isNotBlank() } else null,
                             systemPromptValue.text.takeIf { it.isNotBlank() }
                         )
+                        if (node.type == NodeType.CLARIFICATION) {
+                            val timeoutMs = clarificationTimeoutSeconds
+                                .toLongOrNull()
+                                ?.takeIf { it > 0L }
+                                ?.let { it * 1000L }
+                            viewModel.updateNodeClarificationTimeout(node.id, timeoutMs)
+                        }
                         configuringNodeId = null
                     }) {
                         Text("Save")

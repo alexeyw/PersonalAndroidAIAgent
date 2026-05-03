@@ -21,6 +21,8 @@ import androidx.room.PrimaryKey
  * @property conditionPrompt Free-form prompt for condition classification.
  * @property systemPrompt An optional system prompt to configure the behavior of the node.
  * @property cloudProvider An optional provider for a CLOUD node.
+ * @property clarificationTimeoutMs Timeout (in ms) for a CLARIFICATION node before it falls back
+ * to a default answer. `null` means the engine's default is used.
  */
 @Entity(
     tableName = "pipeline_nodes",
@@ -48,5 +50,6 @@ data class NodeEntity(
     val conditionKeywords: String? = null,
     val conditionPrompt: String? = null,
     val systemPrompt: String? = null,
-    val cloudProvider: String? = null
+    val cloudProvider: String? = null,
+    val clarificationTimeoutMs: Long? = null,
 )

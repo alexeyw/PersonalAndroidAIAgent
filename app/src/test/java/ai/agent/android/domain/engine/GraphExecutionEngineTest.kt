@@ -38,7 +38,8 @@ class GraphExecutionEngineTest {
     private lateinit var koogClientFactory: KoogClientFactory
     private lateinit var evaluateIfConditionUseCase: EvaluateIfConditionUseCase
     private lateinit var loadModelUseCase: LoadModelUseCase
-    
+    private lateinit var clarificationRepository: ai.agent.android.domain.repositories.ClarificationRepository
+
     private lateinit var engine: GraphExecutionEngine
     private lateinit var promptTemplateEngine: PromptTemplateEngine
     private var promptVariableProviders: Set<PromptVariableProvider> = emptySet()
@@ -59,6 +60,7 @@ class GraphExecutionEngineTest {
         koogClientFactory = mockk()
         evaluateIfConditionUseCase = mockk()
         loadModelUseCase = mockk()
+        clarificationRepository = mockk()
 
         val inputNodeExecutor = InputNodeExecutor()
         val outputNodeExecutor = OutputNodeExecutor(llmEngine, loadModelUseCase, chatRepository)
@@ -88,10 +90,15 @@ class GraphExecutionEngineTest {
             llmEngine, loadModelUseCase
         )
 
+        val clarificationNodeExecutor = ClarificationNodeExecutor(
+            llmEngine, loadModelUseCase, clarificationRepository
+        )
+
         val nodeExecutorFactory = NodeExecutorFactory(
             inputNodeExecutor, outputNodeExecutor, ifConditionNodeExecutor,
             toolNodeExecutor, liteRtNodeExecutor, cloudLlmNodeExecutor,
-            systemNodeExecutor, queueProcessorNodeExecutor, summaryNodeExecutor
+            systemNodeExecutor, queueProcessorNodeExecutor, summaryNodeExecutor,
+            clarificationNodeExecutor,
         )
 
         promptTemplateEngine = PromptTemplateEngine()
@@ -115,6 +122,51 @@ class GraphExecutionEngineTest {
         coEvery { toolRepository.getAvailableTools() } returns emptyList()
         
         coEvery { loadModelUseCase(any()) } returns ai.agent.android.domain.models.Result.Success(Unit)
+    }
+
+    @Test
+    fun `routes user reply through CLARIFICATION node into OUTPUT`() = runTest {
+        // Arrange a pipeline INPUT → CLARIFICATION → OUTPUT.
+        // The clarification node generates a JSON question, the repository returns
+        // "user reply", and the OUTPUT node (no systemPrompt) echoes its input.
+        val inputNode = NodeModel("input_1", NodeType.INPUT, 0f, 0f)
+        val clarificationNode = NodeModel(
+            id = "clar_1",
+            type = NodeType.CLARIFICATION,
+            x = 0f,
+            y = 0f,
+            systemPrompt = "Ask user for clarification.",
+            clarificationTimeoutMs = 5_000L,
+        )
+        val outputNode = NodeModel("output_1", NodeType.OUTPUT, 0f, 0f, systemPrompt = null)
+
+        val graph = PipelineGraph(
+            id = "g1", name = "Clarification Graph",
+            nodes = listOf(inputNode, clarificationNode, outputNode),
+            connections = listOf(
+                ConnectionModel("c1", "input_1", "clar_1"),
+                ConnectionModel("c2", "clar_1", "output_1"),
+            )
+        )
+
+        every { llmEngine.generateResponseStream(any()) } returns flowOf(
+            "{\"question\":\"Confirm?\",\"options\":[\"yes\",\"no\"]}"
+        )
+        coEvery { clarificationRepository.requestAnswer(any()) } returns "user reply"
+
+        // Act
+        val states = engine(sessionId, "User prompt", graph).toList()
+
+        // Assert: AwaitingClarification was emitted with the parsed question/options.
+        val awaiting = states.filterIsInstance<AgentOrchestratorState.AwaitingClarification>().single()
+        assertEquals("Confirm?", awaiting.request.question)
+        assertEquals(listOf("yes", "no"), awaiting.request.options)
+        assertEquals(5_000L, awaiting.request.timeoutMs)
+
+        // The user's reply propagates downstream and ends up in the final Completed state.
+        val completed = states.last() as AgentOrchestratorState.Completed
+        assertEquals("user reply", completed.finalResponse)
+        coVerify { clarificationRepository.requestAnswer(any()) }
     }
 
     @Test
@@ -610,6 +662,7 @@ class GraphExecutionEngineTest {
             SystemNodeExecutor(llmEngine, loadModelUseCase, chatRepository),
             QueueProcessorNodeExecutor(),
             ai.agent.android.domain.engine.executors.SummaryNodeExecutor(llmEngine, loadModelUseCase),
+            ClarificationNodeExecutor(llmEngine, loadModelUseCase, clarificationRepository),
         )
         val engineWithProvider = GraphExecutionEngine(
             realFactory,

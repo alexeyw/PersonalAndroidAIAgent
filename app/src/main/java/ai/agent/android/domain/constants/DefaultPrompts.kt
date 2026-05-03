@@ -34,6 +34,16 @@ object DefaultPrompts {
     const val OUTPUT_FORMAT_PROMPT = "You are a Formatter. Please format the provided input text into a clear, readable markdown response for the user."
 
     /**
+     * Default instruction for a [NodeType.CLARIFICATION] node.
+     *
+     * Tells the LLM to inspect the upstream context and produce a clarification
+     * question — together with an optional list of answer options — as strict JSON.
+     * The executor parses the JSON and forwards it to the user; an empty `options`
+     * array means "free-form input expected".
+     */
+    const val CLARIFICATION_PROMPT = "You are a Clarification Generator. Inspect the user's request and the upstream context, then craft ONE concise clarifying question that would help the agent proceed. If a small set of likely answers is obvious, list them as options; otherwise return an empty array to ask for free-form input. Output STRICTLY valid JSON with this shape and nothing else:\n{\n  \"question\": \"<the question to ask the user>\",\n  \"options\": [\"<option 1>\", \"<option 2>\"]\n}"
+
+    /**
      * Returns the default system prompt for a specific node type.
      */
     fun getDefaultPromptForNodeType(type: NodeType): String? {
@@ -43,6 +53,7 @@ object DefaultPrompts {
             NodeType.EVALUATION -> EVALUATION_PROMPT
             NodeType.SUMMARY -> SUMMARY_PROMPT
             NodeType.OUTPUT -> OUTPUT_FORMAT_PROMPT
+            NodeType.CLARIFICATION -> CLARIFICATION_PROMPT
             NodeType.LITE_RT, NodeType.CLOUD -> SYSTEM_PROMPT_PREFIX
             else -> null
         }

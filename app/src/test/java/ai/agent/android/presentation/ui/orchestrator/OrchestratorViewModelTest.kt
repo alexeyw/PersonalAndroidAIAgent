@@ -391,6 +391,46 @@ class OrchestratorViewModelTest {
     }
 
     @Test
+    fun `addNode supports CLARIFICATION type with default fields`() {
+        viewModel.addNode(NodeType.CLARIFICATION, 50f, 80f)
+
+        val nodes = viewModel.uiState.value.currentPipeline.nodes
+        assertEquals(1, nodes.size)
+        val node = nodes[0]
+        assertEquals(NodeType.CLARIFICATION, node.type)
+        assertEquals(50f, node.x)
+        assertEquals(80f, node.y)
+        assertEquals(null, node.clarificationTimeoutMs)
+        // The default system prompt for CLARIFICATION is the JSON-format instruction.
+        assertNotNull(node.systemPrompt)
+    }
+
+    @Test
+    fun `updateNodeClarificationTimeout updates only the target node`() {
+        viewModel.addNode(NodeType.CLARIFICATION, 0f, 0f)
+        val nodeId = viewModel.uiState.value.currentPipeline.nodes[0].id
+
+        viewModel.updateNodeClarificationTimeout(nodeId, 30_000L)
+
+        val updated = viewModel.uiState.value.currentPipeline.nodes
+            .single { it.id == nodeId }
+        assertEquals(30_000L, updated.clarificationTimeoutMs)
+    }
+
+    @Test
+    fun `updateNodeClarificationTimeout clears timeout when null is passed`() {
+        viewModel.addNode(NodeType.CLARIFICATION, 0f, 0f)
+        val nodeId = viewModel.uiState.value.currentPipeline.nodes[0].id
+        viewModel.updateNodeClarificationTimeout(nodeId, 30_000L)
+
+        viewModel.updateNodeClarificationTimeout(nodeId, null)
+
+        val updated = viewModel.uiState.value.currentPipeline.nodes
+            .single { it.id == nodeId }
+        assertEquals(null, updated.clarificationTimeoutMs)
+    }
+
+    @Test
     fun `dismissPromptPreview resets state to Hidden`() = runTest {
         coEvery { promptTemplateEngine.renderSegments(any(), any()) } returns emptyList()
         viewModel.requestPromptPreview("anything")

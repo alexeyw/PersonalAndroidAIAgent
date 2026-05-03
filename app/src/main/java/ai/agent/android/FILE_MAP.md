@@ -85,6 +85,7 @@ This file maps the contents of the main application package.
     - `LlmInferenceEngine.kt` - LLM engine interface.
     - `TaskQueueManager.kt` - Task queue manager interface.
     - `TextEmbeddingEngine.kt` - Text embedding engine interface.
+    - `executors/ClarificationNodeExecutor.kt` - Executor for `NodeType.CLARIFICATION` that asks the local LLM to generate a question/options JSON, suspends on `ClarificationRepository.requestAnswer`, and forwards the user's reply downstream.
   - `prompt/` - Prompt templating layer.
     - `PromptVariableProvider.kt` - Contract for a single substitutable prompt variable.
     - `PromptTemplateEngine.kt` - Renders templates by substituting `$KEY` placeholders.

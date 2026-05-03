@@ -332,6 +332,23 @@ class OrchestratorViewModel @Inject constructor(
     }
 
     /**
+     * Updates the reply timeout for a CLARIFICATION node.
+     *
+     * @param nodeId The unique identifier of the node.
+     * @param timeoutMs The timeout in milliseconds, or `null` to fall back to the engine default.
+     */
+    fun updateNodeClarificationTimeout(nodeId: String, timeoutMs: Long?) {
+        _uiState.update { state ->
+            val updatedNodes = state.currentPipeline.nodes.map {
+                if (it.id == nodeId) it.copy(clarificationTimeoutMs = timeoutMs) else it
+            }
+            state.copy(
+                currentPipeline = state.currentPipeline.copy(nodes = updatedNodes)
+            )
+        }
+    }
+
+    /**
      * Updates the cloud provider for a CLOUD node.
      *
      * @param nodeId The unique identifier of the node.

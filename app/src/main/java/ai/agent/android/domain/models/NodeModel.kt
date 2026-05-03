@@ -15,6 +15,9 @@ package ai.agent.android.domain.models
  * @property conditionPrompt Free-form prompt for condition classification if type is [NodeType.IF_CONDITION].
  * @property systemPrompt An optional system prompt to configure the behavior of the node.
  * @property cloudProvider An optional provider for a CLOUD node ("auto", "openai", "anthropic", "google", "deepseek").
+ * @property clarificationTimeoutMs Timeout (in ms) the [NodeType.CLARIFICATION] node waits for the
+ * user's reply before falling back to a default answer. `null` means use the engine's default
+ * (60 000 ms). Ignored for non-CLARIFICATION nodes.
  */
 data class NodeModel(
     val id: String,
@@ -28,5 +31,6 @@ data class NodeModel(
     val conditionKeywords: String? = null,
     val conditionPrompt: String? = null,
     val systemPrompt: String? = ai.agent.android.domain.constants.DefaultPrompts.getDefaultPromptForNodeType(type),
-    val cloudProvider: String? = null
+    val cloudProvider: String? = null,
+    val clarificationTimeoutMs: Long? = null,
 )

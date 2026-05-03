@@ -359,6 +359,7 @@ class GraphExecutionEngine @Inject constructor(
             NodeType.INTENT_ROUTER,
             NodeType.DECOMPOSITION,
             NodeType.EVALUATION,
+            NodeType.CLARIFICATION,
         )
     }
 }
