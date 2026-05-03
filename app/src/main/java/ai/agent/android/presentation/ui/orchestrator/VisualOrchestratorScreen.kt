@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.List
@@ -279,10 +280,14 @@ fun VisualOrchestratorScreen(
                     )
                 },
                 text = {
-                    Column {
+                    // The dialog body can grow with several optional sections (variable chips,
+                    // IF_CONDITION fields, CLARIFICATION timeout). Wrap in verticalScroll so the
+                    // tail of the column stays reachable instead of being clipped behind the
+                    // confirm/dismiss buttons.
+                    Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
                         Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
                             TextButton(onClick = { showPromptLibrary = true }) {
-                                Text("Load from Library")
+                                Text("Load")
                             }
                             TextButton(onClick = {
                                 val current = systemPromptValue.text
@@ -291,36 +296,33 @@ fun VisualOrchestratorScreen(
                                     viewModel.clearError() // Just in case, might want a success message
                                 }
                             }) {
-                                Text("Save to Library")
+                                Text("Save")
                             }
-                        }
-                        Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-                            androidx.compose.material3.OutlinedTextField(
-                                value = systemPromptValue,
-                                onValueChange = { systemPromptValue = it },
-                                label = {
-                                    Text(
-                                        if (node.type == NodeType.CLARIFICATION) {
-                                            "Clarification instruction (LLM)"
-                                        } else {
-                                            "System Prompt"
-                                        }
-                                    )
-                                },
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .padding(top = 8.dp),
-                            )
-                            IconButton(
-                                onClick = { viewModel.requestPromptPreview(systemPromptValue.text) },
-                                modifier = Modifier.padding(top = 8.dp, start = 4.dp),
-                            ) {
+                            TextButton(onClick = { viewModel.requestPromptPreview(systemPromptValue.text) }) {
                                 Icon(
                                     imageVector = Icons.Default.Visibility,
-                                    contentDescription = "Preview prompt",
+                                    contentDescription = null,
+                                    modifier = Modifier.padding(end = 4.dp),
                                 )
+                                Text("Preview")
                             }
                         }
+                        androidx.compose.material3.OutlinedTextField(
+                            value = systemPromptValue,
+                            onValueChange = { systemPromptValue = it },
+                            label = {
+                                Text(
+                                    if (node.type == NodeType.CLARIFICATION) {
+                                        "Clarification instruction (LLM)"
+                                    } else {
+                                        "System Prompt"
+                                    }
+                                )
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 8.dp),
+                        )
                         VariableChipsRow(
                             variables = uiState.availableVariables,
                             onChipClick = { token ->
