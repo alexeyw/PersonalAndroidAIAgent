@@ -10,6 +10,8 @@ import ai.agent.android.data.repositories.LocalModelRepositoryImpl
 import ai.agent.android.domain.repositories.LocalModelRepository
 import ai.agent.android.data.repositories.ChatRepositoryImpl
 import ai.agent.android.domain.repositories.ChatRepository
+import ai.agent.android.data.repositories.ClarificationRepositoryImpl
+import ai.agent.android.domain.repositories.ClarificationRepository
 import ai.agent.android.data.repositories.MemoryRepositoryImpl
 import ai.agent.android.domain.repositories.MemoryRepository
 import ai.agent.android.data.engine.MediaPipeTextEmbeddingEngine
@@ -186,5 +188,14 @@ abstract class DataModule {
     abstract fun bindPromptRepository(
         repository: ai.agent.android.data.repositories.PromptRepositoryImpl
     ): ai.agent.android.domain.repositories.PromptRepository
+
+    /**
+     * Binds the [ClarificationRepositoryImpl] implementation to the [ClarificationRepository] interface.
+     */
+    @Binds
+    @Singleton
+    abstract fun bindClarificationRepository(
+        repository: ClarificationRepositoryImpl
+    ): ClarificationRepository
 }
 

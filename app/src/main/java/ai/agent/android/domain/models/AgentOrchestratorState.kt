@@ -38,6 +38,16 @@ sealed interface AgentOrchestratorState {
     data class WaitingForApproval(val toolName: String, val arguments: String) : AgentOrchestratorState
 
     /**
+     * The agent has paused pipeline execution and is waiting for the user to answer a
+     * clarifying question. Distinct from [WaitingForApproval] which is a binary
+     * approve/deny gate around a specific tool invocation: a clarification asks for
+     * arbitrary input (option choice or free-form text) used to refine the next step.
+     *
+     * @property request Details of the pending clarification (question, options, timeout).
+     */
+    data class AwaitingClarification(val request: ClarificationRequest) : AgentOrchestratorState
+
+    /**
      * The tool execution finished.
      *
      * @property toolName The name of the tool.
