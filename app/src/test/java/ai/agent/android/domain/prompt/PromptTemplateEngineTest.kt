@@ -3,8 +3,10 @@ package ai.agent.android.domain.prompt
 import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertThrows
 import org.junit.Before
 import org.junit.Test
 
@@ -233,6 +235,31 @@ class PromptTemplateEngineTest {
             ),
             result,
         )
+    }
+
+    @Test
+    fun `given resolve throws CancellationException when render then rethrows`() = runTest {
+        val cancelling = mockk<PromptVariableProvider>()
+        every { cancelling.key() } returns "DATE"
+        coEvery { cancelling.resolve() } throws CancellationException("cancelled")
+
+        assertThrows(CancellationException::class.java) {
+            kotlinx.coroutines.runBlocking {
+                engine.render("[\$DATE]", listOf(cancelling))
+            }
+        }
+    }
+
+    @Test
+    fun `given key throws CancellationException when render then rethrows`() = runTest {
+        val cancelling = mockk<PromptVariableProvider>()
+        every { cancelling.key() } throws CancellationException("cancelled")
+
+        assertThrows(CancellationException::class.java) {
+            kotlinx.coroutines.runBlocking {
+                engine.render("[\$DATE]", listOf(cancelling))
+            }
+        }
     }
 
     private fun providerOf(key: String, value: String): PromptVariableProvider =

@@ -108,9 +108,9 @@ fun PromptLibraryScreen(
     }
 
     val previewState = uiState.previewState
-    if (previewState is PromptPreviewState.Ready) {
+    if (previewState !is PromptPreviewState.Hidden) {
         PromptPreviewBottomSheet(
-            segments = previewState.segments,
+            segments = (previewState as? PromptPreviewState.Ready)?.segments,
             onDismiss = { viewModel.dismissPromptPreview() }
         )
     }

@@ -1,5 +1,6 @@
 package ai.agent.android.domain.prompt
 
+import kotlinx.coroutines.CancellationException
 import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -75,9 +76,17 @@ class PromptTemplateEngine @Inject constructor() {
                 // Guard key() the same way we guard resolve(): a single broken provider
                 // (e.g. one that throws during lazy initialisation inside key()) MUST NOT
                 // prevent the rest of the prompt from being rendered. Skip it and log.
-                val key = runCatching { provider.key() }
-                    .onFailure { Timber.e(it, "Prompt variable provider key() threw; skipping") }
-                    .getOrNull() ?: continue
+                // CancellationException is rethrown to preserve structured concurrency —
+                // even though key() itself is non-suspend, a sub-call could rethrow a
+                // cancellation observed elsewhere on the calling coroutine.
+                val key = try {
+                    provider.key()
+                } catch (ce: CancellationException) {
+                    throw ce
+                } catch (t: Throwable) {
+                    Timber.e(t, "Prompt variable provider key() threw; skipping")
+                    null
+                } ?: continue
                 put(key, provider)
             }
         }
@@ -111,9 +120,18 @@ class PromptTemplateEngine @Inject constructor() {
                     flushLiteral()
                     segments.add(PromptSegment.Unknown(key))
                 } else {
-                    val value = runCatching { provider.resolve() }
-                        .onFailure { Timber.e(it, "Prompt variable provider \$%s failed", key) }
-                        .getOrDefault("")
+                    // resolve() is suspending I/O. Catch Throwable to render through
+                    // a single broken provider, but rethrow CancellationException so the
+                    // parent coroutine (e.g. viewModelScope) can cancel this rendering
+                    // — swallowing it would break structured concurrency and leak work.
+                    val value = try {
+                        provider.resolve()
+                    } catch (ce: CancellationException) {
+                        throw ce
+                    } catch (t: Throwable) {
+                        Timber.e(t, "Prompt variable provider \$%s failed", key)
+                        ""
+                    }
                     flushLiteral()
                     segments.add(PromptSegment.Resolved(key, value))
                 }

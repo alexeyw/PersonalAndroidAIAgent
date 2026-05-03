@@ -5,9 +5,11 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
@@ -45,16 +47,20 @@ import androidx.compose.ui.unit.dp
  * indicate a typo in the template.
  *
  * The component is a thin presentation shell: the caller is responsible for producing the
- * [segments] list (typically via `PromptTemplateEngine.renderSegments`).
+ * [segments] list (typically via `PromptTemplateEngine.renderSegments`). Pass `null` to
+ * surface the loading state — a centred [CircularProgressIndicator] is shown until the
+ * engine finishes rendering, which matters for slow providers (e.g. `$MEMORY_SUMMARY`
+ * hits the database).
  *
- * @param segments ordered list of segments produced by the prompt engine.
+ * @param segments ordered list of segments produced by the prompt engine, or `null`
+ * while resolution is still in flight.
  * @param onDismiss invoked when the sheet is dragged away or its scrim is tapped.
  * @param modifier optional [Modifier] applied to the [ModalBottomSheet] root.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PromptPreviewBottomSheet(
-    segments: List<PromptSegment>,
+    segments: List<PromptSegment>?,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -74,7 +80,19 @@ fun PromptPreviewBottomSheet(
                 text = "Prompt preview",
                 style = MaterialTheme.typography.titleMedium,
             )
-            PreviewBody(segments = segments, modifier = Modifier.padding(top = 12.dp))
+            if (segments == null) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(120.dp)
+                        .padding(top = 12.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    CircularProgressIndicator()
+                }
+            } else {
+                PreviewBody(segments = segments, modifier = Modifier.padding(top = 12.dp))
+            }
         }
     }
 }
@@ -102,7 +120,9 @@ private fun PreviewBody(
 
     // Pre-compute the inline-placeholder dimensions for every unknown segment so the
     // slot inside `Text` reserves exactly the space the literal `$KEY` would occupy.
-    val inlineContent = remember(segments, textStyle, density) {
+    // Theme colors participate in the cache key — without them the inline content keeps
+    // serving stale colors after a light/dark mode switch.
+    val inlineContent = remember(segments, textStyle, density, unknownBg, unknownFg) {
         buildInlineContent(
             segments = segments,
             textStyle = textStyle,
