@@ -8,6 +8,7 @@ import ai.agent.android.domain.models.NodeModel
 import ai.agent.android.domain.models.Result
 import ai.agent.android.domain.repositories.ClarificationRepository
 import ai.agent.android.domain.usecases.LoadModelUseCase
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import org.json.JSONException
@@ -70,6 +71,10 @@ class ClarificationNodeExecutor @Inject constructor(
                 accumulatedResponse.append(token)
                 emit(AgentOrchestratorState.Thinking(accumulatedResponse.toString()))
             }
+        } catch (e: CancellationException) {
+            // Re-throw to preserve structured-concurrency cancellation. Catching `Exception`
+            // below would otherwise swallow it and the caller would never see the cancel.
+            throw e
         } catch (e: Exception) {
             Timber.tag(TAG).e(e, "[NODE_ERR] type=${node.type.name} id=${node.id} error during clarification generation")
             emit(AgentOrchestratorState.Error(e.message ?: "Unknown error during clarification generation"))

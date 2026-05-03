@@ -14,6 +14,8 @@ import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.runTest
@@ -177,6 +179,20 @@ class ClarificationNodeExecutorTest {
         assertTrue(errorState.message.contains("inference failure"))
         val result = states.last() as NodeExecutionResult
         assertEquals("inference failure", result.error)
+    }
+
+    @Test(expected = CancellationException::class)
+    fun `given LLM stream cancelled when execute then re-throws CancellationException`() = runTest {
+        // Catching `Exception` would swallow CancellationException and break structured
+        // concurrency: the parent coroutine would never observe the cancel. The executor
+        // must rethrow so collectors propagate the cancel up the chain.
+        val node = clarificationNode()
+        coEvery { loadModelUseCase(any()) } returns Result.Success(Unit)
+        every { llmEngine.generateResponseStream(any()) } returns flow {
+            throw CancellationException("cancelled mid-stream")
+        }
+
+        executor.execute(node, "ctx", "session", "prompt").toList()
     }
 
     @Test
