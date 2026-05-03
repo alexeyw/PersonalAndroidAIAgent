@@ -11,6 +11,7 @@ import ai.agent.android.domain.repositories.SettingsRepository
 import ai.agent.android.domain.repositories.ToolRepository
 import ai.agent.android.domain.services.ApprovalNotifier
 import ai.agent.android.domain.usecases.LoadModelUseCase
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.flow.Flow
@@ -101,6 +102,10 @@ class ToolNodeExecutor @Inject constructor(
                 responseStream.collect { token ->
                     accumulatedResponse.append(token)
                 }
+            } catch (e: CancellationException) {
+                // Preserve structured-concurrency cancellation: a broad `catch (Exception)`
+                // would silently swallow cancellation and leave the parent coroutine running.
+                throw e
             } catch (e: Exception) {
                 Timber.tag("PipelineDebug").e(e, "Error generating tool selection via LLM")
                 val errorMsg = "Error generating tool selection: ${e.message}"
@@ -152,6 +157,10 @@ class ToolNodeExecutor @Inject constructor(
                 responseStream.collect { token ->
                     accumulatedResponse.append(token)
                 }
+            } catch (e: CancellationException) {
+                // Preserve structured-concurrency cancellation: a broad `catch (Exception)`
+                // would silently swallow cancellation and leave the parent coroutine running.
+                throw e
             } catch (e: Exception) {
                 Timber.tag("PipelineDebug").e(e, "Error generating tool arguments via LLM")
                 val errorMsg = "Error generating tool arguments: ${e.message}"
@@ -209,6 +218,10 @@ class ToolNodeExecutor @Inject constructor(
         emit(AgentOrchestratorState.ExecutingTool(resolvedToolName, resolvedToolArgs))
         val result = try {
             toolRepository.executeTool(resolvedToolName, resolvedToolArgs)
+        } catch (e: CancellationException) {
+            // Preserve structured-concurrency cancellation: tool execution may suspend,
+            // and a broad `catch (Exception)` would silently swallow the cancel.
+            throw e
         } catch (e: Exception) {
             Timber.tag("PipelineDebug").e(e, "[NODE_ERR] type=${node.type.name} id=${node.id} error executing tool: $resolvedToolName")
             "Error executing $resolvedToolName: ${e.message}"

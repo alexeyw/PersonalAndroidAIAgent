@@ -21,6 +21,7 @@ import ai.koog.prompt.executor.clients.deepseek.DeepSeekModels
 import ai.koog.prompt.executor.clients.google.GoogleModels
 import ai.koog.prompt.executor.clients.openai.OpenAIModels
 import ai.koog.prompt.streaming.StreamFrame
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
@@ -123,6 +124,10 @@ class CloudLlmNodeExecutor @Inject constructor(
                     emit(AgentOrchestratorState.Answering(accumulatedResponse.toString()))
                 }
             }
+        } catch (e: CancellationException) {
+            // Preserve structured-concurrency cancellation: a broad `catch (Exception)`
+            // would silently swallow cancellation and leave the parent coroutine running.
+            throw e
         } catch (e: Exception) {
             Timber.tag("PipelineDebug").e(e, "[NODE_ERR] type=${node.type.name} id=${node.id} error in CloudLlmNodeExecutor generation")
             emit(AgentOrchestratorState.Error(e.message ?: "Unknown error during LLM generation"))
