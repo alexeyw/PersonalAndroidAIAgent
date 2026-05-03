@@ -1,14 +1,17 @@
 package ai.agent.android.presentation.ui.chat
 
+import android.os.SystemClock
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import ai.agent.android.domain.engine.LlmInferenceEngine
 import ai.agent.android.domain.models.AgentOrchestratorState
 import ai.agent.android.domain.models.ChatMessage
 import ai.agent.android.domain.models.ChatSession
+import ai.agent.android.domain.models.ClarificationRequest
 import ai.agent.android.domain.models.Result
 import ai.agent.android.domain.models.Role
 import ai.agent.android.domain.repositories.ChatRepository
+import ai.agent.android.domain.repositories.ClarificationRepository
 import ai.agent.android.domain.repositories.SettingsRepository
 import ai.agent.android.domain.usecases.AgentOrchestratorUseCase
 import ai.agent.android.domain.usecases.GetContextWindowUseCase
@@ -45,6 +48,7 @@ class ChatViewModel @Inject constructor(
     private val getContextWindowUseCase: GetContextWindowUseCase,
     private val activeSessionTracker: ActiveSessionTracker,
     private val llmInferenceEngine: LlmInferenceEngine,
+    private val clarificationRepository: ClarificationRepository,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ChatUiState())
@@ -163,7 +167,14 @@ class ChatViewModel @Inject constructor(
     fun switchSession(sessionId: String) {
         viewModelScope.launch {
             settingsRepository.setCurrentChatSessionId(sessionId)
-            _uiState.update { it.copy(currentSessionId = sessionId, isGenerating = false, orchestratorState = null) }
+            _uiState.update {
+                it.copy(
+                    currentSessionId = sessionId,
+                    isGenerating = false,
+                    orchestratorState = null,
+                    clarificationCards = emptyList(),
+                )
+            }
             loadMessages(sessionId)
             
             // Re-evaluate active session tracking if the UI is currently visible.
@@ -263,6 +274,7 @@ class ChatViewModel @Inject constructor(
                     orchestratorState = null,
                     pipelineTrace = emptyList(),
                     currentStep = null,
+                    clarificationCards = emptyList(),
                 )
             }
 
@@ -280,6 +292,11 @@ class ChatViewModel @Inject constructor(
                 .collect { state ->
                     val isTerminal = state is AgentOrchestratorState.Completed || state is AgentOrchestratorState.Error
                     _uiState.update { current ->
+                        val updatedCards = if (state is AgentOrchestratorState.AwaitingClarification) {
+                            appendClarificationCard(current.clarificationCards, state.request)
+                        } else {
+                            current.clarificationCards
+                        }
                         current.copy(
                             orchestratorState = state,
                             currentStep = when {
@@ -289,6 +306,7 @@ class ChatViewModel @Inject constructor(
                             },
                             pipelineTrace = if (state is AgentOrchestratorState.PipelineTrace) state.steps else current.pipelineTrace,
                             isGenerating = if (isTerminal) false else current.isGenerating,
+                            clarificationCards = updatedCards,
                         )
                     }
                 }
@@ -320,7 +338,16 @@ class ChatViewModel @Inject constructor(
                 )
             }
         }
-        _uiState.update { it.copy(isGenerating = false, currentStep = null, orchestratorState = null) }
+        _uiState.update {
+            it.copy(
+                isGenerating = false,
+                currentStep = null,
+                orchestratorState = null,
+                clarificationCards = it.clarificationCards.filterNot { card ->
+                    card.status == ClarificationCardUiModel.Status.PENDING
+                },
+            )
+        }
     }
 
     /**
@@ -461,5 +488,101 @@ class ChatViewModel @Inject constructor(
     fun resumeWithApproval(isApproved: Boolean) {
         val currentState = _uiState.value
         agentOrchestratorUseCase.resumeWithApproval(currentState.currentSessionId, isApproved)
+    }
+
+    /**
+     * Forwards the user's reply to the suspended pipeline coroutine via
+     * [ClarificationRepository.submitClarification] and updates the matching
+     * [ClarificationCardUiModel] based on whether the repository accepted the reply.
+     *
+     * - When the repository returns `true` (the suspended coroutine consumed
+     *   [answer]), the card flips to [ClarificationCardUiModel.Status.ANSWERED]
+     *   showing what the user typed.
+     * - When the repository returns `false` (the request already timed out,
+     *   was already answered, or the id is unknown), the card flips to
+     *   [ClarificationCardUiModel.Status.TIMED_OUT] showing the default answer the
+     *   pipeline actually consumed. This prevents "You answered: …" from being
+     *   shown when the agent in fact moved on with a different value.
+     *
+     * No-op if [requestId] does not match any currently pending card.
+     *
+     * @param requestId The id of the clarification card being answered.
+     * @param answer The user's reply text (option label or free-form input).
+     */
+    fun submitClarification(requestId: String, answer: String) {
+        val matched = _uiState.value.clarificationCards.firstOrNull {
+            it.id == requestId && it.status == ClarificationCardUiModel.Status.PENDING
+        } ?: return
+
+        viewModelScope.launch {
+            val accepted = clarificationRepository.submitClarification(matched.id, answer)
+            _uiState.update { current ->
+                current.copy(
+                    clarificationCards = current.clarificationCards.map { card ->
+                        if (card.id == requestId && card.status == ClarificationCardUiModel.Status.PENDING) {
+                            if (accepted) {
+                                card.copy(
+                                    status = ClarificationCardUiModel.Status.ANSWERED,
+                                    answer = answer,
+                                )
+                            } else {
+                                card.copy(
+                                    status = ClarificationCardUiModel.Status.TIMED_OUT,
+                                    answer = card.options?.firstOrNull().orEmpty(),
+                                )
+                            }
+                        } else {
+                            card
+                        }
+                    },
+                )
+            }
+        }
+    }
+
+    /**
+     * Marks a clarification card as timed out from the UI's perspective.
+     *
+     * The repository owns the authoritative timeout (`withTimeout`); this call only
+     * updates the visual state of the card so the user sees that the agent fell back
+     * to a default answer. It deliberately does NOT call the repository — the
+     * suspended pipeline coroutine resumes on its own when the repository's timer
+     * fires, and double-submitting would race against that resumption.
+     *
+     * @param requestId The id of the clarification card whose visual countdown elapsed.
+     * @param defaultAnswer The default answer the agent will receive (first option, or
+     *   empty string for free-form requests).
+     */
+    fun markClarificationTimedOut(requestId: String, defaultAnswer: String) {
+        _uiState.update { current ->
+            current.copy(
+                clarificationCards = current.clarificationCards.map { card ->
+                    if (card.id == requestId && card.status == ClarificationCardUiModel.Status.PENDING) {
+                        card.copy(status = ClarificationCardUiModel.Status.TIMED_OUT, answer = defaultAnswer)
+                    } else {
+                        card
+                    }
+                },
+            )
+        }
+    }
+
+    /**
+     * Appends a UI card for [request] to [existing], deduplicating by request id so the
+     * same `AwaitingClarification` state replayed by re-collection (e.g. after a
+     * recomposition or state restoration) does not create a duplicate card.
+     */
+    private fun appendClarificationCard(
+        existing: List<ClarificationCardUiModel>,
+        request: ClarificationRequest,
+    ): List<ClarificationCardUiModel> {
+        if (existing.any { it.id == request.id }) return existing
+        return existing + ClarificationCardUiModel(
+            id = request.id,
+            question = request.question,
+            options = request.options,
+            timeoutMs = request.timeoutMs,
+            startedAtMs = SystemClock.uptimeMillis(),
+        )
     }
 }

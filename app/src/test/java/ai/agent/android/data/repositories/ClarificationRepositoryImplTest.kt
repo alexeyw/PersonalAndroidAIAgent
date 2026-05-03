@@ -11,6 +11,7 @@ import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.yield
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -235,6 +236,52 @@ class ClarificationRepositoryImplTest {
         assertEquals("free-form-reply", secondAnswer.await())
 
         assertEquals(emptyList<ClarificationRequest>(), repository.pendingRequests.first())
+    }
+
+    @Test
+    fun `submitClarification returns true when request was successfully delivered`() = runTest {
+        val request = ClarificationRequest(
+            id = "ret-true",
+            question = "Q?",
+            options = listOf("a", "b"),
+            timeoutMs = 60_000L,
+        )
+
+        val deferredAnswer = async { repository.requestAnswer(request) }
+        yield()
+
+        val accepted = repository.submitClarification("ret-true", "a")
+
+        assertTrue(accepted)
+        assertEquals("a", deferredAnswer.await())
+    }
+
+    @Test
+    fun `submitClarification returns false when requestId is unknown`() = runTest {
+        val accepted = repository.submitClarification("never-existed", "ignored")
+        assertFalse(accepted)
+    }
+
+    @Test
+    fun `submitClarification returns false when request has already timed out`() = runTest {
+        val request = ClarificationRequest(
+            id = "ret-late",
+            question = "Late?",
+            options = listOf("default"),
+            timeoutMs = 50L,
+        )
+
+        val deferredAnswer = async { repository.requestAnswer(request) }
+        yield()
+        // Drive the timeout to completion before submitting.
+        advanceTimeBy(100L)
+        advanceUntilIdle()
+        // The pipeline coroutine has already received the default answer.
+        assertEquals("default", deferredAnswer.await())
+
+        val accepted = repository.submitClarification("ret-late", "too-late")
+
+        assertFalse(accepted)
     }
 
     @Test

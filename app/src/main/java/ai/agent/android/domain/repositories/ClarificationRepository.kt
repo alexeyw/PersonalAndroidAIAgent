@@ -53,11 +53,17 @@ interface ClarificationRepository {
      * Forwards the user's reply to the suspended [requestAnswer] call identified by
      * [requestId].
      *
-     * If [requestId] does not correspond to an active request (e.g. the request has
-     * already been resolved by a timeout, or the id is unknown) the call is a no-op.
+     * Returns `true` only if this call actually delivered [answer] to the suspended
+     * coroutine. Returns `false` when [requestId] is unknown, was already resolved by
+     * a timeout, or was already resolved by a previous reply — i.e. whenever the
+     * agent will NOT consume [answer]. Callers (typically the UI) must use the
+     * return value to avoid showing the user a "your reply was used" message when
+     * the pipeline has already moved on with a different value.
      *
      * @param requestId The id of the [ClarificationRequest] being answered.
      * @param answer The user's reply text.
+     * @return `true` if the suspended pipeline coroutine received [answer], `false`
+     *   if the request was no longer active (unknown id, timed out, or already answered).
      */
-    suspend fun submitClarification(requestId: String, answer: String)
+    suspend fun submitClarification(requestId: String, answer: String): Boolean
 }

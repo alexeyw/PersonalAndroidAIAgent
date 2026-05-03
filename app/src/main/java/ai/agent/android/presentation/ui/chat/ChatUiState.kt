@@ -19,6 +19,10 @@ import ai.agent.android.domain.models.ChatSession
  * @property maxContextSize The maximum allowed size for the prompt context window.
  * @property pipelineTrace The list of pipeline trace steps accumulated during execution.
  * @property currentStep Progress metadata for the pipeline step currently being executed, or null when idle.
+ * @property clarificationCards Cards rendered inline in the chat timeline whenever the
+ *   orchestrator emits an [AgentOrchestratorState.AwaitingClarification] state. Each
+ *   card tracks its own pending/answered/timed-out lifecycle and persists in the UI
+ *   state for the duration of the chat session so the user can see what they answered.
  */
 data class ChatUiState(
     val messages: List<ChatMessage> = emptyList(),
@@ -32,4 +36,5 @@ data class ChatUiState(
     val maxContextSize: Int = 0,
     val pipelineTrace: List<AgentOrchestratorState.TraceStep> = emptyList(),
     val currentStep: AgentOrchestratorState.PipelineStepInfo? = null,
+    val clarificationCards: List<ClarificationCardUiModel> = emptyList(),
 )
