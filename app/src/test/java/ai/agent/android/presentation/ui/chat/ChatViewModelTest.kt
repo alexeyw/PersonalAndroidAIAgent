@@ -4,10 +4,12 @@ import ai.agent.android.domain.engine.LlmInferenceEngine
 import ai.agent.android.domain.models.AgentOrchestratorState
 import ai.agent.android.domain.models.ChatMessage
 import ai.agent.android.domain.models.ChatSession
+import ai.agent.android.domain.models.ClarificationRequest
 import ai.agent.android.domain.models.Role
 import kotlinx.coroutines.delay
 import ai.agent.android.domain.models.Result
 import ai.agent.android.domain.repositories.ChatRepository
+import ai.agent.android.domain.repositories.ClarificationRepository
 import ai.agent.android.domain.usecases.AgentOrchestratorUseCase
 import ai.agent.android.domain.repositories.SettingsRepository
 import ai.agent.android.domain.usecases.GetContextWindowUseCase
@@ -51,6 +53,7 @@ class ChatViewModelTest {
     private lateinit var getContextWindowUseCase: GetContextWindowUseCase
     private lateinit var activeSessionTracker: ActiveSessionTracker
     private lateinit var llmInferenceEngine: LlmInferenceEngine
+    private lateinit var clarificationRepository: ClarificationRepository
     private lateinit var viewModel: ChatViewModel
 
     private fun createViewModel(): ChatViewModel = ChatViewModel(
@@ -61,6 +64,7 @@ class ChatViewModelTest {
         getContextWindowUseCase,
         activeSessionTracker,
         llmInferenceEngine,
+        clarificationRepository,
     )
 
     @Before
@@ -74,6 +78,7 @@ class ChatViewModelTest {
         activeSessionTracker = mockk(relaxed = true)
         llmInferenceEngine = mockk(relaxed = true)
         every { llmInferenceEngine.isInitialized } returns true
+        clarificationRepository = mockk(relaxed = true)
 
         // Mock chat repository flow for any session
         every { chatRepository.getMessagesForSession(any()) } returns flowOf(emptyList())
@@ -466,6 +471,218 @@ class ChatViewModelTest {
         // Init creates a "New Chat" session; the import path must not create any additional session.
         coVerify(exactly = 0) { chatRepository.saveMessage(any()) }
         coVerify(exactly = 0) { chatRepository.saveSession(match { it.name == "Imported Chat" }) }
+    }
+
+    @Test
+    fun `sendMessage should append clarification card on AwaitingClarification state`() = runTest {
+        val userPrompt = "ask me"
+        val request = ClarificationRequest(
+            id = "clr-1",
+            question = "Which option?",
+            options = listOf("A", "B"),
+            timeoutMs = 60_000L,
+        )
+
+        viewModel = createViewModel()
+        advanceUntilIdle()
+
+        val sessionId = viewModel.uiState.value.currentSessionId
+        coEvery { agentOrchestratorUseCase(sessionId, userPrompt) } returns flow {
+            emit(AgentOrchestratorState.AwaitingClarification(request))
+            delay(10_000)
+        }
+
+        viewModel.sendMessage(userPrompt)
+        testScheduler.advanceTimeBy(100)
+
+        val cards = viewModel.uiState.value.clarificationCards
+        assertEquals(1, cards.size)
+        val card = cards.first()
+        assertEquals("clr-1", card.id)
+        assertEquals("Which option?", card.question)
+        assertEquals(listOf("A", "B"), card.options)
+        assertEquals(60_000L, card.timeoutMs)
+        assertEquals(ClarificationCardUiModel.Status.PENDING, card.status)
+        assertNull(card.answer)
+
+        viewModel.stopGeneration()
+        advanceUntilIdle()
+    }
+
+    @Test
+    fun `sendMessage should not duplicate clarification card on repeated AwaitingClarification`() = runTest {
+        val userPrompt = "ask me twice"
+        val request = ClarificationRequest(
+            id = "clr-dup",
+            question = "Once?",
+            options = null,
+            timeoutMs = 5_000L,
+        )
+
+        viewModel = createViewModel()
+        advanceUntilIdle()
+
+        val sessionId = viewModel.uiState.value.currentSessionId
+        coEvery { agentOrchestratorUseCase(sessionId, userPrompt) } returns flow {
+            emit(AgentOrchestratorState.AwaitingClarification(request))
+            emit(AgentOrchestratorState.AwaitingClarification(request))
+            delay(10_000)
+        }
+
+        viewModel.sendMessage(userPrompt)
+        testScheduler.advanceTimeBy(100)
+
+        assertEquals(1, viewModel.uiState.value.clarificationCards.size)
+
+        viewModel.stopGeneration()
+        advanceUntilIdle()
+    }
+
+    @Test
+    fun `submitClarification should mark card answered and forward reply to repository`() = runTest {
+        val userPrompt = "ask me"
+        val request = ClarificationRequest(
+            id = "clr-2",
+            question = "Free form?",
+            options = null,
+            timeoutMs = 60_000L,
+        )
+
+        viewModel = createViewModel()
+        advanceUntilIdle()
+
+        val sessionId = viewModel.uiState.value.currentSessionId
+        coEvery { agentOrchestratorUseCase(sessionId, userPrompt) } returns flow {
+            emit(AgentOrchestratorState.AwaitingClarification(request))
+            delay(10_000)
+        }
+
+        viewModel.sendMessage(userPrompt)
+        testScheduler.advanceTimeBy(100)
+
+        viewModel.submitClarification("clr-2", "the answer")
+        advanceUntilIdle()
+
+        val card = viewModel.uiState.value.clarificationCards.single()
+        assertEquals(ClarificationCardUiModel.Status.ANSWERED, card.status)
+        assertEquals("the answer", card.answer)
+        coVerify { clarificationRepository.submitClarification("clr-2", "the answer") }
+
+        viewModel.stopGeneration()
+        advanceUntilIdle()
+    }
+
+    @Test
+    fun `submitClarification should be no-op when requestId is unknown`() = runTest {
+        viewModel = createViewModel()
+        advanceUntilIdle()
+
+        viewModel.submitClarification("not-a-real-id", "ignored")
+        advanceUntilIdle()
+
+        assertTrue(viewModel.uiState.value.clarificationCards.isEmpty())
+        coVerify(exactly = 0) { clarificationRepository.submitClarification(any(), any()) }
+    }
+
+    @Test
+    fun `markClarificationTimedOut should flip card to TIMED_OUT and not call repository`() = runTest {
+        val userPrompt = "ask me"
+        val request = ClarificationRequest(
+            id = "clr-3",
+            question = "Pick one",
+            options = listOf("Yes", "No"),
+            timeoutMs = 1_000L,
+        )
+
+        viewModel = createViewModel()
+        advanceUntilIdle()
+
+        val sessionId = viewModel.uiState.value.currentSessionId
+        coEvery { agentOrchestratorUseCase(sessionId, userPrompt) } returns flow {
+            emit(AgentOrchestratorState.AwaitingClarification(request))
+            delay(10_000)
+        }
+
+        viewModel.sendMessage(userPrompt)
+        testScheduler.advanceTimeBy(100)
+
+        viewModel.markClarificationTimedOut("clr-3", "Yes")
+        advanceUntilIdle()
+
+        val card = viewModel.uiState.value.clarificationCards.single()
+        assertEquals(ClarificationCardUiModel.Status.TIMED_OUT, card.status)
+        assertEquals("Yes", card.answer)
+        coVerify(exactly = 0) { clarificationRepository.submitClarification(any(), any()) }
+
+        viewModel.stopGeneration()
+        advanceUntilIdle()
+    }
+
+    @Test
+    fun `subsequent AwaitingClarification appends second card without removing the answered first`() = runTest {
+        val userPrompt = "two clarifications"
+        val request1 = ClarificationRequest(id = "clr-a", question = "First?", options = null, timeoutMs = 60_000L)
+        val request2 = ClarificationRequest(id = "clr-b", question = "Second?", options = null, timeoutMs = 60_000L)
+
+        viewModel = createViewModel()
+        advanceUntilIdle()
+
+        val sessionId = viewModel.uiState.value.currentSessionId
+        coEvery { agentOrchestratorUseCase(sessionId, userPrompt) } returns flow {
+            emit(AgentOrchestratorState.AwaitingClarification(request1))
+            delay(50)
+            emit(AgentOrchestratorState.AwaitingClarification(request2))
+            delay(10_000)
+        }
+
+        viewModel.sendMessage(userPrompt)
+        testScheduler.advanceTimeBy(20)
+
+        viewModel.submitClarification("clr-a", "answer-a")
+        testScheduler.advanceTimeBy(100)
+
+        val cards = viewModel.uiState.value.clarificationCards
+        assertEquals(2, cards.size)
+        val first = cards.first { it.id == "clr-a" }
+        val second = cards.first { it.id == "clr-b" }
+        assertEquals(ClarificationCardUiModel.Status.ANSWERED, first.status)
+        assertEquals("answer-a", first.answer)
+        assertEquals(ClarificationCardUiModel.Status.PENDING, second.status)
+        assertNull(second.answer)
+
+        viewModel.stopGeneration()
+        advanceUntilIdle()
+    }
+
+    @Test
+    fun `stopGeneration should drop pending clarification cards and keep answered ones`() = runTest {
+        val userPrompt = "two more"
+        val pending = ClarificationRequest(id = "clr-pending", question = "?", options = null, timeoutMs = 60_000L)
+        val answered = ClarificationRequest(id = "clr-answered", question = "?", options = null, timeoutMs = 60_000L)
+
+        viewModel = createViewModel()
+        advanceUntilIdle()
+
+        val sessionId = viewModel.uiState.value.currentSessionId
+        coEvery { agentOrchestratorUseCase(sessionId, userPrompt) } returns flow {
+            emit(AgentOrchestratorState.AwaitingClarification(answered))
+            delay(50)
+            emit(AgentOrchestratorState.AwaitingClarification(pending))
+            delay(10_000)
+        }
+
+        viewModel.sendMessage(userPrompt)
+        testScheduler.advanceTimeBy(20)
+        viewModel.submitClarification("clr-answered", "kept")
+        testScheduler.advanceTimeBy(100)
+
+        viewModel.stopGeneration()
+        advanceUntilIdle()
+
+        val remaining = viewModel.uiState.value.clarificationCards
+        assertEquals(1, remaining.size)
+        assertEquals("clr-answered", remaining.single().id)
+        assertEquals(ClarificationCardUiModel.Status.ANSWERED, remaining.single().status)
     }
 
     @Test

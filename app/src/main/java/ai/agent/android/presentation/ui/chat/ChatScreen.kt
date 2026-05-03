@@ -168,10 +168,10 @@ fun ChatScreen(
     }
 
     // Auto-scroll to the bottom when new messages arrive or generation starts
-    LaunchedEffect(uiState.messages.size, uiState.isGenerating) {
-        if (uiState.messages.isNotEmpty() || uiState.isGenerating) {
+    LaunchedEffect(uiState.messages.size, uiState.isGenerating, uiState.clarificationCards.size) {
+        if (uiState.messages.isNotEmpty() || uiState.isGenerating || uiState.clarificationCards.isNotEmpty()) {
             val targetIndex =
-                uiState.messages.size + if (uiState.isGenerating) 2 else 1
+                uiState.messages.size + uiState.clarificationCards.size + if (uiState.isGenerating) 2 else 1
             if (targetIndex > 0) {
                 coroutineScope.launch {
                     listState.scrollToItem(targetIndex)
@@ -327,7 +327,21 @@ fun ChatScreen(
                         }
                     }
 
-                    if (uiState.orchestratorState != null && uiState.isGenerating) {
+                    items(uiState.clarificationCards, key = { it.id }) { card ->
+                        ClarificationCard(
+                            model = card,
+                            onAnswer = { answer -> viewModel.submitClarification(card.id, answer) },
+                            onTimeout = { defaultAnswer ->
+                                viewModel.markClarificationTimedOut(card.id, defaultAnswer)
+                            },
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                    }
+
+                    val hasPendingClarification = uiState.clarificationCards.any {
+                        it.status == ClarificationCardUiModel.Status.PENDING
+                    }
+                    if (uiState.orchestratorState != null && uiState.isGenerating && !hasPendingClarification) {
                         item {
                             AgentThoughtIndicator(
                                 state = uiState.orchestratorState!!,
