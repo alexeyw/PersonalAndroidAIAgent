@@ -6,6 +6,7 @@ import ai.agent.android.data.local.models.NodeEntity
 import ai.agent.android.data.local.models.PipelineEntity
 import ai.agent.android.data.local.models.PipelineWithNodesAndConnections
 import ai.agent.android.domain.models.ConnectionModel
+import ai.agent.android.domain.models.NodeContextConfig
 import ai.agent.android.domain.models.NodeModel
 import ai.agent.android.domain.models.NodeType
 import ai.agent.android.domain.models.PipelineGraph
@@ -70,6 +71,45 @@ class LocalPipelineRepositoryImplTest {
         assertEquals("c1", connection.id)
         assertEquals("n1", connection.sourceNodeId)
         assertEquals("n2", connection.targetNodeId)
+
+        // Legacy entities created without an explicit context config must come
+        // back as ALL_ENABLED so pre-Phase-15 pipelines keep behaving the same.
+        assertEquals(NodeContextConfig.ALL_ENABLED, node.contextConfig)
+    }
+
+    @Test
+    fun `getAllPipelines preserves a non-default context config from entity to domain`() = runTest {
+        val customConfig = NodeContextConfig(
+            chatHistory = false,
+            originalTask = true,
+            nodeInput = true,
+            longTermMemory = false,
+            toolResults = false,
+        )
+        val pipelineEntity = PipelineEntity(id = "p1", name = "Test Pipeline")
+        val nodeEntity = NodeEntity(
+            id = "n1",
+            pipelineId = "p1",
+            type = "LITE_RT",
+            x = 0f,
+            y = 0f,
+            label = "Test Node",
+            contextConfig = customConfig,
+        )
+
+        every { pipelineDao.getAllPipelines() } returns flowOf(
+            listOf(
+                PipelineWithNodesAndConnections(
+                    pipeline = pipelineEntity,
+                    nodes = listOf(nodeEntity),
+                    connections = emptyList(),
+                ),
+            ),
+        )
+
+        val result = repository.getAllPipelines().first()
+
+        assertEquals(customConfig, result.first().nodes.first().contextConfig)
     }
 
     @Test
@@ -81,19 +121,57 @@ class LocalPipelineRepositoryImplTest {
             nodes = listOf(NodeModel("n1", NodeType.LITE_RT, 0f, 0f, "Label")),
             connections = listOf(ConnectionModel("c1", "n1", "n2"))
         )
-        
+
         coEvery { pipelineDao.savePipelineTransaction(any(), any(), any()) } returns Unit
 
         // Act
         repository.savePipeline(pipeline)
 
         // Assert
-        coVerify(exactly = 1) { 
+        coVerify(exactly = 1) {
             pipelineDao.savePipelineTransaction(
                 match { it.id == "p1" && it.name == "Test Pipeline" },
                 match { it.size == 1 && it[0].id == "n1" && it[0].type == "LITE_RT" },
                 match { it.size == 1 && it[0].id == "c1" && it[0].sourceNodeId == "n1" && it[0].targetNodeId == "n2" }
-            ) 
+            )
+        }
+    }
+
+    @Test
+    fun `savePipeline forwards context config to entity layer`() = runTest {
+        val customConfig = NodeContextConfig(
+            chatHistory = false,
+            originalTask = true,
+            nodeInput = true,
+            longTermMemory = false,
+            toolResults = true,
+        )
+        val pipeline = PipelineGraph(
+            id = "p1",
+            name = "Test Pipeline",
+            nodes = listOf(
+                NodeModel(
+                    id = "n1",
+                    type = NodeType.LITE_RT,
+                    x = 0f,
+                    y = 0f,
+                    label = "Label",
+                    contextConfig = customConfig,
+                ),
+            ),
+            connections = emptyList(),
+        )
+
+        coEvery { pipelineDao.savePipelineTransaction(any(), any(), any()) } returns Unit
+
+        repository.savePipeline(pipeline)
+
+        coVerify(exactly = 1) {
+            pipelineDao.savePipelineTransaction(
+                any(),
+                match { it.size == 1 && it[0].contextConfig == customConfig },
+                any(),
+            )
         }
     }
 }

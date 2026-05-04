@@ -52,6 +52,7 @@ class LocalPipelineRepositoryImpl @Inject constructor(
                 systemPrompt = it.systemPrompt,
                 cloudProvider = it.cloudProvider,
                 clarificationTimeoutMs = it.clarificationTimeoutMs,
+                contextConfig = it.contextConfig,
             )
         }
         val connectionEntities = pipeline.connections.map {
@@ -91,6 +92,7 @@ class LocalPipelineRepositoryImpl @Inject constructor(
                     systemPrompt = it.systemPrompt ?: ai.agent.android.domain.constants.DefaultPrompts.getDefaultPromptForNodeType(runCatching { NodeType.valueOf(it.type) }.getOrDefault(NodeType.TOOL)),
                     cloudProvider = it.cloudProvider,
                     clarificationTimeoutMs = it.clarificationTimeoutMs,
+                    contextConfig = it.contextConfig,
                 )
             },
             connections = this.connections.map {

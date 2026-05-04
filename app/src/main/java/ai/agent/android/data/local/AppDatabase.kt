@@ -36,7 +36,7 @@ import ai.agent.android.data.local.dao.PromptTemplateDao
         PromptTemplateEntity::class,
         ai.agent.android.data.local.models.TraceStepEntity::class
     ],
-    version = 17,
+    version = 18,
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -209,6 +209,26 @@ abstract class AppDatabase : RoomDatabase() {
         val MIGRATION_16_17 = object : Migration(16, 17) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE `pipeline_nodes` ADD COLUMN `clarificationTimeoutMs` INTEGER")
+            }
+        }
+
+        /**
+         * Migration from version 17 to 18.
+         *
+         * Adds the `context_config` column to `pipeline_nodes` that stores the
+         * per-node [ai.agent.android.domain.models.NodeContextConfig] as a JSON
+         * blob. The default value enables every flag (`chatHistory`,
+         * `originalTask`, `nodeInput`, `longTermMemory`, `toolResults`) so that
+         * existing pipelines keep their pre-Phase-15 behaviour: every node
+         * receives the full context it used to receive.
+         */
+        val MIGRATION_17_18 = object : Migration(17, 18) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "ALTER TABLE `pipeline_nodes` ADD COLUMN `context_config` TEXT NOT NULL " +
+                        "DEFAULT '{\"chatHistory\":true,\"originalTask\":true,\"nodeInput\":true," +
+                        "\"longTermMemory\":true,\"toolResults\":true}'"
+                )
             }
         }
     }
