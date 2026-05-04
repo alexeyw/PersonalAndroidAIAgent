@@ -40,15 +40,14 @@ class Converters {
 
     /**
      * Serialises a [NodeContextConfig] to a compact JSON string suitable for
-     * storage in a single Room TEXT column.
+     * storage in a single Room TEXT column. The matching `pipeline_nodes`
+     * column is `NOT NULL`, so both directions of this converter are non-null.
      *
-     * @param config The config to serialise. `null` is mapped to `null`.
-     * @return A JSON object string with all five boolean flags, or `null`
-     * when the input is `null`.
+     * @param config The config to serialise.
+     * @return A JSON object string with all five boolean flags.
      */
     @TypeConverter
-    fun fromNodeContextConfig(config: NodeContextConfig?): String? {
-        if (config == null) return null
+    fun fromNodeContextConfig(config: NodeContextConfig): String {
         return JSONObject().apply {
             put(KEY_CHAT_HISTORY, config.chatHistory)
             put(KEY_ORIGINAL_TASK, config.originalTask)
@@ -62,19 +61,20 @@ class Converters {
      * Deserialises a JSON string produced by [fromNodeContextConfig] back into
      * a [NodeContextConfig].
      *
-     * For resilience against legacy rows or malformed payloads, the converter
-     * falls back to [NodeContextConfig.ALL_ENABLED] whenever the input is
-     * `null`/blank or cannot be parsed — this preserves the
-     * "everything enabled by default" backward-compatibility contract documented
-     * in the migration script.
+     * Although the schema makes `context_config` `NOT NULL`, this converter
+     * still defends against blank or malformed payloads — both can be produced
+     * by a hypothetical hand-edited DB. In every recoverable case the
+     * converter falls back to [NodeContextConfig.ALL_ENABLED], which is the
+     * same value the migration writes for legacy rows; this preserves the
+     * "everything enabled by default" backward-compatibility contract.
      *
-     * @param value The stored JSON string. May be `null` for legacy rows.
+     * @param value The stored JSON string.
      * @return The parsed configuration, or [NodeContextConfig.ALL_ENABLED] on
      * any error / missing data.
      */
     @TypeConverter
-    fun toNodeContextConfig(value: String?): NodeContextConfig? {
-        if (value.isNullOrBlank()) return NodeContextConfig.ALL_ENABLED
+    fun toNodeContextConfig(value: String): NodeContextConfig {
+        if (value.isBlank()) return NodeContextConfig.ALL_ENABLED
         return try {
             val json = JSONObject(value)
             NodeContextConfig(

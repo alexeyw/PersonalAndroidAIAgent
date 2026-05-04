@@ -2,8 +2,6 @@ package ai.agent.android.data.local
 
 import ai.agent.android.domain.models.NodeContextConfig
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNotNull
-import org.junit.Assert.assertNull
 import org.junit.Before
 import org.junit.Test
 
@@ -23,16 +21,6 @@ class ConvertersTest {
     }
 
     @Test
-    fun `fromNodeContextConfig returns null for null input`() {
-        assertNull(converters.fromNodeContextConfig(null))
-    }
-
-    @Test
-    fun `toNodeContextConfig returns ALL_ENABLED for null input`() {
-        assertEquals(NodeContextConfig.ALL_ENABLED, converters.toNodeContextConfig(null))
-    }
-
-    @Test
     fun `toNodeContextConfig returns ALL_ENABLED for blank input`() {
         assertEquals(NodeContextConfig.ALL_ENABLED, converters.toNodeContextConfig("   "))
     }
@@ -48,8 +36,7 @@ class ConvertersTest {
 
         val result = converters.toNodeContextConfig(partial)
 
-        assertNotNull(result)
-        assertEquals(false, result!!.chatHistory)
+        assertEquals(false, result.chatHistory)
         assertEquals(true, result.originalTask)
         assertEquals(true, result.nodeInput)
         assertEquals(true, result.longTermMemory)
