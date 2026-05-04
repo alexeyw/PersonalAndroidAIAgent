@@ -105,6 +105,7 @@ This file maps the contents of the main application package.
     - `MemoryChunk.kt` - Memory chunk model.
     - `MemorySummary.kt` - Lightweight memory projection (id/text/timestamp) used by `$MEMORY_SUMMARY`.
     - `NetworkState.kt` - Network state model.
+    - `NodeContextConfig.kt` - Per-node selection of pipeline context blocks (chat history, original task, previous node output, long-term memory, tool results) injected on every execution.
     - `NodeExecutionResult.kt` - Result of a node execution.
     - `NodeModel.kt` - Node model.
     - `NodeType.kt` - Node type enum.

@@ -18,6 +18,11 @@ package ai.agent.android.domain.models
  * @property clarificationTimeoutMs Timeout (in ms) the [NodeType.CLARIFICATION] node waits for the
  * user's reply before falling back to a default answer. `null` means use the engine's default
  * (60 000 ms). Ignored for non-CLARIFICATION nodes.
+ * @property contextConfig Per-node selection of pipeline context blocks
+ * (chat history, original task, previous node output, long-term memory, tool
+ * results) that the orchestrator concatenates into the node's input on every
+ * execution. Defaults to [NodeContextConfig.ALL_ENABLED] so legacy pipelines
+ * keep their pre-Phase-15 behaviour.
  */
 data class NodeModel(
     val id: String,
@@ -33,4 +38,5 @@ data class NodeModel(
     val systemPrompt: String? = ai.agent.android.domain.constants.DefaultPrompts.getDefaultPromptForNodeType(type),
     val cloudProvider: String? = null,
     val clarificationTimeoutMs: Long? = null,
+    val contextConfig: NodeContextConfig = NodeContextConfig.ALL_ENABLED,
 )

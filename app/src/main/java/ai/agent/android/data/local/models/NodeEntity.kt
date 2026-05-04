@@ -1,9 +1,11 @@
 package ai.agent.android.data.local.models
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.ForeignKey
 import androidx.room.Index
 import androidx.room.PrimaryKey
+import ai.agent.android.domain.models.NodeContextConfig
 
 /**
  * Room entity representing a single node in a pipeline.
@@ -23,6 +25,11 @@ import androidx.room.PrimaryKey
  * @property cloudProvider An optional provider for a CLOUD node.
  * @property clarificationTimeoutMs Timeout (in ms) for a CLARIFICATION node before it falls back
  * to a default answer. `null` means the engine's default is used.
+ * @property contextConfig Per-node selection of pipeline context blocks
+ * (chat history, original task, previous node output, long-term memory,
+ * tool results) injected on every execution. Stored as JSON via the
+ * `NodeContextConfig` Room TypeConverter; defaults to all flags `true`
+ * for backward compatibility with rows created before Phase 15.
  */
 @Entity(
     tableName = "pipeline_nodes",
@@ -52,4 +59,6 @@ data class NodeEntity(
     val systemPrompt: String? = null,
     val cloudProvider: String? = null,
     val clarificationTimeoutMs: Long? = null,
+    @ColumnInfo(name = "context_config")
+    val contextConfig: NodeContextConfig = NodeContextConfig.ALL_ENABLED,
 )
