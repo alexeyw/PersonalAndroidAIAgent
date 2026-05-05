@@ -126,8 +126,12 @@ class GraphExecutionEngine @Inject constructor(
                     toolResults = toolInvocationResults.toList(),
                     memoryEntries = relevantMemories,
                 )
+                // No fallback to currentInputText: an empty result is the
+                // intended outcome of a sparse config (e.g. only toolResults=true
+                // before any tool has run). Step 3/6 forbids the all-flags-false
+                // case at the validation layer, so we will not silently leak
+                // previous-node output back into a node that opted out.
                 nodeContextBuilder.build(currentNode.contextConfig, executionContext)
-                    .ifEmpty { currentInputText }
             } else {
                 currentInputText
             }
@@ -161,7 +165,13 @@ class GraphExecutionEngine @Inject constructor(
 
             if (currentNode.type == NodeType.TOOL) {
                 val toolOutput = nodeResult?.outputText ?: ""
-                val toolName = currentNode.toolName ?: currentNode.label
+                // Prefer the executor-resolved tool name so "auto"-configured TOOL
+                // nodes attribute the observation to the tool that actually ran,
+                // not the literal "auto" placeholder. Fall back to the node's
+                // configured toolName, then the node label as a last resort.
+                val toolName = nodeResult?.resolvedToolName
+                    ?: currentNode.toolName?.takeUnless { it.equals("auto", ignoreCase = true) }
+                    ?: currentNode.label
                 toolInvocationResults += ToolInvocationResult(toolName = toolName, output = toolOutput)
             }
 

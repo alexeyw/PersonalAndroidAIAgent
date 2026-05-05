@@ -960,6 +960,84 @@ class GraphExecutionEngineTest {
     }
 
     @Test
+    fun `given TOOL node configured as auto when executed then resolved tool name is recorded for downstream Tool Results block`() = runTest {
+        every { settingsRepository.pipelineMaxSteps } returns flowOf(15)
+        every { settingsRepository.requiresUserConfirmation } returns flowOf(false)
+
+        // Two tools registered; the LITE_RT used by ToolNodeExecutor for auto-selection
+        // returns a JSON object naming "web.search" — so the observation must be
+        // attributed to "web.search", not to the configured placeholder "auto".
+        coEvery { toolRepository.getAvailableTools() } returns listOf(
+            AgentTool("web.search", "Search the web", "{}"),
+            AgentTool("calendar.read", "Read the calendar", "{}"),
+        )
+        coEvery { toolRepository.executeTool("web.search", any()) } returns "search-result"
+
+        val inputNode = NodeModel("input", NodeType.INPUT, 0f, 0f)
+        val toolNode = NodeModel(
+            id = "tool",
+            type = NodeType.TOOL,
+            x = 0f,
+            y = 0f,
+            toolName = "auto",
+            // Sparse config: only Tool Results — proves that downstream nodes see
+            // the resolved tool, not the literal "auto" placeholder.
+            contextConfig = NodeContextConfig(
+                chatHistory = false,
+                originalTask = false,
+                nodeInput = false,
+                longTermMemory = false,
+                toolResults = true,
+            ),
+        )
+        val downstreamNode = NodeModel(
+            id = "llm",
+            type = NodeType.LITE_RT,
+            x = 0f,
+            y = 0f,
+            contextConfig = NodeContextConfig(
+                chatHistory = false,
+                originalTask = false,
+                nodeInput = false,
+                longTermMemory = false,
+                toolResults = true,
+            ),
+        )
+        val outputNode = NodeModel("output", NodeType.OUTPUT, 0f, 0f, systemPrompt = null)
+
+        val graph = PipelineGraph(
+            id = "g1", name = "Auto Tool Attribution",
+            nodes = listOf(inputNode, toolNode, downstreamNode, outputNode),
+            connections = listOf(
+                ConnectionModel("c1", "input", "tool"),
+                ConnectionModel("c2", "tool", "llm"),
+                ConnectionModel("c3", "llm", "output"),
+            ),
+        )
+
+        // Two LLM consumers fire in order:
+        //   1. ToolNodeExecutor's auto-selection LLM → returns the JSON tool choice
+        //   2. The downstream LITE_RT node → return value is irrelevant for this test
+        every { llmEngine.generateResponseStream(any()) } returnsMany listOf(
+            flowOf("{\"tool\":\"web.search\",\"arguments\":{\"q\":\"weather\"}}"),
+            flowOf("downstream answer"),
+        )
+
+        engine(sessionId, "find weather", graph).toList()
+
+        // The downstream LITE_RT prompt must carry the Tool Results block attributed
+        // to the resolved tool name, NOT the literal "auto" or the node label.
+        io.mockk.verify {
+            llmEngine.generateResponseStream(match {
+                it.contains("--- Tool Results ---") &&
+                    it.contains("web.search: search-result") &&
+                    !it.contains("auto: search-result") &&
+                    !it.contains("TOOL: search-result")
+            })
+        }
+    }
+
+    @Test
     fun `given control-flow nodes when executed then their input is not wrapped with context headers`() = runTest {
         every { settingsRepository.pipelineMaxSteps } returns flowOf(15)
 

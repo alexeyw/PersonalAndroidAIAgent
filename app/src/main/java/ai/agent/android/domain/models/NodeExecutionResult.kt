@@ -9,6 +9,10 @@ package ai.agent.android.domain.models
  * @property routingKey For intent-router nodes, the matched routing key.
  * @property tokenCount Approximate number of LLM tokens produced by the node, or `null`
  *   for non-LLM nodes. Used to attribute token usage per trace step and per node type.
+ * @property resolvedToolName For TOOL nodes only — the actual tool that was selected
+ *   and executed. When the node is configured with `toolName = "auto"` the executor
+ *   resolves the concrete tool dynamically; the engine reads this field to record
+ *   the real attribution in `ToolInvocationResult`. `null` for non-TOOL nodes.
  */
 data class NodeExecutionResult(
     val outputText: String? = null,
@@ -16,4 +20,5 @@ data class NodeExecutionResult(
     val conditionResult: Boolean? = null,
     val routingKey: String? = null,
     val tokenCount: Int? = null,
+    val resolvedToolName: String? = null,
 )
