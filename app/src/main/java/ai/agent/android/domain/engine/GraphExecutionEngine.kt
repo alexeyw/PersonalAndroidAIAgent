@@ -78,6 +78,11 @@ class GraphExecutionEngine @Inject constructor(
         // reuse to avoid re-embedding the same query for every node iteration.
         val relevantMemories: List<MemoryChunk> = try {
             retrieveRelevantMemoryUseCase(userPrompt)
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            // Memory retrieval suspends (embedding + DB lookup). Swallowing
+            // cancellation here would let the parent flow keep running after
+            // the caller cancelled, breaking structured concurrency.
+            throw e
         } catch (e: Exception) {
             Timber.tag("PipelineDebug").w(e, "Failed to retrieve long-term memories; continuing without them")
             emptyList()

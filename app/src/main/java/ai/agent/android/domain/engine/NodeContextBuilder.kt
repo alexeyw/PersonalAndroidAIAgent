@@ -53,7 +53,7 @@ class NodeContextBuilder @Inject constructor() {
      * @return The concatenated context string, with blocks separated by a
      * blank line. May be empty if no enabled flag yields any content.
      */
-    suspend fun build(config: NodeContextConfig, ctx: PipelineExecutionContext): String {
+    fun build(config: NodeContextConfig, ctx: PipelineExecutionContext): String {
         val blocks = mutableListOf<String>()
 
         if (config.originalTask && ctx.originalUserMessage.isNotBlank()) {
