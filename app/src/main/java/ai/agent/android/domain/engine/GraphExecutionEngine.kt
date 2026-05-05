@@ -8,6 +8,7 @@ import ai.agent.android.domain.prompt.PromptVariableProvider
 import ai.agent.android.domain.repositories.ChatRepository
 import ai.agent.android.domain.repositories.MetricsRepository
 import ai.agent.android.domain.repositories.SettingsRepository
+import ai.agent.android.domain.usecases.RetrieveRelevantMemoryUseCase
 import kotlinx.coroutines.flow.*
 import timber.log.Timber
 import javax.inject.Inject
@@ -27,6 +28,8 @@ class GraphExecutionEngine @Inject constructor(
     private val metricsRepository: MetricsRepository,
     private val promptTemplateEngine: PromptTemplateEngine,
     private val promptVariableProviders: Set<@JvmSuppressWildcards PromptVariableProvider>,
+    private val nodeContextBuilder: NodeContextBuilder,
+    private val retrieveRelevantMemoryUseCase: RetrieveRelevantMemoryUseCase,
 ) {
 
     /**
@@ -65,11 +68,23 @@ class GraphExecutionEngine @Inject constructor(
         var currentNode: NodeModel? = inputNode
         var stepCount = 0
         var currentInputText = userPrompt
-        
+
         val activeQueue = mutableListOf<String>()
         var activeQueueProcessorId: String? = null
         val queueResults = mutableListOf<String>()
         val traceSteps = mutableListOf<AgentOrchestratorState.TraceStep>()
+
+        // Memory retrieval is keyed off the immutable userPrompt; resolve once and
+        // reuse to avoid re-embedding the same query for every node iteration.
+        val relevantMemories: List<MemoryChunk> = try {
+            retrieveRelevantMemoryUseCase(userPrompt)
+        } catch (e: Exception) {
+            Timber.tag("PipelineDebug").w(e, "Failed to retrieve long-term memories; continuing without them")
+            emptyList()
+        }
+        // Tool invocations are accumulated as TOOL nodes complete and surfaced
+        // via the `--- Tool Results ---` block on later nodes that opt in.
+        val toolInvocationResults = mutableListOf<ToolInvocationResult>()
 
         while (currentNode != null && stepCount < maxSteps) {
             stepCount++
@@ -97,9 +112,29 @@ class GraphExecutionEngine @Inject constructor(
             // `systemPrompt` or use it for non-LLM logic where placeholders are not expected.
             val nodeForExecution = renderNodeSystemPrompt(currentNode)
 
+            // Compose the executor input by selecting only the context blocks the node
+            // opted into via its [NodeContextConfig]. Control-flow nodes (INPUT,
+            // IF_CONDITION, QUEUE_PROCESSOR) keep their raw passthrough semantics —
+            // wrapping them would corrupt routing/queue state. OUTPUT in echo mode
+            // (no systemPrompt) is also passed through so it forwards the upstream
+            // result verbatim instead of leaking context headers to the user.
+            val executorInput = if (shouldComposeContext(currentNode)) {
+                val executionContext = PipelineExecutionContext(
+                    originalUserMessage = userPrompt,
+                    chatHistory = chatRepository.getMessagesForSession(sessionId).first(),
+                    previousNodeOutput = currentInputText,
+                    toolResults = toolInvocationResults.toList(),
+                    memoryEntries = relevantMemories,
+                )
+                nodeContextBuilder.build(currentNode.contextConfig, executionContext)
+                    .ifEmpty { currentInputText }
+            } else {
+                currentInputText
+            }
+
             val nodeStartMs = System.currentTimeMillis()
             try {
-                executor.execute(nodeForExecution, currentInputText, sessionId, userPrompt)
+                executor.execute(nodeForExecution, executorInput, sessionId, userPrompt)
                     .collect { stateOrResult ->
                         if (stateOrResult is AgentOrchestratorState) {
                             emit(stateOrResult)
@@ -122,6 +157,12 @@ class GraphExecutionEngine @Inject constructor(
                 Timber.tag("PipelineDebug").e("[NODE_ERR] type=${currentNode.type.name} id=${currentNode.id} error=${nodeResult?.error}")
                 emit(AgentOrchestratorState.Error(nodeResult?.error!!))
                 return@flow
+            }
+
+            if (currentNode.type == NodeType.TOOL) {
+                val toolOutput = nodeResult?.outputText ?: ""
+                val toolName = currentNode.toolName ?: currentNode.label
+                toolInvocationResults += ToolInvocationResult(toolName = toolName, output = toolOutput)
             }
 
             if (currentNode.type != NodeType.INPUT && currentNode.type != NodeType.OUTPUT) {
@@ -301,6 +342,28 @@ class GraphExecutionEngine @Inject constructor(
     }
 
     /**
+     * Decides whether [node]'s input string should be assembled by
+     * [NodeContextBuilder] (true) or passed through as the raw
+     * `currentInputText` (false).
+     *
+     * Composition is meaningful only for nodes that interpret their input as
+     * an LLM prompt or a task description for a tool call. Control-flow nodes
+     * ([NodeType.INPUT], [NodeType.IF_CONDITION], [NodeType.QUEUE_PROCESSOR])
+     * either echo their input or use it for routing — wrapping them with
+     * context headers would break their downstream contract.
+     *
+     * [NodeType.OUTPUT] in "echo" mode (no `systemPrompt`) is treated like a
+     * passthrough so the user-visible response stays clean of context
+     * scaffolding; an OUTPUT node with a configured `systemPrompt` is an LLM
+     * formatter and benefits from the assembled context.
+     */
+    private fun shouldComposeContext(node: NodeModel): Boolean {
+        if (node.type !in CONTEXT_AWARE_NODE_TYPES) return false
+        if (node.type == NodeType.OUTPUT && node.systemPrompt.isNullOrBlank()) return false
+        return true
+    }
+
+    /**
      * Returns a copy of [node] with its `systemPrompt` rendered through
      * [PromptTemplateEngine], substituting all `$VARIABLE` placeholders using the
      * injected [PromptVariableProvider] set. For nodes whose `systemPrompt` is
@@ -360,6 +423,24 @@ class GraphExecutionEngine @Inject constructor(
             NodeType.DECOMPOSITION,
             NodeType.EVALUATION,
             NodeType.CLARIFICATION,
+        )
+
+        /**
+         * Node types whose executor input is assembled via [NodeContextBuilder].
+         * Mirrors [LLM_NODE_TYPES] plus [NodeType.TOOL] (which uses an internal
+         * LLM call to choose tools / generate arguments and therefore benefits
+         * from context blocks even when its `systemPrompt` is null).
+         */
+        private val CONTEXT_AWARE_NODE_TYPES: Set<NodeType> = setOf(
+            NodeType.LITE_RT,
+            NodeType.CLOUD,
+            NodeType.OUTPUT,
+            NodeType.SUMMARY,
+            NodeType.INTENT_ROUTER,
+            NodeType.DECOMPOSITION,
+            NodeType.EVALUATION,
+            NodeType.CLARIFICATION,
+            NodeType.TOOL,
         )
     }
 }
