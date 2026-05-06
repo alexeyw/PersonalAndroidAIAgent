@@ -380,7 +380,7 @@ class OrchestratorViewModel @Inject constructor(
             state.copy(
                 currentPipeline = state.currentPipeline.copy(nodes = updatedNodes),
                 errorMessage = if (incomingAllDisabled) {
-                    "Необходим хотя бы один источник данных"
+                    "At least one data source must remain enabled"
                 } else {
                     null
                 },
@@ -483,7 +483,7 @@ class OrchestratorViewModel @Inject constructor(
                                 is ai.agent.android.domain.models.PipelineValidationError.NodeEmptyContext -> {
                                     val name = _uiState.value.currentPipeline.nodes
                                         .find { it.id == err.nodeId }?.label ?: err.nodeId
-                                    "Нода «$name» не получит никаких данных — включите хотя бы один источник"
+                                    "Node \"$name\" will not receive any data — enable at least one source"
                                 }
                             }
                         }

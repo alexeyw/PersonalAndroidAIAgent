@@ -471,7 +471,7 @@ class OrchestratorViewModelTest {
         val updated = viewModel.uiState.value.currentPipeline.nodes.single { it.id == nodeId }
         assertEquals(true, updated.contextConfig.nodeInput)
         assertEquals(
-            "Необходим хотя бы один источник данных",
+            "At least one data source must remain enabled",
             viewModel.uiState.value.errorMessage,
         )
     }
@@ -516,8 +516,8 @@ class OrchestratorViewModelTest {
 
         val msg = viewModel.uiState.value.errorMessage
         assertNotNull(msg)
-        assertTrue(msg!!.contains("Нода «${node.label}»"))
-        assertTrue(msg.contains("включите хотя бы один источник"))
+        assertTrue(msg!!.contains("Node \"${node.label}\""))
+        assertTrue(msg.contains("enable at least one source"))
     }
 
     @Test
