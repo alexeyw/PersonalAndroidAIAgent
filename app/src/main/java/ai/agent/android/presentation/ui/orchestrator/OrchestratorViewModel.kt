@@ -3,6 +3,7 @@ package ai.agent.android.presentation.ui.orchestrator
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import ai.agent.android.domain.models.ConnectionModel
+import ai.agent.android.domain.models.NodeContextConfig
 import ai.agent.android.domain.models.NodeModel
 import ai.agent.android.domain.models.NodeType
 import ai.agent.android.domain.models.PipelineGraph
@@ -349,6 +350,45 @@ class OrchestratorViewModel @Inject constructor(
     }
 
     /**
+     * Updates the per-node context configuration that controls which pipeline
+     * context blocks (chat history, original task, previous node output,
+     * long-term memory, tool results) are concatenated into the node's input
+     * on every execution.
+     *
+     * Two invariants are enforced here as a safety net for cases where the
+     * UI layer is bypassed (JSON import, programmatic updates, future
+     * regressions):
+     *
+     * 1. The `nodeInput` flag is forced to `true` — the previous node's
+     *    output is the canonical input source for any node in a chain, so
+     *    disabling it would silently break the pipeline.
+     * 2. If the caller passes a config with every flag disabled, the
+     *    `errorMessage` is set so the UI can surface a Snackbar prompting
+     *    the user to keep at least one source enabled.
+     *
+     * @param nodeId The unique identifier of the node to update.
+     * @param config The desired [NodeContextConfig]; sanitized before use.
+     */
+    fun updateNodeContextConfig(nodeId: String, config: NodeContextConfig) {
+        val incomingAllDisabled = !config.chatHistory && !config.originalTask &&
+            !config.nodeInput && !config.longTermMemory && !config.toolResults
+        val sanitized = config.copy(nodeInput = true)
+        _uiState.update { state ->
+            val updatedNodes = state.currentPipeline.nodes.map {
+                if (it.id == nodeId) it.copy(contextConfig = sanitized) else it
+            }
+            state.copy(
+                currentPipeline = state.currentPipeline.copy(nodes = updatedNodes),
+                errorMessage = if (incomingAllDisabled) {
+                    "Необходим хотя бы один источник данных"
+                } else {
+                    null
+                },
+            )
+        }
+    }
+
+    /**
      * Updates the cloud provider for a CLOUD node.
      *
      * @param nodeId The unique identifier of the node.
@@ -440,6 +480,11 @@ class OrchestratorViewModel @Inject constructor(
                                 is ai.agent.android.domain.models.PipelineValidationError.DisconnectedOutput -> "OUTPUT node is not connected"
                                 is ai.agent.android.domain.models.PipelineValidationError.UnreachableNode -> "Some nodes are unreachable from INPUT"
                                 is ai.agent.android.domain.models.PipelineValidationError.DeadEndNode -> "Some nodes do not reach OUTPUT"
+                                is ai.agent.android.domain.models.PipelineValidationError.NodeEmptyContext -> {
+                                    val name = _uiState.value.currentPipeline.nodes
+                                        .find { it.id == err.nodeId }?.label ?: err.nodeId
+                                    "Нода «$name» не получит никаких данных — включите хотя бы один источник"
+                                }
                             }
                         }
                     } else {
