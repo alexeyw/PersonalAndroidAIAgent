@@ -370,8 +370,7 @@ class OrchestratorViewModel @Inject constructor(
      * @param config The desired [NodeContextConfig]; sanitized before use.
      */
     fun updateNodeContextConfig(nodeId: String, config: NodeContextConfig) {
-        val incomingAllDisabled = !config.chatHistory && !config.originalTask &&
-            !config.nodeInput && !config.longTermMemory && !config.toolResults
+        val incomingAllDisabled = config.isEmpty()
         val sanitized = config.copy(nodeInput = true)
         _uiState.update { state ->
             val updatedNodes = state.currentPipeline.nodes.map {
