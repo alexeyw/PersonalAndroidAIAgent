@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.MaterialTheme
@@ -12,6 +13,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 
@@ -124,9 +126,13 @@ fun NodeContextConfigSection(
  * Single checkbox row used inside [NodeContextConfigSection]. Renders a
  * Material 3 `Checkbox` next to a two-line label/hint column.
  *
- * When [enabled] is `false` the checkbox is rendered in the disabled style
- * and clicks are ignored — this is how we communicate the locked-on
- * "Previous node output" flag without inventing a custom indicator.
+ * The whole [Row] is the click target — `Modifier.toggleable` with
+ * `Role.Checkbox` flips the flag and announces the row as a single
+ * checkbox to TalkBack, so users do not need to aim at the small icon.
+ * Passing `null` for [onCheckedChange] disables the toggle and removes
+ * the click target entirely; combined with `enabled = false` on the
+ * `Checkbox`, this is how the locked-on "Previous node output" row is
+ * rendered.
  *
  * @param checked Current value of the flag.
  * @param enabled Whether the user can toggle the flag.
@@ -143,15 +149,30 @@ private fun ContextFlagRow(
     hint: String,
     onCheckedChange: ((Boolean) -> Unit)?,
 ) {
+    val rowModifier = if (onCheckedChange != null && enabled) {
+        Modifier
+            .fillMaxWidth()
+            .toggleable(
+                value = checked,
+                role = Role.Checkbox,
+                onValueChange = onCheckedChange,
+            )
+            .padding(vertical = 2.dp)
+    } else {
+        Modifier
+            .fillMaxWidth()
+            .padding(vertical = 2.dp)
+    }
     Row(
         verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 2.dp),
+        modifier = rowModifier,
     ) {
+        // Click handling is hoisted onto the Row, so the checkbox itself
+        // does not need its own listener. Passing `null` here also lets
+        // TalkBack treat the row as a single semantics node.
         Checkbox(
             checked = checked,
-            onCheckedChange = onCheckedChange,
+            onCheckedChange = null,
             enabled = enabled,
         )
         Column(modifier = Modifier.padding(start = 4.dp)) {

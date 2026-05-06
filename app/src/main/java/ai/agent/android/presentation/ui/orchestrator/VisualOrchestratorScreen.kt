@@ -414,18 +414,22 @@ fun VisualOrchestratorScreen(
                                 ?.let { it * 1000L }
                             viewModel.updateNodeClarificationTimeout(node.id, timeoutMs)
                         }
-                        // Persist the context flags. `nodeInput` is hard-coded
-                        // to true here to mirror the locked-on UI checkbox;
-                        // the ViewModel will sanitise it again as a defence in
-                        // depth, but we send the canonical value anyway so the
-                        // call site reads correctly.
+                        // Persist the context flags. `nodeInput` is sent as
+                        // `false` even though the UI shows it locked-on: the
+                        // ViewModel uses `config.isEmpty()` to surface the
+                        // "at least one source" snackbar, and forcing
+                        // `nodeInput = true` here would mask that signal when
+                        // the user toggled every other flag off. The
+                        // ViewModel re-applies `nodeInput = true` as part of
+                        // its sanitisation, so the persisted config remains
+                        // safe.
                         if (showContextSection) {
                             viewModel.updateNodeContextConfig(
                                 node.id,
                                 NodeContextConfig(
                                     chatHistory = ctxChatHistory,
                                     originalTask = ctxOriginalTask,
-                                    nodeInput = true,
+                                    nodeInput = false,
                                     longTermMemory = ctxLongTermMemory,
                                     toolResults = ctxToolResults,
                                 ),
