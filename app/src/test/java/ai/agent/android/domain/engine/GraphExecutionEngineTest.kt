@@ -117,10 +117,13 @@ class GraphExecutionEngineTest {
             metricsRepository,
             promptTemplateEngine,
             promptVariableProviders,
+            NodeContextBuilder(),
+            retrieveRelevantMemoryUseCase,
         )
 
         coEvery { getContextWindowUseCase(sessionId) } returns ""
         coEvery { retrieveRelevantMemoryUseCase(any()) } returns emptyList()
+        every { chatRepository.getMessagesForSession(any()) } returns flowOf(emptyList())
         every { settingsRepository.systemPromptPrefix } returns flowOf("")
         every { settingsRepository.toolUsageInstruction } returns flowOf("")
         every { settingsRepository.requiresUserConfirmation } returns flowOf(false)
@@ -306,6 +309,8 @@ class GraphExecutionEngineTest {
             mockk(relaxed = true),
             PromptTemplateEngine(),
             emptySet(),
+            NodeContextBuilder(),
+            mockk(relaxed = true),
         )
 
         engineWithMock.resumeWithApproval("session_id_123", true)
@@ -455,13 +460,17 @@ class GraphExecutionEngineTest {
 
         assertTrue("Expected Completed but got: ${states.last()}", states.last() is AgentOrchestratorState.Completed)
 
-        // LITE_RT must receive the original user query, not the routing key
+        // LITE_RT must receive the original user query (now wrapped by NodeContextBuilder),
+        // not the routing key. We assert the user input section contains the query and
+        // never contains the routing key as a standalone payload.
         io.mockk.verify {
-            llmEngine.generateResponseStream(match { it.contains("USER/INPUT: fuel consumption query") })
+            llmEngine.generateResponseStream(match {
+                it.contains("USER/INPUT:") && it.contains("fuel consumption query")
+            })
         }
-        // No downstream node must receive the routing key as its user input
+        // No downstream node must receive the routing key as its previous-node-output payload.
         io.mockk.verify(exactly = 0) {
-            llmEngine.generateResponseStream(match { it.contains("USER/INPUT: Data") })
+            llmEngine.generateResponseStream(match { it.contains("Previous Node Output ---\nData") })
         }
     }
 
@@ -678,6 +687,8 @@ class GraphExecutionEngineTest {
             metricsRepository,
             PromptTemplateEngine(),
             setOf(dateProvider),
+            NodeContextBuilder(),
+            retrieveRelevantMemoryUseCase,
         )
 
         val inputNode = NodeModel("input", NodeType.INPUT, 0f, 0f)
@@ -821,6 +832,8 @@ class GraphExecutionEngineTest {
             metricsRepository,
             PromptTemplateEngine(),
             emptySet(),
+            NodeContextBuilder(),
+            retrieveRelevantMemoryUseCase,
         )
 
         // Generate a question with two options; the first one is the default the
@@ -863,5 +876,188 @@ class GraphExecutionEngineTest {
         // unanswered request.
         val completed = states.last() as AgentOrchestratorState.Completed
         assertEquals("default-option", completed.finalResponse)
+    }
+
+    // ─── NodeContextBuilder integration ──────────────────────────────────────
+
+    @Test
+    fun `given LITE_RT with default ALL_ENABLED config when executed then assembled context reaches LLM`() = runTest {
+        every { settingsRepository.pipelineMaxSteps } returns flowOf(15)
+
+        val inputNode = NodeModel("input", NodeType.INPUT, 0f, 0f)
+        val llmNode = NodeModel("llm", NodeType.LITE_RT, 0f, 0f)
+        val outputNode = NodeModel("output", NodeType.OUTPUT, 0f, 0f, systemPrompt = null)
+
+        val graph = PipelineGraph(
+            id = "g1", name = "Context Wrap Test",
+            nodes = listOf(inputNode, llmNode, outputNode),
+            connections = listOf(
+                ConnectionModel("c1", "input", "llm"),
+                ConnectionModel("c2", "llm", "output"),
+            ),
+        )
+
+        every { llmEngine.generateResponseStream(any()) } returns flowOf("ok")
+
+        engine(sessionId, "what's the weather?", graph).toList()
+
+        // The Original Task header must wrap the user message; Previous Node Output
+        // header must carry INPUT's echoed payload (also "what's the weather?").
+        io.mockk.verify {
+            llmEngine.generateResponseStream(match {
+                it.contains("--- Original Task ---") &&
+                    it.contains("what's the weather?") &&
+                    it.contains("--- Previous Node Output ---")
+            })
+        }
+    }
+
+    @Test
+    fun `given LITE_RT with only originalTask flag when executed then disabled blocks are absent from prompt`() = runTest {
+        every { settingsRepository.pipelineMaxSteps } returns flowOf(15)
+
+        val inputNode = NodeModel("input", NodeType.INPUT, 0f, 0f)
+        val llmNode = NodeModel(
+            id = "llm",
+            type = NodeType.LITE_RT,
+            x = 0f,
+            y = 0f,
+            contextConfig = NodeContextConfig(
+                chatHistory = false,
+                originalTask = true,
+                nodeInput = false,
+                longTermMemory = false,
+                toolResults = false,
+            ),
+        )
+        val outputNode = NodeModel("output", NodeType.OUTPUT, 0f, 0f, systemPrompt = null)
+
+        val graph = PipelineGraph(
+            id = "g1", name = "Single-Flag Config Test",
+            nodes = listOf(inputNode, llmNode, outputNode),
+            connections = listOf(
+                ConnectionModel("c1", "input", "llm"),
+                ConnectionModel("c2", "llm", "output"),
+            ),
+        )
+
+        every { llmEngine.generateResponseStream(any()) } returns flowOf("ok")
+
+        engine(sessionId, "the question", graph).toList()
+
+        // Only the Original Task block (with the user prompt) is allowed in the prompt;
+        // the headers for disabled blocks must not appear.
+        io.mockk.verify {
+            llmEngine.generateResponseStream(match {
+                it.contains("--- Original Task ---") &&
+                    it.contains("the question") &&
+                    !it.contains("--- Chat History ---") &&
+                    !it.contains("--- Long-Term Memory ---") &&
+                    !it.contains("--- Tool Results ---") &&
+                    !it.contains("--- Previous Node Output ---")
+            })
+        }
+    }
+
+    @Test
+    fun `given TOOL node configured as auto when executed then resolved tool name is recorded for downstream Tool Results block`() = runTest {
+        every { settingsRepository.pipelineMaxSteps } returns flowOf(15)
+        every { settingsRepository.requiresUserConfirmation } returns flowOf(false)
+
+        // Two tools registered; the LITE_RT used by ToolNodeExecutor for auto-selection
+        // returns a JSON object naming "web.search" — so the observation must be
+        // attributed to "web.search", not to the configured placeholder "auto".
+        coEvery { toolRepository.getAvailableTools() } returns listOf(
+            AgentTool("web.search", "Search the web", "{}"),
+            AgentTool("calendar.read", "Read the calendar", "{}"),
+        )
+        coEvery { toolRepository.executeTool("web.search", any()) } returns "search-result"
+
+        val inputNode = NodeModel("input", NodeType.INPUT, 0f, 0f)
+        val toolNode = NodeModel(
+            id = "tool",
+            type = NodeType.TOOL,
+            x = 0f,
+            y = 0f,
+            toolName = "auto",
+            // Sparse config: only Tool Results — proves that downstream nodes see
+            // the resolved tool, not the literal "auto" placeholder.
+            contextConfig = NodeContextConfig(
+                chatHistory = false,
+                originalTask = false,
+                nodeInput = false,
+                longTermMemory = false,
+                toolResults = true,
+            ),
+        )
+        val downstreamNode = NodeModel(
+            id = "llm",
+            type = NodeType.LITE_RT,
+            x = 0f,
+            y = 0f,
+            contextConfig = NodeContextConfig(
+                chatHistory = false,
+                originalTask = false,
+                nodeInput = false,
+                longTermMemory = false,
+                toolResults = true,
+            ),
+        )
+        val outputNode = NodeModel("output", NodeType.OUTPUT, 0f, 0f, systemPrompt = null)
+
+        val graph = PipelineGraph(
+            id = "g1", name = "Auto Tool Attribution",
+            nodes = listOf(inputNode, toolNode, downstreamNode, outputNode),
+            connections = listOf(
+                ConnectionModel("c1", "input", "tool"),
+                ConnectionModel("c2", "tool", "llm"),
+                ConnectionModel("c3", "llm", "output"),
+            ),
+        )
+
+        // Two LLM consumers fire in order:
+        //   1. ToolNodeExecutor's auto-selection LLM → returns the JSON tool choice
+        //   2. The downstream LITE_RT node → return value is irrelevant for this test
+        every { llmEngine.generateResponseStream(any()) } returnsMany listOf(
+            flowOf("{\"tool\":\"web.search\",\"arguments\":{\"q\":\"weather\"}}"),
+            flowOf("downstream answer"),
+        )
+
+        engine(sessionId, "find weather", graph).toList()
+
+        // The downstream LITE_RT prompt must carry the Tool Results block attributed
+        // to the resolved tool name, NOT the literal "auto" or the node label.
+        io.mockk.verify {
+            llmEngine.generateResponseStream(match {
+                it.contains("--- Tool Results ---") &&
+                    it.contains("web.search: search-result") &&
+                    !it.contains("auto: search-result") &&
+                    !it.contains("TOOL: search-result")
+            })
+        }
+    }
+
+    @Test
+    fun `given control-flow nodes when executed then their input is not wrapped with context headers`() = runTest {
+        every { settingsRepository.pipelineMaxSteps } returns flowOf(15)
+
+        // INPUT echoes its raw input; if the engine wrapped it, the OUTPUT (echo mode)
+        // would surface the wrapped string as the final response. The fact that the
+        // pipeline below produces "raw passthrough" verifies INPUT is left untouched.
+        val inputNode = NodeModel("input", NodeType.INPUT, 0f, 0f)
+        val outputNode = NodeModel("output", NodeType.OUTPUT, 0f, 0f, systemPrompt = null)
+
+        val graph = PipelineGraph(
+            id = "g1", name = "Passthrough Test",
+            nodes = listOf(inputNode, outputNode),
+            connections = listOf(
+                ConnectionModel("c1", "input", "output"),
+            ),
+        )
+
+        val states = engine(sessionId, "raw passthrough", graph).toList()
+
+        val completed = states.last() as AgentOrchestratorState.Completed
+        assertEquals("raw passthrough", completed.finalResponse)
     }
 }

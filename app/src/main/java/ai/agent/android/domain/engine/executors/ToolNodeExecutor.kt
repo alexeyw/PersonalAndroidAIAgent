@@ -210,7 +210,10 @@ class ToolNodeExecutor @Inject constructor(
                     )
                 )
                 emit(AgentOrchestratorState.ObservationResult(resolvedToolName, "Execution denied by user"))
-                emit(NodeExecutionResult(outputText = "Execution denied by user"))
+                emit(NodeExecutionResult(
+                    outputText = "Execution denied by user",
+                    resolvedToolName = resolvedToolName,
+                ))
                 return@flow
             }
         }
@@ -236,7 +239,7 @@ class ToolNodeExecutor @Inject constructor(
                 timestamp = System.currentTimeMillis()
             )
         )
-        emit(NodeExecutionResult(outputText = result))
+        emit(NodeExecutionResult(outputText = result, resolvedToolName = resolvedToolName))
     }
 
     @androidx.annotation.VisibleForTesting

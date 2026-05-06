@@ -83,6 +83,8 @@ This file maps the contents of the main application package.
     - `DefaultPipelineFactory.kt` - Factory for default pipelines.
     - `GraphExecutionEngine.kt` - Engine responsible for executing PipelineGraphs.
     - `LlmInferenceEngine.kt` - LLM engine interface.
+    - `NodeContextBuilder.kt` - Assembles a node's executor input by concatenating only the context blocks enabled by its `NodeContextConfig` (Original Task, Chat History, Long-Term Memory, Tool Results, Previous Node Output).
+    - `PipelineExecutionContext.kt` - Immutable per-iteration snapshot of pipeline-scoped data (original user message, chat history, previous node output, tool invocation results, memory entries) consumed by `NodeContextBuilder`.
     - `TaskQueueManager.kt` - Task queue manager interface.
     - `TextEmbeddingEngine.kt` - Text embedding engine interface.
     - `executors/ClarificationNodeExecutor.kt` - Executor for `NodeType.CLARIFICATION` that asks the local LLM to generate a question/options JSON, suspends on `ClarificationRepository.requestAnswer`, and forwards the user's reply downstream.
@@ -117,6 +119,7 @@ This file maps the contents of the main application package.
     - `Role.kt` - Chat role enum.
     - `RoutingDecision.kt` - Routing decision model.
     - `TaskPriority.kt` - Task priority enum.
+    - `ToolInvocationResult.kt` - Snapshot of a single tool invocation (toolName + output) accumulated by `GraphExecutionEngine` during a pipeline run for the `--- Tool Results ---` block.
   - `repositories/` - Repository interfaces.
     - `ApiKeyRepository.kt` - API key repository interface.
     - `ChatRepository.kt` - Chat repository interface.
