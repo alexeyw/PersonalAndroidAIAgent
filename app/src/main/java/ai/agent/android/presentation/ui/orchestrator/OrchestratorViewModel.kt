@@ -168,7 +168,8 @@ class OrchestratorViewModel @Inject constructor(
             type = type,
             x = x,
             y = y,
-            cloudProvider = if (type == NodeType.CLOUD) "auto" else null
+            cloudProvider = if (type == NodeType.CLOUD) "auto" else null,
+            contextConfig = NodeContextConfig.defaultForType(type),
         )
         _uiState.update { state ->
             val updatedPipeline = state.currentPipeline.copy(

@@ -407,6 +407,76 @@ class OrchestratorViewModelTest {
     }
 
     @Test
+    fun `addNode applies recommended contextConfig for LITE_RT`() {
+        viewModel.addNode(NodeType.LITE_RT, 0f, 0f)
+
+        val node = viewModel.uiState.value.currentPipeline.nodes.single()
+        assertEquals(NodeContextConfig.defaultForType(NodeType.LITE_RT), node.contextConfig)
+        // Sanity: the LITE_RT preset trims chat history / memory / tool results.
+        assertEquals(false, node.contextConfig.chatHistory)
+        assertEquals(true, node.contextConfig.originalTask)
+        assertEquals(true, node.contextConfig.nodeInput)
+        assertEquals(false, node.contextConfig.longTermMemory)
+        assertEquals(false, node.contextConfig.toolResults)
+    }
+
+    @Test
+    fun `addNode applies recommended contextConfig for CLOUD`() {
+        viewModel.addNode(NodeType.CLOUD, 0f, 0f)
+
+        val node = viewModel.uiState.value.currentPipeline.nodes.single()
+        assertEquals(NodeContextConfig.defaultForType(NodeType.CLOUD), node.contextConfig)
+        assertEquals(true, node.contextConfig.chatHistory)
+        assertEquals(true, node.contextConfig.originalTask)
+        assertEquals(true, node.contextConfig.nodeInput)
+        assertEquals(false, node.contextConfig.longTermMemory)
+        assertEquals(false, node.contextConfig.toolResults)
+    }
+
+    @Test
+    fun `addNode applies recommended contextConfig for TOOL`() {
+        viewModel.addNode(NodeType.TOOL, 0f, 0f)
+
+        val node = viewModel.uiState.value.currentPipeline.nodes.single()
+        assertEquals(NodeContextConfig.defaultForType(NodeType.TOOL), node.contextConfig)
+        assertEquals(false, node.contextConfig.chatHistory)
+        assertEquals(false, node.contextConfig.originalTask)
+        assertEquals(true, node.contextConfig.nodeInput)
+        assertEquals(false, node.contextConfig.longTermMemory)
+        assertEquals(false, node.contextConfig.toolResults)
+    }
+
+    @Test
+    fun `addNode applies recommended contextConfig for OUTPUT (all enabled)`() {
+        viewModel.addNode(NodeType.OUTPUT, 0f, 0f)
+
+        val node = viewModel.uiState.value.currentPipeline.nodes.single()
+        assertEquals(NodeContextConfig.ALL_ENABLED, node.contextConfig)
+    }
+
+    @Test
+    fun `addNode applies recommended contextConfig for CLARIFICATION`() {
+        viewModel.addNode(NodeType.CLARIFICATION, 0f, 0f)
+
+        val node = viewModel.uiState.value.currentPipeline.nodes.single()
+        assertEquals(NodeContextConfig.defaultForType(NodeType.CLARIFICATION), node.contextConfig)
+        assertEquals(false, node.contextConfig.chatHistory)
+        assertEquals(true, node.contextConfig.originalTask)
+        assertEquals(true, node.contextConfig.nodeInput)
+    }
+
+    @Test
+    fun `addNode applies recommended contextConfig for QUEUE_PROCESSOR`() {
+        viewModel.addNode(NodeType.QUEUE_PROCESSOR, 0f, 0f)
+
+        val node = viewModel.uiState.value.currentPipeline.nodes.single()
+        assertEquals(NodeContextConfig.defaultForType(NodeType.QUEUE_PROCESSOR), node.contextConfig)
+        assertEquals(true, node.contextConfig.originalTask)
+        assertEquals(true, node.contextConfig.nodeInput)
+        assertEquals(false, node.contextConfig.chatHistory)
+    }
+
+    @Test
     fun `updateNodeClarificationTimeout updates only the target node`() {
         viewModel.addNode(NodeType.CLARIFICATION, 0f, 0f)
         val nodeId = viewModel.uiState.value.currentPipeline.nodes[0].id
@@ -502,8 +572,9 @@ class OrchestratorViewModelTest {
         assertEquals(false, target.contextConfig.originalTask)
         assertEquals(false, target.contextConfig.longTermMemory)
         assertEquals(false, target.contextConfig.toolResults)
-        // The untouched node still carries the default ALL_ENABLED config.
-        assertEquals(NodeContextConfig.ALL_ENABLED, other.contextConfig)
+        // The untouched node still carries the recommended default for its
+        // type (LITE_RT — `nodeInput` + `originalTask` only).
+        assertEquals(NodeContextConfig.defaultForType(NodeType.LITE_RT), other.contextConfig)
     }
 
     @Test
