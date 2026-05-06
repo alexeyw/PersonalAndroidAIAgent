@@ -359,24 +359,12 @@ class GraphExecutionEngine @Inject constructor(
     /**
      * Decides whether [node]'s input string should be assembled by
      * [NodeContextBuilder] (true) or passed through as the raw
-     * `currentInputText` (false).
-     *
-     * Composition is meaningful only for nodes that interpret their input as
-     * an LLM prompt or a task description for a tool call. Control-flow nodes
-     * ([NodeType.INPUT], [NodeType.IF_CONDITION], [NodeType.QUEUE_PROCESSOR])
-     * either echo their input or use it for routing — wrapping them with
-     * context headers would break their downstream contract.
-     *
-     * [NodeType.OUTPUT] in "echo" mode (no `systemPrompt`) is treated like a
-     * passthrough so the user-visible response stays clean of context
-     * scaffolding; an OUTPUT node with a configured `systemPrompt` is an LLM
-     * formatter and benefits from the assembled context.
+     * `currentInputText` (false). Delegates to [NodeModel.usesContextConfig],
+     * the single source of truth shared with `PipelineGraph.validate()` so
+     * the validator only flags empty configs on nodes that actually consume
+     * them.
      */
-    private fun shouldComposeContext(node: NodeModel): Boolean {
-        if (node.type !in CONTEXT_AWARE_NODE_TYPES) return false
-        if (node.type == NodeType.OUTPUT && node.systemPrompt.isNullOrBlank()) return false
-        return true
-    }
+    private fun shouldComposeContext(node: NodeModel): Boolean = node.usesContextConfig()
 
     /**
      * Returns a copy of [node] with its `systemPrompt` rendered through
@@ -438,24 +426,6 @@ class GraphExecutionEngine @Inject constructor(
             NodeType.DECOMPOSITION,
             NodeType.EVALUATION,
             NodeType.CLARIFICATION,
-        )
-
-        /**
-         * Node types whose executor input is assembled via [NodeContextBuilder].
-         * Mirrors [LLM_NODE_TYPES] plus [NodeType.TOOL] (which uses an internal
-         * LLM call to choose tools / generate arguments and therefore benefits
-         * from context blocks even when its `systemPrompt` is null).
-         */
-        private val CONTEXT_AWARE_NODE_TYPES: Set<NodeType> = setOf(
-            NodeType.LITE_RT,
-            NodeType.CLOUD,
-            NodeType.OUTPUT,
-            NodeType.SUMMARY,
-            NodeType.INTENT_ROUTER,
-            NodeType.DECOMPOSITION,
-            NodeType.EVALUATION,
-            NodeType.CLARIFICATION,
-            NodeType.TOOL,
         )
     }
 }

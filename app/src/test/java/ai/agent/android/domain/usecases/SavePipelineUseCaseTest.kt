@@ -1,6 +1,7 @@
 package ai.agent.android.domain.usecases
 
 import ai.agent.android.domain.models.ConnectionModel
+import ai.agent.android.domain.models.NodeContextConfig
 import ai.agent.android.domain.models.NodeModel
 import ai.agent.android.domain.models.NodeType
 import ai.agent.android.domain.models.PipelineGraph
@@ -8,6 +9,8 @@ import ai.agent.android.domain.repositories.PipelineRepository
 import io.mockk.coVerify
 import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -154,6 +157,206 @@ class SavePipelineUseCaseTest {
         assertTrue(exception?.errors?.contains(ai.agent.android.domain.models.PipelineValidationError.DisconnectedInput) == true)
         assertTrue(exception?.errors?.contains(ai.agent.android.domain.models.PipelineValidationError.DisconnectedOutput) == true)
         coVerify(exactly = 0) { pipelineRepository.savePipeline(any()) }
+    }
+
+    @Test
+    fun `invoke should return failure when non-INPUT node has all context flags disabled`() = runTest {
+        val emptyContext = NodeContextConfig(
+            chatHistory = false,
+            originalTask = false,
+            nodeInput = false,
+            longTermMemory = false,
+            toolResults = false,
+        )
+        val invalidPipeline = PipelineGraph(
+            id = "9",
+            name = "Test 9",
+            nodes = listOf(
+                NodeModel("n1", NodeType.INPUT, 0f, 0f),
+                NodeModel("n2", NodeType.TOOL, 5f, 5f, contextConfig = emptyContext),
+                NodeModel("n3", NodeType.OUTPUT, 10f, 10f),
+            ),
+            connections = listOf(
+                ConnectionModel("c1", "n1", "n2"),
+                ConnectionModel("c2", "n2", "n3"),
+            ),
+        )
+
+        val result = useCase(invalidPipeline)
+
+        assertTrue(result.isFailure)
+        val exception = result.exceptionOrNull() as? ai.agent.android.domain.models.PipelineValidationException
+        assertEquals(
+            ai.agent.android.domain.models.PipelineValidationError.NodeEmptyContext("n2"),
+            exception?.errors?.firstOrNull {
+                it is ai.agent.android.domain.models.PipelineValidationError.NodeEmptyContext
+            },
+        )
+        coVerify(exactly = 0) { pipelineRepository.savePipeline(any()) }
+    }
+
+    @Test
+    fun `invoke should not flag IF_CONDITION or QUEUE_PROCESSOR when context config is empty`() = runTest {
+        val emptyContext = NodeContextConfig(
+            chatHistory = false,
+            originalTask = false,
+            nodeInput = false,
+            longTermMemory = false,
+            toolResults = false,
+        )
+        // IF_CONDITION and QUEUE_PROCESSOR bypass NodeContextBuilder at runtime,
+        // so an empty NodeContextConfig is harmless and must not block saving.
+        val pipeline = PipelineGraph(
+            id = "9b",
+            name = "Test 9b",
+            nodes = listOf(
+                NodeModel("n1", NodeType.INPUT, 0f, 0f),
+                NodeModel("n2", NodeType.IF_CONDITION, 5f, 5f, contextConfig = emptyContext),
+                NodeModel("n3", NodeType.QUEUE_PROCESSOR, 7f, 7f, contextConfig = emptyContext),
+                NodeModel("n4", NodeType.OUTPUT, 10f, 10f),
+            ),
+            connections = listOf(
+                ConnectionModel("c1", "n1", "n2"),
+                ConnectionModel("c2", "n2", "n3"),
+                ConnectionModel("c3", "n3", "n4"),
+            ),
+        )
+
+        val errors = pipeline.validate()
+        assertFalse(
+            errors.any { it is ai.agent.android.domain.models.PipelineValidationError.NodeEmptyContext },
+        )
+    }
+
+    @Test
+    fun `invoke should not flag OUTPUT in echo mode when context config is empty`() = runTest {
+        val emptyContext = NodeContextConfig(
+            chatHistory = false,
+            originalTask = false,
+            nodeInput = false,
+            longTermMemory = false,
+            toolResults = false,
+        )
+        // Echo-mode OUTPUT (systemPrompt = null) is a passthrough and ignores
+        // contextConfig; an empty config must not produce a validation error.
+        val pipeline = PipelineGraph(
+            id = "9c",
+            name = "Test 9c",
+            nodes = listOf(
+                NodeModel("n1", NodeType.INPUT, 0f, 0f),
+                NodeModel(
+                    id = "n2",
+                    type = NodeType.OUTPUT,
+                    x = 10f,
+                    y = 10f,
+                    systemPrompt = null,
+                    contextConfig = emptyContext,
+                ),
+            ),
+            connections = listOf(ConnectionModel("c1", "n1", "n2")),
+        )
+
+        val errors = pipeline.validate()
+        assertFalse(
+            errors.any { it is ai.agent.android.domain.models.PipelineValidationError.NodeEmptyContext },
+        )
+    }
+
+    @Test
+    fun `invoke should flag OUTPUT with systemPrompt when context config is empty`() = runTest {
+        val emptyContext = NodeContextConfig(
+            chatHistory = false,
+            originalTask = false,
+            nodeInput = false,
+            longTermMemory = false,
+            toolResults = false,
+        )
+        // OUTPUT with a configured systemPrompt acts as an LLM formatter and
+        // does consume contextConfig — an empty config is a real problem.
+        val pipeline = PipelineGraph(
+            id = "9d",
+            name = "Test 9d",
+            nodes = listOf(
+                NodeModel("n1", NodeType.INPUT, 0f, 0f),
+                NodeModel(
+                    id = "n2",
+                    type = NodeType.OUTPUT,
+                    x = 10f,
+                    y = 10f,
+                    systemPrompt = "Format the answer as markdown.",
+                    contextConfig = emptyContext,
+                ),
+            ),
+            connections = listOf(ConnectionModel("c1", "n1", "n2")),
+        )
+
+        val errors = pipeline.validate()
+        assertTrue(
+            errors.any {
+                it is ai.agent.android.domain.models.PipelineValidationError.NodeEmptyContext &&
+                    it.nodeId == "n2"
+            },
+        )
+    }
+
+    @Test
+    fun `invoke should not flag INPUT node when its context config is empty`() = runTest {
+        val emptyContext = NodeContextConfig(
+            chatHistory = false,
+            originalTask = false,
+            nodeInput = false,
+            longTermMemory = false,
+            toolResults = false,
+        )
+        val pipeline = PipelineGraph(
+            id = "10",
+            name = "Test 10",
+            nodes = listOf(
+                NodeModel("n1", NodeType.INPUT, 0f, 0f, contextConfig = emptyContext),
+                NodeModel("n2", NodeType.OUTPUT, 10f, 10f),
+            ),
+            connections = listOf(
+                ConnectionModel("c1", "n1", "n2"),
+            ),
+        )
+
+        val result = useCase(pipeline)
+
+        assertTrue(result.isSuccess)
+        coVerify { pipelineRepository.savePipeline(pipeline) }
+    }
+
+    @Test
+    fun `invoke should succeed when every non-INPUT node has at least one context flag enabled`() = runTest {
+        val minimalContext = NodeContextConfig(
+            chatHistory = false,
+            originalTask = false,
+            nodeInput = true,
+            longTermMemory = false,
+            toolResults = false,
+        )
+        val pipeline = PipelineGraph(
+            id = "11",
+            name = "Test 11",
+            nodes = listOf(
+                NodeModel("n1", NodeType.INPUT, 0f, 0f),
+                NodeModel("n2", NodeType.TOOL, 5f, 5f, contextConfig = minimalContext),
+                NodeModel("n3", NodeType.OUTPUT, 10f, 10f, contextConfig = minimalContext),
+            ),
+            connections = listOf(
+                ConnectionModel("c1", "n1", "n2"),
+                ConnectionModel("c2", "n2", "n3"),
+            ),
+        )
+
+        val result = useCase(pipeline)
+
+        assertTrue(result.isSuccess)
+        val errors = pipeline.validate()
+        assertFalse(
+            errors.any { it is ai.agent.android.domain.models.PipelineValidationError.NodeEmptyContext },
+        )
+        coVerify { pipelineRepository.savePipeline(pipeline) }
     }
 
     @Test

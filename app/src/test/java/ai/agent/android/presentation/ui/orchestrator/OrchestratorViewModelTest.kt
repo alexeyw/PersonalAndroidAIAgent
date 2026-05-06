@@ -1,5 +1,6 @@
 package ai.agent.android.presentation.ui.orchestrator
 
+import ai.agent.android.domain.models.NodeContextConfig
 import ai.agent.android.domain.models.NodeType
 import ai.agent.android.domain.models.PipelineGraph
 import ai.agent.android.domain.models.AgentTool
@@ -428,6 +429,95 @@ class OrchestratorViewModelTest {
         val updated = viewModel.uiState.value.currentPipeline.nodes
             .single { it.id == nodeId }
         assertEquals(null, updated.clarificationTimeoutMs)
+    }
+
+    @Test
+    fun `updateNodeContextConfig updates target node and forces nodeInput true`() {
+        viewModel.addNode(NodeType.TOOL, 0f, 0f)
+        val nodeId = viewModel.uiState.value.currentPipeline.nodes[0].id
+
+        val requested = NodeContextConfig(
+            chatHistory = true,
+            originalTask = false,
+            nodeInput = false,
+            longTermMemory = true,
+            toolResults = false,
+        )
+        viewModel.updateNodeContextConfig(nodeId, requested)
+
+        val updated = viewModel.uiState.value.currentPipeline.nodes.single { it.id == nodeId }
+        assertEquals(true, updated.contextConfig.nodeInput)
+        assertEquals(true, updated.contextConfig.chatHistory)
+        assertEquals(false, updated.contextConfig.originalTask)
+        assertEquals(true, updated.contextConfig.longTermMemory)
+        assertEquals(false, updated.contextConfig.toolResults)
+        assertEquals(null, viewModel.uiState.value.errorMessage)
+    }
+
+    @Test
+    fun `updateNodeContextConfig with all flags disabled sets snackbar message and forces nodeInput true`() {
+        viewModel.addNode(NodeType.TOOL, 0f, 0f)
+        val nodeId = viewModel.uiState.value.currentPipeline.nodes[0].id
+
+        val empty = NodeContextConfig(
+            chatHistory = false,
+            originalTask = false,
+            nodeInput = false,
+            longTermMemory = false,
+            toolResults = false,
+        )
+        viewModel.updateNodeContextConfig(nodeId, empty)
+
+        val updated = viewModel.uiState.value.currentPipeline.nodes.single { it.id == nodeId }
+        assertEquals(true, updated.contextConfig.nodeInput)
+        assertEquals(
+            "At least one data source must remain enabled",
+            viewModel.uiState.value.errorMessage,
+        )
+    }
+
+    @Test
+    fun `updateNodeContextConfig with valid config clears error message`() {
+        viewModel.addNode(NodeType.TOOL, 0f, 0f)
+        val nodeId = viewModel.uiState.value.currentPipeline.nodes[0].id
+        viewModel.updateNodeContextConfig(
+            nodeId,
+            NodeContextConfig(false, false, false, false, false),
+        )
+        assertNotNull(viewModel.uiState.value.errorMessage)
+
+        viewModel.updateNodeContextConfig(
+            nodeId,
+            NodeContextConfig(
+                chatHistory = false,
+                originalTask = true,
+                nodeInput = true,
+                longTermMemory = false,
+                toolResults = false,
+            ),
+        )
+
+        assertEquals(null, viewModel.uiState.value.errorMessage)
+    }
+
+    @Test
+    fun `saveCurrentPipeline maps NodeEmptyContext to localized message with node label`() = runTest {
+        viewModel.addNode(NodeType.TOOL, 0f, 0f)
+        val node = viewModel.uiState.value.currentPipeline.nodes[0]
+
+        val errors = listOf(
+            ai.agent.android.domain.models.PipelineValidationError.NodeEmptyContext(node.id),
+        )
+        val exception = ai.agent.android.domain.models.PipelineValidationException(errors)
+        coEvery { savePipelineUseCase(any()) } returns Result.failure(exception)
+
+        viewModel.saveCurrentPipeline()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        val msg = viewModel.uiState.value.errorMessage
+        assertNotNull(msg)
+        assertTrue(msg!!.contains("Node \"${node.label}\""))
+        assertTrue(msg.contains("enable at least one source"))
     }
 
     @Test

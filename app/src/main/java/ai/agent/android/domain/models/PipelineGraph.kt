@@ -149,6 +149,12 @@ data class PipelineGraph(
             }
         }
 
+        nodes.forEach { node ->
+            if (node.usesContextConfig() && node.contextConfig.isEmpty()) {
+                errors.add(PipelineValidationError.NodeEmptyContext(node.id))
+            }
+        }
+
         return errors
     }
 }
