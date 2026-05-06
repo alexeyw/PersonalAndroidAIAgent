@@ -196,6 +196,110 @@ class SavePipelineUseCaseTest {
     }
 
     @Test
+    fun `invoke should not flag IF_CONDITION or QUEUE_PROCESSOR when context config is empty`() = runTest {
+        val emptyContext = NodeContextConfig(
+            chatHistory = false,
+            originalTask = false,
+            nodeInput = false,
+            longTermMemory = false,
+            toolResults = false,
+        )
+        // IF_CONDITION and QUEUE_PROCESSOR bypass NodeContextBuilder at runtime,
+        // so an empty NodeContextConfig is harmless and must not block saving.
+        val pipeline = PipelineGraph(
+            id = "9b",
+            name = "Test 9b",
+            nodes = listOf(
+                NodeModel("n1", NodeType.INPUT, 0f, 0f),
+                NodeModel("n2", NodeType.IF_CONDITION, 5f, 5f, contextConfig = emptyContext),
+                NodeModel("n3", NodeType.QUEUE_PROCESSOR, 7f, 7f, contextConfig = emptyContext),
+                NodeModel("n4", NodeType.OUTPUT, 10f, 10f),
+            ),
+            connections = listOf(
+                ConnectionModel("c1", "n1", "n2"),
+                ConnectionModel("c2", "n2", "n3"),
+                ConnectionModel("c3", "n3", "n4"),
+            ),
+        )
+
+        val errors = pipeline.validate()
+        assertFalse(
+            errors.any { it is ai.agent.android.domain.models.PipelineValidationError.NodeEmptyContext },
+        )
+    }
+
+    @Test
+    fun `invoke should not flag OUTPUT in echo mode when context config is empty`() = runTest {
+        val emptyContext = NodeContextConfig(
+            chatHistory = false,
+            originalTask = false,
+            nodeInput = false,
+            longTermMemory = false,
+            toolResults = false,
+        )
+        // Echo-mode OUTPUT (systemPrompt = null) is a passthrough and ignores
+        // contextConfig; an empty config must not produce a validation error.
+        val pipeline = PipelineGraph(
+            id = "9c",
+            name = "Test 9c",
+            nodes = listOf(
+                NodeModel("n1", NodeType.INPUT, 0f, 0f),
+                NodeModel(
+                    id = "n2",
+                    type = NodeType.OUTPUT,
+                    x = 10f,
+                    y = 10f,
+                    systemPrompt = null,
+                    contextConfig = emptyContext,
+                ),
+            ),
+            connections = listOf(ConnectionModel("c1", "n1", "n2")),
+        )
+
+        val errors = pipeline.validate()
+        assertFalse(
+            errors.any { it is ai.agent.android.domain.models.PipelineValidationError.NodeEmptyContext },
+        )
+    }
+
+    @Test
+    fun `invoke should flag OUTPUT with systemPrompt when context config is empty`() = runTest {
+        val emptyContext = NodeContextConfig(
+            chatHistory = false,
+            originalTask = false,
+            nodeInput = false,
+            longTermMemory = false,
+            toolResults = false,
+        )
+        // OUTPUT with a configured systemPrompt acts as an LLM formatter and
+        // does consume contextConfig — an empty config is a real problem.
+        val pipeline = PipelineGraph(
+            id = "9d",
+            name = "Test 9d",
+            nodes = listOf(
+                NodeModel("n1", NodeType.INPUT, 0f, 0f),
+                NodeModel(
+                    id = "n2",
+                    type = NodeType.OUTPUT,
+                    x = 10f,
+                    y = 10f,
+                    systemPrompt = "Format the answer as markdown.",
+                    contextConfig = emptyContext,
+                ),
+            ),
+            connections = listOf(ConnectionModel("c1", "n1", "n2")),
+        )
+
+        val errors = pipeline.validate()
+        assertTrue(
+            errors.any {
+                it is ai.agent.android.domain.models.PipelineValidationError.NodeEmptyContext &&
+                    it.nodeId == "n2"
+            },
+        )
+    }
+
+    @Test
     fun `invoke should not flag INPUT node when its context config is empty`() = runTest {
         val emptyContext = NodeContextConfig(
             chatHistory = false,

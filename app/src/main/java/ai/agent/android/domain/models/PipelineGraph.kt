@@ -150,7 +150,7 @@ data class PipelineGraph(
         }
 
         nodes.forEach { node ->
-            if (node.type != NodeType.INPUT && node.contextConfig.isEmpty()) {
+            if (node.usesContextConfig() && node.contextConfig.isEmpty()) {
                 errors.add(PipelineValidationError.NodeEmptyContext(node.id))
             }
         }
@@ -158,10 +158,3 @@ data class PipelineGraph(
         return errors
     }
 }
-
-/**
- * Returns `true` when every flag of this [NodeContextConfig] is `false`,
- * meaning the node would receive an empty input string at execution time.
- */
-private fun NodeContextConfig.isEmpty(): Boolean =
-    !chatHistory && !originalTask && !nodeInput && !longTermMemory && !toolResults
