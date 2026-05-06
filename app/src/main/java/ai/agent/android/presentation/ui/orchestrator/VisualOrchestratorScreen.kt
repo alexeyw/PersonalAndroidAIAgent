@@ -1,10 +1,13 @@
 package ai.agent.android.presentation.ui.orchestrator
 
+import ai.agent.android.domain.models.NodeContextConfig
 import ai.agent.android.domain.models.NodeType
+import ai.agent.android.domain.models.usesContextConfig
 import ai.agent.android.presentation.ui.components.PromptPreviewBottomSheet
 import ai.agent.android.presentation.ui.components.VariableChipsRow
 import ai.agent.android.presentation.ui.components.insertAtCursor
 import ai.agent.android.presentation.ui.orchestrator.components.DraggableNode
+import ai.agent.android.presentation.ui.orchestrator.components.NodeContextConfigSection
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
@@ -256,6 +259,25 @@ fun VisualOrchestratorScreen(
             var clarificationTimeoutSeconds by remember(node) {
                 mutableStateOf(((node.clarificationTimeoutMs ?: 60_000L) / 1000L).toString())
             }
+            // Per-node context flags edited as local state; the "nodeInput"
+            // flag is intentionally not exposed — `OrchestratorViewModel`
+            // forces it to true when persisting, and the UI shows it as a
+            // locked-on row inside `NodeContextConfigSection`.
+            var ctxOriginalTask by remember(node) { mutableStateOf(node.contextConfig.originalTask) }
+            var ctxChatHistory by remember(node) { mutableStateOf(node.contextConfig.chatHistory) }
+            var ctxLongTermMemory by remember(node) { mutableStateOf(node.contextConfig.longTermMemory) }
+            var ctxToolResults by remember(node) { mutableStateOf(node.contextConfig.toolResults) }
+
+            // The "Input Data" section is only meaningful for nodes whose
+            // executor is fed by `NodeContextBuilder`. Whether OUTPUT
+            // qualifies depends on its system prompt — which the user is
+            // editing right now — so we re-derive the visibility on every
+            // recomposition from the in-flight `systemPromptValue` rather
+            // than the persisted node. Hoisted out of the dialog body so the
+            // confirm-button lambda can read the same value.
+            val showContextSection = node.copy(
+                systemPrompt = systemPromptValue.text.takeIf { it.isNotBlank() },
+            ).usesContextConfig()
 
             if (showPromptLibrary) {
                 ai.agent.android.presentation.ui.orchestrator.components.PromptLibraryDialog(
@@ -362,6 +384,18 @@ fun VisualOrchestratorScreen(
                                 modifier = Modifier.padding(top = 8.dp),
                             )
                         }
+                        if (showContextSection) {
+                            NodeContextConfigSection(
+                                originalTask = ctxOriginalTask,
+                                chatHistory = ctxChatHistory,
+                                longTermMemory = ctxLongTermMemory,
+                                toolResults = ctxToolResults,
+                                onOriginalTaskChange = { ctxOriginalTask = it },
+                                onChatHistoryChange = { ctxChatHistory = it },
+                                onLongTermMemoryChange = { ctxLongTermMemory = it },
+                                onToolResultsChange = { ctxToolResults = it },
+                            )
+                        }
                     }
                 },
                 confirmButton = {
@@ -379,6 +413,23 @@ fun VisualOrchestratorScreen(
                                 ?.takeIf { it > 0L }
                                 ?.let { it * 1000L }
                             viewModel.updateNodeClarificationTimeout(node.id, timeoutMs)
+                        }
+                        // Persist the context flags. `nodeInput` is hard-coded
+                        // to true here to mirror the locked-on UI checkbox;
+                        // the ViewModel will sanitise it again as a defence in
+                        // depth, but we send the canonical value anyway so the
+                        // call site reads correctly.
+                        if (showContextSection) {
+                            viewModel.updateNodeContextConfig(
+                                node.id,
+                                NodeContextConfig(
+                                    chatHistory = ctxChatHistory,
+                                    originalTask = ctxOriginalTask,
+                                    nodeInput = true,
+                                    longTermMemory = ctxLongTermMemory,
+                                    toolResults = ctxToolResults,
+                                ),
+                            )
                         }
                         configuringNodeId = null
                     }) {

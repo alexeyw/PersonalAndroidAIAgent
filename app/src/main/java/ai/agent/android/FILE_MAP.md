@@ -190,6 +190,7 @@ This file maps the contents of the main application package.
       - `VisualOrchestratorScreen.kt` - Visual orchestrator UI screen.
       - `components/` - Orchestrator UI components.
         - `DraggableNode.kt` - Draggable node UI component.
+        - `NodeContextConfigSection.kt` - "Input Data" section of the node configuration dialog: five checkboxes mapped to `NodeContextConfig` flags (with `nodeInput` rendered locked-on) plus a hint banner.
         - `PromptLibraryDialog.kt` - Prompt library dialog UI component.
     - `prompts/` - Prompt Library screen components.
       - `PromptLibraryScreen.kt` - Prompt library UI screen.

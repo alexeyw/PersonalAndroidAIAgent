@@ -477,6 +477,36 @@ class OrchestratorViewModelTest {
     }
 
     @Test
+    fun `updateNodeContextConfig leaves other nodes unchanged`() {
+        viewModel.addNode(NodeType.TOOL, 0f, 0f)
+        viewModel.addNode(NodeType.LITE_RT, 100f, 100f)
+        val nodes = viewModel.uiState.value.currentPipeline.nodes
+        val targetId = nodes.first { it.type == NodeType.TOOL }.id
+        val otherId = nodes.first { it.type == NodeType.LITE_RT }.id
+
+        viewModel.updateNodeContextConfig(
+            targetId,
+            NodeContextConfig(
+                chatHistory = false,
+                originalTask = false,
+                nodeInput = true,
+                longTermMemory = false,
+                toolResults = false,
+            ),
+        )
+
+        val updated = viewModel.uiState.value.currentPipeline.nodes
+        val target = updated.single { it.id == targetId }
+        val other = updated.single { it.id == otherId }
+        assertEquals(false, target.contextConfig.chatHistory)
+        assertEquals(false, target.contextConfig.originalTask)
+        assertEquals(false, target.contextConfig.longTermMemory)
+        assertEquals(false, target.contextConfig.toolResults)
+        // The untouched node still carries the default ALL_ENABLED config.
+        assertEquals(NodeContextConfig.ALL_ENABLED, other.contextConfig)
+    }
+
+    @Test
     fun `updateNodeContextConfig with valid config clears error message`() {
         viewModel.addNode(NodeType.TOOL, 0f, 0f)
         val nodeId = viewModel.uiState.value.currentPipeline.nodes[0].id
