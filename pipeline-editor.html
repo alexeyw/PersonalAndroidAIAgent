@@ -681,12 +681,28 @@
             modelPath: '',
             toolName: '',
             clarificationTimeoutMs: typeId === 'CLARIFICATION' ? 60000 : null,
-            intentRouterPrompt: '',
             conditionPrompt: '',
             conditionKeywords: '',
             conditionComplexity: null,
             contextConfig: defaultContextConfig(typeId),
         };
+    }
+
+    /**
+     * Migrates legacy node data shapes — currently fold the deprecated
+     * `intentRouterPrompt` field into `systemPrompt` (which is what the
+     * runtime engine actually consumes for INTENT_ROUTER routing logic).
+     * Called whenever node data is read from a foreign source: opening the
+     * config dialog and parsing imported JSON.
+     */
+    function migrateLegacyNodeData(typeId, data) {
+        if (!data) return data;
+        if (typeId === 'INTENT_ROUTER' && data.intentRouterPrompt) {
+            const sp = (data.systemPrompt || '').trim();
+            if (!sp) data.systemPrompt = data.intentRouterPrompt;
+        }
+        delete data.intentRouterPrompt;
+        return data;
     }
 
     /* -------------------------------------------------------------------- *
@@ -789,7 +805,10 @@
         if (!t) return;
 
         // Migrate legacy data shapes (older snapshots may lack new fields)
-        const data = Object.assign(defaultNodeData(typeId), internal.data || {});
+        const data = migrateLegacyNodeData(
+            typeId,
+            Object.assign(defaultNodeData(typeId), internal.data || {}),
+        );
         if (!data.contextConfig) data.contextConfig = defaultContextConfig(typeId);
 
         dialogNodeId = numericId;
@@ -863,12 +882,11 @@
                 }));
                 break;
             case 'INTENT_ROUTER':
-                fields.push(textareaField({
-                    id: 'intentRouterPrompt',
-                    label: 'Routing logic description',
-                    value: data.intentRouterPrompt ?? '',
-                    rows: 3,
-                }));
+                // Routing prose lives in systemPrompt (same field used by
+                // the runtime engine on Android). Earlier builds wrote it
+                // to a separate `intentRouterPrompt` slot that had no
+                // domain counterpart; that field is no longer surfaced
+                // and migrated to systemPrompt when nodes are loaded.
                 break;
             case 'IF_CONDITION':
                 fields.push(textareaField({
@@ -1758,7 +1776,6 @@
                     modelPath: fullData.modelPath || null,
                     toolName: fullData.toolName || null,
                     clarificationTimeoutMs: fullData.clarificationTimeoutMs ?? null,
-                    intentRouterPrompt: fullData.intentRouterPrompt || null,
                     conditionPrompt: fullData.conditionPrompt || null,
                     conditionKeywords: fullData.conditionKeywords || null,
                     conditionComplexity: fullData.conditionComplexity ?? null,
@@ -1843,10 +1860,46 @@
     let suppressAutoLabel = false;
 
     function importFromJson(doc) {
-        if (!doc || typeof doc !== 'object') {
+        // Validate structure BEFORE touching the canvas — clearing the
+        // current graph and then crashing partway through the rebuild
+        // would silently destroy the user's work for a malformed file.
+        if (!doc || typeof doc !== 'object' || Array.isArray(doc)) {
             alert('File does not contain a valid JSON document.');
             return;
         }
+        if (doc.nodes != null && !Array.isArray(doc.nodes)) {
+            alert('Invalid pipeline document: "nodes" must be an array.');
+            return;
+        }
+        if (doc.connections != null && !Array.isArray(doc.connections)) {
+            alert('Invalid pipeline document: "connections" must be an array.');
+            return;
+        }
+        const rawNodes = doc.nodes || [];
+        const rawConnections = doc.connections || [];
+        for (let i = 0; i < rawNodes.length; i++) {
+            const jn = rawNodes[i];
+            if (!jn || typeof jn !== 'object' || Array.isArray(jn)) {
+                alert(`Invalid pipeline document: nodes[${i}] is not an object.`);
+                return;
+            }
+            if (typeof jn.id !== 'string' || !jn.id) {
+                alert(`Invalid pipeline document: nodes[${i}].id is missing.`);
+                return;
+            }
+            if (typeof jn.type !== 'string' || !NODE_TYPE_BY_ID[jn.type]) {
+                alert(`Invalid pipeline document: nodes[${i}] has unknown type "${jn.type}".`);
+                return;
+            }
+        }
+        for (let i = 0; i < rawConnections.length; i++) {
+            const jc = rawConnections[i];
+            if (!jc || typeof jc !== 'object' || Array.isArray(jc)) {
+                alert(`Invalid pipeline document: connections[${i}] is not an object.`);
+                return;
+            }
+        }
+
         if (doc.schemaVersion !== CURRENT_SCHEMA_VERSION) {
             const ok = confirm(
                 `File was created by a different editor version ` +
@@ -1868,20 +1921,15 @@
             editor.clear();
             connectionLabels.clear();
 
-            (doc.nodes || []).forEach(jn => {
+            rawNodes.forEach(jn => {
                 const t = NODE_TYPE_BY_ID[jn.type];
-                if (!t) {
-                    console.warn('Unknown node type:', jn.type);
-                    return;
-                }
-                const data = Object.assign(defaultNodeData(jn.type), {
+                const merged = Object.assign(defaultNodeData(jn.type), {
                     label: jn.label || t.label,
                     systemPrompt: jn.config?.systemPrompt || '',
                     cloudProvider: jn.config?.cloudProvider || (jn.type === 'CLOUD' ? 'auto' : ''),
                     modelPath: jn.config?.modelPath || '',
                     toolName: jn.config?.toolName || '',
                     clarificationTimeoutMs: jn.config?.clarificationTimeoutMs ?? (jn.type === 'CLARIFICATION' ? 60000 : null),
-                    intentRouterPrompt: jn.config?.intentRouterPrompt || '',
                     conditionPrompt: jn.config?.conditionPrompt || '',
                     conditionKeywords: jn.config?.conditionKeywords || '',
                     conditionComplexity: jn.config?.conditionComplexity ?? null,
@@ -1889,6 +1937,10 @@
                         nodeInput: true, // locked-on regardless of file contents
                     }),
                 });
+                // Carry over a legacy intentRouterPrompt field if present
+                // so the migration helper can fold it into systemPrompt.
+                if (jn.config?.intentRouterPrompt) merged.intentRouterPrompt = jn.config.intentRouterPrompt;
+                const data = migrateLegacyNodeData(jn.type, merged);
                 const dfId = editor.addNode(
                     t.id, t.inputs, t.outputs,
                     jn.position?.x ?? 0, jn.position?.y ?? 0,
@@ -1902,7 +1954,7 @@
                 if (labelEl) labelEl.textContent = data.label || t.label;
             });
 
-            (doc.connections || []).forEach(jc => {
+            rawConnections.forEach(jc => {
                 const srcDf = idMap.get(jc.fromNodeId);
                 const tgtDf = idMap.get(jc.toNodeId);
                 if (!srcDf || !tgtDf) {
