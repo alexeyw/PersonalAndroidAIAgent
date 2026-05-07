@@ -214,6 +214,58 @@
         .drawflow .drawflow-node.nodetype-INPUT { border-top-color: #607D8B; }
         .drawflow .drawflow-node.nodetype-OUTPUT { border-top-color: #F44336; }
 
+        /* IF_CONDITION outputs carry True / False semantics. Place the
+           labels outside the node (to the right of each port) so they
+           don't overlap node content and stay visible regardless of the
+           selection or validation outlines. The text-shadow gives a
+           halo against bright outlines (red `has-error` ring vs red
+           "False" text in particular). */
+        .drawflow .drawflow-node.nodetype-IF_CONDITION .output::after {
+            position: absolute;
+            left: 100%;
+            margin-left: 10px;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 11px;
+            font-weight: 600;
+            white-space: nowrap;
+            pointer-events: none;
+            text-shadow: 0 0 3px rgba(0, 0, 0, 0.85);
+        }
+        .drawflow .drawflow-node.nodetype-IF_CONDITION .output.output_1::after {
+            content: "True";
+            color: #4CAF50;
+        }
+        .drawflow .drawflow-node.nodetype-IF_CONDITION .output.output_2::after {
+            content: "False";
+            color: #F44336;
+        }
+
+        /* QUEUE_PROCESSOR has two semantically distinct outputs: output_1
+           ("Item") loops a subtask body back into the queue, output_2
+           ("Done") proceeds downstream once the queue empties. Naming
+           mirrors DraggableNode.kt to keep the UI vocabulary aligned. */
+        .drawflow .drawflow-node.nodetype-QUEUE_PROCESSOR .output::after {
+            position: absolute;
+            left: 100%;
+            margin-left: 10px;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 11px;
+            font-weight: 600;
+            white-space: nowrap;
+            pointer-events: none;
+            text-shadow: 0 0 3px rgba(0, 0, 0, 0.85);
+        }
+        .drawflow .drawflow-node.nodetype-QUEUE_PROCESSOR .output.output_1::after {
+            content: "Item";
+            color: #FFC107;
+        }
+        .drawflow .drawflow-node.nodetype-QUEUE_PROCESSOR .output.output_2::after {
+            content: "Done";
+            color: #4CAF50;
+        }
+
         /* Sidebar palette colour bars */
         .palette-item[data-type="LITE_RT"]         { border-left-color: #4CAF50; }
         .palette-item[data-type="CLOUD"]           { border-left-color: #2196F3; }
@@ -1281,7 +1333,40 @@
      * -------------------------------------------------------------------- */
     editor.on('nodeCreated', () => { redrawLabels(); pushSnapshot(); runValidation(); });
     editor.on('nodeRemoved', () => { redrawLabels(); pushSnapshot(); runValidation(); });
-    editor.on('connectionCreated', () => { redrawLabels(); pushSnapshot(); runValidation(); });
+    /**
+     * Per-type seed labels for connections, matching the inline port
+     * labels rendered next to multi-output nodes. Single-output types are
+     * absent here and produce no auto-label.
+     */
+    const PORT_AUTO_LABELS = {
+        IF_CONDITION:    { output_1: 'True', output_2: 'False' },
+        QUEUE_PROCESSOR: { output_1: 'Item', output_2: 'Done'  },
+    };
+
+    editor.on('connectionCreated', info => {
+        // Auto-fill the edge label so multi-output nodes (IF_CONDITION,
+        // QUEUE_PROCESSOR) get a meaningful branch label without forcing
+        // the user to double-click and type. Only seed when no label is
+        // already set (e.g. via import or earlier connect on the same
+        // socket pair).
+        if (info) {
+            const src = editor.getNodeFromId(String(info.output_id));
+            const map = src && PORT_AUTO_LABELS[src.name];
+            if (map) {
+                const key = connectionKey(
+                    String(info.output_id), info.output_class,
+                    String(info.input_id),  info.input_class,
+                );
+                if (!connectionLabels.has(key)) {
+                    const branch = map[info.output_class];
+                    if (branch) connectionLabels.set(key, branch);
+                }
+            }
+        }
+        redrawLabels();
+        pushSnapshot();
+        runValidation();
+    });
     editor.on('connectionRemoved', info => {
         if (info) {
             connectionLabels.delete(connectionKey(
