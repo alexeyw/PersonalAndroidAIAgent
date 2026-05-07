@@ -1,0 +1,646 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>Pipeline Editor</title>
+    <link rel="stylesheet"
+          href="https://cdn.jsdelivr.net/npm/drawflow@0.0.60/dist/drawflow.min.css">
+    <style>
+        :root {
+            --bg: #1f2127;
+            --bg-soft: #272a31;
+            --border: #3a3d44;
+            --text: #e7e7ea;
+            --text-dim: #a0a3ab;
+            --accent: #4f8cff;
+            --danger: #f44336;
+        }
+
+        * { box-sizing: border-box; }
+
+        html, body {
+            height: 100%;
+            margin: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            color: var(--text);
+            background: var(--bg);
+            overflow: hidden;
+        }
+
+        #app {
+            display: grid;
+            grid-template-columns: 240px 1fr;
+            grid-template-rows: 100vh;
+            width: 100%;
+            height: 100%;
+        }
+
+        /* Sidebar */
+        #sidebar {
+            background: var(--bg-soft);
+            border-right: 1px solid var(--border);
+            padding: 12px;
+            overflow-y: auto;
+        }
+
+        #sidebar h2 {
+            margin: 0 0 12px 0;
+            font-size: 13px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-dim);
+        }
+
+        .palette-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 10px;
+            margin-bottom: 6px;
+            background: #2e313a;
+            border: 1px solid var(--border);
+            border-left-width: 4px;
+            border-radius: 6px;
+            cursor: grab;
+            user-select: none;
+            font-size: 13px;
+            transition: transform 0.05s ease, background 0.1s ease;
+        }
+
+        .palette-item:hover { background: #353841; }
+        .palette-item:active { cursor: grabbing; transform: scale(0.98); }
+        .palette-item .icon { font-size: 16px; width: 18px; text-align: center; }
+        .palette-item .name { font-weight: 500; }
+
+        /* Main area */
+        #main {
+            display: flex;
+            flex-direction: column;
+            min-width: 0;
+        }
+
+        #toolbar {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 12px;
+            background: var(--bg-soft);
+            border-bottom: 1px solid var(--border);
+        }
+
+        #toolbar button {
+            background: #2e313a;
+            color: var(--text);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 6px 12px;
+            cursor: pointer;
+            font-size: 13px;
+        }
+
+        #toolbar button:hover:not(:disabled) { background: #353841; }
+        #toolbar button:disabled { opacity: 0.4; cursor: not-allowed; }
+        #toolbar .danger { border-color: var(--danger); color: #ff8a82; }
+        #toolbar .spacer { flex: 1; }
+        #toolbar .hint { color: var(--text-dim); font-size: 12px; }
+
+        /* Canvas */
+        #canvas-wrapper {
+            position: relative;
+            flex: 1;
+            overflow: hidden;
+        }
+
+        #drawflow {
+            position: absolute;
+            inset: 0;
+            background: #1a1c22;
+            background-image:
+                radial-gradient(circle, #2a2d35 1px, transparent 1px);
+            background-size: 24px 24px;
+        }
+
+        #labels-layer {
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+        }
+
+        .conn-label {
+            position: absolute;
+            transform: translate(-50%, -50%);
+            background: var(--bg);
+            color: var(--text);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 2px 8px;
+            font-size: 11px;
+            line-height: 1.4;
+            white-space: nowrap;
+            cursor: text;
+            pointer-events: auto;
+            user-select: none;
+            max-width: 240px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .conn-label.empty {
+            color: var(--text-dim);
+            opacity: 0.7;
+            font-style: italic;
+        }
+
+        .conn-label input {
+            background: transparent;
+            color: var(--text);
+            border: none;
+            outline: none;
+            font: inherit;
+            min-width: 60px;
+        }
+
+        /* Drawflow node skinning */
+        .drawflow .drawflow-node {
+            background: #2a2d35;
+            border: 1px solid var(--border);
+            border-top: 4px solid var(--border);
+            color: var(--text);
+            padding: 10px 14px;
+            min-width: 140px;
+            border-radius: 8px;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.35);
+        }
+
+        .drawflow .drawflow-node.selected {
+            box-shadow: 0 0 0 2px var(--accent);
+        }
+
+        .drawflow .drawflow-node .node-body {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 13px;
+        }
+
+        .drawflow .drawflow-node .node-body .icon { font-size: 16px; }
+        .drawflow .drawflow-node .node-body .label { font-weight: 600; }
+        .drawflow .drawflow-node .node-body .type {
+            font-size: 11px;
+            color: var(--text-dim);
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }
+
+        .drawflow .drawflow-node .input,
+        .drawflow .drawflow-node .output {
+            background: #11131a;
+            border-color: var(--border);
+        }
+
+        /* Per-type top accent */
+        .drawflow .drawflow-node.nodetype-LITE_RT { border-top-color: #4CAF50; }
+        .drawflow .drawflow-node.nodetype-CLOUD { border-top-color: #2196F3; }
+        .drawflow .drawflow-node.nodetype-TOOL { border-top-color: #FF9800; }
+        .drawflow .drawflow-node.nodetype-IF_CONDITION { border-top-color: #FFC107; }
+        .drawflow .drawflow-node.nodetype-INTENT_ROUTER { border-top-color: #E91E63; }
+        .drawflow .drawflow-node.nodetype-DECOMPOSITION { border-top-color: #3F51B5; }
+        .drawflow .drawflow-node.nodetype-QUEUE_PROCESSOR { border-top-color: #795548; }
+        .drawflow .drawflow-node.nodetype-EVALUATION { border-top-color: #009688; }
+        .drawflow .drawflow-node.nodetype-SUMMARY { border-top-color: #8BC34A; }
+        .drawflow .drawflow-node.nodetype-CLARIFICATION { border-top-color: #9C27B0; }
+        .drawflow .drawflow-node.nodetype-INPUT { border-top-color: #607D8B; }
+        .drawflow .drawflow-node.nodetype-OUTPUT { border-top-color: #F44336; }
+
+        /* Sidebar palette colour bars */
+        .palette-item[data-type="LITE_RT"]         { border-left-color: #4CAF50; }
+        .palette-item[data-type="CLOUD"]           { border-left-color: #2196F3; }
+        .palette-item[data-type="TOOL"]            { border-left-color: #FF9800; }
+        .palette-item[data-type="IF_CONDITION"]    { border-left-color: #FFC107; }
+        .palette-item[data-type="INTENT_ROUTER"]   { border-left-color: #E91E63; }
+        .palette-item[data-type="DECOMPOSITION"]   { border-left-color: #3F51B5; }
+        .palette-item[data-type="QUEUE_PROCESSOR"] { border-left-color: #795548; }
+        .palette-item[data-type="EVALUATION"]      { border-left-color: #009688; }
+        .palette-item[data-type="SUMMARY"]         { border-left-color: #8BC34A; }
+        .palette-item[data-type="CLARIFICATION"]   { border-left-color: #9C27B0; }
+        .palette-item[data-type="INPUT"]           { border-left-color: #607D8B; }
+        .palette-item[data-type="OUTPUT"]          { border-left-color: #F44336; }
+    </style>
+</head>
+<body>
+<div id="app">
+    <aside id="sidebar">
+        <h2>Nodes</h2>
+        <div id="palette"></div>
+    </aside>
+    <main id="main">
+        <header id="toolbar">
+            <button id="btn-undo" title="Undo (Ctrl+Z)">↶ Undo</button>
+            <button id="btn-redo" title="Redo (Ctrl+Y)">↷ Redo</button>
+            <button id="btn-delete" class="danger" title="Delete selected (Del)">🗑 Delete</button>
+            <span class="spacer"></span>
+            <span class="hint">Drag a node from the left. Double-click a connection to label it.</span>
+        </header>
+        <div id="canvas-wrapper">
+            <div id="drawflow"></div>
+            <div id="labels-layer"></div>
+        </div>
+    </main>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/drawflow@0.0.60/dist/drawflow.min.js"></script>
+<script>
+    'use strict';
+
+    /* -------------------------------------------------------------------- *
+     *  Node type catalogue
+     *  Mirrors ai.agent.android.domain.models.NodeType and the colour
+     *  palette used in DraggableNode.kt. Inputs/outputs match the runtime
+     *  shape: INPUT 0/1, OUTPUT 1/0, IF_CONDITION & QUEUE_PROCESSOR 1/2,
+     *  everything else 1/1.
+     * -------------------------------------------------------------------- */
+    const NODE_TYPES = [
+        { id: 'INPUT',           label: 'Input',           color: '#607D8B', icon: '▶',  inputs: 0, outputs: 1 },
+        { id: 'OUTPUT',          label: 'Output',          color: '#F44336', icon: '⏹',  inputs: 1, outputs: 0 },
+        { id: 'LITE_RT',         label: 'LiteRT',          color: '#4CAF50', icon: '🧠', inputs: 1, outputs: 1 },
+        { id: 'CLOUD',           label: 'Cloud',           color: '#2196F3', icon: '☁',  inputs: 1, outputs: 1 },
+        { id: 'TOOL',            label: 'Tool',            color: '#FF9800', icon: '🛠', inputs: 1, outputs: 1 },
+        { id: 'IF_CONDITION',    label: 'If Condition',    color: '#FFC107', icon: '❓', inputs: 1, outputs: 2 },
+        { id: 'INTENT_ROUTER',   label: 'Intent Router',   color: '#E91E63', icon: '🧭', inputs: 1, outputs: 1 },
+        { id: 'DECOMPOSITION',   label: 'Decomposition',   color: '#3F51B5', icon: '🧩', inputs: 1, outputs: 1 },
+        { id: 'QUEUE_PROCESSOR', label: 'Queue Processor', color: '#795548', icon: '🔁', inputs: 1, outputs: 2 },
+        { id: 'EVALUATION',      label: 'Evaluation',      color: '#009688', icon: '✅', inputs: 1, outputs: 1 },
+        { id: 'SUMMARY',         label: 'Summary',         color: '#8BC34A', icon: '📝', inputs: 1, outputs: 1 },
+        { id: 'CLARIFICATION',   label: 'Clarification',   color: '#9C27B0', icon: '💬', inputs: 1, outputs: 1 },
+    ];
+    const NODE_TYPE_BY_ID = Object.fromEntries(NODE_TYPES.map(t => [t.id, t]));
+
+    /* -------------------------------------------------------------------- *
+     *  Drawflow init
+     * -------------------------------------------------------------------- */
+    const canvas = document.getElementById('drawflow');
+    const editor = new Drawflow(canvas);
+    editor.reroute = false;
+    editor.editor_mode = 'edit';
+    editor.start();
+
+    /* -------------------------------------------------------------------- *
+     *  Sidebar palette + drag/drop
+     * -------------------------------------------------------------------- */
+    const paletteEl = document.getElementById('palette');
+    NODE_TYPES.forEach(t => {
+        const el = document.createElement('div');
+        el.className = 'palette-item';
+        el.draggable = true;
+        el.dataset.type = t.id;
+        el.innerHTML = `<span class="icon">${t.icon}</span><span class="name">${t.label}</span>`;
+        el.addEventListener('dragstart', e => {
+            e.dataTransfer.setData('node-type', t.id);
+            e.dataTransfer.effectAllowed = 'copy';
+        });
+        paletteEl.appendChild(el);
+    });
+
+    canvas.addEventListener('dragover', e => {
+        if (Array.from(e.dataTransfer.types).includes('node-type')) {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'copy';
+        }
+    });
+
+    canvas.addEventListener('drop', e => {
+        const typeId = e.dataTransfer.getData('node-type');
+        if (!typeId || !NODE_TYPE_BY_ID[typeId]) return;
+        e.preventDefault();
+        const t = NODE_TYPE_BY_ID[typeId];
+        // Drawflow's canonical recipe: convert viewport (clientX/Y) to canvas
+        // userspace by subtracting the precanvas's own rendered rect and
+        // dividing by the active zoom. precanvas already accounts for both
+        // translate and scale, so this works at any zoom level.
+        const pre = editor.precanvas.getBoundingClientRect();
+        const x = (e.clientX - pre.left) / editor.zoom;
+        const y = (e.clientY - pre.top) / editor.zoom;
+        editor.addNode(
+            t.id,
+            t.inputs,
+            t.outputs,
+            x,
+            y,
+            'nodetype-' + t.id,
+            { name: '' },
+            nodeHtml(t),
+        );
+    });
+
+    function nodeHtml(t) {
+        return `
+            <div class="node-body">
+                <span class="icon">${t.icon}</span>
+                <div>
+                    <div class="label">${t.label}</div>
+                    <div class="type">${t.id}</div>
+                </div>
+            </div>`;
+    }
+
+    /* -------------------------------------------------------------------- *
+     *  Connection label overlay
+     *
+     *  drawflow has no native edge labels. We keep a Map keyed by
+     *  "<outNodeId>_<outClass>_<inNodeId>_<inClass>" and overlay an
+     *  absolutely-positioned <div> at the midpoint of each <path.main-path>.
+     *  Re-render on every event that may change geometry.
+     * -------------------------------------------------------------------- */
+    const labelsLayer = document.getElementById('labels-layer');
+    /** @type {Map<string, string>} */
+    const connectionLabels = new Map();
+
+    function connectionKey(outId, outClass, inId, inClass) {
+        return `${outId}_${outClass}_${inId}_${inClass}`;
+    }
+
+    function parseConnectionElement(svgEl) {
+        // drawflow generates: <svg class="connection node_in_node-X node_out_node-Y output_N input_M">
+        const cls = svgEl.getAttribute('class') || '';
+        const inMatch  = cls.match(/node_in_node-(\d+)/);
+        const outMatch = cls.match(/node_out_node-(\d+)/);
+        const outClassMatch = cls.match(/(?:^|\s)(output_\d+)(?:\s|$)/);
+        const inClassMatch  = cls.match(/(?:^|\s)(input_\d+)(?:\s|$)/);
+        if (!inMatch || !outMatch || !outClassMatch || !inClassMatch) return null;
+        return {
+            outId: outMatch[1],
+            inId: inMatch[1],
+            outClass: outClassMatch[1],
+            inClass: inClassMatch[1],
+            svgEl,
+        };
+    }
+
+    function redrawLabels() {
+        // Wipe existing label DOM and rebuild from scratch — cheap enough
+        // for the node counts we expect (tens) and avoids stale references.
+        labelsLayer.innerHTML = '';
+        const wrapperRect = labelsLayer.getBoundingClientRect();
+        const svgs = canvas.querySelectorAll('svg.connection');
+        svgs.forEach(svg => {
+            const meta = parseConnectionElement(svg);
+            if (!meta) return;
+            const path = svg.querySelector('path.main-path');
+            if (!path) return;
+            let mid;
+            try {
+                const total = path.getTotalLength();
+                if (!isFinite(total) || total <= 0) return;
+                mid = path.getPointAtLength(total / 2);
+            } catch (_) {
+                return;
+            }
+            // path.getPointAtLength returns coords in the SVG's user space
+            // (pre-scale). The SVG sits inside drawflow's precanvas which is
+            // CSS-scaled by editor.zoom, so multiply the user-space offset
+            // by zoom to get on-screen pixels relative to the SVG's
+            // already-post-scale getBoundingClientRect().
+            const svgRect = svg.getBoundingClientRect();
+            const x = svgRect.left + mid.x * editor.zoom - wrapperRect.left;
+            const y = svgRect.top  + mid.y * editor.zoom - wrapperRect.top;
+
+            const key = connectionKey(meta.outId, meta.outClass, meta.inId, meta.inClass);
+            const text = connectionLabels.get(key) || '';
+            const labelEl = document.createElement('div');
+            labelEl.className = 'conn-label' + (text ? '' : ' empty');
+            labelEl.textContent = text || '+ label';
+            labelEl.style.left = x + 'px';
+            labelEl.style.top  = y + 'px';
+            labelEl.dataset.key = key;
+            labelEl.addEventListener('dblclick', e => {
+                e.stopPropagation();
+                beginLabelEdit(labelEl, key);
+            });
+            labelsLayer.appendChild(labelEl);
+        });
+    }
+
+    function beginLabelEdit(labelEl, key) {
+        const current = connectionLabels.get(key) || '';
+        labelEl.classList.remove('empty');
+        labelEl.textContent = '';
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.value = current;
+        labelEl.appendChild(input);
+        input.focus();
+        input.select();
+
+        let finished = false;
+        const commit = (save) => {
+            if (finished) return;
+            finished = true;
+            const next = save ? input.value.trim() : current;
+            if (save && next !== current) {
+                if (next) connectionLabels.set(key, next);
+                else connectionLabels.delete(key);
+                pushSnapshot();
+            }
+            redrawLabels();
+        };
+        input.addEventListener('keydown', e => {
+            if (e.key === 'Enter') { e.preventDefault(); commit(true); }
+            else if (e.key === 'Escape') { e.preventDefault(); commit(false); }
+            // Stop the global Delete/Backspace handler from eating typing
+            e.stopPropagation();
+        });
+        input.addEventListener('blur', () => commit(true));
+    }
+
+    /* -------------------------------------------------------------------- *
+     *  Selection tracking
+     * -------------------------------------------------------------------- */
+    /** @type {{kind:'node', id:string} | {kind:'connection', outId:string, inId:string, outClass:string, inClass:string} | null} */
+    let currentSelection = null;
+
+    editor.on('nodeSelected', id => {
+        currentSelection = { kind: 'node', id: String(id) };
+        updateToolbar();
+    });
+    editor.on('nodeUnselected', () => {
+        if (currentSelection?.kind === 'node') currentSelection = null;
+        updateToolbar();
+    });
+    editor.on('connectionSelected', info => {
+        currentSelection = {
+            kind: 'connection',
+            outId: String(info.output_id),
+            inId: String(info.input_id),
+            outClass: info.output_class,
+            inClass: info.input_class,
+        };
+        updateToolbar();
+    });
+    editor.on('connectionUnselected', () => {
+        if (currentSelection?.kind === 'connection') currentSelection = null;
+        updateToolbar();
+    });
+
+    /* -------------------------------------------------------------------- *
+     *  Delete (button + Delete/Backspace key)
+     * -------------------------------------------------------------------- */
+    document.getElementById('btn-delete').addEventListener('click', deleteSelection);
+
+    function deleteSelection() {
+        if (!currentSelection) return;
+        if (currentSelection.kind === 'node') {
+            editor.removeNodeId('node-' + currentSelection.id);
+        } else {
+            const sel = currentSelection;
+            editor.removeSingleConnection(sel.outId, sel.inId, sel.outClass, sel.inClass);
+            connectionLabels.delete(connectionKey(sel.outId, sel.outClass, sel.inId, sel.inClass));
+        }
+        currentSelection = null;
+        updateToolbar();
+    }
+
+    document.addEventListener('keydown', e => {
+        const target = e.target;
+        const typing = target instanceof HTMLElement &&
+            (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable);
+        if (typing) return;
+
+        if (e.key === 'Delete' || e.key === 'Backspace') {
+            if (currentSelection) {
+                e.preventDefault();
+                deleteSelection();
+            }
+            return;
+        }
+        const meta = e.metaKey || e.ctrlKey;
+        if (!meta) return;
+        const k = e.key.toLowerCase();
+        if (k === 'z' && !e.shiftKey) { e.preventDefault(); undo(); }
+        else if ((k === 'z' && e.shiftKey) || k === 'y') { e.preventDefault(); redo(); }
+    });
+
+    /* -------------------------------------------------------------------- *
+     *  Undo / Redo via snapshot stack
+     *
+     *  Each snapshot pairs drawflow.export() (full graph) with a copy of the
+     *  edge-label map. Restoring is editor.clear() + editor.import() + label
+     *  rebuild — drawflow has no in-place history, so the wholesale swap is
+     *  the cleanest path and is fast for the graph sizes we expect.
+     * -------------------------------------------------------------------- */
+    const MAX_HISTORY = 100;
+    /** @type {Array<{drawflow: object, labels: Array<[string,string]>}>} */
+    let history = [];
+    let historyIndex = -1;
+    let suppressHistory = false;
+    let moveDebounceTimer = null;
+
+    function takeSnapshot() {
+        return {
+            drawflow: JSON.parse(JSON.stringify(editor.export())),
+            labels: Array.from(connectionLabels.entries()),
+        };
+    }
+
+    function pushSnapshot() {
+        if (suppressHistory) return;
+        // Drop redo tail
+        if (historyIndex < history.length - 1) {
+            history = history.slice(0, historyIndex + 1);
+        }
+        history.push(takeSnapshot());
+        if (history.length > MAX_HISTORY) {
+            history.shift();
+        } else {
+            historyIndex++;
+        }
+        if (historyIndex >= MAX_HISTORY) historyIndex = MAX_HISTORY - 1;
+        updateToolbar();
+    }
+
+    function applySnapshot(snapshot) {
+        suppressHistory = true;
+        try {
+            editor.clear();
+            editor.import(JSON.parse(JSON.stringify(snapshot.drawflow)));
+            connectionLabels.clear();
+            snapshot.labels.forEach(([k, v]) => connectionLabels.set(k, v));
+        } finally {
+            suppressHistory = false;
+        }
+        currentSelection = null;
+        redrawLabels();
+        updateToolbar();
+    }
+
+    function undo() {
+        if (historyIndex <= 0) return;
+        historyIndex--;
+        applySnapshot(history[historyIndex]);
+    }
+
+    function redo() {
+        if (historyIndex >= history.length - 1) return;
+        historyIndex++;
+        applySnapshot(history[historyIndex]);
+    }
+
+    document.getElementById('btn-undo').addEventListener('click', undo);
+    document.getElementById('btn-redo').addEventListener('click', redo);
+
+    function updateToolbar() {
+        document.getElementById('btn-undo').disabled = historyIndex <= 0;
+        document.getElementById('btn-redo').disabled = historyIndex >= history.length - 1;
+        document.getElementById('btn-delete').disabled = !currentSelection;
+    }
+
+    /* -------------------------------------------------------------------- *
+     *  Hook drawflow events: keep labels redrawn and history in sync
+     * -------------------------------------------------------------------- */
+    editor.on('nodeCreated', () => { redrawLabels(); pushSnapshot(); });
+    editor.on('nodeRemoved', () => { redrawLabels(); pushSnapshot(); });
+    editor.on('connectionCreated', () => { redrawLabels(); pushSnapshot(); });
+    editor.on('connectionRemoved', info => {
+        if (info) {
+            connectionLabels.delete(connectionKey(
+                String(info.output_id), info.output_class,
+                String(info.input_id),  info.input_class,
+            ));
+        }
+        redrawLabels();
+        pushSnapshot();
+    });
+    editor.on('nodeMoved', () => {
+        redrawLabels();
+        if (moveDebounceTimer) clearTimeout(moveDebounceTimer);
+        moveDebounceTimer = setTimeout(() => { pushSnapshot(); moveDebounceTimer = null; }, 250);
+    });
+    editor.on('translate', redrawLabels);
+    // drawflow emits `zoom` *before* the CSS transform is committed, so the
+    // SVG's getBoundingClientRect() is still on the previous frame — defer
+    // the redraw to the next animation frame. The wheel-listener below is a
+    // safety net for the rare case the zoom event is missed.
+    editor.on('zoom', scheduleLabelRedraw);
+    editor.on('import', redrawLabels);
+    canvas.addEventListener('wheel', scheduleLabelRedraw, { passive: true });
+
+    let labelRedrawScheduled = false;
+    function scheduleLabelRedraw() {
+        if (labelRedrawScheduled) return;
+        labelRedrawScheduled = true;
+        requestAnimationFrame(() => {
+            labelRedrawScheduled = false;
+            redrawLabels();
+        });
+    }
+
+    // Initial empty snapshot so undo "back to blank" works after first action.
+    pushSnapshot();
+    updateToolbar();
+
+    // Expose for manual debugging in DevTools
+    window.__editor = editor;
+    window.__labels = connectionLabels;
+</script>
+</body>
+</html>
