@@ -50,4 +50,200 @@ class NodeContextConfigTest {
         assertTrue(withoutHistory.longTermMemory)
         assertTrue(withoutHistory.toolResults)
     }
+
+    @Test
+    fun `defaultForType returns nodeInput-and-originalTask only for LITE_RT`() {
+        val config = NodeContextConfig.defaultForType(NodeType.LITE_RT)
+
+        assertEquals(
+            NodeContextConfig(
+                chatHistory = false,
+                originalTask = true,
+                nodeInput = true,
+                longTermMemory = false,
+                toolResults = false,
+            ),
+            config,
+        )
+    }
+
+    @Test
+    fun `defaultForType returns nodeInput originalTask and chatHistory for CLOUD`() {
+        val config = NodeContextConfig.defaultForType(NodeType.CLOUD)
+
+        assertEquals(
+            NodeContextConfig(
+                chatHistory = true,
+                originalTask = true,
+                nodeInput = true,
+                longTermMemory = false,
+                toolResults = false,
+            ),
+            config,
+        )
+    }
+
+    @Test
+    fun `defaultForType returns only nodeInput for TOOL`() {
+        val config = NodeContextConfig.defaultForType(NodeType.TOOL)
+
+        assertEquals(
+            NodeContextConfig(
+                chatHistory = false,
+                originalTask = false,
+                nodeInput = true,
+                longTermMemory = false,
+                toolResults = false,
+            ),
+            config,
+        )
+    }
+
+    @Test
+    fun `defaultForType returns nodeInput-and-originalTask for CLARIFICATION`() {
+        val config = NodeContextConfig.defaultForType(NodeType.CLARIFICATION)
+
+        assertEquals(
+            NodeContextConfig(
+                chatHistory = false,
+                originalTask = true,
+                nodeInput = true,
+                longTermMemory = false,
+                toolResults = false,
+            ),
+            config,
+        )
+    }
+
+    @Test
+    fun `defaultForType returns ALL_ENABLED for OUTPUT`() {
+        val config = NodeContextConfig.defaultForType(NodeType.OUTPUT)
+
+        assertEquals(NodeContextConfig.ALL_ENABLED, config)
+    }
+
+    @Test
+    fun `defaultForType returns nodeInput-and-originalTask for QUEUE_PROCESSOR`() {
+        val config = NodeContextConfig.defaultForType(NodeType.QUEUE_PROCESSOR)
+
+        assertEquals(
+            NodeContextConfig(
+                chatHistory = false,
+                originalTask = true,
+                nodeInput = true,
+                longTermMemory = false,
+                toolResults = false,
+            ),
+            config,
+        )
+    }
+
+    @Test
+    fun `defaultForType returns only nodeInput for INPUT`() {
+        val config = NodeContextConfig.defaultForType(NodeType.INPUT)
+
+        assertEquals(
+            NodeContextConfig(
+                chatHistory = false,
+                originalTask = false,
+                nodeInput = true,
+                longTermMemory = false,
+                toolResults = false,
+            ),
+            config,
+        )
+    }
+
+    @Test
+    fun `defaultForType returns only nodeInput for IF_CONDITION`() {
+        val config = NodeContextConfig.defaultForType(NodeType.IF_CONDITION)
+
+        assertEquals(
+            NodeContextConfig(
+                chatHistory = false,
+                originalTask = false,
+                nodeInput = true,
+                longTermMemory = false,
+                toolResults = false,
+            ),
+            config,
+        )
+    }
+
+    @Test
+    fun `defaultForType returns chat history plus original task for INTENT_ROUTER`() {
+        val config = NodeContextConfig.defaultForType(NodeType.INTENT_ROUTER)
+
+        assertEquals(
+            NodeContextConfig(
+                chatHistory = true,
+                originalTask = true,
+                nodeInput = true,
+                longTermMemory = false,
+                toolResults = false,
+            ),
+            config,
+        )
+    }
+
+    @Test
+    fun `defaultForType returns nodeInput-and-originalTask for DECOMPOSITION`() {
+        val config = NodeContextConfig.defaultForType(NodeType.DECOMPOSITION)
+
+        assertEquals(
+            NodeContextConfig(
+                chatHistory = false,
+                originalTask = true,
+                nodeInput = true,
+                longTermMemory = false,
+                toolResults = false,
+            ),
+            config,
+        )
+    }
+
+    @Test
+    fun `defaultForType enables tool results plus original task for SUMMARY`() {
+        val config = NodeContextConfig.defaultForType(NodeType.SUMMARY)
+
+        assertEquals(
+            NodeContextConfig(
+                chatHistory = false,
+                originalTask = true,
+                nodeInput = true,
+                longTermMemory = false,
+                toolResults = true,
+            ),
+            config,
+        )
+    }
+
+    @Test
+    fun `defaultForType enables tool results plus original task for EVALUATION`() {
+        val config = NodeContextConfig.defaultForType(NodeType.EVALUATION)
+
+        assertEquals(
+            NodeContextConfig(
+                chatHistory = false,
+                originalTask = true,
+                nodeInput = true,
+                longTermMemory = false,
+                toolResults = true,
+            ),
+            config,
+        )
+    }
+
+    @Test
+    fun `defaultForType result is non-empty for every NodeType`() {
+        // Guards that no recommended preset would be rejected by
+        // PipelineGraph.validate() as an "all-disabled" configuration on a
+        // context-aware node.
+        NodeType.values().forEach { type ->
+            assertTrue(
+                "defaultForType($type) must enable at least one flag",
+                !NodeContextConfig.defaultForType(type).isEmpty(),
+            )
+        }
+    }
 }

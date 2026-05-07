@@ -47,6 +47,89 @@ data class NodeContextConfig(
          * `context_config` column existed, so their behaviour does not change.
          */
         val ALL_ENABLED: NodeContextConfig = NodeContextConfig()
+
+        /**
+         * Returns the recommended starting [NodeContextConfig] for a freshly
+         * created node of the given [type]. The orchestrator UI applies this
+         * when the user drops a new node on the canvas, and the default
+         * pipeline factory applies it to seed the first-launch preset, so
+         * users see sensible per-type behaviour out of the box without having
+         * to tune flags manually.
+         *
+         * Rationale per type:
+         * - [NodeType.INPUT] / [NodeType.IF_CONDITION] / [NodeType.QUEUE_PROCESSOR]:
+         *   control-flow nodes that mostly forward upstream input verbatim;
+         *   only `nodeInput` is meaningful (plus `originalTask` for the queue
+         *   processor so subtasks keep the user's intent).
+         * - [NodeType.LITE_RT]: small on-device model — minimal context to
+         *   keep the prompt short (`nodeInput` + `originalTask`).
+         * - [NodeType.CLOUD]: cloud LLM with a large context window — adds
+         *   chat history on top of the LITE_RT defaults.
+         * - [NodeType.TOOL]: a tool only needs the concrete query, hence
+         *   `nodeInput` only.
+         * - [NodeType.CLARIFICATION]: needs the question's source plus the
+         *   user's original goal to phrase a useful clarifier.
+         * - [NodeType.OUTPUT]: terminal node that composes the user-facing
+         *   reply — full context is allowed.
+         * - [NodeType.SUMMARY] / [NodeType.EVALUATION]: post-processing nodes
+         *   that work over tool results plus the original task.
+         * - [NodeType.INTENT_ROUTER] / [NodeType.DECOMPOSITION]: classifiers
+         *   that benefit from the user's intent and (for the router) the
+         *   recent chat to disambiguate references.
+         */
+        fun defaultForType(type: NodeType): NodeContextConfig = when (type) {
+            NodeType.INPUT,
+            NodeType.IF_CONDITION,
+            -> NodeContextConfig(
+                chatHistory = false,
+                originalTask = false,
+                nodeInput = true,
+                longTermMemory = false,
+                toolResults = false,
+            )
+
+            NodeType.LITE_RT,
+            NodeType.CLARIFICATION,
+            NodeType.QUEUE_PROCESSOR,
+            NodeType.DECOMPOSITION,
+            -> NodeContextConfig(
+                chatHistory = false,
+                originalTask = true,
+                nodeInput = true,
+                longTermMemory = false,
+                toolResults = false,
+            )
+
+            NodeType.CLOUD,
+            NodeType.INTENT_ROUTER,
+            -> NodeContextConfig(
+                chatHistory = true,
+                originalTask = true,
+                nodeInput = true,
+                longTermMemory = false,
+                toolResults = false,
+            )
+
+            NodeType.TOOL -> NodeContextConfig(
+                chatHistory = false,
+                originalTask = false,
+                nodeInput = true,
+                longTermMemory = false,
+                toolResults = false,
+            )
+
+            NodeType.SUMMARY,
+            NodeType.EVALUATION,
+            -> NodeContextConfig(
+                chatHistory = false,
+                originalTask = true,
+                nodeInput = true,
+                longTermMemory = false,
+                toolResults = true,
+            )
+
+            NodeType.OUTPUT -> ALL_ENABLED
+        }
     }
 }
 
