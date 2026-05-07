@@ -1088,6 +1088,12 @@
     }
 
     document.addEventListener('keydown', e => {
+        // Suppress all canvas hotkeys while the node config dialog is open —
+        // otherwise Delete/Backspace on a <select> (or any non-input control
+        // inside the modal) deletes the selected node behind it, and Ctrl+Z
+        // would silently undo graph state mid-edit.
+        if (dialog.open) return;
+
         const target = e.target;
         const typing = target instanceof HTMLElement &&
             (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable);
