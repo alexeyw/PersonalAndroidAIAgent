@@ -106,6 +106,26 @@
         #toolbar .spacer { flex: 1; }
         #toolbar .hint { color: var(--text-dim); font-size: 12px; }
 
+        #toolbar input[type="text"]#pipeline-name {
+            background: #2e313a;
+            color: var(--text);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 6px 10px;
+            font: inherit;
+            font-size: 13px;
+            outline: none;
+            min-width: 180px;
+        }
+        #toolbar input[type="text"]#pipeline-name:focus { border-color: var(--accent); }
+        #toolbar .name-label {
+            font-size: 11px;
+            color: var(--text-dim);
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            margin-right: 4px;
+        }
+
         /* Canvas */
         #canvas-wrapper {
             position: relative;
@@ -529,6 +549,10 @@
             <button id="btn-redo" title="Redo (Ctrl+Y)">↷ Redo</button>
             <button id="btn-delete" class="danger" title="Delete selected (Del)">🗑 Delete</button>
             <button id="btn-export" title="Export pipeline JSON">📤 Export JSON</button>
+            <button id="btn-import" title="Import pipeline JSON">📥 Import JSON</button>
+            <input id="file-import" type="file" accept="application/json,.json" hidden>
+            <span class="name-label">Name</span>
+            <input id="pipeline-name" type="text" placeholder="Untitled pipeline">
             <span class="spacer"></span>
             <span class="hint">Drag a node from the left. Double-click a connection to label it.</span>
         </header>
@@ -792,14 +816,14 @@
 
         fields.push(textField({
             id: 'label',
-            label: 'Имя ноды',
+            label: 'Node name',
             value: data.label ?? '',
             placeholder: NODE_TYPE_BY_ID[typeId].label,
         }));
 
         fields.push(textareaField({
             id: 'systemPrompt',
-            label: 'Системный промпт',
+            label: 'System prompt',
             value: data.systemPrompt ?? '',
             rows: 4,
         }));
@@ -808,7 +832,7 @@
             case 'CLOUD':
                 fields.push(selectField({
                     id: 'cloudProvider',
-                    label: 'Провайдер',
+                    label: 'Provider',
                     options: CLOUD_PROVIDERS,
                     value: data.cloudProvider || 'auto',
                 }));
@@ -816,23 +840,23 @@
             case 'LITE_RT':
                 fields.push(textField({
                     id: 'modelPath',
-                    label: 'Имя модели',
+                    label: 'Model name',
                     value: data.modelPath ?? '',
-                    placeholder: 'например, gemma-2b-it',
+                    placeholder: 'e.g. gemma-2b-it',
                 }));
                 break;
             case 'TOOL':
                 fields.push(selectField({
                     id: 'toolName',
-                    label: 'Инструмент',
-                    options: [{ id: '', label: '— не выбрано —' }, ...AVAILABLE_TOOLS],
+                    label: 'Tool',
+                    options: [{ id: '', label: '— none —' }, ...AVAILABLE_TOOLS],
                     value: data.toolName ?? '',
                 }));
                 break;
             case 'CLARIFICATION':
                 fields.push(numberField({
                     id: 'clarificationTimeoutMs',
-                    label: 'Таймаут (мс)',
+                    label: 'Timeout (ms)',
                     value: data.clarificationTimeoutMs ?? 60000,
                     min: 0,
                     step: 1000,
@@ -841,7 +865,7 @@
             case 'INTENT_ROUTER':
                 fields.push(textareaField({
                     id: 'intentRouterPrompt',
-                    label: 'Описание логики маршрутизации',
+                    label: 'Routing logic description',
                     value: data.intentRouterPrompt ?? '',
                     rows: 3,
                 }));
@@ -849,18 +873,18 @@
             case 'IF_CONDITION':
                 fields.push(textareaField({
                     id: 'conditionPrompt',
-                    label: 'Промпт классификации',
+                    label: 'Classification prompt',
                     value: data.conditionPrompt ?? '',
                     rows: 3,
                 }));
                 fields.push(textField({
                     id: 'conditionKeywords',
-                    label: 'Ключевые слова (через запятую)',
+                    label: 'Keywords (comma-separated)',
                     value: data.conditionKeywords ?? '',
                 }));
                 fields.push(numberField({
                     id: 'conditionComplexity',
-                    label: 'Порог сложности',
+                    label: 'Complexity threshold',
                     value: data.conditionComplexity ?? '',
                     min: 0,
                     step: 1,
@@ -939,20 +963,20 @@
 
         const title = document.createElement('div');
         title.className = 'section-title';
-        title.textContent = 'Входные данные';
+        title.textContent = 'Input data';
         section.appendChild(title);
 
         const hint = document.createElement('div');
         hint.className = 'hint';
-        hint.textContent = 'Эти флаги определяют, какие блоки контекста подмешиваются на вход ноды на каждом запуске.';
+        hint.textContent = 'These flags control which context blocks are mixed into the node input on every run.';
         section.appendChild(hint);
 
         const rows = [
-            { id: 'originalTask',   label: 'Изначальная задача' },
-            { id: 'chatHistory',    label: 'История чата' },
-            { id: 'longTermMemory', label: 'Долгосрочная память' },
-            { id: 'toolResults',    label: 'Результаты инструментов' },
-            { id: 'nodeInput',      label: 'Выход предыдущей ноды', locked: true },
+            { id: 'originalTask',   label: 'Original task' },
+            { id: 'chatHistory',    label: 'Chat history' },
+            { id: 'longTermMemory', label: 'Long-term memory' },
+            { id: 'toolResults',    label: 'Tool results' },
+            { id: 'nodeInput',      label: 'Previous node output', locked: true },
         ];
         rows.forEach(r => {
             const row = document.createElement('label');
@@ -971,7 +995,7 @@
             if (r.locked) {
                 const hintEl = document.createElement('span');
                 hintEl.className = 'lock-hint';
-                hintEl.textContent = 'всегда включено';
+                hintEl.textContent = 'always on';
                 row.appendChild(hintEl);
             }
             section.appendChild(row);
@@ -1010,12 +1034,12 @@
         // user can fix the value rather than silently dropping it.
         if ('clarificationTimeoutMs' in patch && patch.clarificationTimeoutMs != null
             && (Number.isNaN(patch.clarificationTimeoutMs) || patch.clarificationTimeoutMs < 0)) {
-            alert('Таймаут должен быть неотрицательным числом');
+            alert('Timeout must be a non-negative number');
             return;
         }
         if ('conditionComplexity' in patch && patch.conditionComplexity != null
             && (Number.isNaN(patch.conditionComplexity) || patch.conditionComplexity < 0)) {
-            alert('Порог сложности должен быть неотрицательным числом');
+            alert('Complexity threshold must be a non-negative number');
             return;
         }
 
@@ -1331,8 +1355,14 @@
     /* -------------------------------------------------------------------- *
      *  Hook drawflow events: keep labels redrawn and history in sync
      * -------------------------------------------------------------------- */
-    editor.on('nodeCreated', () => { redrawLabels(); pushSnapshot(); runValidation(); });
-    editor.on('nodeRemoved', () => { redrawLabels(); pushSnapshot(); runValidation(); });
+    editor.on('nodeCreated', () => {
+        redrawLabels();
+        if (!suppressAutoLabel) { pushSnapshot(); runValidation(); }
+    });
+    editor.on('nodeRemoved', () => {
+        redrawLabels();
+        if (!suppressAutoLabel) { pushSnapshot(); runValidation(); }
+    });
     /**
      * Per-type seed labels for connections, matching the inline port
      * labels rendered next to multi-output nodes. Single-output types are
@@ -1348,8 +1378,9 @@
         // QUEUE_PROCESSOR) get a meaningful branch label without forcing
         // the user to double-click and type. Only seed when no label is
         // already set (e.g. via import or earlier connect on the same
-        // socket pair).
-        if (info) {
+        // socket pair). Skipped entirely while importing — the document's
+        // labels are authoritative.
+        if (info && !suppressAutoLabel) {
             const src = editor.getNodeFromId(String(info.output_id));
             const map = src && PORT_AUTO_LABELS[src.name];
             if (map) {
@@ -1364,8 +1395,10 @@
             }
         }
         redrawLabels();
-        pushSnapshot();
-        runValidation();
+        if (!suppressAutoLabel) {
+            pushSnapshot();
+            runValidation();
+        }
     });
     editor.on('connectionRemoved', info => {
         if (info) {
@@ -1375,8 +1408,7 @@
             ));
         }
         redrawLabels();
-        pushSnapshot();
-        runValidation();
+        if (!suppressAutoLabel) { pushSnapshot(); runValidation(); }
     });
     editor.on('nodeMoved', () => {
         redrawLabels();
@@ -1465,10 +1497,10 @@
         const inputs  = nodes.filter(n => n.type === 'INPUT');
         const outputs = nodes.filter(n => n.type === 'OUTPUT');
 
-        if (inputs.length === 0)  errors.push({ kind: 'MissingInput',    level: 'error', message: 'Граф должен содержать INPUT-ноду.' });
-        if (inputs.length > 1)    errors.push({ kind: 'MultipleInputs',  level: 'error', message: 'В графе больше одной INPUT-ноды.' });
-        if (outputs.length === 0) errors.push({ kind: 'MissingOutput',   level: 'error', message: 'Граф должен содержать OUTPUT-ноду.' });
-        if (outputs.length > 1)   errors.push({ kind: 'MultipleOutputs', level: 'error', message: 'В графе больше одной OUTPUT-ноды.' });
+        if (inputs.length === 0)  errors.push({ kind: 'MissingInput',    level: 'error', message: 'Graph must contain an INPUT node.' });
+        if (inputs.length > 1)    errors.push({ kind: 'MultipleInputs',  level: 'error', message: 'Graph contains more than one INPUT node.' });
+        if (outputs.length === 0) errors.push({ kind: 'MissingOutput',   level: 'error', message: 'Graph must contain an OUTPUT node.' });
+        if (outputs.length > 1)   errors.push({ kind: 'MultipleOutputs', level: 'error', message: 'Graph contains more than one OUTPUT node.' });
 
         // Build adjacency. Cycle DFS ignores back-edges into QUEUE_PROCESSOR
         // (matches Android PipelineGraph.isValidDAG()), but reachability
@@ -1494,7 +1526,7 @@
             if ((forward.get(n.id) || []).length === 0) {
                 errors.push({
                     kind: 'DisconnectedInput', level: 'error', nodeId: n.id,
-                    message: 'INPUT-нода не подключена к графу.',
+                    message: 'INPUT node is not connected.',
                 });
             }
         });
@@ -1502,7 +1534,7 @@
             if ((backward.get(n.id) || []).length === 0) {
                 errors.push({
                     kind: 'DisconnectedOutput', level: 'error', nodeId: n.id,
-                    message: 'OUTPUT-нода не подключена к графу.',
+                    message: 'OUTPUT node is not connected.',
                 });
             }
         });
@@ -1525,7 +1557,7 @@
                 if (!reachable.has(n.id)) {
                     errors.push({
                         kind: 'UnreachableNode', level: 'error', nodeId: n.id,
-                        message: 'Нода недостижима из INPUT.',
+                        message: 'Node is unreachable from INPUT.',
                     });
                 }
             });
@@ -1544,7 +1576,7 @@
                 if (!canReach.has(n.id)) {
                     errors.push({
                         kind: 'DeadEndNode', level: 'error', nodeId: n.id,
-                        message: 'Из ноды нельзя дойти до OUTPUT.',
+                        message: 'Node cannot reach OUTPUT.',
                     });
                 }
             });
@@ -1571,7 +1603,7 @@
         }
         nodes.forEach(n => { if (!hasCycle) dfs(n.id); });
         if (hasCycle) {
-            errors.push({ kind: 'HasCycles', level: 'error', message: 'Граф содержит цикл.' });
+            errors.push({ kind: 'HasCycles', level: 'error', message: 'Graph contains a cycle.' });
         }
 
         // Empty context — only meaningful for context-aware types. Skipping
@@ -1589,7 +1621,7 @@
                     kind: 'NodeEmptyContext',
                     level: 'error',
                     nodeId: n.id,
-                    message: 'У ноды отключены все источники контекста.',
+                    message: 'All context sources are disabled on this node.',
                 });
             }
         });
@@ -1627,7 +1659,7 @@
         if (total === 0) {
             const empty = document.createElement('div');
             empty.className = 'empty';
-            empty.textContent = 'Нет проблем — граф готов к экспорту.';
+            empty.textContent = 'No issues — graph is ready to export.';
             validationItemsEl.appendChild(empty);
         } else {
             [...errors, ...warnings].forEach(item => {
@@ -1680,12 +1712,246 @@
         renderValidation(validateGraph());
     }
 
-    // Export stub — the real download lands in PHASE 16 — 4/5.
+    /* -------------------------------------------------------------------- *
+     *  JSON export / import (schemaVersion 1)
+     *
+     *  Schema is symmetric on both sides (this editor and the Android
+     *  app's PipelineJsonSerializer). Every drawflow node maps to one
+     *  JSON node carrying its position, label, type-specific config and
+     *  the five-flag NodeContextConfig. Edge labels round-trip in the
+     *  `connections[].label` field — they're what carries True/False or
+     *  Item/Done semantics for multi-output nodes.
+     * -------------------------------------------------------------------- */
+    const CURRENT_SCHEMA_VERSION = 1;
+    const importBtn = document.getElementById('btn-import');
+    const fileImportInput = document.getElementById('file-import');
+    const nameInput = document.getElementById('pipeline-name');
+
+    /** Pipeline-level identity. Stable across exports until import replaces it. */
+    let currentPipelineId = generateUuid();
+
+    function generateUuid() {
+        // crypto.randomUUID is available in all modern browsers; the manual
+        // fallback covers older Safari snapshots loaded from disk via file://.
+        if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+            return crypto.randomUUID();
+        }
+        return 'p-' + Date.now().toString(16) + '-' + Math.random().toString(16).slice(2, 10);
+    }
+
+    /**
+     * Builds the canonical JSON document for the current graph state.
+     */
+    function exportToJson() {
+        const nodes = snapshotGraph(); // reuse the validator's snapshot helper
+        const jsonNodes = nodes.map(n => {
+            const internal = editor.getNodeFromId(n.id);
+            const fullData = Object.assign(defaultNodeData(n.type), n.data || {});
+            return {
+                id: 'node-' + n.id,
+                type: n.type,
+                position: { x: internal.pos_x, y: internal.pos_y },
+                label: fullData.label || NODE_TYPE_BY_ID[n.type].label,
+                config: {
+                    systemPrompt: fullData.systemPrompt || null,
+                    cloudProvider: fullData.cloudProvider || null,
+                    modelPath: fullData.modelPath || null,
+                    toolName: fullData.toolName || null,
+                    clarificationTimeoutMs: fullData.clarificationTimeoutMs ?? null,
+                    intentRouterPrompt: fullData.intentRouterPrompt || null,
+                    conditionPrompt: fullData.conditionPrompt || null,
+                    conditionKeywords: fullData.conditionKeywords || null,
+                    conditionComplexity: fullData.conditionComplexity ?? null,
+                },
+                contextConfig: Object.assign(
+                    { chatHistory: true, originalTask: true, nodeInput: true, longTermMemory: true, toolResults: true },
+                    fullData.contextConfig || {},
+                ),
+            };
+        });
+
+        const jsonConnections = [];
+        nodes.forEach(n => {
+            Object.entries(n.outputs).forEach(([outClass, outDesc]) => {
+                (outDesc.connections || []).forEach(c => {
+                    const inClass = c.output; // drawflow names the target's input class `output` here
+                    const labelKey = connectionKey(n.id, outClass, String(c.node), inClass);
+                    jsonConnections.push({
+                        id: 'conn-' + n.id + '-' + outClass + '-' + c.node + '-' + inClass,
+                        fromNodeId: 'node-' + n.id,
+                        toNodeId: 'node-' + c.node,
+                        label: connectionLabels.get(labelKey) || null,
+                    });
+                });
+            });
+        });
+
+        return {
+            schemaVersion: CURRENT_SCHEMA_VERSION,
+            id: currentPipelineId,
+            name: (nameInput.value || '').trim() || 'Untitled pipeline',
+            updatedAt: Date.now(),
+            nodes: jsonNodes,
+            connections: jsonConnections,
+        };
+    }
+
+    function downloadJson(obj) {
+        const blob = new Blob([JSON.stringify(obj, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+        a.download = `pipeline-${today}.json`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    }
+
     exportBtn.addEventListener('click', () => {
-        const result = validateGraph();
-        if (result.errors.length > 0) return; // belt-and-braces, button is disabled too
-        alert('Export will be implemented in PHASE 16 — 4/5.');
+        if (validateGraph().errors.length > 0) return;
+        downloadJson(exportToJson());
     });
+
+    /* -------------------------------------------------------------------- *
+     *  Import
+     * -------------------------------------------------------------------- */
+    importBtn.addEventListener('click', () => fileImportInput.click());
+    fileImportInput.addEventListener('change', e => {
+        const file = e.target.files && e.target.files[0];
+        if (!file) return;
+        // Reset so re-selecting the same file fires `change` again
+        fileImportInput.value = '';
+        const reader = new FileReader();
+        reader.onload = () => {
+            try {
+                importFromJson(JSON.parse(reader.result));
+            } catch (err) {
+                alert('Failed to parse JSON: ' + err.message);
+            }
+        };
+        reader.onerror = () => alert('Failed to read file.');
+        reader.readAsText(file);
+    });
+
+    /**
+     * Tells the connectionCreated auto-label seed to stand down while we
+     * rebuild the graph from JSON — labels in the document are
+     * authoritative.
+     */
+    let suppressAutoLabel = false;
+
+    function importFromJson(doc) {
+        if (!doc || typeof doc !== 'object') {
+            alert('File does not contain a valid JSON document.');
+            return;
+        }
+        if (doc.schemaVersion !== CURRENT_SCHEMA_VERSION) {
+            const ok = confirm(
+                `File was created by a different editor version ` +
+                `(schemaVersion=${doc.schemaVersion}, expected ${CURRENT_SCHEMA_VERSION}). ` +
+                `Some configuration may not round-trip cleanly. Continue?`,
+            );
+            if (!ok) return;
+        }
+
+        // Build a stripped numeric-id → seeded data map keyed by the JSON's
+        // own ids. drawflow assigns its own integer ids on addNode, so we
+        // cannot honour the JSON ids verbatim — instead we map JSON ids to
+        // drawflow ids during the rebuild and use that map when wiring
+        // connections.
+        const idMap = new Map();
+        suppressAutoLabel = true;
+        try {
+            // Wipe everything: graph, history, labels.
+            editor.clear();
+            connectionLabels.clear();
+
+            (doc.nodes || []).forEach(jn => {
+                const t = NODE_TYPE_BY_ID[jn.type];
+                if (!t) {
+                    console.warn('Unknown node type:', jn.type);
+                    return;
+                }
+                const data = Object.assign(defaultNodeData(jn.type), {
+                    label: jn.label || t.label,
+                    systemPrompt: jn.config?.systemPrompt || '',
+                    cloudProvider: jn.config?.cloudProvider || (jn.type === 'CLOUD' ? 'auto' : ''),
+                    modelPath: jn.config?.modelPath || '',
+                    toolName: jn.config?.toolName || '',
+                    clarificationTimeoutMs: jn.config?.clarificationTimeoutMs ?? (jn.type === 'CLARIFICATION' ? 60000 : null),
+                    intentRouterPrompt: jn.config?.intentRouterPrompt || '',
+                    conditionPrompt: jn.config?.conditionPrompt || '',
+                    conditionKeywords: jn.config?.conditionKeywords || '',
+                    conditionComplexity: jn.config?.conditionComplexity ?? null,
+                    contextConfig: Object.assign(defaultContextConfig(jn.type), jn.contextConfig || {}, {
+                        nodeInput: true, // locked-on regardless of file contents
+                    }),
+                });
+                const dfId = editor.addNode(
+                    t.id, t.inputs, t.outputs,
+                    jn.position?.x ?? 0, jn.position?.y ?? 0,
+                    'nodetype-' + t.id,
+                    data,
+                    nodeHtml(t),
+                );
+                idMap.set(jn.id, String(dfId));
+                // Patch the visible label inside the just-rendered node.
+                const labelEl = document.querySelector(`#node-${dfId} .node-body .label`);
+                if (labelEl) labelEl.textContent = data.label || t.label;
+            });
+
+            (doc.connections || []).forEach(jc => {
+                const srcDf = idMap.get(jc.fromNodeId);
+                const tgtDf = idMap.get(jc.toNodeId);
+                if (!srcDf || !tgtDf) {
+                    console.warn('Connection references unknown node:', jc);
+                    return;
+                }
+                const srcType = editor.getNodeFromId(srcDf)?.name;
+                const outClass = pickOutputClass(srcType, jc.label);
+                const inClass = 'input_1';
+                editor.addConnection(srcDf, tgtDf, outClass, inClass);
+                if (jc.label) {
+                    connectionLabels.set(connectionKey(srcDf, outClass, tgtDf, inClass), jc.label);
+                }
+            });
+
+            // Restore pipeline-level identity & name from the file.
+            currentPipelineId = doc.id || generateUuid();
+            nameInput.value = doc.name || '';
+        } finally {
+            suppressAutoLabel = false;
+        }
+
+        redrawLabels();
+        // The history stack belongs to the pre-import state — wipe it so the
+        // user can't undo "into" an inconsistent half-imported snapshot.
+        history = [];
+        historyIndex = -1;
+        pushSnapshot();
+        runValidation();
+    }
+
+    /**
+     * Picks which output socket a connection should attach to when
+     * recreating it from JSON. For single-output types we always use
+     * output_1; for multi-output types we honour the inline-port labels
+     * (True/False, Item/Done) so the rebuilt graph matches what the user
+     * exported.
+     */
+    function pickOutputClass(srcType, label) {
+        if (srcType === 'IF_CONDITION') {
+            if (label === 'False') return 'output_2';
+            return 'output_1';
+        }
+        if (srcType === 'QUEUE_PROCESSOR') {
+            if (label === 'Done') return 'output_2';
+            return 'output_1';
+        }
+        return 'output_1';
+    }
 
     // Re-validation on dialog save and on undo/redo lives inside the
     // original commitDialog / applySnapshot bodies (see below) — function
@@ -1701,6 +1967,8 @@
     window.__editor = editor;
     window.__labels = connectionLabels;
     window.__validate = validateGraph;
+    window.__exportJson = exportToJson;
+    window.__importJson = importFromJson;
 </script>
 </body>
 </html>

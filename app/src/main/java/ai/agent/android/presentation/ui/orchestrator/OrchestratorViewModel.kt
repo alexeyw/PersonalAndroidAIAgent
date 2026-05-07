@@ -7,16 +7,18 @@ import ai.agent.android.domain.models.NodeContextConfig
 import ai.agent.android.domain.models.NodeModel
 import ai.agent.android.domain.models.NodeType
 import ai.agent.android.domain.models.PipelineGraph
+import ai.agent.android.domain.models.PipelineImportOutcome
 import ai.agent.android.domain.models.PromptTemplate
+import ai.agent.android.domain.pipelineio.PipelineJsonSerializer
 import ai.agent.android.domain.prompt.PromptTemplateEngine
 import ai.agent.android.domain.prompt.PromptVariableProvider
 import ai.agent.android.domain.repositories.ApiKeyRepository
 import ai.agent.android.domain.repositories.ToolRepository
+import ai.agent.android.domain.usecases.ImportPipelineUseCase
 import ai.agent.android.domain.usecases.LoadPipelineUseCase
 import ai.agent.android.domain.usecases.SavePipelineUseCase
 import ai.agent.android.domain.usecases.GetPromptTemplatesUseCase
 import ai.agent.android.domain.usecases.SavePromptTemplateUseCase
-import com.google.gson.Gson
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -35,6 +37,7 @@ import javax.inject.Inject
 class OrchestratorViewModel @Inject constructor(
     private val savePipelineUseCase: SavePipelineUseCase,
     private val loadPipelineUseCase: LoadPipelineUseCase,
+    private val importPipelineUseCase: ImportPipelineUseCase,
     private val getPromptTemplatesUseCase: GetPromptTemplatesUseCase,
     private val savePromptTemplateUseCase: SavePromptTemplateUseCase,
     private val apiKeyRepository: ApiKeyRepository,
@@ -51,8 +54,6 @@ class OrchestratorViewModel @Inject constructor(
      * The current UI state of the Orchestrator screen.
      */
     val uiState: StateFlow<OrchestratorUiState> = _uiState.asStateFlow()
-
-    private val gson = Gson()
 
     init {
         observeSavedPipelines()
@@ -431,32 +432,81 @@ class OrchestratorViewModel @Inject constructor(
     }
 
     /**
-     * Exports the current pipeline to a JSON string.
-     *
-     * @return The JSON representation of the current pipeline.
+     * Exports the current pipeline to a JSON string in the schema-versioned
+     * format consumed by the browser-side editor (`pipeline-editor.html`).
      */
-    fun exportPipelineToJson(): String {
-        return gson.toJson(_uiState.value.currentPipeline)
+    fun exportPipelineToJson(): String =
+        PipelineJsonSerializer.serialize(_uiState.value.currentPipeline)
+
+    /**
+     * Parses [jsonString] and, on success, persists the imported pipeline
+     * through [SavePipelineUseCase] so it appears in the saved-pipelines
+     * list immediately. On a `schemaVersion` mismatch the parsed graph is
+     * stashed in [OrchestratorUiState.pendingImport] for the UI to
+     * confirm; nothing is written until the user accepts via
+     * [confirmPendingImport].
+     */
+    fun importPipelineFromJson(jsonString: String) {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isLoading = true) }
+            val invocation = importPipelineUseCase(jsonString)
+            _uiState.update { state ->
+                when (val outcome = invocation.outcome) {
+                    is PipelineImportOutcome.Success -> {
+                        val saveErr = invocation.saveResult?.let { res ->
+                            res.exceptionOrNull()?.let(::messageForSaveError)
+                        }
+                        state.copy(
+                            currentPipeline = if (saveErr == null) outcome.graph else state.currentPipeline,
+                            isLoading = false,
+                            pendingImport = null,
+                            errorMessage = saveErr,
+                        )
+                    }
+                    is PipelineImportOutcome.SchemaMismatch ->
+                        state.copy(
+                            isLoading = false,
+                            pendingImport = outcome,
+                            errorMessage = null,
+                        )
+                    is PipelineImportOutcome.Failure ->
+                        state.copy(
+                            isLoading = false,
+                            pendingImport = null,
+                            errorMessage = outcome.message,
+                        )
+                }
+            }
+        }
     }
 
     /**
-     * Imports a pipeline from a JSON string.
-     *
-     * @param jsonString The JSON string representing a pipeline.
+     * Persists the graph captured in [OrchestratorUiState.pendingImport]
+     * after the user has accepted the schema-mismatch warning. No-op when
+     * no import is pending.
      */
-    fun importPipelineFromJson(jsonString: String) {
-        try {
-            val pipeline = gson.fromJson(jsonString, PipelineGraph::class.java)
-            if (pipeline != null) {
-                _uiState.update { state ->
-                    state.copy(currentPipeline = pipeline, errorMessage = null)
-                }
-            } else {
-                _uiState.update { it.copy(errorMessage = "Failed to parse JSON") }
+    fun confirmPendingImport() {
+        val pending = _uiState.value.pendingImport ?: return
+        viewModelScope.launch {
+            _uiState.update { it.copy(isLoading = true) }
+            val result = importPipelineUseCase.persistConfirmed(pending)
+            _uiState.update { state ->
+                val saveErr = result.exceptionOrNull()?.let(::messageForSaveError)
+                state.copy(
+                    currentPipeline = if (saveErr == null) pending.graph else state.currentPipeline,
+                    isLoading = false,
+                    pendingImport = null,
+                    errorMessage = saveErr,
+                )
             }
-        } catch (e: Exception) {
-            _uiState.update { it.copy(errorMessage = "Invalid JSON format: ${e.message}") }
         }
+    }
+
+    /**
+     * Discards a pending schema-mismatch import without persisting.
+     */
+    fun cancelPendingImport() {
+        _uiState.update { it.copy(pendingImport = null) }
     }
 
     /**
@@ -467,34 +517,38 @@ class OrchestratorViewModel @Inject constructor(
             _uiState.update { it.copy(isLoading = true) }
             val result = savePipelineUseCase(_uiState.value.currentPipeline)
             _uiState.update { state ->
-                val errorMsg = result.exceptionOrNull()?.let { e ->
-                    if (e is ai.agent.android.domain.models.PipelineValidationException) {
-                        e.errors.joinToString(", ") { err ->
-                            when (err) {
-                                is ai.agent.android.domain.models.PipelineValidationError.MissingInput -> "Missing INPUT node"
-                                is ai.agent.android.domain.models.PipelineValidationError.MissingOutput -> "Missing OUTPUT node"
-                                is ai.agent.android.domain.models.PipelineValidationError.MultipleInputs -> "Multiple INPUT nodes are not allowed"
-                                is ai.agent.android.domain.models.PipelineValidationError.MultipleOutputs -> "Multiple OUTPUT nodes are not allowed"
-                                is ai.agent.android.domain.models.PipelineValidationError.HasCycles -> "Pipeline contains cycles"
-                                is ai.agent.android.domain.models.PipelineValidationError.DisconnectedInput -> "INPUT node is not connected"
-                                is ai.agent.android.domain.models.PipelineValidationError.DisconnectedOutput -> "OUTPUT node is not connected"
-                                is ai.agent.android.domain.models.PipelineValidationError.UnreachableNode -> "Some nodes are unreachable from INPUT"
-                                is ai.agent.android.domain.models.PipelineValidationError.DeadEndNode -> "Some nodes do not reach OUTPUT"
-                                is ai.agent.android.domain.models.PipelineValidationError.NodeEmptyContext -> {
-                                    val name = _uiState.value.currentPipeline.nodes
-                                        .find { it.id == err.nodeId }?.label ?: err.nodeId
-                                    "Node \"$name\" will not receive any data — enable at least one source"
-                                }
-                            }
-                        }
-                    } else {
-                        e.message
-                    }
-                }
                 state.copy(
                     isLoading = false,
-                    errorMessage = errorMsg
+                    errorMessage = result.exceptionOrNull()?.let(::messageForSaveError),
                 )
+            }
+        }
+    }
+
+    /**
+     * Translates a save failure (validation or generic) into a UI-ready
+     * string. Shared by [saveCurrentPipeline], [importPipelineFromJson]
+     * and [confirmPendingImport] so the user sees the same wording
+     * regardless of which entry point triggered the validator.
+     */
+    private fun messageForSaveError(e: Throwable): String? {
+        if (e !is ai.agent.android.domain.models.PipelineValidationException) return e.message
+        return e.errors.joinToString(", ") { err ->
+            when (err) {
+                is ai.agent.android.domain.models.PipelineValidationError.MissingInput -> "Missing INPUT node"
+                is ai.agent.android.domain.models.PipelineValidationError.MissingOutput -> "Missing OUTPUT node"
+                is ai.agent.android.domain.models.PipelineValidationError.MultipleInputs -> "Multiple INPUT nodes are not allowed"
+                is ai.agent.android.domain.models.PipelineValidationError.MultipleOutputs -> "Multiple OUTPUT nodes are not allowed"
+                is ai.agent.android.domain.models.PipelineValidationError.HasCycles -> "Pipeline contains cycles"
+                is ai.agent.android.domain.models.PipelineValidationError.DisconnectedInput -> "INPUT node is not connected"
+                is ai.agent.android.domain.models.PipelineValidationError.DisconnectedOutput -> "OUTPUT node is not connected"
+                is ai.agent.android.domain.models.PipelineValidationError.UnreachableNode -> "Some nodes are unreachable from INPUT"
+                is ai.agent.android.domain.models.PipelineValidationError.DeadEndNode -> "Some nodes do not reach OUTPUT"
+                is ai.agent.android.domain.models.PipelineValidationError.NodeEmptyContext -> {
+                    val name = _uiState.value.currentPipeline.nodes
+                        .find { it.id == err.nodeId }?.label ?: err.nodeId
+                    "Node \"$name\" will not receive any data — enable at least one source"
+                }
             }
         }
     }

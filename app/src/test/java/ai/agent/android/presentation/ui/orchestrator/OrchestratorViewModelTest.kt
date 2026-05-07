@@ -36,6 +36,7 @@ class OrchestratorViewModelTest {
 
     private lateinit var savePipelineUseCase: SavePipelineUseCase
     private lateinit var loadPipelineUseCase: LoadPipelineUseCase
+    private lateinit var importPipelineUseCase: ai.agent.android.domain.usecases.ImportPipelineUseCase
     private lateinit var getPromptTemplatesUseCase: GetPromptTemplatesUseCase
     private lateinit var savePromptTemplateUseCase: SavePromptTemplateUseCase
     private lateinit var apiKeyRepository: ApiKeyRepository
@@ -51,7 +52,13 @@ class OrchestratorViewModelTest {
     fun setup() {
         Dispatchers.setMain(testDispatcher)
         savePipelineUseCase = mockk()
+        // Default to a successful save so the import-then-save pipeline used
+        // by `importPipelineFromJson` round-trips without extra wiring.
+        coEvery { savePipelineUseCase(any()) } returns Result.success(Unit)
         loadPipelineUseCase = mockk()
+        // Use the real ImportPipelineUseCase against the mocked save: the
+        // import path here is exercised end-to-end (parse + persist).
+        importPipelineUseCase = ai.agent.android.domain.usecases.ImportPipelineUseCase(savePipelineUseCase)
         getPromptTemplatesUseCase = mockk()
         savePromptTemplateUseCase = mockk()
         apiKeyRepository = mockk()
@@ -80,6 +87,7 @@ class OrchestratorViewModelTest {
         viewModel = OrchestratorViewModel(
             savePipelineUseCase,
             loadPipelineUseCase,
+            importPipelineUseCase,
             getPromptTemplatesUseCase,
             savePromptTemplateUseCase,
             apiKeyRepository,
@@ -342,15 +350,16 @@ class OrchestratorViewModelTest {
     }
 
     @Test
-    fun `importPipelineFromJson updates current pipeline from json`() {
+    fun `importPipelineFromJson updates current pipeline from json`() = runTest {
         viewModel.applyBasePreset()
         val json = viewModel.exportPipelineToJson()
-        
+
         viewModel.clearPipeline()
         assertEquals(0, viewModel.uiState.value.currentPipeline.nodes.size)
-        
+
         viewModel.importPipelineFromJson(json)
-        
+        testDispatcher.scheduler.advanceUntilIdle()
+
         val state = viewModel.uiState.value
         assertEquals("Base Preset", state.currentPipeline.name)
         assertEquals(10, state.currentPipeline.nodes.size)
@@ -359,11 +368,12 @@ class OrchestratorViewModelTest {
     }
 
     @Test
-    fun `importPipelineFromJson sets error on invalid json`() {
+    fun `importPipelineFromJson sets error on invalid json`() = runTest {
         viewModel.importPipelineFromJson("{ invalid json }")
+        testDispatcher.scheduler.advanceUntilIdle()
 
         assertNotNull(viewModel.uiState.value.errorMessage)
-        assertTrue(viewModel.uiState.value.errorMessage!!.contains("Invalid JSON format"))
+        assertTrue(viewModel.uiState.value.errorMessage!!.contains("Invalid JSON"))
     }
 
     @Test

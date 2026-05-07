@@ -88,6 +88,8 @@ This file maps the contents of the main application package.
     - `TaskQueueManager.kt` - Task queue manager interface.
     - `TextEmbeddingEngine.kt` - Text embedding engine interface.
     - `executors/ClarificationNodeExecutor.kt` - Executor for `NodeType.CLARIFICATION` that asks the local LLM to generate a question/options JSON, suspends on `ClarificationRepository.requestAnswer`, and forwards the user's reply downstream.
+  - `pipelineio/` - JSON serialisation gateway for pipeline import/export.
+    - `PipelineJsonSerializer.kt` - Two-way mapper between `PipelineGraph` and the `schemaVersion: 1` JSON document shared with the browser-side editor (`pipeline-editor.html`).
   - `prompt/` - Prompt templating layer.
     - `PromptVariableProvider.kt` - Contract for a single substitutable prompt variable.
     - `PromptTemplateEngine.kt` - Renders templates by substituting `$KEY` placeholders.
@@ -112,6 +114,7 @@ This file maps the contents of the main application package.
     - `NodeModel.kt` - Node model.
     - `NodeType.kt` - Node type enum.
     - `PipelineGraph.kt` - Pipeline graph model.
+    - `PipelineImportOutcome.kt` - Sealed result of parsing a pipeline JSON document (Success / SchemaMismatch / Failure) consumed by `ImportPipelineUseCase`.
     - `PipelineValidationError.kt` - Pipeline validation error model.
     - `PipelineValidationException.kt` - Pipeline validation exception model.
     - `PowerState.kt` - Power state model.
@@ -139,6 +142,7 @@ This file maps the contents of the main application package.
     - `AgentOrchestratorUseCase.kt` - Use case for agent orchestration.
     - `EvaluateIfConditionUseCase.kt` - Use case for evaluating IF condition nodes.
     - `GetContextWindowUseCase.kt` - Use case to get context window.
+    - `ImportPipelineUseCase.kt` - Parses a pipeline JSON document via `PipelineJsonSerializer` and persists clean imports through `SavePipelineUseCase`; defers schema-mismatch persistence to a separate `persistConfirmed` step.
     - `InitializeAppUseCase.kt` - Use case for app initialization.
     - `LoadModelUseCase.kt` - Use case to load a model.
     - `LoadPipelineUseCase.kt` - Use case to load a pipeline.
