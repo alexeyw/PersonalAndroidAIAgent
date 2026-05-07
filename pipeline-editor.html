@@ -1316,12 +1316,17 @@
     });
     // Submit via Enter inside a single-line input commits the form. We use
     // method="dialog" form, so <button data-role="save"> is type="button"
-    // explicitly; Enter still bubbles up — listen at form level.
+    // explicitly; Enter still bubbles up — listen at form level. Skip for
+    // textareas (multi-line typing) and for any button — pressing Enter on
+    // a focused button is its native activation key, so the variable chips
+    // and the Save / Cancel buttons must run their own click handlers
+    // rather than save the dialog out from under the user.
     dialog.querySelector('form').addEventListener('keydown', e => {
-        if (e.key === 'Enter' && !(e.target instanceof HTMLTextAreaElement)) {
-            e.preventDefault();
-            commitDialog();
-        }
+        if (e.key !== 'Enter') return;
+        if (e.target instanceof HTMLTextAreaElement) return;
+        if (e.target instanceof HTMLButtonElement) return;
+        e.preventDefault();
+        commitDialog();
     });
 
     // Delegated dblclick on nodes. Excludes connection labels (those have
