@@ -487,15 +487,19 @@ class OrchestratorViewModel @Inject constructor(
      */
     fun confirmPendingImport() {
         val pending = _uiState.value.pendingImport ?: return
+        // Clear pendingImport immediately so the AlertDialog dismisses
+        // before the suspending save runs. Holding it while persistConfirmed
+        // is in-flight would let the user re-click "Import anyway" or
+        // dismiss the dialog mid-save, racing two persists for the same
+        // graph.
+        _uiState.update { it.copy(isLoading = true, pendingImport = null) }
         viewModelScope.launch {
-            _uiState.update { it.copy(isLoading = true) }
             val result = importPipelineUseCase.persistConfirmed(pending)
             _uiState.update { state ->
                 val saveErr = result.exceptionOrNull()?.let(::messageForSaveError)
                 state.copy(
                     currentPipeline = if (saveErr == null) pending.graph else state.currentPipeline,
                     isLoading = false,
-                    pendingImport = null,
                     errorMessage = saveErr,
                 )
             }
