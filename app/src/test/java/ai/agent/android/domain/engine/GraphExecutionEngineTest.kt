@@ -1060,4 +1060,176 @@ class GraphExecutionEngineTest {
         val completed = states.last() as AgentOrchestratorState.Completed
         assertEquals("raw passthrough", completed.finalResponse)
     }
+
+    @Test
+    fun `given INPUT to TOOL to CLOUD to OUTPUT pipeline with distinct NodeContextConfigs when executed then TOOL receives only nodeInput and CLOUD plus OUTPUT receive full context`() = runTest {
+        every { settingsRepository.pipelineMaxSteps } returns flowOf(15)
+        every { settingsRepository.requiresUserConfirmation } returns flowOf(false)
+
+        // Pre-seed the pipeline-scoped data sources so every block in
+        // ALL_ENABLED has something visible to render. Without these stubs the
+        // builder would correctly drop empty blocks and we could not
+        // distinguish "block omitted because flag is false" from "block
+        // omitted because data is empty".
+        every { chatRepository.getMessagesForSession(sessionId) } returns flowOf(
+            listOf(
+                ChatMessage(
+                    id = 1L,
+                    sessionId = sessionId,
+                    role = Role.USER,
+                    content = "earlier question",
+                    timestamp = 0L,
+                ),
+                ChatMessage(
+                    id = 2L,
+                    sessionId = sessionId,
+                    role = Role.AGENT,
+                    content = "earlier answer",
+                    timestamp = 1L,
+                ),
+            ),
+        )
+        coEvery { retrieveRelevantMemoryUseCase(any()) } returns listOf(
+            MemoryChunk(
+                id = 99L,
+                text = "user lives in Berlin",
+                embedding = FloatArray(0),
+                timestamp = 0L,
+            ),
+        )
+
+        // ToolRepository: one available tool plus a deterministic execution
+        // result. The auto-selector LLM call (see returnsMany below) names
+        // "web.search", so this is the tool the engine actually invokes.
+        coEvery { toolRepository.getAvailableTools() } returns listOf(
+            AgentTool("web.search", "Search the web", "{}"),
+        )
+        coEvery { toolRepository.executeTool("web.search", any()) } returns "search-result"
+
+        // Cloud client mock — captures the prompt the CLOUD node receives so we
+        // can assert that the full-context wrap reached the cloud LLM.
+        val mockAnthropicClient: LLMClient = mockk(relaxed = true)
+        val capturedCloudPrompt = slot<Prompt>()
+        coEvery {
+            mockAnthropicClient.executeStreaming(capture(capturedCloudPrompt), any<LLModel>())
+        } returns flowOf(StreamFrame.TextDelta("cloud_answer"))
+        coEvery { koogClientFactory.createAnthropicExecutor() } returns mockAnthropicClient
+
+        every { apiKeyRepository.getAnthropicKey() } returns flowOf("anthropic-test-key")
+        every { apiKeyRepository.getAnthropicModel() } returns flowOf("claude-sonnet-4-5")
+        every { apiKeyRepository.getOpenAIKey() } returns flowOf(null)
+        every { apiKeyRepository.getGoogleKey() } returns flowOf(null)
+        every { apiKeyRepository.getDeepSeekKey() } returns flowOf(null)
+
+        // Two LITE_RT consumers fire in order:
+        //   1. ToolNodeExecutor's auto-selection LLM → returns the JSON tool choice
+        //   2. OUTPUT (with systemPrompt set) → returns the final formatted reply
+        every { llmEngine.generateResponseStream(any()) } returnsMany listOf(
+            flowOf("{\"tool\":\"web.search\",\"arguments\":{\"q\":\"weather\"}}"),
+            flowOf("final_formatted_reply"),
+        )
+
+        // ─── Pipeline definition ───
+        // TOOL: nodeInput-only — must NOT see chat history, memory or tool
+        //                        results (none yet) in its assembled input.
+        // CLOUD: ALL_ENABLED   — should see every block, including the tool
+        //                        result produced by the upstream TOOL node.
+        // OUTPUT: ALL_ENABLED + systemPrompt — should also see every block.
+        val inputNode = NodeModel("input_1", NodeType.INPUT, 0f, 0f)
+        val toolNode = NodeModel(
+            id = "tool_1",
+            type = NodeType.TOOL,
+            x = 0f,
+            y = 0f,
+            toolName = "auto",
+            contextConfig = NodeContextConfig(
+                chatHistory = false,
+                originalTask = false,
+                nodeInput = true,
+                longTermMemory = false,
+                toolResults = false,
+            ),
+        )
+        val cloudNode = NodeModel(
+            id = "cloud_1",
+            type = NodeType.CLOUD,
+            x = 0f,
+            y = 0f,
+            cloudProvider = "anthropic",
+            systemPrompt = "Answer the user.",
+            contextConfig = NodeContextConfig.ALL_ENABLED,
+        )
+        val outputNode = NodeModel(
+            id = "output_1",
+            type = NodeType.OUTPUT,
+            x = 0f,
+            y = 0f,
+            systemPrompt = "Format reply:",
+            contextConfig = NodeContextConfig.ALL_ENABLED,
+        )
+
+        val graph = PipelineGraph(
+            id = "g1", name = "Phase 15-6 integration",
+            nodes = listOf(inputNode, toolNode, cloudNode, outputNode),
+            connections = listOf(
+                ConnectionModel("c1", "input_1", "tool_1"),
+                ConnectionModel("c2", "tool_1", "cloud_1"),
+                ConnectionModel("c3", "cloud_1", "output_1"),
+            ),
+        )
+
+        // ─── Act ───
+        val states = engine(sessionId, "user prompt", graph).toList()
+
+        // ─── Assert: pipeline ran end-to-end ───
+        val completed = states.last() as AgentOrchestratorState.Completed
+        assertEquals("final_formatted_reply", completed.finalResponse)
+
+        // ─── Assert: TOOL's auto-selector LITE_RT prompt carries ONLY the
+        // Previous Node Output block — no chat history, memory or tool
+        // results bleed in (TOOL has not produced any results at that point
+        // anyway, but the configuration must also block the other blocks).
+        io.mockk.verify {
+            llmEngine.generateResponseStream(match {
+                it.contains("--- Previous Node Output ---") &&
+                    it.contains("user prompt") &&
+                    !it.contains("--- Chat History ---") &&
+                    !it.contains("--- Long-Term Memory ---") &&
+                    !it.contains("--- Tool Results ---") &&
+                    !it.contains("--- Original Task ---")
+            })
+        }
+
+        // ─── Assert: OUTPUT's LITE_RT prompt carries the full ALL_ENABLED
+        // wrap, including the tool result accumulated upstream.
+        io.mockk.verify {
+            llmEngine.generateResponseStream(match {
+                it.contains("--- Original Task ---") &&
+                    it.contains("user prompt") &&
+                    it.contains("--- Chat History ---") &&
+                    it.contains("USER: earlier question") &&
+                    it.contains("--- Long-Term Memory ---") &&
+                    it.contains("user lives in Berlin") &&
+                    it.contains("--- Tool Results ---") &&
+                    it.contains("web.search: search-result") &&
+                    it.contains("--- Previous Node Output ---")
+            })
+        }
+
+        // ─── Assert: CLOUD received the full context wrap (ALL_ENABLED). The
+        // cloud client serialises every prompt message into its own field, so
+        // we collapse them into a single string for substring assertions.
+        coVerify { mockAnthropicClient.executeStreaming(any<Prompt>(), any<LLModel>()) }
+        val cloudPromptText = capturedCloudPrompt.captured.messages.joinToString("\n") { it.content }
+        assertTrue("CLOUD prompt missing Original Task block: $cloudPromptText",
+            cloudPromptText.contains("--- Original Task ---") && cloudPromptText.contains("user prompt"))
+        assertTrue("CLOUD prompt missing Chat History block: $cloudPromptText",
+            cloudPromptText.contains("--- Chat History ---") && cloudPromptText.contains("earlier question"))
+        assertTrue("CLOUD prompt missing Long-Term Memory block: $cloudPromptText",
+            cloudPromptText.contains("--- Long-Term Memory ---") && cloudPromptText.contains("user lives in Berlin"))
+        assertTrue("CLOUD prompt missing Tool Results block: $cloudPromptText",
+            cloudPromptText.contains("--- Tool Results ---") && cloudPromptText.contains("web.search: search-result"))
+        assertTrue("CLOUD prompt missing Previous Node Output block: $cloudPromptText",
+            cloudPromptText.contains("--- Previous Node Output ---"))
+    }
 }
