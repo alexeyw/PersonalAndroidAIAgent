@@ -5,6 +5,7 @@ import ai.agent.android.domain.models.NodeModel
 import ai.agent.android.domain.models.PipelineGraph
 import ai.agent.android.domain.models.AgentTool
 import ai.agent.android.domain.models.NodeType
+import ai.agent.android.domain.models.PipelineImportOutcome
 import ai.agent.android.domain.models.PipelineValidationError
 import ai.agent.android.domain.models.PromptTemplate
 import ai.agent.android.domain.prompt.PromptSegment
@@ -22,6 +23,8 @@ import ai.agent.android.domain.prompt.PromptSegment
  * @property availableVariables Tokens (`$KEY`) of every prompt variable currently
  * registered in the DI graph. Drives the chip row in the prompt editor.
  * @property previewState Current state of the prompt-preview bottom sheet.
+ * @property pendingImport A schema-mismatch outcome awaiting user
+ * confirmation before being persisted. `null` when no import is pending.
  */
 data class OrchestratorUiState(
     val currentPipeline: PipelineGraph = PipelineGraph(id = java.util.UUID.randomUUID().toString(), name = "New Pipeline"),
@@ -33,6 +36,7 @@ data class OrchestratorUiState(
     val promptTemplates: List<PromptTemplate> = emptyList(),
     val availableVariables: List<String> = emptyList(),
     val previewState: PromptPreviewState = PromptPreviewState.Hidden,
+    val pendingImport: PipelineImportOutcome.SchemaMismatch? = null,
 ) {
     /**
      * Helper to get nodes easily.

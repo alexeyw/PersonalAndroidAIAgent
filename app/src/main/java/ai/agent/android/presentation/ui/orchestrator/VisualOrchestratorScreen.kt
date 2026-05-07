@@ -173,6 +173,31 @@ fun VisualOrchestratorScreen(
         }
     }
 
+    uiState.pendingImport?.let { pending ->
+        AlertDialog(
+            onDismissRequest = { viewModel.cancelPendingImport() },
+            title = { Text("Schema version mismatch") },
+            text = {
+                Text(
+                    "This pipeline file was created in a different editor version " +
+                        "(found schemaVersion=${pending.foundVersion}, expected " +
+                        "${pending.expectedVersion}). Some configuration may not " +
+                        "round-trip cleanly. Import anyway?"
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = { viewModel.confirmPendingImport() }) {
+                    Text("Import anyway")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { viewModel.cancelPendingImport() }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
     if (showClearDialog) {
         AlertDialog(
             onDismissRequest = { showClearDialog = false },
