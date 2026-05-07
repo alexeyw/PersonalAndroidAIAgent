@@ -314,11 +314,13 @@
         if (!typeId || !NODE_TYPE_BY_ID[typeId]) return;
         e.preventDefault();
         const t = NODE_TYPE_BY_ID[typeId];
-        // Translate viewport coordinates to drawflow's internal coordinate
-        // system. drawflow.canvas_x / canvas_y are pan offsets, .zoom is scale.
-        const rect = canvas.getBoundingClientRect();
-        const x = (e.clientX - rect.left - editor.canvas_x) / editor.zoom;
-        const y = (e.clientY - rect.top - editor.canvas_y) / editor.zoom;
+        // Drawflow's canonical recipe: convert viewport (clientX/Y) to canvas
+        // userspace by subtracting the precanvas's own rendered rect and
+        // dividing by the active zoom. precanvas already accounts for both
+        // translate and scale, so this works at any zoom level.
+        const pre = editor.precanvas.getBoundingClientRect();
+        const x = (e.clientX - pre.left) / editor.zoom;
+        const y = (e.clientY - pre.top) / editor.zoom;
         editor.addNode(
             t.id,
             t.inputs,
@@ -394,14 +396,14 @@
             } catch (_) {
                 return;
             }
-            const pathRect = path.getBoundingClientRect();
-            // path.getPointAtLength returns coords relative to the SVG;
-            // translate to viewport coords using the SVG's own bounding rect.
+            // path.getPointAtLength returns coords in the SVG's user space
+            // (pre-scale). The SVG sits inside drawflow's precanvas which is
+            // CSS-scaled by editor.zoom, so multiply the user-space offset
+            // by zoom to get on-screen pixels relative to the SVG's
+            // already-post-scale getBoundingClientRect().
             const svgRect = svg.getBoundingClientRect();
-            // The SVG covers the full canvas, so its top-left is the origin
-            // for path coordinates.
-            const x = svgRect.left + mid.x - wrapperRect.left;
-            const y = svgRect.top  + mid.y - wrapperRect.top;
+            const x = svgRect.left + mid.x * editor.zoom - wrapperRect.left;
+            const y = svgRect.top  + mid.y * editor.zoom - wrapperRect.top;
 
             const key = connectionKey(meta.outId, meta.outClass, meta.inId, meta.inClass);
             const text = connectionLabels.get(key) || '';
@@ -614,8 +616,23 @@
         moveDebounceTimer = setTimeout(() => { pushSnapshot(); moveDebounceTimer = null; }, 250);
     });
     editor.on('translate', redrawLabels);
-    editor.on('zoom', redrawLabels);
+    // drawflow emits `zoom` *before* the CSS transform is committed, so the
+    // SVG's getBoundingClientRect() is still on the previous frame — defer
+    // the redraw to the next animation frame. The wheel-listener below is a
+    // safety net for the rare case the zoom event is missed.
+    editor.on('zoom', scheduleLabelRedraw);
     editor.on('import', redrawLabels);
+    canvas.addEventListener('wheel', scheduleLabelRedraw, { passive: true });
+
+    let labelRedrawScheduled = false;
+    function scheduleLabelRedraw() {
+        if (labelRedrawScheduled) return;
+        labelRedrawScheduled = true;
+        requestAnimationFrame(() => {
+            labelRedrawScheduled = false;
+            redrawLabels();
+        });
+    }
 
     // Initial empty snapshot so undo "back to blank" works after first action.
     pushSnapshot();
