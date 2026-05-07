@@ -1349,6 +1349,26 @@
     }
 
     /**
+     * Mirror of Android NodeModel.usesContextConfig(): only context-aware
+     * node types feed their input through NodeContextBuilder, so
+     * NodeEmptyContext is meaningful only for them. Control-flow types
+     * (INPUT, IF_CONDITION, QUEUE_PROCESSOR) and OUTPUT in echo mode (no
+     * systemPrompt) forward upstream text verbatim regardless of flags.
+     */
+    const CONTEXT_AWARE_TYPES = new Set([
+        'LITE_RT', 'CLOUD', 'OUTPUT', 'SUMMARY', 'INTENT_ROUTER',
+        'DECOMPOSITION', 'EVALUATION', 'CLARIFICATION', 'TOOL',
+    ]);
+    function usesContextConfig(node) {
+        if (!CONTEXT_AWARE_TYPES.has(node.type)) return false;
+        if (node.type === 'OUTPUT') {
+            const sp = node.data?.systemPrompt;
+            if (!sp || !String(sp).trim()) return false;
+        }
+        return true;
+    }
+
+    /**
      * @returns {{errors:Array, warnings:Array}}
      * Each item: { kind, level, message, nodeId? }
      */
@@ -1360,14 +1380,14 @@
         const inputs  = nodes.filter(n => n.type === 'INPUT');
         const outputs = nodes.filter(n => n.type === 'OUTPUT');
 
-        if (inputs.length === 0)  errors.push({ kind: 'MissingInput',    level: 'error',   message: 'Граф должен содержать INPUT-ноду.' });
-        if (inputs.length > 1)    errors.push({ kind: 'MultipleInputs',  level: 'error',   message: 'В графе больше одной INPUT-ноды.' });
-        if (outputs.length === 0) errors.push({ kind: 'MissingOutput',   level: 'error',   message: 'Граф должен содержать OUTPUT-ноду.' });
-        if (outputs.length > 1)   errors.push({ kind: 'MultipleOutputs', level: 'error',   message: 'В графе больше одной OUTPUT-ноды.' });
+        if (inputs.length === 0)  errors.push({ kind: 'MissingInput',    level: 'error', message: 'Граф должен содержать INPUT-ноду.' });
+        if (inputs.length > 1)    errors.push({ kind: 'MultipleInputs',  level: 'error', message: 'В графе больше одной INPUT-ноды.' });
+        if (outputs.length === 0) errors.push({ kind: 'MissingOutput',   level: 'error', message: 'Граф должен содержать OUTPUT-ноду.' });
+        if (outputs.length > 1)   errors.push({ kind: 'MultipleOutputs', level: 'error', message: 'В графе больше одной OUTPUT-ноды.' });
 
-        // Build adjacency for cycle + isolation checks. Match Android
-        // isValidDAG(): ignore back-edges *into* QUEUE_PROCESSOR so loop
-        // bodies are not flagged as cycles.
+        // Build adjacency. Cycle DFS ignores back-edges into QUEUE_PROCESSOR
+        // (matches Android PipelineGraph.isValidDAG()), but reachability
+        // BFS uses the full graph since loops still propagate execution.
         const idToType = new Map(nodes.map(n => [n.id, n.type]));
         const forward = new Map(nodes.map(n => [n.id, []]));
         const backward = new Map(nodes.map(n => [n.id, []]));
@@ -1381,21 +1401,72 @@
             });
         });
 
-        // Isolated node = no incoming AND no outgoing connections.
-        nodes.forEach(n => {
-            const inDeg  = (backward.get(n.id) || []).length;
-            const outDeg = (forward.get(n.id)  || []).length;
-            if (inDeg === 0 && outDeg === 0) {
-                warnings.push({
-                    kind: 'IsolatedNode',
-                    level: 'warning',
-                    nodeId: n.id,
-                    message: 'Изолированная нода без связей.',
+        // Endpoint connectivity — match PipelineGraph.validate(): every
+        // INPUT must have at least one outgoing edge, every OUTPUT at
+        // least one incoming. These are *errors*, not warnings, so the
+        // export gate kicks in for an INPUT/OUTPUT pair with no edge.
+        inputs.forEach(n => {
+            if ((forward.get(n.id) || []).length === 0) {
+                errors.push({
+                    kind: 'DisconnectedInput', level: 'error', nodeId: n.id,
+                    message: 'INPUT-нода не подключена к графу.',
+                });
+            }
+        });
+        outputs.forEach(n => {
+            if ((backward.get(n.id) || []).length === 0) {
+                errors.push({
+                    kind: 'DisconnectedOutput', level: 'error', nodeId: n.id,
+                    message: 'OUTPUT-нода не подключена к графу.',
                 });
             }
         });
 
-        // Cycle detection (DFS with rec-stack), ignoring edges to QUEUE_PROCESSOR.
+        // Reachability — every non-INPUT node must be reachable from some
+        // INPUT, every non-OUTPUT node must be able to reach some OUTPUT.
+        // Skip when the corresponding endpoint is missing entirely; the
+        // cardinality error already covers that case.
+        if (inputs.length > 0) {
+            const reachable = new Set(inputs.map(n => n.id));
+            const queue = inputs.map(n => n.id);
+            while (queue.length) {
+                const u = queue.shift();
+                (forward.get(u) || []).forEach(v => {
+                    if (!reachable.has(v)) { reachable.add(v); queue.push(v); }
+                });
+            }
+            nodes.forEach(n => {
+                if (n.type === 'INPUT') return;
+                if (!reachable.has(n.id)) {
+                    errors.push({
+                        kind: 'UnreachableNode', level: 'error', nodeId: n.id,
+                        message: 'Нода недостижима из INPUT.',
+                    });
+                }
+            });
+        }
+        if (outputs.length > 0) {
+            const canReach = new Set(outputs.map(n => n.id));
+            const queue = outputs.map(n => n.id);
+            while (queue.length) {
+                const u = queue.shift();
+                (backward.get(u) || []).forEach(v => {
+                    if (!canReach.has(v)) { canReach.add(v); queue.push(v); }
+                });
+            }
+            nodes.forEach(n => {
+                if (n.type === 'OUTPUT') return;
+                if (!canReach.has(n.id)) {
+                    errors.push({
+                        kind: 'DeadEndNode', level: 'error', nodeId: n.id,
+                        message: 'Из ноды нельзя дойти до OUTPUT.',
+                    });
+                }
+            });
+        }
+
+        // Cycle detection (DFS with rec-stack), ignoring edges into
+        // QUEUE_PROCESSOR.
         const dfsForward = new Map();
         nodes.forEach(n => {
             const filtered = (forward.get(n.id) || []).filter(t => idToType.get(t) !== 'QUEUE_PROCESSOR');
@@ -1418,10 +1489,12 @@
             errors.push({ kind: 'HasCycles', level: 'error', message: 'Граф содержит цикл.' });
         }
 
-        // Per-node empty context. nodeInput is locked-on in the UI so this
-        // should be unreachable in practice — but the Android validator
-        // checks it, so we keep parity.
+        // Empty context — only meaningful for context-aware types. Skipping
+        // INPUT / IF_CONDITION / QUEUE_PROCESSOR (and OUTPUT in echo mode)
+        // matches Android usesContextConfig(), so legacy/imported JSON with
+        // all-off flags on a control-flow node is not flagged.
         nodes.forEach(n => {
+            if (!usesContextConfig(n)) return;
             const ctx = n.data?.contextConfig;
             if (!ctx) return;
             const allOff = !ctx.chatHistory && !ctx.originalTask && !ctx.nodeInput
