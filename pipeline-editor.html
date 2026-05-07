@@ -75,9 +75,10 @@
 
         /* Main area */
         #main {
-            display: flex;
-            flex-direction: column;
+            display: grid;
+            grid-template-rows: auto 1fr auto;
             min-width: 0;
+            min-height: 0;
         }
 
         #toolbar {
@@ -212,6 +213,58 @@
         .drawflow .drawflow-node.nodetype-CLARIFICATION { border-top-color: #9C27B0; }
         .drawflow .drawflow-node.nodetype-INPUT { border-top-color: #607D8B; }
         .drawflow .drawflow-node.nodetype-OUTPUT { border-top-color: #F44336; }
+
+        /* IF_CONDITION outputs carry True / False semantics. Place the
+           labels outside the node (to the right of each port) so they
+           don't overlap node content and stay visible regardless of the
+           selection or validation outlines. The text-shadow gives a
+           halo against bright outlines (red `has-error` ring vs red
+           "False" text in particular). */
+        .drawflow .drawflow-node.nodetype-IF_CONDITION .output::after {
+            position: absolute;
+            left: 100%;
+            margin-left: 10px;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 11px;
+            font-weight: 600;
+            white-space: nowrap;
+            pointer-events: none;
+            text-shadow: 0 0 3px rgba(0, 0, 0, 0.85);
+        }
+        .drawflow .drawflow-node.nodetype-IF_CONDITION .output.output_1::after {
+            content: "True";
+            color: #4CAF50;
+        }
+        .drawflow .drawflow-node.nodetype-IF_CONDITION .output.output_2::after {
+            content: "False";
+            color: #F44336;
+        }
+
+        /* QUEUE_PROCESSOR has two semantically distinct outputs: output_1
+           ("Item") loops a subtask body back into the queue, output_2
+           ("Done") proceeds downstream once the queue empties. Naming
+           mirrors DraggableNode.kt to keep the UI vocabulary aligned. */
+        .drawflow .drawflow-node.nodetype-QUEUE_PROCESSOR .output::after {
+            position: absolute;
+            left: 100%;
+            margin-left: 10px;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 11px;
+            font-weight: 600;
+            white-space: nowrap;
+            pointer-events: none;
+            text-shadow: 0 0 3px rgba(0, 0, 0, 0.85);
+        }
+        .drawflow .drawflow-node.nodetype-QUEUE_PROCESSOR .output.output_1::after {
+            content: "Item";
+            color: #FFC107;
+        }
+        .drawflow .drawflow-node.nodetype-QUEUE_PROCESSOR .output.output_2::after {
+            content: "Done";
+            color: #4CAF50;
+        }
 
         /* Sidebar palette colour bars */
         .palette-item[data-type="LITE_RT"]         { border-left-color: #4CAF50; }
@@ -384,6 +437,84 @@
         }
 
         dialog#node-config button:hover { filter: brightness(1.1); }
+
+        /* Validation panel */
+        #validation-panel {
+            background: var(--bg-soft);
+            border-top: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            min-height: 0;
+            max-height: 200px;
+        }
+
+        #validation-panel header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 12px;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-dim);
+            border-bottom: 1px solid var(--border);
+        }
+
+        #validation-panel header .counts {
+            margin-left: auto;
+            color: var(--text-dim);
+            font-size: 11px;
+            text-transform: none;
+            letter-spacing: 0;
+        }
+
+        #validation-panel .items {
+            overflow-y: auto;
+            padding: 6px 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        #validation-panel .empty {
+            padding: 12px;
+            color: var(--text-dim);
+            font-size: 12px;
+        }
+
+        #validation-panel .item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 12px;
+            line-height: 1.5;
+        }
+
+        #validation-panel .item .icon { width: 16px; text-align: center; }
+        #validation-panel .item.error .icon { color: var(--danger); }
+        #validation-panel .item.warning .icon { color: #FFC107; }
+
+        #validation-panel .item button.node-link {
+            background: transparent;
+            color: var(--accent);
+            border: none;
+            padding: 0 2px;
+            font: inherit;
+            cursor: pointer;
+            text-decoration: underline;
+            text-underline-offset: 2px;
+        }
+
+        /* Validation highlighting on nodes */
+        .drawflow .drawflow-node.has-warning {
+            outline: 2px solid #FFC107;
+            outline-offset: 2px;
+        }
+
+        .drawflow .drawflow-node.has-error {
+            outline: 2px solid var(--danger);
+            outline-offset: 2px;
+        }
     </style>
 </head>
 <body>
@@ -397,6 +528,7 @@
             <button id="btn-undo" title="Undo (Ctrl+Z)">↶ Undo</button>
             <button id="btn-redo" title="Redo (Ctrl+Y)">↷ Redo</button>
             <button id="btn-delete" class="danger" title="Delete selected (Del)">🗑 Delete</button>
+            <button id="btn-export" title="Export pipeline JSON">📤 Export JSON</button>
             <span class="spacer"></span>
             <span class="hint">Drag a node from the left. Double-click a connection to label it.</span>
         </header>
@@ -404,6 +536,13 @@
             <div id="drawflow"></div>
             <div id="labels-layer"></div>
         </div>
+        <section id="validation-panel">
+            <header>
+                <span>Validation</span>
+                <span class="counts" data-role="counts"></span>
+            </header>
+            <div class="items" data-role="items"></div>
+        </section>
     </main>
 </div>
 
@@ -894,6 +1033,7 @@
         }
 
         pushSnapshot();
+        runValidation();
         closeDialog();
     }
 
@@ -1164,6 +1304,7 @@
         currentSelection = null;
         redrawLabels();
         updateToolbar();
+        runValidation();
     }
 
     function undo() {
@@ -1190,9 +1331,42 @@
     /* -------------------------------------------------------------------- *
      *  Hook drawflow events: keep labels redrawn and history in sync
      * -------------------------------------------------------------------- */
-    editor.on('nodeCreated', () => { redrawLabels(); pushSnapshot(); });
-    editor.on('nodeRemoved', () => { redrawLabels(); pushSnapshot(); });
-    editor.on('connectionCreated', () => { redrawLabels(); pushSnapshot(); });
+    editor.on('nodeCreated', () => { redrawLabels(); pushSnapshot(); runValidation(); });
+    editor.on('nodeRemoved', () => { redrawLabels(); pushSnapshot(); runValidation(); });
+    /**
+     * Per-type seed labels for connections, matching the inline port
+     * labels rendered next to multi-output nodes. Single-output types are
+     * absent here and produce no auto-label.
+     */
+    const PORT_AUTO_LABELS = {
+        IF_CONDITION:    { output_1: 'True', output_2: 'False' },
+        QUEUE_PROCESSOR: { output_1: 'Item', output_2: 'Done'  },
+    };
+
+    editor.on('connectionCreated', info => {
+        // Auto-fill the edge label so multi-output nodes (IF_CONDITION,
+        // QUEUE_PROCESSOR) get a meaningful branch label without forcing
+        // the user to double-click and type. Only seed when no label is
+        // already set (e.g. via import or earlier connect on the same
+        // socket pair).
+        if (info) {
+            const src = editor.getNodeFromId(String(info.output_id));
+            const map = src && PORT_AUTO_LABELS[src.name];
+            if (map) {
+                const key = connectionKey(
+                    String(info.output_id), info.output_class,
+                    String(info.input_id),  info.input_class,
+                );
+                if (!connectionLabels.has(key)) {
+                    const branch = map[info.output_class];
+                    if (branch) connectionLabels.set(key, branch);
+                }
+            }
+        }
+        redrawLabels();
+        pushSnapshot();
+        runValidation();
+    });
     editor.on('connectionRemoved', info => {
         if (info) {
             connectionLabels.delete(connectionKey(
@@ -1202,6 +1376,7 @@
         }
         redrawLabels();
         pushSnapshot();
+        runValidation();
     });
     editor.on('nodeMoved', () => {
         redrawLabels();
@@ -1227,13 +1402,305 @@
         });
     }
 
+    /* -------------------------------------------------------------------- *
+     *  Graph validation
+     *
+     *  Mirrors the rule set of Android `PipelineGraph.validate()` adapted
+     *  to the editor's needs: structural cardinality, connectivity, cycles,
+     *  and per-node context-config sanity. Errors block export; warnings
+     *  surface for the user but do not. Triggered after every mutation
+     *  event listed below.
+     * -------------------------------------------------------------------- */
+    const validationItemsEl = document.querySelector('#validation-panel [data-role="items"]');
+    const validationCountsEl = document.querySelector('#validation-panel [data-role="counts"]');
+    const exportBtn = document.getElementById('btn-export');
+
+    /**
+     * Pulls the current graph from drawflow's internal store. Each entry has
+     * { id, name (=nodeType), data, inputs, outputs }; we only need the
+     * shape, not the rendered HTML.
+     */
+    function snapshotGraph() {
+        const data = editor.export();
+        const homeNodes = data?.drawflow?.Home?.data || {};
+        const nodes = Object.entries(homeNodes).map(([id, n]) => ({
+            id: String(id),
+            type: n.name,
+            data: n.data || {},
+            inputs: n.inputs || {},
+            outputs: n.outputs || {},
+        }));
+        return nodes;
+    }
+
+    /**
+     * Mirror of Android NodeModel.usesContextConfig(): only context-aware
+     * node types feed their input through NodeContextBuilder, so
+     * NodeEmptyContext is meaningful only for them. Control-flow types
+     * (INPUT, IF_CONDITION, QUEUE_PROCESSOR) and OUTPUT in echo mode (no
+     * systemPrompt) forward upstream text verbatim regardless of flags.
+     */
+    const CONTEXT_AWARE_TYPES = new Set([
+        'LITE_RT', 'CLOUD', 'OUTPUT', 'SUMMARY', 'INTENT_ROUTER',
+        'DECOMPOSITION', 'EVALUATION', 'CLARIFICATION', 'TOOL',
+    ]);
+    function usesContextConfig(node) {
+        if (!CONTEXT_AWARE_TYPES.has(node.type)) return false;
+        if (node.type === 'OUTPUT') {
+            const sp = node.data?.systemPrompt;
+            if (!sp || !String(sp).trim()) return false;
+        }
+        return true;
+    }
+
+    /**
+     * @returns {{errors:Array, warnings:Array}}
+     * Each item: { kind, level, message, nodeId? }
+     */
+    function validateGraph() {
+        const errors = [];
+        const warnings = [];
+        const nodes = snapshotGraph();
+
+        const inputs  = nodes.filter(n => n.type === 'INPUT');
+        const outputs = nodes.filter(n => n.type === 'OUTPUT');
+
+        if (inputs.length === 0)  errors.push({ kind: 'MissingInput',    level: 'error', message: 'Граф должен содержать INPUT-ноду.' });
+        if (inputs.length > 1)    errors.push({ kind: 'MultipleInputs',  level: 'error', message: 'В графе больше одной INPUT-ноды.' });
+        if (outputs.length === 0) errors.push({ kind: 'MissingOutput',   level: 'error', message: 'Граф должен содержать OUTPUT-ноду.' });
+        if (outputs.length > 1)   errors.push({ kind: 'MultipleOutputs', level: 'error', message: 'В графе больше одной OUTPUT-ноды.' });
+
+        // Build adjacency. Cycle DFS ignores back-edges into QUEUE_PROCESSOR
+        // (matches Android PipelineGraph.isValidDAG()), but reachability
+        // BFS uses the full graph since loops still propagate execution.
+        const idToType = new Map(nodes.map(n => [n.id, n.type]));
+        const forward = new Map(nodes.map(n => [n.id, []]));
+        const backward = new Map(nodes.map(n => [n.id, []]));
+        nodes.forEach(n => {
+            Object.values(n.outputs).forEach(out => {
+                (out.connections || []).forEach(c => {
+                    const tgt = String(c.node);
+                    if (forward.has(n.id))   forward.get(n.id).push(tgt);
+                    if (backward.has(tgt))   backward.get(tgt).push(n.id);
+                });
+            });
+        });
+
+        // Endpoint connectivity — match PipelineGraph.validate(): every
+        // INPUT must have at least one outgoing edge, every OUTPUT at
+        // least one incoming. These are *errors*, not warnings, so the
+        // export gate kicks in for an INPUT/OUTPUT pair with no edge.
+        inputs.forEach(n => {
+            if ((forward.get(n.id) || []).length === 0) {
+                errors.push({
+                    kind: 'DisconnectedInput', level: 'error', nodeId: n.id,
+                    message: 'INPUT-нода не подключена к графу.',
+                });
+            }
+        });
+        outputs.forEach(n => {
+            if ((backward.get(n.id) || []).length === 0) {
+                errors.push({
+                    kind: 'DisconnectedOutput', level: 'error', nodeId: n.id,
+                    message: 'OUTPUT-нода не подключена к графу.',
+                });
+            }
+        });
+
+        // Reachability — every non-INPUT node must be reachable from some
+        // INPUT, every non-OUTPUT node must be able to reach some OUTPUT.
+        // Skip when the corresponding endpoint is missing entirely; the
+        // cardinality error already covers that case.
+        if (inputs.length > 0) {
+            const reachable = new Set(inputs.map(n => n.id));
+            const queue = inputs.map(n => n.id);
+            while (queue.length) {
+                const u = queue.shift();
+                (forward.get(u) || []).forEach(v => {
+                    if (!reachable.has(v)) { reachable.add(v); queue.push(v); }
+                });
+            }
+            nodes.forEach(n => {
+                if (n.type === 'INPUT') return;
+                if (!reachable.has(n.id)) {
+                    errors.push({
+                        kind: 'UnreachableNode', level: 'error', nodeId: n.id,
+                        message: 'Нода недостижима из INPUT.',
+                    });
+                }
+            });
+        }
+        if (outputs.length > 0) {
+            const canReach = new Set(outputs.map(n => n.id));
+            const queue = outputs.map(n => n.id);
+            while (queue.length) {
+                const u = queue.shift();
+                (backward.get(u) || []).forEach(v => {
+                    if (!canReach.has(v)) { canReach.add(v); queue.push(v); }
+                });
+            }
+            nodes.forEach(n => {
+                if (n.type === 'OUTPUT') return;
+                if (!canReach.has(n.id)) {
+                    errors.push({
+                        kind: 'DeadEndNode', level: 'error', nodeId: n.id,
+                        message: 'Из ноды нельзя дойти до OUTPUT.',
+                    });
+                }
+            });
+        }
+
+        // Cycle detection (DFS with rec-stack), ignoring edges into
+        // QUEUE_PROCESSOR.
+        const dfsForward = new Map();
+        nodes.forEach(n => {
+            const filtered = (forward.get(n.id) || []).filter(t => idToType.get(t) !== 'QUEUE_PROCESSOR');
+            dfsForward.set(n.id, filtered);
+        });
+        const visited = new Set();
+        const stack = new Set();
+        let hasCycle = false;
+        function dfs(u) {
+            if (hasCycle) return;
+            if (stack.has(u)) { hasCycle = true; return; }
+            if (visited.has(u)) return;
+            visited.add(u);
+            stack.add(u);
+            (dfsForward.get(u) || []).forEach(dfs);
+            stack.delete(u);
+        }
+        nodes.forEach(n => { if (!hasCycle) dfs(n.id); });
+        if (hasCycle) {
+            errors.push({ kind: 'HasCycles', level: 'error', message: 'Граф содержит цикл.' });
+        }
+
+        // Empty context — only meaningful for context-aware types. Skipping
+        // INPUT / IF_CONDITION / QUEUE_PROCESSOR (and OUTPUT in echo mode)
+        // matches Android usesContextConfig(), so legacy/imported JSON with
+        // all-off flags on a control-flow node is not flagged.
+        nodes.forEach(n => {
+            if (!usesContextConfig(n)) return;
+            const ctx = n.data?.contextConfig;
+            if (!ctx) return;
+            const allOff = !ctx.chatHistory && !ctx.originalTask && !ctx.nodeInput
+                && !ctx.longTermMemory && !ctx.toolResults;
+            if (allOff) {
+                errors.push({
+                    kind: 'NodeEmptyContext',
+                    level: 'error',
+                    nodeId: n.id,
+                    message: 'У ноды отключены все источники контекста.',
+                });
+            }
+        });
+
+        return { errors, warnings };
+    }
+
+    /** Centers the canvas on the given node by adjusting drawflow's pan. */
+    function centerOnNode(nodeId) {
+        const internal = editor.getNodeFromId(nodeId);
+        if (!internal) return;
+        const wrap = canvas.getBoundingClientRect();
+        const el = document.getElementById('node-' + nodeId);
+        const halfW = el ? el.offsetWidth / 2 : 70;
+        const halfH = el ? el.offsetHeight / 2 : 30;
+        const z = editor.zoom;
+        const tx = wrap.width  / 2 - (internal.pos_x + halfW) * z;
+        const ty = wrap.height / 2 - (internal.pos_y + halfH) * z;
+        editor.canvas_x = tx;
+        editor.canvas_y = ty;
+        editor.precanvas.style.transform = `translate(${tx}px, ${ty}px) scale(${z})`;
+        scheduleLabelRedraw();
+    }
+
+    function nodeDisplayName(nodeId) {
+        const internal = editor.getNodeFromId(nodeId);
+        if (!internal) return '#' + nodeId;
+        const t = NODE_TYPE_BY_ID[internal.name];
+        return (internal.data && internal.data.label) || (t ? t.label : internal.name);
+    }
+
+    function renderValidation({ errors, warnings }) {
+        validationItemsEl.innerHTML = '';
+        const total = errors.length + warnings.length;
+        if (total === 0) {
+            const empty = document.createElement('div');
+            empty.className = 'empty';
+            empty.textContent = 'Нет проблем — граф готов к экспорту.';
+            validationItemsEl.appendChild(empty);
+        } else {
+            [...errors, ...warnings].forEach(item => {
+                const row = document.createElement('div');
+                row.className = 'item ' + item.level;
+                const icon = document.createElement('span');
+                icon.className = 'icon';
+                icon.textContent = item.level === 'error' ? '❌' : '⚠️';
+                row.appendChild(icon);
+
+                const text = document.createElement('span');
+                text.textContent = item.message + (item.nodeId ? ' ' : '');
+                row.appendChild(text);
+
+                if (item.nodeId) {
+                    const link = document.createElement('button');
+                    link.type = 'button';
+                    link.className = 'node-link';
+                    link.textContent = nodeDisplayName(item.nodeId);
+                    link.addEventListener('click', () => centerOnNode(item.nodeId));
+                    row.appendChild(link);
+                }
+                validationItemsEl.appendChild(row);
+            });
+        }
+        validationCountsEl.textContent = total === 0
+            ? 'OK'
+            : `${errors.length} error(s), ${warnings.length} warning(s)`;
+
+        // Re-paint per-node highlight classes
+        canvas.querySelectorAll('.drawflow-node.has-error, .drawflow-node.has-warning')
+            .forEach(el => el.classList.remove('has-error', 'has-warning'));
+        const errorIds   = new Set(errors.filter(e => e.nodeId).map(e => e.nodeId));
+        const warningIds = new Set(warnings.filter(w => w.nodeId).map(w => w.nodeId));
+        errorIds.forEach(id => {
+            const el = document.getElementById('node-' + id);
+            if (el) el.classList.add('has-error');
+        });
+        warningIds.forEach(id => {
+            if (errorIds.has(id)) return; // error supersedes warning
+            const el = document.getElementById('node-' + id);
+            if (el) el.classList.add('has-warning');
+        });
+
+        // Disable Export when any error is present.
+        exportBtn.disabled = errors.length > 0;
+    }
+
+    function runValidation() {
+        renderValidation(validateGraph());
+    }
+
+    // Export stub — the real download lands in PHASE 16 — 4/5.
+    exportBtn.addEventListener('click', () => {
+        const result = validateGraph();
+        if (result.errors.length > 0) return; // belt-and-braces, button is disabled too
+        alert('Export will be implemented in PHASE 16 — 4/5.');
+    });
+
+    // Re-validation on dialog save and on undo/redo lives inside the
+    // original commitDialog / applySnapshot bodies (see below) — function
+    // declarations are hoisted so they can call runValidation() defined
+    // here without a forward-declaration dance.
+
     // Initial empty snapshot so undo "back to blank" works after first action.
     pushSnapshot();
     updateToolbar();
+    runValidation();
 
     // Expose for manual debugging in DevTools
     window.__editor = editor;
     window.__labels = connectionLabels;
+    window.__validate = validateGraph;
 </script>
 </body>
 </html>
