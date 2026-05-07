@@ -226,6 +226,164 @@
         .palette-item[data-type="CLARIFICATION"]   { border-left-color: #9C27B0; }
         .palette-item[data-type="INPUT"]           { border-left-color: #607D8B; }
         .palette-item[data-type="OUTPUT"]          { border-left-color: #F44336; }
+
+        /* Node config dialog */
+        dialog#node-config {
+            border: 1px solid var(--border);
+            background: var(--bg);
+            color: var(--text);
+            border-radius: 10px;
+            padding: 0;
+            min-width: 480px;
+            max-width: 560px;
+            max-height: 90vh;
+            box-shadow: 0 12px 32px rgba(0,0,0,0.5);
+        }
+
+        dialog#node-config::backdrop {
+            background: rgba(0,0,0,0.55);
+        }
+
+        dialog#node-config form {
+            display: flex;
+            flex-direction: column;
+            max-height: inherit;
+        }
+
+        dialog#node-config header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 14px 18px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        dialog#node-config header .icon { font-size: 18px; }
+        dialog#node-config header .title {
+            font-size: 14px;
+            font-weight: 600;
+        }
+        dialog#node-config header .type-badge {
+            font-size: 11px;
+            color: var(--text-dim);
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            margin-left: auto;
+        }
+
+        dialog#node-config .body {
+            padding: 16px 18px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+        }
+
+        dialog#node-config .field {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+
+        dialog#node-config .field > label {
+            font-size: 12px;
+            color: var(--text-dim);
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }
+
+        dialog#node-config input[type="text"],
+        dialog#node-config input[type="number"],
+        dialog#node-config select,
+        dialog#node-config textarea {
+            background: #2e313a;
+            color: var(--text);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 8px 10px;
+            font: inherit;
+            outline: none;
+        }
+
+        dialog#node-config input[type="text"]:focus,
+        dialog#node-config input[type="number"]:focus,
+        dialog#node-config select:focus,
+        dialog#node-config textarea:focus {
+            border-color: var(--accent);
+        }
+
+        dialog#node-config textarea {
+            min-height: 80px;
+            resize: vertical;
+            font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+            font-size: 12px;
+        }
+
+        dialog#node-config .context-section {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            padding: 12px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            background: var(--bg-soft);
+        }
+
+        dialog#node-config .context-section .section-title {
+            font-size: 12px;
+            color: var(--text-dim);
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }
+
+        dialog#node-config .context-section .hint {
+            font-size: 11px;
+            color: var(--text-dim);
+            line-height: 1.4;
+        }
+
+        dialog#node-config .ctx-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 13px;
+        }
+
+        dialog#node-config .ctx-row.locked {
+            opacity: 0.7;
+        }
+
+        dialog#node-config .ctx-row .lock-hint {
+            font-size: 11px;
+            color: var(--text-dim);
+            margin-left: auto;
+        }
+
+        dialog#node-config footer {
+            display: flex;
+            justify-content: flex-end;
+            gap: 8px;
+            padding: 12px 18px;
+            border-top: 1px solid var(--border);
+        }
+
+        dialog#node-config button {
+            background: #2e313a;
+            color: var(--text);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 8px 16px;
+            cursor: pointer;
+            font-size: 13px;
+        }
+
+        dialog#node-config button.primary {
+            background: var(--accent);
+            border-color: var(--accent);
+            color: white;
+        }
+
+        dialog#node-config button:hover { filter: brightness(1.1); }
     </style>
 </head>
 <body>
@@ -248,6 +406,21 @@
         </div>
     </main>
 </div>
+
+<dialog id="node-config">
+    <form method="dialog">
+        <header>
+            <span class="icon" data-role="icon"></span>
+            <span class="title">Configure node</span>
+            <span class="type-badge" data-role="type"></span>
+        </header>
+        <div class="body" data-role="body"></div>
+        <footer>
+            <button type="button" data-role="cancel">Cancel</button>
+            <button type="button" class="primary" data-role="save">Save</button>
+        </footer>
+    </form>
+</dialog>
 
 <script src="https://cdn.jsdelivr.net/npm/drawflow@0.0.60/dist/drawflow.min.js"></script>
 <script>
@@ -275,6 +448,83 @@
         { id: 'CLARIFICATION',   label: 'Clarification',   color: '#9C27B0', icon: '💬', inputs: 1, outputs: 1 },
     ];
     const NODE_TYPE_BY_ID = Object.fromEntries(NODE_TYPES.map(t => [t.id, t]));
+
+    /* -------------------------------------------------------------------- *
+     *  Cloud providers and tool registry
+     *  Provider list mirrors the values accepted by NodeModel.cloudProvider.
+     *  AVAILABLE_TOOLS is a static list edited in this file — extend as the
+     *  app's tool registry grows.
+     * -------------------------------------------------------------------- */
+    const CLOUD_PROVIDERS = [
+        { id: 'auto',      label: 'Auto' },
+        { id: 'openai',    label: 'OpenAI' },
+        { id: 'anthropic', label: 'Anthropic' },
+        { id: 'google',    label: 'Google' },
+        { id: 'deepseek',  label: 'DeepSeek' },
+    ];
+
+    const AVAILABLE_TOOLS = [
+        { id: 'web_search',    label: 'Web Search' },
+        { id: 'delegate_task', label: 'Delegate Task' },
+    ];
+
+    /* -------------------------------------------------------------------- *
+     *  NodeContextConfig defaults — port of
+     *  NodeContextConfig.defaultForType() in the Android codebase. Kept in
+     *  sync manually; if the Kotlin defaults change, update here too.
+     * -------------------------------------------------------------------- */
+    function defaultContextConfig(typeId) {
+        const flags = (chat, orig, mem, tool) => ({
+            chatHistory: chat,
+            originalTask: orig,
+            longTermMemory: mem,
+            toolResults: tool,
+            nodeInput: true, // always on; UI keeps it locked
+        });
+        switch (typeId) {
+            case 'INPUT':
+            case 'IF_CONDITION':
+                return flags(false, false, false, false);
+            case 'LITE_RT':
+            case 'CLARIFICATION':
+            case 'QUEUE_PROCESSOR':
+            case 'DECOMPOSITION':
+                return flags(false, true,  false, false);
+            case 'CLOUD':
+            case 'INTENT_ROUTER':
+                return flags(true,  true,  false, false);
+            case 'TOOL':
+                return flags(false, false, false, false);
+            case 'SUMMARY':
+            case 'EVALUATION':
+                return flags(false, true,  false, true);
+            case 'OUTPUT':
+            default:
+                return flags(true, true, true, true);
+        }
+    }
+
+    /**
+     * Build the full data payload for a freshly-created node. All fields are
+     * present (even type-irrelevant ones) so the JSON shape is stable when
+     * exported in PHASE 16 — 4/5.
+     */
+    function defaultNodeData(typeId) {
+        const t = NODE_TYPE_BY_ID[typeId];
+        return {
+            label: t.label,
+            systemPrompt: '',
+            cloudProvider: typeId === 'CLOUD' ? 'auto' : '',
+            modelPath: '',
+            toolName: '',
+            clarificationTimeoutMs: typeId === 'CLARIFICATION' ? 60000 : null,
+            intentRouterPrompt: '',
+            conditionPrompt: '',
+            conditionKeywords: '',
+            conditionComplexity: null,
+            contextConfig: defaultContextConfig(typeId),
+        };
+    }
 
     /* -------------------------------------------------------------------- *
      *  Drawflow init
@@ -328,7 +578,7 @@
             x,
             y,
             'nodetype-' + t.id,
-            { name: '' },
+            defaultNodeData(t.id),
             nodeHtml(t),
         );
     });
@@ -343,6 +593,343 @@
                 </div>
             </div>`;
     }
+
+    /* -------------------------------------------------------------------- *
+     *  Node configuration dialog
+     *
+     *  Triggered by double-clicking a node. Renders a form whose fields are
+     *  determined by NodeType: every node has Name + System Prompt, plus a
+     *  type-specific section, plus the always-visible NodeContextConfig
+     *  block (5 checkboxes; nodeInput is checked + disabled to keep chain
+     *  integrity, mirroring the Android NodeContextConfigSection).
+     *
+     *  All edits are persisted into the drawflow node's `data` field via
+     *  editor.updateNodeDataFromId — `editor.export()` will round-trip them
+     *  to JSON in PHASE 16 — 4/5.
+     * -------------------------------------------------------------------- */
+    const dialog = document.getElementById('node-config');
+    const dialogIcon = dialog.querySelector('[data-role="icon"]');
+    const dialogTypeBadge = dialog.querySelector('[data-role="type"]');
+    const dialogBody = dialog.querySelector('[data-role="body"]');
+    const dialogSaveBtn = dialog.querySelector('[data-role="save"]');
+    const dialogCancelBtn = dialog.querySelector('[data-role="cancel"]');
+
+    /** ID of the drawflow node currently being edited (numeric, no `node-` prefix). */
+    let dialogNodeId = null;
+
+    function openNodeConfigDialog(rawNodeId) {
+        const numericId = String(rawNodeId).replace(/^node-/, '');
+        const internal = editor.getNodeFromId(numericId);
+        if (!internal) return;
+        const typeId = internal.name; // drawflow stores `name` = type id we passed to addNode
+        const t = NODE_TYPE_BY_ID[typeId];
+        if (!t) return;
+
+        // Migrate legacy data shapes (older snapshots may lack new fields)
+        const data = Object.assign(defaultNodeData(typeId), internal.data || {});
+        if (!data.contextConfig) data.contextConfig = defaultContextConfig(typeId);
+
+        dialogNodeId = numericId;
+        dialogIcon.textContent = t.icon;
+        dialog.querySelector('.title').textContent = `Configure: ${data.label || t.label}`;
+        dialogTypeBadge.textContent = t.id;
+        dialogBody.innerHTML = '';
+        dialogBody.append(...renderFormFields(t.id, data));
+
+        // Native <dialog> shows a modal with backdrop and Esc support
+        dialog.showModal();
+        // Focus first visible input for keyboard-first workflow
+        const firstInput = dialogBody.querySelector('input,select,textarea');
+        if (firstInput) firstInput.focus();
+    }
+
+    /**
+     * Builds the array of <div class="field"> nodes for the given node type.
+     * The "All nodes" pair (label + systemPrompt) comes first, then the
+     * type-specific section, then the contextConfig section.
+     */
+    function renderFormFields(typeId, data) {
+        const fields = [];
+
+        fields.push(textField({
+            id: 'label',
+            label: 'Имя ноды',
+            value: data.label ?? '',
+            placeholder: NODE_TYPE_BY_ID[typeId].label,
+        }));
+
+        fields.push(textareaField({
+            id: 'systemPrompt',
+            label: 'Системный промпт',
+            value: data.systemPrompt ?? '',
+            rows: 4,
+        }));
+
+        switch (typeId) {
+            case 'CLOUD':
+                fields.push(selectField({
+                    id: 'cloudProvider',
+                    label: 'Провайдер',
+                    options: CLOUD_PROVIDERS,
+                    value: data.cloudProvider || 'auto',
+                }));
+                break;
+            case 'LITE_RT':
+                fields.push(textField({
+                    id: 'modelPath',
+                    label: 'Имя модели',
+                    value: data.modelPath ?? '',
+                    placeholder: 'например, gemma-2b-it',
+                }));
+                break;
+            case 'TOOL':
+                fields.push(selectField({
+                    id: 'toolName',
+                    label: 'Инструмент',
+                    options: [{ id: '', label: '— не выбрано —' }, ...AVAILABLE_TOOLS],
+                    value: data.toolName ?? '',
+                }));
+                break;
+            case 'CLARIFICATION':
+                fields.push(numberField({
+                    id: 'clarificationTimeoutMs',
+                    label: 'Таймаут (мс)',
+                    value: data.clarificationTimeoutMs ?? 60000,
+                    min: 0,
+                    step: 1000,
+                }));
+                break;
+            case 'INTENT_ROUTER':
+                fields.push(textareaField({
+                    id: 'intentRouterPrompt',
+                    label: 'Описание логики маршрутизации',
+                    value: data.intentRouterPrompt ?? '',
+                    rows: 3,
+                }));
+                break;
+            case 'IF_CONDITION':
+                fields.push(textareaField({
+                    id: 'conditionPrompt',
+                    label: 'Промпт классификации',
+                    value: data.conditionPrompt ?? '',
+                    rows: 3,
+                }));
+                fields.push(textField({
+                    id: 'conditionKeywords',
+                    label: 'Ключевые слова (через запятую)',
+                    value: data.conditionKeywords ?? '',
+                }));
+                fields.push(numberField({
+                    id: 'conditionComplexity',
+                    label: 'Порог сложности',
+                    value: data.conditionComplexity ?? '',
+                    min: 0,
+                    step: 1,
+                }));
+                break;
+        }
+
+        fields.push(renderContextConfigSection(data.contextConfig));
+
+        return fields;
+    }
+
+    function fieldWrap(labelText) {
+        const wrap = document.createElement('div');
+        wrap.className = 'field';
+        if (labelText) {
+            const lab = document.createElement('label');
+            lab.textContent = labelText;
+            wrap.appendChild(lab);
+        }
+        return wrap;
+    }
+
+    function textField({ id, label, value, placeholder }) {
+        const wrap = fieldWrap(label);
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.dataset.field = id;
+        input.value = value ?? '';
+        if (placeholder) input.placeholder = placeholder;
+        wrap.appendChild(input);
+        return wrap;
+    }
+
+    function textareaField({ id, label, value, rows }) {
+        const wrap = fieldWrap(label);
+        const ta = document.createElement('textarea');
+        ta.dataset.field = id;
+        ta.rows = rows || 4;
+        ta.value = value ?? '';
+        wrap.appendChild(ta);
+        return wrap;
+    }
+
+    function numberField({ id, label, value, min, step }) {
+        const wrap = fieldWrap(label);
+        const input = document.createElement('input');
+        input.type = 'number';
+        input.dataset.field = id;
+        if (value !== '' && value != null) input.value = String(value);
+        if (min !== undefined) input.min = String(min);
+        if (step !== undefined) input.step = String(step);
+        wrap.appendChild(input);
+        return wrap;
+    }
+
+    function selectField({ id, label, options, value }) {
+        const wrap = fieldWrap(label);
+        const select = document.createElement('select');
+        select.dataset.field = id;
+        options.forEach(o => {
+            const opt = document.createElement('option');
+            opt.value = o.id;
+            opt.textContent = o.label;
+            if (o.id === value) opt.selected = true;
+            select.appendChild(opt);
+        });
+        wrap.appendChild(select);
+        return wrap;
+    }
+
+    function renderContextConfigSection(cfg) {
+        const section = document.createElement('section');
+        section.className = 'context-section';
+        section.dataset.role = 'context-config';
+
+        const title = document.createElement('div');
+        title.className = 'section-title';
+        title.textContent = 'Входные данные';
+        section.appendChild(title);
+
+        const hint = document.createElement('div');
+        hint.className = 'hint';
+        hint.textContent = 'Эти флаги определяют, какие блоки контекста подмешиваются на вход ноды на каждом запуске.';
+        section.appendChild(hint);
+
+        const rows = [
+            { id: 'originalTask',   label: 'Изначальная задача' },
+            { id: 'chatHistory',    label: 'История чата' },
+            { id: 'longTermMemory', label: 'Долгосрочная память' },
+            { id: 'toolResults',    label: 'Результаты инструментов' },
+            { id: 'nodeInput',      label: 'Выход предыдущей ноды', locked: true },
+        ];
+        rows.forEach(r => {
+            const row = document.createElement('label');
+            row.className = 'ctx-row' + (r.locked ? ' locked' : '');
+            const cb = document.createElement('input');
+            cb.type = 'checkbox';
+            cb.dataset.ctx = r.id;
+            cb.checked = r.locked ? true : !!cfg[r.id];
+            if (r.locked) cb.disabled = true;
+            row.appendChild(cb);
+
+            const text = document.createElement('span');
+            text.textContent = r.label;
+            row.appendChild(text);
+
+            if (r.locked) {
+                const hintEl = document.createElement('span');
+                hintEl.className = 'lock-hint';
+                hintEl.textContent = 'всегда включено';
+                row.appendChild(hintEl);
+            }
+            section.appendChild(row);
+        });
+
+        return section;
+    }
+
+    function readDialogForm() {
+        const result = {};
+        dialogBody.querySelectorAll('[data-field]').forEach(el => {
+            const key = el.dataset.field;
+            if (el.type === 'number') {
+                const raw = el.value.trim();
+                result[key] = raw === '' ? null : Number(raw);
+            } else {
+                result[key] = el.value;
+            }
+        });
+        const ctx = {};
+        dialogBody.querySelectorAll('[data-ctx]').forEach(el => {
+            ctx[el.dataset.ctx] = el.checked;
+        });
+        ctx.nodeInput = true; // forced regardless of UI tampering
+        result.contextConfig = ctx;
+        return result;
+    }
+
+    function commitDialog() {
+        if (dialogNodeId == null) return;
+        const internal = editor.getNodeFromId(dialogNodeId);
+        if (!internal) return;
+        const patch = readDialogForm();
+
+        // Validate numeric-y fields. On bad input we abort the close so the
+        // user can fix the value rather than silently dropping it.
+        if ('clarificationTimeoutMs' in patch && patch.clarificationTimeoutMs != null
+            && (Number.isNaN(patch.clarificationTimeoutMs) || patch.clarificationTimeoutMs < 0)) {
+            alert('Таймаут должен быть неотрицательным числом');
+            return;
+        }
+        if ('conditionComplexity' in patch && patch.conditionComplexity != null
+            && (Number.isNaN(patch.conditionComplexity) || patch.conditionComplexity < 0)) {
+            alert('Порог сложности должен быть неотрицательным числом');
+            return;
+        }
+
+        const merged = Object.assign({}, internal.data || {}, patch);
+        editor.updateNodeDataFromId(dialogNodeId, merged);
+
+        // Update the visible label inside the rendered node DOM. drawflow
+        // does not re-render html when data changes, so we patch by hand.
+        const labelEl = document.querySelector(
+            `#node-${dialogNodeId} .node-body .label`,
+        );
+        if (labelEl) {
+            const t = NODE_TYPE_BY_ID[internal.name];
+            labelEl.textContent = merged.label || t.label;
+        }
+
+        pushSnapshot();
+        closeDialog();
+    }
+
+    function closeDialog() {
+        dialogNodeId = null;
+        if (dialog.open) dialog.close();
+    }
+
+    dialogSaveBtn.addEventListener('click', commitDialog);
+    dialogCancelBtn.addEventListener('click', closeDialog);
+    // Native <dialog> closes on Esc by emitting `cancel`; treat as cancel.
+    dialog.addEventListener('cancel', e => {
+        e.preventDefault();
+        closeDialog();
+    });
+    // Submit via Enter inside a single-line input commits the form. We use
+    // method="dialog" form, so <button data-role="save"> is type="button"
+    // explicitly; Enter still bubbles up — listen at form level.
+    dialog.querySelector('form').addEventListener('keydown', e => {
+        if (e.key === 'Enter' && !(e.target instanceof HTMLTextAreaElement)) {
+            e.preventDefault();
+            commitDialog();
+        }
+    });
+
+    // Delegated dblclick on nodes. Excludes connection labels (those have
+    // their own dblclick handler attached on the label element).
+    canvas.addEventListener('dblclick', e => {
+        const nodeEl = e.target.closest('.drawflow-node');
+        if (!nodeEl) return;
+        // Don't trigger when double-clicking input/output ports — drawflow
+        // already uses single-click on those for connection bookkeeping.
+        if (e.target.closest('.input, .output')) return;
+        const id = nodeEl.id.replace(/^node-/, '');
+        openNodeConfigDialog(id);
+    });
 
     /* -------------------------------------------------------------------- *
      *  Connection label overlay
