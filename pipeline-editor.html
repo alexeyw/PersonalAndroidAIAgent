@@ -466,11 +466,20 @@
             font-size: 12px;
         }
 
+        dialog#node-config .prompt-toolbar {
+            position: relative;
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 8px;
+            margin-bottom: 6px;
+        }
+
         dialog#node-config .variable-chips {
             display: flex;
             flex-wrap: wrap;
             gap: 6px;
-            margin-bottom: 6px;
+            flex: 1;
         }
 
         dialog#node-config .variable-chip {
@@ -486,6 +495,122 @@
         dialog#node-config .variable-chip:hover {
             background: #353841;
             border-color: var(--accent);
+        }
+
+        dialog#node-config .prompts-trigger {
+            background: #2a2d35;
+            color: var(--text);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 4px 10px;
+            font-size: 11px;
+            font-weight: 500;
+            cursor: pointer;
+            white-space: nowrap;
+        }
+        dialog#node-config .prompts-trigger:hover {
+            background: #353841;
+            border-color: var(--accent);
+        }
+
+        dialog#node-config .prompts-popover {
+            position: absolute;
+            top: calc(100% + 4px);
+            right: 0;
+            z-index: 5;
+            min-width: 280px;
+            max-width: 360px;
+            max-height: 320px;
+            overflow-y: auto;
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.45);
+            display: flex;
+            flex-direction: column;
+            padding: 6px;
+        }
+        /* The base rule above sets `display: flex` with higher specificity
+           than the user-agent `[hidden] { display: none }`, so we need an
+           explicit override for the closed state — otherwise the
+           popover stays visible after the user picks a template. */
+        dialog#node-config .prompts-popover[hidden] { display: none; }
+
+        dialog#node-config .prompts-section { padding: 6px 0; }
+        dialog#node-config .prompts-section + .prompts-section {
+            border-top: 1px solid var(--border);
+        }
+        dialog#node-config .prompts-section-title {
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-dim);
+            padding: 0 6px 4px;
+        }
+        dialog#node-config .prompts-empty {
+            font-size: 12px;
+            color: var(--text-dim);
+            padding: 4px 6px;
+            font-style: italic;
+        }
+
+        dialog#node-config .prompts-row {
+            display: flex;
+            align-items: stretch;
+            gap: 4px;
+        }
+        dialog#node-config .prompts-row-pick {
+            flex: 1;
+            background: transparent;
+            color: var(--text);
+            border: none;
+            border-radius: 4px;
+            padding: 6px 8px;
+            font: inherit;
+            font-size: 12px;
+            text-align: left;
+            cursor: pointer;
+        }
+        dialog#node-config .prompts-row-pick:hover { background: rgba(127,127,127,0.15); }
+        dialog#node-config .prompts-row-delete {
+            background: transparent;
+            color: var(--text-dim);
+            border: none;
+            border-radius: 4px;
+            width: 26px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        dialog#node-config .prompts-row-delete:hover {
+            color: var(--danger);
+            background: rgba(244, 67, 54, 0.12);
+        }
+
+        dialog#node-config .prompts-save-current {
+            margin-top: 6px;
+            background: transparent;
+            color: var(--accent);
+            border: 1px dashed var(--border);
+            border-radius: 6px;
+            padding: 6px 8px;
+            font: inherit;
+            font-size: 12px;
+            cursor: pointer;
+        }
+        dialog#node-config .prompts-save-current:hover {
+            background: rgba(79, 140, 255, 0.08);
+            border-color: var(--accent);
+        }
+
+        /* Light-theme overrides for the prompts popover */
+        html[data-theme="light"] dialog#node-config .prompts-trigger { background: #ffffff; }
+        html[data-theme="light"] dialog#node-config .prompts-trigger:hover { background: #eceff4; }
+        html[data-theme="light"] dialog#node-config .prompts-popover {
+            background: #ffffff;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.18);
+        }
+        html[data-theme="light"] dialog#node-config .prompts-row-pick:hover {
+            background: rgba(0,0,0,0.05);
         }
 
         dialog#node-config .context-section {
@@ -775,6 +900,51 @@
      */
     const PROMPT_VARIABLES = ['DATE', 'TIME', 'TOOLS', 'MODEL', 'MEMORY_SUMMARY'];
 
+    /**
+     * Built-in prompt library exposed by the "📚 Prompts" popover in the
+     * config dialog. Each entry maps to one of the per-type defaults so
+     * users can instantly seed a node with a known-good prompt or recover
+     * from an experimental edit. KEEP IN SYNC with DEFAULT_SYSTEM_PROMPTS
+     * — see DESCRIPTION.md §8.
+     */
+    const BUILTIN_PROMPT_TEMPLATES = [
+        { name: 'LiteRT / Cloud baseline', content: DEFAULT_SYSTEM_PROMPTS.LITE_RT },
+        { name: 'Intent Router',           content: DEFAULT_SYSTEM_PROMPTS.INTENT_ROUTER },
+        { name: 'Decomposition',           content: DEFAULT_SYSTEM_PROMPTS.DECOMPOSITION },
+        { name: 'Evaluation',              content: DEFAULT_SYSTEM_PROMPTS.EVALUATION },
+        { name: 'Summary',                 content: DEFAULT_SYSTEM_PROMPTS.SUMMARY },
+        { name: 'Output formatter',        content: DEFAULT_SYSTEM_PROMPTS.OUTPUT },
+        { name: 'Clarification',           content: DEFAULT_SYSTEM_PROMPTS.CLARIFICATION },
+    ];
+
+    /**
+     * Per-browser, user-managed prompt library. Stored as JSON in
+     * localStorage; private-mode browsers (where storage throws) silently
+     * degrade to an in-memory empty list, same pattern the theme toggle
+     * uses.
+     */
+    const PROMPT_TEMPLATES_STORAGE_KEY = 'pipeline-editor-prompt-templates';
+
+    function loadUserPromptTemplates() {
+        try {
+            const raw = localStorage.getItem(PROMPT_TEMPLATES_STORAGE_KEY);
+            if (!raw) return [];
+            const parsed = JSON.parse(raw);
+            if (!Array.isArray(parsed)) return [];
+            return parsed
+                .filter(t => t && typeof t.name === 'string' && typeof t.content === 'string')
+                .map(t => ({ name: t.name, content: t.content, savedAt: t.savedAt || 0 }));
+        } catch (_) {
+            return [];
+        }
+    }
+
+    function saveUserPromptTemplates(list) {
+        try {
+            localStorage.setItem(PROMPT_TEMPLATES_STORAGE_KEY, JSON.stringify(list));
+        } catch (_) { /* ignore */ }
+    }
+
     /* -------------------------------------------------------------------- *
      *  Cloud providers and tool registry
      *  Provider list mirrors the values accepted by NodeModel.cloudProvider.
@@ -1026,6 +1196,7 @@
 
         fields.push(systemPromptField({
             value: data.systemPrompt ?? '',
+            typeId,
         }));
 
         switch (typeId) {
@@ -1130,17 +1301,22 @@
 
     /**
      * Specialised textarea for the system prompt — adds a row of variable
-     * chips ($DATE, $TIME, ...) above the textarea. Clicking a chip
-     * splices the token at the current caret position so users don't have
-     * to remember the spelling.
+     * chips ($DATE, $TIME, ...) and a "📚 Prompts" picker above the
+     * textarea. Clicking a chip splices the token at the current caret;
+     * picking a template replaces the textarea content (after a confirm
+     * if it's non-empty).
      */
-    function systemPromptField({ value }) {
+    function systemPromptField({ value, typeId }) {
         const wrap = fieldWrap('System prompt');
         const ta = document.createElement('textarea');
         ta.dataset.field = 'systemPrompt';
         ta.rows = 4;
         ta.value = value ?? '';
 
+        const toolbarRow = document.createElement('div');
+        toolbarRow.className = 'prompt-toolbar';
+
+        // Variable chips on the left
         const chips = document.createElement('div');
         chips.className = 'variable-chips';
         PROMPT_VARIABLES.forEach(name => {
@@ -1151,10 +1327,189 @@
             chip.addEventListener('click', () => insertAtCaret(ta, '$' + name));
             chips.appendChild(chip);
         });
+        toolbarRow.appendChild(chips);
 
-        wrap.appendChild(chips);
+        // Prompts picker on the right
+        const promptsBtn = document.createElement('button');
+        promptsBtn.type = 'button';
+        promptsBtn.className = 'prompts-trigger';
+        promptsBtn.textContent = '📚 Prompts ▾';
+        promptsBtn.setAttribute('aria-haspopup', 'listbox');
+        promptsBtn.setAttribute('aria-expanded', 'false');
+        toolbarRow.appendChild(promptsBtn);
+
+        const popover = document.createElement('div');
+        popover.className = 'prompts-popover';
+        popover.hidden = true;
+        toolbarRow.appendChild(popover);
+
+        let popoverOpen = false;
+        const closePopover = () => {
+            if (!popoverOpen) return;
+            popoverOpen = false;
+            popover.hidden = true;
+            promptsBtn.setAttribute('aria-expanded', 'false');
+            document.removeEventListener('mousedown', onOutsideClick, true);
+            document.removeEventListener('keydown', onPopoverKey, true);
+        };
+        const onOutsideClick = e => {
+            if (!toolbarRow.contains(e.target)) closePopover();
+        };
+        // Esc closes the popover only — without preventDefault, the
+        // browser would also fire the dialog's native `cancel` event and
+        // dismiss the whole node config dialog.
+        const onPopoverKey = e => {
+            if (e.key !== 'Escape') return;
+            e.preventDefault();
+            e.stopPropagation();
+            closePopover();
+        };
+        const openPopover = () => {
+            renderPromptsPopover(popover, ta, typeId, () => closePopover());
+            popover.hidden = false;
+            popoverOpen = true;
+            promptsBtn.setAttribute('aria-expanded', 'true');
+            document.addEventListener('mousedown', onOutsideClick, true);
+            document.addEventListener('keydown', onPopoverKey, true);
+        };
+        promptsBtn.addEventListener('click', () => {
+            if (popoverOpen) closePopover();
+            else openPopover();
+        });
+
+        wrap.appendChild(toolbarRow);
         wrap.appendChild(ta);
         return wrap;
+    }
+
+    /**
+     * Repaints the prompts popover panel from scratch, so saving / deleting
+     * a user template can call back into this function to reflect the new
+     * list without rebuilding the whole dialog.
+     */
+    function renderPromptsPopover(popover, textarea, typeId, closeFn) {
+        popover.innerHTML = '';
+
+        const builtinSection = document.createElement('div');
+        builtinSection.className = 'prompts-section';
+        const builtinTitle = document.createElement('div');
+        builtinTitle.className = 'prompts-section-title';
+        builtinTitle.textContent = 'Built-in';
+        builtinSection.appendChild(builtinTitle);
+
+        BUILTIN_PROMPT_TEMPLATES.forEach(t => {
+            builtinSection.appendChild(promptItemRow({
+                label: t.name,
+                onPick: () => applyPromptTemplate(textarea, t.content, closeFn),
+            }));
+        });
+
+        // Per-type "Reset to type default" — only meaningful for types that
+        // ship a default in DEFAULT_SYSTEM_PROMPTS.
+        if (DEFAULT_SYSTEM_PROMPTS[typeId]) {
+            builtinSection.appendChild(promptItemRow({
+                label: `Reset to ${typeId} default`,
+                onPick: () => applyPromptTemplate(textarea, DEFAULT_SYSTEM_PROMPTS[typeId], closeFn),
+            }));
+        }
+        popover.appendChild(builtinSection);
+
+        const userSection = document.createElement('div');
+        userSection.className = 'prompts-section';
+        const userTitle = document.createElement('div');
+        userTitle.className = 'prompts-section-title';
+        userTitle.textContent = 'Saved templates';
+        userSection.appendChild(userTitle);
+
+        const userTemplates = loadUserPromptTemplates();
+        if (userTemplates.length === 0) {
+            const empty = document.createElement('div');
+            empty.className = 'prompts-empty';
+            empty.textContent = 'No saved templates yet.';
+            userSection.appendChild(empty);
+        } else {
+            userTemplates.forEach((t, idx) => {
+                userSection.appendChild(promptItemRow({
+                    label: t.name,
+                    onPick: () => applyPromptTemplate(textarea, t.content, closeFn),
+                    onDelete: () => {
+                        if (!confirm(`Delete template "${t.name}"?`)) return;
+                        const updated = loadUserPromptTemplates();
+                        updated.splice(idx, 1);
+                        saveUserPromptTemplates(updated);
+                        renderPromptsPopover(popover, textarea, typeId, closeFn);
+                    },
+                }));
+            });
+        }
+        popover.appendChild(userSection);
+
+        const saveRow = document.createElement('button');
+        saveRow.type = 'button';
+        saveRow.className = 'prompts-save-current';
+        saveRow.textContent = '+ Save current prompt as template…';
+        saveRow.addEventListener('click', () => {
+            const content = textarea.value.trim();
+            if (!content) {
+                alert('System prompt is empty — nothing to save.');
+                return;
+            }
+            const name = (prompt('Template name?') || '').trim();
+            if (!name) return;
+            const list = loadUserPromptTemplates();
+            const existing = list.findIndex(t => t.name === name);
+            if (existing !== -1) {
+                if (!confirm(`Overwrite template "${name}"?`)) return;
+                list[existing] = { name, content, savedAt: Date.now() };
+            } else {
+                list.push({ name, content, savedAt: Date.now() });
+            }
+            saveUserPromptTemplates(list);
+            renderPromptsPopover(popover, textarea, typeId, closeFn);
+        });
+        popover.appendChild(saveRow);
+    }
+
+    /**
+     * Renders one row of the prompts list — clickable label, optional
+     * delete `[×]`. Buttons keep `type="button"` so Enter triggers a
+     * native click rather than form submission.
+     */
+    function promptItemRow({ label, onPick, onDelete }) {
+        const row = document.createElement('div');
+        row.className = 'prompts-row';
+        const pick = document.createElement('button');
+        pick.type = 'button';
+        pick.className = 'prompts-row-pick';
+        pick.textContent = label;
+        pick.addEventListener('click', onPick);
+        row.appendChild(pick);
+        if (onDelete) {
+            const del = document.createElement('button');
+            del.type = 'button';
+            del.className = 'prompts-row-delete';
+            del.title = 'Delete template';
+            del.setAttribute('aria-label', `Delete template ${label}`);
+            del.textContent = '×';
+            del.addEventListener('click', onDelete);
+            row.appendChild(del);
+        }
+        return row;
+    }
+
+    /**
+     * Replaces the textarea content with the picked template after
+     * confirming any non-empty existing prompt would be overwritten.
+     */
+    function applyPromptTemplate(textarea, content, closeFn) {
+        const current = textarea.value.trim();
+        if (current && current !== content.trim()) {
+            if (!confirm('Replace current prompt with the selected template?')) return;
+        }
+        textarea.value = content;
+        textarea.dispatchEvent(new Event('input', { bubbles: true }));
+        textarea.focus();
+        closeFn();
     }
 
     /**
