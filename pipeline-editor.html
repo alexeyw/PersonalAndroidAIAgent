@@ -17,6 +17,44 @@
             --danger: #f44336;
         }
 
+        /* Light theme overrides — applied via [data-theme="light"] on
+           <html>. Variables are the only knob so component CSS doesn't
+           need any conditional rules. */
+        html[data-theme="light"] {
+            --bg: #f4f5f8;
+            --bg-soft: #ffffff;
+            --border: #d6d8de;
+            --text: #1d1f25;
+            --text-dim: #5c6068;
+            --accent: #1a73e8;
+            --danger: #d93025;
+        }
+        html[data-theme="light"] #drawflow {
+            background: #fbfbfd;
+            background-image: radial-gradient(circle, #d6d8de 1px, transparent 1px);
+        }
+        html[data-theme="light"] .drawflow .drawflow-node {
+            background: #ffffff;
+            color: var(--text);
+            box-shadow: 0 1px 3px rgba(0,0,0,0.12);
+        }
+        html[data-theme="light"] .palette-item { background: #ffffff; }
+        html[data-theme="light"] .palette-item:hover { background: #eceff4; }
+        html[data-theme="light"] #toolbar button { background: #ffffff; }
+        html[data-theme="light"] #toolbar button:hover:not(:disabled) { background: #eceff4; }
+        html[data-theme="light"] #toolbar input[type="text"]#pipeline-name { background: #ffffff; }
+        html[data-theme="light"] dialog#node-config input[type="text"],
+        html[data-theme="light"] dialog#node-config input[type="number"],
+        html[data-theme="light"] dialog#node-config select,
+        html[data-theme="light"] dialog#node-config textarea { background: #ffffff; }
+        html[data-theme="light"] dialog#node-config button { background: #ffffff; }
+        html[data-theme="light"] dialog#node-config .variable-chip { background: #ffffff; }
+        html[data-theme="light"] dialog#node-config .variable-chip:hover { background: #eceff4; }
+        html[data-theme="light"] .conn-label {
+            background: #ffffff;
+            color: var(--text);
+        }
+
         * { box-sizing: border-box; }
 
         html, body {
@@ -147,6 +185,42 @@
             inset: 0;
             pointer-events: none;
         }
+
+        /* Welcome overlay shown while the canvas is empty. Centred above
+           the canvas, transparent backdrop so the dotted grid still shows
+           through. Hidden via [data-graph-empty="false"] on <body>. */
+        #welcome-overlay {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 14px;
+            padding: 24px;
+            text-align: center;
+            color: var(--text-dim);
+            pointer-events: none;
+        }
+        body[data-graph-empty="false"] #welcome-overlay { display: none; }
+        #welcome-overlay h2 {
+            margin: 0;
+            font-size: 18px;
+            font-weight: 600;
+            color: var(--text);
+        }
+        #welcome-overlay p { margin: 0; max-width: 360px; line-height: 1.5; font-size: 13px; }
+        #welcome-overlay button {
+            pointer-events: auto;
+            background: var(--accent);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            padding: 8px 18px;
+            font-size: 13px;
+            cursor: pointer;
+        }
+        #welcome-overlay button:hover { filter: brightness(1.1); }
 
         .conn-label {
             position: absolute;
@@ -392,6 +466,153 @@
             font-size: 12px;
         }
 
+        dialog#node-config .prompt-toolbar {
+            position: relative;
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 8px;
+            margin-bottom: 6px;
+        }
+
+        dialog#node-config .variable-chips {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            flex: 1;
+        }
+
+        dialog#node-config .variable-chip {
+            background: #2a2d35;
+            color: var(--text);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 3px 10px;
+            font-size: 11px;
+            font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+            cursor: pointer;
+        }
+        dialog#node-config .variable-chip:hover {
+            background: #353841;
+            border-color: var(--accent);
+        }
+
+        dialog#node-config .prompts-trigger {
+            background: #2a2d35;
+            color: var(--text);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 4px 10px;
+            font-size: 11px;
+            font-weight: 500;
+            cursor: pointer;
+            white-space: nowrap;
+        }
+        dialog#node-config .prompts-trigger:hover {
+            background: #353841;
+            border-color: var(--accent);
+        }
+
+        dialog#node-config .prompts-popover {
+            position: absolute;
+            top: calc(100% + 4px);
+            right: 0;
+            z-index: 5;
+            min-width: 280px;
+            max-width: 360px;
+            max-height: 320px;
+            overflow-y: auto;
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.45);
+            display: flex;
+            flex-direction: column;
+            padding: 6px;
+        }
+        /* The base rule above sets `display: flex` with higher specificity
+           than the user-agent `[hidden] { display: none }`, so we need an
+           explicit override for the closed state — otherwise the
+           popover stays visible after the user picks a template. */
+        dialog#node-config .prompts-popover[hidden] { display: none; }
+
+        dialog#node-config .prompts-section { padding: 6px 0; }
+        dialog#node-config .prompts-section + .prompts-section {
+            border-top: 1px solid var(--border);
+        }
+        dialog#node-config .prompts-section-title {
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-dim);
+            padding: 0 6px 4px;
+        }
+        dialog#node-config .prompts-empty {
+            font-size: 12px;
+            color: var(--text-dim);
+            padding: 4px 6px;
+            font-style: italic;
+        }
+
+        dialog#node-config .prompts-row {
+            display: flex;
+            align-items: stretch;
+            gap: 4px;
+        }
+        dialog#node-config .prompts-row-pick {
+            flex: 1;
+            background: transparent;
+            color: var(--text);
+            border: none;
+            border-radius: 4px;
+            padding: 6px 8px;
+            font: inherit;
+            font-size: 12px;
+            text-align: left;
+            cursor: pointer;
+        }
+        dialog#node-config .prompts-row-pick:hover { background: rgba(127,127,127,0.15); }
+        dialog#node-config .prompts-row-delete {
+            background: transparent;
+            color: var(--text-dim);
+            border: none;
+            border-radius: 4px;
+            width: 26px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        dialog#node-config .prompts-row-delete:hover {
+            color: var(--danger);
+            background: rgba(244, 67, 54, 0.12);
+        }
+
+        dialog#node-config .prompts-save-current {
+            margin-top: 6px;
+            background: transparent;
+            color: var(--accent);
+            border: 1px dashed var(--border);
+            border-radius: 6px;
+            padding: 6px 8px;
+            font: inherit;
+            font-size: 12px;
+            cursor: pointer;
+        }
+        dialog#node-config .prompts-save-current:hover {
+            background: rgba(79, 140, 255, 0.08);
+            border-color: var(--accent);
+        }
+
+        /* Light-theme overrides for the prompts popover */
+        html[data-theme="light"] dialog#node-config .prompts-trigger { background: #ffffff; }
+        html[data-theme="light"] dialog#node-config .prompts-trigger:hover { background: #eceff4; }
+        html[data-theme="light"] dialog#node-config .prompts-popover {
+            background: #ffffff;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.18);
+        }
+        html[data-theme="light"] dialog#node-config .prompts-row-pick:hover {
+            background: rgba(0,0,0,0.05);
+        }
+
         dialog#node-config .context-section {
             display: flex;
             flex-direction: column;
@@ -548,6 +769,7 @@
             <button id="btn-undo" title="Undo (Ctrl+Z)">↶ Undo</button>
             <button id="btn-redo" title="Redo (Ctrl+Y)">↷ Redo</button>
             <button id="btn-delete" class="danger" title="Delete selected (Del)">🗑 Delete</button>
+            <button id="btn-autolayout" title="Auto-layout the graph (left-to-right by topological depth)">🪄 Auto-layout</button>
             <button id="btn-export" title="Export pipeline JSON">📤 Export JSON</button>
             <button id="btn-import" title="Import pipeline JSON">📥 Import JSON</button>
             <input id="file-import" type="file" accept="application/json,.json" hidden>
@@ -555,10 +777,16 @@
             <input id="pipeline-name" type="text" placeholder="Untitled pipeline">
             <span class="spacer"></span>
             <span class="hint">Drag a node from the left. Double-click a connection to label it.</span>
+            <button id="btn-theme" type="button" title="Toggle theme">🌙</button>
         </header>
         <div id="canvas-wrapper">
             <div id="drawflow"></div>
             <div id="labels-layer"></div>
+            <div id="welcome-overlay">
+                <h2>No pipeline yet</h2>
+                <p>Drag a node from the left to start, or load a starter graph (INPUT → CLOUD → OUTPUT) to see the editor in action.</p>
+                <button id="btn-load-example" type="button">Load Example</button>
+            </div>
         </div>
         <section id="validation-panel">
             <header>
@@ -611,6 +839,111 @@
         { id: 'CLARIFICATION',   label: 'Clarification',   color: '#9C27B0', icon: '💬', inputs: 1, outputs: 1 },
     ];
     const NODE_TYPE_BY_ID = Object.fromEntries(NODE_TYPES.map(t => [t.id, t]));
+
+    /* -------------------------------------------------------------------- *
+     *  Default system prompts — port of
+     *  ai.agent.android.domain.constants.DefaultPrompts.
+     *
+     *  KEEP IN SYNC with the Android source. When DefaultPrompts changes
+     *  (new node type, edited prompt) the corresponding entry here must
+     *  be updated too — otherwise nodes created in this editor will ship
+     *  with a different baseline than the same node type produced by the
+     *  Android UI. See DESCRIPTION.md §8 (Pipeline Editor → Sync rule).
+     * -------------------------------------------------------------------- */
+    const SYSTEM_PROMPT_PREFIX = 'You are a helpful AI assistant running on an Android device.';
+
+    const DEFAULT_SYSTEM_PROMPTS = {
+        LITE_RT: SYSTEM_PROMPT_PREFIX,
+        CLOUD: SYSTEM_PROMPT_PREFIX,
+        INTENT_ROUTER:
+            'You are an Intent Router. Analyze the user input and determine its category. ' +
+            'Output strictly ONE of the following keywords:\n' +
+            '- Simple (if it\'s a simple chat message or greeting)\n' +
+            '- Data (if it requires searching the web or current data)\n' +
+            '- Complex (if it requires complex coding, math, or deep reasoning)\n' +
+            '- Task (if it\'s a multi-step task or requires executing an action/tool)',
+        DECOMPOSITION:
+            'You are a Task Decomposer. Break down the given complex task into a list of ' +
+            'simpler, actionable subtasks. Output the result as a JSON array of strings.',
+        EVALUATION:
+            'You are a Task Evaluator. Analyze the result of the executed subtask and ' +
+            'determine if it was successful. If not, explain what went wrong and how to fix it.',
+        SUMMARY:
+            'You are a Summarizer. Given the results of multiple executed subtasks, provide ' +
+            'a concise and comprehensive summary of the overall outcome.',
+        OUTPUT:
+            'You are a Formatter. Please format the provided input text into a clear, ' +
+            'readable markdown response for the user.',
+        CLARIFICATION:
+            'You are a Clarification Generator. Inspect the user\'s request and the upstream ' +
+            'context, then craft ONE concise clarifying question that would help the agent ' +
+            'proceed. If a small set of likely answers is obvious, list them as options; ' +
+            'otherwise return an empty array to ask for free-form input. Output STRICTLY valid ' +
+            'JSON with this shape and nothing else:\n' +
+            '{\n' +
+            '  "question": "<the question to ask the user>",\n' +
+            '  "options": ["<option 1>", "<option 2>"]\n' +
+            '}',
+    };
+
+    /**
+     * Tokens recognised by `PromptTemplateEngine` on Android. Surfaced as
+     * clickable chips above the systemPrompt textarea so users can splice
+     * them at the caret. Resolution happens at runtime on the device — the
+     * editor only inserts the literal `$KEY` token.
+     *
+     * KEEP IN SYNC with the active `PromptVariableProvider` set on Android
+     * (see `data/prompt/`). Adding a new provider on Android without
+     * adding it here means users won't see it as a chip; the reverse is
+     * harmless because the runtime simply leaves unknown tokens verbatim
+     * with a warning.
+     */
+    const PROMPT_VARIABLES = ['DATE', 'TIME', 'TOOLS', 'MODEL', 'MEMORY_SUMMARY'];
+
+    /**
+     * Built-in prompt library exposed by the "📚 Prompts" popover in the
+     * config dialog. Each entry maps to one of the per-type defaults so
+     * users can instantly seed a node with a known-good prompt or recover
+     * from an experimental edit. KEEP IN SYNC with DEFAULT_SYSTEM_PROMPTS
+     * — see DESCRIPTION.md §8.
+     */
+    const BUILTIN_PROMPT_TEMPLATES = [
+        { name: 'LiteRT / Cloud baseline', content: DEFAULT_SYSTEM_PROMPTS.LITE_RT },
+        { name: 'Intent Router',           content: DEFAULT_SYSTEM_PROMPTS.INTENT_ROUTER },
+        { name: 'Decomposition',           content: DEFAULT_SYSTEM_PROMPTS.DECOMPOSITION },
+        { name: 'Evaluation',              content: DEFAULT_SYSTEM_PROMPTS.EVALUATION },
+        { name: 'Summary',                 content: DEFAULT_SYSTEM_PROMPTS.SUMMARY },
+        { name: 'Output formatter',        content: DEFAULT_SYSTEM_PROMPTS.OUTPUT },
+        { name: 'Clarification',           content: DEFAULT_SYSTEM_PROMPTS.CLARIFICATION },
+    ];
+
+    /**
+     * Per-browser, user-managed prompt library. Stored as JSON in
+     * localStorage; private-mode browsers (where storage throws) silently
+     * degrade to an in-memory empty list, same pattern the theme toggle
+     * uses.
+     */
+    const PROMPT_TEMPLATES_STORAGE_KEY = 'pipeline-editor-prompt-templates';
+
+    function loadUserPromptTemplates() {
+        try {
+            const raw = localStorage.getItem(PROMPT_TEMPLATES_STORAGE_KEY);
+            if (!raw) return [];
+            const parsed = JSON.parse(raw);
+            if (!Array.isArray(parsed)) return [];
+            return parsed
+                .filter(t => t && typeof t.name === 'string' && typeof t.content === 'string')
+                .map(t => ({ name: t.name, content: t.content, savedAt: t.savedAt || 0 }));
+        } catch (_) {
+            return [];
+        }
+    }
+
+    function saveUserPromptTemplates(list) {
+        try {
+            localStorage.setItem(PROMPT_TEMPLATES_STORAGE_KEY, JSON.stringify(list));
+        } catch (_) { /* ignore */ }
+    }
 
     /* -------------------------------------------------------------------- *
      *  Cloud providers and tool registry
@@ -676,7 +1009,7 @@
         const t = NODE_TYPE_BY_ID[typeId];
         return {
             label: t.label,
-            systemPrompt: '',
+            systemPrompt: DEFAULT_SYSTEM_PROMPTS[typeId] || '',
             cloudProvider: typeId === 'CLOUD' ? 'auto' : '',
             modelPath: '',
             toolName: '',
@@ -718,11 +1051,32 @@
      *  Sidebar palette + drag/drop
      * -------------------------------------------------------------------- */
     const paletteEl = document.getElementById('palette');
+    /**
+     * One-line tooltip per node type, shown via the native `title`
+     * attribute on each palette item. Wording stays terse so the tooltip
+     * does not crowd the screen on small displays.
+     */
+    const NODE_TYPE_TOOLTIPS = {
+        INPUT:           'Pipeline entry point — receives the user message that started the run.',
+        OUTPUT:          'Pipeline exit — composes and forwards the final reply to the user.',
+        LITE_RT:         'Run a small on-device model (LiteRT) for fast, private inference.',
+        CLOUD:           'Call a cloud LLM provider (OpenAI / Anthropic / Google / DeepSeek / auto).',
+        TOOL:            'Invoke an AppFunction or registered tool with the upstream input.',
+        IF_CONDITION:    'Branch downstream flow into True / False based on a classifier.',
+        INTENT_ROUTER:   'Classify the user input and route to a downstream branch.',
+        DECOMPOSITION:   'Break a complex task into a list of simpler subtasks.',
+        QUEUE_PROCESSOR: 'Iterate over a list of subtasks; loops Item back, exits via Done.',
+        EVALUATION:      'Inspect the upstream result and decide whether it is good enough.',
+        SUMMARY:         'Aggregate multiple upstream results into a concise summary.',
+        CLARIFICATION:   'Ask the user a clarifying question and wait for the answer.',
+    };
+
     NODE_TYPES.forEach(t => {
         const el = document.createElement('div');
         el.className = 'palette-item';
         el.draggable = true;
         el.dataset.type = t.id;
+        el.title = NODE_TYPE_TOOLTIPS[t.id] || '';
         el.innerHTML = `<span class="icon">${t.icon}</span><span class="name">${t.label}</span>`;
         el.addEventListener('dragstart', e => {
             e.dataTransfer.setData('node-type', t.id);
@@ -840,11 +1194,9 @@
             placeholder: NODE_TYPE_BY_ID[typeId].label,
         }));
 
-        fields.push(textareaField({
-            id: 'systemPrompt',
-            label: 'System prompt',
+        fields.push(systemPromptField({
             value: data.systemPrompt ?? '',
-            rows: 4,
+            typeId,
         }));
 
         switch (typeId) {
@@ -945,6 +1297,232 @@
         ta.value = value ?? '';
         wrap.appendChild(ta);
         return wrap;
+    }
+
+    /**
+     * Specialised textarea for the system prompt — adds a row of variable
+     * chips ($DATE, $TIME, ...) and a "📚 Prompts" picker above the
+     * textarea. Clicking a chip splices the token at the current caret;
+     * picking a template replaces the textarea content (after a confirm
+     * if it's non-empty).
+     */
+    function systemPromptField({ value, typeId }) {
+        const wrap = fieldWrap('System prompt');
+        const ta = document.createElement('textarea');
+        ta.dataset.field = 'systemPrompt';
+        ta.rows = 4;
+        ta.value = value ?? '';
+
+        const toolbarRow = document.createElement('div');
+        toolbarRow.className = 'prompt-toolbar';
+
+        // Variable chips on the left
+        const chips = document.createElement('div');
+        chips.className = 'variable-chips';
+        PROMPT_VARIABLES.forEach(name => {
+            const chip = document.createElement('button');
+            chip.type = 'button';
+            chip.className = 'variable-chip';
+            chip.textContent = '$' + name;
+            chip.addEventListener('click', () => insertAtCaret(ta, '$' + name));
+            chips.appendChild(chip);
+        });
+        toolbarRow.appendChild(chips);
+
+        // Prompts picker on the right
+        const promptsBtn = document.createElement('button');
+        promptsBtn.type = 'button';
+        promptsBtn.className = 'prompts-trigger';
+        promptsBtn.textContent = '📚 Prompts ▾';
+        promptsBtn.setAttribute('aria-haspopup', 'listbox');
+        promptsBtn.setAttribute('aria-expanded', 'false');
+        toolbarRow.appendChild(promptsBtn);
+
+        const popover = document.createElement('div');
+        popover.className = 'prompts-popover';
+        popover.hidden = true;
+        toolbarRow.appendChild(popover);
+
+        let popoverOpen = false;
+        const closePopover = () => {
+            if (!popoverOpen) return;
+            popoverOpen = false;
+            popover.hidden = true;
+            promptsBtn.setAttribute('aria-expanded', 'false');
+            document.removeEventListener('mousedown', onOutsideClick, true);
+            document.removeEventListener('keydown', onPopoverKey, true);
+        };
+        const onOutsideClick = e => {
+            if (!toolbarRow.contains(e.target)) closePopover();
+        };
+        // Esc closes the popover only — without preventDefault, the
+        // browser would also fire the dialog's native `cancel` event and
+        // dismiss the whole node config dialog.
+        const onPopoverKey = e => {
+            if (e.key !== 'Escape') return;
+            e.preventDefault();
+            e.stopPropagation();
+            closePopover();
+        };
+        const openPopover = () => {
+            renderPromptsPopover(popover, ta, typeId, () => closePopover());
+            popover.hidden = false;
+            popoverOpen = true;
+            promptsBtn.setAttribute('aria-expanded', 'true');
+            document.addEventListener('mousedown', onOutsideClick, true);
+            document.addEventListener('keydown', onPopoverKey, true);
+        };
+        promptsBtn.addEventListener('click', () => {
+            if (popoverOpen) closePopover();
+            else openPopover();
+        });
+
+        wrap.appendChild(toolbarRow);
+        wrap.appendChild(ta);
+        return wrap;
+    }
+
+    /**
+     * Repaints the prompts popover panel from scratch, so saving / deleting
+     * a user template can call back into this function to reflect the new
+     * list without rebuilding the whole dialog.
+     */
+    function renderPromptsPopover(popover, textarea, typeId, closeFn) {
+        popover.innerHTML = '';
+
+        const builtinSection = document.createElement('div');
+        builtinSection.className = 'prompts-section';
+        const builtinTitle = document.createElement('div');
+        builtinTitle.className = 'prompts-section-title';
+        builtinTitle.textContent = 'Built-in';
+        builtinSection.appendChild(builtinTitle);
+
+        BUILTIN_PROMPT_TEMPLATES.forEach(t => {
+            builtinSection.appendChild(promptItemRow({
+                label: t.name,
+                onPick: () => applyPromptTemplate(textarea, t.content, closeFn),
+            }));
+        });
+
+        // Per-type "Reset to type default" — only meaningful for types that
+        // ship a default in DEFAULT_SYSTEM_PROMPTS.
+        if (DEFAULT_SYSTEM_PROMPTS[typeId]) {
+            builtinSection.appendChild(promptItemRow({
+                label: `Reset to ${typeId} default`,
+                onPick: () => applyPromptTemplate(textarea, DEFAULT_SYSTEM_PROMPTS[typeId], closeFn),
+            }));
+        }
+        popover.appendChild(builtinSection);
+
+        const userSection = document.createElement('div');
+        userSection.className = 'prompts-section';
+        const userTitle = document.createElement('div');
+        userTitle.className = 'prompts-section-title';
+        userTitle.textContent = 'Saved templates';
+        userSection.appendChild(userTitle);
+
+        const userTemplates = loadUserPromptTemplates();
+        if (userTemplates.length === 0) {
+            const empty = document.createElement('div');
+            empty.className = 'prompts-empty';
+            empty.textContent = 'No saved templates yet.';
+            userSection.appendChild(empty);
+        } else {
+            userTemplates.forEach((t, idx) => {
+                userSection.appendChild(promptItemRow({
+                    label: t.name,
+                    onPick: () => applyPromptTemplate(textarea, t.content, closeFn),
+                    onDelete: () => {
+                        if (!confirm(`Delete template "${t.name}"?`)) return;
+                        const updated = loadUserPromptTemplates();
+                        updated.splice(idx, 1);
+                        saveUserPromptTemplates(updated);
+                        renderPromptsPopover(popover, textarea, typeId, closeFn);
+                    },
+                }));
+            });
+        }
+        popover.appendChild(userSection);
+
+        const saveRow = document.createElement('button');
+        saveRow.type = 'button';
+        saveRow.className = 'prompts-save-current';
+        saveRow.textContent = '+ Save current prompt as template…';
+        saveRow.addEventListener('click', () => {
+            const content = textarea.value.trim();
+            if (!content) {
+                alert('System prompt is empty — nothing to save.');
+                return;
+            }
+            const name = (prompt('Template name?') || '').trim();
+            if (!name) return;
+            const list = loadUserPromptTemplates();
+            const existing = list.findIndex(t => t.name === name);
+            if (existing !== -1) {
+                if (!confirm(`Overwrite template "${name}"?`)) return;
+                list[existing] = { name, content, savedAt: Date.now() };
+            } else {
+                list.push({ name, content, savedAt: Date.now() });
+            }
+            saveUserPromptTemplates(list);
+            renderPromptsPopover(popover, textarea, typeId, closeFn);
+        });
+        popover.appendChild(saveRow);
+    }
+
+    /**
+     * Renders one row of the prompts list — clickable label, optional
+     * delete `[×]`. Buttons keep `type="button"` so Enter triggers a
+     * native click rather than form submission.
+     */
+    function promptItemRow({ label, onPick, onDelete }) {
+        const row = document.createElement('div');
+        row.className = 'prompts-row';
+        const pick = document.createElement('button');
+        pick.type = 'button';
+        pick.className = 'prompts-row-pick';
+        pick.textContent = label;
+        pick.addEventListener('click', onPick);
+        row.appendChild(pick);
+        if (onDelete) {
+            const del = document.createElement('button');
+            del.type = 'button';
+            del.className = 'prompts-row-delete';
+            del.title = 'Delete template';
+            del.setAttribute('aria-label', `Delete template ${label}`);
+            del.textContent = '×';
+            del.addEventListener('click', onDelete);
+            row.appendChild(del);
+        }
+        return row;
+    }
+
+    /**
+     * Replaces the textarea content with the picked template after
+     * confirming any non-empty existing prompt would be overwritten.
+     */
+    function applyPromptTemplate(textarea, content, closeFn) {
+        const current = textarea.value.trim();
+        if (current && current !== content.trim()) {
+            if (!confirm('Replace current prompt with the selected template?')) return;
+        }
+        textarea.value = content;
+        textarea.dispatchEvent(new Event('input', { bubbles: true }));
+        textarea.focus();
+        closeFn();
+    }
+
+    /**
+     * Inserts [token] at the textarea's current selection, replacing any
+     * selected text and putting the caret right after the inserted token.
+     * Mirrors the behaviour of TextFieldValueExt.insertAtCursor on the
+     * Android side so the UX matches.
+     */
+    function insertAtCaret(textarea, token) {
+        textarea.focus();
+        const start = textarea.selectionStart ?? textarea.value.length;
+        const end = textarea.selectionEnd ?? textarea.value.length;
+        textarea.setRangeText(token, start, end, 'end');
     }
 
     function numberField({ id, label, value, min, step }) {
@@ -1093,12 +1671,17 @@
     });
     // Submit via Enter inside a single-line input commits the form. We use
     // method="dialog" form, so <button data-role="save"> is type="button"
-    // explicitly; Enter still bubbles up — listen at form level.
+    // explicitly; Enter still bubbles up — listen at form level. Skip for
+    // textareas (multi-line typing) and for any button — pressing Enter on
+    // a focused button is its native activation key, so the variable chips
+    // and the Save / Cancel buttons must run their own click handlers
+    // rather than save the dialog out from under the user.
     dialog.querySelector('form').addEventListener('keydown', e => {
-        if (e.key === 'Enter' && !(e.target instanceof HTMLTextAreaElement)) {
-            e.preventDefault();
-            commitDialog();
-        }
+        if (e.key !== 'Enter') return;
+        if (e.target instanceof HTMLTextAreaElement) return;
+        if (e.target instanceof HTMLButtonElement) return;
+        e.preventDefault();
+        commitDialog();
     });
 
     // Delegated dblclick on nodes. Excludes connection labels (those have
@@ -1728,7 +2311,194 @@
 
     function runValidation() {
         renderValidation(validateGraph());
+        // Welcome overlay visibility tracks the same lifecycle as
+        // validation: every mutation refreshes it so the placeholder
+        // shows when the graph is empty and hides as soon as the user
+        // drops the first node.
+        document.body.dataset.graphEmpty = String(snapshotGraph().length === 0);
     }
+
+    /**
+     * Load the starter pipeline: INPUT → CLOUD → OUTPUT, three nodes and
+     * two connections. Reuses the same addNode path as the drag-and-drop
+     * flow so default prompts, contextConfig and the rendered HTML are
+     * identical to a manually-created node.
+     */
+    function loadExamplePipeline() {
+        suppressAutoLabel = true;
+        try {
+            editor.clear();
+            connectionLabels.clear();
+
+            const ROW_Y = 200;
+            const seed = (typeId, x) => {
+                const t = NODE_TYPE_BY_ID[typeId];
+                const dfId = editor.addNode(
+                    t.id, t.inputs, t.outputs, x, ROW_Y,
+                    'nodetype-' + t.id,
+                    defaultNodeData(typeId),
+                    nodeHtml(t),
+                );
+                return String(dfId);
+            };
+            const inId = seed('INPUT', 80);
+            const cloudId = seed('CLOUD', 360);
+            const outId = seed('OUTPUT', 660);
+
+            editor.addConnection(inId, cloudId, 'output_1', 'input_1');
+            editor.addConnection(cloudId, outId, 'output_1', 'input_1');
+
+            currentPipelineId = generateUuid();
+            nameInput.value = 'Example pipeline';
+        } finally {
+            suppressAutoLabel = false;
+        }
+        history = [];
+        historyIndex = -1;
+        redrawLabels();
+        pushSnapshot();
+        runValidation();
+    }
+    document.getElementById('btn-load-example').addEventListener('click', loadExamplePipeline);
+
+    /* -------------------------------------------------------------------- *
+     *  Auto-layout
+     *
+     *  Lays out nodes left-to-right by longest-path depth from the root
+     *  set (nodes with no incoming edges). Same cycle rule as the
+     *  validator: back-edges into QUEUE_PROCESSOR are ignored, anything
+     *  else cyclic blocks the layout because longest-path is undefined.
+     * -------------------------------------------------------------------- */
+    const AUTOLAYOUT_LEVEL_GAP = 240;
+    const AUTOLAYOUT_ROW_GAP = 140;
+    const AUTOLAYOUT_ORIGIN_X = 80;
+    const AUTOLAYOUT_ORIGIN_Y = 60;
+
+    function autoLayout() {
+        const nodes = snapshotGraph();
+        if (nodes.length === 0) return;
+
+        // Build forward adjacency, ignoring edges into QUEUE_PROCESSOR
+        // (those represent the loop body and would otherwise inflate
+        // depths or close real cycles).
+        const idToType = new Map(nodes.map(n => [n.id, n.type]));
+        const adj = new Map(nodes.map(n => [n.id, []]));
+        const inDeg = new Map(nodes.map(n => [n.id, 0]));
+        nodes.forEach(n => {
+            Object.values(n.outputs).forEach(out => {
+                (out.connections || []).forEach(c => {
+                    const tgt = String(c.node);
+                    if (idToType.get(tgt) === 'QUEUE_PROCESSOR') return;
+                    adj.get(n.id).push(tgt);
+                    inDeg.set(tgt, (inDeg.get(tgt) || 0) + 1);
+                });
+            });
+        });
+
+        // Kahn topological order; if it terminates with unprocessed
+        // nodes the (non-QUEUE_PROCESSOR) graph contains a cycle.
+        const queue = [];
+        const order = [];
+        inDeg.forEach((deg, id) => { if (deg === 0) queue.push(id); });
+        while (queue.length) {
+            const u = queue.shift();
+            order.push(u);
+            (adj.get(u) || []).forEach(v => {
+                inDeg.set(v, inDeg.get(v) - 1);
+                if (inDeg.get(v) === 0) queue.push(v);
+            });
+        }
+        if (order.length < nodes.length) {
+            alert('Auto-layout requires a cycle-free graph.');
+            return;
+        }
+
+        // Longest-path depth in topo order — gives the column index.
+        const depth = new Map(nodes.map(n => [n.id, 0]));
+        order.forEach(u => {
+            (adj.get(u) || []).forEach(v => {
+                depth.set(v, Math.max(depth.get(v), depth.get(u) + 1));
+            });
+        });
+
+        // Group by depth, then assign y by stable index within each
+        // column so nodes that share a column stack vertically.
+        const buckets = new Map();
+        nodes.forEach(n => {
+            const d = depth.get(n.id);
+            if (!buckets.has(d)) buckets.set(d, []);
+            buckets.get(d).push(n.id);
+        });
+
+        buckets.forEach((ids, d) => {
+            ids.forEach((id, row) => {
+                const x = AUTOLAYOUT_ORIGIN_X + d * AUTOLAYOUT_LEVEL_GAP;
+                const y = AUTOLAYOUT_ORIGIN_Y + row * AUTOLAYOUT_ROW_GAP;
+                applyNodePosition(id, x, y);
+            });
+        });
+
+        scheduleLabelRedraw();
+        pushSnapshot();
+        runValidation();
+    }
+
+    /**
+     * Updates a drawflow node's position both in the internal store and
+     * in the rendered DOM, then asks drawflow to redraw connections that
+     * touch this node. drawflow does not expose a setter, so we patch
+     * the data directly — same pattern its own drag handler uses.
+     */
+    function applyNodePosition(id, x, y) {
+        const internal = editor.drawflow?.drawflow?.Home?.data?.[id];
+        if (!internal) return;
+        internal.pos_x = x;
+        internal.pos_y = y;
+        const el = document.getElementById('node-' + id);
+        if (el) {
+            el.style.top = y + 'px';
+            el.style.left = x + 'px';
+        }
+        editor.updateConnectionNodes('node-' + id);
+    }
+
+    document.getElementById('btn-autolayout').addEventListener('click', autoLayout);
+
+    /* -------------------------------------------------------------------- *
+     *  Theme toggle (dark / light)
+     *
+     *  Choice persists across sessions via localStorage. On first load
+     *  (no stored value) we honour the OS-level prefers-color-scheme so
+     *  users on light desktops don't get a black flash.
+     * -------------------------------------------------------------------- */
+    const THEME_STORAGE_KEY = 'pipeline-editor-theme';
+    const themeBtn = document.getElementById('btn-theme');
+
+    function applyTheme(theme) {
+        document.documentElement.dataset.theme = theme;
+        // Sun glyph when light theme is active (clicking goes to dark),
+        // moon glyph when dark theme is active (clicking goes to light).
+        themeBtn.textContent = theme === 'light' ? '☀️' : '🌙';
+    }
+
+    function initialTheme() {
+        try {
+            const stored = localStorage.getItem(THEME_STORAGE_KEY);
+            if (stored === 'light' || stored === 'dark') return stored;
+        } catch (_) { /* Safari private mode etc. — fall through */ }
+        if (typeof matchMedia === 'function'
+            && matchMedia('(prefers-color-scheme: light)').matches) {
+            return 'light';
+        }
+        return 'dark';
+    }
+
+    applyTheme(initialTheme());
+    themeBtn.addEventListener('click', () => {
+        const next = document.documentElement.dataset.theme === 'light' ? 'dark' : 'light';
+        applyTheme(next);
+        try { localStorage.setItem(THEME_STORAGE_KEY, next); } catch (_) { /* ignore */ }
+    });
 
     /* -------------------------------------------------------------------- *
      *  JSON export / import (schemaVersion 1)
