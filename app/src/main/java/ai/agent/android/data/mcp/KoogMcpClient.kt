@@ -32,10 +32,20 @@ class KoogMcpClient : McpClient {
     /**
      * Connects to the MCP server at the specified URL using the Koog MCP transport.
      *
+     * Calling [connect] more than once on the same instance is supported (e.g. reconnect
+     * or repoint scenarios): any previously-attached `HttpClient` is closed before a
+     * fresh one is installed so its socket pool and engine threads do not leak until
+     * process teardown.
+     *
      * @param url The endpoint URL of the MCP server.
      */
     override suspend fun connect(url: String) {
         withContext(Dispatchers.IO) {
+            // Drop any previous client+registry pair before reattaching. Without this,
+            // a second connect() on the same instance would silently leak the prior
+            // HttpClient (and its underlying engine threads/sockets).
+            httpClient?.close()
+            registry = null
             val client = HttpClient().also { httpClient = it }
             val transport = McpToolRegistryProvider.defaultSseTransport(url, client)
             val serverInfo = McpServerInfo(url = url, command = "")

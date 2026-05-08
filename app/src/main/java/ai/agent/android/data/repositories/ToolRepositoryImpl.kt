@@ -111,25 +111,35 @@ class ToolRepositoryImpl @Inject constructor(
 
 
     /**
-     * Retrieves all locally available tools, including built-in tools and app functions.
+     * Retrieves all locally available tools.
+     *
+     * AppFunctions discovered via [LocalAppFunctionManager.getAvailableFunctions] are
+     * intentionally **not** included until end-to-end execution (building
+     * `ExecuteAppFunctionRequest` with typed `AppFunctionData` from the LLM-supplied
+     * arguments) is wired up. Advertising them here would let the agent
+     * deterministically pick a tool that cannot run, and `executeTool` would have to
+     * raise `Local tool $name has no executor registered` — a worse failure mode than
+     * simply hiding them from the catalog.
      *
      * @return A list of [AgentTool] representing the local tools available.
      */
     override suspend fun getAllLocalTools(): List<AgentTool> {
-        return localAppFunctionManager.getAvailableFunctions() + getBuiltinTools()
+        return getBuiltinTools()
     }
 
     /**
      * Retrieves all available tools, including both local tools (not disabled) and tools
      * fetched from connected MCP servers.
      *
+     * See [getAllLocalTools] for the rationale behind excluding AppFunctions from the
+     * advertised set.
+     *
      * @return A list of [AgentTool] representing all tools currently available to the agent.
      */
     override suspend fun getAvailableTools(): List<AgentTool> {
         syncMcpClients()
         val disabled = settingsRepository.disabledAppFunctions.first()
-        val localTools = localAppFunctionManager.getAvailableFunctions() + getBuiltinTools()
-        val availableLocal = localTools.filter { it.name !in disabled }
+        val availableLocal = getBuiltinTools().filter { it.name !in disabled }
 
         val mcpTools = mcpClients.values.flatMap { client ->
             try {
@@ -144,8 +154,12 @@ class ToolRepositoryImpl @Inject constructor(
 
     /**
      * Executes a tool by its name with the given arguments.
-     * The tool is first looked up in local tools (with a registered [LocalToolExecutor]),
-     * and if not found, in MCP servers.
+     * The tool is first looked up in built-in local tools (each backed by a registered
+     * [LocalToolExecutor]); if not found, the request is forwarded to any MCP server
+     * that advertises the name.
+     *
+     * AppFunctions discovered via [LocalAppFunctionManager] are not handled here yet —
+     * see [getAllLocalTools] for the rationale.
      *
      * @param name The name of the tool to execute.
      * @param arguments A JSON string containing the arguments required by the tool.
@@ -154,10 +168,10 @@ class ToolRepositoryImpl @Inject constructor(
      * or is not found across active providers.
      */
     override suspend fun executeTool(name: String, arguments: String): String {
-        val localTools = localAppFunctionManager.getAvailableFunctions() + getBuiltinTools()
-        // Check if the tool is a known local tool and is not disabled
+        // Check if the tool is a known built-in local tool and is not disabled
+        val builtinTools = getBuiltinTools()
         val disabled = settingsRepository.disabledAppFunctions.first()
-        if (localTools.any { it.name == name }) {
+        if (builtinTools.any { it.name == name }) {
             if (name in disabled) {
                 throw IllegalArgumentException("Tool $name is disabled")
             }

@@ -67,6 +67,29 @@ class KoogMcpClientTest {
     }
 
     @Test
+    fun `connect twice in a row replaces httpClient instance instead of leaking the previous one`() = runTest {
+        // Reconnect/repoint regression guard: the second connect() must install a brand
+        // new HttpClient (the prior one is closed first). Identity comparison is enough —
+        // if the implementation reused the existing field without closing+reassigning,
+        // the references would match.
+        val client = KoogMcpClient()
+        val httpClientField = client.javaClass.getDeclaredField("httpClient")
+        httpClientField.isAccessible = true
+
+        runCatching { client.connect("http://127.0.0.1:1") }
+        val firstHttpClient = httpClientField.get(client)
+        assertTrue("Expected an HttpClient after first connect", firstHttpClient != null)
+
+        runCatching { client.connect("http://127.0.0.1:2") }
+        val secondHttpClient = httpClientField.get(client)
+        assertTrue("Expected an HttpClient after second connect", secondHttpClient != null)
+        assertTrue(
+            "Second connect must replace, not reuse, the previous HttpClient",
+            firstHttpClient !== secondHttpClient,
+        )
+    }
+
+    @Test
     fun `disconnect then connect does not throw because httpClient is recreated`() = runTest {
         // Defect 5 regression guard: the previous implementation closed the singleton
         // `HttpClient` on disconnect, so a subsequent connect would immediately fail when
