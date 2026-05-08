@@ -1,8 +1,10 @@
 package ai.agent.android.domain.engine
 
 import ai.agent.android.data.engine.KoogClientFactory
+import ai.agent.android.data.engine.KoogCloudLlmModelResolver
 import ai.agent.android.data.repositories.ClarificationRepositoryImpl
 import ai.agent.android.domain.engine.executors.*
+import ai.koog.prompt.executor.clients.anthropic.AnthropicModels
 import ai.agent.android.domain.models.*
 import ai.agent.android.domain.prompt.PromptTemplateEngine
 import ai.agent.android.domain.prompt.PromptVariableProvider
@@ -42,6 +44,7 @@ class GraphExecutionEngineTest {
     private lateinit var metricsRepository: MetricsRepository
     private lateinit var approvalNotifier: ApprovalNotifier
     private lateinit var koogClientFactory: KoogClientFactory
+    private lateinit var cloudLlmModelResolver: KoogCloudLlmModelResolver
     private lateinit var evaluateIfConditionUseCase: EvaluateIfConditionUseCase
     private lateinit var loadModelUseCase: LoadModelUseCase
     private lateinit var clarificationRepository: ai.agent.android.domain.repositories.ClarificationRepository
@@ -64,9 +67,24 @@ class GraphExecutionEngineTest {
         metricsRepository = mockk(relaxed = true)
         approvalNotifier = mockk(relaxed = true)
         koogClientFactory = mockk()
+        cloudLlmModelResolver = mockk()
         evaluateIfConditionUseCase = mockk()
         loadModelUseCase = mockk()
         clarificationRepository = mockk()
+        // The resolver is exercised whenever a CLOUD node fires; default to a sensible
+        // Koog model so each individual test does not have to wire it up.
+        coEvery { cloudLlmModelResolver.resolveModel(any(), any()) } returns AnthropicModels.Sonnet_4_5
+        // Provider-keyed dispatch — tests that exercise CLOUD configure Anthropic.
+        coEvery { koogClientFactory.createClient(any()) } coAnswers {
+            when (firstArg<String>().lowercase()) {
+                "anthropic" -> koogClientFactory.createAnthropicExecutor()
+                "openai" -> koogClientFactory.createOpenAIExecutor()
+                "google", "gemini" -> koogClientFactory.createGoogleExecutor()
+                "deepseek" -> koogClientFactory.createDeepSeekExecutor()
+                "ollama" -> koogClientFactory.createOllamaExecutor()
+                else -> null
+            }
+        }
 
         val inputNodeExecutor = InputNodeExecutor()
         val outputNodeExecutor = OutputNodeExecutor(llmEngine, loadModelUseCase, chatRepository)
@@ -78,14 +96,13 @@ class GraphExecutionEngineTest {
         )
         
         val liteRtNodeExecutor = LiteRtNodeExecutor(
-            llmEngine, toolRepository, chatRepository, getContextWindowUseCase,
-            retrieveRelevantMemoryUseCase, settingsRepository, metricsRepository, loadModelUseCase
+            llmEngine, toolRepository, chatRepository,
+            settingsRepository, metricsRepository, loadModelUseCase
         )
-        
+
         val cloudLlmNodeExecutor = CloudLlmNodeExecutor(
-            toolRepository, chatRepository, getContextWindowUseCase,
-            retrieveRelevantMemoryUseCase, settingsRepository, apiKeyRepository,
-            metricsRepository, koogClientFactory
+            toolRepository, chatRepository, settingsRepository, apiKeyRepository,
+            metricsRepository, koogClientFactory, cloudLlmModelResolver
         )
         
         val systemNodeExecutor = SystemNodeExecutor(
@@ -461,11 +478,12 @@ class GraphExecutionEngineTest {
         assertTrue("Expected Completed but got: ${states.last()}", states.last() is AgentOrchestratorState.Completed)
 
         // LITE_RT must receive the original user query (now wrapped by NodeContextBuilder),
-        // not the routing key. We assert the user input section contains the query and
-        // never contains the routing key as a standalone payload.
+        // not the routing key. The Phase 17 cleanup removed the legacy "USER/INPUT:" prefix
+        // because the assembled context already carries `--- Previous Node Output ---`,
+        // so we assert via the context-builder header instead.
         io.mockk.verify {
             llmEngine.generateResponseStream(match {
-                it.contains("USER/INPUT:") && it.contains("fuel consumption query")
+                it.contains("--- Previous Node Output ---") && it.contains("fuel consumption query")
             })
         }
         // No downstream node must receive the routing key as its previous-node-output payload.
@@ -666,13 +684,12 @@ class GraphExecutionEngineTest {
             IfConditionNodeExecutor(evaluateIfConditionUseCase),
             ToolNodeExecutor(llmEngine, loadModelUseCase, toolRepository, settingsRepository, approvalNotifier, chatRepository),
             LiteRtNodeExecutor(
-                llmEngine, toolRepository, chatRepository, getContextWindowUseCase,
-                retrieveRelevantMemoryUseCase, settingsRepository, metricsRepository, loadModelUseCase,
+                llmEngine, toolRepository, chatRepository,
+                settingsRepository, metricsRepository, loadModelUseCase,
             ),
             CloudLlmNodeExecutor(
-                toolRepository, chatRepository, getContextWindowUseCase,
-                retrieveRelevantMemoryUseCase, settingsRepository, apiKeyRepository,
-                metricsRepository, koogClientFactory,
+                toolRepository, chatRepository, settingsRepository, apiKeyRepository,
+                metricsRepository, koogClientFactory, cloudLlmModelResolver,
             ),
             SystemNodeExecutor(llmEngine, loadModelUseCase, chatRepository),
             QueueProcessorNodeExecutor(),
@@ -811,13 +828,12 @@ class GraphExecutionEngineTest {
             IfConditionNodeExecutor(evaluateIfConditionUseCase),
             ToolNodeExecutor(llmEngine, loadModelUseCase, toolRepository, settingsRepository, approvalNotifier, chatRepository),
             LiteRtNodeExecutor(
-                llmEngine, toolRepository, chatRepository, getContextWindowUseCase,
-                retrieveRelevantMemoryUseCase, settingsRepository, metricsRepository, loadModelUseCase,
+                llmEngine, toolRepository, chatRepository,
+                settingsRepository, metricsRepository, loadModelUseCase,
             ),
             CloudLlmNodeExecutor(
-                toolRepository, chatRepository, getContextWindowUseCase,
-                retrieveRelevantMemoryUseCase, settingsRepository, apiKeyRepository,
-                metricsRepository, koogClientFactory,
+                toolRepository, chatRepository, settingsRepository, apiKeyRepository,
+                metricsRepository, koogClientFactory, cloudLlmModelResolver,
             ),
             SystemNodeExecutor(llmEngine, loadModelUseCase, chatRepository),
             QueueProcessorNodeExecutor(),

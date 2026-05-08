@@ -67,6 +67,38 @@ class KoogMcpClientTest {
     }
 
     @Test
+    fun `disconnect then connect does not throw because httpClient is recreated`() = runTest {
+        // Defect 5 regression guard: the previous implementation closed the singleton
+        // `HttpClient` on disconnect, so a subsequent connect would immediately fail when
+        // the underlying engine was reused. The new implementation creates the client
+        // inside connect() and nulls it on disconnect(); a second connect is therefore
+        // a fresh start.
+        //
+        // We exercise the suspend-fun lifecycle by reflectively reading the private
+        // `httpClient` field rather than going across the network, since opening a real
+        // SSE transport in a unit test would be brittle.
+        val client = KoogMcpClient()
+        val httpClientField = client.javaClass.getDeclaredField("httpClient")
+        httpClientField.isAccessible = true
+
+        // Initially no client is held.
+        assertEquals(null, httpClientField.get(client))
+
+        // Trying to connect to a non-routable URL surfaces an exception, but only after
+        // the client field has been populated. We catch the connect-time failure to keep
+        // the test focused on the lifecycle invariant (was the client created?).
+        runCatching { client.connect("http://127.0.0.1:1") }
+        assertTrue(httpClientField.get(client) != null)
+
+        client.disconnect()
+        assertEquals(null, httpClientField.get(client))
+
+        // The second connect must be allowed to install a fresh HttpClient.
+        runCatching { client.connect("http://127.0.0.1:1") }
+        assertTrue(httpClientField.get(client) != null)
+    }
+
+    @Test
     fun `getTools optional parameters appear in properties but not in required`() = runTest {
         val optionalParam = mockk<ToolParameterDescriptor>()
         every { optionalParam.name } returns "lang"

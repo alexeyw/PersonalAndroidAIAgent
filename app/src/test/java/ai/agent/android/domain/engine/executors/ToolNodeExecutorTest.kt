@@ -115,7 +115,7 @@ class ToolNodeExecutorTest {
         every { llmEngine.generateResponseStream(any()) } returns flowOf("""{"tool": "MyTool", "arguments": "arg_value"}""")
         coEvery { toolRepository.executeTool(toolName, "arg_value") } returns "Tool Success"
 
-        val states = executor.execute(node, "Do something", "session-1", "").toList()
+        val states = executor.execute(node, "Do something", "session-1", "").toList().unwrap()
 
         // Checking last state
         val lastState = states.last() as ai.agent.android.domain.models.NodeExecutionResult
@@ -134,7 +134,12 @@ class ToolNodeExecutorTest {
 
         val results = mutableListOf<Any>()
         val job = launch {
-            executor.execute(node, "Do something", "session-1", "").collect { results.add(it) }
+            executor.execute(node, "Do something", "session-1", "").collect { output ->
+                when (output) {
+                    is ai.agent.android.domain.models.NodeOutput.State -> results.add(output.state)
+                    is ai.agent.android.domain.models.NodeOutput.Result -> results.add(output.result)
+                }
+            }
         }
 
         advanceTimeBy(200L)
@@ -157,7 +162,7 @@ class ToolNodeExecutorTest {
         every { llmEngine.generateResponseStream(any()) } returns flowOf("""{"tool": "ToolB", "arguments": "arg_b"}""")
         coEvery { toolRepository.executeTool("ToolB", "arg_b") } returns "Tool B Success"
 
-        val states = executor.execute(node, "Do B", "session-1", "").toList()
+        val states = executor.execute(node, "Do B", "session-1", "").toList().unwrap()
 
         val lastState = states.last() as ai.agent.android.domain.models.NodeExecutionResult
         assertEquals("Tool B Success", lastState.outputText)

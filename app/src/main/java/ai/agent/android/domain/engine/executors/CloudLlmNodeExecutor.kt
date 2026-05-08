@@ -1,25 +1,19 @@
 package ai.agent.android.domain.engine.executors
 
-import ai.agent.android.data.engine.KoogClientFactory
-import ai.agent.android.data.engine.KoogModelMapper
+import ai.agent.android.domain.engine.CloudLlmClientFactory
+import ai.agent.android.domain.engine.CloudLlmModelResolver
 import ai.agent.android.domain.models.AgentOrchestratorState
-import ai.agent.android.domain.models.ChatMessage
 import ai.agent.android.domain.models.NodeExecutionResult
 import ai.agent.android.domain.models.NodeModel
-import ai.agent.android.domain.models.NodeType
-import ai.agent.android.domain.models.Role
+import ai.agent.android.domain.models.NodeOutput
 import ai.agent.android.domain.repositories.ApiKeyRepository
 import ai.agent.android.domain.repositories.ChatRepository
 import ai.agent.android.domain.repositories.MetricsRepository
 import ai.agent.android.domain.repositories.SettingsRepository
 import ai.agent.android.domain.repositories.ToolRepository
-import ai.agent.android.domain.usecases.GetContextWindowUseCase
-import ai.agent.android.domain.usecases.RetrieveRelevantMemoryUseCase
 import ai.koog.prompt.dsl.prompt
-import ai.koog.prompt.executor.clients.anthropic.AnthropicModels
-import ai.koog.prompt.executor.clients.deepseek.DeepSeekModels
-import ai.koog.prompt.executor.clients.google.GoogleModels
-import ai.koog.prompt.executor.clients.openai.OpenAIModels
+import ai.koog.prompt.executor.clients.LLMClient
+import ai.koog.prompt.llm.LLModel
 import ai.koog.prompt.streaming.StreamFrame
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
@@ -33,12 +27,11 @@ import javax.inject.Inject
 class CloudLlmNodeExecutor @Inject constructor(
     private val toolRepository: ToolRepository,
     private val chatRepository: ChatRepository,
-    private val getContextWindowUseCase: GetContextWindowUseCase,
-    private val retrieveRelevantMemoryUseCase: RetrieveRelevantMemoryUseCase,
     private val settingsRepository: SettingsRepository,
     private val apiKeyRepository: ApiKeyRepository,
     private val metricsRepository: MetricsRepository,
-    private val koogClientFactory: KoogClientFactory
+    private val cloudLlmClientFactory: CloudLlmClientFactory,
+    private val cloudLlmModelResolver: CloudLlmModelResolver,
 ) : NodeExecutor {
 
     override fun execute(
@@ -46,22 +39,16 @@ class CloudLlmNodeExecutor @Inject constructor(
         inputText: String,
         sessionId: String,
         originalPrompt: String
-    ): Flow<Any> = flow {
+    ): Flow<NodeOutput> = flow {
         val systemPromptPrefix = settingsRepository.systemPromptPrefix.first()
         val nodeSystemPrompt = node.systemPrompt ?: "You are a helpful AI assistant."
         val baseSystemPrompt = "$systemPromptPrefix\n$nodeSystemPrompt\n"
 
-        val contextWindow = getContextWindowUseCase(sessionId)
-        
-        val relevantMemories = retrieveRelevantMemoryUseCase(originalPrompt)
-        val memoryContext = if (relevantMemories.isNotEmpty()) {
-            "RELEVANT LONG-TERM MEMORIES:\n" + relevantMemories.joinToString("\n") { "- ${it.text}" } + "\n\n"
-        } else {
-            ""
-        }
+        // `inputText` is the assembled context produced upstream by NodeContextBuilder
+        // according to the node's NodeContextConfig. Re-fetching chat history or
+        // long-term memory here would silently override those flags and break Phase 15.
+        val fullPrompt = "$baseSystemPrompt\n\n$inputText\nAGENT: "
 
-        val fullPrompt = "$baseSystemPrompt\n\n$memoryContext$contextWindow\n\nUSER/INPUT: $inputText\nAGENT: "
-        
         val startTime = System.currentTimeMillis()
 
         var selectedProvider = node.cloudProvider ?: "auto"
@@ -79,35 +66,27 @@ class CloudLlmNodeExecutor @Inject constructor(
                 else -> "none"
             }
         }
-        
-        val responseStream = when (selectedProvider) {
-            "openai" -> {
-                val client = koogClientFactory.createOpenAIExecutor()
-                val modelName = apiKeyRepository.getOpenAIModel().first() ?: OpenAIModels.Chat.GPT5_4.id
-                client?.executeStreaming(prompt("default") { user(fullPrompt) }, KoogModelMapper.getOpenAIModel(modelName))
-                    ?.mapNotNull { (it as? StreamFrame.TextDelta)?.text } ?: flowOf("Error: OpenAI not configured")
+
+        val responseStream = if (selectedProvider == "none") {
+            flowOf("Error: No cloud provider configured or selected")
+        } else {
+            val client = cloudLlmClientFactory.createClient(selectedProvider) as? LLMClient
+            if (client == null) {
+                flowOf("Error: ${selectedProvider} not configured")
+            } else {
+                val configuredModelId = when (selectedProvider) {
+                    "openai" -> apiKeyRepository.getOpenAIModel().first()
+                    "anthropic" -> apiKeyRepository.getAnthropicModel().first()
+                    "google", "gemini" -> apiKeyRepository.getGoogleModel().first()
+                    "deepseek" -> apiKeyRepository.getDeepSeekModel().first()
+                    else -> null
+                }
+                val model = cloudLlmModelResolver.resolveModel(selectedProvider, configuredModelId) as LLModel
+                client.executeStreaming(prompt("default") { user(fullPrompt) }, model)
+                    .mapNotNull { (it as? StreamFrame.TextDelta)?.text }
             }
-            "anthropic" -> {
-                val client = koogClientFactory.createAnthropicExecutor()
-                val modelName = apiKeyRepository.getAnthropicModel().first() ?: AnthropicModels.Sonnet_4_5.id
-                client?.executeStreaming(prompt("default") { user(fullPrompt) }, KoogModelMapper.getAnthropicModel(modelName))
-                    ?.mapNotNull { (it as? StreamFrame.TextDelta)?.text } ?: flowOf("Error: Anthropic not configured")
-            }
-            "google" -> {
-                val client = koogClientFactory.createGoogleExecutor()
-                val modelName = apiKeyRepository.getGoogleModel().first() ?: GoogleModels.Gemini3_Flash_Preview.id
-                client?.executeStreaming(prompt("default") { user(fullPrompt) }, KoogModelMapper.getGoogleModel(modelName))
-                    ?.mapNotNull { (it as? StreamFrame.TextDelta)?.text } ?: flowOf("Error: Google not configured")
-            }
-            "deepseek" -> {
-                val client = koogClientFactory.createDeepSeekExecutor()
-                val modelName = apiKeyRepository.getDeepSeekModel().first() ?: DeepSeekModels.DeepSeekChat.id
-                client?.executeStreaming(prompt("default") { user(fullPrompt) }, KoogModelMapper.getDeepSeekModel(modelName))
-                    ?.mapNotNull { (it as? StreamFrame.TextDelta)?.text } ?: flowOf("Error: DeepSeek not configured")
-            }
-            else -> flowOf("Error: No cloud provider configured or selected")
         }
-        
+
         val accumulatedResponse = StringBuilder()
         var emittedThinking = false
         var approximateTokenCount = 0
@@ -115,13 +94,16 @@ class CloudLlmNodeExecutor @Inject constructor(
         try {
             responseStream.collect { token ->
                 accumulatedResponse.append(token)
-                approximateTokenCount += token.length / 4 + 1
-                
+                // Cloud streams emit token-sized text deltas; counting per emission keeps the
+                // metric consistent with the local LiteRT path. Length-based estimation was
+                // double-counting characters and inflating the recorded token total.
+                approximateTokenCount += 1
+
                 if (!emittedThinking) {
-                    emit(AgentOrchestratorState.Thinking(accumulatedResponse.toString()))
+                    emit(NodeOutput.State(AgentOrchestratorState.Thinking(accumulatedResponse.toString())))
                     emittedThinking = true
                 } else {
-                    emit(AgentOrchestratorState.Answering(accumulatedResponse.toString()))
+                    emit(NodeOutput.State(AgentOrchestratorState.Answering(accumulatedResponse.toString())))
                 }
             }
         } catch (e: CancellationException) {
@@ -130,18 +112,18 @@ class CloudLlmNodeExecutor @Inject constructor(
             throw e
         } catch (e: Exception) {
             Timber.tag("PipelineDebug").e(e, "[NODE_ERR] type=${node.type.name} id=${node.id} error in CloudLlmNodeExecutor generation")
-            emit(AgentOrchestratorState.Error(e.message ?: "Unknown error during LLM generation"))
-            emit(NodeExecutionResult(error = e.message))
+            emit(NodeOutput.State(AgentOrchestratorState.Error(e.message ?: "Unknown error during LLM generation")))
+            emit(NodeOutput.Result(NodeExecutionResult(error = e.message)))
             return@flow
         }
-        
+
         val endTime = System.currentTimeMillis()
         metricsRepository.updateMetrics(endTime - startTime, approximateTokenCount)
 
         val fullResponseText = accumulatedResponse.toString().trim()
-        
+
         kotlinx.coroutines.delay(1000)
 
-        emit(NodeExecutionResult(outputText = fullResponseText, tokenCount = approximateTokenCount))
+        emit(NodeOutput.Result(NodeExecutionResult(outputText = fullResponseText, tokenCount = approximateTokenCount)))
     }
 }

@@ -44,10 +44,10 @@ class SystemNodeExecutorTest {
         
         every { llmEngine.generateResponseStream(any()) } returns flowOf("Result")
         
-        val states = executor.execute(node, "input", "session-1", "prompt").toList()
-        
+        val states = executor.execute(node, "input", "session-1", "prompt").toList().unwrap()
+
         assertTrue(states[0] is AgentOrchestratorState.Thinking)
-        
+
         val result = states[1] as NodeExecutionResult
         assertEquals("Result", result.outputText)
         assertEquals("Result", result.routingKey)

@@ -5,27 +5,30 @@ import ai.agent.android.data.mcp.McpClientFactory
 import ai.agent.android.data.tools.local.LocalAppFunctionManager
 import ai.agent.android.domain.models.AgentTool
 import ai.agent.android.domain.repositories.ApiKeyRepository
+import ai.agent.android.domain.repositories.LocalToolExecutor
 import ai.agent.android.domain.repositories.SettingsRepository
 import ai.agent.android.domain.repositories.ToolRepository
-import ai.agent.android.domain.usecases.ScheduleTaskUseCase
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.firstOrNull
-import org.json.JSONObject
 import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 
 /**
  * Implementation of [ToolRepository] that manages multiple [McpClient] connections
  * and local AppFunctions based on application settings.
+ *
+ * @property localToolExecutors Hilt multibinding map keyed by tool name. Each entry
+ * implements one of the built-in agent tools (e.g. `schedule_task`, `delegate_task`,
+ * `search_tool`). New built-ins are added by registering another implementation in DI;
+ * an unknown name now fails fast instead of returning a fake success string.
  */
 class ToolRepositoryImpl @Inject constructor(
     private val settingsRepository: SettingsRepository,
     private val mcpClientFactory: McpClientFactory,
     private val localAppFunctionManager: LocalAppFunctionManager,
-    private val scheduleTaskUseCase: ScheduleTaskUseCase,
-    private val delegateTaskTool: ai.agent.android.data.tools.local.DelegateTaskTool,
     private val apiKeyRepository: ApiKeyRepository,
-    private val searchTool: ai.agent.android.data.tools.local.SearchTool
+    private val searchTool: ai.agent.android.data.tools.local.SearchTool,
+    private val localToolExecutors: Map<String, @JvmSuppressWildcards LocalToolExecutor>,
 ) : ToolRepository {
 
     private val mcpClients = ConcurrentHashMap<String, McpClient>()
@@ -76,7 +79,7 @@ class ToolRepositoryImpl @Inject constructor(
                 }
             """.trimIndent()
         )
-        
+
         baseTools.add(delegateTool)
         return baseTools
     }
@@ -127,7 +130,7 @@ class ToolRepositoryImpl @Inject constructor(
         val disabled = settingsRepository.disabledAppFunctions.first()
         val localTools = localAppFunctionManager.getAvailableFunctions() + getBuiltinTools()
         val availableLocal = localTools.filter { it.name !in disabled }
-        
+
         val mcpTools = mcpClients.values.flatMap { client ->
             try {
                 client.getTools()
@@ -135,18 +138,20 @@ class ToolRepositoryImpl @Inject constructor(
                 emptyList()
             }
         }
-        
+
         return availableLocal + mcpTools
     }
 
     /**
      * Executes a tool by its name with the given arguments.
-     * The tool is first looked up in local tools, and if not found, in MCP servers.
+     * The tool is first looked up in local tools (with a registered [LocalToolExecutor]),
+     * and if not found, in MCP servers.
      *
      * @param name The name of the tool to execute.
      * @param arguments A JSON string containing the arguments required by the tool.
      * @return A string representing the result of the tool execution.
-     * @throws IllegalArgumentException If the tool is disabled or not found.
+     * @throws IllegalArgumentException If the tool is disabled, has no executor registered,
+     * or is not found across active providers.
      */
     override suspend fun executeTool(name: String, arguments: String): String {
         val localTools = localAppFunctionManager.getAvailableFunctions() + getBuiltinTools()
@@ -156,33 +161,10 @@ class ToolRepositoryImpl @Inject constructor(
             if (name in disabled) {
                 throw IllegalArgumentException("Tool $name is disabled")
             }
-            
-            if (name == "schedule_task") {
-                val json = JSONObject(arguments)
-                val prompt = json.getString("prompt")
-                val intervalHours = if (json.has("intervalHours")) json.getLong("intervalHours") else 0L
-                val delayMinutes = if (json.has("delayMinutes")) json.getLong("delayMinutes") else 0L
-                return scheduleTaskUseCase(prompt, intervalHours, delayMinutes)
-            }
-            
-            if (name == "delegate_task") {
-                val json = JSONObject(arguments)
-                val taskDescription = json.getString("taskDescription")
-                val targetModel = if (json.has("targetModel")) json.getString("targetModel") else "anthropic"
-                return delegateTaskTool.executeDelegation(taskDescription, targetModel)
-            }
-            
-            if (name == ai.agent.android.data.tools.local.SearchTool.TOOL_NAME) {
-                val json = JSONObject(arguments)
-                val query = json.optString("query", "")
-                val lang = json.optString("lang", "en")
-                if (query.isBlank()) {
-                    return "Error: Missing 'query' argument."
-                }
-                return searchTool.executeSearch(query, lang)
-            }
-            
-            return "Local tool executed: $name with $arguments"
+
+            val executor = localToolExecutors[name]
+                ?: throw IllegalArgumentException("Local tool $name has no executor registered")
+            return executor.execute(arguments)
         }
 
         // Ensure MCP clients are synced before searching for the tool
@@ -198,7 +180,7 @@ class ToolRepositoryImpl @Inject constructor(
                 // Error querying or executing on this client, try the next one
             }
         }
-        
+
         throw IllegalArgumentException("Tool $name not found across active providers")
     }
 }

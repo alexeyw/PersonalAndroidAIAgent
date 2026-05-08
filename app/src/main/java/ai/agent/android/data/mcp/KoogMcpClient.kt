@@ -22,7 +22,11 @@ import javax.inject.Inject
 @OptIn(ai.koog.agents.core.tools.annotations.InternalAgentToolsApi::class)
 class KoogMcpClient : McpClient {
     private var registry: ToolRegistry? = null
-    private val httpClient = HttpClient()
+    // The HTTP client is recreated on every [connect] so the same client instance can be
+    // disconnected and reconnected cleanly. Holding a single client across disconnect would
+    // leave it in a closed state, and a subsequent [connect] would immediately fail when the
+    // underlying engine is reused.
+    private var httpClient: HttpClient? = null
     private val serializer = KotlinxSerializer(Json { ignoreUnknownKeys = true })
 
     /**
@@ -32,7 +36,8 @@ class KoogMcpClient : McpClient {
      */
     override suspend fun connect(url: String) {
         withContext(Dispatchers.IO) {
-            val transport = McpToolRegistryProvider.defaultSseTransport(url, httpClient)
+            val client = HttpClient().also { httpClient = it }
+            val transport = McpToolRegistryProvider.defaultSseTransport(url, client)
             val serverInfo = McpServerInfo(url = url, command = "")
             registry = McpToolRegistryProvider.fromTransport(transport, serverInfo)
         }
@@ -40,11 +45,13 @@ class KoogMcpClient : McpClient {
 
     /**
      * Disconnects from the current MCP server, clearing the registry and closing the HTTP client.
+     * The client is nulled out so that a subsequent [connect] creates a fresh instance.
      */
     override suspend fun disconnect() {
         withContext(Dispatchers.IO) {
             registry = null
-            httpClient.close()
+            httpClient?.close()
+            httpClient = null
         }
     }
 

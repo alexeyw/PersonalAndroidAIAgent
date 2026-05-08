@@ -5,6 +5,7 @@ import ai.agent.android.domain.models.AgentOrchestratorState
 import ai.agent.android.domain.models.ChatMessage
 import ai.agent.android.domain.models.NodeExecutionResult
 import ai.agent.android.domain.models.NodeModel
+import ai.agent.android.domain.models.NodeOutput
 import ai.agent.android.domain.models.Role
 import ai.agent.android.domain.repositories.ChatRepository
 import ai.agent.android.domain.repositories.SettingsRepository
@@ -45,20 +46,20 @@ class ToolNodeExecutor @Inject constructor(
         inputText: String,
         sessionId: String,
         originalPrompt: String
-    ): Flow<Any> = flow {
+    ): Flow<NodeOutput> = flow {
         val toolNameConfig = node.toolName
         if (toolNameConfig.isNullOrBlank()) {
-            emit(NodeExecutionResult(error = "Tool node is missing toolName configuration."))
+            emit(NodeOutput.Result(NodeExecutionResult(error = "Tool node is missing toolName configuration.")))
             return@flow
         }
 
-        emit(AgentOrchestratorState.Thinking("Analyzing task for tool execution..."))
+        emit(NodeOutput.State(AgentOrchestratorState.Thinking("Analyzing task for tool execution...")))
 
         val loadResult = loadModelUseCase(node.modelPath)
         if (loadResult is ai.agent.android.domain.models.Result.Error) {
             val errorMsg = "Error loading local model for tool node"
-            emit(AgentOrchestratorState.Error(errorMsg))
-            emit(NodeExecutionResult(error = errorMsg))
+            emit(NodeOutput.State(AgentOrchestratorState.Error(errorMsg)))
+            emit(NodeOutput.Result(NodeExecutionResult(error = errorMsg)))
             return@flow
         }
 
@@ -69,8 +70,8 @@ class ToolNodeExecutor @Inject constructor(
             val availableTools = toolRepository.getAvailableTools()
             if (availableTools.isEmpty()) {
                 val errorMsg = "No tools available for auto selection"
-                emit(AgentOrchestratorState.Error(errorMsg))
-                emit(NodeExecutionResult(error = errorMsg))
+                emit(NodeOutput.State(AgentOrchestratorState.Error(errorMsg)))
+                emit(NodeOutput.Result(NodeExecutionResult(error = errorMsg)))
                 return@flow
             }
 
@@ -109,16 +110,16 @@ class ToolNodeExecutor @Inject constructor(
             } catch (e: Exception) {
                 Timber.tag("PipelineDebug").e(e, "Error generating tool selection via LLM")
                 val errorMsg = "Error generating tool selection: ${e.message}"
-                emit(AgentOrchestratorState.Error(errorMsg))
-                emit(NodeExecutionResult(error = errorMsg))
+                emit(NodeOutput.State(AgentOrchestratorState.Error(errorMsg)))
+                emit(NodeOutput.Result(NodeExecutionResult(error = errorMsg)))
                 return@flow
             }
 
             val parsedSelection = parseToolSelection(accumulatedResponse.toString())
             if (parsedSelection == null) {
                 val errorMsg = "Failed to parse tool selection JSON from LLM output"
-                emit(AgentOrchestratorState.Error(errorMsg))
-                emit(NodeExecutionResult(error = errorMsg))
+                emit(NodeOutput.State(AgentOrchestratorState.Error(errorMsg)))
+                emit(NodeOutput.Result(NodeExecutionResult(error = errorMsg)))
                 return@flow
             }
 
@@ -129,8 +130,8 @@ class ToolNodeExecutor @Inject constructor(
             val selectedTool = tools.find { it.name == toolNameConfig }
             if (selectedTool == null) {
                 val errorMsg = "Tool $toolNameConfig not found in available tools"
-                emit(AgentOrchestratorState.Error(errorMsg))
-                emit(NodeExecutionResult(error = errorMsg))
+                emit(NodeOutput.State(AgentOrchestratorState.Error(errorMsg)))
+                emit(NodeOutput.Result(NodeExecutionResult(error = errorMsg)))
                 return@flow
             }
 
@@ -164,8 +165,8 @@ class ToolNodeExecutor @Inject constructor(
             } catch (e: Exception) {
                 Timber.tag("PipelineDebug").e(e, "Error generating tool arguments via LLM")
                 val errorMsg = "Error generating tool arguments: ${e.message}"
-                emit(AgentOrchestratorState.Error(errorMsg))
-                emit(NodeExecutionResult(error = errorMsg))
+                emit(NodeOutput.State(AgentOrchestratorState.Error(errorMsg)))
+                emit(NodeOutput.Result(NodeExecutionResult(error = errorMsg)))
                 return@flow
             }
 
@@ -183,7 +184,7 @@ class ToolNodeExecutor @Inject constructor(
         var isApproved = true
 
         if (requiresUserConfirmation) {
-            emit(AgentOrchestratorState.WaitingForApproval(resolvedToolName, resolvedToolArgs))
+            emit(NodeOutput.State(AgentOrchestratorState.WaitingForApproval(resolvedToolName, resolvedToolArgs)))
             approvalNotifier.sendApprovalRequest(sessionId, resolvedToolName, resolvedToolArgs)
 
             // Register deferred before any suspension point so a fast approval is not dropped
@@ -195,8 +196,8 @@ class ToolNodeExecutor @Inject constructor(
             } catch (e: TimeoutCancellationException) {
                 activeApprovalDeferreds.remove(sessionId)
                 Timber.tag("PipelineDebug").w("Approval timed out for session: $sessionId")
-                emit(AgentOrchestratorState.Error("Approval request timed out"))
-                emit(NodeExecutionResult(error = "Approval request timed out"))
+                emit(NodeOutput.State(AgentOrchestratorState.Error("Approval request timed out")))
+                emit(NodeOutput.Result(NodeExecutionResult(error = "Approval request timed out")))
                 return@flow
             }
 
@@ -209,16 +210,16 @@ class ToolNodeExecutor @Inject constructor(
                         timestamp = System.currentTimeMillis()
                     )
                 )
-                emit(AgentOrchestratorState.ObservationResult(resolvedToolName, "Execution denied by user"))
-                emit(NodeExecutionResult(
+                emit(NodeOutput.State(AgentOrchestratorState.ObservationResult(resolvedToolName, "Execution denied by user")))
+                emit(NodeOutput.Result(NodeExecutionResult(
                     outputText = "Execution denied by user",
                     resolvedToolName = resolvedToolName,
-                ))
+                )))
                 return@flow
             }
         }
 
-        emit(AgentOrchestratorState.ExecutingTool(resolvedToolName, resolvedToolArgs))
+        emit(NodeOutput.State(AgentOrchestratorState.ExecutingTool(resolvedToolName, resolvedToolArgs)))
         val result = try {
             toolRepository.executeTool(resolvedToolName, resolvedToolArgs)
         } catch (e: CancellationException) {
@@ -230,7 +231,7 @@ class ToolNodeExecutor @Inject constructor(
             "Error executing $resolvedToolName: ${e.message}"
         }
 
-        emit(AgentOrchestratorState.ObservationResult(resolvedToolName, result))
+        emit(NodeOutput.State(AgentOrchestratorState.ObservationResult(resolvedToolName, result)))
         chatRepository.saveMessage(
             ChatMessage(
                 sessionId = sessionId,
@@ -239,7 +240,7 @@ class ToolNodeExecutor @Inject constructor(
                 timestamp = System.currentTimeMillis()
             )
         )
-        emit(NodeExecutionResult(outputText = result, resolvedToolName = resolvedToolName))
+        emit(NodeOutput.Result(NodeExecutionResult(outputText = result, resolvedToolName = resolvedToolName)))
     }
 
     @androidx.annotation.VisibleForTesting

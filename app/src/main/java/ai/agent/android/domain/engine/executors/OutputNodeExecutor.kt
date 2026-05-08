@@ -5,6 +5,7 @@ import ai.agent.android.domain.models.AgentOrchestratorState
 import ai.agent.android.domain.models.ChatMessage
 import ai.agent.android.domain.models.NodeExecutionResult
 import ai.agent.android.domain.models.NodeModel
+import ai.agent.android.domain.models.NodeOutput
 import ai.agent.android.domain.models.Result
 import ai.agent.android.domain.models.Role
 import ai.agent.android.domain.repositories.ChatRepository
@@ -25,30 +26,30 @@ class OutputNodeExecutor @Inject constructor(
         inputText: String,
         sessionId: String,
         originalPrompt: String
-    ): Flow<Any> = flow {
+    ): Flow<NodeOutput> = flow {
         if (!node.systemPrompt.isNullOrBlank()) {
             val fullPrompt = "${node.systemPrompt}\n\nCRITICAL INSTRUCTION: Output ONLY the requested format. Do NOT include any conversational filler, explanations, or preambles (e.g., \"Here is the formatted output:\").\n\nINPUT: $inputText\nFORMATTED OUTPUT: "
-            
+
             val loadResult = loadModelUseCase(node.modelPath)
             if (loadResult is Result.Error) {
                 val errorMsg = "Error loading local model for output node"
-                emit(AgentOrchestratorState.Error(errorMsg))
-                emit(NodeExecutionResult(error = errorMsg))
+                emit(NodeOutput.State(AgentOrchestratorState.Error(errorMsg)))
+                emit(NodeOutput.Result(NodeExecutionResult(error = errorMsg)))
                 return@flow
             }
 
             val responseStream = llmEngine.generateResponseStream(fullPrompt)
             val accumulatedResponse = StringBuilder()
             var emittedThinking = false
-            
+
             try {
                 responseStream.collect { token ->
                     accumulatedResponse.append(token)
                     if (!emittedThinking) {
-                        emit(AgentOrchestratorState.Thinking(accumulatedResponse.toString()))
+                        emit(NodeOutput.State(AgentOrchestratorState.Thinking(accumulatedResponse.toString())))
                         emittedThinking = true
                     } else {
-                        emit(AgentOrchestratorState.Answering(accumulatedResponse.toString()))
+                        emit(NodeOutput.State(AgentOrchestratorState.Answering(accumulatedResponse.toString())))
                     }
                 }
             } catch (e: CancellationException) {
@@ -57,14 +58,14 @@ class OutputNodeExecutor @Inject constructor(
                 throw e
             } catch (e: Exception) {
                 Timber.tag("PipelineDebug").e(e, "[NODE_ERR] type=${node.type.name} id=${node.id} error in OutputNodeExecutor generation")
-                emit(AgentOrchestratorState.Error(e.message ?: "Unknown error"))
-                emit(NodeExecutionResult(error = e.message))
+                emit(NodeOutput.State(AgentOrchestratorState.Error(e.message ?: "Unknown error")))
+                emit(NodeOutput.Result(NodeExecutionResult(error = e.message)))
                 return@flow
             }
-            
+
             val generatedText = accumulatedResponse.toString().trim()
             var finalOutput = if (generatedText.isNotEmpty()) generatedText else inputText
-            
+
             // Heuristic cleanup for common LLM conversational fillers
             val lowerCaseOutput = finalOutput.lowercase()
             val prefixesToRemove = listOf(
@@ -88,8 +89,8 @@ class OutputNodeExecutor @Inject constructor(
                     timestamp = System.currentTimeMillis()
                 )
             )
-            emit(AgentOrchestratorState.Completed(finalOutput))
-            emit(NodeExecutionResult(outputText = finalOutput))
+            emit(NodeOutput.State(AgentOrchestratorState.Completed(finalOutput)))
+            emit(NodeOutput.Result(NodeExecutionResult(outputText = finalOutput)))
         } else {
             chatRepository.saveMessage(
                 ChatMessage(
@@ -99,8 +100,8 @@ class OutputNodeExecutor @Inject constructor(
                     timestamp = System.currentTimeMillis()
                 )
             )
-            emit(AgentOrchestratorState.Completed(inputText))
-            emit(NodeExecutionResult(outputText = inputText))
+            emit(NodeOutput.State(AgentOrchestratorState.Completed(inputText)))
+            emit(NodeOutput.Result(NodeExecutionResult(outputText = inputText)))
         }
     }
 }

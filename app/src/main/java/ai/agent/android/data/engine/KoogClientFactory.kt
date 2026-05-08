@@ -1,5 +1,6 @@
 package ai.agent.android.data.engine
 
+import ai.agent.android.domain.engine.CloudLlmClientFactory
 import ai.agent.android.domain.repositories.ApiKeyRepository
 import ai.koog.prompt.executor.clients.LLMClient
 import ai.koog.prompt.executor.clients.anthropic.AnthropicLLMClient
@@ -15,11 +16,30 @@ import javax.inject.Singleton
  * Factory for creating Koog LLM client instances (LLMClients).
  * It uses the [ApiKeyRepository] to retrieve the necessary credentials
  * and configurations (like Custom Base URL for Ollama) at runtime.
+ *
+ * Implements the domain-level [CloudLlmClientFactory] interface so that
+ * `CloudLlmNodeExecutor` can construct cloud clients without importing data-layer types,
+ * while internal callers (e.g. `DelegateTaskTool`) retain the typed per-provider helpers.
  */
 @Singleton
 class KoogClientFactory @Inject constructor(
     private val apiKeyRepository: ApiKeyRepository
-) {
+) : CloudLlmClientFactory {
+
+    /**
+     * Provider-keyed dispatch used by domain-side consumers.
+     *
+     * @param provider Lowercase provider key (`openai`, `anthropic`, `google`, `deepseek`, `ollama`).
+     * @return The LLMClient on success or `null` if credentials are missing or the key is unknown.
+     */
+    override suspend fun createClient(provider: String): Any? = when (provider.lowercase()) {
+        "openai" -> createOpenAIExecutor()
+        "anthropic" -> createAnthropicExecutor()
+        "google", "gemini" -> createGoogleExecutor()
+        "deepseek" -> createDeepSeekExecutor()
+        "ollama" -> createOllamaExecutor()
+        else -> null
+    }
 
     /**
      * Creates an OpenAI LLMClient.

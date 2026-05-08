@@ -8,6 +8,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 /**
  * Manages the idle timeout logic for the AI Agent.
@@ -27,6 +29,12 @@ class AgentIdleManager(
 ) {
     private var idleJob: Job? = null
 
+    // A coroutine-safe mutex guards the engine unload path. Using `synchronized(engine)` from
+    // inside a coroutine would block the dispatcher thread without participating in
+    // structured concurrency or cancellation; `Mutex.withLock` suspends instead and lets
+    // the surrounding scope cancel cleanly.
+    private val engineMutex = Mutex()
+
     /**
      * Starts observing the agent state to manage the idle timer.
      */
@@ -39,8 +47,8 @@ class AgentIdleManager(
     }
 
     private fun handleStateChange(state: AgentOrchestratorState) {
-        val isIdle = state is AgentOrchestratorState.Idle || 
-                     state is AgentOrchestratorState.Completed || 
+        val isIdle = state is AgentOrchestratorState.Idle ||
+                     state is AgentOrchestratorState.Completed ||
                      state is AgentOrchestratorState.Error
 
         if (isIdle) {
@@ -54,7 +62,7 @@ class AgentIdleManager(
         cancelIdleTimer()
         idleJob = scope.launch {
             delay(idleTimeoutMs)
-            synchronized(engine) {
+            engineMutex.withLock {
                 if (engine.isInitialized) {
                     engine.unload()
                 }
