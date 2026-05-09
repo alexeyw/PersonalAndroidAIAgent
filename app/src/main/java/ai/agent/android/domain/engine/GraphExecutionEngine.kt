@@ -62,15 +62,21 @@ class GraphExecutionEngine @Inject constructor(
         }
 
         if (!graph.isValidDAG()) {
-            emit(AgentOrchestratorState.Error("Pipeline graph contains cycles and is invalid."))
+            // Push the console event BEFORE the terminal Error so the Error
+            // remains the last value of the orchestrator state flow.
+            // `TaskQueueManagerImpl.processTask` resets the flow to `Idle` in
+            // its `finally` if the last value is anything other than
+            // `Completed` / `Error`, so a trailing `ConsoleLog` would mask the
+            // real failure for observers reading `stateFlow.value`.
             pushConsole(ConsoleEventType.Error, "Pipeline graph contains cycles")
+            emit(AgentOrchestratorState.Error("Pipeline graph contains cycles and is invalid."))
             return@flow
         }
 
         val inputNode = graph.nodes.find { it.type == NodeType.INPUT }
         if (inputNode == null) {
-            emit(AgentOrchestratorState.Error("Pipeline has no INPUT node"))
             pushConsole(ConsoleEventType.Error, "Pipeline has no INPUT node")
+            emit(AgentOrchestratorState.Error("Pipeline has no INPUT node"))
             return@flow
         }
 

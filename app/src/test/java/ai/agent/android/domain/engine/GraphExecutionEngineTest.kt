@@ -284,9 +284,13 @@ class GraphExecutionEngineTest {
         )
 
         val states = engine(sessionId, "Test", cyclicGraph).toList()
-        
-        assertTrue(states.first() is AgentOrchestratorState.Error)
-        assertTrue((states.first() as AgentOrchestratorState.Error).message.contains("cycles"))
+
+        // The terminal orchestrator state must be Error so observers reading
+        // the latest value of `globalState` (e.g. `TaskQueueManagerImpl`) see
+        // the failure rather than a trailing ConsoleLog snapshot.
+        val last = states.last()
+        assertTrue(last is AgentOrchestratorState.Error)
+        assertTrue((last as AgentOrchestratorState.Error).message.contains("cycles"))
     }
 
     @Test
