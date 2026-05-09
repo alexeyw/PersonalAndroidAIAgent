@@ -46,8 +46,10 @@ interface ChatRepository {
     suspend fun setMessageStarred(messageId: Long, starred: Boolean)
 
     /**
-     * Retrieves all starred messages across every session, most recent first.
-     * Backs the chat-screen "starred only" filter.
+     * Retrieves all starred messages across every session ordered chronologically
+     * (oldest first), matching the main chat list. Backs the chat-screen
+     * "starred only" filter; preserving `ASC` order keeps the screen's
+     * "scroll-to-last" auto-scroll consistent across filter toggles.
      *
      * @return A [Flow] emitting the current list of starred [ChatMessage]s.
      */

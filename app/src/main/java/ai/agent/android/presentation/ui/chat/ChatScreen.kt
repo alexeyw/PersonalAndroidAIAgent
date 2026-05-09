@@ -381,9 +381,14 @@ fun ChatScreen(
 
                     itemsIndexed(uiState.messages) { index, message ->
                         val isLast = uiState.messages.lastIndex == index
+                        // While the starred-only filter is active the streaming
+                        // AGENT message is not part of the visible list, so the
+                        // last-starred bubble must NOT be treated as the
+                        // currently-generating one — otherwise it loses its
+                        // Markdown rendering for the duration of generation.
                         ChatMessageItem(
                             message = message,
-                            isGenerating = isLast && uiState.isGenerating,
+                            isGenerating = isLast && uiState.isGenerating && !uiState.showStarredOnly,
                             onCopy = {
                                 clipboardManager.setText(AnnotatedString(message.content))
                                 viewModel.signalCopiedToClipboard()

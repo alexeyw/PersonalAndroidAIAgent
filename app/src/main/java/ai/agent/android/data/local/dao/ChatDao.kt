@@ -59,11 +59,13 @@ interface ChatDao {
     suspend fun setMessageStarred(messageId: Long, starred: Boolean)
 
     /**
-     * Retrieves every starred message across all sessions, most recent first.
+     * Retrieves every starred message across all sessions, ordered chronologically
+     * (ascending timestamp) to match the main chat list — keeps `ChatScreen`'s
+     * "scroll-to-last" auto-scroll consistent across filter toggles.
      *
      * @return A [Flow] emitting the current list of starred [ChatMessageEntity]s.
      */
-    @Query("SELECT * FROM chat_messages WHERE isStarred = 1 ORDER BY timestamp DESC")
+    @Query("SELECT * FROM chat_messages WHERE isStarred = 1 ORDER BY timestamp ASC")
     fun getStarredMessages(): Flow<List<ChatMessageEntity>>
 
     /**
