@@ -29,6 +29,12 @@ import ai.agent.android.domain.prompt.PromptSegment
  * library Snackbar (e.g. "Pipeline duplicated"). Distinct from
  * [errorMessage] so the UI can style green/blue toast vs. red error.
  * Cleared via `clearFeedback()` after display.
+ * @property pendingEditorNavigation One-shot flag the library screen
+ * observes to navigate to the editor. Set by the ViewModel only when an
+ * action that should open the editor (e.g. `createNewPipeline`) actually
+ * succeeds — so a failed create stays on the library screen instead of
+ * dragging the user into the editor with the previously active pipeline.
+ * Cleared via `consumePendingEditorNavigation()` once acted upon.
  */
 data class OrchestratorUiState(
     val currentPipeline: PipelineGraph = PipelineGraph(id = java.util.UUID.randomUUID().toString(), name = "New Pipeline"),
@@ -42,6 +48,7 @@ data class OrchestratorUiState(
     val previewState: PromptPreviewState = PromptPreviewState.Hidden,
     val pendingImport: PipelineImportOutcome.SchemaMismatch? = null,
     val feedbackMessage: String? = null,
+    val pendingEditorNavigation: Boolean = false,
 ) {
     /**
      * Helper to get nodes easily.

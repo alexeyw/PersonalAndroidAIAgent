@@ -75,4 +75,15 @@ class RenamePipelineUseCaseTest {
         assertTrue(result.isFailure)
         assertEquals("disk full", result.exceptionOrNull()?.message)
     }
+
+    @Test
+    fun `given lookup throws when invoke then returns failure rather than throwing`() = runTest {
+        coEvery { pipelineRepository.getPipelineById("p1") } throws RuntimeException("db closed")
+
+        val result = useCase("p1", "New")
+
+        assertTrue(result.isFailure)
+        assertEquals("db closed", result.exceptionOrNull()?.message)
+        coVerify(exactly = 0) { pipelineRepository.savePipeline(any()) }
+    }
 }

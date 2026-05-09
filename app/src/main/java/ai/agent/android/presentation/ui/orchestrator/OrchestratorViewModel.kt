@@ -696,6 +696,11 @@ class OrchestratorViewModel @Inject constructor(
                     currentPipeline = created ?: state.currentPipeline,
                     errorMessage = result.exceptionOrNull()?.message,
                     feedbackMessage = if (created != null) "Pipeline created" else state.feedbackMessage,
+                    // Only request navigation on a successful create; a failed
+                    // create (validation, persistence error) must keep the user
+                    // in the library so they can retry, instead of pushing
+                    // them into the editor with the previously active graph.
+                    pendingEditorNavigation = state.pendingEditorNavigation || created != null,
                 )
             }
         }
@@ -708,6 +713,16 @@ class OrchestratorViewModel @Inject constructor(
      */
     fun clearFeedback() {
         _uiState.update { it.copy(feedbackMessage = null) }
+    }
+
+    /**
+     * Acknowledges and resets the [OrchestratorUiState.pendingEditorNavigation]
+     * flag. Call from the library screen's `LaunchedEffect` after invoking
+     * the navigation callback, so the same trigger never fires twice (e.g.
+     * after a configuration change).
+     */
+    fun consumePendingEditorNavigation() {
+        _uiState.update { it.copy(pendingEditorNavigation = false) }
     }
 
     /**

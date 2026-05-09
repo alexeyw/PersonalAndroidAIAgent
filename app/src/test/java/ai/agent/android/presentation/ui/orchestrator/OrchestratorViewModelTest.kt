@@ -819,4 +819,40 @@ class OrchestratorViewModelTest {
         val state = viewModel.uiState.value
         assertEquals(null, state.activePipelineId)
     }
+
+    @Test
+    fun `createNewPipeline sets pendingEditorNavigation true on success`() = runTest {
+        val seed = PipelineGraph(id = "new", name = "Brand New")
+        coEvery { createPipelineUseCase("Brand New") } returns Result.success(seed)
+
+        viewModel.createNewPipeline("Brand New")
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals(true, viewModel.uiState.value.pendingEditorNavigation)
+    }
+
+    @Test
+    fun `createNewPipeline keeps pendingEditorNavigation false on failure`() = runTest {
+        coEvery {
+            createPipelineUseCase("")
+        } returns Result.failure(IllegalArgumentException("Pipeline name cannot be empty"))
+
+        viewModel.createNewPipeline("")
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals(false, viewModel.uiState.value.pendingEditorNavigation)
+    }
+
+    @Test
+    fun `consumePendingEditorNavigation resets the flag`() = runTest {
+        val seed = PipelineGraph(id = "new", name = "Brand New")
+        coEvery { createPipelineUseCase("Brand New") } returns Result.success(seed)
+        viewModel.createNewPipeline("Brand New")
+        testDispatcher.scheduler.advanceUntilIdle()
+        assertEquals(true, viewModel.uiState.value.pendingEditorNavigation)
+
+        viewModel.consumePendingEditorNavigation()
+
+        assertEquals(false, viewModel.uiState.value.pendingEditorNavigation)
+    }
 }

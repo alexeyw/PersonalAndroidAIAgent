@@ -34,31 +34,50 @@ class DuplicatePipelineUseCase @Inject constructor(
      * the source is missing or the save fails.
      */
     suspend operator fun invoke(pipelineId: String): Result<PipelineGraph> {
-        val source = pipelineRepository.getPipelineById(pipelineId)
-            ?: return Result.failure(IllegalStateException("Pipeline not found"))
-
-        val nodeIdMapping: Map<String, String> = source.nodes.associate { it.id to UUID.randomUUID().toString() }
-        val duplicatedNodes = source.nodes.map { node ->
-            node.copy(id = nodeIdMapping.getValue(node.id))
-        }
-        val duplicatedConnections = source.connections.map { connection ->
-            ConnectionModel(
-                id = UUID.randomUUID().toString(),
-                sourceNodeId = nodeIdMapping.getValue(connection.sourceNodeId),
-                targetNodeId = nodeIdMapping.getValue(connection.targetNodeId),
-                label = connection.label,
-            )
-        }
-
-        val duplicate = PipelineGraph(
-            id = UUID.randomUUID().toString(),
-            name = "${source.name} (copy)",
-            nodes = duplicatedNodes,
-            connections = duplicatedConnections,
-            updatedAt = System.currentTimeMillis(),
-        )
-
+        // Wrap the entire pipeline (read + transform + save) so any unexpected
+        // throwable — including a malformed source graph that references node
+        // ids no longer present in `source.nodes` — surfaces as `Result.failure`
+        // instead of escaping the use-case boundary as an uncaught exception.
         return try {
+            val source = pipelineRepository.getPipelineById(pipelineId)
+                ?: return Result.failure(IllegalStateException("Pipeline not found"))
+
+            val nodeIdMapping: Map<String, String> =
+                source.nodes.associate { it.id to UUID.randomUUID().toString() }
+
+            val duplicatedNodes = source.nodes.map { node ->
+                node.copy(id = nodeIdMapping.getValue(node.id))
+            }
+
+            // Drop connections that reference node ids missing from
+            // `source.nodes` rather than crashing the duplicate. A dangling
+            // connection in the source graph is already broken; producing a
+            // duplicate that silently inherits the corruption (or worse,
+            // crashes the action) would be a regression. We keep the rest of
+            // the graph intact.
+            val duplicatedConnections = source.connections.mapNotNull { connection ->
+                val newSource = nodeIdMapping[connection.sourceNodeId]
+                val newTarget = nodeIdMapping[connection.targetNodeId]
+                if (newSource == null || newTarget == null) {
+                    null
+                } else {
+                    ConnectionModel(
+                        id = UUID.randomUUID().toString(),
+                        sourceNodeId = newSource,
+                        targetNodeId = newTarget,
+                        label = connection.label,
+                    )
+                }
+            }
+
+            val duplicate = PipelineGraph(
+                id = UUID.randomUUID().toString(),
+                name = "${source.name} (copy)",
+                nodes = duplicatedNodes,
+                connections = duplicatedConnections,
+                updatedAt = System.currentTimeMillis(),
+            )
+
             pipelineRepository.savePipeline(duplicate)
             Result.success(duplicate)
         } catch (e: Exception) {

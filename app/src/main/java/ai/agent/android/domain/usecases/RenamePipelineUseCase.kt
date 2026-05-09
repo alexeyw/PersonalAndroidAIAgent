@@ -44,10 +44,13 @@ class RenamePipelineUseCase @Inject constructor(
                 IllegalArgumentException("Pipeline name must be $MAX_NAME_LENGTH characters or fewer"),
             )
         }
-        val existing = pipelineRepository.getPipelineById(pipelineId)
-            ?: return Result.failure(IllegalStateException("Pipeline not found"))
-
+        // Wrap both the read and the write in a single try/catch — a thrown
+        // `getPipelineById` (closed DB, decryption failure, I/O) must surface
+        // as `Result.failure`, never as an unhandled exception that escapes
+        // the use-case boundary.
         return try {
+            val existing = pipelineRepository.getPipelineById(pipelineId)
+                ?: return Result.failure(IllegalStateException("Pipeline not found"))
             pipelineRepository.savePipeline(
                 existing.copy(name = trimmed, updatedAt = System.currentTimeMillis()),
             )

@@ -97,6 +97,15 @@ fun PipelineLibraryScreen(
             viewModel.clearFeedback()
         }
     }
+    // Navigate to the editor only when the ViewModel signals a successful
+    // create. A failed create (validation, persistence error) keeps the flag
+    // false, so the user stays on the library and can retry.
+    LaunchedEffect(uiState.pendingEditorNavigation) {
+        if (uiState.pendingEditorNavigation) {
+            viewModel.consumePendingEditorNavigation()
+            onOpenEditor()
+        }
+    }
 
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
@@ -163,9 +172,13 @@ fun PipelineLibraryScreen(
             initialName = "",
             onDismiss = { showCreateDialog = false },
             onConfirm = { name ->
+                // Navigation to the editor is intentionally deferred: it fires
+                // from the `pendingEditorNavigation` LaunchedEffect above only
+                // after the ViewModel reports a successful create. A failed
+                // create (e.g. >60-char name slipped past the dialog, or an
+                // I/O error) leaves the user on the library to retry.
                 viewModel.createNewPipeline(name)
                 showCreateDialog = false
-                onOpenEditor()
             },
         )
     }
