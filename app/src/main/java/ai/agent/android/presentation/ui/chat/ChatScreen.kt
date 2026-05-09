@@ -10,8 +10,10 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import ai.agent.android.domain.models.ChatMessage
 import ai.agent.android.domain.models.ChatSession
 import ai.agent.android.domain.models.Role
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -39,7 +41,11 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.StarBorder
+import androidx.compose.material.icons.filled.StarOutline
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.Upload
 import androidx.compose.material.icons.filled.Warning
@@ -61,6 +67,7 @@ import androidx.compose.material3.NavigationDrawerItem
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
@@ -80,12 +87,15 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.mikepenz.markdown.m3.Markdown
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -107,6 +117,7 @@ fun ChatScreen(
     val coroutineScope = rememberCoroutineScope()
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val context = LocalContext.current
+    val clipboardManager = LocalClipboardManager.current
 
     var inputText by remember { mutableStateOf(TextFieldValue("")) }
     var menuExpanded by remember { mutableStateOf(false) }
@@ -180,6 +191,21 @@ fun ChatScreen(
             snackbarHostState.showSnackbar(it)
             viewModel.clearPipelineFallback()
         }
+    }
+
+    // Transient "Copied" Snackbar emitted by the long-press menu. Uses the
+    // Indefinite duration combined with a 1.5s delay + manual dismiss to
+    // achieve the short visual flash specified by Phase 17.3 (Material's
+    // built-in `Short` duration is ~4 seconds, which is too long here).
+    LaunchedEffect(uiState.snackbarMessage) {
+        val msg = uiState.snackbarMessage ?: return@LaunchedEffect
+        val showJob = launch {
+            snackbarHostState.showSnackbar(msg, duration = SnackbarDuration.Indefinite)
+        }
+        delay(1500)
+        snackbarHostState.currentSnackbarData?.dismiss()
+        showJob.cancel()
+        viewModel.consumeSnackbar()
     }
 
     // Auto-scroll to the bottom when new messages arrive or generation starts
@@ -263,6 +289,20 @@ fun ChatScreen(
                         }
                     },
                     actions = {
+                        IconButton(onClick = { viewModel.toggleStarredFilter() }) {
+                            Icon(
+                                imageVector = if (uiState.showStarredOnly) {
+                                    Icons.Default.Star
+                                } else {
+                                    Icons.Default.StarBorder
+                                },
+                                contentDescription = if (uiState.showStarredOnly) {
+                                    "Show all messages"
+                                } else {
+                                    "Show only starred"
+                                },
+                            )
+                        }
                         IconButton(onClick = { coroutineScope.launch { drawerState.open() } }) {
                             Icon(
                                 imageVector = Icons.Default.Menu,
@@ -332,11 +372,20 @@ fun ChatScreen(
                     item { Spacer(modifier = Modifier.height(16.dp)) }
 
                     itemsIndexed(uiState.messages) { index, message ->
-                        if (uiState.messages.lastIndex == index) {
-                            ChatMessageItem(message = message, isGenerating = uiState.isGenerating)
-                        } else {
-                            ChatMessageItem(message = message)
-                        }
+                        val isLast = uiState.messages.lastIndex == index
+                        ChatMessageItem(
+                            message = message,
+                            isGenerating = isLast && uiState.isGenerating,
+                            onCopy = {
+                                clipboardManager.setText(AnnotatedString(message.content))
+                                viewModel.signalCopiedToClipboard()
+                            },
+                            onToggleStarred = {
+                                message.id?.let { id ->
+                                    viewModel.setMessageStarred(id, !message.isStarred)
+                                }
+                            },
+                        )
                         Spacer(modifier = Modifier.height(8.dp))
                     }
 
@@ -716,12 +765,28 @@ fun ChatDrawerContent(
 /**
  * Composable for displaying a single chat message.
  *
+ * Long-pressing the message bubble opens a contextual `DropdownMenu` with the
+ * Phase 17.3 actions:
+ *  - **Copy** — places the raw message text on the system clipboard via
+ *    [onCopy]; the parent screen surfaces a transient "Copied" Snackbar.
+ *  - **Star / Unstar** — toggles [ChatMessage.isStarred] via [onToggleStarred].
+ *    A small star icon overlays the bubble when the message is starred.
+ *
  * @param message The [ChatMessage] to display.
+ * @param isGenerating Whether the agent is still streaming this message — when
+ *   `true` the AGENT bubble renders plain text instead of fully-parsed Markdown
+ *   so partial output doesn't reflow on every token.
+ * @param onCopy Invoked when the user picks "Copy" from the long-press menu.
+ * @param onToggleStarred Invoked when the user picks "Save"/"Unstar". No-op when
+ *   the message has no persisted id yet (defensive — saved messages always do).
  */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun ChatMessageItem(
     isGenerating: Boolean = false,
-    message: ChatMessage
+    message: ChatMessage,
+    onCopy: () -> Unit = {},
+    onToggleStarred: () -> Unit = {},
 ) {
     val isUser = message.role == Role.USER
     val isSystem = message.role == Role.SYSTEM
@@ -738,56 +803,119 @@ fun ChatMessageItem(
         else -> Alignment.CenterStart
     }
 
+    var menuExpanded by remember { mutableStateOf(false) }
+
     Box(
         modifier = Modifier.fillMaxWidth(),
         contentAlignment = alignment
     ) {
-        Column(
-            modifier = Modifier
-                .widthIn(max = 300.dp)
-                .clip(RoundedCornerShape(12.dp))
-                .background(backgroundColor)
-                .padding(12.dp)
-        ) {
-            if (isSystem) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        imageVector = Icons.Default.Info,
-                        contentDescription = null,
-                        modifier = Modifier.size(16.dp),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+        Box {
+            Column(
+                modifier = Modifier
+                    .widthIn(max = 300.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(backgroundColor)
+                    .combinedClickable(
+                        onClick = {},
+                        onLongClick = { menuExpanded = true },
                     )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text(
-                        text = message.content,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            } else if (isUser) {
-                Text(
-                    text = message.content,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer
-                )
-            } else {
-                if (isGenerating) {
-                    Text(
-                        text = message.content,
-                    )
-                } else {
-                    Markdown(
-                        content = message.content,
-                        typography = com.mikepenz.markdown.m3.markdownTypography(
-                            h1 = MaterialTheme.typography.titleLarge,
-                            h2 = MaterialTheme.typography.titleMedium,
-                            h3 = MaterialTheme.typography.titleSmall,
-                            h4 = MaterialTheme.typography.bodyLarge,
-                            h5 = MaterialTheme.typography.bodyMedium,
-                            h6 = MaterialTheme.typography.bodySmall,
-                            text = MaterialTheme.typography.bodyMedium
+                    .padding(12.dp)
+            ) {
+                if (isSystem) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Default.Info,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
                         )
-                    )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = message.content,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                } else if (isUser) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        if (message.isStarred) {
+                            Icon(
+                                imageVector = Icons.Default.Star,
+                                contentDescription = "Starred",
+                                modifier = Modifier.size(14.dp),
+                                tint = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f),
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                        }
+                        Text(
+                            text = message.content,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                    }
+                } else {
+                    Column {
+                        if (message.isStarred) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = Icons.Default.Star,
+                                    contentDescription = "Starred",
+                                    modifier = Modifier.size(14.dp),
+                                    tint = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f),
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                            }
+                            Spacer(modifier = Modifier.height(2.dp))
+                        }
+                        if (isGenerating) {
+                            Text(text = message.content)
+                        } else {
+                            Markdown(
+                                content = message.content,
+                                typography = com.mikepenz.markdown.m3.markdownTypography(
+                                    h1 = MaterialTheme.typography.titleLarge,
+                                    h2 = MaterialTheme.typography.titleMedium,
+                                    h3 = MaterialTheme.typography.titleSmall,
+                                    h4 = MaterialTheme.typography.bodyLarge,
+                                    h5 = MaterialTheme.typography.bodyMedium,
+                                    h6 = MaterialTheme.typography.bodySmall,
+                                    text = MaterialTheme.typography.bodyMedium
+                                )
+                            )
+                        }
+                    }
                 }
+            }
+            DropdownMenu(
+                expanded = menuExpanded,
+                onDismissRequest = { menuExpanded = false },
+            ) {
+                DropdownMenuItem(
+                    text = { Text("Copy") },
+                    leadingIcon = {
+                        Icon(Icons.Default.ContentCopy, contentDescription = null)
+                    },
+                    onClick = {
+                        menuExpanded = false
+                        onCopy()
+                    },
+                )
+                DropdownMenuItem(
+                    text = { Text(if (message.isStarred) "Unsave" else "Save") },
+                    leadingIcon = {
+                        Icon(
+                            imageVector = if (message.isStarred) {
+                                Icons.Default.StarOutline
+                            } else {
+                                Icons.Default.Star
+                            },
+                            contentDescription = null,
+                        )
+                    },
+                    onClick = {
+                        menuExpanded = false
+                        onToggleStarred()
+                    },
+                )
             }
         }
     }

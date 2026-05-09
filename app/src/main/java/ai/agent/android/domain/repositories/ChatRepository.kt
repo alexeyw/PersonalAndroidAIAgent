@@ -16,12 +16,42 @@ interface ChatRepository {
     suspend fun saveMessage(message: ChatMessage)
 
     /**
-     * Retrieves the history of messages for a given session.
+     * Retrieves the full history of messages for a given session, including
+     * intermediate (`isFinal = false`) entries. Use this for context-window
+     * computations, exports, and console logging.
      *
      * @param sessionId The unique ID of the chat session.
      * @return A [Flow] emitting the list of [ChatMessage] ordered by time.
      */
     fun getMessagesForSession(sessionId: String): Flow<List<ChatMessage>>
+
+    /**
+     * Retrieves only the user-facing messages for a session — that is, messages
+     * with `isFinal = true`. This is the source of truth for the main chat list
+     * UI; intermediate node outputs are filtered out and surfaced separately
+     * in the agent console.
+     *
+     * @param sessionId The unique ID of the chat session.
+     * @return A [Flow] emitting the list of final [ChatMessage]s ordered by time.
+     */
+    fun getDisplayMessagesForSession(sessionId: String): Flow<List<ChatMessage>>
+
+    /**
+     * Toggles the starred state of a single message. Starred messages are
+     * preserved across sessions and accessible via the chat-screen filter.
+     *
+     * @param messageId The id of the message to update.
+     * @param starred The new starred state to persist.
+     */
+    suspend fun setMessageStarred(messageId: Long, starred: Boolean)
+
+    /**
+     * Retrieves all starred messages across every session, most recent first.
+     * Backs the chat-screen "starred only" filter.
+     *
+     * @return A [Flow] emitting the current list of starred [ChatMessage]s.
+     */
+    fun getStarredMessages(): Flow<List<ChatMessage>>
 
     /**
      * Deletes all messages associated with the given session, and the session itself.

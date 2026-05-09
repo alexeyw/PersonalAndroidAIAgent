@@ -106,8 +106,15 @@ class ChatViewModelTest {
         pipelineRepository = mockk()
         every { pipelineRepository.getAllPipelines() } returns pipelinesFlow
 
-        // Mock chat repository flow for any session
+        // Mock chat repository flow for any session — both unfiltered (used by
+        // export/context-window paths) and the display-only flow consumed by
+        // `loadMessages`. Phase 17.3 added `getDisplayMessagesForSession`, so
+        // the default stub must answer both methods to keep existing tests
+        // unchanged.
         every { chatRepository.getMessagesForSession(any()) } returns flowOf(emptyList())
+        every { chatRepository.getDisplayMessagesForSession(any()) } returns flowOf(emptyList())
+        every { chatRepository.getStarredMessages() } returns flowOf(emptyList())
+        coEvery { chatRepository.setMessageStarred(any(), any()) } returns Unit
         every { chatRepository.getSessionsFlow() } returns sessionsFlow
         coEvery { chatRepository.saveSession(any()) } answers {
             val saved = firstArg<ChatSession>()
@@ -1086,5 +1093,106 @@ class ChatViewModelTest {
         advanceUntilIdle()
 
         coVerify { agentOrchestratorUseCase(sessionId, "go", null) }
+    }
+
+    // -------------------------------------------------------------------
+    // Phase 17.3 — Main chat area rework (filter + copy + star)
+    // -------------------------------------------------------------------
+
+    @Test
+    fun `loadMessages sources only display messages by default`() = runTest {
+        viewModel = createViewModel()
+        advanceUntilIdle()
+
+        val sessionId = viewModel.uiState.value.currentSessionId
+        // The display flow excludes isFinal = false rows; the ViewModel must
+        // observe that flow rather than the unfiltered one.
+        io.mockk.verify { chatRepository.getDisplayMessagesForSession(sessionId) }
+        io.mockk.verify(exactly = 0) { chatRepository.getStarredMessages() }
+    }
+
+    @Test
+    fun `toggleStarredFilter swaps source to starred flow and back`() = runTest {
+        viewModel = createViewModel()
+        advanceUntilIdle()
+
+        viewModel.toggleStarredFilter()
+        advanceUntilIdle()
+
+        assertTrue(viewModel.uiState.value.showStarredOnly)
+        io.mockk.verify { chatRepository.getStarredMessages() }
+
+        viewModel.toggleStarredFilter()
+        advanceUntilIdle()
+
+        assertFalse(viewModel.uiState.value.showStarredOnly)
+    }
+
+    @Test
+    fun `setMessageStarred forwards to repository`() = runTest {
+        viewModel = createViewModel()
+        advanceUntilIdle()
+
+        viewModel.setMessageStarred(messageId = 42L, starred = true)
+        advanceUntilIdle()
+
+        coVerify { chatRepository.setMessageStarred(42L, true) }
+    }
+
+    @Test
+    fun `signalCopiedToClipboard sets snackbar message`() = runTest {
+        viewModel = createViewModel()
+        advanceUntilIdle()
+
+        viewModel.signalCopiedToClipboard()
+
+        assertEquals("Copied", viewModel.uiState.value.snackbarMessage)
+    }
+
+    @Test
+    fun `consumeSnackbar clears the snackbar message`() = runTest {
+        viewModel = createViewModel()
+        advanceUntilIdle()
+
+        viewModel.signalCopiedToClipboard()
+        assertNotNull(viewModel.uiState.value.snackbarMessage)
+
+        viewModel.consumeSnackbar()
+        assertNull(viewModel.uiState.value.snackbarMessage)
+    }
+
+    @Test
+    fun `loadMessages uses display flow that filters intermediate messages`() = runTest {
+        // Verifies the source-flow contract: when the repository emits only
+        // the user-facing subset (isFinal = true) for the session, those are
+        // the messages the ViewModel surfaces — guaranteeing intermediate
+        // node outputs never reach the chat list.
+        viewModel = createViewModel()
+        advanceUntilIdle()
+
+        val sessionId = viewModel.uiState.value.currentSessionId
+        val finalMsg = ChatMessage(
+            id = 1L,
+            sessionId = sessionId,
+            role = Role.AGENT,
+            content = "final",
+            timestamp = 100L,
+            isFinal = true,
+        )
+        every { chatRepository.getDisplayMessagesForSession(sessionId) } returns
+            flowOf(listOf(finalMsg))
+
+        // Re-load by toggling the filter twice (off→on→off) so the observer
+        // re-subscribes and picks up the new stub. The end state is the
+        // unfiltered display flow, which now emits the prepared list.
+        viewModel.toggleStarredFilter()
+        advanceUntilIdle()
+        viewModel.toggleStarredFilter()
+        advanceUntilIdle()
+
+        val emitted = viewModel.uiState.value.messages
+        assertEquals(1, emitted.size)
+        assertEquals("final", emitted.first().content)
+        assertTrue(emitted.first().isFinal)
     }
 }

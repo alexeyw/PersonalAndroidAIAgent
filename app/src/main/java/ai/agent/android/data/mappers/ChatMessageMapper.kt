@@ -15,7 +15,9 @@ fun ChatMessageEntity.toDomain(): ChatMessage {
         sessionId = sessionId,
         role = try { Role.valueOf(role) } catch (e: IllegalArgumentException) { Role.SYSTEM },
         content = content,
-        timestamp = timestamp
+        timestamp = timestamp,
+        isFinal = isFinal,
+        isStarred = isStarred,
     )
 }
 
@@ -30,6 +32,8 @@ fun ChatMessage.toEntity(): ChatMessageEntity {
         sessionId = sessionId,
         role = role.name,
         content = content,
-        timestamp = timestamp
+        timestamp = timestamp,
+        isFinal = isFinal,
+        isStarred = isStarred,
     )
 }

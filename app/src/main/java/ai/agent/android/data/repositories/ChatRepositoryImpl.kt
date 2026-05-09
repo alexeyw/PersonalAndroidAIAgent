@@ -58,6 +58,22 @@ class ChatRepositoryImpl @Inject constructor(
         }
     }
 
+    override fun getDisplayMessagesForSession(sessionId: String): Flow<List<ChatMessage>> {
+        return chatDao.getDisplayMessagesBySessionId(sessionId).map { entities ->
+            entities.map { it.toDomain() }
+        }
+    }
+
+    override suspend fun setMessageStarred(messageId: Long, starred: Boolean) {
+        chatDao.setMessageStarred(messageId, starred)
+    }
+
+    override fun getStarredMessages(): Flow<List<ChatMessage>> {
+        return chatDao.getStarredMessages().map { entities ->
+            entities.map { it.toDomain() }
+        }
+    }
+
     override suspend fun deleteSession(sessionId: String) {
         chatDao.deleteSessionMessages(sessionId)
         chatDao.deleteSession(sessionId)

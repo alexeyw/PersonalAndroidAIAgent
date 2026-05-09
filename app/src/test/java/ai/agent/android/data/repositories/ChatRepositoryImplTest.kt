@@ -2,6 +2,7 @@ package ai.agent.android.data.repositories
 
 import ai.agent.android.data.local.dao.ChatDao
 import ai.agent.android.data.local.dao.TraceStepDao
+import ai.agent.android.data.local.models.ChatMessageEntity
 import ai.agent.android.data.local.models.ChatSessionEntity
 import ai.agent.android.data.local.models.TraceStepEntity
 import ai.agent.android.domain.models.ChatMessage
@@ -9,8 +10,11 @@ import ai.agent.android.domain.models.Role
 import io.mockk.CapturingSlot
 import io.mockk.coEvery
 import io.mockk.coVerify
+import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Before
@@ -133,6 +137,52 @@ class ChatRepositoryImplTest {
         repository.saveMessage(message)
 
         coVerify(exactly = 1) { chatDao.updateSession(existingSession.copy(updatedAt = message.timestamp)) }
+    }
+
+    @Test
+    fun `given display flow when collected then only isFinal=true messages are emitted`() = runTest {
+        val sessionId = "display-session"
+        val finalEntity = ChatMessageEntity(
+            id = 1L,
+            sessionId = sessionId,
+            role = "AGENT",
+            content = "final answer",
+            timestamp = 1000L,
+            isFinal = true,
+            isStarred = false,
+        )
+        every { chatDao.getDisplayMessagesBySessionId(sessionId) } returns flowOf(listOf(finalEntity))
+
+        val emitted = repository.getDisplayMessagesForSession(sessionId).first()
+
+        assertEquals(1, emitted.size)
+        assertEquals("final answer", emitted.first().content)
+        assertEquals(true, emitted.first().isFinal)
+    }
+
+    @Test
+    fun `given setMessageStarred when called then dao update is invoked with same args`() = runTest {
+        repository.setMessageStarred(messageId = 42L, starred = true)
+        coVerify(exactly = 1) { chatDao.setMessageStarred(42L, true) }
+    }
+
+    @Test
+    fun `given starred flow when collected then mapped messages preserve isStarred`() = runTest {
+        val starred = ChatMessageEntity(
+            id = 7L,
+            sessionId = "any",
+            role = "USER",
+            content = "saved msg",
+            timestamp = 1L,
+            isFinal = true,
+            isStarred = true,
+        )
+        every { chatDao.getStarredMessages() } returns flowOf(listOf(starred))
+
+        val emitted = repository.getStarredMessages().first()
+
+        assertEquals(1, emitted.size)
+        assertEquals(true, emitted.first().isStarred)
     }
 
     @Test

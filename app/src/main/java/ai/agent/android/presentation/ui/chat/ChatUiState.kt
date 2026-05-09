@@ -39,6 +39,12 @@ import ai.agent.android.domain.models.ChatSession
  * @property pipelineFallbackMessage One-shot Snackbar message emitted exactly once
  *   when the chat's bound pipeline is detected as deleted and the chat has been
  *   silently rebound to the default pipeline. Cleared via `clearPipelineFallback()`.
+ * @property snackbarMessage One-shot transient text surfaced as a Snackbar (e.g. the
+ *   "Copied" feedback after the user copies a message via the long-press menu).
+ *   Cleared by the UI via `consumeSnackbar()` after the auto-dismiss timeout.
+ * @property showStarredOnly When `true`, the chat list is sourced from
+ *   `getStarredMessages()` and shows every starred message across all sessions.
+ *   Toggled from the TopAppBar action bar.
  */
 data class ChatUiState(
     val messages: List<ChatMessage> = emptyList(),
@@ -59,6 +65,8 @@ data class ChatUiState(
     val chatSettingsDialog: ChatSettingsDialogState? = null,
     val pipelineSwitchConfirm: PipelineSwitchConfirmState? = null,
     val pipelineFallbackMessage: String? = null,
+    val snackbarMessage: String? = null,
+    val showStarredOnly: Boolean = false,
 )
 
 /**

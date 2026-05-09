@@ -364,20 +364,79 @@ class ChatViewModel @Inject constructor(
     /**
      * Loads the chat messages for the given session ID and observes changes.
      *
+     * The source flow depends on [ChatUiState.showStarredOnly]:
+     *  - `false` (default): only user-facing messages of the active session
+     *    (`isFinal = true`) — intermediate node outputs are excluded so the
+     *    main chat stays clean.
+     *  - `true`: every starred message across all sessions, most recent first.
+     *
+     * The context-size readout still reflects the active session's *full*
+     * (unfiltered) history regardless of the filter, so the user sees the
+     * accurate token-window cost even while the starred filter is active.
+     *
      * @param sessionId The ID of the chat session to load.
      */
     private fun loadMessages(sessionId: String) {
         messagesJob?.cancel()
         messagesJob = viewModelScope.launch {
-            chatRepository.getMessagesForSession(sessionId).collect { messages ->
+            val source = if (_uiState.value.showStarredOnly) {
+                chatRepository.getStarredMessages()
+            } else {
+                chatRepository.getDisplayMessagesForSession(sessionId)
+            }
+            source.collect { messages ->
                 val contextString = getContextWindowUseCase(sessionId)
-                _uiState.update { 
+                _uiState.update {
                     it.copy(
                         messages = messages,
-                        contextSize = contextString.length
-                    ) 
+                        contextSize = contextString.length,
+                    )
                 }
             }
+        }
+    }
+
+    /**
+     * Toggles the "starred only" filter on the chat list and re-starts the
+     * message observation so the [ChatUiState.messages] source flow swaps
+     * between the per-session display flow and the global starred flow.
+     */
+    fun toggleStarredFilter() {
+        _uiState.update { it.copy(showStarredOnly = !it.showStarredOnly) }
+        loadMessages(_uiState.value.currentSessionId)
+    }
+
+    /**
+     * Toggles the starred state of [messageId] in the database. The Room flow
+     * underlying [ChatUiState.messages] re-emits automatically once the row
+     * changes, so the UI updates without further action from the caller.
+     *
+     * @param messageId Database id of the message to update.
+     * @param starred New starred state to persist.
+     */
+    fun setMessageStarred(messageId: Long, starred: Boolean) {
+        viewModelScope.launch {
+            chatRepository.setMessageStarred(messageId, starred)
+        }
+    }
+
+    /**
+     * Surfaces the "Copied" Snackbar after the UI has placed message text on
+     * the system clipboard. The actual `ClipboardManager` interaction happens
+     * inside the Composable layer (which has access to `LocalClipboardManager`),
+     * so the ViewModel itself stays free of Android-framework dependencies.
+     */
+    fun signalCopiedToClipboard() {
+        _uiState.update { it.copy(snackbarMessage = "Copied") }
+    }
+
+    /**
+     * Clears [ChatUiState.snackbarMessage] after the UI has displayed it.
+     * Called from a `LaunchedEffect` once the auto-dismiss timeout elapses.
+     */
+    fun consumeSnackbar() {
+        if (_uiState.value.snackbarMessage != null) {
+            _uiState.update { it.copy(snackbarMessage = null) }
         }
     }
 

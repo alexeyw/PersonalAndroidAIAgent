@@ -36,7 +36,7 @@ import ai.agent.android.data.local.dao.PromptTemplateDao
         PromptTemplateEntity::class,
         ai.agent.android.data.local.models.TraceStepEntity::class
     ],
-    version = 19,
+    version = 20,
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -244,6 +244,27 @@ abstract class AppDatabase : RoomDatabase() {
         val MIGRATION_18_19 = object : Migration(18, 19) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE `chat_sessions` ADD COLUMN `pipelineId` TEXT")
+            }
+        }
+
+        /**
+         * Adds the `isFinal` and `isStarred` columns to `chat_messages` (Phase 17.3).
+         *
+         * - `isFinal` — distinguishes user-facing messages (USER input, final AGENT
+         *   answers) from intermediate node outputs (tool observations, internal
+         *   SYSTEM logs). Backfilled to `1` so every pre-existing message keeps
+         *   rendering in the main chat list.
+         * - `isStarred` — backs the new "save message" action; defaults to `0`
+         *   for all legacy rows.
+         */
+        val MIGRATION_19_20 = object : Migration(19, 20) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "ALTER TABLE `chat_messages` ADD COLUMN `isFinal` INTEGER NOT NULL DEFAULT 1",
+                )
+                db.execSQL(
+                    "ALTER TABLE `chat_messages` ADD COLUMN `isStarred` INTEGER NOT NULL DEFAULT 0",
+                )
             }
         }
     }
