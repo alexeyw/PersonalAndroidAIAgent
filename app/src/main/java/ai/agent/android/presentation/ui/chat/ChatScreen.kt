@@ -194,16 +194,24 @@ fun ChatScreen(
     }
 
     // Transient "Copied" Snackbar emitted by the long-press menu. Uses the
-    // Indefinite duration combined with a 1.5s delay + manual dismiss to
-    // achieve the short visual flash specified by Phase 17.3 (Material's
-    // built-in `Short` duration is ~4 seconds, which is too long here).
+    // Indefinite duration combined with a 1.5s delay so we can dismiss the
+    // snackbar by cancelling *our own* show coroutine — Material's built-in
+    // `Short` duration is ~4 seconds, which is too long for this feedback.
+    //
+    // Cancelling [showJob] is what dismisses the snackbar: when the suspending
+    // `showSnackbar` call is cancelled it removes its `SnackbarData` entry
+    // from the host (whether currently displayed or still queued). We
+    // deliberately avoid touching `snackbarHostState.currentSnackbarData`,
+    // since that reference may belong to an unrelated, higher-priority
+    // snackbar (errors, pipeline fallback notices) — closing it here would
+    // truncate it and could even cancel the queued copy snackbar before it
+    // ever became visible.
     LaunchedEffect(uiState.snackbarMessage) {
         val msg = uiState.snackbarMessage ?: return@LaunchedEffect
         val showJob = launch {
             snackbarHostState.showSnackbar(msg, duration = SnackbarDuration.Indefinite)
         }
         delay(1500)
-        snackbarHostState.currentSnackbarData?.dismiss()
         showJob.cancel()
         viewModel.consumeSnackbar()
     }
