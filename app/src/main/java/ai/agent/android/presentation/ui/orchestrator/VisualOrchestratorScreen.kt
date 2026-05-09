@@ -103,7 +103,6 @@ fun VisualOrchestratorScreen(
     var configuringNodeId by remember { mutableStateOf<String?>(null) }
     var editingConnectionId by remember { mutableStateOf<String?>(null) }
 
-    var showLoadMenu by remember { mutableStateOf(false) }
     var showPromptLibrary by remember { mutableStateOf(false) }
     
     var canvasSize by remember { mutableStateOf(IntSize.Zero) }
@@ -555,34 +554,6 @@ fun VisualOrchestratorScreen(
                     modifier = Modifier.padding(end = 8.dp)
                 ) {
                     Text("Base Preset")
-                }
-
-                Box {
-                    Button(
-                        onClick = { showLoadMenu = true },
-                        modifier = Modifier.padding(end = 8.dp)
-                    ) {
-                        Icon(imageVector = Icons.AutoMirrored.Filled.List, contentDescription = "Load Pipeline", modifier = Modifier.padding(end = 4.dp))
-                        Text("Load")
-                    }
-                    DropdownMenu(
-                        expanded = showLoadMenu,
-                        onDismissRequest = { showLoadMenu = false }
-                    ) {
-                        if (uiState.savedPipelines.isEmpty()) {
-                            DropdownMenuItem(text = { Text("No saved pipelines") }, onClick = { showLoadMenu = false })
-                        } else {
-                            uiState.savedPipelines.forEach { pipeline ->
-                                DropdownMenuItem(
-                                    text = { Text(pipeline.name.ifBlank { "Unnamed (${pipeline.id.take(4)})" }) },
-                                    onClick = {
-                                        viewModel.loadPipeline(pipeline.id)
-                                        showLoadMenu = false
-                                    }
-                                )
-                            }
-                        }
-                    }
                 }
 
                 Button(

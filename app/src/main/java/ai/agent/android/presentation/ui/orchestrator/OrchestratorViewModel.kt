@@ -14,8 +14,12 @@ import ai.agent.android.domain.prompt.PromptTemplateEngine
 import ai.agent.android.domain.prompt.PromptVariableProvider
 import ai.agent.android.domain.repositories.ApiKeyRepository
 import ai.agent.android.domain.repositories.ToolRepository
+import ai.agent.android.domain.usecases.CreatePipelineUseCase
+import ai.agent.android.domain.usecases.DeletePipelineUseCase
+import ai.agent.android.domain.usecases.DuplicatePipelineUseCase
 import ai.agent.android.domain.usecases.ImportPipelineUseCase
 import ai.agent.android.domain.usecases.LoadPipelineUseCase
+import ai.agent.android.domain.usecases.RenamePipelineUseCase
 import ai.agent.android.domain.usecases.SavePipelineUseCase
 import ai.agent.android.domain.usecases.GetPromptTemplatesUseCase
 import ai.agent.android.domain.usecases.SavePromptTemplateUseCase
@@ -38,6 +42,10 @@ class OrchestratorViewModel @Inject constructor(
     private val savePipelineUseCase: SavePipelineUseCase,
     private val loadPipelineUseCase: LoadPipelineUseCase,
     private val importPipelineUseCase: ImportPipelineUseCase,
+    private val renamePipelineUseCase: RenamePipelineUseCase,
+    private val duplicatePipelineUseCase: DuplicatePipelineUseCase,
+    private val deletePipelineUseCase: DeletePipelineUseCase,
+    private val createPipelineUseCase: CreatePipelineUseCase,
     private val getPromptTemplatesUseCase: GetPromptTemplatesUseCase,
     private val savePromptTemplateUseCase: SavePromptTemplateUseCase,
     private val apiKeyRepository: ApiKeyRepository,
@@ -574,6 +582,147 @@ class OrchestratorViewModel @Inject constructor(
                 }
             }
         }
+    }
+
+    /**
+     * Renames the pipeline identified by [pipelineId] to [newName].
+     *
+     * Delegates validation (blank / over-length name) to [RenamePipelineUseCase] and
+     * surfaces failures via [OrchestratorUiState.errorMessage] for the Snackbar to
+     * pick up. The list of pipelines refreshes itself through the existing
+     * `observeSavedPipelines` flow once the save completes; if the renamed pipeline
+     * is the one currently loaded into the editor, [OrchestratorUiState.currentPipeline]
+     * is patched in place so the editor's TopAppBar and the library highlight match
+     * without waiting for the database round-trip.
+     *
+     * @param pipelineId Unique identifier of the pipeline to rename.
+     * @param newName The new display name; trimmed and validated by the use case.
+     */
+    fun renamePipeline(pipelineId: String, newName: String) {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isLoading = true) }
+            val result = renamePipelineUseCase(pipelineId, newName)
+            _uiState.update { state ->
+                val error = result.exceptionOrNull()?.message
+                val patchedCurrent = if (
+                    result.isSuccess && state.currentPipeline.id == pipelineId
+                ) {
+                    state.currentPipeline.copy(name = newName.trim())
+                } else {
+                    state.currentPipeline
+                }
+                state.copy(
+                    isLoading = false,
+                    currentPipeline = patchedCurrent,
+                    errorMessage = error,
+                    feedbackMessage = if (result.isSuccess) "Pipeline renamed" else state.feedbackMessage,
+                )
+            }
+        }
+    }
+
+    /**
+     * Duplicates an existing pipeline and exposes the new graph as the active one.
+     *
+     * The duplicate is created with fresh ids (pipeline + every node + every
+     * connection) by [DuplicatePipelineUseCase]. On success, the duplicate is
+     * loaded into [OrchestratorUiState.currentPipeline] so the user can continue
+     * editing the copy immediately — this is the expected flow for the library's
+     * "Duplicate" context-menu action.
+     *
+     * @param pipelineId Unique identifier of the source pipeline.
+     */
+    fun duplicatePipeline(pipelineId: String) {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isLoading = true) }
+            val result = duplicatePipelineUseCase(pipelineId)
+            _uiState.update { state ->
+                val duplicate = result.getOrNull()
+                val error = result.exceptionOrNull()?.message
+                state.copy(
+                    isLoading = false,
+                    currentPipeline = duplicate ?: state.currentPipeline,
+                    errorMessage = error,
+                    feedbackMessage = if (duplicate != null) "Pipeline duplicated" else state.feedbackMessage,
+                )
+            }
+        }
+    }
+
+    /**
+     * Deletes the pipeline identified by [pipelineId] from the library.
+     *
+     * Forwards the active pipeline id (taken from [OrchestratorUiState.currentPipeline])
+     * to [DeletePipelineUseCase] so attempts to delete the pipeline being edited are
+     * blocked at the use-case layer. The error message wired into the UI is
+     * deliberately UI-friendly ("Active pipeline cannot be deleted") so the
+     * Snackbar reads the same regardless of how the deletion was triggered.
+     *
+     * @param pipelineId Unique identifier of the pipeline to delete.
+     */
+    fun deletePipeline(pipelineId: String) {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isLoading = true) }
+            val activeId = _uiState.value.currentPipeline.id
+            val result = deletePipelineUseCase(pipelineId, activeId)
+            _uiState.update { state ->
+                state.copy(
+                    isLoading = false,
+                    errorMessage = result.exceptionOrNull()?.message,
+                    feedbackMessage = if (result.isSuccess) "Pipeline deleted" else state.feedbackMessage,
+                )
+            }
+        }
+    }
+
+    /**
+     * Creates a brand-new pipeline with a minimal `INPUT → OUTPUT` seed and
+     * loads it as the current pipeline.
+     *
+     * Used by the library's "New pipeline" FAB. Persistence happens through
+     * [CreatePipelineUseCase], which validates the name and seeds the graph so
+     * the freshly created pipeline already passes [PipelineGraph.validate].
+     *
+     * @param name Display name for the new pipeline.
+     */
+    fun createNewPipeline(name: String) {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isLoading = true) }
+            val result = createPipelineUseCase(name)
+            _uiState.update { state ->
+                val created = result.getOrNull()
+                state.copy(
+                    isLoading = false,
+                    currentPipeline = created ?: state.currentPipeline,
+                    errorMessage = result.exceptionOrNull()?.message,
+                    feedbackMessage = if (created != null) "Pipeline created" else state.feedbackMessage,
+                    // Only request navigation on a successful create; a failed
+                    // create (validation, persistence error) must keep the user
+                    // in the library so they can retry, instead of pushing
+                    // them into the editor with the previously active graph.
+                    pendingEditorNavigation = state.pendingEditorNavigation || created != null,
+                )
+            }
+        }
+    }
+
+    /**
+     * Clears the transient feedback string after the Snackbar has shown it.
+     * Mirrors [clearError] so the library screen can dismiss the feedback
+     * channel independently of the error channel.
+     */
+    fun clearFeedback() {
+        _uiState.update { it.copy(feedbackMessage = null) }
+    }
+
+    /**
+     * Acknowledges and resets the [OrchestratorUiState.pendingEditorNavigation]
+     * flag. Call from the library screen's `LaunchedEffect` after invoking
+     * the navigation callback, so the same trigger never fires twice (e.g.
+     * after a configuration change).
+     */
+    fun consumePendingEditorNavigation() {
+        _uiState.update { it.copy(pendingEditorNavigation = false) }
     }
 
     /**
