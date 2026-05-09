@@ -752,6 +752,12 @@ class ChatViewModel @Inject constructor(
      * session immediately the ViewModel raises a `PipelineSwitchConfirm`
      * dialog asking the user whether to cancel generation and switch, or
      * wait. This implements UX option (a) agreed in the plan.
+     *
+     * The chat-settings dialog is *not* dismissed when the confirm is
+     * raised — it stays open behind the confirm so that "Wait" returns the
+     * user to a stable surface (and so the second `Dialog` window is not
+     * swallowed by the simultaneous dismiss-and-show transition that would
+     * otherwise happen).
      */
     fun confirmChatSettings() {
         val state = _uiState.value
@@ -769,7 +775,6 @@ class ChatViewModel @Inject constructor(
         if (state.isGenerating) {
             _uiState.update {
                 it.copy(
-                    chatSettingsDialog = null,
                     pipelineSwitchConfirm = PipelineSwitchConfirmState(targetPipelineId = targetId),
                 )
             }
@@ -782,19 +787,20 @@ class ChatViewModel @Inject constructor(
 
     /**
      * Resolves the pipeline-switch confirmation: cancels the in-flight
-     * generation and applies the requested pipeline id.
+     * generation, applies the requested pipeline id, and dismisses both the
+     * confirm dialog and the chat-settings dialog underneath it.
      */
     fun confirmPipelineSwitchCancelGeneration() {
         val target = _uiState.value.pipelineSwitchConfirm?.targetPipelineId
         stopGeneration()
         applySessionPipeline(target)
-        _uiState.update { it.copy(pipelineSwitchConfirm = null) }
+        _uiState.update { it.copy(pipelineSwitchConfirm = null, chatSettingsDialog = null) }
     }
 
     /**
-     * Resolves the pipeline-switch confirmation by waiting: simply dismisses
-     * the dialog without changing anything. The user may try again once
-     * generation has settled.
+     * Resolves the pipeline-switch confirmation by waiting: dismisses only
+     * the confirm overlay, leaving the chat-settings dialog open underneath
+     * so the user can change their pick or cancel out of settings entirely.
      */
     fun dismissPipelineSwitchConfirm() {
         _uiState.update { it.copy(pipelineSwitchConfirm = null) }

@@ -429,12 +429,21 @@ class OrchestratorViewModel @Inject constructor(
     }
 
     /**
-     * Applies the base preset consisting of a complex task routing pipeline.
+     * Replaces the nodes and connections of the pipeline currently being
+     * edited with the default complex task-routing preset. Preserves the
+     * pipeline's `id`, `name`, and `updatedAt` (refreshed to "now") so the
+     * preset is *applied to* the current pipeline rather than spawning a
+     * new "Base Preset" pipeline alongside it.
      */
     fun applyBasePreset() {
         _uiState.update { state ->
+            val preset = ai.agent.android.domain.engine.DefaultPipelineFactory.create(state.currentPipeline.name)
             state.copy(
-                currentPipeline = ai.agent.android.domain.engine.DefaultPipelineFactory.create("Base Preset")
+                currentPipeline = state.currentPipeline.copy(
+                    nodes = preset.nodes,
+                    connections = preset.connections,
+                    updatedAt = System.currentTimeMillis(),
+                ),
             )
         }
     }

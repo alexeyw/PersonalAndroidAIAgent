@@ -894,8 +894,10 @@ class ChatViewModelTest {
         val confirm = viewModel.uiState.value.pipelineSwitchConfirm
         assertNotNull(confirm)
         assertEquals("p2", confirm!!.targetPipelineId)
-        // Settings dialog has been collapsed in favour of the confirm.
-        assertNull(viewModel.uiState.value.chatSettingsDialog)
+        // The chat-settings dialog must stay open behind the confirm so that
+        // "Wait" returns the user to a stable surface and so the second
+        // Dialog window is not swallowed by a simultaneous dismiss-and-show.
+        assertNotNull(viewModel.uiState.value.chatSettingsDialog)
         // The pipelineId is NOT applied yet — must wait for explicit confirmation.
         coVerify(exactly = 0) {
             chatRepository.saveSession(match { it.pipelineId == "p2" })
@@ -928,6 +930,8 @@ class ChatViewModelTest {
 
         assertFalse(viewModel.uiState.value.isGenerating)
         assertNull(viewModel.uiState.value.pipelineSwitchConfirm)
+        // Both dialogs are dismissed together once the user commits.
+        assertNull(viewModel.uiState.value.chatSettingsDialog)
         coVerify {
             chatRepository.saveSession(
                 match { it.id == sessionId && it.pipelineId == "p2" },
@@ -956,6 +960,9 @@ class ChatViewModelTest {
         viewModel.dismissPipelineSwitchConfirm()
 
         assertNull(viewModel.uiState.value.pipelineSwitchConfirm)
+        // The chat-settings dialog must stay open after "Wait" so the user
+        // returns to a stable surface — they can change their mind or cancel.
+        assertNotNull(viewModel.uiState.value.chatSettingsDialog)
         coVerify(exactly = 0) {
             chatRepository.saveSession(match { it.pipelineId == "p2" })
         }
