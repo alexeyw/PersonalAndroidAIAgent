@@ -12,6 +12,7 @@ import ai.agent.android.domain.models.Result
 import ai.agent.android.domain.models.Role
 import ai.agent.android.domain.repositories.ChatRepository
 import ai.agent.android.domain.repositories.ClarificationRepository
+import ai.agent.android.domain.repositories.PipelineRepository
 import ai.agent.android.domain.repositories.SettingsRepository
 import ai.agent.android.domain.usecases.AgentOrchestratorUseCase
 import ai.agent.android.domain.usecases.GetContextWindowUseCase
@@ -49,6 +50,7 @@ class ChatViewModel @Inject constructor(
     private val activeSessionTracker: ActiveSessionTracker,
     private val llmInferenceEngine: LlmInferenceEngine,
     private val clarificationRepository: ClarificationRepository,
+    private val pipelineRepository: PipelineRepository,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ChatUiState())
@@ -69,14 +71,98 @@ class ChatViewModel @Inject constructor(
 
     init {
         loadSessions()
+        observeAvailablePipelines()
         initializeSession()
         observeMaxContextSize()
+    }
+
+    /**
+     * Continuously observes the pipeline library and recomputes:
+     *  1. [ChatUiState.availablePipelines] — feeds the new-chat selector and
+     *     chat-settings dialog.
+     *  2. [ChatUiState.currentPipelineName] — TopAppBar subtitle: name of the
+     *     pipeline bound to the current chat (or of the default pipeline when
+     *     `pipelineId == null`).
+     *  3. Deleted-pipeline fallback: if the pipeline currently bound to the
+     *     active chat disappears from the library, silently rebind the chat
+     *     to the default pipeline and emit a one-shot Snackbar via
+     *     [ChatUiState.pipelineFallbackMessage].
+     *
+     * The observation is keyed on the pair `(availablePipelines, sessions)` so
+     * that switching chats while pipelines are unchanged still triggers a
+     * subtitle recompute.
+     */
+    private fun observeAvailablePipelines() {
+        viewModelScope.launch {
+            pipelineRepository.getAllPipelines().collect { graphs ->
+                val summaries = graphs.map { PipelineSummary(id = it.id, name = it.name) }
+                _uiState.update { state ->
+                    state.copy(
+                        availablePipelines = summaries,
+                        currentPipelineName = resolvePipelineName(
+                            sessions = state.sessions,
+                            currentSessionId = state.currentSessionId,
+                            summaries = summaries,
+                        ),
+                    )
+                }
+                handleDeletedBoundPipeline(summaries)
+            }
+        }
+    }
+
+    /**
+     * Detects whether the pipeline bound to the currently active chat has been
+     * deleted. When it has, persists `pipelineId = null` on the session
+     * (falling back to the default pipeline) and surfaces a one-shot Snackbar.
+     *
+     * No-op when the chat is unbound (`pipelineId == null`) or when the bound
+     * pipeline still exists.
+     */
+    private suspend fun handleDeletedBoundPipeline(summaries: List<PipelineSummary>) {
+        val state = _uiState.value
+        val session = state.sessions.firstOrNull { it.id == state.currentSessionId } ?: return
+        val boundId = session.pipelineId ?: return
+        if (summaries.any { it.id == boundId }) return
+
+        chatRepository.saveSession(session.copy(pipelineId = null))
+        _uiState.update {
+            it.copy(pipelineFallbackMessage = "The pipeline was deleted. Default pipeline is used now.")
+        }
+    }
+
+    /**
+     * Resolves the display name of the pipeline currently bound to the active
+     * chat — either the explicit binding when set, or the default pipeline
+     * (the first entry in [summaries]) otherwise. Returns `null` when no
+     * pipelines exist yet, so the TopAppBar can omit the subtitle entirely.
+     */
+    private fun resolvePipelineName(
+        sessions: List<ChatSession>,
+        currentSessionId: String,
+        summaries: List<PipelineSummary>,
+    ): String? {
+        if (summaries.isEmpty()) return null
+        val session = sessions.firstOrNull { it.id == currentSessionId }
+        val boundId = session?.pipelineId
+        val match = boundId?.let { id -> summaries.firstOrNull { it.id == id } }
+        return (match ?: summaries.first()).name
     }
 
     private fun loadSessions() {
         viewModelScope.launch {
             chatRepository.getSessionsFlow().collect { sessions ->
-                _uiState.update { it.copy(sessions = sessions) }
+                _uiState.update { state ->
+                    state.copy(
+                        sessions = sessions,
+                        currentPipelineName = resolvePipelineName(
+                            sessions = sessions,
+                            currentSessionId = state.currentSessionId,
+                            summaries = state.availablePipelines,
+                        ),
+                    )
+                }
+                handleDeletedBoundPipeline(_uiState.value.availablePipelines)
             }
         }
     }
@@ -143,16 +229,64 @@ class ChatViewModel @Inject constructor(
     }
 
     /**
-     * Creates a new chat session and switches to it.
+     * Opens the new-chat pipeline selector `ModalBottomSheet`. The bottom
+     * sheet pre-selects the application-wide default pipeline so a user who
+     * just taps "Create" gets the same behaviour as before Phase 17.2.
+     *
+     * When no pipelines exist yet, falls back to creating an unbound chat
+     * directly without prompting — the selector would be empty otherwise.
      */
-    fun createNewSession() {
+    fun requestNewSession() {
+        val pipelines = _uiState.value.availablePipelines
+        if (pipelines.isEmpty()) {
+            createNewSession(pipelineId = null)
+            return
+        }
+        _uiState.update {
+            it.copy(
+                newChatPipelinePrompt = NewChatPipelinePrompt(
+                    preselectedPipelineId = pipelines.first().id,
+                ),
+            )
+        }
+    }
+
+    /**
+     * Dismisses the new-chat pipeline selector without creating a chat.
+     */
+    fun dismissNewChatPrompt() {
+        _uiState.update { it.copy(newChatPipelinePrompt = null) }
+    }
+
+    /**
+     * Confirms the new-chat pipeline selection and creates the session.
+     *
+     * @param pipelineId Identifier of the pipeline the new chat should bind
+     *   to, or `null` to use the application-wide default pipeline.
+     */
+    fun confirmNewSession(pipelineId: String?) {
+        _uiState.update { it.copy(newChatPipelinePrompt = null) }
+        createNewSession(pipelineId = pipelineId)
+    }
+
+    /**
+     * Creates a new chat session bound to [pipelineId] and switches to it.
+     *
+     * Internal entry-point used by both [requestNewSession] (no-pipelines
+     * shortcut) and [confirmNewSession] (after the selector resolves).
+     *
+     * @param pipelineId Pipeline identifier to bind, or `null` for the
+     *   default pipeline.
+     */
+    private fun createNewSession(pipelineId: String?) {
         viewModelScope.launch {
             val newId = UUID.randomUUID().toString()
             chatRepository.saveSession(
                 ChatSession(
                     id = newId,
                     name = "New Chat",
-                    updatedAt = System.currentTimeMillis()
+                    updatedAt = System.currentTimeMillis(),
+                    pipelineId = pipelineId,
                 )
             )
             switchSession(newId)
@@ -167,15 +301,21 @@ class ChatViewModel @Inject constructor(
     fun switchSession(sessionId: String) {
         viewModelScope.launch {
             settingsRepository.setCurrentChatSessionId(sessionId)
-            _uiState.update {
-                it.copy(
+            _uiState.update { state ->
+                state.copy(
                     currentSessionId = sessionId,
                     isGenerating = false,
                     orchestratorState = null,
                     clarificationCards = emptyList(),
+                    currentPipelineName = resolvePipelineName(
+                        sessions = state.sessions,
+                        currentSessionId = sessionId,
+                        summaries = state.availablePipelines,
+                    ),
                 )
             }
             loadMessages(sessionId)
+            handleDeletedBoundPipeline(_uiState.value.availablePipelines)
             
             // Re-evaluate active session tracking if the UI is currently visible.
             // setChatVisible logic relies on UI state, so we update the tracker if we were already active.
@@ -215,7 +355,7 @@ class ChatViewModel @Inject constructor(
                 if (sessions.isNotEmpty()) {
                     switchSession(sessions.first().id)
                 } else {
-                    createNewSession()
+                    createNewSession(pipelineId = null)
                 }
             }
         }
@@ -278,7 +418,10 @@ class ChatViewModel @Inject constructor(
                 )
             }
 
-            agentOrchestratorUseCase(currentState.currentSessionId, prompt)
+            val pipelineId = currentState.sessions
+                .firstOrNull { it.id == currentState.currentSessionId }
+                ?.pipelineId
+            agentOrchestratorUseCase(currentState.currentSessionId, prompt, pipelineId)
                 .catch { error ->
                     _uiState.update {
                         it.copy(
@@ -564,6 +707,124 @@ class ChatViewModel @Inject constructor(
                     }
                 },
             )
+        }
+    }
+
+    /**
+     * Opens the chat-settings dialog (pipeline rebind for the active chat).
+     * Pre-selects the currently bound pipeline so an accidental "Save" is a
+     * no-op.
+     */
+    fun openChatSettings() {
+        val state = _uiState.value
+        val currentBoundId = state.sessions
+            .firstOrNull { it.id == state.currentSessionId }
+            ?.pipelineId
+        _uiState.update {
+            it.copy(chatSettingsDialog = ChatSettingsDialogState(selectedPipelineId = currentBoundId))
+        }
+    }
+
+    /**
+     * Updates the highlighted pipeline inside the open chat-settings dialog
+     * without persisting anything yet.
+     */
+    fun updateChatSettingsSelection(pipelineId: String?) {
+        _uiState.update { state ->
+            state.chatSettingsDialog?.let { dialog ->
+                state.copy(chatSettingsDialog = dialog.copy(selectedPipelineId = pipelineId))
+            } ?: state
+        }
+    }
+
+    /**
+     * Closes the chat-settings dialog without applying the selection.
+     */
+    fun dismissChatSettings() {
+        _uiState.update { it.copy(chatSettingsDialog = null) }
+    }
+
+    /**
+     * Confirms the chat-settings dialog: writes the chosen pipeline id (or
+     * `null` for default) into the active session.
+     *
+     * If a generation is currently in flight, instead of mutating the
+     * session immediately the ViewModel raises a `PipelineSwitchConfirm`
+     * dialog asking the user whether to cancel generation and switch, or
+     * wait. This implements UX option (a) agreed in the plan.
+     *
+     * The chat-settings dialog is *not* dismissed when the confirm is
+     * raised — it stays open behind the confirm so that "Wait" returns the
+     * user to a stable surface (and so the second `Dialog` window is not
+     * swallowed by the simultaneous dismiss-and-show transition that would
+     * otherwise happen).
+     */
+    fun confirmChatSettings() {
+        val state = _uiState.value
+        val dialog = state.chatSettingsDialog ?: return
+        val targetId = dialog.selectedPipelineId
+        val currentBoundId = state.sessions
+            .firstOrNull { it.id == state.currentSessionId }
+            ?.pipelineId
+
+        if (targetId == currentBoundId) {
+            _uiState.update { it.copy(chatSettingsDialog = null) }
+            return
+        }
+
+        if (state.isGenerating) {
+            _uiState.update {
+                it.copy(
+                    pipelineSwitchConfirm = PipelineSwitchConfirmState(targetPipelineId = targetId),
+                )
+            }
+            return
+        }
+
+        applySessionPipeline(targetId)
+        _uiState.update { it.copy(chatSettingsDialog = null) }
+    }
+
+    /**
+     * Resolves the pipeline-switch confirmation: cancels the in-flight
+     * generation, applies the requested pipeline id, and dismisses both the
+     * confirm dialog and the chat-settings dialog underneath it.
+     */
+    fun confirmPipelineSwitchCancelGeneration() {
+        val target = _uiState.value.pipelineSwitchConfirm?.targetPipelineId
+        stopGeneration()
+        applySessionPipeline(target)
+        _uiState.update { it.copy(pipelineSwitchConfirm = null, chatSettingsDialog = null) }
+    }
+
+    /**
+     * Resolves the pipeline-switch confirmation by waiting: dismisses only
+     * the confirm overlay, leaving the chat-settings dialog open underneath
+     * so the user can change their pick or cancel out of settings entirely.
+     */
+    fun dismissPipelineSwitchConfirm() {
+        _uiState.update { it.copy(pipelineSwitchConfirm = null) }
+    }
+
+    /**
+     * Persists the new pipeline binding for the currently active session and
+     * refreshes the TopAppBar subtitle. No-op when no chat is loaded.
+     */
+    private fun applySessionPipeline(pipelineId: String?) {
+        viewModelScope.launch {
+            val state = _uiState.value
+            val session = state.sessions.firstOrNull { it.id == state.currentSessionId } ?: return@launch
+            chatRepository.saveSession(session.copy(pipelineId = pipelineId))
+        }
+    }
+
+    /**
+     * Clears the one-shot deleted-pipeline fallback Snackbar after the UI has
+     * displayed it.
+     */
+    fun clearPipelineFallback() {
+        if (_uiState.value.pipelineFallbackMessage != null) {
+            _uiState.update { it.copy(pipelineFallbackMessage = null) }
         }
     }
 

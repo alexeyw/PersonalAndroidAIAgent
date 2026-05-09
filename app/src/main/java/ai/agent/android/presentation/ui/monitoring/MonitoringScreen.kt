@@ -26,12 +26,14 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import java.text.SimpleDateFormat
 import java.util.Date
+import androidx.compose.ui.platform.LocalConfiguration
 import java.util.Locale
 
 /**
@@ -237,7 +239,8 @@ fun LogItemCard(log: ai.agent.android.domain.models.ChatMessage) {
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Column(modifier = Modifier.padding(12.dp)) {
-            val formatter = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
+            val locale = LocalConfiguration.current.locales[0]
+            val formatter = remember(locale) { SimpleDateFormat("HH:mm:ss", locale) }
             val timeString = formatter.format(Date(log.timestamp))
 
             Text(

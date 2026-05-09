@@ -12,6 +12,7 @@ import ai.agent.android.domain.models.ChatSession
 import ai.agent.android.domain.models.Role
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -38,6 +39,7 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.Upload
 import androidx.compose.material.icons.filled.Warning
@@ -52,10 +54,12 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.ModalDrawerSheet
 import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.NavigationDrawerItem
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -65,6 +69,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberDrawerState
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -167,6 +172,16 @@ fun ChatScreen(
         }
     }
 
+    // One-shot Snackbar for the deleted-pipeline fallback (Phase 17.2): the
+    // chat was silently rebound to the default pipeline because the bound
+    // pipeline disappeared from the library.
+    LaunchedEffect(uiState.pipelineFallbackMessage) {
+        uiState.pipelineFallbackMessage?.let {
+            snackbarHostState.showSnackbar(it)
+            viewModel.clearPipelineFallback()
+        }
+    }
+
     // Auto-scroll to the bottom when new messages arrive or generation starts
     LaunchedEffect(uiState.messages.size, uiState.isGenerating, uiState.clarificationCards.size) {
         if (uiState.messages.isNotEmpty() || uiState.isGenerating || uiState.clarificationCards.isNotEmpty()) {
@@ -188,7 +203,7 @@ fun ChatScreen(
                     sessions = uiState.sessions,
                     currentSessionId = uiState.currentSessionId,
                     onNewChat = {
-                        viewModel.createNewSession()
+                        viewModel.requestNewSession()
                         coroutineScope.launch { drawerState.close() }
                     },
                     onImportChat = {
@@ -214,9 +229,16 @@ fun ChatScreen(
                 val title = currentSession?.name ?: "Agent Chat"
                 
                 TopAppBar(
-                    title = { 
+                    title = {
                         Column {
                             Text(title)
+                            uiState.currentPipelineName?.let { pipelineName ->
+                                Text(
+                                    text = "Pipeline: $pipelineName",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.6f),
+                                )
+                            }
                             if (uiState.maxContextSize > 0) {
                                 val contextPercentage = (uiState.contextSize.toFloat() / uiState.maxContextSize.toFloat()).coerceIn(0f, 1f)
                                 val color = when {
@@ -258,6 +280,18 @@ fun ChatScreen(
                                 expanded = menuExpanded,
                                 onDismissRequest = { menuExpanded = false },
                             ) {
+                                DropdownMenuItem(
+                                    text = { Text("Chat settings") },
+                                    onClick = {
+                                        menuExpanded = false
+                                        if (uiState.currentSessionId.isNotBlank()) {
+                                            viewModel.openChatSettings()
+                                        }
+                                    },
+                                    leadingIcon = {
+                                        Icon(Icons.Default.Settings, contentDescription = null)
+                                    },
+                                )
                                 DropdownMenuItem(
                                     text = { Text("Export chat") },
                                     onClick = {
@@ -383,6 +417,200 @@ fun ChatScreen(
                 )
             }
         }
+    }
+
+    uiState.newChatPipelinePrompt?.let { prompt ->
+        NewChatPipelineSheet(
+            pipelines = uiState.availablePipelines,
+            initialSelection = prompt.preselectedPipelineId,
+            onDismiss = { viewModel.dismissNewChatPrompt() },
+            onConfirm = { selected -> viewModel.confirmNewSession(selected) },
+        )
+    }
+
+    uiState.chatSettingsDialog?.let { dialog ->
+        ChatSettingsDialog(
+            pipelines = uiState.availablePipelines,
+            selectedPipelineId = dialog.selectedPipelineId,
+            onSelectPipeline = { viewModel.updateChatSettingsSelection(it) },
+            onDismiss = { viewModel.dismissChatSettings() },
+            onConfirm = { viewModel.confirmChatSettings() },
+        )
+    }
+
+    if (uiState.pipelineSwitchConfirm != null) {
+        AlertDialog(
+            onDismissRequest = { viewModel.dismissPipelineSwitchConfirm() },
+            title = { Text("Generation in progress") },
+            text = {
+                Text("A response is being generated. Cancel it and switch the pipeline?")
+            },
+            confirmButton = {
+                Button(onClick = { viewModel.confirmPipelineSwitchCancelGeneration() }) {
+                    Text("Cancel and switch")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { viewModel.dismissPipelineSwitchConfirm() }) {
+                    Text("Wait")
+                }
+            },
+        )
+    }
+}
+
+/**
+ * Modal bottom sheet shown when the user creates a new chat. Lets the user
+ * pick which pipeline to bind to the chat (or "Use default" to leave it
+ * unbound). The list of pipelines comes from
+ * [ChatUiState.availablePipelines]; the application-wide default (first
+ * entry) is the implicit choice when [initialSelection] is `null`.
+ *
+ * @param pipelines Lightweight projections of every pipeline available in
+ *   the library.
+ * @param initialSelection Pipeline id pre-selected when the sheet opens, or
+ *   `null` to start with "Use default" highlighted.
+ * @param onDismiss Invoked when the user dismisses the sheet without
+ *   confirming.
+ * @param onConfirm Invoked with the chosen pipeline id (or `null` for the
+ *   "Use default" option) when the user taps "Create".
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun NewChatPipelineSheet(
+    pipelines: List<PipelineSummary>,
+    initialSelection: String?,
+    onDismiss: () -> Unit,
+    onConfirm: (String?) -> Unit,
+) {
+    var selected by remember(initialSelection) { mutableStateOf(initialSelection) }
+    val sheetState = rememberModalBottomSheetState()
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text(
+                text = "Choose pipeline for the new chat",
+                style = MaterialTheme.typography.titleMedium,
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+
+            LazyColumn(modifier = Modifier.fillMaxWidth()) {
+                item {
+                    PipelineChoiceRow(
+                        title = "Use default pipeline",
+                        selected = selected == null,
+                        onClick = { selected = null },
+                    )
+                }
+                items(pipelines, key = { it.id }) { pipeline ->
+                    PipelineChoiceRow(
+                        title = pipeline.name,
+                        selected = selected == pipeline.id,
+                        onClick = { selected = pipeline.id },
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                TextButton(onClick = onDismiss) { Text("Cancel") }
+                Spacer(modifier = Modifier.width(8.dp))
+                Button(onClick = { onConfirm(selected) }) { Text("Create") }
+            }
+        }
+    }
+}
+
+/**
+ * Alert dialog opened from the TopAppBar `⋮` menu that lets the user rebind
+ * the active chat to a different pipeline (or to the default).
+ *
+ * @param pipelines Lightweight projections of every pipeline available in
+ *   the library.
+ * @param selectedPipelineId Currently highlighted pipeline id (`null` for
+ *   "Use default").
+ * @param onSelectPipeline Invoked when the user picks a different pipeline
+ *   inside the dialog (does not commit anything yet).
+ * @param onDismiss Invoked when the user dismisses the dialog without
+ *   confirming.
+ * @param onConfirm Invoked when the user taps "Save" — the ViewModel
+ *   decides whether to apply the change immediately or raise a
+ *   pipeline-switch confirmation if a generation is in flight.
+ */
+@Composable
+private fun ChatSettingsDialog(
+    pipelines: List<PipelineSummary>,
+    selectedPipelineId: String?,
+    onSelectPipeline: (String?) -> Unit,
+    onDismiss: () -> Unit,
+    onConfirm: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Chat settings") },
+        text = {
+            Column {
+                Text(
+                    text = "Pipeline",
+                    style = MaterialTheme.typography.titleSmall,
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                LazyColumn(modifier = Modifier.fillMaxWidth()) {
+                    item {
+                        PipelineChoiceRow(
+                            title = "Use default pipeline",
+                            selected = selectedPipelineId == null,
+                            onClick = { onSelectPipeline(null) },
+                        )
+                    }
+                    items(pipelines, key = { it.id }) { pipeline ->
+                        PipelineChoiceRow(
+                            title = pipeline.name,
+                            selected = selectedPipelineId == pipeline.id,
+                            onClick = { onSelectPipeline(pipeline.id) },
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Button(onClick = onConfirm) { Text("Save") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        },
+    )
+}
+
+/**
+ * Single tappable row in the pipeline picker (used by both the new-chat
+ * bottom sheet and the chat-settings dialog). Renders a radio-button plus a
+ * pipeline display name; the entire row is clickable to keep the touch
+ * target large.
+ *
+ * The `RadioButton` itself is passed `onClick = null` so the parent `Row`
+ * is the single touch target — this prevents nested clickable surfaces and
+ * the duplicate accessibility node that would otherwise appear.
+ */
+@Composable
+private fun PipelineChoiceRow(
+    title: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        RadioButton(selected = selected, onClick = null)
+        Spacer(modifier = Modifier.width(8.dp))
+        Text(text = title, style = MaterialTheme.typography.bodyMedium)
     }
 }
 

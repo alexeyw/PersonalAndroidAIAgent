@@ -41,13 +41,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import java.text.SimpleDateFormat
 import java.util.Date
-import java.util.Locale
 
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 
@@ -240,7 +240,8 @@ private fun ChatMessageItem(
     message: ChatMessage,
     onDelete: () -> Unit
 ) {
-    val dateFormat = SimpleDateFormat("MMM dd, HH:mm", Locale.getDefault())
+    val locale = LocalConfiguration.current.locales[0]
+    val dateFormat = remember(locale) { SimpleDateFormat("MMM dd, HH:mm", locale) }
     val dateString = dateFormat.format(Date(message.timestamp))
     var expanded by remember { mutableStateOf(false) }
     val clipboardManager = LocalClipboardManager.current
@@ -305,7 +306,8 @@ private fun MemoryChunkItem(
     memory: MemoryChunk,
     onDelete: () -> Unit
 ) {
-    val dateFormat = SimpleDateFormat("MMM dd, yyyy HH:mm", Locale.getDefault())
+    val locale = LocalConfiguration.current.locales[0]
+    val dateFormat = remember(locale) { SimpleDateFormat("MMM dd, yyyy HH:mm", locale) }
     val dateString = dateFormat.format(Date(memory.timestamp))
     var expanded by remember { mutableStateOf(false) }
     val clipboardManager = LocalClipboardManager.current

@@ -336,30 +336,36 @@ class OrchestratorViewModelTest {
     }
 
     @Test
-    fun `applyBasePreset creates complex routing pipeline with nodes and connections`() {
+    fun `applyBasePreset replaces current pipeline nodes and connections in place`() {
+        val originalId = viewModel.uiState.value.currentPipeline.id
+        val originalName = viewModel.uiState.value.currentPipeline.name
+
         viewModel.applyBasePreset()
-        
+
         val state = viewModel.uiState.value
         val nodes = state.currentPipeline.nodes
         val connections = state.currentPipeline.connections
-        
+
         assertEquals(10, nodes.size)
         assertEquals(NodeType.INPUT, nodes.find { it.type == NodeType.INPUT }?.type)
         assertEquals(NodeType.INTENT_ROUTER, nodes.find { it.type == NodeType.INTENT_ROUTER }?.type)
         assertEquals(NodeType.DECOMPOSITION, nodes.find { it.type == NodeType.DECOMPOSITION }?.type)
         assertEquals(NodeType.OUTPUT, nodes.find { it.type == NodeType.OUTPUT }?.type)
-        
+
         assertEquals(12, connections.size)
-        assertEquals("Base Preset", state.currentPipeline.name)
+        // The preset is applied IN PLACE — the pipeline's identity (id and
+        // user-given name) is preserved so saving updates the existing
+        // pipeline rather than spawning a "Base Preset" twin.
+        assertEquals(originalId, state.currentPipeline.id)
+        assertEquals(originalName, state.currentPipeline.name)
     }
 
     @Test
     fun `exportPipelineToJson returns valid json string`() {
         viewModel.applyBasePreset()
-        
+
         val json = viewModel.exportPipelineToJson()
-        
-        assertTrue(json.contains("Base Preset"))
+
         assertTrue(json.contains("INPUT"))
         assertTrue(json.contains("LITE_RT"))
         assertTrue(json.contains("OUTPUT"))
@@ -368,6 +374,7 @@ class OrchestratorViewModelTest {
     @Test
     fun `importPipelineFromJson updates current pipeline from json`() = runTest {
         viewModel.applyBasePreset()
+        val originalName = viewModel.uiState.value.currentPipeline.name
         val json = viewModel.exportPipelineToJson()
 
         viewModel.clearPipeline()
@@ -377,7 +384,7 @@ class OrchestratorViewModelTest {
         testDispatcher.scheduler.advanceUntilIdle()
 
         val state = viewModel.uiState.value
-        assertEquals("Base Preset", state.currentPipeline.name)
+        assertEquals(originalName, state.currentPipeline.name)
         assertEquals(10, state.currentPipeline.nodes.size)
         assertEquals(12, state.currentPipeline.connections.size)
         assertEquals(null, state.errorMessage)

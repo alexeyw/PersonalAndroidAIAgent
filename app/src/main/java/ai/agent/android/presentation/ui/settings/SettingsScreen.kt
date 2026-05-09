@@ -43,7 +43,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
-import java.util.Locale
+import androidx.compose.ui.platform.LocalConfiguration
 import kotlin.math.roundToInt
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -119,6 +119,7 @@ fun SettingsScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val scrollState = rememberScrollState()
+    val locale = LocalConfiguration.current.locales[0]
 
     val openAiModels = KoogModelMapper.getOpenAIModelIdList()
     val anthropicModels = KoogModelMapper.getAnthropicModelIdList()
@@ -211,7 +212,7 @@ fun SettingsScreen(
             Text(
                 text = "Temperature: ${
                     String.format(
-                        Locale.getDefault(),
+                        locale,
                         "%.2f",
                         uiState.temperature
                     )
@@ -235,7 +236,7 @@ fun SettingsScreen(
             Spacer(modifier = Modifier.height(8.dp))
 
             // Top-P Slider
-            Text(text = "Top-P: ${String.format(Locale.getDefault(), "%.2f", uiState.topP)}")
+            Text(text = "Top-P: ${String.format(locale, "%.2f", uiState.topP)}")
             Slider(
                 value = uiState.topP,
                 onValueChange = { viewModel.updateTopP(it) },

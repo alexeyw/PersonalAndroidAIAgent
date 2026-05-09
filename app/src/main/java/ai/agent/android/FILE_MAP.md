@@ -189,6 +189,7 @@ This file maps the contents of the main application package.
       - `ChatViewModel.kt` - Chat ViewModel.
       - `ClarificationCard.kt` - Inline chat card rendering an `AwaitingClarification` request (pending/answered/timed-out states with countdown).
       - `ClarificationCardUiModel.kt` - UI projection of a clarification request held in `ChatUiState.clarificationCards`.
+      - `PipelineSummary.kt` - Lightweight UI projection of a pipeline (id + name) used by the chat-screen pipeline selectors and TopAppBar subtitle.
       - `PipelineTraceCard.kt` - Pipeline trace UI component.
     - `memory/` - Memory screen components.
       - `MemoryScreen.kt` - Memory UI screen.

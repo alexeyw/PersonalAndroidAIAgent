@@ -36,7 +36,7 @@ import ai.agent.android.data.local.dao.PromptTemplateDao
         PromptTemplateEntity::class,
         ai.agent.android.data.local.models.TraceStepEntity::class
     ],
-    version = 18,
+    version = 19,
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -229,6 +229,21 @@ abstract class AppDatabase : RoomDatabase() {
                         "DEFAULT '{\"chatHistory\":true,\"originalTask\":true,\"nodeInput\":true," +
                         "\"longTermMemory\":true,\"toolResults\":true}'"
                 )
+            }
+        }
+
+        /**
+         * Migration from version 18 to 19 (Phase 17.2 — Pipeline binding to chat).
+         *
+         * Adds the nullable `pipelineId` column to `chat_sessions`. `NULL` means the
+         * chat uses the application-wide default pipeline (the first pipeline
+         * returned by `PipelineRepository.getAllPipelines()`), preserving the
+         * pre-Phase-17.2 behaviour for every existing row without requiring a
+         * data backfill.
+         */
+        val MIGRATION_18_19 = object : Migration(18, 19) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `chat_sessions` ADD COLUMN `pipelineId` TEXT")
             }
         }
     }
