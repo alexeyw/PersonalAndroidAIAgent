@@ -1,6 +1,5 @@
 package ai.agent.android.domain.usecases
 
-import ai.agent.android.domain.models.ConnectionModel
 import ai.agent.android.domain.models.PipelineGraph
 import ai.agent.android.domain.repositories.PipelineRepository
 import java.util.UUID
@@ -55,24 +54,28 @@ class DuplicatePipelineUseCase @Inject constructor(
             // duplicate that silently inherits the corruption (or worse,
             // crashes the action) would be a regression. We keep the rest of
             // the graph intact.
+            //
+            // Use `connection.copy(...)` instead of the constructor so any
+            // future fields added to `ConnectionModel` (visual styling,
+            // routing waypoints, etc.) are preserved on the duplicate
+            // automatically.
             val duplicatedConnections = source.connections.mapNotNull { connection ->
                 val newSource = nodeIdMapping[connection.sourceNodeId]
                 val newTarget = nodeIdMapping[connection.targetNodeId]
                 if (newSource == null || newTarget == null) {
                     null
                 } else {
-                    ConnectionModel(
+                    connection.copy(
                         id = UUID.randomUUID().toString(),
                         sourceNodeId = newSource,
                         targetNodeId = newTarget,
-                        label = connection.label,
                     )
                 }
             }
 
             val duplicate = PipelineGraph(
                 id = UUID.randomUUID().toString(),
-                name = "${source.name} (copy)",
+                name = buildDuplicateName(source.name),
                 nodes = duplicatedNodes,
                 connections = duplicatedConnections,
                 updatedAt = System.currentTimeMillis(),
@@ -83,5 +86,35 @@ class DuplicatePipelineUseCase @Inject constructor(
         } catch (e: Exception) {
             Result.failure(e)
         }
+    }
+
+    /**
+     * Composes the duplicate's display name as `"<source> (copy)"`, truncating
+     * the base name when the concatenation would exceed [MAX_NAME_LENGTH].
+     * The limit is shared with [CreatePipelineUseCase] / [RenamePipelineUseCase]
+     * so a duplicate is never longer than what those flows accept — without
+     * the truncation, repeated duplication or already-long names would
+     * produce graphs whose names cannot be saved by a subsequent rename.
+     *
+     * Trailing whitespace is stripped after truncation so we never persist
+     * names like `"Long source... (copy)"` with a stray space before the
+     * suffix.
+     */
+    private fun buildDuplicateName(sourceName: String): String {
+        val maxBase = MAX_NAME_LENGTH - COPY_SUFFIX.length
+        val base = if (sourceName.length > maxBase) {
+            sourceName.substring(0, maxBase).trimEnd()
+        } else {
+            sourceName
+        }
+        return "$base$COPY_SUFFIX"
+    }
+
+    private companion object {
+        /** Mirrors the limit enforced by `CreatePipelineUseCase` / `RenamePipelineUseCase`. */
+        const val MAX_NAME_LENGTH = 60
+
+        /** Suffix appended to the source name to mark a duplicate. */
+        const val COPY_SUFFIX = " (copy)"
     }
 }

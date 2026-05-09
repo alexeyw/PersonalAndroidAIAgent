@@ -110,6 +110,58 @@ class DuplicatePipelineUseCaseTest {
     }
 
     @Test
+    fun `given source name near limit when invoke then truncates base before appending copy suffix`() = runTest {
+        // 58 chars of "a" → would be 65 total with " (copy)" (length 7), past the
+        // 60-char shared limit. The base must be truncated to 53 ("60 − 7") so the
+        // final name fits.
+        val longName = "a".repeat(58)
+        val source = PipelineGraph(
+            id = "src",
+            name = longName,
+            nodes = listOf(
+                NodeModel("n1", NodeType.INPUT, 0f, 0f),
+                NodeModel("n2", NodeType.OUTPUT, 10f, 10f),
+            ),
+            connections = listOf(ConnectionModel("c1", "n1", "n2")),
+        )
+        coEvery { pipelineRepository.getPipelineById("src") } returns source
+        coEvery { pipelineRepository.savePipeline(any()) } returns Unit
+
+        val result = useCase("src")
+
+        assertTrue(result.isSuccess)
+        val duplicateName = result.getOrNull()?.name
+        assertNotNull(duplicateName)
+        assertEquals(60, duplicateName!!.length)
+        assertTrue(duplicateName.endsWith(" (copy)"))
+        assertEquals("a".repeat(53) + " (copy)", duplicateName)
+    }
+
+    @Test
+    fun `given source connection has label when invoke then preserves it via copy()`() = runTest {
+        val source = PipelineGraph(
+            id = "src",
+            name = "Source",
+            nodes = listOf(
+                NodeModel("n1", NodeType.INPUT, 0f, 0f),
+                NodeModel("n2", NodeType.OUTPUT, 10f, 10f),
+            ),
+            connections = listOf(
+                ConnectionModel("c1", "n1", "n2", label = "True"),
+            ),
+        )
+        coEvery { pipelineRepository.getPipelineById("src") } returns source
+        coEvery { pipelineRepository.savePipeline(any()) } returns Unit
+
+        val result = useCase("src")
+
+        assertTrue(result.isSuccess)
+        val duplicateConnection = result.getOrNull()?.connections?.single()
+        assertNotNull(duplicateConnection)
+        assertEquals("True", duplicateConnection!!.label)
+    }
+
+    @Test
     fun `given source has connections referencing missing node ids when invoke then drops them and returns success`() = runTest {
         // The source graph has a "dangling" connection — its target id
         // (`ghost`) is not present in the nodes list. Without the guard the
