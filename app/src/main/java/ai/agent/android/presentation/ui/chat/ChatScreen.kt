@@ -590,6 +590,10 @@ private fun ChatSettingsDialog(
  * bottom sheet and the chat-settings dialog). Renders a radio-button plus a
  * pipeline display name; the entire row is clickable to keep the touch
  * target large.
+ *
+ * The `RadioButton` itself is passed `onClick = null` so the parent `Row`
+ * is the single touch target — this prevents nested clickable surfaces and
+ * the duplicate accessibility node that would otherwise appear.
  */
 @Composable
 private fun PipelineChoiceRow(
@@ -604,7 +608,7 @@ private fun PipelineChoiceRow(
             .padding(vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        RadioButton(selected = selected, onClick = onClick)
+        RadioButton(selected = selected, onClick = null)
         Spacer(modifier = Modifier.width(8.dp))
         Text(text = title, style = MaterialTheme.typography.bodyMedium)
     }

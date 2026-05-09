@@ -241,7 +241,7 @@ private fun ChatMessageItem(
     onDelete: () -> Unit
 ) {
     val locale = LocalConfiguration.current.locales[0]
-    val dateFormat = SimpleDateFormat("MMM dd, HH:mm", locale)
+    val dateFormat = remember(locale) { SimpleDateFormat("MMM dd, HH:mm", locale) }
     val dateString = dateFormat.format(Date(message.timestamp))
     var expanded by remember { mutableStateOf(false) }
     val clipboardManager = LocalClipboardManager.current
@@ -307,7 +307,7 @@ private fun MemoryChunkItem(
     onDelete: () -> Unit
 ) {
     val locale = LocalConfiguration.current.locales[0]
-    val dateFormat = SimpleDateFormat("MMM dd, yyyy HH:mm", locale)
+    val dateFormat = remember(locale) { SimpleDateFormat("MMM dd, yyyy HH:mm", locale) }
     val dateString = dateFormat.format(Date(memory.timestamp))
     var expanded by remember { mutableStateOf(false) }
     val clipboardManager = LocalClipboardManager.current
