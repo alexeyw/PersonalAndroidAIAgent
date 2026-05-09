@@ -307,6 +307,7 @@ class ChatViewModel @Inject constructor(
                     isGenerating = false,
                     orchestratorState = null,
                     clarificationCards = emptyList(),
+                    consoleLines = emptyList(),
                     currentPipelineName = resolvePipelineName(
                         sessions = state.sessions,
                         currentSessionId = sessionId,
@@ -474,6 +475,7 @@ class ChatViewModel @Inject constructor(
                     pipelineTrace = emptyList(),
                     currentStep = null,
                     clarificationCards = emptyList(),
+                    consoleLines = emptyList(),
                 )
             }
 
@@ -507,6 +509,7 @@ class ChatViewModel @Inject constructor(
                                 else -> current.currentStep
                             },
                             pipelineTrace = if (state is AgentOrchestratorState.PipelineTrace) state.steps else current.pipelineTrace,
+                            consoleLines = if (state is AgentOrchestratorState.ConsoleLog) state.events else current.consoleLines,
                             isGenerating = if (isTerminal) false else current.isGenerating,
                             clarificationCards = updatedCards,
                         )

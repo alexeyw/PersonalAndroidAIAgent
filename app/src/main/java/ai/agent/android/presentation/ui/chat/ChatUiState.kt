@@ -3,6 +3,7 @@ package ai.agent.android.presentation.ui.chat
 import ai.agent.android.domain.models.AgentOrchestratorState
 import ai.agent.android.domain.models.ChatMessage
 import ai.agent.android.domain.models.ChatSession
+import ai.agent.android.domain.models.ConsoleEvent
 
 /**
  * Data class representing the state of the Chat UI.
@@ -45,6 +46,11 @@ import ai.agent.android.domain.models.ChatSession
  * @property showStarredOnly When `true`, the chat list is sourced from
  *   `getStarredMessages()` and shows every starred message across all sessions.
  *   Toggled from the TopAppBar action bar.
+ * @property consoleLines Append-only log of [ConsoleEvent]s for the current
+ *   pipeline run. Populated from [AgentOrchestratorState.ConsoleLog]
+ *   emissions; cleared on new send and on session switch. Drives the
+ *   collapsed mini-console (Phase 17.4) and the full bottom-sheet log
+ *   (Phase 17.5).
  */
 data class ChatUiState(
     val messages: List<ChatMessage> = emptyList(),
@@ -67,6 +73,7 @@ data class ChatUiState(
     val pipelineFallbackMessage: String? = null,
     val snackbarMessage: String? = null,
     val showStarredOnly: Boolean = false,
+    val consoleLines: List<ConsoleEvent> = emptyList(),
 )
 
 /**

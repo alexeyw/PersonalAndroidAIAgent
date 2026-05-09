@@ -1248,4 +1248,75 @@ class GraphExecutionEngineTest {
         assertTrue("CLOUD prompt missing Previous Node Output block: $cloudPromptText",
             cloudPromptText.contains("--- Previous Node Output ---"))
     }
+
+    // ─── Phase 17.4 — Agent console event emissions ──────────────────────────
+
+    @Test
+    fun `given linear pipeline when run completes then console log spans memory and node lifecycle events`() = runTest {
+        every { settingsRepository.pipelineMaxSteps } returns flowOf(15)
+
+        val inputNode = NodeModel("input_1", NodeType.INPUT, 0f, 0f)
+        val llmNode = NodeModel("llm_1", NodeType.LITE_RT, 0f, 0f)
+        val outputNode = NodeModel("output_1", NodeType.OUTPUT, 0f, 0f)
+
+        val graph = PipelineGraph(
+            id = "g1", name = "Console Linear",
+            nodes = listOf(inputNode, llmNode, outputNode),
+            connections = listOf(
+                ConnectionModel("c1", "input_1", "llm_1"),
+                ConnectionModel("c2", "llm_1", "output_1"),
+            )
+        )
+        every { llmEngine.generateResponseStream(any()) } returns flowOf("answer")
+
+        // The latest ConsoleLog snapshot contains the full event sequence by
+        // construction (the engine accumulates and emits a copy on every push).
+        val finalLog = engine(sessionId, "User prompt", graph).toList()
+            .filterIsInstance<AgentOrchestratorState.ConsoleLog>()
+            .last()
+            .events
+
+        // Memory access is reported even when the corpus is empty.
+        val memEvent = finalLog.single { it.type == ConsoleEventType.MemoryAccess }
+        assertTrue(memEvent.message.contains("0"))
+
+        // Every non-OUTPUT node yields a paired ▶ / ✓ NodeExecution event;
+        // OUTPUT only gets a ▶ because its own Completed state already serves
+        // as the success marker (engine deliberately suppresses the trailing
+        // "✓" so Completed remains the last orchestrator state).
+        val nodeMessages = finalLog.filter { it.type == ConsoleEventType.NodeExecution }
+            .map { it.message }
+        assertTrue("Missing INPUT start", nodeMessages.any { it.startsWith("▶") && it.contains("INPUT") })
+        assertTrue("Missing INPUT done",  nodeMessages.any { it.startsWith("✓") && it.contains("INPUT") })
+        assertTrue("Missing LITE_RT start", nodeMessages.any { it.startsWith("▶") && it.contains("LITE_RT") })
+        assertTrue("Missing LITE_RT done",  nodeMessages.any { it.startsWith("✓") && it.contains("LITE_RT") })
+        assertTrue("Missing OUTPUT start", nodeMessages.any { it.startsWith("▶") && it.contains("OUTPUT") })
+        assertTrue("OUTPUT must not push ✓", nodeMessages.none { it.startsWith("✓") && it.contains("OUTPUT") })
+    }
+
+    @Test
+    fun `given pipeline ending without OUTPUT when run terminates then last console event is Error`() = runTest {
+        every { settingsRepository.pipelineMaxSteps } returns flowOf(15)
+
+        val inputNode = NodeModel("input_1", NodeType.INPUT, 0f, 0f)
+        val llmNode = NodeModel("llm_1", NodeType.LITE_RT, 0f, 0f)
+
+        val graph = PipelineGraph(
+            id = "g1", name = "No Output",
+            nodes = listOf(inputNode, llmNode),
+            connections = listOf(ConnectionModel("c1", "input_1", "llm_1")),
+        )
+        every { llmEngine.generateResponseStream(any()) } returns flowOf("Response")
+
+        val finalLog = engine(sessionId, "Prompt", graph).toList()
+            .filterIsInstance<AgentOrchestratorState.ConsoleLog>()
+            .last()
+            .events
+
+        assertEquals(ConsoleEventType.Error, finalLog.last().type)
+        assertTrue(
+            "Last error should mention missing OUTPUT: ${finalLog.last().message}",
+            finalLog.last().message.contains("OUTPUT", ignoreCase = true),
+        )
+    }
 }

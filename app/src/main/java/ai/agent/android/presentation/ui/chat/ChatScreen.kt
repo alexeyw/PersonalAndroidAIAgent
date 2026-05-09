@@ -451,6 +451,10 @@ fun ChatScreen(
                     item { Spacer(modifier = Modifier.height(8.dp)) }
                 }
 
+                if (uiState.isGenerating || uiState.consoleLines.isNotEmpty()) {
+                    ConsolePanelCollapsed(events = uiState.consoleLines)
+                }
+
                 uiState.inlineError?.let { inlineError ->
                     InlineErrorBanner(
                         text = inlineError,

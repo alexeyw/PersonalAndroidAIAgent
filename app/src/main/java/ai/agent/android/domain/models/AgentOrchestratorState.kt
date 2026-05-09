@@ -119,4 +119,18 @@ sealed interface AgentOrchestratorState {
      * @property steps The list of steps executed so far.
      */
     data class PipelineTrace(val steps: List<TraceStep>) : AgentOrchestratorState
+
+    /**
+     * Snapshot of the agent console log accumulated since the start of the
+     * current pipeline run. Emitted by
+     * [ai.agent.android.domain.engine.GraphExecutionEngine] every time a new
+     * [ConsoleEvent] is appended; the UI mirrors [events] into
+     * `ChatUiState.consoleLines` and renders the latest entries in the
+     * collapsed mini-console (Phase 17.4) and the full bottom sheet
+     * (Phase 17.5).
+     *
+     * @property events Append-only ordered list of console events for the
+     *   current run. The engine emits a fresh immutable copy on every change.
+     */
+    data class ConsoleLog(val events: List<ConsoleEvent>) : AgentOrchestratorState
 }

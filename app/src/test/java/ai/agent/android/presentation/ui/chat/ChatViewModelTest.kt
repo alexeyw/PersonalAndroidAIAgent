@@ -5,6 +5,8 @@ import ai.agent.android.domain.models.AgentOrchestratorState
 import ai.agent.android.domain.models.ChatMessage
 import ai.agent.android.domain.models.ChatSession
 import ai.agent.android.domain.models.ClarificationRequest
+import ai.agent.android.domain.models.ConsoleEvent
+import ai.agent.android.domain.models.ConsoleEventType
 import ai.agent.android.domain.models.Role
 import kotlinx.coroutines.delay
 import ai.agent.android.domain.models.Result
@@ -1194,5 +1196,129 @@ class ChatViewModelTest {
         assertEquals(1, emitted.size)
         assertEquals("final", emitted.first().content)
         assertTrue(emitted.first().isFinal)
+    }
+
+    @Test
+    fun `given orchestrator emits ConsoleLog when collected then consoleLines mirror events`() = runTest {
+        val userPrompt = "console test"
+        val event1 = ConsoleEvent(
+            timestamp = 1_700_000_000_000L,
+            type = ConsoleEventType.SystemMessage,
+            message = "Pipeline started",
+        )
+        val event2 = ConsoleEvent(
+            timestamp = 1_700_000_001_000L,
+            type = ConsoleEventType.NodeExecution,
+            message = "▶ LITE_RT",
+        )
+
+        viewModel = createViewModel()
+        advanceUntilIdle()
+
+        val sessionId = viewModel.uiState.value.currentSessionId
+        coEvery { agentOrchestratorUseCase(sessionId, userPrompt, any()) } returns flow {
+            emit(AgentOrchestratorState.ConsoleLog(listOf(event1)))
+            emit(AgentOrchestratorState.ConsoleLog(listOf(event1, event2)))
+            emit(AgentOrchestratorState.Completed("done"))
+        }
+
+        viewModel.sendMessage(userPrompt)
+        advanceUntilIdle()
+
+        val lines = viewModel.uiState.value.consoleLines
+        assertEquals(2, lines.size)
+        assertEquals(event1, lines[0])
+        assertEquals(event2, lines[1])
+    }
+
+    @Test
+    fun `given prior console events when sendMessage starts then consoleLines cleared before new emissions`() = runTest {
+        val firstPrompt = "first"
+        val secondPrompt = "second"
+        val staleEvent = ConsoleEvent(
+            timestamp = 1_700_000_000_000L,
+            type = ConsoleEventType.NodeExecution,
+            message = "stale",
+        )
+
+        viewModel = createViewModel()
+        advanceUntilIdle()
+
+        val sessionId = viewModel.uiState.value.currentSessionId
+        coEvery { agentOrchestratorUseCase(sessionId, firstPrompt, any()) } returns flow {
+            emit(AgentOrchestratorState.ConsoleLog(listOf(staleEvent)))
+            emit(AgentOrchestratorState.Completed("ok"))
+        }
+
+        viewModel.sendMessage(firstPrompt)
+        advanceUntilIdle()
+        assertEquals(1, viewModel.uiState.value.consoleLines.size)
+
+        // Second send: orchestrator never emits ConsoleLog. Verifies that the
+        // ChatViewModel resets consoleLines on send-start rather than relying
+        // on the engine to send an empty snapshot.
+        coEvery { agentOrchestratorUseCase(sessionId, secondPrompt, any()) } returns flow {
+            emit(AgentOrchestratorState.Completed("ok2"))
+        }
+        viewModel.sendMessage(secondPrompt)
+        advanceUntilIdle()
+
+        assertTrue(viewModel.uiState.value.consoleLines.isEmpty())
+    }
+
+    @Test
+    fun `given prior console events when switchSession called then consoleLines cleared`() = runTest {
+        val userPrompt = "before switch"
+        val event = ConsoleEvent(
+            timestamp = 1_700_000_000_000L,
+            type = ConsoleEventType.ToolCall,
+            message = "search_tool",
+        )
+
+        viewModel = createViewModel()
+        advanceUntilIdle()
+
+        val sessionId = viewModel.uiState.value.currentSessionId
+        coEvery { agentOrchestratorUseCase(sessionId, userPrompt, any()) } returns flow {
+            emit(AgentOrchestratorState.ConsoleLog(listOf(event)))
+            emit(AgentOrchestratorState.Completed("done"))
+        }
+
+        viewModel.sendMessage(userPrompt)
+        advanceUntilIdle()
+        assertEquals(1, viewModel.uiState.value.consoleLines.size)
+
+        viewModel.switchSession("other-session")
+        advanceUntilIdle()
+
+        assertTrue(viewModel.uiState.value.consoleLines.isEmpty())
+    }
+
+    @Test
+    fun `given orchestrator stream completes when terminal state arrives then last consoleLines preserved`() = runTest {
+        val userPrompt = "preserve test"
+        val event = ConsoleEvent(
+            timestamp = 1_700_000_000_000L,
+            type = ConsoleEventType.SystemMessage,
+            message = "Pipeline completed",
+        )
+
+        viewModel = createViewModel()
+        advanceUntilIdle()
+
+        val sessionId = viewModel.uiState.value.currentSessionId
+        coEvery { agentOrchestratorUseCase(sessionId, userPrompt, any()) } returns flow {
+            emit(AgentOrchestratorState.ConsoleLog(listOf(event)))
+            emit(AgentOrchestratorState.Completed("done"))
+        }
+
+        viewModel.sendMessage(userPrompt)
+        advanceUntilIdle()
+
+        // After Completed the panel must still show the last events so the user
+        // can review what just happened. Only the next sendMessage / switchSession
+        // is allowed to clear them.
+        assertEquals(listOf(event), viewModel.uiState.value.consoleLines)
+        assertFalse(viewModel.uiState.value.isGenerating)
     }
 }
