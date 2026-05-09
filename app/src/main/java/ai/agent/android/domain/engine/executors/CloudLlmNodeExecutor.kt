@@ -74,14 +74,9 @@ class CloudLlmNodeExecutor @Inject constructor(
             if (client == null) {
                 flowOf("Error: ${selectedProvider} not configured")
             } else {
-                val configuredModelId = when (selectedProvider) {
-                    "openai" -> apiKeyRepository.getOpenAIModel().first()
-                    "anthropic" -> apiKeyRepository.getAnthropicModel().first()
-                    "google", "gemini" -> apiKeyRepository.getGoogleModel().first()
-                    "deepseek" -> apiKeyRepository.getDeepSeekModel().first()
-                    else -> null
-                }
-                val model = cloudLlmModelResolver.resolveModel(selectedProvider, configuredModelId) as LLModel
+                // The resolver owns the per-provider configured-id ↔ default fallback,
+                // so the executor stays out of the data layer's settings plumbing.
+                val model = cloudLlmModelResolver.resolveModel(selectedProvider) as LLModel
                 client.executeStreaming(prompt("default") { user(fullPrompt) }, model)
                     .mapNotNull { (it as? StreamFrame.TextDelta)?.text }
             }

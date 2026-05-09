@@ -73,7 +73,7 @@ class GraphExecutionEngineTest {
         clarificationRepository = mockk()
         // The resolver is exercised whenever a CLOUD node fires; default to a sensible
         // Koog model so each individual test does not have to wire it up.
-        coEvery { cloudLlmModelResolver.resolveModel(any(), any()) } returns AnthropicModels.Sonnet_4_5
+        coEvery { cloudLlmModelResolver.resolveModel(any()) } returns AnthropicModels.Sonnet_4_5
         // Provider-keyed dispatch — tests that exercise CLOUD configure Anthropic.
         coEvery { koogClientFactory.createClient(any()) } coAnswers {
             when (firstArg<String>().lowercase()) {

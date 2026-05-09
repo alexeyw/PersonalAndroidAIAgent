@@ -16,9 +16,10 @@ import javax.inject.Singleton
 /**
  * Data-layer implementation of [CloudLlmModelResolver].
  *
- * Owns the per-provider default model identifiers and the Ollama context-window/model
- * lookup so that `CloudLlmNodeExecutor` (in the domain layer) never imports
- * `KoogModelMapper` or other data-layer constants directly.
+ * Reads the user-configured model id for each provider from [ApiKeyRepository] and
+ * substitutes a per-provider default when nothing is set. Centralising this here keeps
+ * `CloudLlmNodeExecutor` free of both data-layer constants (`KoogModelMapper`,
+ * `OpenAIModels`, …) and the per-provider `apiKeyRepository.get*Model()` branching.
  */
 @Singleton
 class KoogCloudLlmModelResolver @Inject constructor(
@@ -29,22 +30,31 @@ class KoogCloudLlmModelResolver @Inject constructor(
      * Resolves the Koog [LLModel] to use for a given provider.
      *
      * @param provider Lowercase provider key.
-     * @param configuredModelId The user-selected model id (nullable — falls back to provider default).
      * @return The Koog [LLModel] cast to [Any] for the domain boundary.
      */
-    override suspend fun resolveModel(provider: String, configuredModelId: String?): Any {
+    override suspend fun resolveModel(provider: String): Any {
         return when (provider.lowercase()) {
-            "openai" -> KoogModelMapper.getOpenAIModel(configuredModelId ?: OpenAIModels.Chat.GPT5_4.id)
-            "anthropic" -> KoogModelMapper.getAnthropicModel(configuredModelId ?: AnthropicModels.Sonnet_4_5.id)
-            "google", "gemini" -> KoogModelMapper.getGoogleModel(configuredModelId ?: GoogleModels.Gemini3_Flash_Preview.id)
-            "deepseek" -> KoogModelMapper.getDeepSeekModel(configuredModelId ?: DeepSeekModels.DeepSeekChat.id)
+            "openai" -> KoogModelMapper.getOpenAIModel(
+                apiKeyRepository.getOpenAIModel().first() ?: OpenAIModels.Chat.GPT5_4.id
+            )
+            "anthropic" -> KoogModelMapper.getAnthropicModel(
+                apiKeyRepository.getAnthropicModel().first() ?: AnthropicModels.Sonnet_4_5.id
+            )
+            "google", "gemini" -> KoogModelMapper.getGoogleModel(
+                apiKeyRepository.getGoogleModel().first() ?: GoogleModels.Gemini3_Flash_Preview.id
+            )
+            "deepseek" -> KoogModelMapper.getDeepSeekModel(
+                apiKeyRepository.getDeepSeekModel().first() ?: DeepSeekModels.DeepSeekChat.id
+            )
             "ollama" -> LLModel(
                 provider = LLMProvider.Ollama,
-                id = configuredModelId ?: apiKeyRepository.getOllamaModelName().first() ?: "llama3",
+                id = apiKeyRepository.getOllamaModelName().first() ?: "llama3",
                 capabilities = listOf(LLMCapability.Completion),
                 contextLength = apiKeyRepository.getOllamaContextWindowSize().first().toLong(),
             )
-            else -> KoogModelMapper.getGoogleModel(configuredModelId ?: GoogleModels.Gemini3_Flash_Preview.id)
+            else -> KoogModelMapper.getGoogleModel(
+                apiKeyRepository.getGoogleModel().first() ?: GoogleModels.Gemini3_Flash_Preview.id
+            )
         }
     }
 }

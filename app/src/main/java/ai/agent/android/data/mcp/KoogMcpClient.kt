@@ -37,6 +37,12 @@ class KoogMcpClient : McpClient {
      * fresh one is installed so its socket pool and engine threads do not leak until
      * process teardown.
      *
+     * The freshly-created `HttpClient` is published into the [httpClient] field **only
+     * after** transport construction succeeds. If `defaultSseTransport` or
+     * `fromTransport` throws (network error, malformed URL, server-side rejection), the
+     * client is closed locally and the field is left in its previous state, so a leaked
+     * Ktor engine cannot accumulate across failed connects.
+     *
      * @param url The endpoint URL of the MCP server.
      */
     override suspend fun connect(url: String) {
@@ -45,11 +51,21 @@ class KoogMcpClient : McpClient {
             // a second connect() on the same instance would silently leak the prior
             // HttpClient (and its underlying engine threads/sockets).
             httpClient?.close()
+            httpClient = null
             registry = null
-            val client = HttpClient().also { httpClient = it }
-            val transport = McpToolRegistryProvider.defaultSseTransport(url, client)
-            val serverInfo = McpServerInfo(url = url, command = "")
-            registry = McpToolRegistryProvider.fromTransport(transport, serverInfo)
+
+            val client = HttpClient()
+            try {
+                val transport = McpToolRegistryProvider.defaultSseTransport(url, client)
+                val serverInfo = McpServerInfo(url = url, command = "")
+                registry = McpToolRegistryProvider.fromTransport(transport, serverInfo)
+                // Publish the client into the field only after the transport has been
+                // attached successfully — failure paths must close it locally.
+                httpClient = client
+            } catch (t: Throwable) {
+                runCatching { client.close() }
+                throw t
+            }
         }
     }
 

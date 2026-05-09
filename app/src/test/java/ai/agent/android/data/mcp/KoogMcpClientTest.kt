@@ -67,58 +67,55 @@ class KoogMcpClientTest {
     }
 
     @Test
-    fun `connect twice in a row replaces httpClient instance instead of leaking the previous one`() = runTest {
-        // Reconnect/repoint regression guard: the second connect() must install a brand
-        // new HttpClient (the prior one is closed first). Identity comparison is enough —
-        // if the implementation reused the existing field without closing+reassigning,
-        // the references would match.
+    fun `connect that fails during transport attachment leaves httpClient field null`() = runTest {
+        // Leak-on-failure regression guard: when SSE transport attachment to a
+        // non-routable address surfaces an exception, the freshly-created HttpClient
+        // must be closed locally. The field stays at its previous value (null on a
+        // first attempt), so a retry does not accumulate leaked Ktor engines.
         val client = KoogMcpClient()
         val httpClientField = client.javaClass.getDeclaredField("httpClient")
         httpClientField.isAccessible = true
 
-        runCatching { client.connect("http://127.0.0.1:1") }
-        val firstHttpClient = httpClientField.get(client)
-        assertTrue("Expected an HttpClient after first connect", firstHttpClient != null)
+        val outcome = runCatching { client.connect("http://127.0.0.1:1") }
 
-        runCatching { client.connect("http://127.0.0.1:2") }
-        val secondHttpClient = httpClientField.get(client)
-        assertTrue("Expected an HttpClient after second connect", secondHttpClient != null)
-        assertTrue(
-            "Second connect must replace, not reuse, the previous HttpClient",
-            firstHttpClient !== secondHttpClient,
+        assertTrue("Expected connect against unreachable host to fail", outcome.isFailure)
+        assertEquals(
+            "Failed connect must clean up the new HttpClient — leaked engine = bug",
+            null,
+            httpClientField.get(client),
         )
     }
 
     @Test
-    fun `disconnect then connect does not throw because httpClient is recreated`() = runTest {
-        // Defect 5 regression guard: the previous implementation closed the singleton
-        // `HttpClient` on disconnect, so a subsequent connect would immediately fail when
-        // the underlying engine was reused. The new implementation creates the client
-        // inside connect() and nulls it on disconnect(); a second connect is therefore
-        // a fresh start.
-        //
-        // We exercise the suspend-fun lifecycle by reflectively reading the private
-        // `httpClient` field rather than going across the network, since opening a real
-        // SSE transport in a unit test would be brittle.
+    fun `repeated failed connects do not accumulate leaked HttpClient instances`() = runTest {
+        // Same invariant under repeated failure: the field must remain clean so callers
+        // can keep retrying without building up open Ktor engines.
         val client = KoogMcpClient()
         val httpClientField = client.javaClass.getDeclaredField("httpClient")
         httpClientField.isAccessible = true
 
-        // Initially no client is held.
-        assertEquals(null, httpClientField.get(client))
+        repeat(3) {
+            runCatching { client.connect("http://127.0.0.1:1") }
+            assertEquals(
+                "After failed connect #${it + 1} the httpClient field must be null",
+                null,
+                httpClientField.get(client),
+            )
+        }
+    }
 
-        // Trying to connect to a non-routable URL surfaces an exception, but only after
-        // the client field has been populated. We catch the connect-time failure to keep
-        // the test focused on the lifecycle invariant (was the client created?).
+    @Test
+    fun `disconnect after a failed connect keeps httpClient field null`() = runTest {
+        // Defect 5 regression guard: a disconnect after a failed connect is harmless
+        // (no double-close) and leaves the field in the documented "no client" state.
+        val client = KoogMcpClient()
+        val httpClientField = client.javaClass.getDeclaredField("httpClient")
+        httpClientField.isAccessible = true
+
         runCatching { client.connect("http://127.0.0.1:1") }
-        assertTrue(httpClientField.get(client) != null)
-
         client.disconnect()
-        assertEquals(null, httpClientField.get(client))
 
-        // The second connect must be allowed to install a fresh HttpClient.
-        runCatching { client.connect("http://127.0.0.1:1") }
-        assertTrue(httpClientField.get(client) != null)
+        assertEquals(null, httpClientField.get(client))
     }
 
     @Test

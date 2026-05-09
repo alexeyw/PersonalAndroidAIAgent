@@ -77,7 +77,7 @@ class CloudLlmNodeExecutorTest {
         coEvery { client.executeStreaming(capture(capturedPrompt), any<LLModel>()) } returns
             flowOf(StreamFrame.TextDelta("ok"))
         coEvery { clientFactory.createClient("anthropic") } returns client
-        coEvery { modelResolver.resolveModel("anthropic", any()) } returns AnthropicModels.Sonnet_4_5
+        coEvery { modelResolver.resolveModel("anthropic") } returns AnthropicModels.Sonnet_4_5
 
         val assembledContext = "--- Original Task ---\nQ\n\n--- Previous Node Output ---\nU"
         executor.execute(node, assembledContext, "s1", "Q").toList()
@@ -100,7 +100,7 @@ class CloudLlmNodeExecutorTest {
             StreamFrame.TextDelta("cc"),
         )
         coEvery { clientFactory.createClient("anthropic") } returns client
-        coEvery { modelResolver.resolveModel("anthropic", any()) } returns AnthropicModels.Sonnet_4_5
+        coEvery { modelResolver.resolveModel("anthropic") } returns AnthropicModels.Sonnet_4_5
 
         val outputs = executor.execute(node, "input", "s1", "Q").toList()
         val result = outputs.filterIsInstance<NodeOutput.Result>().single().result
@@ -131,7 +131,7 @@ class CloudLlmNodeExecutorTest {
         val client: LLMClient = mockk(relaxed = true)
         coEvery { client.executeStreaming(any(), any<LLModel>()) } returns flowOf(StreamFrame.TextDelta("hi"))
         coEvery { clientFactory.createClient("anthropic") } returns client
-        coEvery { modelResolver.resolveModel("anthropic", any()) } returns AnthropicModels.Sonnet_4_5
+        coEvery { modelResolver.resolveModel("anthropic") } returns AnthropicModels.Sonnet_4_5
 
         val outputs = executor.execute(node, "input", "s1", "Q").toList()
         val result = outputs.filterIsInstance<NodeOutput.Result>().single().result
