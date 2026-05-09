@@ -134,4 +134,28 @@ class ChatRepositoryImplTest {
 
         coVerify(exactly = 1) { chatDao.updateSession(existingSession.copy(updatedAt = message.timestamp)) }
     }
+
+    @Test
+    fun `given saveSession when called then upsertSession is invoked once`() = runTest {
+        // Defect 8 regression guard: `saveSession` must perform a single DAO round-trip
+        // via `@Upsert`, replacing the previous SELECT + INSERT/UPDATE pattern. Verifying
+        // the legacy methods are NOT called also guards against silent regressions where
+        // an old code path is reintroduced.
+        val session = ai.agent.android.domain.models.ChatSession(
+            id = "sess-x",
+            name = "Some chat",
+            updatedAt = 1000L,
+        )
+
+        repository.saveSession(session)
+
+        coVerify(exactly = 1) {
+            chatDao.upsertSession(
+                ChatSessionEntity(id = "sess-x", name = "Some chat", updatedAt = 1000L),
+            )
+        }
+        coVerify(exactly = 0) { chatDao.getSessionById("sess-x") }
+        coVerify(exactly = 0) { chatDao.insertSession(any()) }
+        coVerify(exactly = 0) { chatDao.updateSession(any()) }
+    }
 }

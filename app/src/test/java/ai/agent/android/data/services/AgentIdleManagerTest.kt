@@ -121,4 +121,31 @@ class AgentIdleManagerTest {
 
         verify(exactly = 0) { llmEngine.unload() }
     }
+
+    @Test
+    fun `concurrent idle timers do not call unload more than once via Mutex`() = runTest(testDispatcher) {
+        // Defect 2 regression guard: replacing `synchronized(engine)` with `Mutex.withLock`
+        // must still serialise the unload path. We force several rapid Idle→Active→Idle
+        // transitions; only the most recent timer survives (`collectLatest` cancels the
+        // previous launch), so unload must fire exactly once after the final timeout.
+        idleManager = AgentIdleManager(
+            scope = CoroutineScope(testDispatcher),
+            engine = llmEngine,
+            agentState = stateFlow,
+            idleTimeoutMs = 1000L
+        )
+        idleManager.startObserving()
+
+        repeat(3) {
+            stateFlow.value = AgentOrchestratorState.Idle
+            advanceTimeBy(200L)
+            stateFlow.value = AgentOrchestratorState.Thinking("...")
+            advanceTimeBy(50L)
+        }
+        // Final transition into Idle, then advance past the timeout.
+        stateFlow.value = AgentOrchestratorState.Idle
+        advanceTimeBy(1100L)
+
+        verify(exactly = 1) { llmEngine.unload() }
+    }
 }

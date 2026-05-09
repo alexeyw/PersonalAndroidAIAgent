@@ -14,8 +14,8 @@ class QueueProcessorNodeExecutorTest {
         val executor = QueueProcessorNodeExecutor()
         val node = NodeModel("1", NodeType.QUEUE_PROCESSOR, 0f, 0f)
         
-        val results = executor.execute(node, "queue input", "session-1", "prompt").toList()
-        
+        val results = executor.execute(node, "queue input", "session-1", "prompt").toList().unwrap()
+
         assertEquals(1, results.size)
         val executionResult = results[0] as NodeExecutionResult
         assertEquals("queue input", executionResult.outputText)

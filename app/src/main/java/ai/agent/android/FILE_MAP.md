@@ -5,7 +5,8 @@ This file maps the contents of the main application package.
 - `App.kt` - Main Android Application class.
 - `data/` - Data layer encompassing local, remote, and repository implementations.
   - `engine/` - Core LLM and inference engines.
-    - `KoogClientFactory.kt` - Factory for Koog clients.
+    - `KoogClientFactory.kt` - Factory for Koog clients; data-layer impl of `domain/engine/CloudLlmClientFactory`.
+    - `KoogCloudLlmModelResolver.kt` - Data-layer impl of `domain/engine/CloudLlmModelResolver`; owns per-provider default model ids and Ollama context-window lookup.
     - `KoogModelMapper.kt` - Maps string identifiers to Koog LLModel constants.
     - `LiteRTLlmEngine.kt` - LiteRT LLM engine implementation.
     - `MediaPipeTextEmbeddingEngine.kt` - MediaPipe text embedding engine.
@@ -72,14 +73,21 @@ This file maps the contents of the main application package.
       - `DelegateTaskTool.kt` - Task delegation tool.
       - `LocalAppFunctionManager.kt` - Manager for local app functions.
       - `SearchTool.kt` - Local web search tool.
+      - `executors/` - `LocalToolExecutor` implementations registered via Hilt multibinding.
+        - `DelegateTaskExecutor.kt` - `LocalToolExecutor` bridging the `delegate_task` tool to `DelegateTaskTool`.
+        - `ScheduleTaskExecutor.kt` - `LocalToolExecutor` bridging the `schedule_task` tool to `ScheduleTaskUseCase`.
+        - `SearchToolExecutor.kt` - `LocalToolExecutor` bridging the `search_tool` tool to `SearchTool`.
 - `di/` - Dependency Injection configurations (Hilt).
   - `AppModule.kt` - General app-level DI module.
   - `DataModule.kt` - Data layer DI module.
+  - `LocalToolsModule.kt` - Hilt multibinding for `LocalToolExecutor` map and bindings for `CloudLlmClientFactory` / `CloudLlmModelResolver`.
   - `PromptTemplateModule.kt` - Hilt multibinding module for prompt variable providers.
 - `domain/` - Domain layer containing core business logic and Use Cases.
   - `constants/` - Domain-level constants.
     - `DefaultPrompts.kt` - Default system prompts.
   - `engine/` - Engine interfaces and abstractions.
+    - `CloudLlmClientFactory.kt` - Domain interface for constructing cloud LLM clients (data-layer impl: `KoogClientFactory`).
+    - `CloudLlmModelResolver.kt` - Domain interface for resolving cloud-LLM model objects (data-layer impl: `KoogCloudLlmModelResolver`).
     - `DefaultPipelineFactory.kt` - Factory for default pipelines.
     - `GraphExecutionEngine.kt` - Engine responsible for executing PipelineGraphs.
     - `LlmInferenceEngine.kt` - LLM engine interface.
@@ -112,6 +120,7 @@ This file maps the contents of the main application package.
     - `NodeContextConfig.kt` - Per-node selection of pipeline context blocks (chat history, original task, previous node output, long-term memory, tool results) injected on every execution.
     - `NodeExecutionResult.kt` - Result of a node execution.
     - `NodeModel.kt` - Node model.
+    - `NodeOutput.kt` - Sealed class wrapping `NodeExecutor.execute()` flow elements (`State` for orchestrator updates / `Result` for the terminal node result), replacing the legacy untyped `Flow<Any>` channel.
     - `NodeType.kt` - Node type enum.
     - `PipelineGraph.kt` - Pipeline graph model.
     - `PipelineImportOutcome.kt` - Sealed result of parsing a pipeline JSON document (Success / SchemaMismatch / Failure) consumed by `ImportPipelineUseCase`.
@@ -126,6 +135,7 @@ This file maps the contents of the main application package.
   - `repositories/` - Repository interfaces.
     - `ApiKeyRepository.kt` - API key repository interface.
     - `ChatRepository.kt` - Chat repository interface.
+    - `LocalToolExecutor.kt` - Strategy interface for executing a single locally-registered agent tool (multibound by name in `LocalToolsModule`).
     - `ClarificationRepository.kt` - Bridges the agent (suspending until the user answers) and the UI (publishing the pending question, forwarding the reply).
     - `LocalModelRepository.kt` - Local model repository interface.
     - `MemoryRepository.kt` - Memory repository interface.

@@ -8,13 +8,13 @@ plugins {
 android {
     namespace = "ai.agent.android"
     compileSdk {
-        version = release(36)
+        version = release(37)
     }
 
     defaultConfig {
         applicationId = "ai.agent.android"
         minSdk = 36
-        targetSdk = 36
+        targetSdk = 37
         versionCode = 1
         versionName = "0.1.0"
 

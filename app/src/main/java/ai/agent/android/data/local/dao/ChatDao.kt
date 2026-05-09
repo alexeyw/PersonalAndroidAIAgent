@@ -5,6 +5,7 @@ import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Update
+import androidx.room.Upsert
 import ai.agent.android.data.local.models.ChatMessageEntity
 import ai.agent.android.data.local.models.ChatSessionEntity
 import kotlinx.coroutines.flow.Flow
@@ -119,4 +120,15 @@ interface ChatDao {
      */
     @Query("UPDATE chat_sessions SET updatedAt = :timestamp WHERE id = :sessionId")
     suspend fun updateSessionTimestamp(sessionId: String, timestamp: Long)
+
+    /**
+     * Inserts the given session, or updates it if a row with the same primary key already
+     * exists. Replaces the SELECT-then-INSERT/UPDATE pattern previously used in
+     * [ai.agent.android.data.repositories.ChatRepositoryImpl.saveSession], collapsing two
+     * round-trips into one.
+     *
+     * @param session The [ChatSessionEntity] to persist.
+     */
+    @Upsert
+    suspend fun upsertSession(session: ChatSessionEntity)
 }

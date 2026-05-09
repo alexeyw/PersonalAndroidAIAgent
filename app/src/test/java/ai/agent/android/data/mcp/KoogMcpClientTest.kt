@@ -67,6 +67,58 @@ class KoogMcpClientTest {
     }
 
     @Test
+    fun `connect that fails during transport attachment leaves httpClient field null`() = runTest {
+        // Leak-on-failure regression guard: when SSE transport attachment to a
+        // non-routable address surfaces an exception, the freshly-created HttpClient
+        // must be closed locally. The field stays at its previous value (null on a
+        // first attempt), so a retry does not accumulate leaked Ktor engines.
+        val client = KoogMcpClient()
+        val httpClientField = client.javaClass.getDeclaredField("httpClient")
+        httpClientField.isAccessible = true
+
+        val outcome = runCatching { client.connect("http://127.0.0.1:1") }
+
+        assertTrue("Expected connect against unreachable host to fail", outcome.isFailure)
+        assertEquals(
+            "Failed connect must clean up the new HttpClient — leaked engine = bug",
+            null,
+            httpClientField.get(client),
+        )
+    }
+
+    @Test
+    fun `repeated failed connects do not accumulate leaked HttpClient instances`() = runTest {
+        // Same invariant under repeated failure: the field must remain clean so callers
+        // can keep retrying without building up open Ktor engines.
+        val client = KoogMcpClient()
+        val httpClientField = client.javaClass.getDeclaredField("httpClient")
+        httpClientField.isAccessible = true
+
+        repeat(3) {
+            runCatching { client.connect("http://127.0.0.1:1") }
+            assertEquals(
+                "After failed connect #${it + 1} the httpClient field must be null",
+                null,
+                httpClientField.get(client),
+            )
+        }
+    }
+
+    @Test
+    fun `disconnect after a failed connect keeps httpClient field null`() = runTest {
+        // Defect 5 regression guard: a disconnect after a failed connect is harmless
+        // (no double-close) and leaves the field in the documented "no client" state.
+        val client = KoogMcpClient()
+        val httpClientField = client.javaClass.getDeclaredField("httpClient")
+        httpClientField.isAccessible = true
+
+        runCatching { client.connect("http://127.0.0.1:1") }
+        client.disconnect()
+
+        assertEquals(null, httpClientField.get(client))
+    }
+
+    @Test
     fun `getTools optional parameters appear in properties but not in required`() = runTest {
         val optionalParam = mockk<ToolParameterDescriptor>()
         every { optionalParam.name } returns "lang"

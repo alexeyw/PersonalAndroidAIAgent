@@ -26,12 +26,12 @@ class OutputNodeExecutorTest {
         val executor = OutputNodeExecutor(llmEngine, loadModelUseCase, mockk(relaxed = true))
         val node = NodeModel("1", NodeType.OUTPUT, 0f, 0f, systemPrompt = null)
         
-        val results = executor.execute(node, "final text", "session-1", "prompt").toList()
-        
+        val results = executor.execute(node, "final text", "session-1", "prompt").toList().unwrap()
+
         assertEquals(2, results.size)
         assertTrue(results[0] is AgentOrchestratorState.Completed)
         assertEquals("final text", (results[0] as AgentOrchestratorState.Completed).finalResponse)
-        
+
         assertTrue(results[1] is NodeExecutionResult)
         assertEquals("final text", (results[1] as NodeExecutionResult).outputText)
     }
@@ -46,8 +46,8 @@ class OutputNodeExecutorTest {
         val executor = OutputNodeExecutor(llmEngine, loadModelUseCase, mockk(relaxed = true))
         val node = NodeModel("1", NodeType.OUTPUT, 0f, 0f, systemPrompt = "Format please:")
         
-        val results = executor.execute(node, "final text", "session-1", "prompt").toList()
-        
+        val results = executor.execute(node, "final text", "session-1", "prompt").toList().unwrap()
+
         assertEquals(3, results.size) // Thinking, Completed, NodeExecutionResult
         assertTrue(results[0] is AgentOrchestratorState.Thinking)
         assertTrue(results[1] is AgentOrchestratorState.Completed)

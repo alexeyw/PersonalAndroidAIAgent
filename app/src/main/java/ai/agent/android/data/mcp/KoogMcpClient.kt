@@ -22,29 +22,62 @@ import javax.inject.Inject
 @OptIn(ai.koog.agents.core.tools.annotations.InternalAgentToolsApi::class)
 class KoogMcpClient : McpClient {
     private var registry: ToolRegistry? = null
-    private val httpClient = HttpClient()
+    // The HTTP client is recreated on every [connect] so the same client instance can be
+    // disconnected and reconnected cleanly. Holding a single client across disconnect would
+    // leave it in a closed state, and a subsequent [connect] would immediately fail when the
+    // underlying engine is reused.
+    private var httpClient: HttpClient? = null
     private val serializer = KotlinxSerializer(Json { ignoreUnknownKeys = true })
 
     /**
      * Connects to the MCP server at the specified URL using the Koog MCP transport.
      *
+     * Calling [connect] more than once on the same instance is supported (e.g. reconnect
+     * or repoint scenarios): any previously-attached `HttpClient` is closed before a
+     * fresh one is installed so its socket pool and engine threads do not leak until
+     * process teardown.
+     *
+     * The freshly-created `HttpClient` is published into the [httpClient] field **only
+     * after** transport construction succeeds. If `defaultSseTransport` or
+     * `fromTransport` throws (network error, malformed URL, server-side rejection), the
+     * client is closed locally and the field is left in its previous state, so a leaked
+     * Ktor engine cannot accumulate across failed connects.
+     *
      * @param url The endpoint URL of the MCP server.
      */
     override suspend fun connect(url: String) {
         withContext(Dispatchers.IO) {
-            val transport = McpToolRegistryProvider.defaultSseTransport(url, httpClient)
-            val serverInfo = McpServerInfo(url = url, command = "")
-            registry = McpToolRegistryProvider.fromTransport(transport, serverInfo)
+            // Drop any previous client+registry pair before reattaching. Without this,
+            // a second connect() on the same instance would silently leak the prior
+            // HttpClient (and its underlying engine threads/sockets).
+            httpClient?.close()
+            httpClient = null
+            registry = null
+
+            val client = HttpClient()
+            try {
+                val transport = McpToolRegistryProvider.defaultSseTransport(url, client)
+                val serverInfo = McpServerInfo(url = url, command = "")
+                registry = McpToolRegistryProvider.fromTransport(transport, serverInfo)
+                // Publish the client into the field only after the transport has been
+                // attached successfully — failure paths must close it locally.
+                httpClient = client
+            } catch (t: Throwable) {
+                runCatching { client.close() }
+                throw t
+            }
         }
     }
 
     /**
      * Disconnects from the current MCP server, clearing the registry and closing the HTTP client.
+     * The client is nulled out so that a subsequent [connect] creates a fresh instance.
      */
     override suspend fun disconnect() {
         withContext(Dispatchers.IO) {
             registry = null
-            httpClient.close()
+            httpClient?.close()
+            httpClient = null
         }
     }
 

@@ -2,6 +2,7 @@ package ai.agent.android.domain.engine.executors
 
 import ai.agent.android.domain.models.NodeExecutionResult
 import ai.agent.android.domain.models.NodeModel
+import ai.agent.android.domain.models.NodeOutput
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
 import javax.inject.Inject
@@ -12,5 +13,5 @@ class InputNodeExecutor @Inject constructor() : NodeExecutor {
         inputText: String,
         sessionId: String,
         originalPrompt: String
-    ): Flow<Any> = flowOf(NodeExecutionResult(outputText = inputText))
+    ): Flow<NodeOutput> = flowOf(NodeOutput.Result(NodeExecutionResult(outputText = inputText)))
 }

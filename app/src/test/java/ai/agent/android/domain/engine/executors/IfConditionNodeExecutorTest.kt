@@ -20,8 +20,8 @@ class IfConditionNodeExecutorTest {
         
         coEvery { evaluateIfConditionUseCase(node, "test input") } returns true
         
-        val results = executor.execute(node, "test input", "session-1", "prompt").toList()
-        
+        val results = executor.execute(node, "test input", "session-1", "prompt").toList().unwrap()
+
         assertEquals(1, results.size)
         val executionResult = results[0] as NodeExecutionResult
         assertEquals(true, executionResult.conditionResult)

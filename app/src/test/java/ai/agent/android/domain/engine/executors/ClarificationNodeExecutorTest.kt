@@ -67,7 +67,7 @@ class ClarificationNodeExecutorTest {
         val captured = slot<ClarificationRequest>()
         coEvery { clarificationRepository.requestAnswer(capture(captured)) } returns "red"
 
-        val states = executor.execute(node, "ctx", "session", "prompt").toList()
+        val states = executor.execute(node, "ctx", "session", "prompt").toList().unwrap()
 
         // Final NodeExecutionResult carries the user's answer.
         val result = states.last() as NodeExecutionResult
@@ -94,7 +94,7 @@ class ClarificationNodeExecutorTest {
         )
         coEvery { clarificationRepository.requestAnswer(any()) } returns "free text"
 
-        val states = executor.execute(node, "ctx", "session", "prompt").toList()
+        val states = executor.execute(node, "ctx", "session", "prompt").toList().unwrap()
 
         val awaiting = states.filterIsInstance<AgentOrchestratorState.AwaitingClarification>().single()
         assertEquals("Describe issue", awaiting.request.question)
@@ -112,7 +112,7 @@ class ClarificationNodeExecutorTest {
         )
         coEvery { clarificationRepository.requestAnswer(any()) } returns "yes"
 
-        val states = executor.execute(node, "ctx", "session", "prompt").toList()
+        val states = executor.execute(node, "ctx", "session", "prompt").toList().unwrap()
 
         val awaiting = states.filterIsInstance<AgentOrchestratorState.AwaitingClarification>().single()
         assertEquals("Confirm?", awaiting.request.question)
@@ -128,7 +128,7 @@ class ClarificationNodeExecutorTest {
         )
         coEvery { clarificationRepository.requestAnswer(any()) } returns ""
 
-        val states = executor.execute(node, "ctx", "session", "prompt").toList()
+        val states = executor.execute(node, "ctx", "session", "prompt").toList().unwrap()
 
         val awaiting = states.filterIsInstance<AgentOrchestratorState.AwaitingClarification>().single()
         assertEquals("Could not produce JSON. Please confirm.", awaiting.request.question)
@@ -144,7 +144,7 @@ class ClarificationNodeExecutorTest {
         )
         coEvery { clarificationRepository.requestAnswer(any()) } returns "a"
 
-        val states = executor.execute(node, "ctx", "session", "prompt").toList()
+        val states = executor.execute(node, "ctx", "session", "prompt").toList().unwrap()
 
         val awaiting = states.filterIsInstance<AgentOrchestratorState.AwaitingClarification>().single()
         assertEquals(12_345L, awaiting.request.timeoutMs)
@@ -159,7 +159,7 @@ class ClarificationNodeExecutorTest {
             throwable = RuntimeException("boom"),
         )
 
-        val states = executor.execute(node, "ctx", "session", "prompt").toList()
+        val states = executor.execute(node, "ctx", "session", "prompt").toList().unwrap()
 
         val errorState = states.filterIsInstance<AgentOrchestratorState.Error>().single()
         assertTrue(errorState.message.contains("Error loading local model"))
@@ -173,7 +173,7 @@ class ClarificationNodeExecutorTest {
         coEvery { loadModelUseCase(any()) } returns Result.Success(Unit)
         every { llmEngine.generateResponseStream(any()) } throws RuntimeException("inference failure")
 
-        val states = executor.execute(node, "ctx", "session", "prompt").toList()
+        val states = executor.execute(node, "ctx", "session", "prompt").toList().unwrap()
 
         val errorState = states.filterIsInstance<AgentOrchestratorState.Error>().single()
         assertTrue(errorState.message.contains("inference failure"))
@@ -204,7 +204,7 @@ class ClarificationNodeExecutorTest {
         )
         coEvery { clarificationRepository.requestAnswer(any()) } returns "a"
 
-        val states = executor.execute(node, "ctx", "session", "prompt").toList()
+        val states = executor.execute(node, "ctx", "session", "prompt").toList().unwrap()
 
         val thinkingIdx = states.indexOfFirst { it is AgentOrchestratorState.Thinking }
         val awaitingIdx = states.indexOfFirst { it is AgentOrchestratorState.AwaitingClarification }

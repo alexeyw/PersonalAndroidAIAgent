@@ -1,6 +1,7 @@
 package ai.agent.android.domain.engine.executors
 
 import ai.agent.android.domain.models.NodeModel
+import ai.agent.android.domain.models.NodeOutput
 import kotlinx.coroutines.flow.Flow
 
 /**
@@ -9,12 +10,14 @@ import kotlinx.coroutines.flow.Flow
 interface NodeExecutor {
     /**
      * Executes the node logic.
-     * @return A Flow emitting [ai.agent.android.domain.models.AgentOrchestratorState] updates and finally a [ai.agent.android.domain.models.NodeExecutionResult].
+     *
+     * @return A [Flow] of [NodeOutput.State] progress updates terminated by exactly one
+     * [NodeOutput.Result] carrying the node's [ai.agent.android.domain.models.NodeExecutionResult].
      */
     fun execute(
         node: NodeModel,
         inputText: String,
         sessionId: String,
         originalPrompt: String
-    ): Flow<Any>
+    ): Flow<NodeOutput>
 }

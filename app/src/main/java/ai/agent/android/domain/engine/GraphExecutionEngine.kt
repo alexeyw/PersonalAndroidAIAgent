@@ -144,11 +144,10 @@ class GraphExecutionEngine @Inject constructor(
             val nodeStartMs = System.currentTimeMillis()
             try {
                 executor.execute(nodeForExecution, executorInput, sessionId, userPrompt)
-                    .collect { stateOrResult ->
-                        if (stateOrResult is AgentOrchestratorState) {
-                            emit(stateOrResult)
-                        } else if (stateOrResult is NodeExecutionResult) {
-                            nodeResult = stateOrResult
+                    .collect { output ->
+                        when (output) {
+                            is NodeOutput.State -> emit(output.state)
+                            is NodeOutput.Result -> nodeResult = output.result
                         }
                     }
 

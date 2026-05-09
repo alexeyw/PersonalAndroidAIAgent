@@ -78,12 +78,9 @@ class ChatRepositoryImpl @Inject constructor(
     }
 
     override suspend fun saveSession(session: ChatSession) {
-        val existing = chatDao.getSessionById(session.id)
-        if (existing != null) {
-            chatDao.updateSession(session.toEntity())
-        } else {
-            chatDao.insertSession(session.toEntity())
-        }
+        // Single round-trip via Room's @Upsert — eliminates the SELECT + INSERT/UPDATE
+        // N+1 pattern previously used here. The DAO conflicts on primary key (`id`).
+        chatDao.upsertSession(session.toEntity())
     }
 
     override fun getSessionsFlow(): Flow<List<ChatSession>> {

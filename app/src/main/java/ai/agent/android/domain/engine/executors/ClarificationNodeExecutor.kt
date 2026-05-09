@@ -5,6 +5,7 @@ import ai.agent.android.domain.models.AgentOrchestratorState
 import ai.agent.android.domain.models.ClarificationRequest
 import ai.agent.android.domain.models.NodeExecutionResult
 import ai.agent.android.domain.models.NodeModel
+import ai.agent.android.domain.models.NodeOutput
 import ai.agent.android.domain.models.Result
 import ai.agent.android.domain.repositories.ClarificationRepository
 import ai.agent.android.domain.usecases.LoadModelUseCase
@@ -52,7 +53,7 @@ class ClarificationNodeExecutor @Inject constructor(
         inputText: String,
         sessionId: String,
         originalPrompt: String,
-    ): Flow<Any> = flow {
+    ): Flow<NodeOutput> = flow {
         val instruction = node.systemPrompt
             ?: ai.agent.android.domain.constants.DefaultPrompts.CLARIFICATION_PROMPT
         val fullPrompt = "$instruction\n\nCONTEXT FROM PREVIOUS NODE:\n$inputText\n\nRESPONSE (JSON only):\n"
@@ -60,8 +61,8 @@ class ClarificationNodeExecutor @Inject constructor(
         val loadResult = loadModelUseCase(node.modelPath)
         if (loadResult is Result.Error) {
             val errorMsg = "Error loading local model for clarification node"
-            emit(AgentOrchestratorState.Error(errorMsg))
-            emit(NodeExecutionResult(error = errorMsg))
+            emit(NodeOutput.State(AgentOrchestratorState.Error(errorMsg)))
+            emit(NodeOutput.Result(NodeExecutionResult(error = errorMsg)))
             return@flow
         }
 
@@ -69,7 +70,7 @@ class ClarificationNodeExecutor @Inject constructor(
         try {
             llmEngine.generateResponseStream(fullPrompt).collect { token ->
                 accumulatedResponse.append(token)
-                emit(AgentOrchestratorState.Thinking(accumulatedResponse.toString()))
+                emit(NodeOutput.State(AgentOrchestratorState.Thinking(accumulatedResponse.toString())))
             }
         } catch (e: CancellationException) {
             // Re-throw to preserve structured-concurrency cancellation. Catching `Exception`
@@ -77,8 +78,8 @@ class ClarificationNodeExecutor @Inject constructor(
             throw e
         } catch (e: Exception) {
             Timber.tag(TAG).e(e, "[NODE_ERR] type=${node.type.name} id=${node.id} error during clarification generation")
-            emit(AgentOrchestratorState.Error(e.message ?: "Unknown error during clarification generation"))
-            emit(NodeExecutionResult(error = e.message))
+            emit(NodeOutput.State(AgentOrchestratorState.Error(e.message ?: "Unknown error during clarification generation")))
+            emit(NodeOutput.Result(NodeExecutionResult(error = e.message)))
             return@flow
         }
 
@@ -92,10 +93,10 @@ class ClarificationNodeExecutor @Inject constructor(
             timeoutMs = node.clarificationTimeoutMs ?: DEFAULT_TIMEOUT_MS,
         )
 
-        emit(AgentOrchestratorState.AwaitingClarification(request))
+        emit(NodeOutput.State(AgentOrchestratorState.AwaitingClarification(request)))
         val answer = clarificationRepository.requestAnswer(request)
 
-        emit(NodeExecutionResult(outputText = answer))
+        emit(NodeOutput.Result(NodeExecutionResult(outputText = answer)))
     }
 
     /**
