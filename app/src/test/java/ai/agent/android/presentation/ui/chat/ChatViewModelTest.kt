@@ -8,10 +8,13 @@ import ai.agent.android.domain.models.ClarificationRequest
 import ai.agent.android.domain.models.Role
 import kotlinx.coroutines.delay
 import ai.agent.android.domain.models.Result
+import ai.agent.android.domain.models.PipelineGraph
 import ai.agent.android.domain.repositories.ChatRepository
 import ai.agent.android.domain.repositories.ClarificationRepository
+import ai.agent.android.domain.repositories.PipelineRepository
 import ai.agent.android.domain.usecases.AgentOrchestratorUseCase
 import ai.agent.android.domain.repositories.SettingsRepository
+import kotlinx.coroutines.flow.MutableStateFlow
 import ai.agent.android.domain.usecases.GetContextWindowUseCase
 import ai.agent.android.domain.usecases.LoadModelUseCase
 import ai.agent.android.presentation.state.ActiveSessionTracker
@@ -54,6 +57,9 @@ class ChatViewModelTest {
     private lateinit var activeSessionTracker: ActiveSessionTracker
     private lateinit var llmInferenceEngine: LlmInferenceEngine
     private lateinit var clarificationRepository: ClarificationRepository
+    private lateinit var pipelineRepository: PipelineRepository
+    private lateinit var sessionsFlow: MutableStateFlow<List<ChatSession>>
+    private lateinit var pipelinesFlow: MutableStateFlow<List<PipelineGraph>>
     private lateinit var viewModel: ChatViewModel
 
     private fun createViewModel(): ChatViewModel = ChatViewModel(
@@ -65,7 +71,16 @@ class ChatViewModelTest {
         activeSessionTracker,
         llmInferenceEngine,
         clarificationRepository,
+        pipelineRepository,
     )
+
+    /**
+     * Builds a pipeline stub used by tests that exercise the pipeline-binding
+     * flows. `ChatViewModel` only consumes `id` and `name` from the graph,
+     * so node/connection contents are deliberately omitted.
+     */
+    private fun pipeline(id: String, name: String): PipelineGraph =
+        PipelineGraph(id = id, name = name)
 
     @Before
     fun setup() {
@@ -83,13 +98,28 @@ class ChatViewModelTest {
         // the rejection path override this on the specific request id.
         coEvery { clarificationRepository.submitClarification(any(), any()) } returns true
 
+        // Backing flows so tests can append/replace sessions and pipelines after
+        // the ViewModel has started observing them — required for the
+        // pipeline-binding flows (deletion fallback, new-chat selection, etc.).
+        sessionsFlow = MutableStateFlow(emptyList())
+        pipelinesFlow = MutableStateFlow(emptyList())
+        pipelineRepository = mockk()
+        every { pipelineRepository.getAllPipelines() } returns pipelinesFlow
+
         // Mock chat repository flow for any session
         every { chatRepository.getMessagesForSession(any()) } returns flowOf(emptyList())
-        every { chatRepository.getSessionsFlow() } returns flowOf(emptyList())
-        coEvery { chatRepository.saveSession(any()) } returns Unit
+        every { chatRepository.getSessionsFlow() } returns sessionsFlow
+        coEvery { chatRepository.saveSession(any()) } answers {
+            val saved = firstArg<ChatSession>()
+            sessionsFlow.value = sessionsFlow.value.filterNot { it.id == saved.id } + saved
+            Unit
+        }
         coEvery { chatRepository.saveMessage(any()) } returns Unit
         coEvery { chatRepository.deleteSession(any()) } returns Unit
-        coEvery { chatRepository.getSessionById(any()) } returns null
+        coEvery { chatRepository.getSessionById(any()) } answers {
+            val id = firstArg<String>()
+            sessionsFlow.value.firstOrNull { it.id == id }
+        }
         // Default: no saved session
         every { settingsRepository.currentChatSessionId } returns flowOf(null)
         // Default: model loads successfully
@@ -146,7 +176,7 @@ class ChatViewModelTest {
         viewModel.sendMessage("   ")
         advanceUntilIdle()
 
-        coVerify(exactly = 0) { agentOrchestratorUseCase(any(), any()) }
+        coVerify(exactly = 0) { agentOrchestratorUseCase(any(), any(), any()) }
         assertFalse(viewModel.uiState.value.isGenerating)
     }
 
@@ -159,7 +189,7 @@ class ChatViewModelTest {
 
         val actualSessionId = viewModel.uiState.value.currentSessionId
 
-        coEvery { agentOrchestratorUseCase(actualSessionId, userPrompt) } returns flow {
+        coEvery { agentOrchestratorUseCase(actualSessionId, userPrompt, any()) } returns flow {
             emit(AgentOrchestratorState.Loading)
             emit(AgentOrchestratorState.Thinking("Hmm"))
             emit(AgentOrchestratorState.Completed("Final answer"))
@@ -186,7 +216,7 @@ class ChatViewModelTest {
 
         val actualSessionId = viewModel.uiState.value.currentSessionId
 
-        coEvery { agentOrchestratorUseCase(actualSessionId, userPrompt) } returns flow {
+        coEvery { agentOrchestratorUseCase(actualSessionId, userPrompt, any()) } returns flow {
             throw RuntimeException(exceptionMessage)
         }
 
@@ -207,7 +237,7 @@ class ChatViewModelTest {
 
         // Force an error state
         val actualSessionId = viewModel.uiState.value.currentSessionId
-        coEvery { agentOrchestratorUseCase(actualSessionId, "trigger error") } returns flow {
+        coEvery { agentOrchestratorUseCase(actualSessionId, "trigger error", any()) } returns flow {
             throw RuntimeException("Error occurred")
         }
 
@@ -229,7 +259,7 @@ class ChatViewModelTest {
         advanceUntilIdle()
 
         val sessionId = viewModel.uiState.value.currentSessionId
-        coEvery { agentOrchestratorUseCase(sessionId, userPrompt) } returns flow {
+        coEvery { agentOrchestratorUseCase(sessionId, userPrompt, any()) } returns flow {
             emit(AgentOrchestratorState.PipelineStage(stepInfo))
             emit(AgentOrchestratorState.Completed("done"))
         }
@@ -252,7 +282,7 @@ class ChatViewModelTest {
         advanceUntilIdle()
 
         val sessionId = viewModel.uiState.value.currentSessionId
-        coEvery { agentOrchestratorUseCase(sessionId, userPrompt) } returns flow {
+        coEvery { agentOrchestratorUseCase(sessionId, userPrompt, any()) } returns flow {
             emit(AgentOrchestratorState.PipelineStage(stepInfo))
             emit(AgentOrchestratorState.Completed("final"))
         }
@@ -271,7 +301,7 @@ class ChatViewModelTest {
         advanceUntilIdle()
 
         val sessionId = viewModel.uiState.value.currentSessionId
-        coEvery { agentOrchestratorUseCase(sessionId, userPrompt) } returns flow {
+        coEvery { agentOrchestratorUseCase(sessionId, userPrompt, any()) } returns flow {
             emit(AgentOrchestratorState.Loading)
             delay(10_000)
             emit(AgentOrchestratorState.Completed("never reached"))
@@ -299,7 +329,7 @@ class ChatViewModelTest {
         advanceUntilIdle()
 
         val sessionId = viewModel.uiState.value.currentSessionId
-        coEvery { agentOrchestratorUseCase(sessionId, userPrompt) } returns flow {
+        coEvery { agentOrchestratorUseCase(sessionId, userPrompt, any()) } returns flow {
             emit(AgentOrchestratorState.Thinking(partialText))
             delay(10_000)
         }
@@ -346,7 +376,7 @@ class ChatViewModelTest {
         val state = viewModel.uiState.value
         assertNotNull(state.inlineError)
         assertFalse(state.isGenerating)
-        coVerify(exactly = 0) { agentOrchestratorUseCase(any(), any()) }
+        coVerify(exactly = 0) { agentOrchestratorUseCase(any(), any(), any()) }
     }
 
     @Test
@@ -362,7 +392,7 @@ class ChatViewModelTest {
 
         every { llmInferenceEngine.isInitialized } returns true
         val sessionId = viewModel.uiState.value.currentSessionId
-        coEvery { agentOrchestratorUseCase(sessionId, "hello again") } returns flow {
+        coEvery { agentOrchestratorUseCase(sessionId, "hello again", any()) } returns flow {
             emit(AgentOrchestratorState.Completed("ok"))
         }
 
@@ -490,7 +520,7 @@ class ChatViewModelTest {
         advanceUntilIdle()
 
         val sessionId = viewModel.uiState.value.currentSessionId
-        coEvery { agentOrchestratorUseCase(sessionId, userPrompt) } returns flow {
+        coEvery { agentOrchestratorUseCase(sessionId, userPrompt, any()) } returns flow {
             emit(AgentOrchestratorState.AwaitingClarification(request))
             delay(10_000)
         }
@@ -526,7 +556,7 @@ class ChatViewModelTest {
         advanceUntilIdle()
 
         val sessionId = viewModel.uiState.value.currentSessionId
-        coEvery { agentOrchestratorUseCase(sessionId, userPrompt) } returns flow {
+        coEvery { agentOrchestratorUseCase(sessionId, userPrompt, any()) } returns flow {
             emit(AgentOrchestratorState.AwaitingClarification(request))
             emit(AgentOrchestratorState.AwaitingClarification(request))
             delay(10_000)
@@ -555,7 +585,7 @@ class ChatViewModelTest {
         advanceUntilIdle()
 
         val sessionId = viewModel.uiState.value.currentSessionId
-        coEvery { agentOrchestratorUseCase(sessionId, userPrompt) } returns flow {
+        coEvery { agentOrchestratorUseCase(sessionId, userPrompt, any()) } returns flow {
             emit(AgentOrchestratorState.AwaitingClarification(request))
             delay(10_000)
         }
@@ -591,7 +621,7 @@ class ChatViewModelTest {
         advanceUntilIdle()
 
         val sessionId = viewModel.uiState.value.currentSessionId
-        coEvery { agentOrchestratorUseCase(sessionId, userPrompt) } returns flow {
+        coEvery { agentOrchestratorUseCase(sessionId, userPrompt, any()) } returns flow {
             emit(AgentOrchestratorState.AwaitingClarification(request))
             delay(10_000)
         }
@@ -639,7 +669,7 @@ class ChatViewModelTest {
         advanceUntilIdle()
 
         val sessionId = viewModel.uiState.value.currentSessionId
-        coEvery { agentOrchestratorUseCase(sessionId, userPrompt) } returns flow {
+        coEvery { agentOrchestratorUseCase(sessionId, userPrompt, any()) } returns flow {
             emit(AgentOrchestratorState.AwaitingClarification(request))
             delay(10_000)
         }
@@ -669,7 +699,7 @@ class ChatViewModelTest {
         advanceUntilIdle()
 
         val sessionId = viewModel.uiState.value.currentSessionId
-        coEvery { agentOrchestratorUseCase(sessionId, userPrompt) } returns flow {
+        coEvery { agentOrchestratorUseCase(sessionId, userPrompt, any()) } returns flow {
             emit(AgentOrchestratorState.AwaitingClarification(request1))
             delay(50)
             emit(AgentOrchestratorState.AwaitingClarification(request2))
@@ -705,7 +735,7 @@ class ChatViewModelTest {
         advanceUntilIdle()
 
         val sessionId = viewModel.uiState.value.currentSessionId
-        coEvery { agentOrchestratorUseCase(sessionId, userPrompt) } returns flow {
+        coEvery { agentOrchestratorUseCase(sessionId, userPrompt, any()) } returns flow {
             emit(AgentOrchestratorState.AwaitingClarification(answered))
             delay(50)
             emit(AgentOrchestratorState.AwaitingClarification(pending))
@@ -743,5 +773,311 @@ class ChatViewModelTest {
                 match { it.role == Role.USER && it.content == "a" && it.timestamp == 1L },
             )
         }
+    }
+
+    // -------------------------------------------------------------------
+    // Phase 17.2 — Pipeline binding to chat
+    // -------------------------------------------------------------------
+
+    @Test
+    fun `requestNewSession opens selector when pipelines exist`() = runTest {
+        pipelinesFlow.value = listOf(pipeline("p-default", "Default"), pipeline("p-other", "Other"))
+        viewModel = createViewModel()
+        advanceUntilIdle()
+
+        viewModel.requestNewSession()
+        advanceUntilIdle()
+
+        val prompt = viewModel.uiState.value.newChatPipelinePrompt
+        assertNotNull(prompt)
+        assertEquals("p-default", prompt!!.preselectedPipelineId)
+    }
+
+    @Test
+    fun `requestNewSession creates unbound chat directly when no pipelines exist`() = runTest {
+        viewModel = createViewModel()
+        advanceUntilIdle()
+
+        viewModel.requestNewSession()
+        advanceUntilIdle()
+
+        assertNull(viewModel.uiState.value.newChatPipelinePrompt)
+        coVerify { chatRepository.saveSession(match { it.pipelineId == null }) }
+    }
+
+    @Test
+    fun `confirmNewSession persists chosen pipelineId on the new session`() = runTest {
+        pipelinesFlow.value = listOf(pipeline("p1", "Alpha"), pipeline("p2", "Beta"))
+        viewModel = createViewModel()
+        advanceUntilIdle()
+
+        viewModel.requestNewSession()
+        viewModel.confirmNewSession("p2")
+        advanceUntilIdle()
+
+        coVerify { chatRepository.saveSession(match { it.pipelineId == "p2" }) }
+        assertNull(viewModel.uiState.value.newChatPipelinePrompt)
+    }
+
+    @Test
+    fun `confirmNewSession with null persists unbound session`() = runTest {
+        pipelinesFlow.value = listOf(pipeline("p1", "Alpha"))
+        viewModel = createViewModel()
+        advanceUntilIdle()
+
+        viewModel.requestNewSession()
+        viewModel.confirmNewSession(null)
+        advanceUntilIdle()
+
+        coVerify { chatRepository.saveSession(match { it.pipelineId == null && it.name == "New Chat" }) }
+    }
+
+    @Test
+    fun `dismissNewChatPrompt closes selector without creating session`() = runTest {
+        pipelinesFlow.value = listOf(pipeline("p1", "Alpha"))
+        viewModel = createViewModel()
+        advanceUntilIdle()
+
+        // The init flow already saved the bootstrap "New Chat" session — count
+        // those calls as the baseline so we can assert nothing else is saved.
+        val baselineSaves = sessionsFlow.value.size
+
+        viewModel.requestNewSession()
+        viewModel.dismissNewChatPrompt()
+        advanceUntilIdle()
+
+        assertNull(viewModel.uiState.value.newChatPipelinePrompt)
+        assertEquals(baselineSaves, sessionsFlow.value.size)
+    }
+
+    @Test
+    fun `chat settings save persists new pipelineId on active session when idle`() = runTest {
+        pipelinesFlow.value = listOf(pipeline("p1", "Alpha"), pipeline("p2", "Beta"))
+        viewModel = createViewModel()
+        advanceUntilIdle()
+
+        val sessionId = viewModel.uiState.value.currentSessionId
+
+        viewModel.openChatSettings()
+        viewModel.updateChatSettingsSelection("p2")
+        viewModel.confirmChatSettings()
+        advanceUntilIdle()
+
+        coVerify {
+            chatRepository.saveSession(
+                match { it.id == sessionId && it.pipelineId == "p2" },
+            )
+        }
+        assertNull(viewModel.uiState.value.chatSettingsDialog)
+    }
+
+    @Test
+    fun `chat settings save raises switch confirm dialog while generating`() = runTest {
+        pipelinesFlow.value = listOf(pipeline("p1", "Alpha"), pipeline("p2", "Beta"))
+        viewModel = createViewModel()
+        advanceUntilIdle()
+
+        val sessionId = viewModel.uiState.value.currentSessionId
+        coEvery { agentOrchestratorUseCase(sessionId, "wait", any()) } returns flow {
+            emit(AgentOrchestratorState.Loading)
+            delay(10_000)
+        }
+
+        viewModel.sendMessage("wait")
+        testScheduler.advanceTimeBy(50)
+        assertTrue(viewModel.uiState.value.isGenerating)
+
+        viewModel.openChatSettings()
+        viewModel.updateChatSettingsSelection("p2")
+        viewModel.confirmChatSettings()
+
+        val confirm = viewModel.uiState.value.pipelineSwitchConfirm
+        assertNotNull(confirm)
+        assertEquals("p2", confirm!!.targetPipelineId)
+        // Settings dialog has been collapsed in favour of the confirm.
+        assertNull(viewModel.uiState.value.chatSettingsDialog)
+        // The pipelineId is NOT applied yet — must wait for explicit confirmation.
+        coVerify(exactly = 0) {
+            chatRepository.saveSession(match { it.pipelineId == "p2" })
+        }
+
+        viewModel.stopGeneration()
+        advanceUntilIdle()
+    }
+
+    @Test
+    fun `confirmPipelineSwitchCancelGeneration cancels generation and applies binding`() = runTest {
+        pipelinesFlow.value = listOf(pipeline("p1", "Alpha"), pipeline("p2", "Beta"))
+        viewModel = createViewModel()
+        advanceUntilIdle()
+
+        val sessionId = viewModel.uiState.value.currentSessionId
+        coEvery { agentOrchestratorUseCase(sessionId, "wait", any()) } returns flow {
+            emit(AgentOrchestratorState.Loading)
+            delay(10_000)
+        }
+
+        viewModel.sendMessage("wait")
+        testScheduler.advanceTimeBy(50)
+
+        viewModel.openChatSettings()
+        viewModel.updateChatSettingsSelection("p2")
+        viewModel.confirmChatSettings()
+        viewModel.confirmPipelineSwitchCancelGeneration()
+        advanceUntilIdle()
+
+        assertFalse(viewModel.uiState.value.isGenerating)
+        assertNull(viewModel.uiState.value.pipelineSwitchConfirm)
+        coVerify {
+            chatRepository.saveSession(
+                match { it.id == sessionId && it.pipelineId == "p2" },
+            )
+        }
+    }
+
+    @Test
+    fun `dismissPipelineSwitchConfirm closes confirm without changing binding`() = runTest {
+        pipelinesFlow.value = listOf(pipeline("p1", "Alpha"), pipeline("p2", "Beta"))
+        viewModel = createViewModel()
+        advanceUntilIdle()
+
+        val sessionId = viewModel.uiState.value.currentSessionId
+        coEvery { agentOrchestratorUseCase(sessionId, "wait", any()) } returns flow {
+            emit(AgentOrchestratorState.Loading)
+            delay(10_000)
+        }
+
+        viewModel.sendMessage("wait")
+        testScheduler.advanceTimeBy(50)
+
+        viewModel.openChatSettings()
+        viewModel.updateChatSettingsSelection("p2")
+        viewModel.confirmChatSettings()
+        viewModel.dismissPipelineSwitchConfirm()
+
+        assertNull(viewModel.uiState.value.pipelineSwitchConfirm)
+        coVerify(exactly = 0) {
+            chatRepository.saveSession(match { it.pipelineId == "p2" })
+        }
+
+        viewModel.stopGeneration()
+        advanceUntilIdle()
+    }
+
+    @Test
+    fun `bound pipeline deletion auto-resets session and emits fallback Snackbar`() = runTest {
+        pipelinesFlow.value = listOf(pipeline("p-bound", "Bound"), pipeline("p-default", "Default"))
+        viewModel = createViewModel()
+        advanceUntilIdle()
+
+        val sessionId = viewModel.uiState.value.currentSessionId
+        // Bind the active session to "p-bound".
+        viewModel.openChatSettings()
+        viewModel.updateChatSettingsSelection("p-bound")
+        viewModel.confirmChatSettings()
+        advanceUntilIdle()
+
+        // Now remove the bound pipeline from the library.
+        pipelinesFlow.value = listOf(pipeline("p-default", "Default"))
+        advanceUntilIdle()
+
+        // Session should have been silently rebound to null (= use default).
+        coVerify {
+            chatRepository.saveSession(
+                match { it.id == sessionId && it.pipelineId == null },
+            )
+        }
+        assertNotNull(viewModel.uiState.value.pipelineFallbackMessage)
+    }
+
+    @Test
+    fun `clearPipelineFallback removes the one-shot Snackbar message`() = runTest {
+        pipelinesFlow.value = listOf(pipeline("p-bound", "Bound"), pipeline("p-default", "Default"))
+        viewModel = createViewModel()
+        advanceUntilIdle()
+
+        viewModel.openChatSettings()
+        viewModel.updateChatSettingsSelection("p-bound")
+        viewModel.confirmChatSettings()
+        advanceUntilIdle()
+        pipelinesFlow.value = listOf(pipeline("p-default", "Default"))
+        advanceUntilIdle()
+        assertNotNull(viewModel.uiState.value.pipelineFallbackMessage)
+
+        viewModel.clearPipelineFallback()
+
+        assertNull(viewModel.uiState.value.pipelineFallbackMessage)
+    }
+
+    @Test
+    fun `currentPipelineName resolves to bound pipeline when set`() = runTest {
+        pipelinesFlow.value = listOf(pipeline("p1", "Alpha"), pipeline("p2", "Beta"))
+        viewModel = createViewModel()
+        advanceUntilIdle()
+
+        viewModel.openChatSettings()
+        viewModel.updateChatSettingsSelection("p2")
+        viewModel.confirmChatSettings()
+        advanceUntilIdle()
+
+        assertEquals("Beta", viewModel.uiState.value.currentPipelineName)
+    }
+
+    @Test
+    fun `currentPipelineName falls back to default when session is unbound`() = runTest {
+        pipelinesFlow.value = listOf(pipeline("p1", "Alpha"), pipeline("p2", "Beta"))
+        viewModel = createViewModel()
+        advanceUntilIdle()
+
+        // The bootstrap session is created with pipelineId == null, so the
+        // subtitle should show the default (first) pipeline's name.
+        assertEquals("Alpha", viewModel.uiState.value.currentPipelineName)
+    }
+
+    @Test
+    fun `currentPipelineName is null when no pipelines exist`() = runTest {
+        viewModel = createViewModel()
+        advanceUntilIdle()
+
+        assertNull(viewModel.uiState.value.currentPipelineName)
+    }
+
+    @Test
+    fun `sendMessage forwards bound pipelineId to AgentOrchestratorUseCase`() = runTest {
+        pipelinesFlow.value = listOf(pipeline("p1", "Alpha"), pipeline("p2", "Beta"))
+        viewModel = createViewModel()
+        advanceUntilIdle()
+
+        val sessionId = viewModel.uiState.value.currentSessionId
+        viewModel.openChatSettings()
+        viewModel.updateChatSettingsSelection("p2")
+        viewModel.confirmChatSettings()
+        advanceUntilIdle()
+
+        coEvery { agentOrchestratorUseCase(sessionId, "go", "p2") } returns flow {
+            emit(AgentOrchestratorState.Completed("done"))
+        }
+
+        viewModel.sendMessage("go")
+        advanceUntilIdle()
+
+        coVerify { agentOrchestratorUseCase(sessionId, "go", "p2") }
+    }
+
+    @Test
+    fun `sendMessage forwards null pipelineId for unbound chat`() = runTest {
+        pipelinesFlow.value = listOf(pipeline("p1", "Alpha"))
+        viewModel = createViewModel()
+        advanceUntilIdle()
+
+        val sessionId = viewModel.uiState.value.currentSessionId
+        coEvery { agentOrchestratorUseCase(sessionId, "go", null) } returns flow {
+            emit(AgentOrchestratorState.Completed("done"))
+        }
+
+        viewModel.sendMessage("go")
+        advanceUntilIdle()
+
+        coVerify { agentOrchestratorUseCase(sessionId, "go", null) }
     }
 }

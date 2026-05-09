@@ -12,7 +12,8 @@ fun ChatSessionEntity.toDomain(): ChatSession {
     return ChatSession(
         id = id,
         name = name,
-        updatedAt = updatedAt
+        updatedAt = updatedAt,
+        pipelineId = pipelineId,
     )
 }
 
@@ -25,6 +26,7 @@ fun ChatSession.toEntity(): ChatSessionEntity {
     return ChatSessionEntity(
         id = id,
         name = name,
-        updatedAt = updatedAt
+        updatedAt = updatedAt,
+        pipelineId = pipelineId,
     )
 }

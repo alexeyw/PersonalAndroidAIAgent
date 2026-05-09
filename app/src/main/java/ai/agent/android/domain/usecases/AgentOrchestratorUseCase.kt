@@ -38,13 +38,22 @@ class AgentOrchestratorUseCase @Inject constructor(
      *
      * @param sessionId The current chat session ID.
      * @param userPrompt The new prompt from the user.
+     * @param pipelineId Identifier of the pipeline that should run this task. Pass
+     *   the value of `ChatSession.pipelineId` so each chat executes against its
+     *   own bound pipeline (Phase 17.2). `null` defers to the application-wide
+     *   default pipeline.
      * @return A [Flow] of [AgentOrchestratorState] emitting the progress of the agent.
      */
-    operator fun invoke(sessionId: String, userPrompt: String): Flow<AgentOrchestratorState> {
+    operator fun invoke(
+        sessionId: String,
+        userPrompt: String,
+        pipelineId: String? = null,
+    ): Flow<AgentOrchestratorState> {
         val task = AgentTask(
             sessionId = sessionId,
             prompt = userPrompt,
-            priority = TaskPriority.HIGH // High priority for active UI requests
+            priority = TaskPriority.HIGH, // High priority for active UI requests
+            pipelineId = pipelineId,
         )
         taskQueueManager.enqueueTask(task)
         return taskQueueManager.observeTaskState(sessionId)

@@ -48,4 +48,35 @@ class AgentOrchestratorUseCaseTest {
         useCase.resumeWithApproval(sessionId, true)
         verify { taskQueueManager.resumeWithApproval(sessionId, true) }
     }
+
+    /**
+     * Phase 17.2 — the use case must surface the per-chat `pipelineId` on the
+     * enqueued [AgentTask] so the orchestrator runs the chat-bound pipeline,
+     * not the global default.
+     */
+    @Test
+    fun `invoke captures pipelineId on the enqueued task`() = runTest {
+        every { taskQueueManager.observeTaskState(sessionId) } returns flowOf(
+            AgentOrchestratorState.Completed("done"),
+        )
+
+        useCase(sessionId, "hi", pipelineId = "pipeline-42").toList()
+
+        verify {
+            taskQueueManager.enqueueTask(
+                match { it.sessionId == sessionId && it.prompt == "hi" && it.pipelineId == "pipeline-42" },
+            )
+        }
+    }
+
+    @Test
+    fun `invoke without pipelineId enqueues task with null pipelineId`() = runTest {
+        every { taskQueueManager.observeTaskState(sessionId) } returns flowOf(
+            AgentOrchestratorState.Completed("done"),
+        )
+
+        useCase(sessionId, "hi").toList()
+
+        verify { taskQueueManager.enqueueTask(match { it.pipelineId == null }) }
+    }
 }

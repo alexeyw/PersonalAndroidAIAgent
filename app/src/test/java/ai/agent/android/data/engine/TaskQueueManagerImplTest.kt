@@ -10,6 +10,7 @@ import ai.agent.android.domain.repositories.PipelineRepository
 import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.verify
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.delay
@@ -99,24 +100,127 @@ class TaskQueueManagerImplTest {
     fun `enqueueTask processes task successfully`() = testScope.runTest {
         val sessionId = "session_1"
         val prompt = "Hello"
-        
+
         val task = AgentTask(
             sessionId = sessionId,
             prompt = prompt,
             priority = TaskPriority.NORMAL
         )
 
-        every { 
-            graphExecutionEngine.invoke(any(), any(), any()) 
+        every {
+            graphExecutionEngine.invoke(any(), any(), any())
         } returns flowOf(AgentOrchestratorState.Completed("Result"))
 
         taskQueueManager.enqueueTask(task)
-        
+
         advanceUntilIdle() // Wait for the IO dispatcher to process the task without delay
 
         val state = taskQueueManager.observeTaskState(sessionId).first()
         println("Final state: $state")
-        assertTrue("Expected Completed or Idle after processing, got $state", 
+        assertTrue("Expected Completed or Idle after processing, got $state",
             state is AgentOrchestratorState.Idle || state is AgentOrchestratorState.Completed)
+    }
+
+    /**
+     * Phase 17.2 — when an [AgentTask] carries a `pipelineId`, the queue
+     * must execute that specific pipeline rather than the global default
+     * (the first pipeline in the repository).
+     */
+    @Test
+    fun `enqueueTask honours per-task pipelineId`() = testScope.runTest {
+        val defaultPipeline = PipelineGraph(id = "default-id", name = "Default")
+        val boundPipeline = PipelineGraph(id = "bound-id", name = "Bound")
+        every { pipelineRepository.getAllPipelines() } returns flowOf(
+            listOf(defaultPipeline, boundPipeline),
+        )
+        every {
+            graphExecutionEngine.invoke(any(), any(), any())
+        } returns flowOf(AgentOrchestratorState.Completed("ok"))
+
+        val task = AgentTask(
+            sessionId = "session-bound",
+            prompt = "go",
+            priority = TaskPriority.NORMAL,
+            pipelineId = "bound-id",
+        )
+
+        taskQueueManager.enqueueTask(task)
+        advanceUntilIdle()
+
+        verify {
+            graphExecutionEngine.invoke(
+                "session-bound",
+                "go",
+                match<PipelineGraph> { it.id == "bound-id" },
+            )
+        }
+    }
+
+    /**
+     * Phase 17.2 — when the bound pipeline has been deleted while the task
+     * waited in the queue, fall back to the default pipeline rather than
+     * failing the task. The chat-level UI handles the "deleted pipeline"
+     * Snackbar fallback separately.
+     */
+    @Test
+    fun `enqueueTask falls back to first pipeline when bound id is missing`() = testScope.runTest {
+        val defaultPipeline = PipelineGraph(id = "default-id", name = "Default")
+        every { pipelineRepository.getAllPipelines() } returns flowOf(listOf(defaultPipeline))
+        every {
+            graphExecutionEngine.invoke(any(), any(), any())
+        } returns flowOf(AgentOrchestratorState.Completed("ok"))
+
+        val task = AgentTask(
+            sessionId = "session-orphaned",
+            prompt = "go",
+            priority = TaskPriority.NORMAL,
+            pipelineId = "missing-id",
+        )
+
+        taskQueueManager.enqueueTask(task)
+        advanceUntilIdle()
+
+        verify {
+            graphExecutionEngine.invoke(
+                "session-orphaned",
+                "go",
+                match<PipelineGraph> { it.id == "default-id" },
+            )
+        }
+    }
+
+    /**
+     * Phase 17.2 — when the task carries no `pipelineId`, the queue uses
+     * the application-wide default (the first pipeline returned by the
+     * repository), preserving the pre-Phase-17.2 behaviour.
+     */
+    @Test
+    fun `enqueueTask uses default pipeline when task has no pipelineId`() = testScope.runTest {
+        val defaultPipeline = PipelineGraph(id = "default-id", name = "Default")
+        val otherPipeline = PipelineGraph(id = "other-id", name = "Other")
+        every { pipelineRepository.getAllPipelines() } returns flowOf(
+            listOf(defaultPipeline, otherPipeline),
+        )
+        every {
+            graphExecutionEngine.invoke(any(), any(), any())
+        } returns flowOf(AgentOrchestratorState.Completed("ok"))
+
+        val task = AgentTask(
+            sessionId = "session-unbound",
+            prompt = "go",
+            priority = TaskPriority.NORMAL,
+            pipelineId = null,
+        )
+
+        taskQueueManager.enqueueTask(task)
+        advanceUntilIdle()
+
+        verify {
+            graphExecutionEngine.invoke(
+                "session-unbound",
+                "go",
+                match<PipelineGraph> { it.id == "default-id" },
+            )
+        }
     }
 }

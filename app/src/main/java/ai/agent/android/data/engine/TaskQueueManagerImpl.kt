@@ -114,9 +114,17 @@ class TaskQueueManagerImpl @Inject constructor(
         )
         chatRepository.saveMessage(userMessage)
 
-        // 2. Load pipeline
+        // 2. Load pipeline. Phase 17.2: each chat session may bind its own
+        // `pipelineId`; honour that binding first, then fall back to the
+        // application-wide default (the first pipeline returned by the
+        // repository) for legacy chats and for tasks that don't specify a
+        // binding. If the bound pipeline was deleted while the task waited
+        // in the queue we silently fall back to the default rather than
+        // failing — the chat-level UI handles the deleted-pipeline rebind
+        // separately (Phase 17.2 Snackbar fallback).
         val pipelines = pipelineRepository.getAllPipelines().firstOrNull() ?: emptyList()
-        val activePipeline = pipelines.firstOrNull()
+        val boundPipeline = task.pipelineId?.let { id -> pipelines.firstOrNull { it.id == id } }
+        val activePipeline = boundPipeline ?: pipelines.firstOrNull()
 
         if (activePipeline == null) {
             val errState = AgentOrchestratorState.Error("No active pipeline found. Please create one in the Visual Orchestrator.")
