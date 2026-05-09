@@ -35,6 +35,40 @@ interface ChatDao {
     fun getMessagesBySessionId(sessionId: String): Flow<List<ChatMessageEntity>>
 
     /**
+     * Retrieves only the user-facing (final) chat messages for a session, ordered by time.
+     * Intermediate node outputs (`isFinal = 0`) are excluded — they remain queryable via
+     * [getMessagesBySessionId] for the agent console / context-window logic.
+     *
+     * @param sessionId The ID of the session to retrieve messages for.
+     * @return A [Flow] emitting a list of final [ChatMessageEntity]s ordered by time.
+     */
+    @Query(
+        "SELECT * FROM chat_messages " +
+            "WHERE sessionId = :sessionId AND isFinal = 1 " +
+            "ORDER BY timestamp ASC",
+    )
+    fun getDisplayMessagesBySessionId(sessionId: String): Flow<List<ChatMessageEntity>>
+
+    /**
+     * Updates the starred state of a single message.
+     *
+     * @param messageId The id of the row to update.
+     * @param starred `true` to mark as starred, `false` to unstar.
+     */
+    @Query("UPDATE chat_messages SET isStarred = :starred WHERE id = :messageId")
+    suspend fun setMessageStarred(messageId: Long, starred: Boolean)
+
+    /**
+     * Retrieves every starred message across all sessions, ordered chronologically
+     * (ascending timestamp) to match the main chat list — keeps `ChatScreen`'s
+     * "scroll-to-last" auto-scroll consistent across filter toggles.
+     *
+     * @return A [Flow] emitting the current list of starred [ChatMessageEntity]s.
+     */
+    @Query("SELECT * FROM chat_messages WHERE isStarred = 1 ORDER BY timestamp ASC")
+    fun getStarredMessages(): Flow<List<ChatMessageEntity>>
+
+    /**
      * Deletes all chat messages associated with a specific session.
      *
      * @param sessionId The ID of the session to delete.

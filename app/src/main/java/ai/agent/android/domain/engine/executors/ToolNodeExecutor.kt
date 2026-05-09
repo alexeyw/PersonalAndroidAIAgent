@@ -207,7 +207,8 @@ class ToolNodeExecutor @Inject constructor(
                         sessionId = sessionId,
                         role = Role.SYSTEM,
                         content = "User denied execution of tool: $resolvedToolName",
-                        timestamp = System.currentTimeMillis()
+                        timestamp = System.currentTimeMillis(),
+                        isFinal = false,
                     )
                 )
                 emit(NodeOutput.State(AgentOrchestratorState.ObservationResult(resolvedToolName, "Execution denied by user")))
@@ -237,7 +238,8 @@ class ToolNodeExecutor @Inject constructor(
                 sessionId = sessionId,
                 role = Role.SYSTEM,
                 content = "Observation from $resolvedToolName: $result",
-                timestamp = System.currentTimeMillis()
+                timestamp = System.currentTimeMillis(),
+                isFinal = false,
             )
         )
         emit(NodeOutput.Result(NodeExecutionResult(outputText = result, resolvedToolName = resolvedToolName)))
