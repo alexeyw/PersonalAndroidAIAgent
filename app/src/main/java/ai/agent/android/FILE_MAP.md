@@ -152,10 +152,14 @@ This file maps the contents of the main application package.
     - `AgentOrchestratorUseCase.kt` - Use case for agent orchestration.
     - `EvaluateIfConditionUseCase.kt` - Use case for evaluating IF condition nodes.
     - `GetContextWindowUseCase.kt` - Use case to get context window.
+    - `CreatePipelineUseCase.kt` - Creates and persists a new pipeline pre-seeded with `INPUT → OUTPUT` so it passes `PipelineGraph.validate` immediately; powers the library FAB.
+    - `DeletePipelineUseCase.kt` - Deletes a pipeline by id; refuses to delete the pipeline currently loaded in the editor (caller passes the active id).
+    - `DuplicatePipelineUseCase.kt` - Deep-copies an existing pipeline with fresh ids for the graph and every node/connection; suffixes the name with `(copy)`.
     - `ImportPipelineUseCase.kt` - Parses a pipeline JSON document via `PipelineJsonSerializer` and persists clean imports through `SavePipelineUseCase`; defers schema-mismatch persistence to a separate `persistConfirmed` step.
     - `InitializeAppUseCase.kt` - Use case for app initialization.
     - `LoadModelUseCase.kt` - Use case to load a model.
     - `LoadPipelineUseCase.kt` - Use case to load a pipeline.
+    - `RenamePipelineUseCase.kt` - Validates and applies a new display name to an existing pipeline; canonical name-validation gate (trim + length).
     - `RetrieveRelevantMemoryUseCase.kt` - Use case to retrieve memories.
     - `SavePipelineUseCase.kt` - Use case to save a pipeline.
     - `ScheduleTaskUseCase.kt` - Use case to schedule tasks.
@@ -201,6 +205,7 @@ This file maps the contents of the main application package.
     - `orchestrator/` - Orchestrator screen components.
       - `OrchestratorUiState.kt` - Orchestrator UI state.
       - `OrchestratorViewModel.kt` - Orchestrator ViewModel.
+      - `PipelineLibraryScreen.kt` - Library screen listing every saved pipeline (active highlight, long-press / `⋮` menu for Load / Rename / Duplicate / Delete, FAB for new pipeline). Shares `OrchestratorViewModel` with the editor via the `pipelines` nested nav graph.
       - `VisualOrchestratorScreen.kt` - Visual orchestrator UI screen.
       - `components/` - Orchestrator UI components.
         - `DraggableNode.kt` - Draggable node UI component.

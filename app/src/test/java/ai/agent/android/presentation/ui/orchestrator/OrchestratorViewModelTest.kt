@@ -9,7 +9,11 @@ import ai.agent.android.domain.prompt.PromptTemplateEngine
 import ai.agent.android.domain.prompt.PromptVariableProvider
 import ai.agent.android.domain.repositories.ApiKeyRepository
 import ai.agent.android.domain.repositories.ToolRepository
+import ai.agent.android.domain.usecases.CreatePipelineUseCase
+import ai.agent.android.domain.usecases.DeletePipelineUseCase
+import ai.agent.android.domain.usecases.DuplicatePipelineUseCase
 import ai.agent.android.domain.usecases.LoadPipelineUseCase
+import ai.agent.android.domain.usecases.RenamePipelineUseCase
 import ai.agent.android.domain.usecases.SavePipelineUseCase
 import ai.agent.android.domain.usecases.GetPromptTemplatesUseCase
 import ai.agent.android.domain.usecases.SavePromptTemplateUseCase
@@ -37,6 +41,10 @@ class OrchestratorViewModelTest {
     private lateinit var savePipelineUseCase: SavePipelineUseCase
     private lateinit var loadPipelineUseCase: LoadPipelineUseCase
     private lateinit var importPipelineUseCase: ai.agent.android.domain.usecases.ImportPipelineUseCase
+    private lateinit var renamePipelineUseCase: RenamePipelineUseCase
+    private lateinit var duplicatePipelineUseCase: DuplicatePipelineUseCase
+    private lateinit var deletePipelineUseCase: DeletePipelineUseCase
+    private lateinit var createPipelineUseCase: CreatePipelineUseCase
     private lateinit var getPromptTemplatesUseCase: GetPromptTemplatesUseCase
     private lateinit var savePromptTemplateUseCase: SavePromptTemplateUseCase
     private lateinit var apiKeyRepository: ApiKeyRepository
@@ -59,6 +67,10 @@ class OrchestratorViewModelTest {
         // Use the real ImportPipelineUseCase against the mocked save: the
         // import path here is exercised end-to-end (parse + persist).
         importPipelineUseCase = ai.agent.android.domain.usecases.ImportPipelineUseCase(savePipelineUseCase)
+        renamePipelineUseCase = mockk()
+        duplicatePipelineUseCase = mockk()
+        deletePipelineUseCase = mockk()
+        createPipelineUseCase = mockk()
         getPromptTemplatesUseCase = mockk()
         savePromptTemplateUseCase = mockk()
         apiKeyRepository = mockk()
@@ -88,6 +100,10 @@ class OrchestratorViewModelTest {
             savePipelineUseCase,
             loadPipelineUseCase,
             importPipelineUseCase,
+            renamePipelineUseCase,
+            duplicatePipelineUseCase,
+            deletePipelineUseCase,
+            createPipelineUseCase,
             getPromptTemplatesUseCase,
             savePromptTemplateUseCase,
             apiKeyRepository,
@@ -640,5 +656,167 @@ class OrchestratorViewModelTest {
         viewModel.dismissPromptPreview()
 
         assertEquals(PromptPreviewState.Hidden, viewModel.uiState.value.previewState)
+    }
+
+    @Test
+    fun `renamePipeline patches currentPipeline name and emits feedback when active is renamed`() = runTest {
+        // Arrange — load the pipeline so it becomes the active one.
+        val active = PipelineGraph(id = "active", name = "Old Name")
+        coEvery { loadPipelineUseCase.getPipelineById("active") } returns active
+        viewModel.loadPipeline("active")
+        testDispatcher.scheduler.advanceUntilIdle()
+        coEvery { renamePipelineUseCase("active", "  New Name  ") } returns Result.success(Unit)
+
+        // Act
+        viewModel.renamePipeline("active", "  New Name  ")
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        // Assert
+        val state = viewModel.uiState.value
+        assertEquals("New Name", state.currentPipeline.name)
+        assertEquals(false, state.isLoading)
+        assertEquals(null, state.errorMessage)
+        assertEquals("Pipeline renamed", state.feedbackMessage)
+        coVerify { renamePipelineUseCase("active", "  New Name  ") }
+    }
+
+    @Test
+    fun `renamePipeline surfaces error and leaves current pipeline unchanged on failure`() = runTest {
+        coEvery {
+            renamePipelineUseCase("p1", "")
+        } returns Result.failure(IllegalArgumentException("Pipeline name cannot be empty"))
+
+        viewModel.renamePipeline("p1", "")
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertEquals("Pipeline name cannot be empty", state.errorMessage)
+        assertEquals(null, state.feedbackMessage)
+    }
+
+    @Test
+    fun `duplicatePipeline loads the duplicate as currentPipeline on success`() = runTest {
+        val duplicate = PipelineGraph(id = "dup", name = "Source (copy)")
+        coEvery { duplicatePipelineUseCase("src") } returns Result.success(duplicate)
+
+        viewModel.duplicatePipeline("src")
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertEquals("dup", state.currentPipeline.id)
+        assertEquals("Source (copy)", state.currentPipeline.name)
+        assertEquals("Pipeline duplicated", state.feedbackMessage)
+        assertEquals(null, state.errorMessage)
+    }
+
+    @Test
+    fun `duplicatePipeline surfaces error on failure`() = runTest {
+        val previousPipelineId = viewModel.uiState.value.currentPipeline.id
+        coEvery {
+            duplicatePipelineUseCase("missing")
+        } returns Result.failure(IllegalStateException("Pipeline not found"))
+
+        viewModel.duplicatePipeline("missing")
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertEquals(previousPipelineId, state.currentPipeline.id)
+        assertEquals("Pipeline not found", state.errorMessage)
+    }
+
+    @Test
+    fun `deletePipeline forwards active id and surfaces blocked-when-active error`() = runTest {
+        val active = PipelineGraph(id = "active", name = "Active")
+        coEvery { loadPipelineUseCase.getPipelineById("active") } returns active
+        viewModel.loadPipeline("active")
+        testDispatcher.scheduler.advanceUntilIdle()
+        coEvery {
+            deletePipelineUseCase("active", "active")
+        } returns Result.failure(IllegalStateException("Active pipeline cannot be deleted"))
+
+        viewModel.deletePipeline("active")
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertEquals("Active pipeline cannot be deleted", state.errorMessage)
+        assertEquals(null, state.feedbackMessage)
+        coVerify { deletePipelineUseCase("active", "active") }
+    }
+
+    @Test
+    fun `deletePipeline emits feedback on successful deletion`() = runTest {
+        coEvery { deletePipelineUseCase("p2", any()) } returns Result.success(Unit)
+
+        viewModel.deletePipeline("p2")
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertEquals("Pipeline deleted", state.feedbackMessage)
+        assertEquals(null, state.errorMessage)
+    }
+
+    @Test
+    fun `createNewPipeline loads the seed graph as currentPipeline`() = runTest {
+        val seed = PipelineGraph(
+            id = "new",
+            name = "Brand New",
+            nodes = listOf(
+                ai.agent.android.domain.models.NodeModel("i", NodeType.INPUT, 0f, 0f),
+                ai.agent.android.domain.models.NodeModel("o", NodeType.OUTPUT, 100f, 0f),
+            ),
+            connections = listOf(
+                ai.agent.android.domain.models.ConnectionModel("c", "i", "o"),
+            ),
+        )
+        coEvery { createPipelineUseCase("Brand New") } returns Result.success(seed)
+
+        viewModel.createNewPipeline("Brand New")
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertEquals("new", state.currentPipeline.id)
+        assertEquals(2, state.currentPipeline.nodes.size)
+        assertEquals("Pipeline created", state.feedbackMessage)
+    }
+
+    @Test
+    fun `createNewPipeline surfaces validation error from use case`() = runTest {
+        coEvery {
+            createPipelineUseCase("")
+        } returns Result.failure(IllegalArgumentException("Pipeline name cannot be empty"))
+
+        viewModel.createNewPipeline("")
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertEquals("Pipeline name cannot be empty", state.errorMessage)
+        assertEquals(null, state.feedbackMessage)
+    }
+
+    @Test
+    fun `clearFeedback resets feedbackMessage to null`() = runTest {
+        coEvery { deletePipelineUseCase("p2", any()) } returns Result.success(Unit)
+        viewModel.deletePipeline("p2")
+        testDispatcher.scheduler.advanceUntilIdle()
+        assertEquals("Pipeline deleted", viewModel.uiState.value.feedbackMessage)
+
+        viewModel.clearFeedback()
+
+        assertEquals(null, viewModel.uiState.value.feedbackMessage)
+    }
+
+    @Test
+    fun `activePipelineId returns currentPipeline id when pipeline has nodes`() = runTest {
+        viewModel.addNode(NodeType.INPUT, 0f, 0f)
+
+        val state = viewModel.uiState.value
+        assertEquals(state.currentPipeline.id, state.activePipelineId)
+    }
+
+    @Test
+    fun `activePipelineId returns null for empty unsaved pipeline not in saved list`() = runTest {
+        // Default state — empty currentPipeline, empty savedPipelines list.
+        val state = viewModel.uiState.value
+        assertEquals(null, state.activePipelineId)
     }
 }

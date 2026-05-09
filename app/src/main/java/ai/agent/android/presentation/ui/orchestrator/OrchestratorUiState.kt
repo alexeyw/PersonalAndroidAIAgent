@@ -25,6 +25,10 @@ import ai.agent.android.domain.prompt.PromptSegment
  * @property previewState Current state of the prompt-preview bottom sheet.
  * @property pendingImport A schema-mismatch outcome awaiting user
  * confirmation before being persisted. `null` when no import is pending.
+ * @property feedbackMessage One-shot success-flavoured message for the
+ * library Snackbar (e.g. "Pipeline duplicated"). Distinct from
+ * [errorMessage] so the UI can style green/blue toast vs. red error.
+ * Cleared via `clearFeedback()` after display.
  */
 data class OrchestratorUiState(
     val currentPipeline: PipelineGraph = PipelineGraph(id = java.util.UUID.randomUUID().toString(), name = "New Pipeline"),
@@ -37,6 +41,7 @@ data class OrchestratorUiState(
     val availableVariables: List<String> = emptyList(),
     val previewState: PromptPreviewState = PromptPreviewState.Hidden,
     val pendingImport: PipelineImportOutcome.SchemaMismatch? = null,
+    val feedbackMessage: String? = null,
 ) {
     /**
      * Helper to get nodes easily.
@@ -52,6 +57,19 @@ data class OrchestratorUiState(
      * Dynamically computed list of validation errors for the current pipeline.
      */
     val validationErrors: List<PipelineValidationError> get() = currentPipeline.validate()
+
+    /**
+     * The id of the pipeline currently loaded into the editor — i.e. the "active"
+     * pipeline for highlight and delete-block purposes in the library screen.
+     *
+     * Returns `null` when [currentPipeline] is the unsaved scratch graph (no nodes
+     * and not present in [savedPipelines]); under that condition there is nothing
+     * to highlight in the library and no delete to block.
+     */
+    val activePipelineId: String?
+        get() = currentPipeline.id.takeIf { id ->
+            savedPipelines.any { it.id == id } || currentPipeline.nodes.isNotEmpty()
+        }
 }
 
 /**

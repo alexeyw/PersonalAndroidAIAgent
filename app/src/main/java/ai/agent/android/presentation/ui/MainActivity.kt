@@ -10,6 +10,7 @@ import ai.agent.android.presentation.ui.models.ModelsScreen
 import ai.agent.android.presentation.ui.monitoring.MonitoringScreen
 import ai.agent.android.presentation.ui.monitoring.MonitoringViewModel
 import ai.agent.android.presentation.ui.orchestrator.OrchestratorViewModel
+import ai.agent.android.presentation.ui.orchestrator.PipelineLibraryScreen
 import ai.agent.android.presentation.ui.orchestrator.VisualOrchestratorScreen
 import ai.agent.android.presentation.ui.prompts.PromptLibraryScreen
 import ai.agent.android.presentation.ui.settings.SettingsScreen
@@ -36,6 +37,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
@@ -43,6 +45,7 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.lifecycleScope
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import androidx.navigation.compose.navigation
 import androidx.navigation.compose.rememberNavController
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.launch
@@ -135,7 +138,7 @@ class MainActivity : ComponentActivity() {
                                     }
                                 },
                                 onNavigateToOrchestrator = {
-                                    navController.navigate("orchestrator") {
+                                    navController.navigate("pipelines") {
                                         launchSingleTop = true
                                     }
                                 },
@@ -191,16 +194,46 @@ class MainActivity : ComponentActivity() {
                                 modifier = Modifier.fillMaxSize(),
                                 onBack = { navController.popBackStack() })
                         }
-                        composable("orchestrator") {
-                            val orchestratorViewModel: OrchestratorViewModel = hiltViewModel()
-                            VisualOrchestratorScreen(
-                                viewModel = orchestratorViewModel,
-                                onNavigateToPrompts = {
-                                    navController.navigate("prompts") {
-                                        launchSingleTop = true
-                                    }
-                                },
-                                onBack = { navController.popBackStack() })
+                        // Pipelines feature: library + editor share one
+                        // OrchestratorViewModel scoped to the nested nav graph,
+                        // so creating / renaming / duplicating in the library is
+                        // immediately reflected when the editor opens.
+                        navigation(
+                            startDestination = "pipeline-library",
+                            route = "pipelines",
+                        ) {
+                            composable("pipeline-library") { entry ->
+                                val parentEntry = remember(entry) {
+                                    navController.getBackStackEntry("pipelines")
+                                }
+                                val orchestratorViewModel: OrchestratorViewModel =
+                                    hiltViewModel(parentEntry)
+                                PipelineLibraryScreen(
+                                    viewModel = orchestratorViewModel,
+                                    onOpenEditor = {
+                                        navController.navigate("pipeline-editor") {
+                                            launchSingleTop = true
+                                        }
+                                    },
+                                    onBack = { navController.popBackStack() },
+                                )
+                            }
+                            composable("pipeline-editor") { entry ->
+                                val parentEntry = remember(entry) {
+                                    navController.getBackStackEntry("pipelines")
+                                }
+                                val orchestratorViewModel: OrchestratorViewModel =
+                                    hiltViewModel(parentEntry)
+                                VisualOrchestratorScreen(
+                                    viewModel = orchestratorViewModel,
+                                    onNavigateToPrompts = {
+                                        navController.navigate("prompts") {
+                                            launchSingleTop = true
+                                        }
+                                    },
+                                    onBack = { navController.popBackStack() },
+                                )
+                            }
                         }
                     }
                 }
