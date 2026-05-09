@@ -32,6 +32,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import java.text.SimpleDateFormat
 import java.util.Date
+import androidx.compose.ui.platform.LocalConfiguration
 import java.util.Locale
 
 /**
@@ -237,7 +238,8 @@ fun LogItemCard(log: ai.agent.android.domain.models.ChatMessage) {
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Column(modifier = Modifier.padding(12.dp)) {
-            val formatter = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
+            val locale = LocalConfiguration.current.locales[0]
+            val formatter = SimpleDateFormat("HH:mm:ss", locale)
             val timeString = formatter.format(Date(log.timestamp))
 
             Text(
