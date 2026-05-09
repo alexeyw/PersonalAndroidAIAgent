@@ -3,7 +3,7 @@ package ai.agent.android.presentation.ui.chat
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -29,7 +29,12 @@ import java.util.Locale
  */
 private const val COLLAPSED_LINE_LIMIT = 3
 
-/** Fixed height of the panel — matches the spec for Phase 17.4. */
+/**
+ * Target height of the panel as specified by Phase 17.4. Used as a *minimum*
+ * via [heightIn] so the strip can grow vertically when the user has enabled
+ * a large font scale in accessibility settings — pinning to a fixed height
+ * would clip lines under those scales.
+ */
 private val PanelHeight = 56.dp
 
 /** Compact monospace font size used for every console line. */
@@ -67,7 +72,7 @@ fun ConsolePanelCollapsed(
     Surface(
         modifier = modifier
             .fillMaxWidth()
-            .height(PanelHeight),
+            .heightIn(min = PanelHeight),
         color = MaterialTheme.colorScheme.surfaceVariant,
     ) {
         Column(
