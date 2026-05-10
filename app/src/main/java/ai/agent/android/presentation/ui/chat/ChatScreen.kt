@@ -72,6 +72,7 @@ import androidx.compose.material3.ModalDrawerSheet
 import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.NavigationDrawerItem
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarDuration
@@ -95,6 +96,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
@@ -1066,7 +1068,17 @@ fun ChatInputBar(
             modifier = Modifier.weight(1f),
             placeholder = { Text("Ask the agent...") },
             enabled = !isGenerating,
-            maxLines = 4
+            maxLines = 4,
+            // Semi-transparent white container so the input visually
+            // separates from the surrounding bottomBar surface in both
+            // light and dark themes; alpha keeps the underlying colour
+            // hint (e.g. theme accent or scrim) just barely showing
+            // through instead of slamming a solid white plate over it.
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedContainerColor = Color.White.copy(alpha = 0.7f),
+                unfocusedContainerColor = Color.White.copy(alpha = 0.7f),
+                disabledContainerColor = Color.White.copy(alpha = 0.7f),
+            ),
         )
         Spacer(modifier = Modifier.width(8.dp))
         if (isGenerating) {
