@@ -19,13 +19,18 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.calculateEndPadding
+import androidx.compose.foundation.layout.calculateStartPadding
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.windowInsetsBottomHeight
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -79,6 +84,7 @@ import androidx.compose.material3.rememberDrawerState
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -89,6 +95,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
@@ -216,15 +223,31 @@ fun ChatScreen(
         viewModel.consumeSnackbar()
     }
 
-    // Auto-scroll to the bottom when new messages arrive or generation starts
-    LaunchedEffect(uiState.messages.size, uiState.isGenerating, uiState.clarificationCards.size) {
-        if (uiState.messages.isNotEmpty() || uiState.isGenerating || uiState.clarificationCards.isNotEmpty()) {
-            val targetIndex =
-                uiState.messages.size + uiState.clarificationCards.size + if (uiState.isGenerating) 2 else 1
-            if (targetIndex > 0) {
-                coroutineScope.launch {
-                    listState.scrollToItem(targetIndex)
-                }
+    // True iff the chat list is already pinned to the bottom (i.e. the user
+    // hasn't manually scrolled up). Computed lazily so we don't refire the
+    // auto-scroll effect on every scroll event.
+    val isAtBottom by remember(listState) {
+        derivedStateOf {
+            val info = listState.layoutInfo
+            val totalItems = info.totalItemsCount
+            if (totalItems == 0) return@derivedStateOf true
+            val lastVisible = info.visibleItemsInfo.lastOrNull()?.index ?: -1
+            lastVisible >= totalItems - 1
+        }
+    }
+
+    // Auto-scroll to the tail of the list only when a finalized message
+    // (user prompt or completed agent reply) or a clarification card is
+    // appended *and* the user was already viewing the bottom. If they have
+    // scrolled up to read history we leave their viewport alone — fixing the
+    // jarring "snaps to first message" behaviour where any state change
+    // during a manual scroll yanked them back.
+    LaunchedEffect(uiState.messages.size, uiState.clarificationCards.size) {
+        if (!isAtBottom) return@LaunchedEffect
+        val targetIndex = uiState.messages.size + uiState.clarificationCards.size
+        if (targetIndex > 0) {
+            coroutineScope.launch {
+                listState.scrollToItem(targetIndex)
             }
         }
     }
@@ -364,10 +387,19 @@ fun ChatScreen(
             },
             snackbarHost = { SnackbarHost(snackbarHostState) }
         ) { paddingValues ->
+            // Drop the bottom inset from the column so the console panel can
+            // stretch its background to the screen edge (over the navigation
+            // bar area). The console / fallback Spacer at the very bottom of
+            // this Column applies `navigationBarsPadding()` internally so
+            // text stays clear of the system buttons.
             Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(paddingValues)
+                    .padding(
+                        top = paddingValues.calculateTopPadding(),
+                        start = paddingValues.calculateStartPadding(LocalLayoutDirection.current),
+                        end = paddingValues.calculateEndPadding(LocalLayoutDirection.current),
+                    )
             ) {
                 LazyColumn(
                     state = listState,
@@ -375,7 +407,12 @@ fun ChatScreen(
                         .weight(1f)
                         .fillMaxWidth()
                         .padding(horizontal = 16.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    // Stick chat content to the bottom of the viewport so a
+                    // short conversation reads as a chat thread (latest turn
+                    // just above the input bar) rather than leaving a large
+                    // empty zone between the last message and the controls.
+                    verticalArrangement = Arrangement.Bottom,
                 ) {
                     item { Spacer(modifier = Modifier.height(16.dp)) }
 
@@ -402,26 +439,12 @@ fun ChatScreen(
                         Spacer(modifier = Modifier.height(8.dp))
                     }
 
-                    if (uiState.pipelineTrace.isNotEmpty()) {
-                        item {
-                            PipelineTraceCard(steps = uiState.pipelineTrace)
-                            Spacer(modifier = Modifier.height(8.dp))
-                        }
-                    }
-
-                    if (uiState.currentStep != null && uiState.isGenerating) {
-                        item {
-                            val step = uiState.currentStep!!
-                            Text(
-                                text = "Step ${step.stepIndex} of ${step.totalSteps ?: "?"}: ${step.nodeName}",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = 8.dp, vertical = 2.dp)
-                            )
-                        }
-                    }
+                    // Pipeline trace and per-step progress used to render here.
+                    // Per Phase 17.4 spec, the chat list keeps only real user /
+                    // agent turns (and the interactive clarification cards
+                    // below); transient pipeline diagnostics live in the
+                    // console strip via `[NODE]` events and the `[NOW]`
+                    // thought line.
 
                     items(uiState.clarificationCards, key = { it.id }) { card ->
                         ClarificationCard(
@@ -432,20 +455,6 @@ fun ChatScreen(
                             },
                         )
                         Spacer(modifier = Modifier.height(8.dp))
-                    }
-
-                    val hasPendingClarification = uiState.clarificationCards.any {
-                        it.status == ClarificationCardUiModel.Status.PENDING
-                    }
-                    if (uiState.orchestratorState != null && uiState.isGenerating && !hasPendingClarification) {
-                        item {
-                            AgentThoughtIndicator(
-                                state = uiState.orchestratorState!!,
-                                onApprove = { viewModel.resumeWithApproval(true) },
-                                onDeny = { viewModel.resumeWithApproval(false) }
-                            )
-                            Spacer(modifier = Modifier.height(8.dp))
-                        }
                     }
 
                     item { Spacer(modifier = Modifier.height(8.dp)) }
@@ -477,6 +486,35 @@ fun ChatScreen(
                     onStopClicked = { viewModel.stopGeneration() },
                     isGenerating = uiState.isGenerating
                 )
+
+                // Bottom agent area: the console panel hosts both the rolling
+                // event log and the thought-state line / approve-deny row.
+                // Pulling the thought card out of the chat LazyColumn (and
+                // re-skinning it as a console line inside this same Surface)
+                // stops streaming-driven recompositions from dragging the
+                // chat list around.
+                val hasPendingClarification = uiState.clarificationCards.any {
+                    it.status == ClarificationCardUiModel.Status.PENDING
+                }
+                val thoughtState = uiState.orchestratorState
+                    ?.takeIf { uiState.isGenerating && !hasPendingClarification }
+
+                if (uiState.isGenerating || uiState.consoleLines.isNotEmpty()) {
+                    ConsolePanelCollapsed(
+                        events = uiState.consoleLines,
+                        currentState = thoughtState,
+                        onApprove = { viewModel.resumeWithApproval(true) },
+                        onDeny = { viewModel.resumeWithApproval(false) },
+                    )
+                } else {
+                    // No console visible: still own the navigation-bar inset
+                    // so the input bar stays clear of the system buttons.
+                    Spacer(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .windowInsetsBottomHeight(WindowInsets.navigationBars)
+                    )
+                }
             }
         }
     }
@@ -484,6 +522,7 @@ fun ChatScreen(
     uiState.newChatPipelinePrompt?.let { prompt ->
         NewChatPipelineSheet(
             pipelines = uiState.availablePipelines,
+            defaultPipelineId = uiState.defaultPipelineId,
             initialSelection = prompt.preselectedPipelineId,
             onDismiss = { viewModel.dismissNewChatPrompt() },
             onConfirm = { selected -> viewModel.confirmNewSession(selected) },
@@ -493,6 +532,7 @@ fun ChatScreen(
     uiState.chatSettingsDialog?.let { dialog ->
         ChatSettingsDialog(
             pipelines = uiState.availablePipelines,
+            defaultPipelineId = uiState.defaultPipelineId,
             selectedPipelineId = dialog.selectedPipelineId,
             onSelectPipeline = { viewModel.updateChatSettingsSelection(it) },
             onDismiss = { viewModel.dismissChatSettings() },
@@ -541,6 +581,7 @@ fun ChatScreen(
 @Composable
 private fun NewChatPipelineSheet(
     pipelines: List<PipelineSummary>,
+    defaultPipelineId: String?,
     initialSelection: String?,
     onDismiss: () -> Unit,
     onConfirm: (String?) -> Unit,
@@ -562,7 +603,7 @@ private fun NewChatPipelineSheet(
             LazyColumn(modifier = Modifier.fillMaxWidth()) {
                 item {
                     PipelineChoiceRow(
-                        title = "Use default pipeline",
+                        title = defaultPipelineLabel(pipelines, defaultPipelineId),
                         selected = selected == null,
                         onClick = { selected = null },
                     )
@@ -605,6 +646,7 @@ private fun NewChatPipelineSheet(
 @Composable
 private fun ChatSettingsDialog(
     pipelines: List<PipelineSummary>,
+    defaultPipelineId: String?,
     selectedPipelineId: String?,
     onSelectPipeline: (String?) -> Unit,
     onDismiss: () -> Unit,
@@ -623,7 +665,7 @@ private fun ChatSettingsDialog(
                 LazyColumn(modifier = Modifier.fillMaxWidth()) {
                     item {
                         PipelineChoiceRow(
-                            title = "Use default pipeline",
+                            title = defaultPipelineLabel(pipelines, defaultPipelineId),
                             selected = selectedPipelineId == null,
                             onClick = { onSelectPipeline(null) },
                         )
@@ -657,6 +699,27 @@ private fun ChatSettingsDialog(
  * is the single touch target — this prevents nested clickable surfaces and
  * the duplicate accessibility node that would otherwise appear.
  */
+/**
+ * Builds the label for the "Use default pipeline" radio option in both the
+ * new-chat sheet and the chat-settings dialog. Resolves the concrete default
+ * pipeline name and appends it in parentheses so the user can see which
+ * pipeline is being deferred to.
+ *
+ * Resolution order: the user-marked [defaultPipelineId] when it points at a
+ * pipeline that still exists in [pipelines]; otherwise the first pipeline in
+ * the library (the same fallback `ChatViewModel.resolvePipelineName` uses
+ * for the TopAppBar subtitle, so the two surfaces always agree).
+ */
+private fun defaultPipelineLabel(
+    pipelines: List<PipelineSummary>,
+    defaultPipelineId: String?,
+): String {
+    if (pipelines.isEmpty()) return "Use default pipeline"
+    val explicit = defaultPipelineId?.let { id -> pipelines.firstOrNull { it.id == id } }
+    val defaultName = (explicit ?: pipelines.first()).name
+    return "Use default pipeline ($defaultName)"
+}
+
 @Composable
 private fun PipelineChoiceRow(
     title: String,

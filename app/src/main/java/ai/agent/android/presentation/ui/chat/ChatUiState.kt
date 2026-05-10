@@ -3,6 +3,7 @@ package ai.agent.android.presentation.ui.chat
 import ai.agent.android.domain.models.AgentOrchestratorState
 import ai.agent.android.domain.models.ChatMessage
 import ai.agent.android.domain.models.ChatSession
+import ai.agent.android.domain.models.ConsoleEvent
 
 /**
  * Data class representing the state of the Chat UI.
@@ -26,6 +27,10 @@ import ai.agent.android.domain.models.ChatSession
  * @property availablePipelines Lightweight projection of every pipeline currently
  *   stored in the library, observed from `PipelineRepository.getAllPipelines()`.
  *   Drives the new-chat pipeline selector and the chat-settings dialog.
+ * @property defaultPipelineId Id of the pipeline the user has explicitly
+ *   marked as default in the library, observed from
+ *   `SettingsRepository.defaultPipelineId`. `null` means no explicit choice
+ *   — callers fall back to `availablePipelines.first()`.
  * @property currentPipelineName Display name of the pipeline bound to the current
  *   chat (or of the default pipeline when the session has `pipelineId == null`).
  *   Rendered as the TopAppBar subtitle. `null` when no pipelines exist at all.
@@ -45,6 +50,11 @@ import ai.agent.android.domain.models.ChatSession
  * @property showStarredOnly When `true`, the chat list is sourced from
  *   `getStarredMessages()` and shows every starred message across all sessions.
  *   Toggled from the TopAppBar action bar.
+ * @property consoleLines Append-only log of [ConsoleEvent]s for the current
+ *   pipeline run. Populated from [AgentOrchestratorState.ConsoleLog]
+ *   emissions; cleared on new send and on session switch. Drives the
+ *   collapsed mini-console (Phase 17.4) and the full bottom-sheet log
+ *   (Phase 17.5).
  */
 data class ChatUiState(
     val messages: List<ChatMessage> = emptyList(),
@@ -60,6 +70,7 @@ data class ChatUiState(
     val currentStep: AgentOrchestratorState.PipelineStepInfo? = null,
     val clarificationCards: List<ClarificationCardUiModel> = emptyList(),
     val availablePipelines: List<PipelineSummary> = emptyList(),
+    val defaultPipelineId: String? = null,
     val currentPipelineName: String? = null,
     val newChatPipelinePrompt: NewChatPipelinePrompt? = null,
     val chatSettingsDialog: ChatSettingsDialogState? = null,
@@ -67,6 +78,7 @@ data class ChatUiState(
     val pipelineFallbackMessage: String? = null,
     val snackbarMessage: String? = null,
     val showStarredOnly: Boolean = false,
+    val consoleLines: List<ConsoleEvent> = emptyList(),
 )
 
 /**

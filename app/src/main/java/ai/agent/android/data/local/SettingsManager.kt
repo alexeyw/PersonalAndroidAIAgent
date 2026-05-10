@@ -45,6 +45,7 @@ class SettingsManager @Inject constructor(
         val TOOL_CALL_TIMEOUT_MS = androidx.datastore.preferences.core.longPreferencesKey("tool_call_timeout_ms")
         val PIPELINE_MAX_STEPS = intPreferencesKey("pipeline_max_steps")
         val MEMORY_SUMMARY_DEFAULT_LIMIT = intPreferencesKey("memory_summary_default_limit")
+        val DEFAULT_PIPELINE_ID = stringPreferencesKey("default_pipeline_id")
     }
 
     override val isFirstLaunch: Flow<Boolean> = dataStore.data
@@ -307,6 +308,29 @@ class SettingsManager @Inject constructor(
     override suspend fun setMaxMemoryChunksForSearch(limit: Int) {
         dataStore.edit { preferences ->
             preferences[PreferencesKeys.MAX_MEMORY_CHUNKS_FOR_SEARCH] = limit
+        }
+    }
+
+    override val defaultPipelineId: Flow<String?> = dataStore.data
+        .catch { exception ->
+            if (exception is IOException) {
+                Timber.e(exception, "Error reading preferences")
+                emit(emptyPreferences())
+            } else {
+                throw exception
+            }
+        }
+        .map { preferences ->
+            preferences[PreferencesKeys.DEFAULT_PIPELINE_ID]
+        }
+
+    override suspend fun setDefaultPipelineId(pipelineId: String?) {
+        dataStore.edit { preferences ->
+            if (pipelineId == null) {
+                preferences.remove(PreferencesKeys.DEFAULT_PIPELINE_ID)
+            } else {
+                preferences[PreferencesKeys.DEFAULT_PIPELINE_ID] = pipelineId
+            }
         }
     }
 

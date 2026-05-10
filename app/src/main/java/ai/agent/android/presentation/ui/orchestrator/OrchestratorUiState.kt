@@ -35,6 +35,11 @@ import ai.agent.android.domain.prompt.PromptSegment
  * succeeds — so a failed create stays on the library screen instead of
  * dragging the user into the editor with the previously active pipeline.
  * Cleared via `consumePendingEditorNavigation()` once acted upon.
+ * @property defaultPipelineId Id of the pipeline the user has marked as
+ * default in the library, observed from `SettingsRepository.defaultPipelineId`.
+ * `null` means no explicit choice — the chat surfaces fall back to the
+ * first pipeline. Drives the "Default" badge and the menu item state in
+ * `PipelineLibraryScreen`.
  */
 data class OrchestratorUiState(
     val currentPipeline: PipelineGraph = PipelineGraph(id = java.util.UUID.randomUUID().toString(), name = "New Pipeline"),
@@ -49,6 +54,7 @@ data class OrchestratorUiState(
     val pendingImport: PipelineImportOutcome.SchemaMismatch? = null,
     val feedbackMessage: String? = null,
     val pendingEditorNavigation: Boolean = false,
+    val defaultPipelineId: String? = null,
 ) {
     /**
      * Helper to get nodes easily.

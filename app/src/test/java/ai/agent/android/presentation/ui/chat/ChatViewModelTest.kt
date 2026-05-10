@@ -5,6 +5,8 @@ import ai.agent.android.domain.models.AgentOrchestratorState
 import ai.agent.android.domain.models.ChatMessage
 import ai.agent.android.domain.models.ChatSession
 import ai.agent.android.domain.models.ClarificationRequest
+import ai.agent.android.domain.models.ConsoleEvent
+import ai.agent.android.domain.models.ConsoleEventType
 import ai.agent.android.domain.models.Role
 import kotlinx.coroutines.delay
 import ai.agent.android.domain.models.Result
@@ -127,8 +129,9 @@ class ChatViewModelTest {
             val id = firstArg<String>()
             sessionsFlow.value.firstOrNull { it.id == id }
         }
-        // Default: no saved session
+        // Default: no saved session, no explicit default pipeline.
         every { settingsRepository.currentChatSessionId } returns flowOf(null)
+        every { settingsRepository.defaultPipelineId } returns flowOf(null)
         // Default: model loads successfully
         coEvery { loadModelUseCase() } returns Result.Success(Unit)
         // Default: getContextWindowUseCase returns empty
@@ -979,6 +982,54 @@ class ChatViewModelTest {
     }
 
     @Test
+    fun `given explicit defaultPipelineId when session unbound then TopAppBar reflects the default`() = runTest {
+        val pinned = pipeline("p-pinned", "Pinned default")
+        val first = pipeline("p-first", "First in library")
+        // Ordering: `first` is the implicit fallback (first in summaries),
+        // `pinned` is the explicit user-marked default. The explicit pick
+        // must win over the implicit fallback for both the title and the
+        // dialog labels — see `resolvePipelineName`.
+        pipelinesFlow.value = listOf(first, pinned)
+        every { settingsRepository.defaultPipelineId } returns flowOf("p-pinned")
+
+        viewModel = createViewModel()
+        advanceUntilIdle()
+
+        assertEquals("Pinned default", viewModel.uiState.value.currentPipelineName)
+        assertEquals("p-pinned", viewModel.uiState.value.defaultPipelineId)
+    }
+
+    @Test
+    fun `given session bound to existing pipeline when ViewModel starts then no false fallback fires`() = runTest {
+        // Reproduces the startup race: the sessions flow may emit before the
+        // pipelines flow does, so `handleDeletedBoundPipeline` used to see an
+        // empty `availablePipelines` and misread the bound pipeline as
+        // deleted. Pre-seed both flows with consistent state — the bound
+        // pipeline DOES exist — and confirm no fallback triggers.
+        val savedSessionId = "race-session"
+        val boundSession = ChatSession(
+            id = savedSessionId,
+            name = "Existing chat",
+            updatedAt = 0L,
+            pipelineId = "p-bound",
+        )
+        sessionsFlow.value = listOf(boundSession)
+        pipelinesFlow.value = listOf(pipeline("p-bound", "Bound"), pipeline("p-default", "Default"))
+        every { settingsRepository.currentChatSessionId } returns flowOf(savedSessionId)
+
+        viewModel = createViewModel()
+        advanceUntilIdle()
+
+        // No fallback message, and the session was not silently rewritten.
+        assertNull(viewModel.uiState.value.pipelineFallbackMessage)
+        coVerify(exactly = 0) {
+            chatRepository.saveSession(
+                match { it.id == savedSessionId && it.pipelineId == null },
+            )
+        }
+    }
+
+    @Test
     fun `bound pipeline deletion auto-resets session and emits fallback Snackbar`() = runTest {
         pipelinesFlow.value = listOf(pipeline("p-bound", "Bound"), pipeline("p-default", "Default"))
         viewModel = createViewModel()
@@ -1194,5 +1245,129 @@ class ChatViewModelTest {
         assertEquals(1, emitted.size)
         assertEquals("final", emitted.first().content)
         assertTrue(emitted.first().isFinal)
+    }
+
+    @Test
+    fun `given orchestrator emits ConsoleLog when collected then consoleLines mirror events`() = runTest {
+        val userPrompt = "console test"
+        val event1 = ConsoleEvent(
+            timestamp = 1_700_000_000_000L,
+            type = ConsoleEventType.SystemMessage,
+            message = "Pipeline started",
+        )
+        val event2 = ConsoleEvent(
+            timestamp = 1_700_000_001_000L,
+            type = ConsoleEventType.NodeExecution,
+            message = "▶ LITE_RT",
+        )
+
+        viewModel = createViewModel()
+        advanceUntilIdle()
+
+        val sessionId = viewModel.uiState.value.currentSessionId
+        coEvery { agentOrchestratorUseCase(sessionId, userPrompt, any()) } returns flow {
+            emit(AgentOrchestratorState.ConsoleLog(listOf(event1)))
+            emit(AgentOrchestratorState.ConsoleLog(listOf(event1, event2)))
+            emit(AgentOrchestratorState.Completed("done"))
+        }
+
+        viewModel.sendMessage(userPrompt)
+        advanceUntilIdle()
+
+        val lines = viewModel.uiState.value.consoleLines
+        assertEquals(2, lines.size)
+        assertEquals(event1, lines[0])
+        assertEquals(event2, lines[1])
+    }
+
+    @Test
+    fun `given prior console events when sendMessage starts then consoleLines cleared before new emissions`() = runTest {
+        val firstPrompt = "first"
+        val secondPrompt = "second"
+        val staleEvent = ConsoleEvent(
+            timestamp = 1_700_000_000_000L,
+            type = ConsoleEventType.NodeExecution,
+            message = "stale",
+        )
+
+        viewModel = createViewModel()
+        advanceUntilIdle()
+
+        val sessionId = viewModel.uiState.value.currentSessionId
+        coEvery { agentOrchestratorUseCase(sessionId, firstPrompt, any()) } returns flow {
+            emit(AgentOrchestratorState.ConsoleLog(listOf(staleEvent)))
+            emit(AgentOrchestratorState.Completed("ok"))
+        }
+
+        viewModel.sendMessage(firstPrompt)
+        advanceUntilIdle()
+        assertEquals(1, viewModel.uiState.value.consoleLines.size)
+
+        // Second send: orchestrator never emits ConsoleLog. Verifies that the
+        // ChatViewModel resets consoleLines on send-start rather than relying
+        // on the engine to send an empty snapshot.
+        coEvery { agentOrchestratorUseCase(sessionId, secondPrompt, any()) } returns flow {
+            emit(AgentOrchestratorState.Completed("ok2"))
+        }
+        viewModel.sendMessage(secondPrompt)
+        advanceUntilIdle()
+
+        assertTrue(viewModel.uiState.value.consoleLines.isEmpty())
+    }
+
+    @Test
+    fun `given prior console events when switchSession called then consoleLines cleared`() = runTest {
+        val userPrompt = "before switch"
+        val event = ConsoleEvent(
+            timestamp = 1_700_000_000_000L,
+            type = ConsoleEventType.ToolCall,
+            message = "search_tool",
+        )
+
+        viewModel = createViewModel()
+        advanceUntilIdle()
+
+        val sessionId = viewModel.uiState.value.currentSessionId
+        coEvery { agentOrchestratorUseCase(sessionId, userPrompt, any()) } returns flow {
+            emit(AgentOrchestratorState.ConsoleLog(listOf(event)))
+            emit(AgentOrchestratorState.Completed("done"))
+        }
+
+        viewModel.sendMessage(userPrompt)
+        advanceUntilIdle()
+        assertEquals(1, viewModel.uiState.value.consoleLines.size)
+
+        viewModel.switchSession("other-session")
+        advanceUntilIdle()
+
+        assertTrue(viewModel.uiState.value.consoleLines.isEmpty())
+    }
+
+    @Test
+    fun `given orchestrator stream completes when terminal state arrives then last consoleLines preserved`() = runTest {
+        val userPrompt = "preserve test"
+        val event = ConsoleEvent(
+            timestamp = 1_700_000_000_000L,
+            type = ConsoleEventType.SystemMessage,
+            message = "Pipeline completed",
+        )
+
+        viewModel = createViewModel()
+        advanceUntilIdle()
+
+        val sessionId = viewModel.uiState.value.currentSessionId
+        coEvery { agentOrchestratorUseCase(sessionId, userPrompt, any()) } returns flow {
+            emit(AgentOrchestratorState.ConsoleLog(listOf(event)))
+            emit(AgentOrchestratorState.Completed("done"))
+        }
+
+        viewModel.sendMessage(userPrompt)
+        advanceUntilIdle()
+
+        // After Completed the panel must still show the last events so the user
+        // can review what just happened. Only the next sendMessage / switchSession
+        // is allowed to clear them.
+        assertEquals(listOf(event), viewModel.uiState.value.consoleLines)
+        assertFalse(viewModel.uiState.value.isGenerating)
     }
 }

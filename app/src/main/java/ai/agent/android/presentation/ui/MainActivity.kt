@@ -1,7 +1,6 @@
 package ai.agent.android.presentation.ui
 
 import ai.agent.android.data.services.AgentForegroundService
-import ai.agent.android.domain.usecases.InitializeAppUseCase
 import ai.agent.android.presentation.theme.AndroidAIAgentTheme
 import ai.agent.android.presentation.ui.chat.ChatScreen
 import ai.agent.android.presentation.ui.chat.ChatViewModel
@@ -15,6 +14,7 @@ import ai.agent.android.presentation.ui.orchestrator.VisualOrchestratorScreen
 import ai.agent.android.presentation.ui.prompts.PromptLibraryScreen
 import ai.agent.android.presentation.ui.settings.SettingsScreen
 import ai.agent.android.presentation.ui.settings.SettingsViewModel
+import ai.agent.android.presentation.ui.splash.SplashScreen
 import ai.agent.android.presentation.ui.taskmonitor.TaskMonitorScreen
 import ai.agent.android.presentation.ui.taskmonitor.TaskMonitorViewModel
 import ai.agent.android.presentation.ui.tools.ToolsScreen
@@ -28,9 +28,11 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
@@ -42,14 +44,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
-import androidx.lifecycle.lifecycleScope
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.navigation
 import androidx.navigation.compose.rememberNavController
 import dagger.hilt.android.AndroidEntryPoint
-import kotlinx.coroutines.launch
-import javax.inject.Inject
 
 /**
  * The main activity of the application, serving as the entry point.
@@ -57,12 +56,6 @@ import javax.inject.Inject
  */
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
-
-    /**
-     * Use case for initializing the application state.
-     */
-    @Inject
-    lateinit var initializeAppUseCase: InitializeAppUseCase
 
     private val requestPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -81,11 +74,9 @@ class MainActivity : ComponentActivity() {
             requestPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
         }
 
-        lifecycleScope.launch {
-            initializeAppUseCase()
-        }
-
-        // Start the background agent service
+        // Start the background agent service. Application init (incl. the
+        // first-launch defaults that used to live here) is now driven by the
+        // splash screen via `AppInitializationUseCase`.
         val serviceIntent = Intent(this, AgentForegroundService::class.java)
         startForegroundService(serviceIntent)
 
@@ -94,12 +85,38 @@ class MainActivity : ComponentActivity() {
             AndroidAIAgentTheme {
                 val navController = rememberNavController()
 
-                Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
+                // The outer Scaffold previously applied `WindowInsets.systemBars`
+                // via `innerPadding`; every feature screen also has its own
+                // Scaffold whose default `contentWindowInsets = systemBars` kicks
+                // in independently — that produced doubled status- and
+                // navigation-bar insets visible inside the work area. Force the
+                // outer Scaffold to surface zero insets so each screen's own
+                // Scaffold is the single authority on inset padding. Splash
+                // and Home don't have their own Scaffold, so they apply
+                // `systemBarsPadding()` directly inside their composables.
+                Scaffold(
+                    modifier = Modifier.fillMaxSize(),
+                    contentWindowInsets = WindowInsets(0, 0, 0, 0),
+                ) { innerPadding ->
                     NavHost(
                         navController = navController,
-                        startDestination = "home",
+                        startDestination = "splash",
                         modifier = Modifier.padding(innerPadding)
                     ) {
+                        composable("splash") {
+                            SplashScreen(
+                                onInitialized = {
+                                    navController.navigate("home") {
+                                        // Drop the splash route so Back from
+                                        // home exits the app instead of
+                                        // re-entering the loading screen.
+                                        popUpTo("splash") { inclusive = true }
+                                        launchSingleTop = true
+                                    }
+                                },
+                                modifier = Modifier.fillMaxSize(),
+                            )
+                        }
                         composable("home") {
                             HomeScreen(
                                 onNavigateToModels = {
@@ -269,6 +286,10 @@ fun HomeScreen(
 ) {
     Column(
         modifier = modifier
+            // Home doesn't ship with its own Scaffold, so it owns the
+            // status- / navigation-bar insets directly to keep the buttons
+            // clear of system surfaces.
+            .systemBarsPadding()
             .padding(16.dp)
             .verticalScroll(rememberScrollState())
     ) {

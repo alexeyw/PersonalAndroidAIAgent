@@ -27,7 +27,10 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import org.json.JSONArray
@@ -69,11 +72,86 @@ class ChatViewModel @Inject constructor(
     private var messagesJob: Job? = null
     private var generationJob: Job? = null
 
+    /**
+     * Becomes `true` after [pipelineRepository] has emitted its initial snapshot
+     * of available pipelines. Used by [handleDeletedBoundPipeline] to avoid a
+     * false-positive deleted-pipeline fallback during the brief window where
+     * the sessions flow has emitted (with a bound `pipelineId`) but the
+     * pipelines flow has not — initial `availablePipelines` is `emptyList()`
+     * by default, which is indistinguishable from "no pipelines exist" without
+     * this flag.
+     */
+    private var availablePipelinesObserved: Boolean = false
+
+    /**
+     * Mirrors whether the chat screen is currently visible to the user. Updated
+     * exclusively by [setChatVisible]; read inside an `init { }` collector that
+     * combines this flag with the active session id and pushes the result into
+     * [activeSessionTracker], so the tracker stays in sync with the chat
+     * visibility *and* with the asynchronously-loaded session id (the previous
+     * read-once-on-ON_START approach raced with `initializeSession()` and
+     * left the tracker as `null` for an open chat — the inline approval prompt
+     * was visible but the push notification still fired because the
+     * tracker never caught the late session id).
+     */
+    private val _isChatVisible = MutableStateFlow(false)
+
     init {
         loadSessions()
         observeAvailablePipelines()
+        observeDefaultPipelineId()
         initializeSession()
         observeMaxContextSize()
+        observeActiveSessionTracking()
+    }
+
+    /**
+     * Observes the user-set default pipeline id from settings and folds it
+     * into [ChatUiState.defaultPipelineId]. Recomputes the TopAppBar subtitle
+     * because the resolution of "default pipeline" depends on this id —
+     * changing it from the library should update the subtitle in real time.
+     */
+    private fun observeDefaultPipelineId() {
+        viewModelScope.launch {
+            settingsRepository.defaultPipelineId.collect { id ->
+                _uiState.update { state ->
+                    state.copy(
+                        defaultPipelineId = id,
+                        currentPipelineName = resolvePipelineName(
+                            sessions = state.sessions,
+                            currentSessionId = state.currentSessionId,
+                            summaries = state.availablePipelines,
+                            defaultPipelineId = id,
+                        ),
+                    )
+                }
+            }
+        }
+    }
+
+    /**
+     * Keeps [activeSessionTracker] in lock-step with the latest
+     * (`isVisible`, `currentSessionId`) pair. Replaces the previous one-shot
+     * read inside [setChatVisible], which fired on `ON_START` and missed the
+     * session id that `initializeSession()` saves a few milliseconds later.
+     *
+     * The tracker becomes:
+     *  - the active session id while the chat is visible AND the id is set;
+     *  - `null` whenever the chat is hidden or the id is still loading.
+     */
+    private fun observeActiveSessionTracking() {
+        viewModelScope.launch {
+            combine(
+                _isChatVisible,
+                _uiState.map { it.currentSessionId }.distinctUntilChanged(),
+            ) { visible, sessionId ->
+                if (visible && sessionId.isNotBlank()) sessionId else null
+            }
+                .distinctUntilChanged()
+                .collect { trackedId ->
+                    activeSessionTracker.setActiveSessionId(trackedId)
+                }
+        }
     }
 
     /**
@@ -96,6 +174,7 @@ class ChatViewModel @Inject constructor(
         viewModelScope.launch {
             pipelineRepository.getAllPipelines().collect { graphs ->
                 val summaries = graphs.map { PipelineSummary(id = it.id, name = it.name) }
+                availablePipelinesObserved = true
                 _uiState.update { state ->
                     state.copy(
                         availablePipelines = summaries,
@@ -103,6 +182,7 @@ class ChatViewModel @Inject constructor(
                             sessions = state.sessions,
                             currentSessionId = state.currentSessionId,
                             summaries = summaries,
+                            defaultPipelineId = state.defaultPipelineId,
                         ),
                     )
                 }
@@ -116,10 +196,16 @@ class ChatViewModel @Inject constructor(
      * deleted. When it has, persists `pipelineId = null` on the session
      * (falling back to the default pipeline) and surfaces a one-shot Snackbar.
      *
-     * No-op when the chat is unbound (`pipelineId == null`) or when the bound
-     * pipeline still exists.
+     * No-op when the chat is unbound (`pipelineId == null`), when the bound
+     * pipeline still exists, or when the pipelines flow has not yet produced
+     * its initial snapshot. The last condition prevents a startup race in
+     * which a sessions emission with a bound `pipelineId` arrives before the
+     * pipelines flow does — without the [availablePipelinesObserved] guard
+     * the empty default `availablePipelines` would be misread as "the bound
+     * pipeline no longer exists" and silently rebind the chat to the default.
      */
     private suspend fun handleDeletedBoundPipeline(summaries: List<PipelineSummary>) {
+        if (!availablePipelinesObserved) return
         val state = _uiState.value
         val session = state.sessions.firstOrNull { it.id == state.currentSessionId } ?: return
         val boundId = session.pipelineId ?: return
@@ -134,19 +220,25 @@ class ChatViewModel @Inject constructor(
     /**
      * Resolves the display name of the pipeline currently bound to the active
      * chat — either the explicit binding when set, or the default pipeline
-     * (the first entry in [summaries]) otherwise. Returns `null` when no
-     * pipelines exist yet, so the TopAppBar can omit the subtitle entirely.
+     * otherwise. The "default" is the user-marked id from settings
+     * ([defaultPipelineId]); when that is `null` or points to a pipeline
+     * that no longer exists, the resolution falls back to the first
+     * pipeline in [summaries]. Returns `null` when no pipelines exist yet,
+     * so the TopAppBar can omit the subtitle entirely.
      */
     private fun resolvePipelineName(
         sessions: List<ChatSession>,
         currentSessionId: String,
         summaries: List<PipelineSummary>,
+        defaultPipelineId: String?,
     ): String? {
         if (summaries.isEmpty()) return null
         val session = sessions.firstOrNull { it.id == currentSessionId }
         val boundId = session?.pipelineId
-        val match = boundId?.let { id -> summaries.firstOrNull { it.id == id } }
-        return (match ?: summaries.first()).name
+        val boundMatch = boundId?.let { id -> summaries.firstOrNull { it.id == id } }
+        if (boundMatch != null) return boundMatch.name
+        val defaultMatch = defaultPipelineId?.let { id -> summaries.firstOrNull { it.id == id } }
+        return (defaultMatch ?: summaries.first()).name
     }
 
     private fun loadSessions() {
@@ -159,6 +251,7 @@ class ChatViewModel @Inject constructor(
                             sessions = sessions,
                             currentSessionId = state.currentSessionId,
                             summaries = state.availablePipelines,
+                            defaultPipelineId = state.defaultPipelineId,
                         ),
                     )
                 }
@@ -176,18 +269,15 @@ class ChatViewModel @Inject constructor(
     }
 
     /**
-     * Sets whether the chat screen is currently visible to the user.
-     * This helps suppress push notifications for approvals when the inline UI is active.
+     * Marks the chat screen as visible (or not). Tracker updates are driven
+     * by [observeActiveSessionTracking]'s combine() — flipping this flag is
+     * enough; the collector immediately reads the latest session id and
+     * pushes the right value into [activeSessionTracker].
      *
      * @param isVisible True if the screen is actively displayed, false otherwise.
      */
     fun setChatVisible(isVisible: Boolean) {
-        val currentSessionId = _uiState.value.currentSessionId
-        if (isVisible && currentSessionId.isNotBlank()) {
-            activeSessionTracker.setActiveSessionId(currentSessionId)
-        } else {
-            activeSessionTracker.setActiveSessionId(null)
-        }
+        _isChatVisible.value = isVisible
     }
 
     /**
@@ -307,21 +397,20 @@ class ChatViewModel @Inject constructor(
                     isGenerating = false,
                     orchestratorState = null,
                     clarificationCards = emptyList(),
+                    consoleLines = emptyList(),
                     currentPipelineName = resolvePipelineName(
                         sessions = state.sessions,
                         currentSessionId = sessionId,
                         summaries = state.availablePipelines,
+                        defaultPipelineId = state.defaultPipelineId,
                     ),
                 )
             }
             loadMessages(sessionId)
             handleDeletedBoundPipeline(_uiState.value.availablePipelines)
-            
-            // Re-evaluate active session tracking if the UI is currently visible.
-            // setChatVisible logic relies on UI state, so we update the tracker if we were already active.
-            if (activeSessionTracker.activeSessionId.value != null) {
-                activeSessionTracker.setActiveSessionId(sessionId)
-            }
+            // No need to poke `activeSessionTracker` here — the
+            // `observeActiveSessionTracking()` combiner above watches the
+            // session id flow and updates the tracker automatically.
         }
     }
 
@@ -474,6 +563,7 @@ class ChatViewModel @Inject constructor(
                     pipelineTrace = emptyList(),
                     currentStep = null,
                     clarificationCards = emptyList(),
+                    consoleLines = emptyList(),
                 )
             }
 
@@ -507,6 +597,7 @@ class ChatViewModel @Inject constructor(
                                 else -> current.currentStep
                             },
                             pipelineTrace = if (state is AgentOrchestratorState.PipelineTrace) state.steps else current.pipelineTrace,
+                            consoleLines = if (state is AgentOrchestratorState.ConsoleLog) state.events else current.consoleLines,
                             isGenerating = if (isTerminal) false else current.isGenerating,
                             clarificationCards = updatedCards,
                         )

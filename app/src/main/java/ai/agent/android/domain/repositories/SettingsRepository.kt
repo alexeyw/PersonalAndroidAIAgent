@@ -195,6 +195,27 @@ interface SettingsRepository {
     suspend fun setPipelineMaxSteps(steps: Int)
 
     /**
+     * A [Flow] representing the id of the pipeline the user has marked as
+     * default. `null` means no explicit choice — callers should fall back
+     * to the first pipeline returned by `PipelineRepository.getAllPipelines()`
+     * (the same convention used before this setting was introduced).
+     *
+     * Set on first launch by `InitializeAppUseCase` to the seeded
+     * `Default System Pipeline` so the default is unambiguous from the
+     * start. Cleared automatically when the marked pipeline is deleted.
+     */
+    val defaultPipelineId: Flow<String?>
+
+    /**
+     * Updates the user-marked default pipeline id. Pass `null` to clear
+     * the marker (the resolution then falls back to the first pipeline
+     * in the library).
+     *
+     * @param pipelineId Pipeline id to mark as default, or `null` to clear.
+     */
+    suspend fun setDefaultPipelineId(pipelineId: String?)
+
+    /**
      * A [Flow] representing the default number of recent memory chunks rendered
      * by the `$MEMORY_SUMMARY` prompt variable. Defaults to 5.
      */

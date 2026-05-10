@@ -47,13 +47,35 @@ class GraphExecutionEngine @Inject constructor(
         userPrompt: String,
         graph: PipelineGraph
     ): Flow<AgentOrchestratorState> = flow {
+        // Buffer of console events accumulated for this run. The engine emits a
+        // fresh `ConsoleLog` snapshot on every append so the UI reactively
+        // updates the collapsed/expanded console panels.
+        val consoleEvents = mutableListOf<ConsoleEvent>()
+
+        suspend fun pushConsole(type: ConsoleEventType, message: String) {
+            consoleEvents += ConsoleEvent(
+                timestamp = System.currentTimeMillis(),
+                type = type,
+                message = message,
+            )
+            emit(AgentOrchestratorState.ConsoleLog(consoleEvents.toList()))
+        }
+
         if (!graph.isValidDAG()) {
+            // Push the console event BEFORE the terminal Error so the Error
+            // remains the last value of the orchestrator state flow.
+            // `TaskQueueManagerImpl.processTask` resets the flow to `Idle` in
+            // its `finally` if the last value is anything other than
+            // `Completed` / `Error`, so a trailing `ConsoleLog` would mask the
+            // real failure for observers reading `stateFlow.value`.
+            pushConsole(ConsoleEventType.Error, "Pipeline graph contains cycles")
             emit(AgentOrchestratorState.Error("Pipeline graph contains cycles and is invalid."))
             return@flow
         }
 
         val inputNode = graph.nodes.find { it.type == NodeType.INPUT }
         if (inputNode == null) {
+            pushConsole(ConsoleEventType.Error, "Pipeline has no INPUT node")
             emit(AgentOrchestratorState.Error("Pipeline has no INPUT node"))
             return@flow
         }
@@ -87,13 +109,17 @@ class GraphExecutionEngine @Inject constructor(
             Timber.tag("PipelineDebug").w(e, "Failed to retrieve long-term memories; continuing without them")
             emptyList()
         }
+        pushConsole(
+            ConsoleEventType.MemoryAccess,
+            "Memory: ${relevantMemories.size} chunk(s) retrieved",
+        )
         // Tool invocations are accumulated as TOOL nodes complete and surfaced
         // via the `--- Tool Results ---` block on later nodes that opt in.
         val toolInvocationResults = mutableListOf<ToolInvocationResult>()
 
         while (currentNode != null && stepCount < maxSteps) {
             stepCount++
-            
+
             // Emit current step with dynamically estimated total (null = still unknown).
             emit(AgentOrchestratorState.PipelineStage(
                 AgentOrchestratorState.PipelineStepInfo(
@@ -102,7 +128,8 @@ class GraphExecutionEngine @Inject constructor(
                     nodeName = currentNode.type.name,
                 )
             ))
-            
+            pushConsole(ConsoleEventType.NodeExecution, "▶ ${currentNode.type.name}")
+
             // Give UI time to render the stage before CPU-heavy inference starts
             kotlinx.coroutines.delay(500)
             
@@ -154,6 +181,10 @@ class GraphExecutionEngine @Inject constructor(
                 Timber.tag("PipelineDebug").d("[NODE_OUT] type=${currentNode.type.name} id=${currentNode.id} output=${nodeResult?.outputText?.take(1000)}")
             } catch (e: Exception) {
                 Timber.tag("PipelineDebug").e(e, "[NODE_ERR] type=${currentNode.type.name} id=${currentNode.id} error=${e.message}")
+                pushConsole(
+                    ConsoleEventType.Error,
+                    "${currentNode.type.name}: ${e.message ?: "Unknown error"}",
+                )
                 emit(AgentOrchestratorState.Error(e.message ?: "Unknown error"))
                 return@flow
             }
@@ -163,8 +194,23 @@ class GraphExecutionEngine @Inject constructor(
 
             if (nodeResult?.error != null) {
                 Timber.tag("PipelineDebug").e("[NODE_ERR] type=${currentNode.type.name} id=${currentNode.id} error=${nodeResult?.error}")
+                pushConsole(
+                    ConsoleEventType.Error,
+                    "${currentNode.type.name}: ${nodeResult?.error}",
+                )
                 emit(AgentOrchestratorState.Error(nodeResult?.error!!))
                 return@flow
+            }
+
+            // Skip the "✓" event for OUTPUT — its own emitted Completed state
+            // already marks the end of the pipeline, and pushing a ConsoleLog
+            // after Completed would shift the terminal state away from the
+            // tail of the flow.
+            if (currentNode.type != NodeType.OUTPUT) {
+                pushConsole(
+                    ConsoleEventType.NodeExecution,
+                    "✓ ${currentNode.type.name} in ${nodeDurationMs}ms",
+                )
             }
 
             if (currentNode.type == NodeType.TOOL) {
@@ -177,6 +223,7 @@ class GraphExecutionEngine @Inject constructor(
                     ?: currentNode.toolName?.takeUnless { it.equals("auto", ignoreCase = true) }
                     ?: currentNode.label
                 toolInvocationResults += ToolInvocationResult(toolName = toolName, output = toolOutput)
+                pushConsole(ConsoleEventType.ToolCall, toolName)
             }
 
             if (currentNode.type != NodeType.INPUT && currentNode.type != NodeType.OUTPUT) {
@@ -288,9 +335,11 @@ class GraphExecutionEngine @Inject constructor(
         }
 
         if (stepCount >= maxSteps) {
+            pushConsole(ConsoleEventType.Error, "Pipeline exceeded max steps ($maxSteps)")
             emit(AgentOrchestratorState.Error("Pipeline execution exceeded maximum steps ($maxSteps)"))
         } else {
             // Loop exited because currentNode became null before reaching OUTPUT
+            pushConsole(ConsoleEventType.Error, "Pipeline terminated without OUTPUT")
             emit(AgentOrchestratorState.Error("Pipeline execution terminated unexpectedly without reaching OUTPUT node."))
         }
     }
