@@ -12,6 +12,7 @@ import ai.agent.android.domain.models.ConsoleEventType
 import ai.agent.android.domain.models.Role
 import io.mockk.every
 import io.mockk.mockk
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import org.junit.Rule
 import org.junit.Test
@@ -21,11 +22,24 @@ class ChatScreenTest {
     @get:Rule
     val composeTestRule = createComposeRule()
 
+    /**
+     * Builds a [ChatViewModel] mock pre-stubbed with [state] and an empty
+     * `exportEvents` SharedFlow. The export flow has to be stubbed
+     * explicitly because `Flow.collect` is declared to return `Nothing` —
+     * MockK's relaxed default invokes the `Nothing` return path inside the
+     * `LaunchedEffect` collector and throws `KotlinNothingValueException`,
+     * tearing down composition before any assertion can run.
+     */
+    private fun mockViewModel(state: ChatUiState): ChatViewModel {
+        val mock = mockk<ChatViewModel>(relaxed = true)
+        every { mock.uiState } returns MutableStateFlow(state)
+        every { mock.exportEvents } returns MutableSharedFlow()
+        return mock
+    }
+
     @Test
     fun testChatScreen_displaysMessages_successState() {
-        val mockViewModel = mockk<ChatViewModel>(relaxed = true)
-
-        val fakeState = MutableStateFlow(
+        val viewModel = mockViewModel(
             ChatUiState(
                 messages = listOf(
                     ChatMessage(1, "s1", Role.USER, "Hello AI", 0L),
@@ -36,10 +50,8 @@ class ChatScreenTest {
             ),
         )
 
-        every { mockViewModel.uiState } returns fakeState
-
         composeTestRule.setContent {
-            ChatScreen(viewModel = mockViewModel)
+            ChatScreen(viewModel = viewModel)
         }
 
         composeTestRule.onNodeWithText("Hello AI").assertIsDisplayed()
@@ -48,18 +60,12 @@ class ChatScreenTest {
 
     @Test
     fun testChatScreen_displaysErrorState() {
-        val mockViewModel = mockk<ChatViewModel>(relaxed = true)
-
-        val fakeState = MutableStateFlow(
-            ChatUiState(
-                errorMessage = "Network Error Occurred",
-            ),
+        val viewModel = mockViewModel(
+            ChatUiState(errorMessage = "Network Error Occurred"),
         )
 
-        every { mockViewModel.uiState } returns fakeState
-
         composeTestRule.setContent {
-            ChatScreen(viewModel = mockViewModel)
+            ChatScreen(viewModel = viewModel)
         }
 
         // Error message is shown in a Snackbar. We can verify it exists on screen.
@@ -68,18 +74,10 @@ class ChatScreenTest {
 
     @Test
     fun testChatScreen_loadingGeneratingState() {
-        val mockViewModel = mockk<ChatViewModel>(relaxed = true)
-
-        val fakeState = MutableStateFlow(
-            ChatUiState(
-                isGenerating = true,
-            ),
-        )
-
-        every { mockViewModel.uiState } returns fakeState
+        val viewModel = mockViewModel(ChatUiState(isGenerating = true))
 
         composeTestRule.setContent {
-            ChatScreen(viewModel = mockViewModel)
+            ChatScreen(viewModel = viewModel)
         }
 
         // When generating, the Send button is disabled or turns into a progress indicator.
@@ -95,9 +93,7 @@ class ChatScreenTest {
      */
     @Test
     fun testChatScreen_bottomBar_rendersInputAndConsoleTogether() {
-        val mockViewModel = mockk<ChatViewModel>(relaxed = true)
-
-        val fakeState = MutableStateFlow(
+        val viewModel = mockViewModel(
             ChatUiState(
                 isGenerating = true,
                 consoleLines = listOf(
@@ -109,10 +105,9 @@ class ChatScreenTest {
                 ),
             ),
         )
-        every { mockViewModel.uiState } returns fakeState
 
         composeTestRule.setContent {
-            ChatScreen(viewModel = mockViewModel)
+            ChatScreen(viewModel = viewModel)
         }
 
         // Input bar still visible (placeholder is unique to ChatInputBar).
@@ -130,24 +125,18 @@ class ChatScreenTest {
      */
     @Test
     fun testChatScreen_lastMessageVisibleAboveBottomBar() {
-        val mockViewModel = mockk<ChatViewModel>(relaxed = true)
-
         val messages = (1..15).flatMap { i ->
             listOf(
                 ChatMessage(i.toLong() * 2, "s1", Role.USER, "user-$i", i.toLong()),
                 ChatMessage(i.toLong() * 2 + 1, "s1", Role.AGENT, "agent-$i", i.toLong()),
             )
         }
-        val fakeState = MutableStateFlow(
-            ChatUiState(
-                messages = messages,
-                isGenerating = false,
-            ),
+        val viewModel = mockViewModel(
+            ChatUiState(messages = messages, isGenerating = false),
         )
-        every { mockViewModel.uiState } returns fakeState
 
         composeTestRule.setContent {
-            ChatScreen(viewModel = mockViewModel)
+            ChatScreen(viewModel = viewModel)
         }
 
         // The very last bubble is what ends up just above the input bar; if
@@ -171,9 +160,7 @@ class ChatScreenTest {
      */
     @Test
     fun testChatScreen_compactScreen_collapsesConsoleToSingleSlot() {
-        val mockViewModel = mockk<ChatViewModel>(relaxed = true)
-
-        val fakeState = MutableStateFlow(
+        val viewModel = mockViewModel(
             ChatUiState(
                 isGenerating = true,
                 consoleLines = listOf(
@@ -183,7 +170,6 @@ class ChatScreenTest {
                 ),
             ),
         )
-        every { mockViewModel.uiState } returns fakeState
 
         composeTestRule.setContent {
             val baseConfiguration = LocalConfiguration.current
@@ -192,7 +178,7 @@ class ChatScreenTest {
                 screenWidthDp = 360
             }
             CompositionLocalProvider(LocalConfiguration provides compactConfiguration) {
-                ChatScreen(viewModel = mockViewModel)
+                ChatScreen(viewModel = viewModel)
             }
         }
 
