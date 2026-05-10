@@ -19,15 +19,20 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -410,7 +415,20 @@ fun ChatScreen(
                 val thoughtState = uiState.orchestratorState
                     ?.takeIf { uiState.isGenerating && !hasPendingClarification }
 
-                Column(modifier = Modifier.imePadding()) {
+                // Apply horizontal safe-drawing insets here: in landscape
+                // the system navigation lives on the side and the
+                // `bottomBar` slot does not receive `paddingValues` like the
+                // body does, so without this the `ChatInputBar` would draw
+                // under the navigation buttons and the Send affordance
+                // would become unclickable. `imePadding()` is layered on
+                // top so the whole bar still rises with the keyboard.
+                Column(
+                    modifier = Modifier
+                        .windowInsetsPadding(
+                            WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal),
+                        )
+                        .imePadding(),
+                ) {
                     uiState.inlineError?.let { inlineError ->
                         InlineErrorBanner(
                             text = inlineError,
