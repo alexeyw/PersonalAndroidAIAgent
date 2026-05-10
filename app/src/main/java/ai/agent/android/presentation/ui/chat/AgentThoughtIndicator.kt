@@ -1,14 +1,13 @@
 package ai.agent.android.presentation.ui.chat
 
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
@@ -22,17 +21,26 @@ import ai.agent.android.domain.models.AgentOrchestratorState
  * state, intended to render at the top of [ConsolePanelCollapsed]. Phase 17.4
  * pulled this card out of the chat list (where it kept dragging the message
  * list during streaming) and re-skinned it to match the console's monospace
- * line aesthetic.
+ * line aesthetic; later the entire panel was locked to exactly three slots,
+ * so this composable is guaranteed to fit in a single row regardless of
+ * orchestrator state — including [AgentOrchestratorState.WaitingForApproval],
+ * whose Approve/Deny actions render inline alongside the question instead
+ * of in a separate row beneath it.
  *
  * Render contract:
  *  - Returns nothing for terminal / inert states ([AgentOrchestratorState.Idle],
  *    [AgentOrchestratorState.Completed], [AgentOrchestratorState.Error]) — the
  *    final reply lands as a regular chat message and the panel's event log
  *    already shows the closing trace.
- *  - Otherwise emits one monospace line in the same `[TAG] message` format as
- *    [ConsoleEvent]s, color-coded by urgency.
- *  - For [AgentOrchestratorState.WaitingForApproval] additionally renders a
- *    compact `Approve / Deny` action row inline below the line.
+ *  - Otherwise emits **one** monospace row in the same `[TAG] message`
+ *    format as [ConsoleEvent]s, color-coded by urgency.
+ *  - For [AgentOrchestratorState.WaitingForApproval] the row is a `Row` with
+ *    the question on the left (taking remaining width with `weight(1f)`) and
+ *    `Deny` / `Approve` clickable Text affordances on the right. Tap target
+ *    is 6dp horizontal + 2dp vertical padding around an 11sp glyph — small
+ *    but acceptable inside the dense status strip; the system notification
+ *    fallback (`ApprovalNotificationManager`) provides the larger touch
+ *    surface when the chat isn't visible.
  *
  * @param state Current orchestrator state. Caller is expected to gate
  *   visibility (e.g. `isGenerating && !hasPendingClarification`); this
@@ -50,7 +58,25 @@ fun AgentThoughtIndicator(
     val label = labelFor(state) ?: return
     val color = colorFor(state)
 
-    Column(modifier = modifier.fillMaxWidth()) {
+    if (state is AgentOrchestratorState.WaitingForApproval) {
+        Row(
+            modifier = modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = label,
+                color = color,
+                fontFamily = FontFamily.Monospace,
+                fontSize = LineFontSize,
+                lineHeight = LineHeight,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f),
+            )
+            ConsoleAction(label = "Deny", onClick = onDeny)
+            ConsoleAction(label = "Approve", onClick = onApprove)
+        }
+    } else {
         Text(
             text = label,
             color = color,
@@ -59,26 +85,20 @@ fun AgentThoughtIndicator(
             lineHeight = LineHeight,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
+            modifier = modifier.fillMaxWidth(),
         )
-        if (state is AgentOrchestratorState.WaitingForApproval) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.End,
-            ) {
-                ConsoleAction(label = "Deny", onClick = onDeny)
-                ConsoleAction(label = "Approve", onClick = onApprove)
-            }
-        }
     }
 }
 
+/** Console line typography — kept in sync with [ConsolePanelCollapsed]. */
+internal val LineFontSize = 11.sp
+internal val LineHeight = 12.sp
+private const val NeutralAlpha = 0.6f
+
 /**
- * Compact in-console action button used by the [AgentOrchestratorState.WaitingForApproval]
- * row. Standard Material `TextButton` reserves a 48dp tap target with
- * generous internal padding which read as a vertical gap inside the dense
- * monospace strip — this variant matches the line-height of console events
- * while still meeting the 44dp tap-target via `clickable` + 12dp horizontal
- * padding (giving ~28dp of vertical padding around an 11sp glyph).
+ * Compact in-line action affordance used by [AgentOrchestratorState.WaitingForApproval].
+ * Clickable monospace text with minimal padding so the entire approval row
+ * stays inside a single console slot.
  */
 @Composable
 private fun ConsoleAction(label: String, onClick: () -> Unit) {
@@ -86,17 +106,13 @@ private fun ConsoleAction(label: String, onClick: () -> Unit) {
         text = label,
         modifier = Modifier
             .clickable(onClick = onClick)
-            .padding(horizontal = 12.dp, vertical = 4.dp),
+            .padding(horizontal = 6.dp, vertical = 2.dp),
         color = MaterialTheme.colorScheme.primary,
         fontFamily = FontFamily.Monospace,
         fontSize = LineFontSize,
         lineHeight = LineHeight,
     )
 }
-
-private val LineFontSize = 11.sp
-private val LineHeight = 12.sp
-private const val NeutralAlpha = 0.6f
 
 /**
  * Maps an orchestrator state to the single-line label rendered in the

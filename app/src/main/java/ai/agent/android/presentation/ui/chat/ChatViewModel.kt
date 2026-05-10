@@ -27,7 +27,10 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import org.json.JSONArray
@@ -80,11 +83,50 @@ class ChatViewModel @Inject constructor(
      */
     private var availablePipelinesObserved: Boolean = false
 
+    /**
+     * Mirrors whether the chat screen is currently visible to the user. Updated
+     * exclusively by [setChatVisible]; read inside an `init { }` collector that
+     * combines this flag with the active session id and pushes the result into
+     * [activeSessionTracker], so the tracker stays in sync with the chat
+     * visibility *and* with the asynchronously-loaded session id (the previous
+     * read-once-on-ON_START approach raced with `initializeSession()` and
+     * left the tracker as `null` for an open chat — the inline approval prompt
+     * was visible but the push notification still fired because the
+     * tracker never caught the late session id).
+     */
+    private val _isChatVisible = MutableStateFlow(false)
+
     init {
         loadSessions()
         observeAvailablePipelines()
         initializeSession()
         observeMaxContextSize()
+        observeActiveSessionTracking()
+    }
+
+    /**
+     * Keeps [activeSessionTracker] in lock-step with the latest
+     * (`isVisible`, `currentSessionId`) pair. Replaces the previous one-shot
+     * read inside [setChatVisible], which fired on `ON_START` and missed the
+     * session id that `initializeSession()` saves a few milliseconds later.
+     *
+     * The tracker becomes:
+     *  - the active session id while the chat is visible AND the id is set;
+     *  - `null` whenever the chat is hidden or the id is still loading.
+     */
+    private fun observeActiveSessionTracking() {
+        viewModelScope.launch {
+            combine(
+                _isChatVisible,
+                _uiState.map { it.currentSessionId }.distinctUntilChanged(),
+            ) { visible, sessionId ->
+                if (visible && sessionId.isNotBlank()) sessionId else null
+            }
+                .distinctUntilChanged()
+                .collect { trackedId ->
+                    activeSessionTracker.setActiveSessionId(trackedId)
+                }
+        }
     }
 
     /**
@@ -194,18 +236,15 @@ class ChatViewModel @Inject constructor(
     }
 
     /**
-     * Sets whether the chat screen is currently visible to the user.
-     * This helps suppress push notifications for approvals when the inline UI is active.
+     * Marks the chat screen as visible (or not). Tracker updates are driven
+     * by [observeActiveSessionTracking]'s combine() — flipping this flag is
+     * enough; the collector immediately reads the latest session id and
+     * pushes the right value into [activeSessionTracker].
      *
      * @param isVisible True if the screen is actively displayed, false otherwise.
      */
     fun setChatVisible(isVisible: Boolean) {
-        val currentSessionId = _uiState.value.currentSessionId
-        if (isVisible && currentSessionId.isNotBlank()) {
-            activeSessionTracker.setActiveSessionId(currentSessionId)
-        } else {
-            activeSessionTracker.setActiveSessionId(null)
-        }
+        _isChatVisible.value = isVisible
     }
 
     /**
@@ -335,12 +374,9 @@ class ChatViewModel @Inject constructor(
             }
             loadMessages(sessionId)
             handleDeletedBoundPipeline(_uiState.value.availablePipelines)
-            
-            // Re-evaluate active session tracking if the UI is currently visible.
-            // setChatVisible logic relies on UI state, so we update the tracker if we were already active.
-            if (activeSessionTracker.activeSessionId.value != null) {
-                activeSessionTracker.setActiveSessionId(sessionId)
-            }
+            // No need to poke `activeSessionTracker` here — the
+            // `observeActiveSessionTracking()` combiner above watches the
+            // session id flow and updates the tracker automatically.
         }
     }
 
