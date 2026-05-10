@@ -1248,6 +1248,74 @@ class ChatViewModelTest {
     }
 
     @Test
+    fun `intermediate node outputs reach console while only isFinal messages reach chat list`() = runTest {
+        // Cross-cuts two independent behaviors verified separately above:
+        //   (a) `getDisplayMessagesForSession` filters out `isFinal = false` rows
+        //       before they hit `uiState.messages` (Phase 17.3).
+        //   (b) `AgentOrchestratorState.ConsoleLog` events feed `uiState.consoleLines`
+        //       regardless of whether their underlying step produced a final message
+        //       (Phase 17.5).
+        // This integration-level assertion prevents future regressions where one
+        // path is changed without the other — e.g. a refactor that accidentally
+        // surfaces intermediate node outputs in the chat list, or one that drops
+        // intermediate ConsoleEvents on the way to the panel.
+        viewModel = createViewModel()
+        advanceUntilIdle()
+
+        val sessionId = viewModel.uiState.value.currentSessionId
+        val finalMessage = ChatMessage(
+            id = 1L,
+            sessionId = sessionId,
+            role = Role.AGENT,
+            content = "final answer",
+            timestamp = 100L,
+            isFinal = true,
+        )
+        // Repository-level filter contract: `isFinal = false` rows are absent here.
+        every { chatRepository.getDisplayMessagesForSession(sessionId) } returns
+            flowOf(listOf(finalMessage))
+
+        val intermediateEvent = ConsoleEvent(
+            timestamp = 1_700_000_000_000L,
+            type = ConsoleEventType.NodeExecution,
+            message = "▶ LITE_RT (intermediate, isFinal=false in DB)",
+        )
+        val finalEvent = ConsoleEvent(
+            timestamp = 1_700_000_001_000L,
+            type = ConsoleEventType.SystemMessage,
+            message = "Pipeline completed",
+        )
+        coEvery { agentOrchestratorUseCase(sessionId, "go", any()) } returns flow {
+            emit(AgentOrchestratorState.ConsoleLog(listOf(intermediateEvent)))
+            emit(AgentOrchestratorState.ConsoleLog(listOf(intermediateEvent, finalEvent)))
+            emit(AgentOrchestratorState.Completed("done"))
+        }
+
+        // Re-subscribe the message observer so the new display-flow stub takes
+        // effect (toggle off→on→off; the ViewModel switches sources on each call).
+        viewModel.toggleStarredFilter()
+        advanceUntilIdle()
+        viewModel.toggleStarredFilter()
+        advanceUntilIdle()
+
+        viewModel.sendMessage("go")
+        advanceUntilIdle()
+
+        // Chat list: only the final message survives the display-flow filter.
+        val chatMessages = viewModel.uiState.value.messages
+        assertEquals(1, chatMessages.size)
+        assertEquals("final answer", chatMessages.single().content)
+        assertTrue(chatMessages.single().isFinal)
+
+        // Console: every event — including the one whose underlying message is
+        // intermediate and never reaches the chat list — is preserved.
+        val consoleLines = viewModel.uiState.value.consoleLines
+        assertEquals(2, consoleLines.size)
+        assertEquals(intermediateEvent, consoleLines[0])
+        assertEquals(finalEvent, consoleLines[1])
+    }
+
+    @Test
     fun `given orchestrator emits ConsoleLog when collected then consoleLines mirror events`() = runTest {
         val userPrompt = "console test"
         val event1 = ConsoleEvent(
