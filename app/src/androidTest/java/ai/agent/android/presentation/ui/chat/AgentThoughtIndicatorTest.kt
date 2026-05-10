@@ -8,73 +8,101 @@ import ai.agent.android.domain.models.AgentOrchestratorState
 import org.junit.Rule
 import org.junit.Test
 
+/**
+ * Compose-side tests for [AgentThoughtIndicator]. Phase 17.4 reduced this
+ * composable to a single console-styled line (with an inline Approve/Deny
+ * action row for `WaitingForApproval`), so the assertions verify the new
+ * line-based output rather than the previous expandable card.
+ */
 class AgentThoughtIndicatorTest {
 
     @get:Rule
     val composeTestRule = createComposeRule()
 
     @Test
-    fun shouldDisplayThinkingState() {
+    fun shouldDisplayThinkingLine() {
         composeTestRule.setContent {
             AgentThoughtIndicator(state = AgentOrchestratorState.Thinking("Hmm..."))
         }
 
-        composeTestRule.onNodeWithText("Agent is thinking...").assertIsDisplayed()
-        
-        // Expand the card
-        composeTestRule.onNodeWithText("Agent is thinking...").performClick()
-        
-        // Check partial text
-        composeTestRule.onNodeWithText("Hmm...").assertIsDisplayed()
+        composeTestRule.onNodeWithText("[NOW] Agent is thinking...").assertIsDisplayed()
+        // The streaming partial text is no longer rendered — it used to drag the
+        // chat list and is now hidden behind the static label.
+        composeTestRule.onNodeWithText("Hmm...").assertDoesNotExist()
     }
 
     @Test
-    fun shouldDisplayExecutingToolState() {
+    fun shouldDisplayExecutingToolLine() {
         composeTestRule.setContent {
             AgentThoughtIndicator(
-                state = AgentOrchestratorState.ExecutingTool(toolName = "Calendar", arguments = "date=today")
+                state = AgentOrchestratorState.ExecutingTool(
+                    toolName = "Calendar",
+                    arguments = "date=today",
+                ),
             )
         }
 
-        composeTestRule.onNodeWithText("Using tool: Calendar...").assertIsDisplayed()
-        
-        composeTestRule.onNodeWithText("Using tool: Calendar...").performClick()
-        
-        composeTestRule.onNodeWithText("Arguments: date=today").assertIsDisplayed()
+        composeTestRule.onNodeWithText("[NOW] Using tool: Calendar...").assertIsDisplayed()
     }
 
     @Test
-    fun shouldDisplayObservationResultState() {
+    fun shouldDisplayObservationLine() {
         composeTestRule.setContent {
             AgentThoughtIndicator(
-                state = AgentOrchestratorState.ObservationResult(toolName = "Calendar", result = "Meeting at 10 AM")
+                state = AgentOrchestratorState.ObservationResult(
+                    toolName = "Calendar",
+                    result = "Meeting at 10 AM",
+                ),
             )
         }
 
-        composeTestRule.onNodeWithText("Observation received...").assertIsDisplayed()
-        
-        composeTestRule.onNodeWithText("Observation received...").performClick()
-        
-        composeTestRule.onNodeWithText("Result from Calendar:\nMeeting at 10 AM").assertIsDisplayed()
+        composeTestRule.onNodeWithText("[NOW] Observation: Calendar").assertIsDisplayed()
     }
-    
+
     @Test
-    fun shouldDisplayAnsweringStateAsMarkdown() {
+    fun shouldDisplayAnsweringLine() {
         composeTestRule.setContent {
             AgentThoughtIndicator(state = AgentOrchestratorState.Answering("Final answer text"))
         }
 
-        composeTestRule.onNodeWithText("Final answer text").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Agent is thinking...").assertDoesNotExist()
+        composeTestRule.onNodeWithText("[NOW] Agent is answering...").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Final answer text").assertDoesNotExist()
     }
-    
+
     @Test
-    fun shouldNotDisplayAnythingForCompletedState() {
+    fun shouldRenderApproveDenyForWaitingForApproval() {
+        var approveCount = 0
+        var denyCount = 0
+
+        composeTestRule.setContent {
+            AgentThoughtIndicator(
+                state = AgentOrchestratorState.WaitingForApproval(
+                    toolName = "Calendar",
+                    arguments = "date=today",
+                ),
+                onApprove = { approveCount++ },
+                onDeny = { denyCount++ },
+            )
+        }
+
+        composeTestRule.onNodeWithText("[ASK] Approve Calendar?").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Approve").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Deny").assertIsDisplayed()
+
+        composeTestRule.onNodeWithText("Approve").performClick()
+        composeTestRule.onNodeWithText("Deny").performClick()
+
+        assert(approveCount == 1) { "Approve callback should fire once, fired $approveCount" }
+        assert(denyCount == 1) { "Deny callback should fire once, fired $denyCount" }
+    }
+
+    @Test
+    fun shouldRenderNothingForCompletedState() {
         composeTestRule.setContent {
             AgentThoughtIndicator(state = AgentOrchestratorState.Completed("Done"))
         }
 
-        composeTestRule.onNodeWithText("Agent is thinking...").assertDoesNotExist()
+        composeTestRule.onNodeWithText("[NOW] Agent is thinking...").assertDoesNotExist()
         composeTestRule.onNodeWithText("Done").assertDoesNotExist()
     }
 }

@@ -496,24 +496,25 @@ fun ChatScreen(
                     isGenerating = uiState.isGenerating
                 )
 
-                // Bottom "agent area" — both pieces moved out of the chat
-                // LazyColumn so streaming-driven recompositions can no longer
-                // drag the message list around. The thought card surfaces
-                // current orchestrator state (and approval buttons) and the
-                // console strip shows the running event log.
+                // Bottom agent area: the console panel hosts both the rolling
+                // event log and the thought-state line / approve-deny row.
+                // Pulling the thought card out of the chat LazyColumn (and
+                // re-skinning it as a console line inside this same Surface)
+                // stops streaming-driven recompositions from dragging the
+                // chat list around.
                 val hasPendingClarification = uiState.clarificationCards.any {
                     it.status == ClarificationCardUiModel.Status.PENDING
                 }
-                if (uiState.orchestratorState != null && uiState.isGenerating && !hasPendingClarification) {
-                    AgentThoughtIndicator(
-                        state = uiState.orchestratorState!!,
+                val thoughtState = uiState.orchestratorState
+                    ?.takeIf { uiState.isGenerating && !hasPendingClarification }
+
+                if (uiState.isGenerating || uiState.consoleLines.isNotEmpty()) {
+                    ConsolePanelCollapsed(
+                        events = uiState.consoleLines,
+                        currentState = thoughtState,
                         onApprove = { viewModel.resumeWithApproval(true) },
                         onDeny = { viewModel.resumeWithApproval(false) },
                     )
-                }
-
-                if (uiState.isGenerating || uiState.consoleLines.isNotEmpty()) {
-                    ConsolePanelCollapsed(events = uiState.consoleLines)
                 } else {
                     // No console visible: still own the navigation-bar inset
                     // so the input bar stays clear of the system buttons.
@@ -608,7 +609,7 @@ private fun NewChatPipelineSheet(
             LazyColumn(modifier = Modifier.fillMaxWidth()) {
                 item {
                     PipelineChoiceRow(
-                        title = "Use default pipeline",
+                        title = defaultPipelineLabel(pipelines),
                         selected = selected == null,
                         onClick = { selected = null },
                     )
@@ -669,7 +670,7 @@ private fun ChatSettingsDialog(
                 LazyColumn(modifier = Modifier.fillMaxWidth()) {
                     item {
                         PipelineChoiceRow(
-                            title = "Use default pipeline",
+                            title = defaultPipelineLabel(pipelines),
                             selected = selectedPipelineId == null,
                             onClick = { onSelectPipeline(null) },
                         )
@@ -703,6 +704,19 @@ private fun ChatSettingsDialog(
  * is the single touch target — this prevents nested clickable surfaces and
  * the duplicate accessibility node that would otherwise appear.
  */
+/**
+ * Builds the label for the "Use default pipeline" radio option in both the
+ * new-chat sheet and the chat-settings dialog. Includes the resolved default
+ * pipeline name in parentheses so the user can see which concrete pipeline
+ * is being deferred to — without this, the TopAppBar subtitle (which always
+ * shows the resolved name) appeared to disagree with the dialog (which only
+ * showed the abstract "Use default" label).
+ */
+private fun defaultPipelineLabel(pipelines: List<PipelineSummary>): String {
+    val defaultName = pipelines.firstOrNull()?.name ?: return "Use default pipeline"
+    return "Use default pipeline ($defaultName)"
+}
+
 @Composable
 private fun PipelineChoiceRow(
     title: String,

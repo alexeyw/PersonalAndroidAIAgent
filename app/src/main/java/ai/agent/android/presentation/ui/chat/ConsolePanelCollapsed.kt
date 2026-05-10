@@ -17,6 +17,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import ai.agent.android.domain.models.AgentOrchestratorState
 import ai.agent.android.domain.models.ConsoleEvent
 import ai.agent.android.domain.models.ConsoleEventType
 import java.text.SimpleDateFormat
@@ -54,25 +55,37 @@ private const val NeutralAlpha = 0.6f
 private const val MutedAlpha = 0.4f
 
 /**
- * Always-on agent console rendered as a thin strip above the chat input.
+ * Always-on agent console rendered as a thin strip below the chat input.
  *
- * The composable is stateless: callers pass the event list (already truncated
- * or filtered if needed) and decide whether to show the panel at all. Visibility
- * gating lives in `ChatScreen` so the panel can disappear entirely when the
- * agent is idle and the log is empty.
+ * The composable is stateless: callers pass the event list, the current
+ * orchestrator state (when generating), and decide whether to show the panel
+ * at all. Visibility gating lives in `ChatScreen` so the panel can disappear
+ * entirely when the agent is idle and the log is empty.
  *
- * The most recent event is rendered at the bottom (closest to the input) so
- * the user's eye, naturally drawn to the input area, lands on the freshest
- * activity. Up to [COLLAPSED_LINE_LIMIT] lines are shown — anything older is
- * available in the expanded console (Phase 17.5).
+ * Layout from top to bottom:
+ *  1. Optional [AgentThoughtIndicator] line (and Approve/Deny row when the
+ *     orchestrator is awaiting approval). Phase 17.4 absorbed the standalone
+ *     thought card into this surface so the agent area reads as one block in
+ *     a unified monospace style.
+ *  2. Last [COLLAPSED_LINE_LIMIT] [ConsoleEvent]s, freshest at the bottom so
+ *     the user's eye (drawn to the input) lands on the most recent activity.
  *
  * @param events Console events to render. Only the last [COLLAPSED_LINE_LIMIT]
  *   are displayed; the caller does not need to truncate.
+ * @param currentState Current orchestrator state. Pass `null` to suppress the
+ *   thought line entirely (e.g. when the agent is idle).
+ * @param onApprove Forwarded to the embedded thought line for the
+ *   [AgentOrchestratorState.WaitingForApproval] action row.
+ * @param onDeny Forwarded to the embedded thought line for the
+ *   [AgentOrchestratorState.WaitingForApproval] action row.
  * @param modifier Optional layout modifier applied to the panel container.
  */
 @Composable
 fun ConsolePanelCollapsed(
     events: List<ConsoleEvent>,
+    currentState: AgentOrchestratorState? = null,
+    onApprove: () -> Unit = {},
+    onDeny: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val timeFormatter = remember { SimpleDateFormat("HH:mm:ss", Locale.US) }
@@ -96,6 +109,13 @@ fun ConsolePanelCollapsed(
                 .padding(horizontal = 10.dp, vertical = 2.dp),
             verticalArrangement = Arrangement.Bottom,
         ) {
+            if (currentState != null) {
+                AgentThoughtIndicator(
+                    state = currentState,
+                    onApprove = onApprove,
+                    onDeny = onDeny,
+                )
+            }
             visibleEvents.forEach { event ->
                 Text(
                     text = formatLine(event, timeFormatter.format(Date(event.timestamp))),

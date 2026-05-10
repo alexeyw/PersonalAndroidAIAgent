@@ -1,173 +1,113 @@
 package ai.agent.android.presentation.ui.chat
 
-import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.KeyboardArrowUp
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import ai.agent.android.domain.models.AgentOrchestratorState
 
 /**
- * A Composable widget that visualizes the internal "Chain of Thought" process of the agent.
- * It displays states like thinking, using tools, or loading in an animated, expandable card.
+ * Console-styled single-line indicator of the agent's current orchestrator
+ * state, intended to render at the top of [ConsolePanelCollapsed]. Phase 17.4
+ * pulled this card out of the chat list (where it kept dragging the message
+ * list during streaming) and re-skinned it to match the console's monospace
+ * line aesthetic.
  *
- * @param state The current state of the orchestrator to visualize.
- * @param onApprove Callback when the user approves a tool execution.
- * @param onDeny Callback when the user denies a tool execution.
+ * Render contract:
+ *  - Returns nothing for terminal / inert states ([AgentOrchestratorState.Idle],
+ *    [AgentOrchestratorState.Completed], [AgentOrchestratorState.Error]) — the
+ *    final reply lands as a regular chat message and the panel's event log
+ *    already shows the closing trace.
+ *  - Otherwise emits one monospace line in the same `[TAG] message` format as
+ *    [ConsoleEvent]s, color-coded by urgency.
+ *  - For [AgentOrchestratorState.WaitingForApproval] additionally renders a
+ *    compact `Approve / Deny` action row inline below the line.
+ *
+ * @param state Current orchestrator state. Caller is expected to gate
+ *   visibility (e.g. `isGenerating && !hasPendingClarification`); this
+ *   composable does not check those external signals itself.
+ * @param onApprove Invoked when the user accepts the pending tool execution.
+ * @param onDeny Invoked when the user rejects the pending tool execution.
  */
 @Composable
 fun AgentThoughtIndicator(
     state: AgentOrchestratorState,
     onApprove: () -> Unit = {},
-    onDeny: () -> Unit = {}
+    onDeny: () -> Unit = {},
+    modifier: Modifier = Modifier,
 ) {
-    var expanded by remember { mutableStateOf(false) }
+    val label = labelFor(state) ?: return
+    val color = colorFor(state)
 
-    // The streaming partial-text bubble used to render here for `Answering`,
-    // but every token append triggered a recomposition and grew the bubble,
-    // jolting the chat list. We now show only the compact thought card with
-    // a static "Agent is answering..." label below; the full reply lands as
-    // a single final message once generation completes.
-    if (state is AgentOrchestratorState.Completed || state is AgentOrchestratorState.Error) {
-        return
-    }
-
-    Box(
-        modifier = Modifier.fillMaxWidth(),
-        contentAlignment = Alignment.CenterStart
-    ) {
-        Column(
-            modifier = Modifier
-                .widthIn(max = 300.dp)
-                .clip(RoundedCornerShape(12.dp))
-                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
-                .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(12.dp))
-                .clickable { expanded = !expanded }
-                .padding(12.dp)
-        ) {
+    Column(modifier = modifier.fillMaxWidth()) {
+        Text(
+            text = label,
+            color = color,
+            fontFamily = FontFamily.Monospace,
+            fontSize = LineFontSize,
+            lineHeight = LineHeight,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        if (state is AgentOrchestratorState.WaitingForApproval) {
             Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End,
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(16.dp),
-                        strokeWidth = 2.dp,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    AnimatedContent(targetState = state, label = "thought_state") { targetState ->
-                        Text(
-                            text = when (targetState) {
-                                is AgentOrchestratorState.Loading -> "Initializing agent..."
-                                is AgentOrchestratorState.Thinking -> "Agent is thinking..."
-                                is AgentOrchestratorState.Answering -> "Agent is answering..."
-                                is AgentOrchestratorState.WaitingForApproval -> "Action requires approval!"
-                                is AgentOrchestratorState.ExecutingTool -> "Using tool: ${targetState.toolName}..."
-                                is AgentOrchestratorState.ObservationResult -> "Observation received..."
-                                is AgentOrchestratorState.PipelineStage -> "Executing stage: ${targetState.stepInfo.nodeName}..."
-                                else -> "Processing..."
-                            },
-                            style = MaterialTheme.typography.labelMedium,
-                            color = if (targetState is AgentOrchestratorState.WaitingForApproval) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
+                TextButton(onClick = onDeny) {
+                    Text("Deny", fontFamily = FontFamily.Monospace, fontSize = LineFontSize)
                 }
-                
-                Icon(
-                    imageVector = if (expanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
-                    contentDescription = "Expand/Collapse",
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(20.dp)
-                )
-            }
-
-            AnimatedVisibility(visible = expanded || state is AgentOrchestratorState.WaitingForApproval) {
-                Column(modifier = Modifier.padding(top = 8.dp)) {
-                    when (state) {
-                        is AgentOrchestratorState.WaitingForApproval -> {
-                            Text(
-                                text = "Agent wants to execute '${state.toolName}'",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.padding(bottom = 8.dp)
-                            )
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.End
-                            ) {
-                                Button(
-                                    onClick = onDeny,
-                                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.errorContainer, contentColor = MaterialTheme.colorScheme.onErrorContainer),
-                                    modifier = Modifier.padding(end = 8.dp)
-                                ) {
-                                    Text("Deny")
-                                }
-                                Button(onClick = onApprove) {
-                                    Text("Approve")
-                                }
-                            }
-                        }
-                        is AgentOrchestratorState.Thinking -> {
-                            Text(
-                                text = state.partialText,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                        is AgentOrchestratorState.ExecutingTool -> {
-                            Text(
-                                text = "Arguments: ${state.arguments}",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                        is AgentOrchestratorState.ObservationResult -> {
-                            Text(
-                                text = "Result from ${state.toolName}:\n${state.result}",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                maxLines = 5,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
-                        else -> {}
-                    }
+                TextButton(onClick = onApprove) {
+                    Text("Approve", fontFamily = FontFamily.Monospace, fontSize = LineFontSize)
                 }
             }
         }
     }
+}
+
+private val LineFontSize = 11.sp
+private val LineHeight = 12.sp
+private const val NeutralAlpha = 0.6f
+
+/**
+ * Maps an orchestrator state to the single-line label rendered in the
+ * thought indicator. Returns `null` for states that should produce no
+ * output (caller `return`s early when this is `null`).
+ */
+private fun labelFor(state: AgentOrchestratorState): String? = when (state) {
+    is AgentOrchestratorState.Idle,
+    is AgentOrchestratorState.Completed,
+    is AgentOrchestratorState.Error,
+    is AgentOrchestratorState.AwaitingClarification -> null
+    is AgentOrchestratorState.Loading -> "[NOW] Initializing agent..."
+    is AgentOrchestratorState.Thinking -> "[NOW] Agent is thinking..."
+    is AgentOrchestratorState.Answering -> "[NOW] Agent is answering..."
+    is AgentOrchestratorState.ExecutingTool -> "[NOW] Using tool: ${state.toolName}..."
+    is AgentOrchestratorState.ObservationResult -> "[NOW] Observation: ${state.toolName}"
+    is AgentOrchestratorState.WaitingForApproval -> "[ASK] Approve ${state.toolName}?"
+    is AgentOrchestratorState.PipelineStage -> "[NOW] Stage: ${state.stepInfo.nodeName}"
+    is AgentOrchestratorState.PipelineTrace,
+    is AgentOrchestratorState.ConsoleLog -> null
+}
+
+/**
+ * Color for the thought line. Approval prompts demand attention so they pick
+ * up the error palette; everything else uses the same muted `onSurface`
+ * neutral that [ConsolePanelCollapsed] uses for `NodeExecution` events so
+ * the thought line and the rolling event log read as a single typographic
+ * surface.
+ */
+@Composable
+private fun colorFor(state: AgentOrchestratorState): Color = when (state) {
+    is AgentOrchestratorState.WaitingForApproval -> MaterialTheme.colorScheme.error
+    else -> MaterialTheme.colorScheme.onSurface.copy(alpha = NeutralAlpha)
 }
