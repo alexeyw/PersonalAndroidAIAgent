@@ -26,47 +26,47 @@ import java.util.Locale
 
 /**
  * Total number of slots rendered by the panel. Locked to three so the panel
- * never resizes between states (one-line thought, two-line approval, etc.) —
- * spec says the strip is exactly three lines tall.
+ * never resizes between states — spec says the strip is exactly three lines
+ * tall and doesn't grow when the agent is thinking or asking for approval.
  */
 private const val SLOT_COUNT = 3
 
 /**
  * Per-slot vertical extent in dp. Set just above the `12.sp` line height of
  * the monospace text so glyph descenders aren't clipped at default font
- * scale. Total content height is therefore `SLOT_COUNT * SlotHeight` plus the
- * vertical padding wrapping the column.
+ * scale.
  */
 private val SlotHeight = 14.dp
 
 /**
+ * Sealed model of a single console row. Both the rolling event log and the
+ * orchestrator state line flow through the same list so they share slot
+ * positioning, alignment, and the bottom-anchored chronological ordering.
+ */
+private sealed interface ConsoleLine {
+    data class Event(val event: ConsoleEvent) : ConsoleLine
+    data class State(val state: AgentOrchestratorState) : ConsoleLine
+}
+
+/**
  * Always-on agent console rendered as a thin strip below the chat input.
  *
- * The composable is stateless: callers pass the event list, the current
- * orchestrator state (when generating), and decide whether to show the panel
- * at all. Visibility gating lives in `ChatScreen` so the panel can disappear
- * entirely when the agent is idle and the log is empty.
+ * Stateless and locked to exactly [SLOT_COUNT] slots. The orchestrator state
+ * line — when present — is treated as just another console row, appended to
+ * the rolling event log as the freshest entry. The strip then shows the last
+ * [SLOT_COUNT] entries bottom-aligned, so the user sees the running activity
+ * regardless of whether it's a node event, a thought-state line, or an
+ * approval prompt; the panel does not gain or lose height between cases.
  *
- * The strip is locked to exactly [SLOT_COUNT] slots, top-to-bottom:
- *  - When [currentState] is non-null, slot 0 hosts a single-line
- *    [AgentThoughtIndicator] (which packs Approve/Deny inline for
- *    [AgentOrchestratorState.WaitingForApproval]). The remaining 2 slots
- *    show the latest events bottom-aligned.
- *  - When [currentState] is null, all 3 slots are populated by the latest
- *    events bottom-aligned.
- *
- * Slots without content render as transparent spacers of [SlotHeight] so the
- * panel keeps the same total height regardless of what's available — the
- * spec asks for an immutable three-line strip.
- *
- * @param events Console events to render. The composable picks the freshest
- *   ones that fit the remaining slots; no truncation needed at the call site.
- * @param currentState Current orchestrator state. Pass `null` to suppress the
- *   thought line entirely (e.g. when the agent is idle).
- * @param onApprove Forwarded to the embedded thought line for the
- *   [AgentOrchestratorState.WaitingForApproval] action affordance.
- * @param onDeny Forwarded to the embedded thought line for the
- *   [AgentOrchestratorState.WaitingForApproval] action affordance.
+ * @param events Console events to render. Caller passes the full log; the
+ *   composable picks the last few that fit the available slots.
+ * @param currentState Current orchestrator state. When non-null it joins the
+ *   line list as the freshest row (rendered at the bottom). For
+ *   [AgentOrchestratorState.WaitingForApproval] the row carries inline
+ *   `Deny` / `Approve` affordances; for every other live state it's a
+ *   single monospace label like `[NOW] Agent is answering...`.
+ * @param onApprove Forwarded to the embedded approval row.
+ * @param onDeny Forwarded to the embedded approval row.
  * @param modifier Optional layout modifier applied to the panel container.
  */
 @Composable
@@ -79,26 +79,21 @@ fun ConsolePanelCollapsed(
 ) {
     val timeFormatter = remember { SimpleDateFormat("HH:mm:ss", Locale.US) }
 
-    val thoughtSlotUsed = currentState != null
-    val eventsSlotsAvailable = SLOT_COUNT - if (thoughtSlotUsed) 1 else 0
-    val visibleEvents = remember(events, eventsSlotsAvailable) {
-        events.takeLast(eventsSlotsAvailable)
+    val visible = remember(events, currentState) {
+        val combined = buildList<ConsoleLine> {
+            events.forEach { add(ConsoleLine.Event(it)) }
+            if (currentState != null) add(ConsoleLine.State(currentState))
+        }
+        combined.takeLast(SLOT_COUNT)
     }
-
-    // Build the slot list top-to-bottom. The thought line (if present) sits
-    // at the top; events stack at the bottom; any leftover slots in the
-    // middle render as empty spacers of SlotHeight so the panel keeps the
-    // fixed total height even with sparse content.
-    val emptySlotsBetween = SLOT_COUNT - (if (thoughtSlotUsed) 1 else 0) - visibleEvents.size
+    val emptySlotsAtTop = SLOT_COUNT - visible.size
 
     Surface(
         // The Surface intentionally has no bottom inset padding so the
         // `surfaceVariant` background reaches the very edge of the screen
         // (covering the navigation-bar inset area). The inner Column then
         // carves out the system-bar space via `navigationBarsPadding()` so
-        // text always renders above the system buttons. The total height is
-        // determined by the column's intrinsic content (SLOT_COUNT slots +
-        // padding + nav-bar inset) — no `heightIn` needed.
+        // text always renders above the system buttons.
         modifier = modifier.fillMaxWidth(),
         color = MaterialTheme.colorScheme.surfaceVariant,
     ) {
@@ -108,29 +103,30 @@ fun ConsolePanelCollapsed(
                 .navigationBarsPadding()
                 .padding(horizontal = 10.dp, vertical = 2.dp),
         ) {
-            if (thoughtSlotUsed) {
-                Slot {
-                    AgentThoughtIndicator(
-                        state = currentState!!,
-                        onApprove = onApprove,
-                        onDeny = onDeny,
-                    )
-                }
-            }
-            repeat(emptySlotsBetween.coerceAtLeast(0)) {
+            // Pad top with empty slots so the visible content stays
+            // bottom-aligned and the panel keeps its fixed three-slot
+            // height even with sparse content.
+            repeat(emptySlotsAtTop.coerceAtLeast(0)) {
                 Slot {}
             }
-            visibleEvents.forEach { event ->
+            visible.forEach { line ->
                 Slot {
-                    Text(
-                        text = formatLine(event, timeFormatter.format(Date(event.timestamp))),
-                        color = lineColor(event.type),
-                        fontFamily = FontFamily.Monospace,
-                        fontSize = LineFontSize,
-                        lineHeight = LineHeight,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
+                    when (line) {
+                        is ConsoleLine.Event -> Text(
+                            text = formatEventLine(line.event, timeFormatter.format(Date(line.event.timestamp))),
+                            color = lineColor(line.event.type),
+                            fontFamily = FontFamily.Monospace,
+                            fontSize = LineFontSize,
+                            lineHeight = LineHeight,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        is ConsoleLine.State -> AgentThoughtIndicator(
+                            state = line.state,
+                            onApprove = onApprove,
+                            onDeny = onDeny,
+                        )
+                    }
                 }
             }
         }
@@ -138,10 +134,9 @@ fun ConsolePanelCollapsed(
 }
 
 /**
- * Fixed-height slot wrapping a single console row (thought line, event line,
- * or empty spacer). Centers content vertically inside the slot so the
- * monospace baseline lines up across slots regardless of which composable
- * rendered the row.
+ * Fixed-height slot wrapping a single console row. Centers content
+ * vertically so the monospace baseline lines up across slots regardless
+ * of which composable rendered the row.
  */
 @Composable
 private fun Slot(content: @Composable () -> Unit) {
@@ -163,7 +158,7 @@ private fun Slot(content: @Composable () -> Unit) {
  * (Phase 17.5) and stays accessible to users who can't distinguish the
  * accent / error colors.
  */
-private fun formatLine(event: ConsoleEvent, timeText: String): String {
+private fun formatEventLine(event: ConsoleEvent, timeText: String): String {
     val tag = when (event.type) {
         ConsoleEventType.NodeExecution -> "NODE"
         ConsoleEventType.ToolCall -> "TOOL"
