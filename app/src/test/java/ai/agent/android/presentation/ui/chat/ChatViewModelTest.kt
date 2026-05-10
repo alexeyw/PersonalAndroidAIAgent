@@ -1370,4 +1370,86 @@ class ChatViewModelTest {
         assertEquals(listOf(event), viewModel.uiState.value.consoleLines)
         assertFalse(viewModel.uiState.value.isGenerating)
     }
+
+    @Test
+    fun `given default state when openConsoleSheet then consoleSheetVisible is true`() = runTest {
+        viewModel = createViewModel()
+        advanceUntilIdle()
+
+        assertFalse(viewModel.uiState.value.consoleSheetVisible)
+
+        viewModel.openConsoleSheet()
+        advanceUntilIdle()
+
+        assertTrue(viewModel.uiState.value.consoleSheetVisible)
+    }
+
+    @Test
+    fun `given sheet open when dismissConsoleSheet then consoleSheetVisible is false`() = runTest {
+        viewModel = createViewModel()
+        advanceUntilIdle()
+
+        viewModel.openConsoleSheet()
+        advanceUntilIdle()
+        assertTrue(viewModel.uiState.value.consoleSheetVisible)
+
+        viewModel.dismissConsoleSheet()
+        advanceUntilIdle()
+
+        assertFalse(viewModel.uiState.value.consoleSheetVisible)
+    }
+
+    @Test
+    fun `given default filter when setConsoleFilter Errors then consoleSheetFilter updated`() = runTest {
+        viewModel = createViewModel()
+        advanceUntilIdle()
+
+        assertEquals(ConsoleLogFilter.All, viewModel.uiState.value.consoleSheetFilter)
+
+        viewModel.setConsoleFilter(ConsoleLogFilter.Errors)
+        advanceUntilIdle()
+
+        assertEquals(ConsoleLogFilter.Errors, viewModel.uiState.value.consoleSheetFilter)
+    }
+
+    @Test
+    fun `given populated consoleLines when clearConsoleLog then list emptied`() = runTest {
+        val userPrompt = "clear test"
+        val event = ConsoleEvent(
+            timestamp = 1_700_000_000_000L,
+            type = ConsoleEventType.NodeExecution,
+            message = "▶ LITE_RT",
+        )
+
+        viewModel = createViewModel()
+        advanceUntilIdle()
+
+        val sessionId = viewModel.uiState.value.currentSessionId
+        coEvery { agentOrchestratorUseCase(sessionId, userPrompt, any()) } returns flow {
+            emit(AgentOrchestratorState.ConsoleLog(listOf(event)))
+            emit(AgentOrchestratorState.Completed("done"))
+        }
+
+        viewModel.sendMessage(userPrompt)
+        advanceUntilIdle()
+        assertEquals(1, viewModel.uiState.value.consoleLines.size)
+
+        viewModel.clearConsoleLog()
+        advanceUntilIdle()
+
+        assertTrue(viewModel.uiState.value.consoleLines.isEmpty())
+    }
+
+    @Test
+    fun `given default state when signalConsoleCopied then snackbarMessage set`() = runTest {
+        viewModel = createViewModel()
+        advanceUntilIdle()
+
+        assertNull(viewModel.uiState.value.snackbarMessage)
+
+        viewModel.signalConsoleCopied()
+        advanceUntilIdle()
+
+        assertEquals("Console log copied", viewModel.uiState.value.snackbarMessage)
+    }
 }

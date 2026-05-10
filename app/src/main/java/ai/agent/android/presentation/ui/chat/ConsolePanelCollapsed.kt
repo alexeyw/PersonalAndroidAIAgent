@@ -1,5 +1,6 @@
 package ai.agent.android.presentation.ui.chat
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -69,6 +70,10 @@ private sealed interface ConsoleLine {
  *   single monospace label like `[NOW] Agent is answering...`.
  * @param onApprove Forwarded to the embedded approval row.
  * @param onDeny Forwarded to the embedded approval row.
+ * @param onClick Invoked when the user taps any non-interactive area of
+ *   the panel; the host opens the expanded-console `ModalBottomSheet`
+ *   (Phase 17.5). Inner buttons (`Approve` / `Deny`) consume their own
+ *   click via Compose's hit dispatch and do not trigger this callback.
  * @param modifier Optional layout modifier applied to the panel container.
  */
 @Composable
@@ -77,6 +82,7 @@ fun ConsolePanelCollapsed(
     currentState: AgentOrchestratorState? = null,
     onApprove: () -> Unit = {},
     onDeny: () -> Unit = {},
+    onClick: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val timeFormatter = remember { SimpleDateFormat("HH:mm:ss", Locale.US) }
@@ -102,7 +108,14 @@ fun ConsolePanelCollapsed(
         // (covering the navigation-bar inset area). The inner Column then
         // carves out the system-bar space via `navigationBarsPadding()` so
         // text always renders above the system buttons.
-        modifier = modifier.fillMaxWidth(),
+        //
+        // `clickable` is attached to the Surface (the outermost touch
+        // target) — Compose dispatches inner Button / IconButton clicks
+        // first, so the embedded `Approve` / `Deny` row keeps working
+        // and only background taps fall through to [onClick].
+        modifier = modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick),
         color = MaterialTheme.colorScheme.surfaceVariant,
     ) {
         Column(

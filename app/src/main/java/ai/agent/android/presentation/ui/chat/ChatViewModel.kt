@@ -979,6 +979,68 @@ class ChatViewModel @Inject constructor(
     }
 
     /**
+     * Opens the expanded-console `ModalBottomSheet` (Phase 17.5). Triggered
+     * by tapping the collapsed mini-console; the sheet renders the full
+     * chronological event log of the current session with filter chips and
+     * `Clear` / `Copy all` controls.
+     */
+    fun openConsoleSheet() {
+        if (!_uiState.value.consoleSheetVisible) {
+            _uiState.update { it.copy(consoleSheetVisible = true) }
+        }
+    }
+
+    /**
+     * Closes the expanded-console sheet without altering the log itself.
+     * Called from the sheet's dismiss callbacks (drag-down, scrim tap).
+     */
+    fun dismissConsoleSheet() {
+        if (_uiState.value.consoleSheetVisible) {
+            _uiState.update { it.copy(consoleSheetVisible = false) }
+        }
+    }
+
+    /**
+     * Persists the user's currently-selected [ConsoleLogFilter] chip in the
+     * expanded console. Kept on the ViewModel rather than as sheet-local
+     * state so the chip survives configuration changes and a quick
+     * dismiss + reopen — both of which would otherwise reset the user's
+     * picked lens to [ConsoleLogFilter.All].
+     */
+    fun setConsoleFilter(filter: ConsoleLogFilter) {
+        if (_uiState.value.consoleSheetFilter != filter) {
+            _uiState.update { it.copy(consoleSheetFilter = filter) }
+        }
+    }
+
+    /**
+     * Clears the in-memory console log of the current session. Surfaced
+     * through the expanded console's `Clear` action after the user
+     * confirms the destructive `AlertDialog`.
+     *
+     * The log lives only in [ChatUiState.consoleLines] and is intentionally
+     * not persisted; resetting the list also makes the collapsed
+     * mini-console drain to its three empty slots until the next pipeline
+     * event arrives.
+     */
+    fun clearConsoleLog() {
+        if (_uiState.value.consoleLines.isNotEmpty()) {
+            _uiState.update { it.copy(consoleLines = emptyList()) }
+        }
+    }
+
+    /**
+     * Surfaces the "Console log copied" Snackbar after the UI has placed
+     * the rendered plain-text dump on the system clipboard. Mirrors the
+     * pattern used by [signalCopiedToClipboard] for chat messages — the
+     * `ClipboardManager` interaction itself happens inside the Composable
+     * layer (which has access to `LocalClipboardManager`).
+     */
+    fun signalConsoleCopied() {
+        _uiState.update { it.copy(snackbarMessage = "Console log copied") }
+    }
+
+    /**
      * Appends a UI card for [request] to [existing], deduplicating by request id so the
      * same `AwaitingClarification` state replayed by re-collection (e.g. after a
      * recomposition or state restoration) does not create a duplicate card.
