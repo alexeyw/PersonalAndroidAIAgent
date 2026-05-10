@@ -505,6 +505,7 @@ fun ChatScreen(
                         currentState = thoughtState,
                         onApprove = { viewModel.resumeWithApproval(true) },
                         onDeny = { viewModel.resumeWithApproval(false) },
+                        onClick = { viewModel.openConsoleSheet() },
                     )
                 } else {
                     // No console visible: still own the navigation-bar inset
@@ -557,6 +558,20 @@ fun ChatScreen(
                     Text("Wait")
                 }
             },
+        )
+    }
+
+    if (uiState.consoleSheetVisible) {
+        ConsoleFullLogSheet(
+            events = uiState.consoleLines,
+            filter = uiState.consoleSheetFilter,
+            onFilterChange = { viewModel.setConsoleFilter(it) },
+            onClear = { viewModel.clearConsoleLog() },
+            onCopyAll = { dump ->
+                clipboardManager.setText(AnnotatedString(dump))
+                viewModel.signalConsoleCopied()
+            },
+            onDismiss = { viewModel.dismissConsoleSheet() },
         )
     }
 }

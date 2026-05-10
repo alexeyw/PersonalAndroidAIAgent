@@ -192,6 +192,8 @@ This file maps the contents of the main application package.
       - `ChatViewModel.kt` - Chat ViewModel.
       - `ClarificationCard.kt` - Inline chat card rendering an `AwaitingClarification` request (pending/answered/timed-out states with countdown).
       - `ClarificationCardUiModel.kt` - UI projection of a clarification request held in `ChatUiState.clarificationCards`.
+      - `ConsoleFullLogSheet.kt` - Expanded-console `ModalBottomSheet` (Phase 17.5): renders the full chronological log of the active session with millisecond timestamps, filter chips, `Clear` / `Copy all` actions, auto-scroll, and a `↓ New events` FAB.
+      - `ConsoleLogFilter.kt` - Pure-Kotlin enum (`All / Nodes / Tools / Memory / Errors`) backing the filter-chip row in the expanded console, plus the `matches(event)` predicate.
       - `ConsolePanelCollapsed.kt` - Stateless 56dp mini-console rendered above the chat input; shows the last 3 `ConsoleEvent`s in monospace with type-coded colors and `HH:mm:ss [TAG] message` formatting.
       - `PipelineSummary.kt` - Lightweight UI projection of a pipeline (id + name) used by the chat-screen pipeline selectors and TopAppBar subtitle.
       - `PipelineTraceCard.kt` - Pipeline trace UI component.

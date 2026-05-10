@@ -8,6 +8,7 @@ import ai.agent.android.domain.models.AgentOrchestratorState
 import ai.agent.android.domain.models.ChatMessage
 import ai.agent.android.domain.models.ChatSession
 import ai.agent.android.domain.models.ClarificationRequest
+import ai.agent.android.domain.models.ConsoleEvent
 import ai.agent.android.domain.models.Result
 import ai.agent.android.domain.models.Role
 import ai.agent.android.domain.repositories.ChatRepository
@@ -71,6 +72,22 @@ class ChatViewModel @Inject constructor(
 
     private var messagesJob: Job? = null
     private var generationJob: Job? = null
+
+    /**
+     * Number of leading entries of the orchestrator's cumulative
+     * [AgentOrchestratorState.ConsoleLog.events] list that the user has
+     * already cleared via [clearConsoleLog] during the current run.
+     *
+     * The orchestrator emits a snapshot of the *full* event log on every
+     * step, so simply emptying [ChatUiState.consoleLines] is not durable —
+     * the very next snapshot would reintroduce the dismissed entries.
+     * Storing a baseline lets the collector slice
+     * `events.subList(baseline, events.size)` on every emission so cleared
+     * entries stay gone until the run ends. Reset to `0` whenever a fresh
+     * run begins ([sendMessage]) or the user switches sessions
+     * ([switchSession]).
+     */
+    private var consoleClearBaseline: Int = 0
 
     /**
      * Becomes `true` after [pipelineRepository] has emitted its initial snapshot
@@ -391,6 +408,12 @@ class ChatViewModel @Inject constructor(
     fun switchSession(sessionId: String) {
         viewModelScope.launch {
             settingsRepository.setCurrentChatSessionId(sessionId)
+            // The new session has its own (empty) cumulative log, so any
+            // mid-stream clear from the previous session is no longer
+            // applicable. Reset before the state update so a stray
+            // in-flight ConsoleLog snapshot (cancelled below but possibly
+            // already in flight) cannot reintroduce dropped entries.
+            consoleClearBaseline = 0
             _uiState.update { state ->
                 state.copy(
                     currentSessionId = sessionId,
@@ -554,6 +577,10 @@ class ChatViewModel @Inject constructor(
                 renameSession(currentState.currentSessionId, newName)
             }
 
+            // Fresh run = fresh cumulative log upstream; the carry-over
+            // baseline from a previous run's mid-stream Clear no longer
+            // applies because the orchestrator restarts events from scratch.
+            consoleClearBaseline = 0
             _uiState.update {
                 it.copy(
                     isGenerating = true,
@@ -597,7 +624,11 @@ class ChatViewModel @Inject constructor(
                                 else -> current.currentStep
                             },
                             pipelineTrace = if (state is AgentOrchestratorState.PipelineTrace) state.steps else current.pipelineTrace,
-                            consoleLines = if (state is AgentOrchestratorState.ConsoleLog) state.events else current.consoleLines,
+                            consoleLines = if (state is AgentOrchestratorState.ConsoleLog) {
+                                applyConsoleClearBaseline(state.events)
+                            } else {
+                                current.consoleLines
+                            },
                             isGenerating = if (isTerminal) false else current.isGenerating,
                             clarificationCards = updatedCards,
                         )
@@ -976,6 +1007,94 @@ class ChatViewModel @Inject constructor(
         if (_uiState.value.pipelineFallbackMessage != null) {
             _uiState.update { it.copy(pipelineFallbackMessage = null) }
         }
+    }
+
+    /**
+     * Opens the expanded-console `ModalBottomSheet` (Phase 17.5). Triggered
+     * by tapping the collapsed mini-console; the sheet renders the full
+     * chronological event log of the current session with filter chips and
+     * `Clear` / `Copy all` controls.
+     */
+    fun openConsoleSheet() {
+        if (!_uiState.value.consoleSheetVisible) {
+            _uiState.update { it.copy(consoleSheetVisible = true) }
+        }
+    }
+
+    /**
+     * Closes the expanded-console sheet without altering the log itself.
+     * Called from the sheet's dismiss callbacks (drag-down, scrim tap).
+     */
+    fun dismissConsoleSheet() {
+        if (_uiState.value.consoleSheetVisible) {
+            _uiState.update { it.copy(consoleSheetVisible = false) }
+        }
+    }
+
+    /**
+     * Persists the user's currently-selected [ConsoleLogFilter] chip in the
+     * expanded console. Kept on the ViewModel rather than as sheet-local
+     * state so the chip survives configuration changes and a quick
+     * dismiss + reopen — both of which would otherwise reset the user's
+     * picked lens to [ConsoleLogFilter.All].
+     */
+    fun setConsoleFilter(filter: ConsoleLogFilter) {
+        if (_uiState.value.consoleSheetFilter != filter) {
+            _uiState.update { it.copy(consoleSheetFilter = filter) }
+        }
+    }
+
+    /**
+     * Clears the in-memory console log of the current session. Surfaced
+     * through the expanded console's `Clear` action after the user
+     * confirms the destructive `AlertDialog`.
+     *
+     * The log lives only in [ChatUiState.consoleLines] and is intentionally
+     * not persisted; resetting the list also makes the collapsed
+     * mini-console drain to its three empty slots until the next pipeline
+     * event arrives.
+     *
+     * Durable mid-generation: the orchestrator emits cumulative
+     * [AgentOrchestratorState.ConsoleLog] snapshots on every step, so this
+     * also advances [consoleClearBaseline] by the count of currently
+     * visible events. The next snapshot's
+     * `events.subList(consoleClearBaseline, ...)` projection drops every
+     * entry the user just dismissed, so cleared rows do not pop back in
+     * on the next emission.
+     */
+    fun clearConsoleLog() {
+        val visible = _uiState.value.consoleLines
+        if (visible.isEmpty()) return
+        consoleClearBaseline += visible.size
+        _uiState.update { it.copy(consoleLines = emptyList()) }
+    }
+
+    /**
+     * Trims the leading [consoleClearBaseline] entries off a cumulative
+     * [AgentOrchestratorState.ConsoleLog.events] snapshot before it is
+     * mirrored into [ChatUiState.consoleLines]. When the baseline already
+     * covers the snapshot (because no new events have arrived since the
+     * last Clear) the result is an empty list, leaving the panel blank
+     * until the next event lands.
+     *
+     * @param events Cumulative event list emitted by the orchestrator on
+     *   the current step.
+     */
+    private fun applyConsoleClearBaseline(events: List<ConsoleEvent>): List<ConsoleEvent> {
+        if (consoleClearBaseline <= 0) return events
+        if (consoleClearBaseline >= events.size) return emptyList()
+        return events.subList(consoleClearBaseline, events.size)
+    }
+
+    /**
+     * Surfaces the "Console log copied" Snackbar after the UI has placed
+     * the rendered plain-text dump on the system clipboard. Mirrors the
+     * pattern used by [signalCopiedToClipboard] for chat messages — the
+     * `ClipboardManager` interaction itself happens inside the Composable
+     * layer (which has access to `LocalClipboardManager`).
+     */
+    fun signalConsoleCopied() {
+        _uiState.update { it.copy(snackbarMessage = "Console log copied") }
     }
 
     /**

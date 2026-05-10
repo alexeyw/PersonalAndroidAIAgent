@@ -55,6 +55,14 @@ import ai.agent.android.domain.models.ConsoleEvent
  *   emissions; cleared on new send and on session switch. Drives the
  *   collapsed mini-console (Phase 17.4) and the full bottom-sheet log
  *   (Phase 17.5).
+ * @property consoleSheetVisible Whether the expanded-console
+ *   `ModalBottomSheet` (Phase 17.5) is currently open. Toggled by tapping
+ *   the collapsed mini-console / dismissing the sheet.
+ * @property consoleSheetFilter Currently-selected category filter for the
+ *   expanded console. Reset to [ConsoleLogFilter.All] only when the user
+ *   explicitly picks it again — switching sessions or clearing the log
+ *   keeps the filter so the next batch of events shows up under the same
+ *   lens the user was already reading.
  */
 data class ChatUiState(
     val messages: List<ChatMessage> = emptyList(),
@@ -79,6 +87,8 @@ data class ChatUiState(
     val snackbarMessage: String? = null,
     val showStarredOnly: Boolean = false,
     val consoleLines: List<ConsoleEvent> = emptyList(),
+    val consoleSheetVisible: Boolean = false,
+    val consoleSheetFilter: ConsoleLogFilter = ConsoleLogFilter.All,
 )
 
 /**
