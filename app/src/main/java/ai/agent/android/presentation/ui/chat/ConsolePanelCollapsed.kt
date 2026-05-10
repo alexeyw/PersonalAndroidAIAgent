@@ -26,11 +26,21 @@ import java.util.Date
 import java.util.Locale
 
 /**
- * Total number of slots rendered by the panel. Locked to three so the panel
- * never resizes between states — spec says the strip is exactly three lines
- * tall and doesn't grow when the agent is thinking or asking for approval.
+ * Default number of slots rendered by the panel. Three so the strip is
+ * exactly three lines tall regardless of which state (event log, thought,
+ * approval) it currently shows. The chat screen may opt into a single-slot
+ * compact layout via [ConsolePanelCollapsed]'s `compact` parameter when the
+ * available viewport is too short for the full strip.
  */
-private const val SLOT_COUNT = 3
+private const val DEFAULT_SLOT_COUNT = 3
+
+/**
+ * Slot count used when the panel is requested in compact mode. One slot
+ * keeps the very last entry visible while reclaiming ~32dp of vertical
+ * space — used on short viewports (e.g. 480dp height with an open IME) so
+ * the chat history isn't squeezed by the bottom bar.
+ */
+private const val COMPACT_SLOT_COUNT = 1
 
 /**
  * Per-slot vertical extent in dp. Sized roomier than the `14.sp` line height
@@ -54,12 +64,14 @@ private sealed interface ConsoleLine {
 /**
  * Always-on agent console rendered as a thin strip below the chat input.
  *
- * Stateless and locked to exactly [SLOT_COUNT] slots. The orchestrator state
- * line — when present — is treated as just another console row, appended to
- * the rolling event log as the freshest entry. The strip then shows the last
- * [SLOT_COUNT] entries bottom-aligned, so the user sees the running activity
- * regardless of whether it's a node event, a thought-state line, or an
- * approval prompt; the panel does not gain or lose height between cases.
+ * Stateless and locked to a fixed number of slots — [DEFAULT_SLOT_COUNT]
+ * normally, [COMPACT_SLOT_COUNT] when [compact] is `true`. The orchestrator
+ * state line — when present — is treated as just another console row,
+ * appended to the rolling event log as the freshest entry. The strip then
+ * shows the last N entries bottom-aligned, so the user sees the running
+ * activity regardless of whether it's a node event, a thought-state line,
+ * or an approval prompt; the panel does not gain or lose height between
+ * cases.
  *
  * @param events Console events to render. Caller passes the full log; the
  *   composable picks the last few that fit the available slots.
@@ -74,6 +86,10 @@ private sealed interface ConsoleLine {
  *   the panel; the host opens the expanded-console `ModalBottomSheet`
  *   (Phase 17.5). Inner buttons (`Approve` / `Deny`) consume their own
  *   click via Compose's hit dispatch and do not trigger this callback.
+ * @param compact When `true`, the panel collapses to a single slot
+ *   ([COMPACT_SLOT_COUNT]) so it stays usable on short viewports without
+ *   squeezing the chat history. Default `false` keeps the full
+ *   three-slot strip.
  * @param modifier Optional layout modifier applied to the panel container.
  */
 @Composable
@@ -83,11 +99,13 @@ fun ConsolePanelCollapsed(
     onApprove: () -> Unit = {},
     onDeny: () -> Unit = {},
     onClick: () -> Unit = {},
+    compact: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
     val timeFormatter = remember { SimpleDateFormat("HH:mm:ss", Locale.US) }
 
-    val visible = remember(events, currentState) {
+    val slotCount = if (compact) COMPACT_SLOT_COUNT else DEFAULT_SLOT_COUNT
+    val visible = remember(events, currentState, slotCount) {
         val combined = buildList<ConsoleLine> {
             events.forEach { add(ConsoleLine.Event(it)) }
             // Only add the state line when AgentThoughtIndicator would render
@@ -98,9 +116,9 @@ fun ConsolePanelCollapsed(
                 add(ConsoleLine.State(currentState))
             }
         }
-        combined.takeLast(SLOT_COUNT)
+        combined.takeLast(slotCount)
     }
-    val emptySlotsAtTop = SLOT_COUNT - visible.size
+    val emptySlotsAtTop = slotCount - visible.size
 
     Surface(
         // The Surface intentionally has no bottom inset padding so the

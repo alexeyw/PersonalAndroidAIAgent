@@ -20,17 +20,19 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.calculateEndPadding
-import androidx.compose.foundation.layout.calculateStartPadding
+import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.layout.windowInsetsBottomHeight
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -70,6 +72,7 @@ import androidx.compose.material3.ModalDrawerSheet
 import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.NavigationDrawerItem
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarDuration
@@ -93,9 +96,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
@@ -280,6 +284,19 @@ fun ChatScreen(
             }
         }
     ) {
+        // Phase 17.6: collapse the input + collapsed-console stack into the
+        // Scaffold's `bottomBar` so the chat history's `LazyColumn` owns the
+        // entire body and Scaffold reports a `bottomPadding` that already
+        // accounts for the bar's measured height. We also apply
+        // `imePadding()` to the bottom bar so it floats above the keyboard
+        // without manual inset arithmetic. On short viewports
+        // (`screenHeightDp <= 480`) the collapsed console drops to a single
+        // slot to keep the chat area readable when the IME opens — the
+        // boundary itself is included so a 480dp-tall device still picks up
+        // the compact layout.
+        val configuration = LocalConfiguration.current
+        val isCompactConsole = configuration.screenHeightDp <= 480
+
         Scaffold(
             topBar = {
                 val currentSession = uiState.sessions.find { it.id == uiState.currentSessionId }
@@ -385,137 +402,147 @@ fun ChatScreen(
                     )
                 )
             },
-            snackbarHost = { SnackbarHost(snackbarHostState) }
-        ) { paddingValues ->
-            // Drop the bottom inset from the column so the console panel can
-            // stretch its background to the screen edge (over the navigation
-            // bar area). The console / fallback Spacer at the very bottom of
-            // this Column applies `navigationBarsPadding()` internally so
-            // text stays clear of the system buttons.
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(
-                        top = paddingValues.calculateTopPadding(),
-                        start = paddingValues.calculateStartPadding(LocalLayoutDirection.current),
-                        end = paddingValues.calculateEndPadding(LocalLayoutDirection.current),
-                    )
-            ) {
-                LazyColumn(
-                    state = listState,
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    // Stick chat content to the bottom of the viewport so a
-                    // short conversation reads as a chat thread (latest turn
-                    // just above the input bar) rather than leaving a large
-                    // empty zone between the last message and the controls.
-                    verticalArrangement = Arrangement.Bottom,
-                ) {
-                    item { Spacer(modifier = Modifier.height(16.dp)) }
-
-                    itemsIndexed(uiState.messages) { index, message ->
-                        val isLast = uiState.messages.lastIndex == index
-                        // While the starred-only filter is active the streaming
-                        // AGENT message is not part of the visible list, so the
-                        // last-starred bubble must NOT be treated as the
-                        // currently-generating one — otherwise it loses its
-                        // Markdown rendering for the duration of generation.
-                        ChatMessageItem(
-                            message = message,
-                            isGenerating = isLast && uiState.isGenerating && !uiState.showStarredOnly,
-                            onCopy = {
-                                clipboardManager.setText(AnnotatedString(message.content))
-                                viewModel.signalCopiedToClipboard()
-                            },
-                            onToggleStarred = {
-                                message.id?.let { id ->
-                                    viewModel.setMessageStarred(id, !message.isStarred)
-                                }
-                            },
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                    }
-
-                    // Pipeline trace and per-step progress used to render here.
-                    // Per Phase 17.4 spec, the chat list keeps only real user /
-                    // agent turns (and the interactive clarification cards
-                    // below); transient pipeline diagnostics live in the
-                    // console strip via `[NODE]` events and the `[NOW]`
-                    // thought line.
-
-                    items(uiState.clarificationCards, key = { it.id }) { card ->
-                        ClarificationCard(
-                            model = card,
-                            onAnswer = { answer -> viewModel.submitClarification(card.id, answer) },
-                            onTimeout = { defaultAnswer ->
-                                viewModel.markClarificationTimedOut(card.id, defaultAnswer)
-                            },
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                    }
-
-                    item { Spacer(modifier = Modifier.height(8.dp)) }
-                }
-
-                uiState.inlineError?.let { inlineError ->
-                    InlineErrorBanner(
-                        text = inlineError,
-                        onDismiss = { viewModel.clearInlineError() },
-                    )
-                }
-
-                ChatInputBar(
-                    inputText = inputText,
-                    onInputTextChanged = { newValue ->
-                        if (newValue.text != inputText.text) {
-                            viewModel.clearInlineError()
-                        }
-                        inputText = newValue
-                    },
-                    onSendClicked = {
-                        if (inputText.text.isNotBlank()) {
-                            viewModel.sendMessage(inputText.text)
-                            if (viewModel.uiState.value.inlineError == null) {
-                                inputText = TextFieldValue("")
-                            }
-                        }
-                    },
-                    onStopClicked = { viewModel.stopGeneration() },
-                    isGenerating = uiState.isGenerating
-                )
-
-                // Bottom agent area: the console panel hosts both the rolling
-                // event log and the thought-state line / approve-deny row.
-                // Pulling the thought card out of the chat LazyColumn (and
-                // re-skinning it as a console line inside this same Surface)
-                // stops streaming-driven recompositions from dragging the
-                // chat list around.
+            bottomBar = {
+                // Bottom agent area stack: optional inline error banner, the
+                // chat input bar, and either the collapsed console (when
+                // there is something to show) or a navigation-bar Spacer
+                // owning the system inset. `imePadding()` lifts the entire
+                // bar in lockstep with the keyboard so the input never
+                // disappears beneath the IME; Scaffold then reports a
+                // matching `bottomPadding` to the body so the chat history
+                // stays scrollable above the bar.
                 val hasPendingClarification = uiState.clarificationCards.any {
                     it.status == ClarificationCardUiModel.Status.PENDING
                 }
                 val thoughtState = uiState.orchestratorState
                     ?.takeIf { uiState.isGenerating && !hasPendingClarification }
 
-                if (uiState.isGenerating || uiState.consoleLines.isNotEmpty()) {
-                    ConsolePanelCollapsed(
-                        events = uiState.consoleLines,
-                        currentState = thoughtState,
-                        onApprove = { viewModel.resumeWithApproval(true) },
-                        onDeny = { viewModel.resumeWithApproval(false) },
-                        onClick = { viewModel.openConsoleSheet() },
+                // Apply horizontal safe-drawing insets here: in landscape
+                // the system navigation lives on the side and the
+                // `bottomBar` slot does not receive `paddingValues` like the
+                // body does, so without this the `ChatInputBar` would draw
+                // under the navigation buttons and the Send affordance
+                // would become unclickable. `imePadding()` is layered on
+                // top so the whole bar still rises with the keyboard.
+                Column(
+                    modifier = Modifier
+                        .windowInsetsPadding(
+                            WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal),
+                        )
+                        .imePadding(),
+                ) {
+                    uiState.inlineError?.let { inlineError ->
+                        InlineErrorBanner(
+                            text = inlineError,
+                            onDismiss = { viewModel.clearInlineError() },
+                        )
+                    }
+
+                    ChatInputBar(
+                        inputText = inputText,
+                        onInputTextChanged = { newValue ->
+                            if (newValue.text != inputText.text) {
+                                viewModel.clearInlineError()
+                            }
+                            inputText = newValue
+                        },
+                        onSendClicked = {
+                            if (inputText.text.isNotBlank()) {
+                                viewModel.sendMessage(inputText.text)
+                                if (viewModel.uiState.value.inlineError == null) {
+                                    inputText = TextFieldValue("")
+                                }
+                            }
+                        },
+                        onStopClicked = { viewModel.stopGeneration() },
+                        isGenerating = uiState.isGenerating,
                     )
-                } else {
-                    // No console visible: still own the navigation-bar inset
-                    // so the input bar stays clear of the system buttons.
-                    Spacer(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .windowInsetsBottomHeight(WindowInsets.navigationBars)
-                    )
+
+                    if (uiState.isGenerating || uiState.consoleLines.isNotEmpty()) {
+                        ConsolePanelCollapsed(
+                            events = uiState.consoleLines,
+                            currentState = thoughtState,
+                            onApprove = { viewModel.resumeWithApproval(true) },
+                            onDeny = { viewModel.resumeWithApproval(false) },
+                            onClick = { viewModel.openConsoleSheet() },
+                            compact = isCompactConsole,
+                        )
+                    } else {
+                        // No console visible: still own the navigation-bar
+                        // inset so the input bar stays clear of the system
+                        // buttons.
+                        Spacer(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .navigationBarsPadding(),
+                        )
+                    }
                 }
+            },
+            snackbarHost = { SnackbarHost(snackbarHostState) },
+        ) { paddingValues ->
+            // The chat history fills the body; `paddingValues` already
+            // accounts for the measured bottomBar height (including its
+            // imePadding contribution), so applying it as `contentPadding`
+            // keeps the last message scrollable above the bar without any
+            // manual height arithmetic.
+            LazyColumn(
+                state = listState,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 16.dp),
+                contentPadding = paddingValues,
+                horizontalAlignment = Alignment.CenterHorizontally,
+                // Stick chat content to the bottom of the viewport so a
+                // short conversation reads as a chat thread (latest turn
+                // just above the input bar) rather than leaving a large
+                // empty zone between the last message and the controls.
+                verticalArrangement = Arrangement.Bottom,
+            ) {
+                item { Spacer(modifier = Modifier.height(16.dp)) }
+
+                itemsIndexed(uiState.messages) { index, message ->
+                    val isLast = uiState.messages.lastIndex == index
+                    // While the starred-only filter is active the streaming
+                    // AGENT message is not part of the visible list, so the
+                    // last-starred bubble must NOT be treated as the
+                    // currently-generating one — otherwise it loses its
+                    // Markdown rendering for the duration of generation.
+                    ChatMessageItem(
+                        message = message,
+                        isGenerating = isLast && uiState.isGenerating && !uiState.showStarredOnly,
+                        onCopy = {
+                            clipboardManager.setText(AnnotatedString(message.content))
+                            viewModel.signalCopiedToClipboard()
+                        },
+                        onToggleStarred = {
+                            message.id?.let { id ->
+                                viewModel.setMessageStarred(id, !message.isStarred)
+                            }
+                        },
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                }
+
+                // Pipeline trace and per-step progress used to render here.
+                // Per Phase 17.4 spec, the chat list keeps only real user /
+                // agent turns (and the interactive clarification cards
+                // below); transient pipeline diagnostics live in the
+                // console strip via `[NODE]` events and the `[NOW]`
+                // thought line.
+
+                items(uiState.clarificationCards, key = { it.id }) { card ->
+                    ClarificationCard(
+                        model = card,
+                        onAnswer = { answer -> viewModel.submitClarification(card.id, answer) },
+                        onTimeout = { defaultAnswer ->
+                            viewModel.markClarificationTimedOut(card.id, defaultAnswer)
+                        },
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                }
+
+                item { Spacer(modifier = Modifier.height(8.dp)) }
             }
         }
     }
@@ -1041,7 +1068,17 @@ fun ChatInputBar(
             modifier = Modifier.weight(1f),
             placeholder = { Text("Ask the agent...") },
             enabled = !isGenerating,
-            maxLines = 4
+            maxLines = 4,
+            // Semi-transparent white container so the input visually
+            // separates from the surrounding bottomBar surface in both
+            // light and dark themes; alpha keeps the underlying colour
+            // hint (e.g. theme accent or scrim) just barely showing
+            // through instead of slamming a solid white plate over it.
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedContainerColor = Color.White.copy(alpha = 0.7f),
+                unfocusedContainerColor = Color.White.copy(alpha = 0.7f),
+                disabledContainerColor = Color.White.copy(alpha = 0.7f),
+            ),
         )
         Spacer(modifier = Modifier.width(8.dp))
         if (isGenerating) {
