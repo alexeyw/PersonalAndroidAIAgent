@@ -981,6 +981,36 @@ class ChatViewModelTest {
     }
 
     @Test
+    fun `given session bound to existing pipeline when ViewModel starts then no false fallback fires`() = runTest {
+        // Reproduces the startup race: the sessions flow may emit before the
+        // pipelines flow does, so `handleDeletedBoundPipeline` used to see an
+        // empty `availablePipelines` and misread the bound pipeline as
+        // deleted. Pre-seed both flows with consistent state — the bound
+        // pipeline DOES exist — and confirm no fallback triggers.
+        val savedSessionId = "race-session"
+        val boundSession = ChatSession(
+            id = savedSessionId,
+            name = "Existing chat",
+            updatedAt = 0L,
+            pipelineId = "p-bound",
+        )
+        sessionsFlow.value = listOf(boundSession)
+        pipelinesFlow.value = listOf(pipeline("p-bound", "Bound"), pipeline("p-default", "Default"))
+        every { settingsRepository.currentChatSessionId } returns flowOf(savedSessionId)
+
+        viewModel = createViewModel()
+        advanceUntilIdle()
+
+        // No fallback message, and the session was not silently rewritten.
+        assertNull(viewModel.uiState.value.pipelineFallbackMessage)
+        coVerify(exactly = 0) {
+            chatRepository.saveSession(
+                match { it.id == savedSessionId && it.pipelineId == null },
+            )
+        }
+    }
+
+    @Test
     fun `bound pipeline deletion auto-resets session and emits fallback Snackbar`() = runTest {
         pipelinesFlow.value = listOf(pipeline("p-bound", "Bound"), pipeline("p-default", "Default"))
         viewModel = createViewModel()

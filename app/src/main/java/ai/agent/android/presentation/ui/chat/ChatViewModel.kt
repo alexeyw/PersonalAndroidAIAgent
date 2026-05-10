@@ -69,6 +69,17 @@ class ChatViewModel @Inject constructor(
     private var messagesJob: Job? = null
     private var generationJob: Job? = null
 
+    /**
+     * Becomes `true` after [pipelineRepository] has emitted its initial snapshot
+     * of available pipelines. Used by [handleDeletedBoundPipeline] to avoid a
+     * false-positive deleted-pipeline fallback during the brief window where
+     * the sessions flow has emitted (with a bound `pipelineId`) but the
+     * pipelines flow has not — initial `availablePipelines` is `emptyList()`
+     * by default, which is indistinguishable from "no pipelines exist" without
+     * this flag.
+     */
+    private var availablePipelinesObserved: Boolean = false
+
     init {
         loadSessions()
         observeAvailablePipelines()
@@ -96,6 +107,7 @@ class ChatViewModel @Inject constructor(
         viewModelScope.launch {
             pipelineRepository.getAllPipelines().collect { graphs ->
                 val summaries = graphs.map { PipelineSummary(id = it.id, name = it.name) }
+                availablePipelinesObserved = true
                 _uiState.update { state ->
                     state.copy(
                         availablePipelines = summaries,
@@ -116,10 +128,16 @@ class ChatViewModel @Inject constructor(
      * deleted. When it has, persists `pipelineId = null` on the session
      * (falling back to the default pipeline) and surfaces a one-shot Snackbar.
      *
-     * No-op when the chat is unbound (`pipelineId == null`) or when the bound
-     * pipeline still exists.
+     * No-op when the chat is unbound (`pipelineId == null`), when the bound
+     * pipeline still exists, or when the pipelines flow has not yet produced
+     * its initial snapshot. The last condition prevents a startup race in
+     * which a sessions emission with a bound `pipelineId` arrives before the
+     * pipelines flow does — without the [availablePipelinesObserved] guard
+     * the empty default `availablePipelines` would be misread as "the bound
+     * pipeline no longer exists" and silently rebind the chat to the default.
      */
     private suspend fun handleDeletedBoundPipeline(summaries: List<PipelineSummary>) {
+        if (!availablePipelinesObserved) return
         val state = _uiState.value
         val session = state.sessions.firstOrNull { it.id == state.currentSessionId } ?: return
         val boundId = session.pipelineId ?: return
