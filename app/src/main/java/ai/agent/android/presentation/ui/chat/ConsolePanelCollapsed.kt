@@ -30,15 +30,23 @@ import java.util.Locale
 private const val COLLAPSED_LINE_LIMIT = 3
 
 /**
- * Target height of the panel as specified by Phase 17.4. Used as a *minimum*
- * via [heightIn] so the strip can grow vertically when the user has enabled
- * a large font scale in accessibility settings — pinning to a fixed height
- * would clip lines under those scales.
+ * Target minimum height of the panel. Used via [heightIn] so the strip can
+ * grow vertically when the user enables a large font scale in accessibility
+ * settings — pinning to a fixed height would clip lines under those scales.
+ * Sized to fit three lines at the tight [LineHeight] with minimal vertical
+ * padding so the panel feels like a status strip, not a half-empty block.
  */
-private val PanelHeight = 56.dp
+private val PanelHeight = 40.dp
 
 /** Compact monospace font size used for every console line. */
 private val LineFontSize = 11.sp
+
+/**
+ * Explicit line height tightened against the default ~16sp Material runtime
+ * picks for 11sp. The lines stack flush to make the strip feel dense — the
+ * spec asked for a status strip with minimal whitespace.
+ */
+private val LineHeight = 12.sp
 
 /** Alpha applied to neutral / muted line colors so they stay legible but recede. */
 private const val NeutralAlpha = 0.6f
@@ -78,7 +86,7 @@ fun ConsolePanelCollapsed(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 4.dp),
+                .padding(horizontal = 10.dp, vertical = 2.dp),
             verticalArrangement = Arrangement.Bottom,
         ) {
             visibleEvents.forEach { event ->
@@ -87,6 +95,7 @@ fun ConsolePanelCollapsed(
                     color = lineColor(event.type),
                     fontFamily = FontFamily.Monospace,
                     fontSize = LineFontSize,
+                    lineHeight = LineHeight,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )

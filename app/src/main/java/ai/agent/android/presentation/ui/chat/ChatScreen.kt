@@ -216,15 +216,16 @@ fun ChatScreen(
         viewModel.consumeSnackbar()
     }
 
-    // Auto-scroll to the bottom when new messages arrive or generation starts
-    LaunchedEffect(uiState.messages.size, uiState.isGenerating, uiState.clarificationCards.size) {
-        if (uiState.messages.isNotEmpty() || uiState.isGenerating || uiState.clarificationCards.isNotEmpty()) {
-            val targetIndex =
-                uiState.messages.size + uiState.clarificationCards.size + if (uiState.isGenerating) 2 else 1
-            if (targetIndex > 0) {
-                coroutineScope.launch {
-                    listState.scrollToItem(targetIndex)
-                }
+    // Auto-scroll to the tail of the list only when a finalized message
+    // (user prompt or completed agent reply) or a clarification card is
+    // appended. Deliberately not keyed on `isGenerating`: streaming-driven
+    // recompositions used to drag the list, and the user only needs the
+    // viewport to land at the bottom once generation has finished.
+    LaunchedEffect(uiState.messages.size, uiState.clarificationCards.size) {
+        val targetIndex = uiState.messages.size + uiState.clarificationCards.size
+        if (targetIndex > 0) {
+            coroutineScope.launch {
+                listState.scrollToItem(targetIndex)
             }
         }
     }
@@ -451,10 +452,6 @@ fun ChatScreen(
                     item { Spacer(modifier = Modifier.height(8.dp)) }
                 }
 
-                if (uiState.isGenerating || uiState.consoleLines.isNotEmpty()) {
-                    ConsolePanelCollapsed(events = uiState.consoleLines)
-                }
-
                 uiState.inlineError?.let { inlineError ->
                     InlineErrorBanner(
                         text = inlineError,
@@ -481,6 +478,13 @@ fun ChatScreen(
                     onStopClicked = { viewModel.stopGeneration() },
                     isGenerating = uiState.isGenerating
                 )
+
+                // Console sits below the input row in the gap above the system
+                // navigation, where there's free space and the panel does not
+                // push the input around as new events arrive.
+                if (uiState.isGenerating || uiState.consoleLines.isNotEmpty()) {
+                    ConsolePanelCollapsed(events = uiState.consoleLines)
+                }
             }
         }
     }

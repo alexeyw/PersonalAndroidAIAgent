@@ -36,7 +36,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import ai.agent.android.domain.models.AgentOrchestratorState
-import com.mikepenz.markdown.m3.Markdown
 
 /**
  * A Composable widget that visualizes the internal "Chain of Thought" process of the agent.
@@ -54,29 +53,11 @@ fun AgentThoughtIndicator(
 ) {
     var expanded by remember { mutableStateOf(false) }
 
-    // Render the final generation as a standard message bubble.
-    if (state is AgentOrchestratorState.Answering) {
-        Box(
-            modifier = Modifier.fillMaxWidth(),
-            contentAlignment = Alignment.CenterStart
-        ) {
-            Column(
-                modifier = Modifier
-                    .widthIn(max = 300.dp)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(MaterialTheme.colorScheme.secondaryContainer)
-                    .padding(12.dp)
-            ) {
-                // Using Text instead of Markdown during streaming to prevent severe UI flickering and layout recalculations
-                Text(
-                    text = state.partialText,
-                    color = MaterialTheme.colorScheme.onSecondaryContainer
-                )
-            }
-        }
-        return
-    }
-
+    // The streaming partial-text bubble used to render here for `Answering`,
+    // but every token append triggered a recomposition and grew the bubble,
+    // jolting the chat list. We now show only the compact thought card with
+    // a static "Agent is answering..." label below; the full reply lands as
+    // a single final message once generation completes.
     if (state is AgentOrchestratorState.Completed || state is AgentOrchestratorState.Error) {
         return
     }
@@ -111,6 +92,7 @@ fun AgentThoughtIndicator(
                             text = when (targetState) {
                                 is AgentOrchestratorState.Loading -> "Initializing agent..."
                                 is AgentOrchestratorState.Thinking -> "Agent is thinking..."
+                                is AgentOrchestratorState.Answering -> "Agent is answering..."
                                 is AgentOrchestratorState.WaitingForApproval -> "Action requires approval!"
                                 is AgentOrchestratorState.ExecutingTool -> "Using tool: ${targetState.toolName}..."
                                 is AgentOrchestratorState.ObservationResult -> "Observation received..."
