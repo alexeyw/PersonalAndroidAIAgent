@@ -99,9 +99,34 @@ class ChatViewModel @Inject constructor(
     init {
         loadSessions()
         observeAvailablePipelines()
+        observeDefaultPipelineId()
         initializeSession()
         observeMaxContextSize()
         observeActiveSessionTracking()
+    }
+
+    /**
+     * Observes the user-set default pipeline id from settings and folds it
+     * into [ChatUiState.defaultPipelineId]. Recomputes the TopAppBar subtitle
+     * because the resolution of "default pipeline" depends on this id —
+     * changing it from the library should update the subtitle in real time.
+     */
+    private fun observeDefaultPipelineId() {
+        viewModelScope.launch {
+            settingsRepository.defaultPipelineId.collect { id ->
+                _uiState.update { state ->
+                    state.copy(
+                        defaultPipelineId = id,
+                        currentPipelineName = resolvePipelineName(
+                            sessions = state.sessions,
+                            currentSessionId = state.currentSessionId,
+                            summaries = state.availablePipelines,
+                            defaultPipelineId = id,
+                        ),
+                    )
+                }
+            }
+        }
     }
 
     /**
@@ -157,6 +182,7 @@ class ChatViewModel @Inject constructor(
                             sessions = state.sessions,
                             currentSessionId = state.currentSessionId,
                             summaries = summaries,
+                            defaultPipelineId = state.defaultPipelineId,
                         ),
                     )
                 }
@@ -194,19 +220,25 @@ class ChatViewModel @Inject constructor(
     /**
      * Resolves the display name of the pipeline currently bound to the active
      * chat — either the explicit binding when set, or the default pipeline
-     * (the first entry in [summaries]) otherwise. Returns `null` when no
-     * pipelines exist yet, so the TopAppBar can omit the subtitle entirely.
+     * otherwise. The "default" is the user-marked id from settings
+     * ([defaultPipelineId]); when that is `null` or points to a pipeline
+     * that no longer exists, the resolution falls back to the first
+     * pipeline in [summaries]. Returns `null` when no pipelines exist yet,
+     * so the TopAppBar can omit the subtitle entirely.
      */
     private fun resolvePipelineName(
         sessions: List<ChatSession>,
         currentSessionId: String,
         summaries: List<PipelineSummary>,
+        defaultPipelineId: String?,
     ): String? {
         if (summaries.isEmpty()) return null
         val session = sessions.firstOrNull { it.id == currentSessionId }
         val boundId = session?.pipelineId
-        val match = boundId?.let { id -> summaries.firstOrNull { it.id == id } }
-        return (match ?: summaries.first()).name
+        val boundMatch = boundId?.let { id -> summaries.firstOrNull { it.id == id } }
+        if (boundMatch != null) return boundMatch.name
+        val defaultMatch = defaultPipelineId?.let { id -> summaries.firstOrNull { it.id == id } }
+        return (defaultMatch ?: summaries.first()).name
     }
 
     private fun loadSessions() {
@@ -219,6 +251,7 @@ class ChatViewModel @Inject constructor(
                             sessions = sessions,
                             currentSessionId = state.currentSessionId,
                             summaries = state.availablePipelines,
+                            defaultPipelineId = state.defaultPipelineId,
                         ),
                     )
                 }
@@ -369,6 +402,7 @@ class ChatViewModel @Inject constructor(
                         sessions = state.sessions,
                         currentSessionId = sessionId,
                         summaries = state.availablePipelines,
+                        defaultPipelineId = state.defaultPipelineId,
                     ),
                 )
             }

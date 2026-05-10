@@ -148,15 +148,19 @@ fun PipelineLibraryScreen(
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 items(uiState.savedPipelines, key = { it.id }) { pipeline ->
+                    val isDefault = pipeline.id == uiState.defaultPipelineId
                     PipelineRow(
                         pipeline = pipeline,
                         isActive = pipeline.id == uiState.activePipelineId,
+                        isDefault = isDefault,
                         onLoad = {
                             viewModel.loadPipeline(pipeline.id)
                             onOpenEditor()
                         },
                         onRename = { renameTarget = pipeline },
                         onDuplicate = { viewModel.duplicatePipeline(pipeline.id) },
+                        onSetAsDefault = { viewModel.setDefaultPipeline(pipeline.id) }
+                            .takeUnless { isDefault },
                         onDelete = { deleteTarget = pipeline },
                     )
                 }
@@ -234,9 +238,11 @@ fun PipelineLibraryScreen(
 private fun PipelineRow(
     pipeline: PipelineGraph,
     isActive: Boolean,
+    isDefault: Boolean,
     onLoad: () -> Unit,
     onRename: () -> Unit,
     onDuplicate: () -> Unit,
+    onSetAsDefault: (() -> Unit)?,
     onDelete: () -> Unit,
 ) {
     var menuExpanded by remember { mutableStateOf(false) }
@@ -286,6 +292,13 @@ private fun PipelineRow(
                         color = MaterialTheme.colorScheme.primary,
                     )
                 }
+                if (isDefault) {
+                    Text(
+                        text = "Default",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.tertiary,
+                    )
+                }
                 Text(
                     text = "Updated ${formatTimestamp(pipeline.updatedAt)} · ${pipeline.nodes.size} nodes",
                     style = MaterialTheme.typography.bodySmall,
@@ -322,6 +335,16 @@ private fun PipelineRow(
                         onClick = {
                             menuExpanded = false
                             onDuplicate()
+                        },
+                    )
+                    DropdownMenuItem(
+                        text = {
+                            Text(if (isDefault) "Default pipeline" else "Set as default")
+                        },
+                        enabled = onSetAsDefault != null,
+                        onClick = {
+                            menuExpanded = false
+                            onSetAsDefault?.invoke()
                         },
                     )
                     DropdownMenuItem(

@@ -107,11 +107,16 @@ private const val NeutralAlpha = 0.6f
  */
 @Composable
 private fun ConsoleAction(label: String, onClick: () -> Unit) {
+    // Horizontal padding only — adding vertical padding would push the
+    // composable past the slot's fixed height and clip the descenders of
+    // `y` / `p` / `q`. Tap target stays the slot height (16dp) which is
+    // small but acceptable here; the system notification fallback gives
+    // the larger 48dp surface when the chat isn't visible.
     Text(
         text = label,
         modifier = Modifier
             .clickable(onClick = onClick)
-            .padding(horizontal = 6.dp, vertical = 2.dp),
+            .padding(horizontal = 6.dp),
         color = MaterialTheme.colorScheme.primary,
         fontFamily = FontFamily.Monospace,
         fontSize = LineFontSize,

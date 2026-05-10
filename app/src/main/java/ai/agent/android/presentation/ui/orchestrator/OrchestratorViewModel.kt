@@ -13,6 +13,7 @@ import ai.agent.android.domain.pipelineio.PipelineJsonSerializer
 import ai.agent.android.domain.prompt.PromptTemplateEngine
 import ai.agent.android.domain.prompt.PromptVariableProvider
 import ai.agent.android.domain.repositories.ApiKeyRepository
+import ai.agent.android.domain.repositories.SettingsRepository
 import ai.agent.android.domain.repositories.ToolRepository
 import ai.agent.android.domain.usecases.CreatePipelineUseCase
 import ai.agent.android.domain.usecases.DeletePipelineUseCase
@@ -50,6 +51,7 @@ class OrchestratorViewModel @Inject constructor(
     private val savePromptTemplateUseCase: SavePromptTemplateUseCase,
     private val apiKeyRepository: ApiKeyRepository,
     private val toolRepository: ToolRepository,
+    private val settingsRepository: SettingsRepository,
     private val promptTemplateEngine: PromptTemplateEngine,
     private val promptVariableProviders: Set<@JvmSuppressWildcards PromptVariableProvider>,
 ) : ViewModel() {
@@ -68,6 +70,33 @@ class OrchestratorViewModel @Inject constructor(
         observeProviderKeys()
         loadAvailableTools()
         observePromptTemplates()
+        observeDefaultPipelineId()
+    }
+
+    /**
+     * Mirrors `SettingsRepository.defaultPipelineId` into [OrchestratorUiState]
+     * so the library screen can render the "Default" badge / menu state in
+     * real time after [setDefaultPipeline] is invoked.
+     */
+    private fun observeDefaultPipelineId() {
+        viewModelScope.launch {
+            settingsRepository.defaultPipelineId.collect { id ->
+                _uiState.update { it.copy(defaultPipelineId = id) }
+            }
+        }
+    }
+
+    /**
+     * Marks [pipelineId] as the application-wide default pipeline. Used by
+     * the library's "Set as default" menu item. The setting is observed by
+     * [ChatViewModel] which uses it in the TopAppBar subtitle and the
+     * "Use default pipeline (…)" label, so chat surfaces stay in sync.
+     */
+    fun setDefaultPipeline(pipelineId: String) {
+        viewModelScope.launch {
+            settingsRepository.setDefaultPipelineId(pipelineId)
+            _uiState.update { it.copy(feedbackMessage = "Default pipeline updated") }
+        }
     }
 
     private fun observePromptTemplates() {
@@ -674,6 +703,12 @@ class OrchestratorViewModel @Inject constructor(
             _uiState.update { it.copy(isLoading = true) }
             val activeId = _uiState.value.currentPipeline.id
             val result = deletePipelineUseCase(pipelineId, activeId)
+            // If the deleted pipeline was the user-marked default, clear the
+            // setting so chat surfaces don't dangle on a non-existent id and
+            // immediately fall back to the new "first in library" default.
+            if (result.isSuccess && _uiState.value.defaultPipelineId == pipelineId) {
+                settingsRepository.setDefaultPipelineId(null)
+            }
             _uiState.update { state ->
                 state.copy(
                     isLoading = false,

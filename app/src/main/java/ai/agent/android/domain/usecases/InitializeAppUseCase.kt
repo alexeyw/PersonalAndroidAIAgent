@@ -27,10 +27,15 @@ class InitializeAppUseCase @Inject constructor(
             // Save default prompts to settings so they can be modified later by the user
             settingsRepository.setSystemPromptPrefix(DefaultPrompts.SYSTEM_PROMPT_PREFIX)
             settingsRepository.setToolUsageInstruction(DefaultPrompts.TOOL_USAGE_INSTRUCTION)
-            
+
             // Generate and save the default complex pipeline
             val defaultPipeline = DefaultPipelineFactory.create("Default System Pipeline")
             pipelineRepository.savePipeline(defaultPipeline)
+            // Mark the seeded pipeline as the application default so the
+            // chat surfaces ("Use default pipeline (…)" label, TopAppBar
+            // subtitle) show a concrete name from the very first launch
+            // instead of relying on the implicit "first in library" fallback.
+            settingsRepository.setDefaultPipelineId(defaultPipeline.id)
 
             // Mark first launch as complete
             settingsRepository.setFirstLaunch(false)

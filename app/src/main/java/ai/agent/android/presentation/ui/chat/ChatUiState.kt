@@ -27,6 +27,10 @@ import ai.agent.android.domain.models.ConsoleEvent
  * @property availablePipelines Lightweight projection of every pipeline currently
  *   stored in the library, observed from `PipelineRepository.getAllPipelines()`.
  *   Drives the new-chat pipeline selector and the chat-settings dialog.
+ * @property defaultPipelineId Id of the pipeline the user has explicitly
+ *   marked as default in the library, observed from
+ *   `SettingsRepository.defaultPipelineId`. `null` means no explicit choice
+ *   — callers fall back to `availablePipelines.first()`.
  * @property currentPipelineName Display name of the pipeline bound to the current
  *   chat (or of the default pipeline when the session has `pipelineId == null`).
  *   Rendered as the TopAppBar subtitle. `null` when no pipelines exist at all.
@@ -66,6 +70,7 @@ data class ChatUiState(
     val currentStep: AgentOrchestratorState.PipelineStepInfo? = null,
     val clarificationCards: List<ClarificationCardUiModel> = emptyList(),
     val availablePipelines: List<PipelineSummary> = emptyList(),
+    val defaultPipelineId: String? = null,
     val currentPipelineName: String? = null,
     val newChatPipelinePrompt: NewChatPipelinePrompt? = null,
     val chatSettingsDialog: ChatSettingsDialogState? = null,

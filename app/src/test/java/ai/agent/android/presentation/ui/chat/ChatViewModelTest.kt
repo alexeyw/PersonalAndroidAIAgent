@@ -129,8 +129,9 @@ class ChatViewModelTest {
             val id = firstArg<String>()
             sessionsFlow.value.firstOrNull { it.id == id }
         }
-        // Default: no saved session
+        // Default: no saved session, no explicit default pipeline.
         every { settingsRepository.currentChatSessionId } returns flowOf(null)
+        every { settingsRepository.defaultPipelineId } returns flowOf(null)
         // Default: model loads successfully
         coEvery { loadModelUseCase() } returns Result.Success(Unit)
         // Default: getContextWindowUseCase returns empty
@@ -978,6 +979,24 @@ class ChatViewModelTest {
 
         viewModel.stopGeneration()
         advanceUntilIdle()
+    }
+
+    @Test
+    fun `given explicit defaultPipelineId when session unbound then TopAppBar reflects the default`() = runTest {
+        val pinned = pipeline("p-pinned", "Pinned default")
+        val first = pipeline("p-first", "First in library")
+        // Ordering: `first` is the implicit fallback (first in summaries),
+        // `pinned` is the explicit user-marked default. The explicit pick
+        // must win over the implicit fallback for both the title and the
+        // dialog labels — see `resolvePipelineName`.
+        pipelinesFlow.value = listOf(first, pinned)
+        every { settingsRepository.defaultPipelineId } returns flowOf("p-pinned")
+
+        viewModel = createViewModel()
+        advanceUntilIdle()
+
+        assertEquals("Pinned default", viewModel.uiState.value.currentPipelineName)
+        assertEquals("p-pinned", viewModel.uiState.value.defaultPipelineId)
     }
 
     @Test

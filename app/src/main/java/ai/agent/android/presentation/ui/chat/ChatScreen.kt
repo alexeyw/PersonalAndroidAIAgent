@@ -522,6 +522,7 @@ fun ChatScreen(
     uiState.newChatPipelinePrompt?.let { prompt ->
         NewChatPipelineSheet(
             pipelines = uiState.availablePipelines,
+            defaultPipelineId = uiState.defaultPipelineId,
             initialSelection = prompt.preselectedPipelineId,
             onDismiss = { viewModel.dismissNewChatPrompt() },
             onConfirm = { selected -> viewModel.confirmNewSession(selected) },
@@ -531,6 +532,7 @@ fun ChatScreen(
     uiState.chatSettingsDialog?.let { dialog ->
         ChatSettingsDialog(
             pipelines = uiState.availablePipelines,
+            defaultPipelineId = uiState.defaultPipelineId,
             selectedPipelineId = dialog.selectedPipelineId,
             onSelectPipeline = { viewModel.updateChatSettingsSelection(it) },
             onDismiss = { viewModel.dismissChatSettings() },
@@ -579,6 +581,7 @@ fun ChatScreen(
 @Composable
 private fun NewChatPipelineSheet(
     pipelines: List<PipelineSummary>,
+    defaultPipelineId: String?,
     initialSelection: String?,
     onDismiss: () -> Unit,
     onConfirm: (String?) -> Unit,
@@ -600,7 +603,7 @@ private fun NewChatPipelineSheet(
             LazyColumn(modifier = Modifier.fillMaxWidth()) {
                 item {
                     PipelineChoiceRow(
-                        title = defaultPipelineLabel(pipelines),
+                        title = defaultPipelineLabel(pipelines, defaultPipelineId),
                         selected = selected == null,
                         onClick = { selected = null },
                     )
@@ -643,6 +646,7 @@ private fun NewChatPipelineSheet(
 @Composable
 private fun ChatSettingsDialog(
     pipelines: List<PipelineSummary>,
+    defaultPipelineId: String?,
     selectedPipelineId: String?,
     onSelectPipeline: (String?) -> Unit,
     onDismiss: () -> Unit,
@@ -661,7 +665,7 @@ private fun ChatSettingsDialog(
                 LazyColumn(modifier = Modifier.fillMaxWidth()) {
                     item {
                         PipelineChoiceRow(
-                            title = defaultPipelineLabel(pipelines),
+                            title = defaultPipelineLabel(pipelines, defaultPipelineId),
                             selected = selectedPipelineId == null,
                             onClick = { onSelectPipeline(null) },
                         )
@@ -697,14 +701,22 @@ private fun ChatSettingsDialog(
  */
 /**
  * Builds the label for the "Use default pipeline" radio option in both the
- * new-chat sheet and the chat-settings dialog. Includes the resolved default
- * pipeline name in parentheses so the user can see which concrete pipeline
- * is being deferred to — without this, the TopAppBar subtitle (which always
- * shows the resolved name) appeared to disagree with the dialog (which only
- * showed the abstract "Use default" label).
+ * new-chat sheet and the chat-settings dialog. Resolves the concrete default
+ * pipeline name and appends it in parentheses so the user can see which
+ * pipeline is being deferred to.
+ *
+ * Resolution order: the user-marked [defaultPipelineId] when it points at a
+ * pipeline that still exists in [pipelines]; otherwise the first pipeline in
+ * the library (the same fallback `ChatViewModel.resolvePipelineName` uses
+ * for the TopAppBar subtitle, so the two surfaces always agree).
  */
-private fun defaultPipelineLabel(pipelines: List<PipelineSummary>): String {
-    val defaultName = pipelines.firstOrNull()?.name ?: return "Use default pipeline"
+private fun defaultPipelineLabel(
+    pipelines: List<PipelineSummary>,
+    defaultPipelineId: String?,
+): String {
+    if (pipelines.isEmpty()) return "Use default pipeline"
+    val explicit = defaultPipelineId?.let { id -> pipelines.firstOrNull { it.id == id } }
+    val defaultName = (explicit ?: pipelines.first()).name
     return "Use default pipeline ($defaultName)"
 }
 

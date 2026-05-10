@@ -49,6 +49,7 @@ class OrchestratorViewModelTest {
     private lateinit var savePromptTemplateUseCase: SavePromptTemplateUseCase
     private lateinit var apiKeyRepository: ApiKeyRepository
     private lateinit var toolRepository: ToolRepository
+    private lateinit var settingsRepository: ai.agent.android.domain.repositories.SettingsRepository
     private lateinit var promptTemplateEngine: PromptTemplateEngine
     private lateinit var providerDate: PromptVariableProvider
     private lateinit var providerTime: PromptVariableProvider
@@ -75,6 +76,9 @@ class OrchestratorViewModelTest {
         savePromptTemplateUseCase = mockk()
         apiKeyRepository = mockk()
         toolRepository = mockk()
+        settingsRepository = mockk(relaxed = true) {
+            every { defaultPipelineId } returns flowOf(null)
+        }
         
         every { loadPipelineUseCase.observeAllPipelines() } returns flowOf(emptyList())
         every { getPromptTemplatesUseCase() } returns flowOf(emptyList())
@@ -108,6 +112,7 @@ class OrchestratorViewModelTest {
             savePromptTemplateUseCase,
             apiKeyRepository,
             toolRepository,
+            settingsRepository,
             promptTemplateEngine,
             setOf(providerDate, providerTime),
         )
