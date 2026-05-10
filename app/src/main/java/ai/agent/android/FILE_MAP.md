@@ -113,6 +113,7 @@ This file maps the contents of the main application package.
     - `ClarificationRequest.kt` - Domain model describing a clarification question issued by the agent (id, question, options, timeoutMs).
     - `ConnectionModel.kt` - Connection model.
     - `ConsoleEvent.kt` - Domain model of a single agent-console entry (`timestamp`, `type`, `message`) with `ConsoleEventType` sealed interface (`NodeExecution`, `ToolCall`, `MemoryAccess`, `SystemMessage`, `Error`).
+    - `InitProgress.kt` - Domain model of cold-start progress (`stage`, `message`, `completedSteps`, `totalSteps`) plus `InitStage` sealed interface (Initializing, LoadingModel, LoadingPipelines, LoadingChats, LoadingMemory, Done, Failed) consumed by the splash screen.
     - `DownloadState.kt` - Download state model.
     - `LocalModel.kt` - Domain model for local models.
     - `MemoryChunk.kt` - Memory chunk model.
@@ -151,6 +152,7 @@ This file maps the contents of the main application package.
     - `ApprovalNotifier.kt` - Notifier for approval requests.
   - `usecases/` - Business logic Use Cases.
     - `AgentOrchestratorUseCase.kt` - Use case for agent orchestration.
+    - `AppInitializationUseCase.kt` - Cold-start orchestrator: streams `InitProgress` snapshots while running first-launch defaults, loading the LiteRT model, and prefetching pipelines / chat sessions / memory summaries. Drives the splash screen.
     - `EvaluateIfConditionUseCase.kt` - Use case for evaluating IF condition nodes.
     - `GetContextWindowUseCase.kt` - Use case to get context window.
     - `CreatePipelineUseCase.kt` - Creates and persists a new pipeline pre-seeded with `INPUT → OUTPUT` so it passes `PipelineGraph.validate` immediately; powers the library FAB.
@@ -218,6 +220,10 @@ This file maps the contents of the main application package.
       - `PromptLibraryScreen.kt` - Prompt library UI screen.
       - `PromptLibraryUiState.kt` - Prompt library UI state.
       - `PromptLibraryViewModel.kt` - Prompt library ViewModel.
+    - `splash/` - Cold-start splash / loading screen.
+      - `SplashScreen.kt` - Compose splash UI: app name, determinate `LinearProgressIndicator`, status label, inline error + Retry button. Calls `onInitialized` once initialization reaches `InitStage.Done` so the activity can navigate to `home`.
+      - `SplashUiState.kt` - Render state of `SplashScreen` (message, progressFraction, isDone, errorMessage).
+      - `SplashViewModel.kt` - Hilt ViewModel that subscribes to `AppInitializationUseCase`, folds each `InitProgress` into `SplashUiState`, and exposes `retry()` to re-run the pipeline after a fatal failure.
     - `settings/` - Settings screen components.
       - `SettingsScreen.kt` - Settings UI screen.
       - `SettingsUiState.kt` - Settings UI state.

@@ -1,7 +1,6 @@
 package ai.agent.android.presentation.ui
 
 import ai.agent.android.data.services.AgentForegroundService
-import ai.agent.android.domain.usecases.InitializeAppUseCase
 import ai.agent.android.presentation.theme.AndroidAIAgentTheme
 import ai.agent.android.presentation.ui.chat.ChatScreen
 import ai.agent.android.presentation.ui.chat.ChatViewModel
@@ -15,6 +14,7 @@ import ai.agent.android.presentation.ui.orchestrator.VisualOrchestratorScreen
 import ai.agent.android.presentation.ui.prompts.PromptLibraryScreen
 import ai.agent.android.presentation.ui.settings.SettingsScreen
 import ai.agent.android.presentation.ui.settings.SettingsViewModel
+import ai.agent.android.presentation.ui.splash.SplashScreen
 import ai.agent.android.presentation.ui.taskmonitor.TaskMonitorScreen
 import ai.agent.android.presentation.ui.taskmonitor.TaskMonitorViewModel
 import ai.agent.android.presentation.ui.tools.ToolsScreen
@@ -42,14 +42,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
-import androidx.lifecycle.lifecycleScope
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.navigation
 import androidx.navigation.compose.rememberNavController
 import dagger.hilt.android.AndroidEntryPoint
-import kotlinx.coroutines.launch
-import javax.inject.Inject
 
 /**
  * The main activity of the application, serving as the entry point.
@@ -57,12 +54,6 @@ import javax.inject.Inject
  */
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
-
-    /**
-     * Use case for initializing the application state.
-     */
-    @Inject
-    lateinit var initializeAppUseCase: InitializeAppUseCase
 
     private val requestPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -81,11 +72,9 @@ class MainActivity : ComponentActivity() {
             requestPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
         }
 
-        lifecycleScope.launch {
-            initializeAppUseCase()
-        }
-
-        // Start the background agent service
+        // Start the background agent service. Application init (incl. the
+        // first-launch defaults that used to live here) is now driven by the
+        // splash screen via `AppInitializationUseCase`.
         val serviceIntent = Intent(this, AgentForegroundService::class.java)
         startForegroundService(serviceIntent)
 
@@ -97,9 +86,23 @@ class MainActivity : ComponentActivity() {
                 Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
                     NavHost(
                         navController = navController,
-                        startDestination = "home",
+                        startDestination = "splash",
                         modifier = Modifier.padding(innerPadding)
                     ) {
+                        composable("splash") {
+                            SplashScreen(
+                                onInitialized = {
+                                    navController.navigate("home") {
+                                        // Drop the splash route so Back from
+                                        // home exits the app instead of
+                                        // re-entering the loading screen.
+                                        popUpTo("splash") { inclusive = true }
+                                        launchSingleTop = true
+                                    }
+                                },
+                                modifier = Modifier.fillMaxSize(),
+                            )
+                        }
                         composable("home") {
                             HomeScreen(
                                 onNavigateToModels = {
