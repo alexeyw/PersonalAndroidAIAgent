@@ -53,14 +53,19 @@ class ChatDaoTest {
     }
 
     @Test
-    fun deleteSession() = runBlocking {
+    fun deleteSessionMessages() = runBlocking {
         val message1 = ChatMessageEntity(sessionId = "session1", role = "USER", content = "Hello", timestamp = 1000L)
         val message2 = ChatMessageEntity(sessionId = "session2", role = "USER", content = "Test", timestamp = 2000L)
 
         chatDao.insertMessage(message1)
         chatDao.insertMessage(message2)
 
-        chatDao.deleteSession("session1")
+        // Use the message-bearing DELETE: `deleteSession(id)` only removes a
+        // row from `chat_sessions`, while `chat_messages` rows are scoped by
+        // `deleteSessionMessages(sessionId)`. The previous version of this
+        // test invoked `deleteSession` and then asserted the messages were
+        // gone — a contract that the DAO has never offered.
+        chatDao.deleteSessionMessages("session1")
 
         val session1Messages = chatDao.getMessagesBySessionId("session1").first()
         val session2Messages = chatDao.getMessagesBySessionId("session2").first()
