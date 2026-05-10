@@ -1,12 +1,11 @@
 package ai.agent.android.presentation.ui.chat
 
-import androidx.compose.ui.test.DeviceConfigurationOverride
-import androidx.compose.ui.test.ForcedSize
+import android.content.res.Configuration
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
-import androidx.compose.ui.unit.DpSize
-import androidx.compose.ui.unit.dp
 import ai.agent.android.domain.models.ChatMessage
 import ai.agent.android.domain.models.ConsoleEvent
 import ai.agent.android.domain.models.ConsoleEventType
@@ -163,6 +162,12 @@ class ChatScreenTest {
      * Phase 17.6: on a short viewport (≤ 480dp tall) the collapsed console
      * drops to a single slot. With three queued events, only the freshest
      * one is rendered; the older two are clipped by the slot budget.
+     *
+     * The compact branch is keyed on `LocalConfiguration.screenHeightDp`,
+     * which `DeviceConfigurationOverride.ForcedSize` does **not** mutate
+     * (it only constrains the rendered DpSize). To reliably exercise the
+     * branch we publish a Configuration with the boundary value (480dp)
+     * via `CompositionLocalProvider(LocalConfiguration provides ...)`.
      */
     @Test
     fun testChatScreen_compactScreen_collapsesConsoleToSingleSlot() {
@@ -181,9 +186,12 @@ class ChatScreenTest {
         every { mockViewModel.uiState } returns fakeState
 
         composeTestRule.setContent {
-            DeviceConfigurationOverride(
-                DeviceConfigurationOverride.ForcedSize(DpSize(360.dp, 480.dp)),
-            ) {
+            val baseConfiguration = LocalConfiguration.current
+            val compactConfiguration = Configuration(baseConfiguration).apply {
+                screenHeightDp = 480
+                screenWidthDp = 360
+            }
+            CompositionLocalProvider(LocalConfiguration provides compactConfiguration) {
                 ChatScreen(viewModel = mockViewModel)
             }
         }

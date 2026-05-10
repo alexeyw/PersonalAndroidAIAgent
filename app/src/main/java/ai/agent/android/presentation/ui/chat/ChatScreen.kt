@@ -283,10 +283,12 @@ fun ChatScreen(
         // accounts for the bar's measured height. We also apply
         // `imePadding()` to the bottom bar so it floats above the keyboard
         // without manual inset arithmetic. On short viewports
-        // (`screenHeightDp < 480`) the collapsed console drops to a single
-        // slot to keep the chat area readable when the IME opens.
+        // (`screenHeightDp <= 480`) the collapsed console drops to a single
+        // slot to keep the chat area readable when the IME opens — the
+        // boundary itself is included so a 480dp-tall device still picks up
+        // the compact layout.
         val configuration = LocalConfiguration.current
-        val isCompactConsole = configuration.screenHeightDp < 480
+        val isCompactConsole = configuration.screenHeightDp <= 480
 
         Scaffold(
             topBar = {
