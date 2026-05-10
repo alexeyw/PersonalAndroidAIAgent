@@ -407,7 +407,12 @@ fun ChatScreen(
                         .weight(1f)
                         .fillMaxWidth()
                         .padding(horizontal = 16.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    // Stick chat content to the bottom of the viewport so a
+                    // short conversation reads as a chat thread (latest turn
+                    // just above the input bar) rather than leaving a large
+                    // empty zone between the last message and the controls.
+                    verticalArrangement = Arrangement.Bottom,
                 ) {
                     item { Spacer(modifier = Modifier.height(16.dp)) }
 
@@ -434,26 +439,12 @@ fun ChatScreen(
                         Spacer(modifier = Modifier.height(8.dp))
                     }
 
-                    if (uiState.pipelineTrace.isNotEmpty()) {
-                        item {
-                            PipelineTraceCard(steps = uiState.pipelineTrace)
-                            Spacer(modifier = Modifier.height(8.dp))
-                        }
-                    }
-
-                    if (uiState.currentStep != null && uiState.isGenerating) {
-                        item {
-                            val step = uiState.currentStep!!
-                            Text(
-                                text = "Step ${step.stepIndex} of ${step.totalSteps ?: "?"}: ${step.nodeName}",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = 8.dp, vertical = 2.dp)
-                            )
-                        }
-                    }
+                    // Pipeline trace and per-step progress used to render here.
+                    // Per Phase 17.4 spec, the chat list keeps only real user /
+                    // agent turns (and the interactive clarification cards
+                    // below); transient pipeline diagnostics live in the
+                    // console strip via `[NODE]` events and the `[NOW]`
+                    // thought line.
 
                     items(uiState.clarificationCards, key = { it.id }) { card ->
                         ClarificationCard(

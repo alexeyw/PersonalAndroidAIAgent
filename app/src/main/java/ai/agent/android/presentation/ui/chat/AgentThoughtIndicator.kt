@@ -1,17 +1,19 @@
 package ai.agent.android.presentation.ui.chat
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import ai.agent.android.domain.models.AgentOrchestratorState
 
@@ -63,15 +65,33 @@ fun AgentThoughtIndicator(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.End,
             ) {
-                TextButton(onClick = onDeny) {
-                    Text("Deny", fontFamily = FontFamily.Monospace, fontSize = LineFontSize)
-                }
-                TextButton(onClick = onApprove) {
-                    Text("Approve", fontFamily = FontFamily.Monospace, fontSize = LineFontSize)
-                }
+                ConsoleAction(label = "Deny", onClick = onDeny)
+                ConsoleAction(label = "Approve", onClick = onApprove)
             }
         }
     }
+}
+
+/**
+ * Compact in-console action button used by the [AgentOrchestratorState.WaitingForApproval]
+ * row. Standard Material `TextButton` reserves a 48dp tap target with
+ * generous internal padding which read as a vertical gap inside the dense
+ * monospace strip — this variant matches the line-height of console events
+ * while still meeting the 44dp tap-target via `clickable` + 12dp horizontal
+ * padding (giving ~28dp of vertical padding around an 11sp glyph).
+ */
+@Composable
+private fun ConsoleAction(label: String, onClick: () -> Unit) {
+    Text(
+        text = label,
+        modifier = Modifier
+            .clickable(onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 4.dp),
+        color = MaterialTheme.colorScheme.primary,
+        fontFamily = FontFamily.Monospace,
+        fontSize = LineFontSize,
+        lineHeight = LineHeight,
+    )
 }
 
 private val LineFontSize = 11.sp
