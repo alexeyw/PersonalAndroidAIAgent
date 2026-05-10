@@ -115,6 +115,14 @@ fun ConsoleFullLogSheet(
     val coroutineScope = rememberCoroutineScope()
     var clearDialogVisible by remember { mutableStateOf(false) }
 
+    // Hoisted out of `ConsoleLogRow` because `LazyColumn` items are
+    // disposed and re-entered on scroll, which would re-instantiate the
+    // formatter for every row that re-enters the viewport. One instance
+    // shared across rows is safe here — Compose rendering is single-
+    // threaded, and `SimpleDateFormat.format(Date)` is reentrant on a
+    // single thread despite the class being non-thread-safe in general.
+    val timeFormatter = remember { SimpleDateFormat("HH:mm:ss.SSS", Locale.US) }
+
     // Filtered view of the events for rendering. Recomputed only when the
     // log itself or the selected chip change so chip toggles in a quiet
     // session don't trigger a full event-list re-walk on every recomposition.
@@ -153,8 +161,19 @@ fun ConsoleFullLogSheet(
     // and the user hasn't manually scrolled away. `pinnedToBottom` is the
     // pre-append snapshot of intent, so a single new event still anchors
     // to the tail even though the layoutInfo would briefly disagree.
+    //
+    // When the list drains (Clear, filter switch with no matches), we
+    // re-pin: the user has nothing to scroll past, so the next event must
+    // tail by default. Without this, a Clear performed while scrolled up
+    // would leave `pinnedToBottom = false` (the scroll-progress collector
+    // had no reason to fire during the Clear), and the next event would
+    // surface the "↓ New events" FAB even though the single row is fully
+    // visible.
     LaunchedEffect(visibleEvents.size) {
-        if (visibleEvents.isEmpty()) return@LaunchedEffect
+        if (visibleEvents.isEmpty()) {
+            pinnedToBottom = true
+            return@LaunchedEffect
+        }
         if (pinnedToBottom) {
             listState.scrollToItem(visibleEvents.lastIndex)
         }
@@ -257,7 +276,7 @@ fun ConsoleFullLogSheet(
                             // hashes that would change on recomposition.
                             key = { event -> "${event.timestamp}|${event.message}" },
                         ) { event ->
-                            ConsoleLogRow(event)
+                            ConsoleLogRow(event, timeFormatter)
                         }
                     }
                 }
@@ -293,10 +312,15 @@ fun ConsoleFullLogSheet(
  * Single row in the expanded log list. Renders the millisecond timestamp
  * (`HH:mm:ss.SSS`), a category icon, and the message body in a monospace
  * font so column alignment matches the collapsed mini-console.
+ *
+ * @param event Log entry to render.
+ * @param timeFormatter Shared `SimpleDateFormat` instance owned by the
+ *   parent [ConsoleFullLogSheet]. Hoisted here so scrolling does not
+ *   thrash through `LazyColumn` item disposal/re-entry, each cycle of
+ *   which would otherwise allocate a fresh formatter inside `remember`.
  */
 @Composable
-private fun ConsoleLogRow(event: ConsoleEvent) {
-    val timeFormatter = remember { SimpleDateFormat("HH:mm:ss.SSS", Locale.US) }
+private fun ConsoleLogRow(event: ConsoleEvent, timeFormatter: SimpleDateFormat) {
     val color = lineColor(event.type)
     Row(
         modifier = Modifier

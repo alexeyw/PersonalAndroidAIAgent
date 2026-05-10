@@ -47,8 +47,12 @@ enum class ConsoleLogFilter(val label: String) {
  */
 fun ConsoleLogFilter.matches(event: ConsoleEvent): Boolean = when (this) {
     ConsoleLogFilter.All -> true
-    ConsoleLogFilter.Nodes -> event.type is ConsoleEventType.NodeExecution
-    ConsoleLogFilter.Tools -> event.type is ConsoleEventType.ToolCall
-    ConsoleLogFilter.Memory -> event.type is ConsoleEventType.MemoryAccess
-    ConsoleLogFilter.Errors -> event.type is ConsoleEventType.Error
+    // `ConsoleEventType` is a sealed interface whose every variant is a
+    // `data object`, so each type is a singleton and identity equality
+    // (`==`) is the canonical comparison — `is` would still compile but
+    // reads as if the variants carried per-instance data.
+    ConsoleLogFilter.Nodes -> event.type == ConsoleEventType.NodeExecution
+    ConsoleLogFilter.Tools -> event.type == ConsoleEventType.ToolCall
+    ConsoleLogFilter.Memory -> event.type == ConsoleEventType.MemoryAccess
+    ConsoleLogFilter.Errors -> event.type == ConsoleEventType.Error
 }
