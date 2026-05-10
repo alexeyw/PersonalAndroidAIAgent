@@ -19,13 +19,18 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.calculateEndPadding
+import androidx.compose.foundation.layout.calculateStartPadding
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.windowInsetsBottomHeight
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -79,6 +84,7 @@ import androidx.compose.material3.rememberDrawerState
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -89,6 +95,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
@@ -216,12 +223,27 @@ fun ChatScreen(
         viewModel.consumeSnackbar()
     }
 
+    // True iff the chat list is already pinned to the bottom (i.e. the user
+    // hasn't manually scrolled up). Computed lazily so we don't refire the
+    // auto-scroll effect on every scroll event.
+    val isAtBottom by remember(listState) {
+        derivedStateOf {
+            val info = listState.layoutInfo
+            val totalItems = info.totalItemsCount
+            if (totalItems == 0) return@derivedStateOf true
+            val lastVisible = info.visibleItemsInfo.lastOrNull()?.index ?: -1
+            lastVisible >= totalItems - 1
+        }
+    }
+
     // Auto-scroll to the tail of the list only when a finalized message
     // (user prompt or completed agent reply) or a clarification card is
-    // appended. Deliberately not keyed on `isGenerating`: streaming-driven
-    // recompositions used to drag the list, and the user only needs the
-    // viewport to land at the bottom once generation has finished.
+    // appended *and* the user was already viewing the bottom. If they have
+    // scrolled up to read history we leave their viewport alone — fixing the
+    // jarring "snaps to first message" behaviour where any state change
+    // during a manual scroll yanked them back.
     LaunchedEffect(uiState.messages.size, uiState.clarificationCards.size) {
+        if (!isAtBottom) return@LaunchedEffect
         val targetIndex = uiState.messages.size + uiState.clarificationCards.size
         if (targetIndex > 0) {
             coroutineScope.launch {
@@ -365,10 +387,19 @@ fun ChatScreen(
             },
             snackbarHost = { SnackbarHost(snackbarHostState) }
         ) { paddingValues ->
+            // Drop the bottom inset from the column so the console panel can
+            // stretch its background to the screen edge (over the navigation
+            // bar area). The console / fallback Spacer at the very bottom of
+            // this Column applies `navigationBarsPadding()` internally so
+            // text stays clear of the system buttons.
             Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(paddingValues)
+                    .padding(
+                        top = paddingValues.calculateTopPadding(),
+                        start = paddingValues.calculateStartPadding(LocalLayoutDirection.current),
+                        end = paddingValues.calculateEndPadding(LocalLayoutDirection.current),
+                    )
             ) {
                 LazyColumn(
                     state = listState,
@@ -435,20 +466,6 @@ fun ChatScreen(
                         Spacer(modifier = Modifier.height(8.dp))
                     }
 
-                    val hasPendingClarification = uiState.clarificationCards.any {
-                        it.status == ClarificationCardUiModel.Status.PENDING
-                    }
-                    if (uiState.orchestratorState != null && uiState.isGenerating && !hasPendingClarification) {
-                        item {
-                            AgentThoughtIndicator(
-                                state = uiState.orchestratorState!!,
-                                onApprove = { viewModel.resumeWithApproval(true) },
-                                onDeny = { viewModel.resumeWithApproval(false) }
-                            )
-                            Spacer(modifier = Modifier.height(8.dp))
-                        }
-                    }
-
                     item { Spacer(modifier = Modifier.height(8.dp)) }
                 }
 
@@ -479,11 +496,32 @@ fun ChatScreen(
                     isGenerating = uiState.isGenerating
                 )
 
-                // Console sits below the input row in the gap above the system
-                // navigation, where there's free space and the panel does not
-                // push the input around as new events arrive.
+                // Bottom "agent area" — both pieces moved out of the chat
+                // LazyColumn so streaming-driven recompositions can no longer
+                // drag the message list around. The thought card surfaces
+                // current orchestrator state (and approval buttons) and the
+                // console strip shows the running event log.
+                val hasPendingClarification = uiState.clarificationCards.any {
+                    it.status == ClarificationCardUiModel.Status.PENDING
+                }
+                if (uiState.orchestratorState != null && uiState.isGenerating && !hasPendingClarification) {
+                    AgentThoughtIndicator(
+                        state = uiState.orchestratorState!!,
+                        onApprove = { viewModel.resumeWithApproval(true) },
+                        onDeny = { viewModel.resumeWithApproval(false) },
+                    )
+                }
+
                 if (uiState.isGenerating || uiState.consoleLines.isNotEmpty()) {
                     ConsolePanelCollapsed(events = uiState.consoleLines)
+                } else {
+                    // No console visible: still own the navigation-bar inset
+                    // so the input bar stays clear of the system buttons.
+                    Spacer(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .windowInsetsBottomHeight(WindowInsets.navigationBars)
+                    )
                 }
             }
         }

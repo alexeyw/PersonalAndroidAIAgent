@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -78,6 +79,11 @@ fun ConsolePanelCollapsed(
     val visibleEvents = remember(events) { events.takeLast(COLLAPSED_LINE_LIMIT) }
 
     Surface(
+        // The Surface intentionally has no bottom inset padding so the
+        // `surfaceVariant` background reaches the very edge of the screen
+        // (covering the navigation-bar inset area). The inner Column then
+        // carves out the system-bar space via `navigationBarsPadding()` so
+        // text always renders above the system buttons.
         modifier = modifier
             .fillMaxWidth()
             .heightIn(min = PanelHeight),
@@ -86,6 +92,7 @@ fun ConsolePanelCollapsed(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .navigationBarsPadding()
                 .padding(horizontal = 10.dp, vertical = 2.dp),
             verticalArrangement = Arrangement.Bottom,
         ) {
