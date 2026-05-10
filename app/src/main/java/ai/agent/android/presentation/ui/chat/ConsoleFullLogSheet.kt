@@ -44,12 +44,12 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -122,26 +122,40 @@ fun ConsoleFullLogSheet(
         events.filter { filter.matches(it) }
     }
 
-    // True iff the LazyColumn is currently scrolled to (or past) the last
-    // visible item. Used both to gate auto-scroll on append and to hide the
-    // "New events" FAB once the user is reading fresh content again.
-    val userAtBottom by remember(listState) {
-        derivedStateOf {
-            val info = listState.layoutInfo
-            val total = info.totalItemsCount
-            if (total == 0) return@derivedStateOf true
-            val lastVisible = info.visibleItemsInfo.lastOrNull()?.index ?: -1
-            lastVisible >= total - 1
+    // Whether the user is currently following the tail of the log. Updated
+    // exclusively from user-driven scroll events (`isScrollInProgress`),
+    // never from item appends — the previous `derivedStateOf` approach
+    // raced with append: when a new event is added, `totalItemsCount`
+    // increments before `visibleItemsInfo.last().index` catches up,
+    // briefly reading as "scrolled away" and suppressing the auto-scroll
+    // even though the user had not moved.
+    var pinnedToBottom by remember { mutableStateOf(true) }
+
+    LaunchedEffect(listState) {
+        snapshotFlow {
+            listState.firstVisibleItemIndex to listState.firstVisibleItemScrollOffset
+        }.collect {
+            // Only re-evaluate while the user / animation is actually
+            // moving the list. Item appends do not change the first-visible
+            // tuple, so this collector stays quiet until the user drags or
+            // the FAB triggers `animateScrollToItem`. Both cases correctly
+            // re-pin (or un-pin) based on the final layout snapshot.
+            if (listState.isScrollInProgress) {
+                val info = listState.layoutInfo
+                val total = info.totalItemsCount
+                val lastVisible = info.visibleItemsInfo.lastOrNull()?.index ?: -1
+                pinnedToBottom = total == 0 || lastVisible >= total - 1
+            }
         }
     }
 
     // Auto-scroll to the freshest event whenever the rendered list grows
-    // and the user hasn't manually scrolled away. Keying on size keeps the
-    // effect cheap; we don't care about content equality here because
-    // events are append-only within a session.
+    // and the user hasn't manually scrolled away. `pinnedToBottom` is the
+    // pre-append snapshot of intent, so a single new event still anchors
+    // to the tail even though the layoutInfo would briefly disagree.
     LaunchedEffect(visibleEvents.size) {
         if (visibleEvents.isEmpty()) return@LaunchedEffect
-        if (userAtBottom) {
+        if (pinnedToBottom) {
             listState.scrollToItem(visibleEvents.lastIndex)
         }
     }
@@ -184,7 +198,7 @@ fun ConsoleFullLogSheet(
             },
             floatingActionButton = {
                 AnimatedVisibility(
-                    visible = !userAtBottom && visibleEvents.isNotEmpty(),
+                    visible = !pinnedToBottom && visibleEvents.isNotEmpty(),
                     enter = fadeIn(),
                     exit = fadeOut(),
                 ) {
