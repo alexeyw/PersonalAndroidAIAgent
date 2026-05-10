@@ -55,7 +55,7 @@ fun AgentThoughtIndicator(
     onDeny: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
-    val label = labelFor(state) ?: return
+    val label = thoughtLineFor(state) ?: return
     val color = colorFor(state)
 
     if (state is AgentOrchestratorState.WaitingForApproval) {
@@ -90,9 +90,14 @@ fun AgentThoughtIndicator(
     }
 }
 
-/** Console line typography — kept in sync with [ConsolePanelCollapsed]. */
+/**
+ * Console line typography — kept in sync with [ConsolePanelCollapsed].
+ * `LineHeight` deliberately leaves room above the natural ascender / below
+ * the descender of the 11sp monospace glyph so letters like `y`, `p`, `q`
+ * aren't clipped when wrapped in a fixed-height slot.
+ */
 internal val LineFontSize = 11.sp
-internal val LineHeight = 12.sp
+internal val LineHeight = 14.sp
 private const val NeutralAlpha = 0.6f
 
 /**
@@ -117,9 +122,12 @@ private fun ConsoleAction(label: String, onClick: () -> Unit) {
 /**
  * Maps an orchestrator state to the single-line label rendered in the
  * thought indicator. Returns `null` for states that should produce no
- * output (caller `return`s early when this is `null`).
+ * output. Public to the chat package so [ConsolePanelCollapsed] can
+ * decide whether the state would actually consume a console slot — adding
+ * a `ConsoleLine.State` for a state that ends up rendering nothing would
+ * silently swallow one of the three event lines.
  */
-private fun labelFor(state: AgentOrchestratorState): String? = when (state) {
+internal fun thoughtLineFor(state: AgentOrchestratorState): String? = when (state) {
     is AgentOrchestratorState.Idle,
     is AgentOrchestratorState.Completed,
     is AgentOrchestratorState.Error,

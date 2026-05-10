@@ -32,11 +32,13 @@ import java.util.Locale
 private const val SLOT_COUNT = 3
 
 /**
- * Per-slot vertical extent in dp. Set just above the `12.sp` line height of
- * the monospace text so glyph descenders aren't clipped at default font
- * scale.
+ * Per-slot vertical extent in dp. Sized roomier than the `14.sp` line height
+ * of the monospace text so glyph descenders (`y`, `p`, `q`) and ascenders
+ * stay fully visible inside the fixed-height slot at default font scale.
+ * Total panel content height is therefore `SLOT_COUNT * SlotHeight` plus the
+ * vertical padding wrapping the column.
  */
-private val SlotHeight = 14.dp
+private val SlotHeight = 16.dp
 
 /**
  * Sealed model of a single console row. Both the rolling event log and the
@@ -82,7 +84,13 @@ fun ConsolePanelCollapsed(
     val visible = remember(events, currentState) {
         val combined = buildList<ConsoleLine> {
             events.forEach { add(ConsoleLine.Event(it)) }
-            if (currentState != null) add(ConsoleLine.State(currentState))
+            // Only add the state line when AgentThoughtIndicator would render
+            // something for it — `PipelineTrace`, `ConsoleLog`,
+            // `AwaitingClarification` etc. produce no output and would
+            // otherwise consume a slot, silently dropping one event line.
+            if (currentState != null && thoughtLineFor(currentState) != null) {
+                add(ConsoleLine.State(currentState))
+            }
         }
         combined.takeLast(SLOT_COUNT)
     }
