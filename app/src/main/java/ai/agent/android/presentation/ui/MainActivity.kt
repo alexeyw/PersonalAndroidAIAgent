@@ -28,9 +28,11 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
@@ -83,7 +85,19 @@ class MainActivity : ComponentActivity() {
             AndroidAIAgentTheme {
                 val navController = rememberNavController()
 
-                Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
+                // The outer Scaffold previously applied `WindowInsets.systemBars`
+                // via `innerPadding`; every feature screen also has its own
+                // Scaffold whose default `contentWindowInsets = systemBars` kicks
+                // in independently — that produced doubled status- and
+                // navigation-bar insets visible inside the work area. Force the
+                // outer Scaffold to surface zero insets so each screen's own
+                // Scaffold is the single authority on inset padding. Splash
+                // and Home don't have their own Scaffold, so they apply
+                // `systemBarsPadding()` directly inside their composables.
+                Scaffold(
+                    modifier = Modifier.fillMaxSize(),
+                    contentWindowInsets = WindowInsets(0, 0, 0, 0),
+                ) { innerPadding ->
                     NavHost(
                         navController = navController,
                         startDestination = "splash",
@@ -272,6 +286,10 @@ fun HomeScreen(
 ) {
     Column(
         modifier = modifier
+            // Home doesn't ship with its own Scaffold, so it owns the
+            // status- / navigation-bar insets directly to keep the buttons
+            // clear of system surfaces.
+            .systemBarsPadding()
             .padding(16.dp)
             .verticalScroll(rememberScrollState())
     ) {

@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material3.Button
 import androidx.compose.material3.LinearProgressIndicator
@@ -52,7 +53,13 @@ fun SplashScreen(
     }
 
     Box(
-        modifier = modifier.fillMaxSize(),
+        // Splash sits directly under the NavHost, no Scaffold of its own —
+        // so it must own the system-bar insets explicitly. Without this the
+        // logo and progress text could collide with the status bar in
+        // edge-to-edge mode.
+        modifier = modifier
+            .fillMaxSize()
+            .systemBarsPadding(),
         contentAlignment = Alignment.Center,
     ) {
         Column(
