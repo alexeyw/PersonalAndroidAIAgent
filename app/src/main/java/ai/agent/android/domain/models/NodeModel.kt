@@ -1,5 +1,7 @@
 package ai.agent.android.domain.models
 
+import ai.agent.android.domain.constants.DefaultPrompts
+
 /**
  * Represents a single node on the visual orchestrator canvas.
  *
@@ -38,7 +40,7 @@ data class NodeModel(
     val conditionComplexity: Int? = null,
     val conditionKeywords: String? = null,
     val conditionPrompt: String? = null,
-    val systemPrompt: String? = ai.agent.android.domain.constants.DefaultPrompts.getDefaultPromptForNodeType(type),
+    val systemPrompt: String? = DefaultPrompts.getDefaultPromptForNodeType(type),
     val cloudProvider: String? = null,
     val clarificationTimeoutMs: Long? = null,
     val contextConfig: NodeContextConfig = NodeContextConfig.ALL_ENABLED,

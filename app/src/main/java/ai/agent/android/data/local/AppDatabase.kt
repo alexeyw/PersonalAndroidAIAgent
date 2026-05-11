@@ -5,6 +5,7 @@ import ai.agent.android.data.local.dao.LocalModelDao
 import ai.agent.android.data.local.dao.MemoryDao
 import ai.agent.android.data.local.dao.PipelineDao
 import ai.agent.android.data.local.dao.PromptTemplateDao
+import ai.agent.android.data.local.dao.TraceStepDao
 import ai.agent.android.data.local.models.ChatMessageEntity
 import ai.agent.android.data.local.models.ChatSessionEntity
 import ai.agent.android.data.local.models.ConnectionEntity
@@ -13,6 +14,7 @@ import ai.agent.android.data.local.models.MemoryChunkEntity
 import ai.agent.android.data.local.models.NodeEntity
 import ai.agent.android.data.local.models.PipelineEntity
 import ai.agent.android.data.local.models.PromptTemplateEntity
+import ai.agent.android.data.local.models.TraceStepEntity
 import androidx.room.Database
 import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
@@ -34,7 +36,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         NodeEntity::class,
         ConnectionEntity::class,
         PromptTemplateEntity::class,
-        ai.agent.android.data.local.models.TraceStepEntity::class,
+        TraceStepEntity::class,
     ],
     version = 20,
     exportSchema = false,
@@ -79,9 +81,9 @@ abstract class AppDatabase : RoomDatabase() {
     /**
      * Provides access to the TraceStepDao.
      *
-     * @return The [ai.agent.android.data.local.dao.TraceStepDao] instance.
+     * @return The [TraceStepDao] instance.
      */
-    abstract fun traceStepDao(): ai.agent.android.data.local.dao.TraceStepDao
+    abstract fun traceStepDao(): TraceStepDao
 
     companion object {
         /**

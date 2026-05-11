@@ -15,6 +15,9 @@ ij_kotlin_allow_trailing_comma = true
 ij_kotlin_allow_trailing_comma_on_call_site = true
 ij_kotlin_imports_layout = *,java.**,javax.**,kotlin.**,^
 ij_kotlin_packages_to_use_import_on_demand = unset
+ktlint_standard_no-unused-imports = enabled
+ktlint_standard_no-wildcard-imports = enabled
+ktlint_standard_import-ordering = enabled
 
 [*.{json,yml,yaml,xml,toml}]
 indent_size = 2

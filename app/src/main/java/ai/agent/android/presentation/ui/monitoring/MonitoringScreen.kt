@@ -1,6 +1,8 @@
 package ai.agent.android.presentation.ui.monitoring
 
 import ai.agent.android.R
+import ai.agent.android.domain.models.AgentMetrics
+import ai.agent.android.domain.models.ChatMessage
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -144,7 +146,7 @@ fun MonitoringScreen(viewModel: MonitoringViewModel, modifier: Modifier = Modifi
  * @param metrics The metrics to display.
  */
 @Composable
-fun MetricsCard(metrics: ai.agent.android.domain.models.AgentMetrics) {
+fun MetricsCard(metrics: AgentMetrics) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
@@ -236,7 +238,7 @@ fun MetricItem(label: String, value: String) {
  * @param log The chat message representing the log.
  */
 @Composable
-fun LogItemCard(log: ai.agent.android.domain.models.ChatMessage) {
+fun LogItemCard(log: ChatMessage) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),

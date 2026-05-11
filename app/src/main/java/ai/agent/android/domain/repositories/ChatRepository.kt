@@ -1,5 +1,6 @@
 package ai.agent.android.domain.repositories
 
+import ai.agent.android.domain.models.AgentOrchestratorState
 import ai.agent.android.domain.models.ChatMessage
 import ai.agent.android.domain.models.ChatSession
 import kotlinx.coroutines.flow.Flow
@@ -129,7 +130,7 @@ interface ChatRepository {
      * Retrieves trace steps for a given session.
      *
      * @param sessionId The ID of the session.
-     * @return A [Flow] emitting the list of [ai.agent.android.domain.models.AgentOrchestratorState.TraceStep] ordered by time.
+     * @return A [Flow] emitting the list of [AgentOrchestratorState.TraceStep] ordered by time.
      */
-    fun getTraceSteps(sessionId: String): Flow<List<ai.agent.android.domain.models.AgentOrchestratorState.TraceStep>>
+    fun getTraceSteps(sessionId: String): Flow<List<AgentOrchestratorState.TraceStep>>
 }

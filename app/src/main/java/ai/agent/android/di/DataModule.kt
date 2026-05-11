@@ -1,23 +1,41 @@
 package ai.agent.android.di
 
+import ai.agent.android.data.engine.DefaultTextEmbedderFactory
 import ai.agent.android.data.engine.LiteRTLlmEngine
 import ai.agent.android.data.engine.MediaPipeTextEmbeddingEngine
+import ai.agent.android.data.engine.TaskQueueManagerImpl
+import ai.agent.android.data.engine.TextEmbedderFactory
 import ai.agent.android.data.local.ApiKeyManager
 import ai.agent.android.data.local.SettingsManager
+import ai.agent.android.data.mcp.KoogMcpClientFactory
+import ai.agent.android.data.mcp.McpClientFactory
 import ai.agent.android.data.network.AndroidModelDownloadManager
 import ai.agent.android.data.repositories.ChatRepositoryImpl
 import ai.agent.android.data.repositories.ClarificationRepositoryImpl
 import ai.agent.android.data.repositories.LocalModelRepositoryImpl
+import ai.agent.android.data.repositories.LocalPipelineRepositoryImpl
 import ai.agent.android.data.repositories.MemoryRepositoryImpl
+import ai.agent.android.data.repositories.MetricsRepositoryImpl
+import ai.agent.android.data.repositories.NetworkStateRepositoryImpl
+import ai.agent.android.data.repositories.PowerStateRepositoryImpl
+import ai.agent.android.data.repositories.PromptRepositoryImpl
+import ai.agent.android.data.repositories.ToolRepositoryImpl
 import ai.agent.android.domain.engine.LlmInferenceEngine
+import ai.agent.android.domain.engine.TaskQueueManager
 import ai.agent.android.domain.engine.TextEmbeddingEngine
 import ai.agent.android.domain.repositories.ApiKeyRepository
 import ai.agent.android.domain.repositories.ChatRepository
 import ai.agent.android.domain.repositories.ClarificationRepository
 import ai.agent.android.domain.repositories.LocalModelRepository
 import ai.agent.android.domain.repositories.MemoryRepository
+import ai.agent.android.domain.repositories.MetricsRepository
 import ai.agent.android.domain.repositories.ModelDownloadManager
+import ai.agent.android.domain.repositories.NetworkStateRepository
+import ai.agent.android.domain.repositories.PipelineRepository
+import ai.agent.android.domain.repositories.PowerStateRepository
+import ai.agent.android.domain.repositories.PromptRepository
 import ai.agent.android.domain.repositories.SettingsRepository
+import ai.agent.android.domain.repositories.ToolRepository
 import dagger.Binds
 import dagger.Module
 import dagger.hilt.InstallIn
@@ -44,7 +62,7 @@ abstract class DataModule {
     abstract fun bindApiKeyRepository(apiKeyManager: ApiKeyManager): ApiKeyRepository
 
     /**
-     * Binds the [ai.agent.android.data.repositories.LocalModelRepositoryImpl] implementation to the [ai.agent.android.domain.repositories.LocalModelRepository] interface.
+     * Binds the [LocalModelRepositoryImpl] implementation to the [LocalModelRepository] interface.
      */
     @Binds
     @Singleton
@@ -72,13 +90,11 @@ abstract class DataModule {
     abstract fun bindTextEmbeddingEngine(engine: MediaPipeTextEmbeddingEngine): TextEmbeddingEngine
 
     /**
-     * Binds the [ai.agent.android.data.engine.DefaultTextEmbedderFactory] implementation to the [ai.agent.android.data.engine.TextEmbedderFactory] interface.
+     * Binds the [DefaultTextEmbedderFactory] implementation to the [TextEmbedderFactory] interface.
      */
     @Binds
     @Singleton
-    abstract fun bindTextEmbedderFactory(
-        factory: ai.agent.android.data.engine.DefaultTextEmbedderFactory,
-    ): ai.agent.android.data.engine.TextEmbedderFactory
+    abstract fun bindTextEmbedderFactory(factory: DefaultTextEmbedderFactory): TextEmbedderFactory
 
     /**
      * Binds the [MemoryRepositoryImpl] implementation to the [MemoryRepository] interface.
@@ -102,76 +118,60 @@ abstract class DataModule {
     abstract fun bindChatRepository(repository: ChatRepositoryImpl): ChatRepository
 
     /**
-     * Binds the [ai.agent.android.data.repositories.ToolRepositoryImpl] implementation to the [ai.agent.android.domain.repositories.ToolRepository] interface.
+     * Binds the [ToolRepositoryImpl] implementation to the [ToolRepository] interface.
      */
     @Binds
     @Singleton
-    abstract fun bindToolRepository(
-        repository: ai.agent.android.data.repositories.ToolRepositoryImpl,
-    ): ai.agent.android.domain.repositories.ToolRepository
+    abstract fun bindToolRepository(repository: ToolRepositoryImpl): ToolRepository
 
     /**
-     * Binds the [ai.agent.android.data.mcp.KoogMcpClientFactory] implementation to the [ai.agent.android.data.mcp.McpClientFactory] interface.
+     * Binds the [KoogMcpClientFactory] implementation to the [McpClientFactory] interface.
      */
     @Binds
     @Singleton
-    abstract fun bindMcpClientFactory(
-        factory: ai.agent.android.data.mcp.KoogMcpClientFactory,
-    ): ai.agent.android.data.mcp.McpClientFactory
+    abstract fun bindMcpClientFactory(factory: KoogMcpClientFactory): McpClientFactory
 
     /**
-     * Binds the [ai.agent.android.data.repositories.MetricsRepositoryImpl] implementation to the [ai.agent.android.domain.repositories.MetricsRepository] interface.
+     * Binds the [MetricsRepositoryImpl] implementation to the [MetricsRepository] interface.
      */
     @Binds
     @Singleton
-    abstract fun bindMetricsRepository(
-        repository: ai.agent.android.data.repositories.MetricsRepositoryImpl,
-    ): ai.agent.android.domain.repositories.MetricsRepository
+    abstract fun bindMetricsRepository(repository: MetricsRepositoryImpl): MetricsRepository
 
     /**
-     * Binds the [ai.agent.android.data.repositories.PowerStateRepositoryImpl] implementation to the [ai.agent.android.domain.repositories.PowerStateRepository] interface.
+     * Binds the [PowerStateRepositoryImpl] implementation to the [PowerStateRepository] interface.
      */
     @Binds
     @Singleton
-    abstract fun bindPowerStateRepository(
-        repository: ai.agent.android.data.repositories.PowerStateRepositoryImpl,
-    ): ai.agent.android.domain.repositories.PowerStateRepository
+    abstract fun bindPowerStateRepository(repository: PowerStateRepositoryImpl): PowerStateRepository
 
     /**
-     * Binds the [ai.agent.android.data.repositories.NetworkStateRepositoryImpl] implementation to the [ai.agent.android.domain.repositories.NetworkStateRepository] interface.
+     * Binds the [NetworkStateRepositoryImpl] implementation to the [NetworkStateRepository] interface.
      */
     @Binds
     @Singleton
-    abstract fun bindNetworkStateRepository(
-        repository: ai.agent.android.data.repositories.NetworkStateRepositoryImpl,
-    ): ai.agent.android.domain.repositories.NetworkStateRepository
+    abstract fun bindNetworkStateRepository(repository: NetworkStateRepositoryImpl): NetworkStateRepository
 
     /**
-     * Binds the [ai.agent.android.data.engine.TaskQueueManagerImpl] implementation to the [ai.agent.android.domain.engine.TaskQueueManager] interface.
+     * Binds the [TaskQueueManagerImpl] implementation to the [TaskQueueManager] interface.
      */
     @Binds
     @Singleton
-    abstract fun bindTaskQueueManager(
-        taskQueueManager: ai.agent.android.data.engine.TaskQueueManagerImpl,
-    ): ai.agent.android.domain.engine.TaskQueueManager
+    abstract fun bindTaskQueueManager(taskQueueManager: TaskQueueManagerImpl): TaskQueueManager
 
     /**
-     * Binds the [ai.agent.android.data.repositories.LocalPipelineRepositoryImpl] implementation to the [ai.agent.android.domain.repositories.PipelineRepository] interface.
+     * Binds the [LocalPipelineRepositoryImpl] implementation to the [PipelineRepository] interface.
      */
     @Binds
     @Singleton
-    abstract fun bindPipelineRepository(
-        repository: ai.agent.android.data.repositories.LocalPipelineRepositoryImpl,
-    ): ai.agent.android.domain.repositories.PipelineRepository
+    abstract fun bindPipelineRepository(repository: LocalPipelineRepositoryImpl): PipelineRepository
 
     /**
-     * Binds the [ai.agent.android.data.repositories.PromptRepositoryImpl] implementation to the [ai.agent.android.domain.repositories.PromptRepository] interface.
+     * Binds the [PromptRepositoryImpl] implementation to the [PromptRepository] interface.
      */
     @Binds
     @Singleton
-    abstract fun bindPromptRepository(
-        repository: ai.agent.android.data.repositories.PromptRepositoryImpl,
-    ): ai.agent.android.domain.repositories.PromptRepository
+    abstract fun bindPromptRepository(repository: PromptRepositoryImpl): PromptRepository
 
     /**
      * Binds the [ClarificationRepositoryImpl] implementation to the [ClarificationRepository] interface.

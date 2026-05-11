@@ -1,5 +1,6 @@
 package ai.agent.android.domain.engine
 
+import ai.agent.android.domain.constants.DefaultPrompts
 import ai.agent.android.domain.models.CloudProvider
 import ai.agent.android.domain.models.ConnectionModel
 import ai.agent.android.domain.models.NodeContextConfig
@@ -107,7 +108,7 @@ object DefaultPipelineFactory {
             id = UUID.randomUUID().toString(),
             type = NodeType.OUTPUT,
             label = "Output",
-            systemPrompt = ai.agent.android.domain.constants.DefaultPrompts.OUTPUT_FORMAT_PROMPT,
+            systemPrompt = DefaultPrompts.OUTPUT_FORMAT_PROMPT,
             x = 1300f,
             y = 300f,
             contextConfig = NodeContextConfig.defaultForType(NodeType.OUTPUT),

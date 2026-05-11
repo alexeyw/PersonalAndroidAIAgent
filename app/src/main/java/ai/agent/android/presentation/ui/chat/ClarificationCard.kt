@@ -250,4 +250,3 @@ private fun TimedOutBody(model: ClarificationCardUiModel) {
 
 /** Alpha applied to a timed-out clarification card to visually deemphasise it. */
 private const val TIMED_OUT_ALPHA: Float = 0.6f
-

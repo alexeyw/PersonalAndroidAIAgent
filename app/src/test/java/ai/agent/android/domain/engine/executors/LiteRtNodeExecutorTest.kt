@@ -4,6 +4,7 @@ import ai.agent.android.domain.engine.LlmInferenceEngine
 import ai.agent.android.domain.models.NodeModel
 import ai.agent.android.domain.models.NodeOutput
 import ai.agent.android.domain.models.NodeType
+import ai.agent.android.domain.models.Result
 import ai.agent.android.domain.repositories.ChatRepository
 import ai.agent.android.domain.repositories.MetricsRepository
 import ai.agent.android.domain.repositories.SettingsRepository
@@ -56,7 +57,7 @@ class LiteRtNodeExecutorTest {
         val node = NodeModel("1", NodeType.LITE_RT, 0f, 0f, systemPrompt = "Custom Node Prompt")
 
         every { settingsRepository.systemPromptPrefix } returns flowOf("Prefix")
-        coEvery { loadModelUseCase(any()) } returns ai.agent.android.domain.models.Result.Success(Unit)
+        coEvery { loadModelUseCase(any()) } returns Result.Success(Unit)
 
         val promptSlot = slot<String>()
         every { llmEngine.generateResponseStream(capture(promptSlot)) } returns flowOf("Result")
@@ -76,7 +77,7 @@ class LiteRtNodeExecutorTest {
         val node = NodeModel("1", NodeType.LITE_RT, 0f, 0f)
 
         every { settingsRepository.systemPromptPrefix } returns flowOf("Prefix")
-        coEvery { loadModelUseCase(any()) } returns ai.agent.android.domain.models.Result.Success(Unit)
+        coEvery { loadModelUseCase(any()) } returns Result.Success(Unit)
 
         val promptSlot = slot<String>()
         every { llmEngine.generateResponseStream(capture(promptSlot)) } returns flowOf("Result")
@@ -95,7 +96,7 @@ class LiteRtNodeExecutorTest {
         // the prompt and silently overriding NodeContextConfig.
         val node = NodeModel("1", NodeType.LITE_RT, 0f, 0f, systemPrompt = "Sys")
         every { settingsRepository.systemPromptPrefix } returns flowOf("")
-        coEvery { loadModelUseCase(any()) } returns ai.agent.android.domain.models.Result.Success(Unit)
+        coEvery { loadModelUseCase(any()) } returns Result.Success(Unit)
 
         val promptSlot = slot<String>()
         every { llmEngine.generateResponseStream(capture(promptSlot)) } returns flowOf("ok")
@@ -116,7 +117,7 @@ class LiteRtNodeExecutorTest {
         // not a string of arbitrary length. Counting by `+= 1` keeps the metric truthful.
         val node = NodeModel("1", NodeType.LITE_RT, 0f, 0f)
         every { settingsRepository.systemPromptPrefix } returns flowOf("")
-        coEvery { loadModelUseCase(any()) } returns ai.agent.android.domain.models.Result.Success(Unit)
+        coEvery { loadModelUseCase(any()) } returns Result.Success(Unit)
 
         // Emit five tokens of varying lengths — the count must equal 5, not the sum of lengths.
         every { llmEngine.generateResponseStream(any()) } returns flowOf("a", "bb", "ccc", "dddd", "eeeee")
@@ -131,7 +132,7 @@ class LiteRtNodeExecutorTest {
     fun `execute terminates with a NodeOutput Result and emits at least one State`() = runTest {
         val node = NodeModel("1", NodeType.LITE_RT, 0f, 0f)
         every { settingsRepository.systemPromptPrefix } returns flowOf("")
-        coEvery { loadModelUseCase(any()) } returns ai.agent.android.domain.models.Result.Success(Unit)
+        coEvery { loadModelUseCase(any()) } returns Result.Success(Unit)
         every { llmEngine.generateResponseStream(any()) } returns flowOf("token")
 
         val outputs = executor.execute(node, "input", "session-1", "prompt").toList()

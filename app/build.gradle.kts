@@ -150,6 +150,60 @@ kover {
     }
 }
 
+// Phase 18 / Task 7/10 — enforces "no internal FQN" rule for the
+// `ai.agent.android.*` package. References like
+// `ai.agent.android.domain.models.NodeType` outside `import`/`package`
+// statements must be replaced with a top-level import + short name. KDoc
+// lines (whitespace-then-`*`) and the `.editorconfig` pinned ktlint rules
+// catch the rest (wildcard imports, unused imports, import ordering).
+val checkNoInternalFqn by tasks.registering {
+    group = "verification"
+    description =
+        "Fails the build if any internal `ai.agent.android.*` FQN reference appears in source code " +
+        "outside of `import`/`package` statements or KDoc comments."
+    val sourceRoots = listOf(
+        "src/main/java",
+        "src/main/kotlin",
+        "src/test/java",
+        "src/test/kotlin",
+        "src/androidTest/java",
+        "src/androidTest/kotlin",
+    )
+    val ktFiles = sourceRoots.flatMap { root ->
+        fileTree("$projectDir/$root") { include("**/*.kt") }.files
+    }
+    inputs.files(ktFiles)
+    doLast {
+        val fqnPattern = Regex("""\bai\.agent\.android\.[a-z_]+\.[A-Za-z]""")
+        val violations = mutableListOf<String>()
+        ktFiles.forEach { file ->
+            file.useLines { lines ->
+                lines.forEachIndexed { index, line ->
+                    val trimmed = line.trimStart()
+                    // Skip `import …` / `package …` statements and `*`-style KDoc lines.
+                    if (trimmed.startsWith("import ") ||
+                        trimmed.startsWith("package ") ||
+                        trimmed.startsWith("*") ||
+                        trimmed.startsWith("//")
+                    ) {
+                        return@forEachIndexed
+                    }
+                    if (fqnPattern.containsMatchIn(line)) {
+                        violations += "${file.relativeTo(rootDir)}:${index + 1}: ${line.trim()}"
+                    }
+                }
+            }
+        }
+        if (violations.isNotEmpty()) {
+            throw GradleException(
+                "Internal FQN references found (use imports instead):\n" +
+                    violations.joinToString(separator = "\n"),
+            )
+        }
+    }
+}
+tasks.named("check") { dependsOn(checkNoInternalFqn) }
+
 dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)

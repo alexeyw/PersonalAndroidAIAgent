@@ -1,6 +1,7 @@
 package ai.agent.android.presentation.ui.orchestrator
 
 import ai.agent.android.R
+import ai.agent.android.domain.engine.DefaultPipelineFactory
 import ai.agent.android.domain.models.CloudProvider
 import ai.agent.android.domain.models.ConnectionModel
 import ai.agent.android.domain.models.NodeContextConfig
@@ -8,6 +9,8 @@ import ai.agent.android.domain.models.NodeModel
 import ai.agent.android.domain.models.NodeType
 import ai.agent.android.domain.models.PipelineGraph
 import ai.agent.android.domain.models.PipelineImportOutcome
+import ai.agent.android.domain.models.PipelineValidationError
+import ai.agent.android.domain.models.PipelineValidationException
 import ai.agent.android.domain.models.PromptTemplate
 import ai.agent.android.domain.pipelineio.PipelineJsonSerializer
 import ai.agent.android.domain.prompt.PromptTemplateEngine
@@ -479,7 +482,7 @@ class OrchestratorViewModel @Inject constructor(
      */
     fun applyBasePreset() {
         _uiState.update { state ->
-            val preset = ai.agent.android.domain.engine.DefaultPipelineFactory.create(state.currentPipeline.name)
+            val preset = DefaultPipelineFactory.create(state.currentPipeline.name)
             state.copy(
                 currentPipeline = state.currentPipeline.copy(
                     nodes = preset.nodes,
@@ -601,7 +604,7 @@ class OrchestratorViewModel @Inject constructor(
      * combinations). Generic exceptions become `UiText.Dynamic`.
      */
     private fun messageForSaveError(e: Throwable): UiText? {
-        if (e !is ai.agent.android.domain.models.PipelineValidationException) {
+        if (e !is PipelineValidationException) {
             return e.message?.let { UiText.Dynamic(it) }
         }
         val parts = e.errors.map { err -> validationErrorAsUiText(err) }
@@ -613,37 +616,36 @@ class OrchestratorViewModel @Inject constructor(
     }
 
     /**
-     * Resolves a single [ai.agent.android.domain.models.PipelineValidationError] to
-     * its `UiText` representation. Pulled out so [messageForSaveError] can
-     * decide whether to keep the typed `Resource` (single error) or collapse
-     * into a `Dynamic` join (multiple errors).
+     * Resolves a single [PipelineValidationError] to its `UiText`
+     * representation. Pulled out so [messageForSaveError] can decide whether
+     * to keep the typed `Resource` (single error) or collapse into a
+     * `Dynamic` join (multiple errors).
      */
-    private fun validationErrorAsUiText(err: ai.agent.android.domain.models.PipelineValidationError): UiText =
-        when (err) {
-            is ai.agent.android.domain.models.PipelineValidationError.MissingInput ->
-                UiText(R.string.errors_orchestrator_validation_missing_input)
-            is ai.agent.android.domain.models.PipelineValidationError.MissingOutput ->
-                UiText(R.string.errors_orchestrator_validation_missing_output)
-            is ai.agent.android.domain.models.PipelineValidationError.MultipleInputs ->
-                UiText(R.string.errors_orchestrator_validation_multiple_inputs)
-            is ai.agent.android.domain.models.PipelineValidationError.MultipleOutputs ->
-                UiText(R.string.errors_orchestrator_validation_multiple_outputs)
-            is ai.agent.android.domain.models.PipelineValidationError.HasCycles ->
-                UiText(R.string.errors_orchestrator_validation_has_cycles)
-            is ai.agent.android.domain.models.PipelineValidationError.DisconnectedInput ->
-                UiText(R.string.errors_orchestrator_validation_disconnected_input)
-            is ai.agent.android.domain.models.PipelineValidationError.DisconnectedOutput ->
-                UiText(R.string.errors_orchestrator_validation_disconnected_output)
-            is ai.agent.android.domain.models.PipelineValidationError.UnreachableNode ->
-                UiText(R.string.errors_orchestrator_validation_unreachable_node)
-            is ai.agent.android.domain.models.PipelineValidationError.DeadEndNode ->
-                UiText(R.string.errors_orchestrator_validation_dead_end)
-            is ai.agent.android.domain.models.PipelineValidationError.NodeEmptyContext -> {
-                val name = _uiState.value.currentPipeline.nodes
-                    .find { it.id == err.nodeId }?.label ?: err.nodeId
-                UiText.of(R.string.errors_orchestrator_validation_node_no_sources, name)
-            }
+    private fun validationErrorAsUiText(err: PipelineValidationError): UiText = when (err) {
+        is PipelineValidationError.MissingInput ->
+            UiText(R.string.errors_orchestrator_validation_missing_input)
+        is PipelineValidationError.MissingOutput ->
+            UiText(R.string.errors_orchestrator_validation_missing_output)
+        is PipelineValidationError.MultipleInputs ->
+            UiText(R.string.errors_orchestrator_validation_multiple_inputs)
+        is PipelineValidationError.MultipleOutputs ->
+            UiText(R.string.errors_orchestrator_validation_multiple_outputs)
+        is PipelineValidationError.HasCycles ->
+            UiText(R.string.errors_orchestrator_validation_has_cycles)
+        is PipelineValidationError.DisconnectedInput ->
+            UiText(R.string.errors_orchestrator_validation_disconnected_input)
+        is PipelineValidationError.DisconnectedOutput ->
+            UiText(R.string.errors_orchestrator_validation_disconnected_output)
+        is PipelineValidationError.UnreachableNode ->
+            UiText(R.string.errors_orchestrator_validation_unreachable_node)
+        is PipelineValidationError.DeadEndNode ->
+            UiText(R.string.errors_orchestrator_validation_dead_end)
+        is PipelineValidationError.NodeEmptyContext -> {
+            val name = _uiState.value.currentPipeline.nodes
+                .find { it.id == err.nodeId }?.label ?: err.nodeId
+            UiText.of(R.string.errors_orchestrator_validation_node_no_sources, name)
         }
+    }
 
     /**
      * Lifts a thrown exception into a `UiText`, falling back to the generic

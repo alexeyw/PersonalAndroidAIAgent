@@ -36,7 +36,8 @@ class AgentApprovalReceiver : BroadcastReceiver() {
         val sessionId = intent.getStringExtra("sessionId") ?: return
 
         notificationManager.cancel(
-            ApprovalNotificationManager.NOTIFICATION_ID + sessionId.hashCode() % TimeAndIdConstants.NOTIFICATION_ID_RANGE,
+            ApprovalNotificationManager.NOTIFICATION_ID +
+                sessionId.hashCode() % TimeAndIdConstants.NOTIFICATION_ID_RANGE,
         )
 
         when (ApprovalAction.fromAction(intent.action)) {
