@@ -1,5 +1,6 @@
 package ai.agent.android.domain.engine.executors
 
+import ai.agent.android.domain.constants.DefaultPrompts
 import ai.agent.android.domain.engine.CloudLlmClientFactory
 import ai.agent.android.domain.engine.CloudLlmModelResolver
 import ai.agent.android.domain.models.AgentOrchestratorState
@@ -41,7 +42,7 @@ class CloudLlmNodeExecutor @Inject constructor(
         originalPrompt: String,
     ): Flow<NodeOutput> = flow {
         val systemPromptPrefix = settingsRepository.systemPromptPrefix.first()
-        val nodeSystemPrompt = node.systemPrompt ?: "You are a helpful AI assistant."
+        val nodeSystemPrompt = node.systemPrompt ?: DefaultPrompts.Cloud.SYSTEM_FALLBACK
         val baseSystemPrompt = "$systemPromptPrefix\n$nodeSystemPrompt\n"
 
         // `inputText` is the assembled context produced upstream by NodeContextBuilder

@@ -1,5 +1,6 @@
 package ai.agent.android.domain.engine.executors
 
+import ai.agent.android.domain.constants.DefaultPrompts
 import ai.agent.android.domain.engine.LlmInferenceEngine
 import ai.agent.android.domain.models.AgentOrchestratorState
 import ai.agent.android.domain.models.NodeExecutionResult
@@ -24,10 +25,16 @@ class SummaryNodeExecutor @Inject constructor(
         sessionId: String,
         originalPrompt: String,
     ): Flow<NodeOutput> = flow {
-        val nodeSystemPrompt =
-            node.systemPrompt ?: "You are an AI assistant responsible for summarizing the results of subtasks."
+        val nodeSystemPrompt = node.systemPrompt ?: DefaultPrompts.Summary.SYSTEM_FALLBACK
 
-        val fullPrompt = "$nodeSystemPrompt\n\nCRITICAL INSTRUCTION: You must synthesize the provided results into a coherent final answer for the original task. Do not just list what each task did. Answer the original task using the data from the results.\n\nORIGINAL TASK: $originalPrompt\n\nRESULTS OF SUBTASKS:\n$inputText\n\nFINAL ANSWER: "
+        val fullPrompt = DefaultPrompts.renderTemplate(
+            DefaultPrompts.Summary.SYNTHESIS_TEMPLATE,
+            mapOf(
+                "NODE_SYSTEM_PROMPT" to nodeSystemPrompt,
+                "ORIGINAL_TASK" to originalPrompt,
+                "RESULTS_OF_SUBTASKS" to inputText,
+            ),
+        )
 
         val loadResult = loadModelUseCase(node.modelPath)
         if (loadResult is Result.Error) {

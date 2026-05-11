@@ -1,5 +1,6 @@
 package ai.agent.android.domain.engine.executors
 
+import ai.agent.android.domain.constants.DefaultPrompts
 import ai.agent.android.domain.engine.LlmInferenceEngine
 import ai.agent.android.domain.models.AgentOrchestratorState
 import ai.agent.android.domain.models.NodeExecutionResult
@@ -27,7 +28,7 @@ class SystemNodeExecutor @Inject constructor(
         sessionId: String,
         originalPrompt: String,
     ): Flow<NodeOutput> = flow {
-        val nodeSystemPrompt = node.systemPrompt ?: "You are an AI assistant."
+        val nodeSystemPrompt = node.systemPrompt ?: DefaultPrompts.System.SYSTEM_FALLBACK
         val fullPrompt = "$nodeSystemPrompt\n\nUSER: $inputText\nAGENT: "
 
         val loadResult = loadModelUseCase(node.modelPath)
