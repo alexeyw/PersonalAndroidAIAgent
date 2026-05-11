@@ -15,6 +15,17 @@ import kotlinx.coroutines.flow.flow
 import timber.log.Timber
 import javax.inject.Inject
 
+/**
+ * Executor for [NodeType.SUMMARY][ai.agent.android.domain.models.NodeType.SUMMARY] nodes.
+ *
+ * Runs a local-model synthesis pass that consolidates upstream subtask results
+ * (`inputText`) and the original user request (`originalPrompt`) into a single coherent
+ * summary, using the canonical [DefaultPrompts.Summary.SYNTHESIS_TEMPLATE]. Streams the
+ * generation as orchestrator state updates and emits the trimmed final text as a
+ * [NodeOutput.Result]. Falls back to a literal `"No summary generated."` placeholder
+ * when the model produces an empty response, so downstream nodes never see a blank
+ * input.
+ */
 class SummaryNodeExecutor @Inject constructor(
     private val llmEngine: LlmInferenceEngine,
     private val loadModelUseCase: LoadModelUseCase,

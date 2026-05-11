@@ -39,6 +39,7 @@ data class NodeContextConfig(
      */
     fun isEmpty(): Boolean = !chatHistory && !originalTask && !nodeInput && !longTermMemory && !toolResults
 
+    /** Holds the canonical `ALL_ENABLED` instance and per-[NodeType] defaults. */
     companion object {
         /**
          * Default configuration with every context block enabled. This is what

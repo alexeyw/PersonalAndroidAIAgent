@@ -11,7 +11,10 @@ package ai.agent.android.domain.models
  * The wire form is preserved as the existing `"CPU" / "GPU" / "NPU"` strings so the
  * refactor does not invalidate values already persisted on user devices.
  */
-enum class LocalBackend(val key: String) {
+enum class LocalBackend(
+    /** Wire key persisted in `DataStore` under `local_model_backend`. */
+    val key: String,
+) {
     /** CPU execution via XNNPACK; the safe default supported on every device. */
     CPU("CPU"),
 
@@ -22,6 +25,7 @@ enum class LocalBackend(val key: String) {
     NPU("NPU"),
     ;
 
+    /** Owns the wire-key ↔ enum parsing rule used by the settings layer. */
     companion object {
         /**
          * Parses a wire/UI backend key into a typed [LocalBackend].

@@ -17,6 +17,17 @@ import kotlinx.coroutines.flow.flow
 import timber.log.Timber
 import javax.inject.Inject
 
+/**
+ * Executor shared by the three "system reasoning" node types — [NodeType.INTENT_ROUTER],
+ * [NodeType.DECOMPOSITION], and [NodeType.EVALUATION].
+ *
+ * They all share the same shape: run the local model with the node's `systemPrompt`
+ * (or the matching [DefaultPrompts.System.SYSTEM_FALLBACK]) over the upstream context
+ * `inputText`, stream tokens as orchestrator state, and emit the final response. The only
+ * type-specific behaviour is that for [NodeType.INTENT_ROUTER] the executor also exposes
+ * the response as the [NodeExecutionResult.routingKey][ai.agent.android.domain.models.NodeExecutionResult.routingKey]
+ * so that `GraphExecutionEngine` can resolve the next labelled connection.
+ */
 class SystemNodeExecutor @Inject constructor(
     private val llmEngine: LlmInferenceEngine,
     private val loadModelUseCase: LoadModelUseCase,

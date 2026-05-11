@@ -61,6 +61,13 @@ import org.json.JSONObject
  */
 object PipelineJsonSerializer {
 
+    /**
+     * Version stamp emitted on every [serialize] call and validated by [parse].
+     *
+     * Mismatches surface as [PipelineImportOutcome.SchemaMismatch] so the UI can warn
+     * the user that a file produced by a different build of the editor may have fields
+     * the current schema cannot represent.
+     */
     const val CURRENT_SCHEMA_VERSION: Int = 1
 
     /* ----------------------------------------------------------------- *

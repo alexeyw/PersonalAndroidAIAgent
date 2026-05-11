@@ -1,4 +1,4 @@
-# Detekt configuration — Phase 18 / Task 1/10 (report-only mode).
+# Detekt configuration — phase 18 (report-only mode).
 #
 # Strategy: this file is layered on top of detekt's bundled defaults
 # (buildUponDefaultConfig = true in app/build.gradle.kts). Only rules
@@ -71,4 +71,40 @@ style:
     excludeRawStrings: true
   UnusedImport:
     active: true
-  # UnusedPrivateClass/Function/Property are enabled in task 8/10.
+  # Phase 18 / Task 8/10 — surface dead private/internal declarations
+  # project-wide. Triage outcome: either delete the symbol or annotate it with
+  # `@Suppress("UnusedPrivateFunction" | "UnusedPrivateProperty" | "UnusedPrivateClass") // reason: …`
+  # when retention is intentional. (detekt 2.x split the legacy
+  # `UnusedPrivateMember` rule into the three rules below.)
+  UnusedPrivateClass:
+    active: true
+  UnusedPrivateFunction:
+    active: true
+  UnusedPrivateProperty:
+    active: true
+
+# Phase 18 / Task 8/10 — enforce the KDoc rule from CLAUDE.md ("every public
+# class/interface/method/property must have exhaustive KDoc"). Scope is
+# intentionally narrow: only `domain/` (business contracts) and
+# `data/repositories/` (concrete repository implementations) — UI layers are
+# excluded because Composable functions and UI-state classes are
+# self-describing and the rule would otherwise produce noise on `@Composable`
+# functions and on `data class` UI-state holders.
+comments:
+  active: true
+  UndocumentedPublicClass:
+    active: true
+    includes: ['**/domain/**', '**/data/repositories/**']
+    searchInNestedClass: true
+    searchInInnerClass: true
+    searchInInnerObject: true
+    searchInInnerInterface: true
+    searchInProtectedClass: false
+  UndocumentedPublicFunction:
+    active: true
+    includes: ['**/domain/**', '**/data/repositories/**']
+    searchProtectedFunction: false
+  UndocumentedPublicProperty:
+    active: true
+    includes: ['**/domain/**', '**/data/repositories/**']
+    searchProtectedProperty: false

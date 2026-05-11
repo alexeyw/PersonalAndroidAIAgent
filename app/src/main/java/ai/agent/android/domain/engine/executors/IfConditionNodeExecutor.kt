@@ -7,6 +7,17 @@ import ai.agent.android.domain.usecases.EvaluateIfConditionUseCase
 import kotlinx.coroutines.flow.Flow
 import javax.inject.Inject
 
+/**
+ * Executor for [NodeType.IF_CONDITION][ai.agent.android.domain.models.NodeType.IF_CONDITION]
+ * branching nodes.
+ *
+ * Delegates the boolean evaluation to [EvaluateIfConditionUseCase] (keyword match,
+ * complexity heuristics, or LLM-based judgement depending on the node's configuration)
+ * and forwards the upstream `inputText` unchanged so that downstream branches still see
+ * the original payload. The branch decision is published via
+ * [NodeExecutionResult.conditionResult][ai.agent.android.domain.models.NodeExecutionResult.conditionResult],
+ * which `GraphExecutionEngine` reads to pick the next connection.
+ */
 class IfConditionNodeExecutor @Inject constructor(private val evaluateIfConditionUseCase: EvaluateIfConditionUseCase) :
     NodeExecutor {
     override fun execute(

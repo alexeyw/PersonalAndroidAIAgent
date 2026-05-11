@@ -17,7 +17,10 @@ sealed interface PromptSegment {
      * placeholder. Includes characters produced by an escaped placeholder (e.g. `\$KEY`
      * resolves to the literal `$KEY` and lands here).
      */
-    data class Literal(val text: String) : PromptSegment
+    data class Literal(
+        /** Verbatim characters from the template (or the result of an escaped `\$KEY`). */
+        val text: String,
+    ) : PromptSegment
 
     /**
      * A placeholder `$[key]` that was successfully resolved by a matching
