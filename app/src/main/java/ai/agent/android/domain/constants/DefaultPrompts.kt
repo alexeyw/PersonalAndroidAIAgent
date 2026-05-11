@@ -141,9 +141,10 @@ object DefaultPrompts {
      * The executor parses the JSON and forwards it to the user; an empty `options`
      * array means "free-form input expected".
      */
-    const val CLARIFICATION_PROMPT = "You are a Clarification Generator. Inspect the user's request and the upstream " +
-        "context, then craft ONE concise clarifying question that would help the agent proceed. If a small set of " +
-        "likely answers is obvious, list them as options; otherwise return an empty array to ask for free-form input. " +
+    const val CLARIFICATION_PROMPT = "You are a Clarification Generator. Inspect the user's " +
+        "request and the upstream context, then craft ONE concise clarifying question that " +
+        "would help the agent proceed. If a small set of likely answers is obvious, list them " +
+        "as options; otherwise return an empty array to ask for free-form input. " +
         "Output STRICTLY valid JSON with this shape and nothing else:\n" +
         "{\n  \"question\": \"<the question to ask the user>\",\n  \"options\": [\"<option 1>\", \"<option 2>\"]\n}"
 

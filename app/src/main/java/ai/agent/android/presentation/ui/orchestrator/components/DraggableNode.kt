@@ -62,7 +62,6 @@ private val cloudProviderDropdownOptions: List<String> = listOf(
  * @param modifier The [Modifier] for this composable.
  * @param isConnecting Whether this node is currently selected to connect to another.
  * @param connectingIsOutput Whether the currently selected port is an output port.
- * @param connectingLabel The label for the connection.
  * @param onPositionDelta Callback invoked when the node is dragged, providing the delta x and y.
  * @param onConnectClick Callback invoked when the connect button/port is clicked. Passes a boolean indicating if it's an output port and an optional label.
  * @param onDeleteClick Callback invoked when the delete button is clicked.
@@ -77,7 +76,6 @@ fun DraggableNode(
     modifier: Modifier = Modifier,
     isConnecting: Boolean = false,
     connectingIsOutput: Boolean = true,
-    connectingLabel: String? = null,
     onPositionDelta: (String, Float, Float) -> Unit,
     onConnectClick: (Boolean, String?) -> Unit,
     onDeleteClick: () -> Unit,

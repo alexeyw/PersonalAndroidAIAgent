@@ -200,11 +200,31 @@ task, or sooner if the PAT scope is updated.
 
 ## What this baseline does **not** do
 
-- It does **not** introduce verification thresholds — `koverVerify` runs but
-  does nothing because no `verify { rule { … } }` block is configured. This
-  changes in Task 9/10.
 - It does **not** add coverage for `*Screen.kt` Composables — those need
   androidTest / Compose UI tests, which is a separate workstream.
 - It does **not** cover the `release` variant — Kover's per-variant tasks are
   invoked with the `Debug` suffix throughout. `release` is irrelevant for
   unit-test coverage.
+
+## Enforced threshold (Phase 18 — Task 9/10)
+
+`koverVerifyDebug` now fails the build when aggregate LINE coverage over
+the unit-testable surface drops below **70 %**. Kover 0.9.x does not
+support per-rule filters, so the rule is one application-level threshold
+applied to a globally-filtered class set (see `app/build.gradle.kts` →
+`kover { reports { filters { excludes { ... } } } }`).
+
+The exclusion list, beyond what was already filtered for the baseline
+above, adds the Android-runtime-bound classes that the JVM unit-test
+pipeline cannot exercise — `App.kt`, `MainActivity`, all `*Screen`
+Composables, `presentation.ui.*.components.*`, `presentation.theme`,
+`presentation.notifications`, `presentation.receivers`,
+`presentation.state`, `data.services.*`, parts of `data.tools.local.*`,
+and `data.local.dao.*`.
+
+After these exclusions the **current** aggregate LINE coverage (May 2026)
+is ~80 %. The 70 % floor leaves a 10 pp buffer for in-flight refactors.
+
+Raise the threshold deliberately as coverage grows; do **not** lower it
+without team agreement. The per-package decomposition above remains the
+useful drill-down view when reading the HTML report.

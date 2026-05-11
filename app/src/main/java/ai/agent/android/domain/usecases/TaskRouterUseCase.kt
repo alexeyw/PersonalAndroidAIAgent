@@ -32,6 +32,11 @@ class TaskRouterUseCase @Inject constructor(
      * @param prompt The user's input prompt.
      * @return The [RoutingDecision] indicating which engine to use.
      */
+    // Reason: each `return` is one ordered routing decision (private data →
+    // local; complex + cloud key → cloud provider; complex offline → local;
+    // default). The decision tree is the logic — collapsing it into a single
+    // exit would force nested `when`s without clarifying the contract.
+    @Suppress("ReturnCount")
     suspend operator fun invoke(prompt: String): RoutingDecision {
         val lowerPrompt = prompt.lowercase()
 

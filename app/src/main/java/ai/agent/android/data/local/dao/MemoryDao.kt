@@ -69,7 +69,8 @@ interface MemoryDao {
      * @param keepLimit The number of recent memory chunks to keep.
      */
     @Query(
-        "DELETE FROM memory_chunks WHERE id NOT IN (SELECT id FROM memory_chunks ORDER BY timestamp DESC LIMIT :keepLimit)",
+        "DELETE FROM memory_chunks WHERE id NOT IN " +
+            "(SELECT id FROM memory_chunks ORDER BY timestamp DESC LIMIT :keepLimit)",
     )
     suspend fun deleteOldestMemories(keepLimit: Int)
 }

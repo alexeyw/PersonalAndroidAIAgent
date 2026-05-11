@@ -254,6 +254,11 @@ object PipelineJsonSerializer {
         )
     }
 
+    // Reason: each `throw` here pinpoints a distinct schema-violation kind
+    // (`missing id`, `missing fromNodeId`, `missing toNodeId`, `unknown source`,
+    // `unknown target`). Folding them into a single Result<Throwable> would
+    // erase the message-specificity that makes import errors actionable.
+    @Suppress("ThrowsCount")
     private fun buildConnection(json: JSONObject, index: Int, nodeIds: Set<String>): ConnectionModel {
         val id = json.optString("id").takeIf { it.isNotBlank() }
             ?: throw PipelineParseException("Connection #$index missing id")

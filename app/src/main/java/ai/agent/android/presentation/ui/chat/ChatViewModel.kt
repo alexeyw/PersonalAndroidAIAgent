@@ -47,6 +47,16 @@ import javax.inject.Inject
  * Orchestrates the interaction between the user input, the chat history, and the AI agent.
  */
 @HiltViewModel
+@Suppress(
+    // Reason: chat hosts every user-visible agent flow: messaging, session
+    // switching, pipeline binding, clarification handling, console log,
+    // starred filter, export, snackbar one-shots. Splitting would require a
+    // shared store (the screen has 12+ user actions and one source-of-truth
+    // UI state). Tracked for a future refactor; out of scope for the
+    // static-analysis gate.
+    "TooManyFunctions",
+    "LargeClass",
+)
 class ChatViewModel @Inject constructor(
     private val agentOrchestratorUseCase: AgentOrchestratorUseCase,
     private val chatRepository: ChatRepository,
@@ -640,7 +650,11 @@ class ChatViewModel @Inject constructor(
                                 state is AgentOrchestratorState.PipelineStage -> state.stepInfo
                                 else -> current.currentStep
                             },
-                            pipelineTrace = if (state is AgentOrchestratorState.PipelineTrace) state.steps else current.pipelineTrace,
+                            pipelineTrace = if (state is AgentOrchestratorState.PipelineTrace) {
+                                state.steps
+                            } else {
+                                current.pipelineTrace
+                            },
                             consoleLines = if (state is AgentOrchestratorState.ConsoleLog) {
                                 applyConsoleClearBaseline(state.events)
                             } else {

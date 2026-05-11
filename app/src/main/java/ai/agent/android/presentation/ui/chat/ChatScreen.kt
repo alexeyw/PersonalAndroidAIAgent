@@ -135,6 +135,9 @@ fun ChatScreen(viewModel: ChatViewModel, onBack: () -> Unit = {}) {
     var inputText by remember { mutableStateOf(TextFieldValue("")) }
     var menuExpanded by remember { mutableStateOf(false) }
 
+    val fileUnreadableMessage = stringResource(R.string.errors_chat_file_unreadable)
+    val exportChooserTitle = stringResource(R.string.chat_export_chooser_title)
+
     val importLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument(),
     ) { uri ->
@@ -146,7 +149,7 @@ fun ChatScreen(viewModel: ChatViewModel, onBack: () -> Unit = {}) {
                     }.getOrNull()
                 }
                 if (json.isNullOrBlank()) {
-                    snackbarHostState.showSnackbar(context.getString(R.string.errors_chat_file_unreadable))
+                    snackbarHostState.showSnackbar(fileUnreadableMessage)
                 } else {
                     viewModel.importChat(json)
                     drawerState.close()
@@ -164,7 +167,7 @@ fun ChatScreen(viewModel: ChatViewModel, onBack: () -> Unit = {}) {
             }
             val chooser = Intent.createChooser(
                 sendIntent,
-                context.getString(R.string.chat_export_chooser_title),
+                exportChooserTitle,
             ).apply {
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }

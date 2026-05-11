@@ -56,6 +56,13 @@ class GraphExecutionEngine @Inject constructor(
     /**
      * Executes the graph by processing nodes sequentially.
      */
+    // Reason: this is the agent's core orchestrator. It is a long single
+    // state machine that walks the DAG, dispatches per node type, manages
+    // queue/clarification/approval suspensions, emits typed orchestrator
+    // states, and surfaces console events. Decomposition into helpers
+    // historically obscured the linear flow; the method body is structured
+    // and well-commented in place.
+    @Suppress("LongMethod", "CyclomaticComplexMethod")
     operator fun invoke(sessionId: String, userPrompt: String, graph: PipelineGraph): Flow<AgentOrchestratorState> =
         flow {
             // Buffer of console events accumulated for this run. The engine emits a

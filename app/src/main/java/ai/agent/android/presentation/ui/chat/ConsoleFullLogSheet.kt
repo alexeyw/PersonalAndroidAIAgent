@@ -57,7 +57,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
@@ -117,17 +116,21 @@ fun ConsoleFullLogSheet(
     val listState = rememberLazyListState()
     val coroutineScope = rememberCoroutineScope()
     var clearDialogVisible by remember { mutableStateOf(false) }
-    val context = LocalContext.current
     // Pre-resolved console tag map. Captured at composition time so
     // [plainTextDump] — which is plain Kotlin and cannot call
     // `stringResource` — can produce a localised clipboard payload.
-    val tagsByType = remember(context) {
+    val tagNode = stringResource(R.string.chat_console_tag_node)
+    val tagTool = stringResource(R.string.chat_console_tag_tool)
+    val tagMemory = stringResource(R.string.chat_console_tag_memory)
+    val tagSystem = stringResource(R.string.chat_console_tag_system)
+    val tagError = stringResource(R.string.chat_console_tag_error)
+    val tagsByType = remember(tagNode, tagTool, tagMemory, tagSystem, tagError) {
         mapOf(
-            ConsoleEventType.NodeExecution to context.getString(R.string.chat_console_tag_node),
-            ConsoleEventType.ToolCall to context.getString(R.string.chat_console_tag_tool),
-            ConsoleEventType.MemoryAccess to context.getString(R.string.chat_console_tag_memory),
-            ConsoleEventType.SystemMessage to context.getString(R.string.chat_console_tag_system),
-            ConsoleEventType.Error to context.getString(R.string.chat_console_tag_error),
+            ConsoleEventType.NodeExecution to tagNode,
+            ConsoleEventType.ToolCall to tagTool,
+            ConsoleEventType.MemoryAccess to tagMemory,
+            ConsoleEventType.SystemMessage to tagSystem,
+            ConsoleEventType.Error to tagError,
         )
     }
 

@@ -65,6 +65,10 @@ class MainActivity : ComponentActivity() {
         // Handle permission result if needed
     }
 
+    // Reason: `onCreate` builds the entire Compose nav graph (a dozen
+    // routes) inline — extracting helpers would split the navigation
+    // declaration in a way that hides the route topology.
+    @Suppress("LongMethod")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 

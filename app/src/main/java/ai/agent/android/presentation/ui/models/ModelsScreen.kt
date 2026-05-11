@@ -247,7 +247,11 @@ private fun DownloadedModelItem(modelName: String, isActive: Boolean, onMakeActi
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
-            containerColor = if (isActive) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
+            containerColor = if (isActive) {
+                MaterialTheme.colorScheme.primaryContainer
+            } else {
+                MaterialTheme.colorScheme.surfaceVariant
+            },
         ),
     ) {
         Row(
@@ -260,7 +264,11 @@ private fun DownloadedModelItem(modelName: String, isActive: Boolean, onMakeActi
             Text(
                 text = modelName,
                 style = MaterialTheme.typography.bodyLarge,
-                color = if (isActive) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
+                color = if (isActive) {
+                    MaterialTheme.colorScheme.onPrimaryContainer
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                },
                 modifier = Modifier.weight(1f).padding(end = 8.dp),
             )
             if (!isActive) {

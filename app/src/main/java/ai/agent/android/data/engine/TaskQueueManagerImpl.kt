@@ -64,7 +64,8 @@ class TaskQueueManagerImpl @Inject constructor(
     private val taskSignal = Channel<Unit>(Channel.CONFLATED)
 
     private val _activeSessionsState = MutableStateFlow<Map<String, AgentOrchestratorState>>(emptyMap())
-    override val activeSessionsState: StateFlow<Map<String, AgentOrchestratorState>> = _activeSessionsState.asStateFlow()
+    override val activeSessionsState: StateFlow<Map<String, AgentOrchestratorState>> =
+        _activeSessionsState.asStateFlow()
 
     // State flows per session — capped by evicting only terminal (non-running) sessions
     @VisibleForTesting

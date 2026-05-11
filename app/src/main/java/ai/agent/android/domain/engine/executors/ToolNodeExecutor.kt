@@ -76,6 +76,12 @@ class ToolNodeExecutor @Inject constructor(
         deferred?.complete(isApproved)
     }
 
+    // Reason: typed tool dispatcher with explicit branches for
+    // LocalToolExecutor, AppFunction, and MCP delegation, each with its own
+    // pre-flight (risk → approval suspension) and post-flight (`Result.success`
+    // vs typed error) handling. Extracting helpers fragments the per-tool
+    // recovery semantics.
+    @Suppress("LongMethod", "CyclomaticComplexMethod")
     override fun execute(
         node: NodeModel,
         inputText: String,

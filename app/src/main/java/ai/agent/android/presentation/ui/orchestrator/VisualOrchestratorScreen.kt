@@ -834,7 +834,6 @@ fun VisualOrchestratorScreen(
                             node = node,
                             isConnecting = connectingFromNodeId == node.id,
                             connectingIsOutput = connectingIsOutput ?: true,
-                            connectingLabel = connectingLabel,
                             modifier = Modifier
                                 .offset { IntOffset(node.x.roundToInt(), node.y.roundToInt()) }
                                 .onGloballyPositioned { coordinates ->

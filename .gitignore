@@ -16,3 +16,8 @@ local.properties
 CLAUDE.md
 /.claude
 /project_docs
+# .github/workflows/ is intentionally ignored: the PAT used for the current
+# Git remote lacks the `workflow` scope required to push files into this
+# directory. The CI configuration (`check.yml`) is maintained locally and
+# committed by the repo owner separately.
+/.github/workflows/

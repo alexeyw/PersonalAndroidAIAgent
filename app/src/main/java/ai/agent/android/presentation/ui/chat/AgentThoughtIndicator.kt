@@ -100,7 +100,7 @@ fun AgentThoughtIndicator(
  */
 internal val LineFontSize = 11.sp
 internal val LineHeight = 14.sp
-private const val NeutralAlpha = 0.6f
+private const val NEUTRAL_ALPHA = 0.6f
 
 /**
  * Compact in-line action affordance used by [AgentOrchestratorState.WaitingForApproval].
@@ -191,5 +191,5 @@ internal fun thoughtLineHasOutput(state: AgentOrchestratorState): Boolean = when
 @Composable
 private fun colorFor(state: AgentOrchestratorState): Color = when (state) {
     is AgentOrchestratorState.WaitingForApproval -> MaterialTheme.colorScheme.error
-    else -> MaterialTheme.colorScheme.onSurface.copy(alpha = NeutralAlpha)
+    else -> MaterialTheme.colorScheme.onSurface.copy(alpha = NEUTRAL_ALPHA)
 }
