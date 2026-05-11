@@ -5,6 +5,10 @@ of Phase 18, Task 1/10. **All tools are in report-only mode**: they generate
 reports, but their findings do **not** fail the build. Strict enforcement
 (failing CI on violations) is enabled by Task 9/10.
 
+> Test-coverage measurement (Kover) is wired in Task 2/10 and lives separately —
+> see [`coverage-baseline.md`](coverage-baseline.md) for the baseline numbers
+> and the run commands.
+
 The reports below serve as the input checklist for Tasks 3–8:
 
 | Task | Driven by                                                                |

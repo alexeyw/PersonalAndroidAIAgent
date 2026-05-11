@@ -7,6 +7,7 @@ plugins {
     alias(libs.plugins.ksp)
     alias(libs.plugins.detekt)
     alias(libs.plugins.ktlint)
+    alias(libs.plugins.kover)
 }
 
 android {
@@ -99,6 +100,53 @@ ktlint {
 kotlin {
     compilerOptions {
         jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
+    }
+}
+
+// Kover — test-coverage measurement.
+// Phase 18 / Task 2/10: report-only mode. Verification thresholds (`koverVerify`)
+// are added in Task 9/10. Documentation: docs/coverage-baseline.md.
+kover {
+    reports {
+        filters {
+            excludes {
+                classes(
+                    // Hilt-generated factories, modules, and member injectors.
+                    "*_HiltModules*",
+                    "*_HiltModules_*",
+                    "*.Hilt_*",
+                    "*_Factory",
+                    "*_Factory$*",
+                    "*_MembersInjector",
+                    "*_Provide*Factory",
+                    "*_Provide*Factory$*",
+                    "dagger.hilt.internal.*",
+                    "hilt_aggregated_deps.*",
+                    // Room-generated DAO implementations and the database impl
+                    // (the schema migrations themselves are bundled inside it).
+                    "*_Impl",
+                    "*_Impl$*",
+                    "ai.agent.android.data.local.AppDatabase",
+                    "ai.agent.android.data.local.AppDatabase_Impl*",
+                    "*_AutoMigration_*",
+                    // Compose synthetic singletons + project-convention preview files
+                    // (every Compose `@Preview` lives in a `*Preview.kt` file).
+                    "*ComposableSingletons*",
+                    "ComposableSingletons$*",
+                    "*Preview",
+                    "*PreviewKt",
+                    // Hilt DI modules — wiring code, no business logic to cover.
+                    "ai.agent.android.di.*",
+                    // Generated build artefacts.
+                    "ai.agent.android.BuildConfig",
+                    "*.databinding.*",
+                    "*.BR",
+                )
+                // Belt-and-braces: also skip any @Preview-annotated function that
+                // happens to live outside a *Preview.kt file.
+                annotatedBy("androidx.compose.ui.tooling.preview.Preview")
+            }
+        }
     }
 }
 
