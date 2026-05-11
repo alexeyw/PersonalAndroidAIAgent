@@ -1,7 +1,6 @@
 # Directory Map: src
 
 - `.git/` - Git version control system internal directory.
-- `.github/workflows/` - GitHub Actions CI workflows (static analysis report uploader).
 - `.gradle/` - Gradle caching and local configuration directory.
 - `.idea/` - IntelliJ IDEA / Android Studio project configuration directory.
 - `.kotlin/` - Kotlin compiler working cache directory.

@@ -108,6 +108,20 @@ surfaced by future runs.
 
 ---
 
+## CI integration — deferred
+
+This PR does **not** add a GitHub Actions workflow that publishes the
+reports as PR artifacts. The PAT used for the current Git remote lacks the
+`workflow` scope required to push files into `.github/workflows/`. The CI
+wiring (a `static-analysis.yml` job that runs the three Gradle tasks above
+with `continue-on-error: true` and uploads `app/build/reports/detekt/`,
+`app/build/reports/ktlint/`, and `app/build/reports/lint-results-debug.*`
+via `actions/upload-artifact`) will be added separately, either when the
+PAT scope is updated or as part of Task 9/10's CI overhaul.
+
+Until then, run the commands locally and open the HTML reports from
+`app/build/reports/...`.
+
 ## What this phase does **not** do
 
 - It does **not** wire `./gradlew check` as a mandatory step in `CLAUDE.md`
