@@ -26,6 +26,28 @@ import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 import javax.inject.Singleton
 
+/**
+ * Executor for [NodeType.TOOL][ai.agent.android.domain.models.NodeType.TOOL] nodes.
+ *
+ * Resolves which tool to run (either the explicit `node.toolName` or LLM-driven auto
+ * selection via [DefaultPrompts.Tool.AUTO_SELECT_TEMPLATE]), builds its arguments, and
+ * dispatches the call through [ToolRepository]. When the user has enabled
+ * `requiresUserConfirmation`, the executor goes through a Human-in-the-Loop gate:
+ *
+ * 1. publishes [WaitingForApproval][ai.agent.android.domain.models.AgentOrchestratorState.WaitingForApproval];
+ * 2. sends a notification via [ApprovalNotifier];
+ * 3. suspends on a [CompletableDeferred] keyed by `sessionId`, bounded by
+ *    [SettingsRepository.toolCallTimeoutMs][ai.agent.android.domain.repositories.SettingsRepository.toolCallTimeoutMs];
+ * 4. resumes when [resumeWithApproval] is called from `MainActivity` /
+ *    `AgentApprovalReceiver`, or fails fast on timeout.
+ *
+ * Tool observations and "Execution denied by user" markers are persisted as
+ * non-final [SYSTEM][ai.agent.android.domain.models.Role.SYSTEM] chat messages so the
+ * agent console can replay them without polluting the user-facing chat list.
+ *
+ * Marked `@Singleton` because [activeApprovalDeferreds] holds per-session pending
+ * approval requests that must outlive any individual executor invocation.
+ */
 @Singleton
 class ToolNodeExecutor @Inject constructor(
     private val llmEngine: LlmInferenceEngine,
@@ -38,6 +60,17 @@ class ToolNodeExecutor @Inject constructor(
 
     private val activeApprovalDeferreds = ConcurrentHashMap<String, CompletableDeferred<Boolean>>()
 
+    /**
+     * Completes the suspended approval request for [sessionId] with the user's decision.
+     *
+     * Invoked from the UI layer (`MainActivity`) and the notification-action receiver
+     * (`AgentApprovalReceiver`). No-ops silently when there is no pending request for
+     * the given session — duplicate dispatches (e.g. user taps the notification action
+     * after the dialog already resumed the executor) cannot corrupt state.
+     *
+     * @param sessionId chat session id used as the lookup key in [activeApprovalDeferreds].
+     * @param isApproved `true` if the user approved tool execution, `false` to deny it.
+     */
     fun resumeWithApproval(sessionId: String, isApproved: Boolean) {
         val deferred = activeApprovalDeferreds.remove(sessionId)
         deferred?.complete(isApproved)

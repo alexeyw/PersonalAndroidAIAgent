@@ -27,6 +27,23 @@ import kotlinx.coroutines.flow.mapNotNull
 import timber.log.Timber
 import javax.inject.Inject
 
+/**
+ * Executor for [NodeType.CLOUD][ai.agent.android.domain.models.NodeType.CLOUD] nodes.
+ *
+ * Streams a response from one of the supported cloud LLM providers (OpenAI, Anthropic,
+ * Google, DeepSeek, Ollama) using the Koog client abstraction. The active provider is
+ * either taken from `node.cloudProvider` or auto-detected from the first configured API
+ * key when the node is set to `"auto"`. The fully assembled `inputText` is sent verbatim:
+ * `NodeContextBuilder` has already concatenated the context blocks selected by
+ * [NodeContextConfig][ai.agent.android.domain.models.NodeContextConfig], so the executor
+ * must not re-fetch chat history or memory itself.
+ *
+ * Tokens are forwarded to the orchestrator as
+ * [Thinking][ai.agent.android.domain.models.AgentOrchestratorState.Thinking] /
+ * [Answering][ai.agent.android.domain.models.AgentOrchestratorState.Answering] states
+ * during streaming, with the final aggregated text emitted as a
+ * [NodeOutput.Result] together with an approximate token count for metrics.
+ */
 class CloudLlmNodeExecutor @Inject constructor(
     private val toolRepository: ToolRepository,
     private val chatRepository: ChatRepository,

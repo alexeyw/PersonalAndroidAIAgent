@@ -15,12 +15,18 @@ sealed class NodeOutput {
      * single execution as the node streams progress (e.g. `Thinking`, `Answering`,
      * `ExecutingTool`, `AwaitingClarification`).
      */
-    data class State(val state: AgentOrchestratorState) : NodeOutput()
+    data class State(
+        /** Orchestrator state update produced by the running node. */
+        val state: AgentOrchestratorState,
+    ) : NodeOutput()
 
     /**
      * Terminal value of a node execution. Exactly one [Result] is expected per `execute()` flow;
      * it provides the [NodeExecutionResult] consumed by the engine (output text, error, routing
      * key, condition result, token count, resolved tool name).
      */
-    data class Result(val result: NodeExecutionResult) : NodeOutput()
+    data class Result(
+        /** Final [NodeExecutionResult] consumed by `GraphExecutionEngine`. */
+        val result: NodeExecutionResult,
+    ) : NodeOutput()
 }

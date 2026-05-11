@@ -17,6 +17,26 @@ import kotlinx.coroutines.flow.flow
 import timber.log.Timber
 import javax.inject.Inject
 
+/**
+ * Executor for [NodeType.OUTPUT][ai.agent.android.domain.models.NodeType.OUTPUT] nodes —
+ * the terminal node of every pipeline run.
+ *
+ * Two modes:
+ * - **With `systemPrompt`**: runs a local-model formatting pass over the upstream
+ *   `inputText`, stripping common LLM conversational prefixes ("Here is the output:",
+ *   …) before persisting the final response as an
+ *   [AGENT][ai.agent.android.domain.models.Role.AGENT] [ChatMessage].
+ * - **Without `systemPrompt`**: persists the upstream `inputText` as-is. This is the
+ *   path documented in `NodeContextConfig` § 6.3 where the OUTPUT node is treated as a
+ *   pass-through and does not consume its [NodeContextConfig].
+ *
+ * Streaming tokens are surfaced as
+ * [Thinking][ai.agent.android.domain.models.AgentOrchestratorState.Thinking] /
+ * [Answering][ai.agent.android.domain.models.AgentOrchestratorState.Answering] states;
+ * the final text is also emitted as
+ * [Completed][ai.agent.android.domain.models.AgentOrchestratorState.Completed] to signal
+ * the end of the pipeline run.
+ */
 class OutputNodeExecutor @Inject constructor(
     private val llmEngine: LlmInferenceEngine,
     private val loadModelUseCase: LoadModelUseCase,

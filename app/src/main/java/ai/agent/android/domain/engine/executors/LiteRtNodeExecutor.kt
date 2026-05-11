@@ -19,6 +19,18 @@ import kotlinx.coroutines.flow.flow
 import timber.log.Timber
 import javax.inject.Inject
 
+/**
+ * Executor for [NodeType.LITE_RT][ai.agent.android.domain.models.NodeType.LITE_RT] nodes.
+ *
+ * Runs inference on the local LiteRT engine: ensures the requested model is loaded (via
+ * [LoadModelUseCase]), builds the full prompt from the node's system prompt plus the
+ * upstream `inputText` produced by `NodeContextBuilder`, and streams tokens back as
+ * orchestrator state updates. The final response is emitted as a
+ * [NodeOutput.Result] together with the per-token count used by the metrics repository.
+ *
+ * Cancellation is rethrown explicitly so that structured concurrency keeps working — a
+ * broad `catch (Exception)` would otherwise swallow it and leak coroutines.
+ */
 class LiteRtNodeExecutor @Inject constructor(
     private val llmEngine: LlmInferenceEngine,
     private val toolRepository: ToolRepository,

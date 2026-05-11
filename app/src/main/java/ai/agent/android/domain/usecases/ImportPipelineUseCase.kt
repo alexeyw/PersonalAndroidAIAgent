@@ -64,4 +64,14 @@ class ImportPipelineUseCase @Inject constructor(private val savePipelineUseCase:
  * persistence result. Modelled as a `data class` so consumers can pattern
  * match on `outcome` and look at `saveResult` only when relevant.
  */
-data class ImportInvocation(val outcome: PipelineImportOutcome, val saveResult: Result<Unit>?)
+data class ImportInvocation(
+    /** Parse outcome — drives the UI branching (Success / SchemaMismatch / Failure). */
+    val outcome: PipelineImportOutcome,
+    /**
+     * Persistence result; non-null only for outcomes that the use case persisted
+     * automatically (i.e. clean [PipelineImportOutcome.Success]). For
+     * [PipelineImportOutcome.SchemaMismatch] persistence is deferred to
+     * `persistConfirmed`, and for [PipelineImportOutcome.Failure] it never runs.
+     */
+    val saveResult: Result<Unit>?,
+)

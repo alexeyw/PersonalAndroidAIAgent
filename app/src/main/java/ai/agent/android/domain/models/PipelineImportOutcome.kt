@@ -22,6 +22,8 @@ sealed class PipelineImportOutcome {
     /**
      * The JSON parsed cleanly and the schema version matches what this
      * application expects. The graph is ready to be persisted as-is.
+     *
+     * @property graph Fully parsed pipeline ready for `SavePipelineUseCase`.
      */
     data class Success(val graph: PipelineGraph) : PipelineImportOutcome()
 

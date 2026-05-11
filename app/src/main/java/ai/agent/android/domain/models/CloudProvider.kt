@@ -15,7 +15,10 @@ package ai.agent.android.domain.models
  * `"gemini"` alias for [GOOGLE] — so that incoming wire data only has to be
  * decoded once on the boundary.
  */
-enum class CloudProvider(val id: String) {
+enum class CloudProvider(
+    /** Lowercase wire-id persisted to disk and accepted by the cloud LLM router. */
+    val id: String,
+) {
     /** OpenAI (GPT family). */
     OPENAI("openai"),
 
@@ -32,6 +35,7 @@ enum class CloudProvider(val id: String) {
     OLLAMA("ollama"),
     ;
 
+    /** Owns the wire-id ↔ enum parsing rules (including the legacy `"gemini"` alias). */
     companion object {
         /**
          * UI marker that means "let the executor pick a provider based on the

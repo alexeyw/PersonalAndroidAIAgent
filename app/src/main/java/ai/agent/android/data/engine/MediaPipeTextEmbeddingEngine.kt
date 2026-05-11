@@ -47,7 +47,6 @@ class MediaPipeTextEmbeddingEngine @Inject constructor(
 
             val options = TextEmbedder.TextEmbedderOptions.builder()
                 .setBaseOptions(baseOptionsBuilder.build())
-                // .setQuantize(true) // Removed because we need floatEmbedding(), not quantized bytes
                 .build()
 
             textEmbedder = embedderFactory.createFromOptions(context, options)

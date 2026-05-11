@@ -18,7 +18,7 @@ The reports below serve as the input checklist for Tasks 3–8:
 | 5/10 | Magic identifier strings (manual grep)                                   |
 | 6/10 | `MagicNumber` rule in detekt                                             |
 | 7/10 | `WildcardImport`, `UnusedImport`, import ordering — both ktlint & detekt |
-| 8/10 | `UnusedPrivate*` rules + manual `TODO/FIXME` grep                        |
+| 8/10 | `UndocumentedPublic*` + `UnusedPrivate*` rules + manual `TODO/FIXME` grep |
 
 ---
 
@@ -38,6 +38,17 @@ Enabled / tuned rules (see brief for rationale):
   named arguments / constants / ranges.
 - `style.MaxLineLength` — 120, excludes package & import statements.
 - `style.UnusedImport`.
+- `style.UnusedPrivateClass` / `style.UnusedPrivateFunction` /
+  `style.UnusedPrivateProperty` — phase 18 task 8/10; surfaces dead private
+  declarations project-wide. Triage outcome is either delete the symbol or
+  attach `@Suppress("…") // reason: …` when retention is intentional.
+- `comments.UndocumentedPublicClass` / `comments.UndocumentedPublicFunction` /
+  `comments.UndocumentedPublicProperty` — phase 18 task 8/10; enforces the
+  KDoc rule from `CLAUDE.md`. Scope is intentionally narrow:
+  `**/domain/**` and `**/data/repositories/**` only. UI layers
+  (`presentation/`) are excluded because Composables and UI-state classes are
+  self-describing and the rule would otherwise produce noise on
+  `@Composable` functions.
 - `complexity.LongMethod` — `allowedLines: 60`.
 - `complexity.ComplexCondition` — `allowedConditions: 4`.
 - `complexity.TooManyFunctions` — `allowedFunctionsPer*: 11`.
