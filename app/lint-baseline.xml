@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<issues format="6" by="lint 9.2.1" type="baseline" client="gradle" dependencies="false" name="AGP (9.2.1)" variant="all" version="9.2.1">
+<issues format="6" by="lint 9.2.1" type="baseline" client="gradle" dependencies="true" name="AGP (9.2.1)" variant="all" version="9.2.1">
 
     <issue
         id="BadPeriodicWorkRequestEnqueue"
         message="Use `enqueueUniquePeriodicWork()` instead of `enqueue()`">
         <location
-            file="$GRADLE_USER_HOME/caches/9.4.1/transforms/8794ff05758a66b2f2c6b997f179c111/transformed/work-runtime-2.11.2/jars/classes.jar!/androidx/work/WorkManager.class"/>
+            file="../../../../.gradle/caches/9.4.1/transforms/f78c3c07af9f2c06e7116b5b231e0fa6/transformed/work-runtime-2.11.2/jars/classes.jar!/androidx/work/WorkManager.class"/>
     </issue>
 
     <issue
@@ -47,7 +47,7 @@
         errorLine1="distributionUrl=https\://services.gradle.org/distributions/gradle-9.4.1-bin.zip"
         errorLine2="                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
-            file="$HOME/ClaudeCodeProjects/android-ai-agent/src/gradle/wrapper/gradle-wrapper.properties"
+            file="../gradle/wrapper/gradle-wrapper.properties"
             line="5"
             column="17"/>
     </issue>
@@ -58,7 +58,7 @@
         errorLine1="mediapipe = &quot;0.10.35&quot;"
         errorLine2="            ~~~~~~~~~">
         <location
-            file="$HOME/ClaudeCodeProjects/android-ai-agent/src/gradle/libs.versions.toml"
+            file="../gradle/libs.versions.toml"
             line="20"
             column="13"/>
     </issue>
@@ -69,7 +69,7 @@
         errorLine1="coroutines = &quot;1.10.2&quot;"
         errorLine2="             ~~~~~~~~">
         <location
-            file="$HOME/ClaudeCodeProjects/android-ai-agent/src/gradle/libs.versions.toml"
+            file="../gradle/libs.versions.toml"
             line="13"
             column="14"/>
     </issue>
@@ -80,7 +80,7 @@
         errorLine1="coroutines = &quot;1.10.2&quot;"
         errorLine2="             ~~~~~~~~">
         <location
-            file="$HOME/ClaudeCodeProjects/android-ai-agent/src/gradle/libs.versions.toml"
+            file="../gradle/libs.versions.toml"
             line="13"
             column="14"/>
     </issue>
@@ -91,7 +91,7 @@
         errorLine1="coroutines = &quot;1.10.2&quot;"
         errorLine2="             ~~~~~~~~">
         <location
-            file="$HOME/ClaudeCodeProjects/android-ai-agent/src/gradle/libs.versions.toml"
+            file="../gradle/libs.versions.toml"
             line="13"
             column="14"/>
     </issue>
@@ -99,11 +99,11 @@
     <issue
         id="ConfigurationScreenWidthHeight"
         message="Using Configuration.screenHeightDp instead of LocalWindowInfo.current.containerSize"
-        errorLine1="        val isCompactConsole = configuration.screenHeightDp &lt;= 480"
+        errorLine1="        val isCompactConsole = configuration.screenHeightDp &lt;= compactConsoleThresholdDp"
         errorLine2="                               ~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/ai/agent/android/presentation/ui/chat/ChatScreen.kt"
-            line="298"
+            line="311"
             column="32"/>
     </issue>
 
@@ -114,7 +114,7 @@
         errorLine2="    ~~~~~~~~">
         <location
             file="src/main/java/ai/agent/android/presentation/ui/chat/AgentThoughtIndicator.kt"
-            line="56"
+            line="58"
             column="5"/>
     </issue>
 
@@ -125,7 +125,73 @@
         errorLine2="    ~~~~~~~~">
         <location
             file="src/main/java/ai/agent/android/presentation/ui/chat/ConsolePanelCollapsed.kt"
-            line="103"
+            line="105"
+            column="5"/>
+    </issue>
+
+    <issue
+        id="PluralsCandidate"
+        message="Formatting %d followed by words (&quot;steps&quot;): This should probably be a plural rather than a string"
+        errorLine1="    &lt;string name=&quot;chat_trace_title&quot;>Pipeline trace (%1$d steps)&lt;/string>"
+        errorLine2="    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings_chat.xml"
+            line="92"
+            column="5"/>
+    </issue>
+
+    <issue
+        id="PluralsCandidate"
+        message="Formatting %d followed by words (&quot;tokens&quot;): This should probably be a plural rather than a string"
+        errorLine1="    &lt;string name=&quot;chat_trace_tokens&quot;>%1$d tokens&lt;/string>"
+        errorLine2="    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings_chat.xml"
+            line="95"
+            column="5"/>
+    </issue>
+
+    <issue
+        id="PluralsCandidate"
+        message="Formatting %d followed by words (&quot;chunks&quot;): This should probably be a plural rather than a string"
+        errorLine1="    &lt;string name=&quot;memory_chunks_stored&quot;>%1$d chunks stored&lt;/string>"
+        errorLine2="    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings_memory.xml"
+            line="8"
+            column="5"/>
+    </issue>
+
+    <issue
+        id="PluralsCandidate"
+        message="Formatting %d followed by words (&quot;messages&quot;): This should probably be a plural rather than a string"
+        errorLine1="    &lt;string name=&quot;memory_session_messages&quot;>%1$d messages&lt;/string>"
+        errorLine2="    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings_memory.xml"
+            line="11"
+            column="5"/>
+    </issue>
+
+    <issue
+        id="PluralsCandidate"
+        message="Formatting %d followed by words (&quot;dims&quot;): This should probably be a plural rather than a string"
+        errorLine1="    &lt;string name=&quot;memory_embedding_size&quot;>Embedding size: %1$d dims&lt;/string>"
+        errorLine2="    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings_memory.xml"
+            line="15"
+            column="5"/>
+    </issue>
+
+    <issue
+        id="PluralsCandidate"
+        message="Formatting %d followed by words (&quot;nodes&quot;): This should probably be a plural rather than a string"
+        errorLine1="    &lt;string name=&quot;orchestrator_library_pipeline_subtitle&quot;>Updated %1$s · %2$d nodes&lt;/string>"
+        errorLine2="    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings_orchestrator.xml"
+            line="74"
             column="5"/>
     </issue>
 
@@ -143,8 +209,228 @@
         errorLine2="                                  ~~~~~~~~~~~~~~">
         <location
             file="src/main/java/ai/agent/android/presentation/ui/prompts/PromptLibraryScreen.kt"
-            line="72"
+            line="74"
             column="35"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.chat_session_imported_default_name` appears to be unused"
+        errorLine1="    &lt;string name=&quot;chat_session_imported_default_name&quot;>Imported Chat&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings_chat.xml"
+            line="114"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.chat_session_export_fallback_name` appears to be unused"
+        errorLine1="    &lt;string name=&quot;chat_session_export_fallback_name&quot;>Chat&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings_chat.xml"
+            line="115"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.chat_message_stopped_suffix` appears to be unused"
+        errorLine1="    &lt;string name=&quot;chat_message_stopped_suffix&quot;>[stopped]&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings_chat.xml"
+            line="118"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.common_ok` appears to be unused"
+        errorLine1="    &lt;string name=&quot;common_ok&quot;>OK&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings_common.xml"
+            line="21"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.common_enable` appears to be unused"
+        errorLine1="    &lt;string name=&quot;common_enable&quot;>Enable&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings_common.xml"
+            line="22"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.common_disable` appears to be unused"
+        errorLine1="    &lt;string name=&quot;common_disable&quot;>Disable&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings_common.xml"
+            line="23"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.common_edit` appears to be unused"
+        errorLine1="    &lt;string name=&quot;common_edit&quot;>Edit&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings_common.xml"
+            line="24"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.common_done` appears to be unused"
+        errorLine1="    &lt;string name=&quot;common_done&quot;>Done&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings_common.xml"
+            line="28"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.common_apply` appears to be unused"
+        errorLine1="    &lt;string name=&quot;common_apply&quot;>Apply&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings_common.xml"
+            line="29"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.errors_generic_unknown` appears to be unused"
+        errorLine1="    &lt;string name=&quot;errors_generic_unknown&quot;>Unknown error&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings_errors.xml"
+            line="12"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.errors_generic_unknown_lower` appears to be unused"
+        errorLine1="    &lt;string name=&quot;errors_generic_unknown_lower&quot;>unknown error&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings_errors.xml"
+            line="14"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.errors_generic_invalid_json` appears to be unused"
+        errorLine1="    &lt;string name=&quot;errors_generic_invalid_json&quot;>invalid JSON&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings_errors.xml"
+            line="15"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.orchestrator_default_pipeline_name` appears to be unused"
+        errorLine1="    &lt;string name=&quot;orchestrator_default_pipeline_name&quot;>New Pipeline&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings_orchestrator.xml"
+            line="27"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="TypographyEllipsis"
+        message="Replace &quot;...&quot; with ellipsis character (…, &amp;#8230;) ?"
+        errorLine1="    &lt;string name=&quot;chat_input_placeholder&quot;>Ask the agent...&lt;/string>"
+        errorLine2="                                          ~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings_chat.xml"
+            line="54"
+            column="43"/>
+    </issue>
+
+    <issue
+        id="TypographyEllipsis"
+        message="Replace &quot;...&quot; with ellipsis character (…, &amp;#8230;) ?"
+        errorLine1="    &lt;string name=&quot;chat_thought_now_initializing&quot;>[NOW] Initializing agent...&lt;/string>"
+        errorLine2="                                                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings_chat.xml"
+            line="99"
+            column="50"/>
+    </issue>
+
+    <issue
+        id="TypographyEllipsis"
+        message="Replace &quot;...&quot; with ellipsis character (…, &amp;#8230;) ?"
+        errorLine1="    &lt;string name=&quot;chat_thought_now_thinking&quot;>[NOW] Agent is thinking...&lt;/string>"
+        errorLine2="                                             ~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings_chat.xml"
+            line="100"
+            column="46"/>
+    </issue>
+
+    <issue
+        id="TypographyEllipsis"
+        message="Replace &quot;...&quot; with ellipsis character (…, &amp;#8230;) ?"
+        errorLine1="    &lt;string name=&quot;chat_thought_now_answering&quot;>[NOW] Agent is answering...&lt;/string>"
+        errorLine2="                                              ~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings_chat.xml"
+            line="101"
+            column="47"/>
+    </issue>
+
+    <issue
+        id="TypographyEllipsis"
+        message="Replace &quot;...&quot; with ellipsis character (…, &amp;#8230;) ?"
+        errorLine1="    &lt;string name=&quot;chat_thought_now_using_tool&quot;>[NOW] Using tool: %1$s...&lt;/string>"
+        errorLine2="                                               ~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings_chat.xml"
+            line="102"
+            column="48"/>
+    </issue>
+
+    <issue
+        id="TypographyEllipsis"
+        message="Replace &quot;...&quot; with ellipsis character (…, &amp;#8230;) ?"
+        errorLine1="    &lt;string name=&quot;memory_session_header&quot;>Session: %1$s...&lt;/string>"
+        errorLine2="                                         ~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings_memory.xml"
+            line="10"
+            column="42"/>
+    </issue>
+
+    <issue
+        id="TypographyEllipsis"
+        message="Replace &quot;...&quot; with ellipsis character (…, &amp;#8230;) ?"
+        errorLine1="    &lt;string name=&quot;models_progress_downloading&quot;>Downloading...&lt;/string>"
+        errorLine2="                                               ~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings_models.xml"
+            line="9"
+            column="48"/>
     </issue>
 
 </issues>

@@ -45,6 +45,17 @@ import javax.inject.Inject
  * Manages the state of the infinite canvas and coordinates saving/loading pipelines.
  */
 @HiltViewModel
+@Suppress(
+    // Reason: the visual orchestrator is a single screen but coordinates a
+    // dozen distinct user flows (graph editing, library management, JSON
+    // import/export, validation, pipeline-config dialogs). Splitting into
+    // per-feature ViewModels would require lifting all of them into a shared
+    // store anyway because the UI state is shared between the editor and the
+    // library screen via the `pipelines` nested nav graph. Tracked for a
+    // future refactor; not in scope for the static-analysis enforcement task.
+    "TooManyFunctions",
+    "LargeClass",
+)
 class OrchestratorViewModel @Inject constructor(
     private val savePipelineUseCase: SavePipelineUseCase,
     private val loadPipelineUseCase: LoadPipelineUseCase,

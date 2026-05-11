@@ -18,6 +18,15 @@ ij_kotlin_packages_to_use_import_on_demand = unset
 ktlint_standard_no-unused-imports = enabled
 ktlint_standard_no-wildcard-imports = enabled
 ktlint_standard_import-ordering = enabled
+# Composable functions are PascalCase by Jetpack Compose convention; ktlint's
+# `function-naming` rule must ignore them so the rule still catches misnamed
+# regular functions in the same files.
+ktlint_function_naming_ignore_when_annotated_with = Composable
+# Phase 18 / Task 9-10: the standard `backing-property-naming` rule fires on
+# Compose ViewModels that expose a mutable `_uiState: MutableStateFlow` and a
+# read-only `uiState: StateFlow` (well-known idiom). Disable globally — the
+# pattern is used project-wide and IDE inspections still surface real misuse.
+ktlint_standard_backing-property-naming = disabled
 
 [*.{json,yml,yaml,xml,toml}]
 indent_size = 2

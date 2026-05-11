@@ -1,149 +1,204 @@
-# Static Analysis (Phase 18 — Task 1/10)
+# Static Analysis & Coverage — Permanent Rules
 
-This document describes the static-analysis tooling wired into the project as
-of Phase 18, Task 1/10. **All tools are in report-only mode**: they generate
-reports, but their findings do **not** fail the build. Strict enforcement
-(failing CI on violations) is enabled by Task 9/10.
+This document is the source of truth for the project's quality gates. Every
+PR must pass `./gradlew check`, which is also wired as the required CI job
+on `pull_request → main`. Failing any sub-task blocks the merge.
 
-> Test-coverage measurement (Kover) is wired in Task 2/10 and lives separately —
-> see [`coverage-baseline.md`](coverage-baseline.md) for the baseline numbers
-> and the run commands.
-
-The reports below serve as the input checklist for Tasks 3–8:
-
-| Task | Driven by                                                                |
-|------|--------------------------------------------------------------------------|
-| 3/10 | Hardcoded strings (not surfaced by detekt directly, but `MaxLineLength` hits often correlate) |
-| 4/10 | Inline LLM prompts (manual grep, complemented by `MaxLineLength`)        |
-| 5/10 | Magic identifier strings (manual grep)                                   |
-| 6/10 | `MagicNumber` rule in detekt                                             |
-| 7/10 | `WildcardImport`, `UnusedImport`, import ordering — both ktlint & detekt |
-| 8/10 | `UndocumentedPublic*` + `UnusedPrivate*` rules + manual `TODO/FIXME` grep |
+> Test-coverage measurement and thresholds live alongside the rules here;
+> the per-package baseline numbers used to seed the thresholds are kept in
+> [`coverage-baseline.md`](coverage-baseline.md).
 
 ---
 
-## Detekt
+## `./gradlew check`
 
-Plugin: `dev.detekt` version `2.0.0-alpha.3`. This is the alpha release
-because detekt 1.23.x is incompatible with Kotlin 2.3.21 / AGP 9.x used by
-this project. The plugin id `io.gitlab.arturbosch.detekt` was renamed to
-`dev.detekt` in the 2.0 line.
+A single command runs the entire gate locally:
 
-Configuration lives in [`config/detekt/detekt.yml`](../config/detekt/detekt.yml).
-It layers on top of detekt's bundled defaults via `buildUponDefaultConfig =
-true`, so unspecified rules keep their default thresholds.
-
-Enabled / tuned rules (see brief for rationale):
-- `style.MagicNumber` — ignores `-1, 0, 1, 2`, plus enums / annotations /
-  named arguments / constants / ranges.
-- `style.MaxLineLength` — 120, excludes package & import statements.
-- `style.UnusedImport`.
-- `style.UnusedPrivateClass` / `style.UnusedPrivateFunction` /
-  `style.UnusedPrivateProperty` — phase 18 task 8/10; surfaces dead private
-  declarations project-wide. Triage outcome is either delete the symbol or
-  attach `@Suppress("…") // reason: …` when retention is intentional.
-- `comments.UndocumentedPublicClass` / `comments.UndocumentedPublicFunction` /
-  `comments.UndocumentedPublicProperty` — phase 18 task 8/10; enforces the
-  KDoc rule from `CLAUDE.md`. Scope is intentionally narrow:
-  `**/domain/**` and `**/data/repositories/**` only. UI layers
-  (`presentation/`) are excluded because Composables and UI-state classes are
-  self-describing and the rule would otherwise produce noise on
-  `@Composable` functions.
-- `complexity.LongMethod` — `allowedLines: 60`.
-- `complexity.ComplexCondition` — `allowedConditions: 4`.
-- `complexity.TooManyFunctions` — `allowedFunctionsPer*: 11`.
-
-**Run:**
 ```bash
-./gradlew :app:detekt
+./gradlew check
 ```
 
-**Reports:**
-- HTML: `app/build/reports/detekt/detekt.html` — primary visual checklist.
-- Checkstyle XML: `app/build/reports/detekt/detekt.xml` — for IDE / CI parsers.
+This invokes (transitively):
 
-The Gradle task is configured with `ignoreFailures = true`, so the build
-exits `0` even when violations are present.
+| Sub-task                                      | Purpose                                                                 |
+|-----------------------------------------------|-------------------------------------------------------------------------|
+| `:app:detekt`                                 | Kotlin static analysis. Fails on any unsuppressed finding.              |
+| `:app:ktlintCheck`                            | Kotlin formatting & idiomatic style rules. Run `ktlintFormat` to fix.  |
+| `:app:lintDebug`                              | Android Lint over the debug variant + library dependencies.             |
+| `:app:testDebugUnitTest`                      | JVM unit tests for the debug variant.                                   |
+| `:app:koverVerifyDebug`                       | Test-coverage threshold enforcement.                                    |
+| `:app:checkNoInternalFqn`                     | Custom rule: forbid `ai.agent.android.*` FQN references in code body.   |
+
+Pre-flight tip: run `./gradlew :app:ktlintFormat` first to auto-fix the
+safely-correctable subset before invoking `check`.
 
 ---
 
-## ktlint
+## Detekt — Kotlin rules
 
-Plugin: `org.jlleitschuh.gradle.ktlint` version `14.2.0`, bundled ktlint
-engine pinned to `1.5.0`. Rule overrides live in
-[`.editorconfig`](../.editorconfig) — Kotlin coding-style, max line 120,
-trailing commas on, import layout per IntelliJ.
+Plugin: `dev.detekt` `2.0.0-alpha.3` (the 2.x line is required for Kotlin
+2.3.21 / AGP 9.x compatibility). Configuration:
+[`config/detekt/detekt.yml`](../config/detekt/detekt.yml), layered on top of
+detekt's bundled defaults via `buildUponDefaultConfig = true` in
+`app/build.gradle.kts`.
 
-**Run:**
-```bash
-./gradlew :app:ktlintCheck         # report
-./gradlew :app:ktlintFormat        # auto-fix the safely-fixable subset
+**Strict mode**: `detekt { ignoreFailures = false }`. The default
+`failOnSeverity = Error` means any rule emitting at `severity: error`
+(everything we enable) fails the build. The legacy 1.x top-level
+`failFast: true` switch was removed in detekt 1.22 and is intentionally not
+used.
+
+### Tuned thresholds & disabled rules
+
+| Rule                              | Setting                           | Why                                                                             |
+|-----------------------------------|-----------------------------------|---------------------------------------------------------------------------------|
+| `complexity.LongMethod`           | `allowedLines: 120`               | Graph-execution loops, JSON serialisers, pipeline factories genuinely run long. |
+| `complexity.LongMethod`           | `ignoreAnnotated: ['Composable']` | `@Composable` trees are declarative; ktlint handles formatting.                 |
+| `complexity.CyclomaticComplexMethod` | `allowedComplexity: 25`        | Orchestrator branches over node/provider/error states.                          |
+| `complexity.CyclomaticComplexMethod` | `ignoreAnnotated: ['Composable']` | Composables aggregate conditional rendering.                                    |
+| `complexity.LargeClass`           | `excludes: presentation/ui/**`    | `*Screen` files host many top-level composables.                                |
+| `complexity.TooManyFunctions`     | `allowedFunctionsPer*: 25`        | DAOs, Repository contracts, Hilt modules naturally expose >11 functions.        |
+| `complexity.LongParameterList`    | `allowedFunctionParameters: 10`   | Composable slot APIs commonly take many lambdas.                                |
+| `style.MagicNumber`               | tuned excludes + named-arg ignore | See `MagicNumber` block in YAML for rationale; `AppDatabase.kt` is excluded.    |
+| `style.MaxLineLength`             | `maxLineLength: 120`, comments excluded | Code lines ≤ 120 are enforced by ktlint too; KDoc references unavoidably overshoot.|
+| `style.ReturnCount`               | `max: 5`                          | Multi-return early-exit is idiomatic Kotlin.                                    |
+| `style.ThrowsCount`               | `max: 4`                          | Per-field schema validators want specific error messages per case.              |
+| `style.LoopWithTooManyJumpStatements` | disabled                      | Pipeline / graph traversal legitimately uses multiple `break/continue`.         |
+| `exceptions.TooGenericExceptionCaught` | disabled                     | LLM SDK / native / Android-IO call sites have an open exception surface.        |
+| `exceptions.SwallowedException`   | disabled                          | Catching → mapping to `Result.failure(domainError)` is the boundary contract.   |
+| `naming.FunctionNaming`           | `ignoreAnnotated: ['Composable']` | Compose convention is PascalCase.                                               |
+| `comments.UndocumentedPublic*`    | scoped to `domain/` and `data/repositories/` | Enforces the KDoc rule from `CLAUDE.md`.                                |
+
+### Adding an intentional suppression
+
+When a finding is genuinely intentional, suppress it at the **narrowest
+scope** with a reason:
+
+```kotlin
+// Reason: the validate() function accumulates a fixed set of structural
+// checks into a single list. Each branch is one independent rule;
+// extracting helpers would mostly rename, not decompose, the cyclomatic count.
+@Suppress("CyclomaticComplexMethod")
+fun validate(): List<PipelineValidationError> { … }
 ```
 
-**Reports:**
-- `app/build/reports/ktlint/ktlintMainSourceSetCheck/ktlintMainSourceSetCheck.html`
-- `app/build/reports/ktlint/ktlintMainSourceSetCheck/ktlintMainSourceSetCheck.txt`
-- Equivalent subdirectories exist for `Test`, `AndroidTest`, and
-  `KotlinScript` source sets.
+Bare `@Suppress("X")` without a reason comment is rejected in code review.
 
-The plugin is configured with `ignoreFailures.set(true)`.
+**Reports**:
+- `app/build/reports/detekt/detekt.html` — visual checklist.
+- `app/build/reports/detekt/detekt.xml` — checkstyle-compatible for CI parsers.
+
+---
+
+## ktlint — formatting & idiomatic style
+
+Plugin: `org.jlleitschuh.gradle.ktlint` `14.2.0`, bundled engine `1.5.0`.
+Strict mode: `ktlint { ignoreFailures.set(false) }`. Rule overrides live in
+[`.editorconfig`](../.editorconfig):
+
+- `ktlint_function_naming_ignore_when_annotated_with = Composable` — Compose
+  PascalCase is allowed.
+- `ktlint_standard_backing-property-naming = disabled` — the `_uiState`
+  /`uiState` ViewModel pattern is project-wide.
+
+Run `./gradlew :app:ktlintFormat` for the auto-fixable subset; remaining
+issues are reported by `:app:ktlintCheck`.
+
+**Reports**:
+- `app/build/reports/ktlint/ktlintMainSourceSetCheck/*` (HTML + plain).
 
 ---
 
 ## Android Lint
 
-Provided by AGP 9.2.1, configured in `app/build.gradle.kts`:
+Provided by AGP 9.2.1. Strict mode in `app/build.gradle.kts`:
 
 ```kotlin
 android {
     lint {
         baseline = file("lint-baseline.xml")
-        abortOnError = false
-        warningsAsErrors = false
+        abortOnError = true
+        warningsAsErrors = true
+        checkDependencies = true
     }
 }
 ```
 
-The baseline file [`app/lint-baseline.xml`](../app/lint-baseline.xml)
-captures the existing 14 warnings/hints reported by AGP 9.2.1 against the
-codebase at the start of Phase 18. Only **newly introduced** issues will be
-surfaced by future runs.
+`lint-baseline.xml` grandfathers existing issues so only **newly introduced**
+warnings or errors fail the build. Regenerate the baseline only after a
+deliberate batch of fixes:
 
-**Run:**
 ```bash
-./gradlew :app:lintDebug                 # debug variant report
-./gradlew :app:updateLintBaseline        # regenerate the baseline (do this only
-                                         # after deliberately addressing a batch
-                                         # of issues; commit the new baseline)
+./gradlew :app:updateLintBaseline    # rewrites the baseline; commit it.
 ```
 
-**Reports:**
+**Reports**:
 - `app/build/reports/lint-results-debug.html`
 - `app/build/reports/lint-results-debug.xml`
 
 ---
 
-## CI integration — deferred
+## Kover — coverage measurement & threshold
 
-This PR does **not** add a GitHub Actions workflow that publishes the
-reports as PR artifacts. The PAT used for the current Git remote lacks the
-`workflow` scope required to push files into `.github/workflows/`. The CI
-wiring (a `static-analysis.yml` job that runs the three Gradle tasks above
-with `continue-on-error: true` and uploads `app/build/reports/detekt/`,
-`app/build/reports/ktlint/`, and `app/build/reports/lint-results-debug.*`
-via `actions/upload-artifact`) will be added separately, either when the
-PAT scope is updated or as part of Task 9/10's CI overhaul.
+Plugin: `org.jetbrains.kotlinx.kover` `0.9.8`. Strict mode: a single
+aggregate rule enforces **≥ 70 % LINE coverage** over the unit-testable
+surface.
 
-Until then, run the commands locally and open the HTML reports from
-`app/build/reports/...`.
+Kover 0.9.x does not support per-rule filters (that landed in 0.10+), so
+filtering is done globally via `reports.filters.excludes`. The excluded
+class set covers:
 
-## What this phase does **not** do
+- Generated code (Hilt factories, Room `*_Impl`, AppDatabase, AutoMigrations,
+  ComposableSingletons, `BuildConfig`, BR, DataBinding).
+- All `*Preview.kt` files and `@Preview`-annotated functions.
+- Hilt DI modules (`ai.agent.android.di.*`).
+- `App.kt` and `MainActivity` — Android-runtime-bound bootstrap.
+- All `*Screen` Composables and `presentation.ui.*.components.*`.
+- `presentation.theme/notifications/receivers/state.*` — Android-runtime UI glue.
+- `data.services.*` (Foreground service, WorkManager worker, idle/power managers).
+- `data.tools.local.*` Android-runtime glue (AppFunctions service, search HTTP, delegate-task).
+- `data.local.dao.*` interfaces (impls are auto-excluded via the `*_Impl` pattern).
 
-- It does **not** wire `./gradlew check` as a mandatory step in `CLAUDE.md`
-  Step 3 — that is Task 9/10's job.
-- It does **not** make CI fail on static-analysis findings — also Task 9/10.
-- It does **not** measure test coverage — that is Task 2/10 (Kover).
-- It does **not** rewrite the violations themselves — Tasks 3–8 do.
+After these exclusions the aggregate runs at ~80 % (baseline);
+[`coverage-baseline.md`](coverage-baseline.md) keeps the per-package
+breakdown for refactor-impact tracking. The 70 % floor protects against
+regression with a 10 pp buffer for in-flight refactors.
 
-If you see a violation in any of the reports, it is an entry on the
-checklist for one of Tasks 3–8.
+Verification is wired into the `check` lifecycle:
+
+```kotlin
+tasks.named("check") { dependsOn("koverVerifyDebug") }
+```
+
+**Local commands**:
+
+```bash
+./gradlew :app:koverVerifyDebug      # threshold check
+./gradlew :app:koverHtmlReportDebug  # drill-down per package/file
+./gradlew :app:koverLog              # one-liner aggregate %
+```
+
+**Reports**:
+- `app/build/reports/kover/htmlDebug/index.html`
+- `app/build/reports/kover/reportDebug.xml`
+
+---
+
+## CI
+
+The required job is defined in `.github/workflows/check.yml` (kept locally
+until the Git remote's PAT gains the `workflow` scope; the path is currently
+gitignored). The workflow runs `./gradlew check` on every `pull_request →
+main` and every `push` to `main`, uploads each report set as a downloadable
+artifact on failure, and is configured with `concurrency.cancel-in-progress`
+so a new push supersedes any older run on the same branch.
+
+---
+
+## What this gate does **not** do
+
+- It does not yet collect instrumented (androidTest / Compose UI test)
+  coverage — `*Screen.kt` Composables remain outside the Kover scope.
+- It does not run the `release` variant — lint and tests target `debug`.
+- It does not perform dependency-vulnerability scanning — that is a
+  separate workstream.

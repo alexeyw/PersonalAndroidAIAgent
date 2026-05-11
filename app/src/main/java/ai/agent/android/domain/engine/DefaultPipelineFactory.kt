@@ -20,6 +20,10 @@ object DefaultPipelineFactory {
      * @param name The name of the pipeline.
      * @return A new instance of PipelineGraph containing the default nodes and connections.
      */
+    // Reason: declarative graph construction — 10 nodes + 12 connections each
+    // built as one builder-style expression. Splitting into helpers would
+    // hurt readability more than the length cost.
+    @Suppress("LongMethod")
     fun create(name: String = "Default System Pipeline"): PipelineGraph {
         val inputNode = NodeModel(
             id = UUID.randomUUID().toString(),
@@ -114,8 +118,18 @@ object DefaultPipelineFactory {
             contextConfig = NodeContextConfig.defaultForType(NodeType.OUTPUT),
         )
 
-        val nodes =
-            listOf(inputNode, intentRouterNode, liteRtNode, searchToolNode, cloudNode, decompositionNode, queueProcessorNode, taskToolNode, summaryNode, outputNode)
+        val nodes = listOf(
+            inputNode,
+            intentRouterNode,
+            liteRtNode,
+            searchToolNode,
+            cloudNode,
+            decompositionNode,
+            queueProcessorNode,
+            taskToolNode,
+            summaryNode,
+            outputNode,
+        )
 
         val connections = listOf(
             ConnectionModel(

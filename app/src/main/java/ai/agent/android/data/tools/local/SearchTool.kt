@@ -20,7 +20,9 @@ class SearchTool @Inject constructor(private val llmEngine: LlmInferenceEngine) 
 
     companion object {
         const val TOOL_NAME = "search_tool"
-        const val TOOL_DESCRIPTION = "Searches Wikipedia for up-to-date information about a topic. Use this when you need facts or data to answer a user's question."
+        const val TOOL_DESCRIPTION =
+            "Searches Wikipedia for up-to-date information about a topic. " +
+                "Use this when you need facts or data to answer a user's question."
         const val TOOL_PARAMETERS = """
             {
               "type": "object",
@@ -85,7 +87,9 @@ class SearchTool @Inject constructor(private val llmEngine: LlmInferenceEngine) 
             val encodedQuery = URLEncoder.encode(query, Charsets.UTF_8.name())
 
             // Using generator=search is much more flexible than titles= because it does a real search.
-            val urlString = "https://$lang.wikipedia.org/w/api.php?action=query&format=json&prop=extracts&exintro=true&explaintext=true&generator=search&gsrsearch=$encodedQuery&gsrlimit=1"
+            val urlString = "https://$lang.wikipedia.org/w/api.php?action=query&format=json" +
+                "&prop=extracts&exintro=true&explaintext=true&generator=search" +
+                "&gsrsearch=$encodedQuery&gsrlimit=1"
             val url = URL(urlString)
             val connection = url.openConnection() as HttpURLConnection
             connection.requestMethod = "GET"
@@ -118,7 +122,9 @@ class SearchTool @Inject constructor(private val llmEngine: LlmInferenceEngine) 
                 if (extract.length > EXTRACT_CHAR_LIMIT) {
                     if (llmEngine.isInitialized) {
                         try {
-                            val prompt = "Summarize the following text within $EXTRACT_CHAR_LIMIT characters retaining the main factual information:\n\n$extract\n\nSUMMARY: "
+                            val prompt = "Summarize the following text within $EXTRACT_CHAR_LIMIT " +
+                                "characters retaining the main factual information:\n\n" +
+                                "$extract\n\nSUMMARY: "
                             val responseStream = llmEngine.generateResponseStream(prompt)
                             val summary = java.lang.StringBuilder()
                             responseStream.collect { token ->

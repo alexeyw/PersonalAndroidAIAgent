@@ -130,7 +130,8 @@ class ModelsViewModel @Inject constructor(
                             val newModel = LocalModel(
                                 name = fileName,
                                 path = state.fileUri,
-                                size = 0L, // Size is not provided by OkHttp DownloadManager currently, could be added later
+                                // Size is not provided by OkHttp DownloadManager currently.
+                                size = 0L,
                                 isActive = false,
                             )
                             localModelRepository.insertModel(newModel)

@@ -73,6 +73,12 @@ data class PipelineGraph(
      *
      * @return A list of [PipelineValidationError]s. Empty if valid.
      */
+    // Reason: validate must accumulate a fixed set of structural checks
+    // (missing/multiple INPUT/OUTPUT, dangling edges, cycle, context-config
+    // compatibility per NodeType) into a single list. Each branch is one
+    // independent rule — extracting helpers would mostly rename, not
+    // decompose, the cyclomatic count.
+    @Suppress("CyclomaticComplexMethod")
     fun validate(): List<PipelineValidationError> {
         val errors = mutableListOf<PipelineValidationError>()
 

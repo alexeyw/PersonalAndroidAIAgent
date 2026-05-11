@@ -51,7 +51,9 @@ class ToolRepositoryImpl @Inject constructor(
 
         val scheduleTool = AgentTool(
             name = "schedule_task",
-            description = "Schedules a task to be executed by the agent in the background. intervalHours: >0 for periodic, 0 for one-time. delayMinutes: >0 for delayed execution.",
+            description = "Schedules a task to be executed by the agent in the background. " +
+                "intervalHours: >0 for periodic, 0 for one-time. " +
+                "delayMinutes: >0 for delayed execution.",
             parameters = """
                 {
                   "type": "object",
@@ -75,7 +77,8 @@ class ToolRepositoryImpl @Inject constructor(
         val defaultModel = availableModels.first().id
         val delegateTool = AgentTool(
             name = "delegate_task",
-            description = "Delegates a complex or specialized task to an external LLM and saves the result to memory. ONLY use this tool if you need cloud reasoning.",
+            description = "Delegates a complex or specialized task to an external LLM and saves the " +
+                "result to memory. ONLY use this tool if you need cloud reasoning.",
             parameters = """
                 {
                   "type": "object",

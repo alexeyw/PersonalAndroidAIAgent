@@ -99,7 +99,8 @@ class TaskMonitorViewModel @Inject constructor(
                     info.state == WorkInfo.State.RUNNING -> TaskStatus.RUNNING
                     info.state == WorkInfo.State.ENQUEUED || info.state == WorkInfo.State.BLOCKED -> TaskStatus.QUEUED
                     info.state == WorkInfo.State.FAILED -> TaskStatus.FAILED
-                    info.state == WorkInfo.State.SUCCEEDED || info.state == WorkInfo.State.CANCELLED -> TaskStatus.COMPLETED
+                    info.state == WorkInfo.State.SUCCEEDED ||
+                        info.state == WorkInfo.State.CANCELLED -> TaskStatus.COMPLETED
                     else -> TaskStatus.QUEUED
                 },
                 progress = if (info.state == WorkInfo.State.RUNNING) -1f else 1f,
