@@ -1,6 +1,7 @@
 package ai.agent.android.presentation.ui.chat
 
 import ai.agent.android.R
+import ai.agent.android.domain.constants.TimeAndIdConstants
 import android.os.SystemClock
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -39,6 +40,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.integerResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -89,7 +91,7 @@ fun ClarificationCard(
                 .clip(RoundedCornerShape(12.dp))
                 .background(MaterialTheme.colorScheme.secondaryContainer)
                 .padding(12.dp)
-                .alpha(if (model.status == ClarificationCardUiModel.Status.TIMED_OUT) 0.6f else 1f),
+                .alpha(if (model.status == ClarificationCardUiModel.Status.TIMED_OUT) TIMED_OUT_ALPHA else 1f),
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(
@@ -178,6 +180,7 @@ private fun CountdownRow(model: ClarificationCardUiModel, onTimeout: (String) ->
         mutableLongStateOf((deadline - SystemClock.uptimeMillis()).coerceAtLeast(0L))
     }
 
+    val countdownIntervalMs = integerResource(R.integer.clarification_countdown_interval_ms).toLong()
     LaunchedEffect(model.id) {
         // Poll once per second using a monotonic clock so the visible value stays
         // aligned with wall-clock progress even after recompositions or brief skips.
@@ -190,13 +193,14 @@ private fun CountdownRow(model: ClarificationCardUiModel, onTimeout: (String) ->
                 onTimeout(defaultAnswer)
                 break
             }
-            delay(1000L)
+            delay(countdownIntervalMs)
         }
     }
 
     val totalMs = model.timeoutMs.coerceAtLeast(1L)
     val progress = (remainingMs.toFloat() / totalMs.toFloat()).coerceIn(0f, 1f)
-    val seconds = ((remainingMs + 999L) / 1000L).toInt()
+    // Ceil-divide remainingMs to whole seconds: e.g. 999 ms → "1 s left", 0 ms → "0 s".
+    val seconds = ((remainingMs + (TimeAndIdConstants.MS_PER_SECOND - 1L)) / TimeAndIdConstants.MS_PER_SECOND).toInt()
 
     Column(modifier = Modifier.fillMaxWidth()) {
         LinearProgressIndicator(
@@ -243,3 +247,7 @@ private fun TimedOutBody(model: ClarificationCardUiModel) {
         modifier = Modifier.testTag("ClarificationTimedOut"),
     )
 }
+
+/** Alpha applied to a timed-out clarification card to visually deemphasise it. */
+private const val TIMED_OUT_ALPHA: Float = 0.6f
+

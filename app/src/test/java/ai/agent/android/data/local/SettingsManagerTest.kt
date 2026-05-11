@@ -1,5 +1,6 @@
 package ai.agent.android.data.local
 
+import ai.agent.android.domain.constants.SettingsDefaults
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
@@ -51,7 +52,7 @@ class SettingsManagerTest {
 
         val settingsManager = SettingsManager(dataStore)
         val result = settingsManager.temperature.first()
-        assertEquals(0.7f, result)
+        assertEquals(SettingsDefaults.TEMPERATURE_DEFAULT, result)
     }
 
     @Test
@@ -62,7 +63,7 @@ class SettingsManagerTest {
 
         val settingsManager = SettingsManager(dataStore)
         val result = settingsManager.topK.first()
-        assertEquals(40, result)
+        assertEquals(SettingsDefaults.TOP_K_DEFAULT, result)
     }
 
     @Test
@@ -73,7 +74,7 @@ class SettingsManagerTest {
 
         val settingsManager = SettingsManager(dataStore)
         val result = settingsManager.topP.first()
-        assertEquals(0.9f, result)
+        assertEquals(SettingsDefaults.TOP_P_DEFAULT, result)
     }
 
     @Test

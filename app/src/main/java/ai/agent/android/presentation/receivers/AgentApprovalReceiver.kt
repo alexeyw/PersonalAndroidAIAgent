@@ -1,5 +1,6 @@
 package ai.agent.android.presentation.receivers
 
+import ai.agent.android.domain.constants.TimeAndIdConstants
 import ai.agent.android.domain.usecases.AgentOrchestratorUseCase
 import ai.agent.android.presentation.notifications.ApprovalNotificationManager
 import android.app.NotificationManager
@@ -34,7 +35,9 @@ class AgentApprovalReceiver : BroadcastReceiver() {
         val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         val sessionId = intent.getStringExtra("sessionId") ?: return
 
-        notificationManager.cancel(ApprovalNotificationManager.NOTIFICATION_ID + sessionId.hashCode() % 1000)
+        notificationManager.cancel(
+            ApprovalNotificationManager.NOTIFICATION_ID + sessionId.hashCode() % TimeAndIdConstants.NOTIFICATION_ID_RANGE,
+        )
 
         when (ApprovalAction.fromAction(intent.action)) {
             ApprovalAction.APPROVE -> orchestratorUseCase.resumeWithApproval(sessionId, true)

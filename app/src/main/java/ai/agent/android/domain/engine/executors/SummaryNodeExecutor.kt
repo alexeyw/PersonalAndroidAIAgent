@@ -1,6 +1,7 @@
 package ai.agent.android.domain.engine.executors
 
 import ai.agent.android.domain.constants.DefaultPrompts
+import ai.agent.android.domain.constants.PipelineExecutionDefaults
 import ai.agent.android.domain.engine.LlmInferenceEngine
 import ai.agent.android.domain.models.AgentOrchestratorState
 import ai.agent.android.domain.models.NodeExecutionResult
@@ -74,7 +75,7 @@ class SummaryNodeExecutor @Inject constructor(
         val generatedText = accumulatedResponse.toString().trim()
         val fullResponseText = if (generatedText.isNotEmpty()) generatedText else "No summary generated."
 
-        kotlinx.coroutines.delay(1000)
+        kotlinx.coroutines.delay(PipelineExecutionDefaults.NODE_RESULT_EMIT_DELAY_MS)
 
         emit(NodeOutput.Result(NodeExecutionResult(outputText = fullResponseText)))
     }

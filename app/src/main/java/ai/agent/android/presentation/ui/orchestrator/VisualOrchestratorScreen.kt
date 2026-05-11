@@ -1,6 +1,8 @@
 package ai.agent.android.presentation.ui.orchestrator
 
 import ai.agent.android.R
+import ai.agent.android.domain.constants.SettingsDefaults
+import ai.agent.android.domain.constants.TimeAndIdConstants
 import ai.agent.android.domain.models.NodeContextConfig
 import ai.agent.android.domain.models.NodeType
 import ai.agent.android.domain.models.usesContextConfig
@@ -66,6 +68,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.colorResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.TextFieldValue
@@ -148,21 +151,21 @@ fun VisualOrchestratorScreen(
     LaunchedEffect(uiState.currentPipeline.id, canvasSize) {
         if (uiState.nodes.isNotEmpty() && canvasSize.width > 0 && canvasSize.height > 0) {
             val minX = uiState.nodes.minOf { it.x }
-            val maxX = uiState.nodes.maxOf { it.x + 200f } // Add width for node
+            val maxX = uiState.nodes.maxOf { it.x + NODE_WIDTH_ESTIMATE_PX }
             val minY = uiState.nodes.minOf { it.y }
-            val maxY = uiState.nodes.maxOf { it.y + 100f } // Add height for node
+            val maxY = uiState.nodes.maxOf { it.y + NODE_HEIGHT_ESTIMATE_PX }
 
             val graphWidth = maxX - minX
             val graphHeight = maxY - minY
 
-            val padding = 100f
+            val padding = FIT_VIEW_PADDING_PX
             val availableWidth = canvasSize.width - padding * 2
             val availableHeight = canvasSize.height - padding * 2
 
             if (graphWidth > 0 && graphHeight > 0) {
                 val scaleX = availableWidth / graphWidth
                 val scaleY = availableHeight / graphHeight
-                val targetScale = minOf(scaleX, scaleY).coerceIn(0.1f, 1f)
+                val targetScale = minOf(scaleX, scaleY).coerceIn(MIN_CANVAS_SCALE, 1f)
 
                 scale = targetScale
 
@@ -288,7 +291,8 @@ fun VisualOrchestratorScreen(
             // Clarification: timeout is edited as seconds for ergonomics; we round-trip
             // the configured millis (or the engine default 60_000) into the field.
             var clarificationTimeoutSeconds by remember(node) {
-                mutableStateOf(((node.clarificationTimeoutMs ?: 60_000L) / 1000L).toString())
+                val timeoutMs = node.clarificationTimeoutMs ?: SettingsDefaults.CLARIFICATION_TIMEOUT_MS_DEFAULT
+                mutableStateOf((timeoutMs / TimeAndIdConstants.MS_PER_SECOND).toString())
             }
             // Per-node context flags edited as local state; the "nodeInput"
             // flag is intentionally not exposed — `OrchestratorViewModel`
@@ -446,7 +450,7 @@ fun VisualOrchestratorScreen(
                             val timeoutMs = clarificationTimeoutSeconds
                                 .toLongOrNull()
                                 ?.takeIf { it > 0L }
-                                ?.let { it * 1000L }
+                                ?.let { it * TimeAndIdConstants.MS_PER_SECOND }
                             viewModel.updateNodeClarificationTimeout(node.id, timeoutMs)
                         }
                         // Persist the context flags. `nodeInput` is sent as
@@ -675,8 +679,8 @@ fun VisualOrchestratorScreen(
                                         isPointNearCubicBezier(
                                             clickLogicPoint,
                                             Offset(startX, startY),
-                                            Offset(startX + 100f, startY),
-                                            Offset(endX - 100f, endY),
+                                            Offset(startX + BEZIER_CONTROL_X_OFFSET_PX, startY),
+                                            Offset(endX - BEZIER_CONTROL_X_OFFSET_PX, endY),
                                             Offset(endX, endY),
                                             threshold,
                                         )
@@ -694,7 +698,7 @@ fun VisualOrchestratorScreen(
                     }
                     .pointerInput(Unit) {
                         detectTransformGestures { centroid, pan, zoom, _ ->
-                            val newScale = (scale * zoom).coerceIn(0.1f, 5f)
+                            val newScale = (scale * zoom).coerceIn(MIN_CANVAS_SCALE, MAX_CANVAS_SCALE)
                             val p = panOffset + pan
                             panOffset = centroid - (centroid - p) * (newScale / scale)
                             scale = newScale
@@ -755,9 +759,9 @@ fun VisualOrchestratorScreen(
                                 val path = Path().apply {
                                     moveTo(startX, startY)
                                     cubicTo(
-                                        startX + 100f,
+                                        startX + BEZIER_CONTROL_X_OFFSET_PX,
                                         startY,
-                                        endX - 100f,
+                                        endX - BEZIER_CONTROL_X_OFFSET_PX,
                                         endY,
                                         endX,
                                         endY,
@@ -772,8 +776,8 @@ fun VisualOrchestratorScreen(
                                 val arrowTipX = endX - portRadiusPx
                                 val arrowPath = Path().apply {
                                     moveTo(arrowTipX, endY)
-                                    lineTo(arrowTipX - 24f, endY - 14f)
-                                    lineTo(arrowTipX - 24f, endY + 14f)
+                                    lineTo(arrowTipX - ARROW_TIP_OFFSET_X_PX, endY - ARROW_TIP_OFFSET_Y_PX)
+                                    lineTo(arrowTipX - ARROW_TIP_OFFSET_X_PX, endY + ARROW_TIP_OFFSET_Y_PX)
                                     close()
                                 }
                                 drawPath(
@@ -804,10 +808,16 @@ fun VisualOrchestratorScreen(
 
                                 Text(
                                     text = conn.label,
-                                    color = if (conn.label == "True") Color(0xFF4CAF50) else Color(0xFFF44336),
+                                    color = if (conn.label == "True") {
+                                        colorResource(R.color.pipeline_connection_true_label)
+                                    } else {
+                                        MaterialTheme.colorScheme.error
+                                    },
                                     fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
                                     modifier = Modifier
-                                        .offset { IntOffset(midX.roundToInt(), midY.roundToInt() - 20) }
+                                        .offset {
+                                            IntOffset(midX.roundToInt(), midY.roundToInt() - CONNECTION_LABEL_OFFSET_Y_PX)
+                                        }
                                         .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.8f))
                                         .padding(4.dp),
                                 )
@@ -886,14 +896,20 @@ private fun isPointNearCubicBezier(
     p3: Offset,
     threshold: Float,
 ): Boolean {
-    val steps = 20
+    val steps = BEZIER_HIT_SAMPLES
     var prev = p0
     for (i in 1..steps) {
         val t = i / steps.toFloat()
         val u = 1 - t
         val current = Offset(
-            u * u * u * p0.x + 3 * u * u * t * p1.x + 3 * u * t * t * p2.x + t * t * t * p3.x,
-            u * u * u * p0.y + 3 * u * u * t * p1.y + 3 * u * t * t * p2.y + t * t * t * p3.y,
+            u * u * u * p0.x +
+                CUBIC_BEZIER_TERM_COEFFICIENT * u * u * t * p1.x +
+                CUBIC_BEZIER_TERM_COEFFICIENT * u * t * t * p2.x +
+                t * t * t * p3.x,
+            u * u * u * p0.y +
+                CUBIC_BEZIER_TERM_COEFFICIENT * u * u * t * p1.y +
+                CUBIC_BEZIER_TERM_COEFFICIENT * u * t * t * p2.y +
+                t * t * t * p3.y,
         )
         if (distanceFromPointToLineSegment(point, prev, current) <= threshold) {
             return true
@@ -911,3 +927,46 @@ private fun distanceFromPointToLineSegment(p: Offset, v: Offset, w: Offset): Flo
     val projection = Offset(v.x + t * (w.x - v.x), v.y + t * (w.y - v.y))
     return (p - projection).getDistance()
 }
+
+// region Canvas geometry constants
+// All values are in raw canvas pixels (`Float`) or raw `Int` pixel offsets —
+// they live in the same coordinate space as the `Offset`/`IntOffset` math
+// performed inside `Canvas` and `Modifier.offset { }` blocks, where Compose's
+// `Dp` abstraction does not apply. Centralised here so the layout maths is
+// auditable in one place.
+
+/** Approximate width of a draggable node card, used when fitting the graph into the canvas viewport. */
+private const val NODE_WIDTH_ESTIMATE_PX: Float = 200f
+
+/** Approximate height of a draggable node card, used when fitting the graph into the canvas viewport. */
+private const val NODE_HEIGHT_ESTIMATE_PX: Float = 100f
+
+/** Padding (each side) preserved around the fitted graph so node cards never touch the canvas edge. */
+private const val FIT_VIEW_PADDING_PX: Float = 100f
+
+/** Minimum scale factor allowed when the user pinch-zooms or auto-fits the canvas. */
+private const val MIN_CANVAS_SCALE: Float = 0.1f
+
+/** Maximum scale factor allowed when the user pinch-zooms the canvas. */
+private const val MAX_CANVAS_SCALE: Float = 5f
+
+/** Horizontal offset of the cubic Bezier control points from each connection endpoint. */
+private const val BEZIER_CONTROL_X_OFFSET_PX: Float = 100f
+
+/** Horizontal distance from the arrow tip to the base of the arrowhead. */
+private const val ARROW_TIP_OFFSET_X_PX: Float = 24f
+
+/** Vertical half-height of the arrowhead. */
+private const val ARROW_TIP_OFFSET_Y_PX: Float = 14f
+
+/** Number of points sampled along a connection's Bezier curve when testing for a tap-hit. */
+private const val BEZIER_HIT_SAMPLES: Int = 20
+
+/** Constant 3 used as the coefficient of the middle terms of the cubic Bezier polynomial. */
+private const val CUBIC_BEZIER_TERM_COEFFICIENT: Int = 3
+
+/** Vertical offset, in canvas pixels, applied so the connection label sits clear of the bezier curve. */
+private const val CONNECTION_LABEL_OFFSET_Y_PX: Int = 20
+
+// endregion
+

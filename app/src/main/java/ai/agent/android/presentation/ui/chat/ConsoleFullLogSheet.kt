@@ -202,7 +202,7 @@ fun ConsoleFullLogSheet(
         Scaffold(
             modifier = Modifier
                 .fillMaxWidth()
-                .fillMaxHeight(0.92f),
+                .fillMaxHeight(FULL_LOG_SHEET_HEIGHT_FRACTION),
             topBar = {
                 TopAppBar(
                     title = { Text(stringResource(R.string.chat_console_title)) },
@@ -453,3 +453,11 @@ internal fun plainTextDump(events: List<ConsoleEvent>, tagsByType: Map<ConsoleEv
         "${formatter.format(Date(event.timestamp))} [$tag] ${event.message}"
     }
 }
+
+/**
+ * Fraction of the screen height occupied by the expanded console
+ * `ModalBottomSheet`. Leaves a small visual gap at the top so the sheet
+ * does not collide with the system status bar on tall devices.
+ */
+private const val FULL_LOG_SHEET_HEIGHT_FRACTION: Float = 0.92f
+

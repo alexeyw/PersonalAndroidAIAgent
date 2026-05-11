@@ -209,7 +209,7 @@ private fun SessionHeader(sessionId: String, messageCount: Int, onDelete: () -> 
     ) {
         Column {
             Text(
-                text = stringResource(R.string.memory_session_header, sessionId.take(8)),
+                text = stringResource(R.string.memory_session_header, sessionId.take(SESSION_ID_DISPLAY_LENGTH)),
                 style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -380,3 +380,7 @@ private fun EmptyStateMessage(message: String) {
         )
     }
 }
+
+/** Number of leading characters of a session UUID embedded into the memory-screen session header. */
+private const val SESSION_ID_DISPLAY_LENGTH: Int = 8
+

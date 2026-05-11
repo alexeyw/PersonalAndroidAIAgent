@@ -40,8 +40,18 @@ style:
   active: true
   MagicNumber:
     active: true
-    excludes: ['**/test/**', '**/androidTest/**', '**/*.Test.kt', '**/*Test.kt', '**/*Spec.kt']
-    ignoreNumbers: ['-1', '0', '1', '2']
+    # `AppDatabase.kt` is excluded because every `Migration(from, to)` block has a
+    # unique pair of version numbers — extracting them into constants would yield
+    # one named constant per migration with no semantic benefit and would obscure
+    # the surrounding KDoc that already documents each step.
+    excludes:
+      - '**/test/**'
+      - '**/androidTest/**'
+      - '**/*.Test.kt'
+      - '**/*Test.kt'
+      - '**/*Spec.kt'
+      - '**/data/local/AppDatabase.kt'
+    ignoreNumbers: ['-1', '0', '1', '2', '100']
     ignoreHashCodeFunction: true
     ignorePropertyDeclaration: false
     ignoreLocalVariableDeclaration: false

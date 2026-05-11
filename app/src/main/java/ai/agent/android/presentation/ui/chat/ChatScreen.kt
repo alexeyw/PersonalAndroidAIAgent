@@ -98,6 +98,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.colorResource
+import androidx.compose.ui.res.dimensionResource
+import androidx.compose.ui.res.integerResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.input.TextFieldValue
@@ -222,12 +225,13 @@ fun ChatScreen(viewModel: ChatViewModel, onBack: () -> Unit = {}) {
     // truncate it and could even cancel the queued copy snackbar before it
     // ever became visible.
     val snackbarText = uiState.snackbarMessage?.asString()
+    val snackbarAutoDismissMs = integerResource(R.integer.chat_snackbar_auto_dismiss_ms).toLong()
     LaunchedEffect(snackbarText) {
         val msg = snackbarText ?: return@LaunchedEffect
         val showJob = launch {
             snackbarHostState.showSnackbar(msg, duration = SnackbarDuration.Indefinite)
         }
-        delay(1500)
+        delay(snackbarAutoDismissMs)
         showJob.cancel()
         viewModel.consumeSnackbar()
     }
@@ -300,7 +304,8 @@ fun ChatScreen(viewModel: ChatViewModel, onBack: () -> Unit = {}) {
         // boundary itself is included so a 480dp-tall device still picks up
         // the compact layout.
         val configuration = LocalConfiguration.current
-        val isCompactConsole = configuration.screenHeightDp <= 480
+        val compactConsoleThresholdDp = dimensionResource(R.dimen.chat_compact_console_threshold_height).value
+        val isCompactConsole = configuration.screenHeightDp <= compactConsoleThresholdDp
 
         Scaffold(
             topBar = {
@@ -324,9 +329,10 @@ fun ChatScreen(viewModel: ChatViewModel, onBack: () -> Unit = {}) {
                                         uiState.maxContextSize.toFloat()
                                     ).coerceIn(0f, 1f)
                                 val color = when {
-                                    contextPercentage > 0.9f -> MaterialTheme.colorScheme.error
-                                    contextPercentage > 0.7f -> androidx.compose.ui.graphics.Color(0xFFFFA000) // Orange
-                                    else -> MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.6f)
+                                    contextPercentage > CONTEXT_CRITICAL_RATIO -> MaterialTheme.colorScheme.error
+                                    contextPercentage > CONTEXT_WARNING_RATIO ->
+                                        colorResource(R.color.chat_context_overflow_warning)
+                                    else -> MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = SECONDARY_LABEL_ALPHA)
                                 }
                                 Text(
                                     text = stringResource(
@@ -1176,3 +1182,13 @@ fun InlineErrorBanner(text: String, onDismiss: () -> Unit) {
         }
     }
 }
+
+/** Context-window utilisation above which the meter switches to the error colour. */
+private const val CONTEXT_CRITICAL_RATIO: Float = 0.9f
+
+/** Context-window utilisation above which the meter switches to the warning colour. */
+private const val CONTEXT_WARNING_RATIO: Float = 0.7f
+
+/** Alpha applied to secondary labels (pipeline name, context-usage meter) in the chat TopAppBar. */
+private const val SECONDARY_LABEL_ALPHA: Float = 0.6f
+

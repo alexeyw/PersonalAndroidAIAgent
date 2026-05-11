@@ -31,6 +31,18 @@ class SearchTool @Inject constructor(private val llmEngine: LlmInferenceEngine) 
               "required": ["query", "lang"]
             }
         """
+
+        /**
+         * Maximum number of characters of the Wikipedia extract kept verbatim. Longer
+         * extracts are either summarised via the local LLM or cleanly truncated.
+         */
+        private const val EXTRACT_CHAR_LIMIT: Int = 2_000
+
+        /** TCP connect timeout, in milliseconds, for the Wikipedia API request. */
+        private const val HTTP_CONNECT_TIMEOUT_MS: Int = 5_000
+
+        /** TCP read timeout, in milliseconds, for the Wikipedia API request. */
+        private const val HTTP_READ_TIMEOUT_MS: Int = 5_000
     }
 
     /**
@@ -43,7 +55,7 @@ class SearchTool @Inject constructor(private val llmEngine: LlmInferenceEngine) 
     )
 
     private fun truncateCleanly(extract: String): String {
-        val substring = extract.substring(0, 2000)
+        val substring = extract.substring(0, EXTRACT_CHAR_LIMIT)
         val lastPunctuation = maxOf(
             substring.lastIndexOf('.'),
             maxOf(substring.lastIndexOf('!'), substring.lastIndexOf('?')),
@@ -77,8 +89,8 @@ class SearchTool @Inject constructor(private val llmEngine: LlmInferenceEngine) 
             val url = URL(urlString)
             val connection = url.openConnection() as HttpURLConnection
             connection.requestMethod = "GET"
-            connection.connectTimeout = 5000
-            connection.readTimeout = 5000
+            connection.connectTimeout = HTTP_CONNECT_TIMEOUT_MS
+            connection.readTimeout = HTTP_READ_TIMEOUT_MS
 
             if (connection.responseCode == HttpURLConnection.HTTP_OK) {
                 val response = connection.inputStream.bufferedReader().use { it.readText() }
@@ -103,10 +115,10 @@ class SearchTool @Inject constructor(private val llmEngine: LlmInferenceEngine) 
                 val extract = page.optString("extract", "No summary available.")
 
                 // If the extract is too long, try to summarize it with LLM
-                if (extract.length > 2000) {
+                if (extract.length > EXTRACT_CHAR_LIMIT) {
                     if (llmEngine.isInitialized) {
                         try {
-                            val prompt = "Summarize the following text within 2000 characters retaining the main factual information:\n\n$extract\n\nSUMMARY: "
+                            val prompt = "Summarize the following text within $EXTRACT_CHAR_LIMIT characters retaining the main factual information:\n\n$extract\n\nSUMMARY: "
                             val responseStream = llmEngine.generateResponseStream(prompt)
                             val summary = java.lang.StringBuilder()
                             responseStream.collect { token ->
