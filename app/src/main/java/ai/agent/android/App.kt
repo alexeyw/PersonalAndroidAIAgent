@@ -1,9 +1,18 @@
 package ai.agent.android
 
+import ai.agent.android.data.logging.CrashlyticsTimberTree
+import ai.agent.android.domain.repositories.CrashReportingRepository
+import ai.agent.android.domain.repositories.SettingsRepository
 import android.app.Application
 import androidx.hilt.work.HiltWorkerFactory
 import androidx.work.Configuration
 import dagger.hilt.android.HiltAndroidApp
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.onEach
 import timber.log.Timber
 import javax.inject.Inject
 
@@ -20,6 +29,12 @@ import javax.inject.Inject
  * It acts as the primary entry point for setting up global application state,
  * integrating Dagger-Hilt for dependency injection across the presentation,
  * domain, and data layers of our Clean Architecture.
+ *
+ * Also owns the Crashlytics opt-in lifecycle: in release builds the app observes
+ * [SettingsRepository.crashReportingEnabled] and plants / uproots
+ * [CrashlyticsTimberTree] in response to the user's choice. Debug builds plant
+ * only [Timber.DebugTree] and never touch Crashlytics, so local development
+ * never accidentally uploads logs.
  */
 @HiltAndroidApp
 class App :
@@ -28,6 +43,16 @@ class App :
 
     @Inject
     lateinit var workerFactory: HiltWorkerFactory
+
+    @Inject
+    lateinit var settingsRepository: SettingsRepository
+
+    @Inject
+    lateinit var crashReportingRepository: CrashReportingRepository
+
+    private val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+
+    private var crashlyticsTree: CrashlyticsTimberTree? = null
 
     override val workManagerConfiguration: Configuration
         get() = Configuration.Builder()
@@ -38,6 +63,36 @@ class App :
         super.onCreate()
         if (BuildConfig.DEBUG) {
             Timber.plant(Timber.DebugTree())
+        } else {
+            observeCrashReportingOptIn()
         }
+    }
+
+    /**
+     * Subscribes to the persisted opt-in flag and keeps the
+     * [CrashlyticsTimberTree] planted exactly when the flag is `true`. Toggling
+     * both the Timber sink and the underlying Firebase collection flag from a
+     * single observer keeps the user-visible state consistent across process
+     * restarts.
+     */
+    private fun observeCrashReportingOptIn() {
+        settingsRepository.crashReportingEnabled
+            .distinctUntilChanged()
+            .onEach { enabled ->
+                crashReportingRepository.setEnabled(enabled)
+                if (enabled) {
+                    if (crashlyticsTree == null) {
+                        val tree = CrashlyticsTimberTree(crashReportingRepository, applicationScope)
+                        crashlyticsTree = tree
+                        Timber.plant(tree)
+                    }
+                } else {
+                    crashlyticsTree?.let { tree ->
+                        Timber.uproot(tree)
+                        crashlyticsTree = null
+                    }
+                }
+            }
+            .launchIn(applicationScope)
     }
 }

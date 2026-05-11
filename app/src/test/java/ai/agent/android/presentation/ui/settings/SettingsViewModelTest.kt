@@ -1,6 +1,7 @@
 package ai.agent.android.presentation.ui.settings
 
 import ai.agent.android.domain.repositories.ApiKeyRepository
+import ai.agent.android.domain.repositories.CrashReportingRepository
 import ai.agent.android.domain.repositories.LocalModelRepository
 import ai.agent.android.domain.repositories.SettingsRepository
 import ai.agent.android.domain.usecases.LoadModelUseCase
@@ -27,6 +28,7 @@ class SettingsViewModelTest {
     private val apiKeyRepository = mockk<ApiKeyRepository>(relaxed = true)
     private val loadModelUseCase = mockk<LoadModelUseCase>(relaxed = true)
     private val localModelRepository = mockk<LocalModelRepository>(relaxed = true)
+    private val crashReportingRepository = mockk<CrashReportingRepository>(relaxed = true)
     private lateinit var viewModel: SettingsViewModel
     private val testDispatcher = StandardTestDispatcher()
 
@@ -43,6 +45,7 @@ class SettingsViewModelTest {
         every { settingsRepository.requiresUserConfirmation } returns MutableStateFlow(true)
         every { settingsRepository.localModelBackend } returns MutableStateFlow("CPU")
         every { settingsRepository.pipelineMaxSteps } returns MutableStateFlow(15)
+        every { settingsRepository.crashReportingEnabled } returns MutableStateFlow(false)
 
         // Setup default flows for API keys repository
         every { apiKeyRepository.getOpenAIKey() } returns MutableStateFlow("sk-open")
@@ -57,7 +60,13 @@ class SettingsViewModelTest {
         every { apiKeyRepository.getOllamaModelName() } returns MutableStateFlow("")
         every { apiKeyRepository.getOllamaContextWindowSize() } returns MutableStateFlow(4096)
 
-        viewModel = SettingsViewModel(settingsRepository, apiKeyRepository, loadModelUseCase, localModelRepository)
+        viewModel = SettingsViewModel(
+            settingsRepository,
+            apiKeyRepository,
+            loadModelUseCase,
+            localModelRepository,
+            crashReportingRepository,
+        )
     }
 
     @After
@@ -176,9 +185,45 @@ class SettingsViewModelTest {
     }
 
     @Test
+    fun `updateCrashReportingEnabled writes settings flag and toggles crash repository on`() = runTest {
+        viewModel.updateCrashReportingEnabled(true)
+        advanceUntilIdle()
+        coVerify { settingsRepository.setCrashReportingEnabled(true) }
+        coVerify { crashReportingRepository.setEnabled(true) }
+    }
+
+    @Test
+    fun `updateCrashReportingEnabled writes settings flag and toggles crash repository off`() = runTest {
+        viewModel.updateCrashReportingEnabled(false)
+        advanceUntilIdle()
+        coVerify { settingsRepository.setCrashReportingEnabled(false) }
+        coVerify { crashReportingRepository.setEnabled(false) }
+    }
+
+    @Test
+    fun `crashReportingEnabled is populated from repository in initial state`() = runTest {
+        every { settingsRepository.crashReportingEnabled } returns MutableStateFlow(true)
+        val vm = SettingsViewModel(
+            settingsRepository,
+            apiKeyRepository,
+            loadModelUseCase,
+            localModelRepository,
+            crashReportingRepository,
+        )
+        advanceUntilIdle()
+        assertEquals(true, vm.uiState.value.crashReportingEnabled)
+    }
+
+    @Test
     fun `pipelineMaxSteps is populated from repository in initial state`() = runTest {
         every { settingsRepository.pipelineMaxSteps } returns MutableStateFlow(42)
-        val vm = SettingsViewModel(settingsRepository, apiKeyRepository, loadModelUseCase, localModelRepository)
+        val vm = SettingsViewModel(
+            settingsRepository,
+            apiKeyRepository,
+            loadModelUseCase,
+            localModelRepository,
+            crashReportingRepository,
+        )
         advanceUntilIdle()
         assertEquals(42, vm.uiState.value.pipelineMaxSteps)
     }

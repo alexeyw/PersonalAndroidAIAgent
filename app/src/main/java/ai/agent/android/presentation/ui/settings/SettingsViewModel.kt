@@ -4,6 +4,7 @@ import ai.agent.android.R
 import ai.agent.android.domain.constants.SettingsDefaults
 import ai.agent.android.domain.models.Result
 import ai.agent.android.domain.repositories.ApiKeyRepository
+import ai.agent.android.domain.repositories.CrashReportingRepository
 import ai.agent.android.domain.repositories.LocalModelRepository
 import ai.agent.android.domain.repositories.SettingsRepository
 import ai.agent.android.domain.usecases.LoadModelUseCase
@@ -33,6 +34,7 @@ class SettingsViewModel @Inject constructor(
     private val apiKeyRepository: ApiKeyRepository,
     private val loadModelUseCase: LoadModelUseCase,
     private val localModelRepository: LocalModelRepository,
+    private val crashReportingRepository: CrashReportingRepository,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(SettingsUiState())
@@ -117,6 +119,25 @@ class SettingsViewModel @Inject constructor(
         settingsRepository.pipelineMaxSteps.onEach { value ->
             _uiState.update { it.copy(pipelineMaxSteps = value) }
         }.launchIn(viewModelScope)
+
+        settingsRepository.crashReportingEnabled.onEach { value ->
+            _uiState.update { it.copy(crashReportingEnabled = value) }
+        }.launchIn(viewModelScope)
+    }
+
+    /**
+     * Updates the crash-reporting opt-in flag. Also pushes the new value to
+     * [CrashReportingRepository] so Firebase collection toggles immediately
+     * rather than waiting for the next process restart.
+     *
+     * @param enabled `true` after the user accepted the consent dialog,
+     *                `false` to disable reporting and revert to no-op mode.
+     */
+    fun updateCrashReportingEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsRepository.setCrashReportingEnabled(enabled)
+            crashReportingRepository.setEnabled(enabled)
+        }
     }
 
     fun updateLocalModelBackend(backend: String) {

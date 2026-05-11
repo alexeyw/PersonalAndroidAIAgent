@@ -4,6 +4,8 @@ This file maps the contents of the main application package.
 
 - `App.kt` - Main Android Application class.
 - `data/` - Data layer encompassing local, remote, and repository implementations.
+  - `logging/` - Application-level Timber sinks.
+    - `CrashlyticsTimberTree.kt` - Timber tree forwarding `Log.WARN` / `Log.ERROR` records to Firebase Crashlytics via `CrashReportingRepository`. Planted only after the user opts in (release builds).
   - `engine/` - Core LLM and inference engines.
     - `KoogClientFactory.kt` - Factory for Koog clients; data-layer impl of `domain/engine/CloudLlmClientFactory`.
     - `KoogCloudLlmModelResolver.kt` - Data-layer impl of `domain/engine/CloudLlmModelResolver`; owns per-provider default model ids and Ollama context-window lookup.
@@ -55,6 +57,7 @@ This file maps the contents of the main application package.
   - `repositories/` - Repository implementations.
     - `ChatRepositoryImpl.kt` - Chat repository implementation.
     - `ClarificationRepositoryImpl.kt` - In-memory implementation of `ClarificationRepository` that suspends pipeline coroutines until the user answers (or the request times out).
+    - `FirebaseCrashReportingRepositoryImpl.kt` - Firebase-backed `CrashReportingRepository`. Every method is gated on `SettingsRepository.crashReportingEnabled` and short-circuits to no-op when the user has not opted in.
     - `LocalModelRepositoryImpl.kt` - Local model repository implementation.
     - `LocalPipelineRepositoryImpl.kt` - Local pipeline repository implementation.
     - `MemoryRepositoryImpl.kt` - Memory repository implementation.
@@ -145,6 +148,7 @@ This file maps the contents of the main application package.
     - `ChatRepository.kt` - Chat repository interface.
     - `LocalToolExecutor.kt` - Strategy interface for executing a single locally-registered agent tool (multibound by name in `LocalToolsModule`).
     - `ClarificationRepository.kt` - Bridges the agent (suspending until the user answers) and the UI (publishing the pending question, forwarding the reply).
+    - `CrashReportingRepository.kt` - Domain gateway for anonymous crash reporting (opt-in). All methods are no-op until `SettingsRepository.crashReportingEnabled` becomes `true`.
     - `LocalModelRepository.kt` - Local model repository interface.
     - `MemoryRepository.kt` - Memory repository interface.
     - `MetricsRepository.kt` - Metrics repository interface.

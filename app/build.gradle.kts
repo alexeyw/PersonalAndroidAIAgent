@@ -8,6 +8,8 @@ plugins {
     alias(libs.plugins.detekt)
     alias(libs.plugins.ktlint)
     alias(libs.plugins.kover)
+    alias(libs.plugins.google.services)
+    alias(libs.plugins.firebase.crashlytics)
 }
 
 android {
@@ -204,6 +206,16 @@ kover {
                     "ai.agent.android.data.tools.local.SearchTool*",
                     "ai.agent.android.data.tools.local.DelegateTaskTool*",
                     "ai.agent.android.data.tools.local.executors.*",
+                    // Firebase Crashlytics glue: the repository impl and the
+                    // Timber tree thinly wrap `FirebaseCrashlytics` /
+                    // `FirebaseAnalytics` singletons which need the Android
+                    // runtime and Google Play services to initialise.
+                    // Unit-test coverage for the no-op-when-disabled and
+                    // dispatch branches lives under
+                    // `FirebaseCrashReportingRepositoryImplTest` /
+                    // `CrashlyticsTimberTreeTest`, but the production
+                    // `getInstance()` paths are not exercised on the JVM.
+                    "ai.agent.android.data.logging.CrashlyticsTimberTree*",
                 )
                 // Belt-and-braces: also skip any @Preview-annotated function that
                 // happens to live outside a *Preview.kt file.
@@ -357,6 +369,14 @@ dependencies {
 
     // JSON Serialization
     implementation(libs.gson)
+
+    // Firebase — Crashlytics + Analytics (Analytics is required by Crashlytics).
+    // The BoM (Bill of Materials) pins inter-library versions; individual
+    // modules are intentionally un-versioned. Starting from Firebase BoM 34.0
+    // the `-ktx` artifacts were folded into the base modules and removed.
+    implementation(platform(libs.firebase.bom))
+    implementation(libs.firebase.crashlytics)
+    implementation(libs.firebase.analytics)
 
     testImplementation(libs.json)
     testImplementation(libs.junit)

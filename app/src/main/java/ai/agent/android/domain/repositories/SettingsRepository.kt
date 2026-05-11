@@ -220,6 +220,26 @@ interface SettingsRepository {
     suspend fun setDefaultPipelineId(pipelineId: String?)
 
     /**
+     * A [Flow] indicating whether the user has opted in to anonymous crash
+     * reporting via Firebase Crashlytics. Defaults to `false` — the project's
+     * on-device privacy positioning forbids any automatic data egress.
+     *
+     * When `false`, the implementation must short-circuit every
+     * `CrashReportingRepository` call to a no-op so no payload ever leaves
+     * the device. When `true`, Firebase Crashlytics + Analytics collection
+     * is enabled and exceptions / custom keys are forwarded.
+     */
+    val crashReportingEnabled: Flow<Boolean>
+
+    /**
+     * Updates the user's opt-in for anonymous crash reporting.
+     *
+     * @param enabled `true` to enable Crashlytics + Analytics collection,
+     *                `false` to disable and force all reporting calls into a no-op.
+     */
+    suspend fun setCrashReportingEnabled(enabled: Boolean)
+
+    /**
      * A [Flow] representing the default number of recent memory chunks rendered
      * by the `$MEMORY_SUMMARY` prompt variable. Defaults to 5.
      */

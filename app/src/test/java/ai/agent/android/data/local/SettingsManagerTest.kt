@@ -32,6 +32,7 @@ class SettingsManagerTest {
         "max_memory_chunks_for_search",
     )
     private val pipelineMaxStepsKey = androidx.datastore.preferences.core.intPreferencesKey("pipeline_max_steps")
+    private val crashReportingEnabledKey = booleanPreferencesKey("crash_reporting_enabled")
 
     @Test
     fun `isFirstLaunch returns true by default`() = runTest {
@@ -139,6 +140,37 @@ class SettingsManagerTest {
         val settingsManager = SettingsManager(dataStore)
         val result = settingsManager.pipelineMaxSteps.first()
         assertEquals(30, result)
+    }
+
+    @Test
+    fun `crashReportingEnabled returns false by default`() = runTest {
+        val prefs = mockk<Preferences>()
+        every { prefs[crashReportingEnabledKey] } returns null
+        every { dataStore.data } returns flowOf(prefs)
+
+        val settingsManager = SettingsManager(dataStore)
+        val result = settingsManager.crashReportingEnabled.first()
+        assertEquals(false, result)
+    }
+
+    @Test
+    fun `crashReportingEnabled returns stored true value`() = runTest {
+        val prefs = mockk<Preferences>()
+        every { prefs[crashReportingEnabledKey] } returns true
+        every { dataStore.data } returns flowOf(prefs)
+
+        val settingsManager = SettingsManager(dataStore)
+        val result = settingsManager.crashReportingEnabled.first()
+        assertTrue(result)
+    }
+
+    @Test
+    fun `crashReportingEnabled handles IOException and falls back to false`() = runTest {
+        every { dataStore.data } returns flow { throw IOException("Test") }
+
+        val settingsManager = SettingsManager(dataStore)
+        val result = settingsManager.crashReportingEnabled.first()
+        assertEquals(false, result)
     }
 
     @Test

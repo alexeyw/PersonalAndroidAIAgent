@@ -32,6 +32,8 @@ import ai.agent.android.domain.prompt.PromptVariableProvider
 import ai.agent.android.domain.repositories.ApiKeyRepository
 import ai.agent.android.domain.repositories.ChatRepository
 import ai.agent.android.domain.repositories.ClarificationRepository
+import ai.agent.android.domain.repositories.CrashReportingRepository
+import ai.agent.android.domain.repositories.LocalModelRepository
 import ai.agent.android.domain.repositories.MetricsRepository
 import ai.agent.android.domain.repositories.SettingsRepository
 import ai.agent.android.domain.repositories.ToolRepository
@@ -75,6 +77,8 @@ class GraphExecutionEngineTest {
     private lateinit var evaluateIfConditionUseCase: EvaluateIfConditionUseCase
     private lateinit var loadModelUseCase: LoadModelUseCase
     private lateinit var clarificationRepository: ClarificationRepository
+    private lateinit var crashReportingRepository: CrashReportingRepository
+    private lateinit var localModelRepository: LocalModelRepository
 
     private lateinit var engine: GraphExecutionEngine
     private lateinit var promptTemplateEngine: PromptTemplateEngine
@@ -97,6 +101,8 @@ class GraphExecutionEngineTest {
         cloudLlmModelResolver = mockk()
         evaluateIfConditionUseCase = mockk()
         loadModelUseCase = mockk()
+        crashReportingRepository = mockk(relaxed = true)
+        localModelRepository = mockk(relaxed = true)
         clarificationRepository = mockk()
         // The resolver is exercised whenever a CLOUD node fires; default to a sensible
         // Koog model so each individual test does not have to wire it up.
@@ -181,6 +187,8 @@ class GraphExecutionEngineTest {
             promptVariableProviders,
             NodeContextBuilder(),
             retrieveRelevantMemoryUseCase,
+            crashReportingRepository,
+            localModelRepository,
         )
 
         coEvery { getContextWindowUseCase(sessionId) } returns ""
@@ -193,6 +201,24 @@ class GraphExecutionEngineTest {
         coEvery { toolRepository.getAvailableTools() } returns emptyList()
 
         coEvery { loadModelUseCase(any()) } returns Result.Success(Unit)
+    }
+
+    @Test
+    fun `sets active_pipeline_id and active_model crash custom keys at start`() = runTest {
+        val inputNode = NodeModel("input_1", NodeType.INPUT, 0f, 0f)
+        val outputNode = NodeModel("output_1", NodeType.OUTPUT, 0f, 0f, systemPrompt = null)
+        val graph = PipelineGraph(
+            id = "graph-xyz",
+            name = "Simple",
+            nodes = listOf(inputNode, outputNode),
+            connections = listOf(ConnectionModel("c1", "input_1", "output_1")),
+        )
+        coEvery { localModelRepository.getActiveModel() } returns null
+
+        engine(sessionId, "Hi", graph).toList()
+
+        coVerify { crashReportingRepository.setCustomKey("active_pipeline_id", "graph-xyz") }
+        coVerify { crashReportingRepository.setCustomKey("active_model", "none") }
     }
 
     @Test
@@ -388,6 +414,8 @@ class GraphExecutionEngineTest {
             PromptTemplateEngine(),
             emptySet(),
             NodeContextBuilder(),
+            mockk(relaxed = true),
+            mockk(relaxed = true),
             mockk(relaxed = true),
         )
 
@@ -818,6 +846,8 @@ class GraphExecutionEngineTest {
             setOf(dateProvider),
             NodeContextBuilder(),
             retrieveRelevantMemoryUseCase,
+            crashReportingRepository,
+            localModelRepository,
         )
 
         val inputNode = NodeModel("input", NodeType.INPUT, 0f, 0f)
@@ -988,6 +1018,8 @@ class GraphExecutionEngineTest {
                 emptySet(),
                 NodeContextBuilder(),
                 retrieveRelevantMemoryUseCase,
+                crashReportingRepository,
+                localModelRepository,
             )
 
             // Generate a question with two options; the first one is the default the

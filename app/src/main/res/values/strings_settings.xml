@@ -25,4 +25,11 @@
     <string name="settings_provider_api_key_label">%1$s API Key</string>
     <string name="settings_provider_model_label">%1$s Model</string>
     <string name="settings_backend_test_success">Success! Backend initialized correctly.</string>
+    <string name="settings_section_privacy">Privacy</string>
+    <string name="settings_crash_reporting_label">Send anonymous crash reports</string>
+    <string name="settings_crash_reporting_hint">Help improve stability by sharing anonymous crash data with Firebase Crashlytics.</string>
+    <string name="settings_crash_reporting_dialog_title">Enable crash reporting?</string>
+    <string name="settings_crash_reporting_dialog_body">When enabled, this app uploads anonymous crash and error data to Firebase Crashlytics. Reports contain: stack traces of fatal and non-fatal exceptions, device model and Android version, app version, the active pipeline id, and the active local model name. No chat messages, prompts, memory, API keys, or other personal content is uploaded. You can turn this off at any time.</string>
+    <string name="settings_crash_reporting_dialog_confirm">Enable</string>
+    <string name="settings_crash_reporting_dialog_dismiss">Cancel</string>
 </resources>

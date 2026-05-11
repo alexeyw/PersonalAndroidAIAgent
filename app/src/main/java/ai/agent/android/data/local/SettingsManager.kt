@@ -45,6 +45,7 @@ class SettingsManager @Inject constructor(private val dataStore: DataStore<Prefe
         val PIPELINE_MAX_STEPS = intPreferencesKey("pipeline_max_steps")
         val MEMORY_SUMMARY_DEFAULT_LIMIT = intPreferencesKey("memory_summary_default_limit")
         val DEFAULT_PIPELINE_ID = stringPreferencesKey("default_pipeline_id")
+        val CRASH_REPORTING_ENABLED = booleanPreferencesKey("crash_reporting_enabled")
     }
 
     override val isFirstLaunch: Flow<Boolean> = dataStore.data
@@ -391,6 +392,25 @@ class SettingsManager @Inject constructor(private val dataStore: DataStore<Prefe
                 SettingsDefaults.PIPELINE_MAX_STEPS_MIN,
                 SettingsDefaults.PIPELINE_MAX_STEPS_MAX,
             )
+        }
+    }
+
+    override val crashReportingEnabled: Flow<Boolean> = dataStore.data
+        .catch { exception ->
+            if (exception is IOException) {
+                Timber.e(exception, "Error reading preferences")
+                emit(emptyPreferences())
+            } else {
+                throw exception
+            }
+        }
+        .map { preferences ->
+            preferences[PreferencesKeys.CRASH_REPORTING_ENABLED] ?: false
+        }
+
+    override suspend fun setCrashReportingEnabled(enabled: Boolean) {
+        dataStore.edit { preferences ->
+            preferences[PreferencesKeys.CRASH_REPORTING_ENABLED] = enabled
         }
     }
 
