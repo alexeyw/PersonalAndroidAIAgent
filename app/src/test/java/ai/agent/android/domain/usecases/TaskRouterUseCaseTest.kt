@@ -1,5 +1,6 @@
 package ai.agent.android.domain.usecases
 
+import ai.agent.android.domain.models.CloudProvider
 import ai.agent.android.domain.models.NetworkState
 import ai.agent.android.domain.models.RoutingDecision
 import ai.agent.android.domain.repositories.ApiKeyRepository
@@ -69,7 +70,7 @@ class TaskRouterUseCaseTest {
 
         val result = useCase("Refactor my code")
         assertTrue(result is RoutingDecision.CloudLLM)
-        assertEquals("openai", (result as RoutingDecision.CloudLLM).provider)
+        assertEquals(CloudProvider.OPENAI, (result as RoutingDecision.CloudLLM).provider)
     }
 
     @Test
@@ -79,7 +80,7 @@ class TaskRouterUseCaseTest {
 
         val result = useCase("Analyze this architecture")
         assertTrue(result is RoutingDecision.CloudLLM)
-        assertEquals("anthropic", (result as RoutingDecision.CloudLLM).provider)
+        assertEquals(CloudProvider.ANTHROPIC, (result as RoutingDecision.CloudLLM).provider)
     }
 
     @Test

@@ -1,6 +1,7 @@
 package ai.agent.android.data.engine
 
 import ai.agent.android.domain.engine.CloudLlmModelResolver
+import ai.agent.android.domain.models.CloudProvider
 import ai.agent.android.domain.repositories.ApiKeyRepository
 import ai.koog.prompt.executor.clients.anthropic.AnthropicModels
 import ai.koog.prompt.executor.clients.deepseek.DeepSeekModels
@@ -26,32 +27,30 @@ class KoogCloudLlmModelResolver @Inject constructor(private val apiKeyRepository
     CloudLlmModelResolver {
 
     /**
-     * Resolves the Koog [LLModel] to use for a given provider.
+     * Resolves the Koog [LLModel] to use for a given provider. Exhaustive on
+     * [CloudProvider] so the compiler flags any unhandled future provider.
      *
-     * @param provider Lowercase provider key.
+     * @param provider The typed [CloudProvider] to resolve a model object for.
      * @return The Koog [LLModel] cast to [Any] for the domain boundary.
      */
-    override suspend fun resolveModel(provider: String): Any = when (provider.lowercase()) {
-        "openai" -> KoogModelMapper.getOpenAIModel(
+    override suspend fun resolveModel(provider: CloudProvider): Any = when (provider) {
+        CloudProvider.OPENAI -> KoogModelMapper.getOpenAIModel(
             apiKeyRepository.getOpenAIModel().first() ?: OpenAIModels.Chat.GPT5_4.id,
         )
-        "anthropic" -> KoogModelMapper.getAnthropicModel(
+        CloudProvider.ANTHROPIC -> KoogModelMapper.getAnthropicModel(
             apiKeyRepository.getAnthropicModel().first() ?: AnthropicModels.Sonnet_4_5.id,
         )
-        "google", "gemini" -> KoogModelMapper.getGoogleModel(
+        CloudProvider.GOOGLE -> KoogModelMapper.getGoogleModel(
             apiKeyRepository.getGoogleModel().first() ?: GoogleModels.Gemini3_Flash_Preview.id,
         )
-        "deepseek" -> KoogModelMapper.getDeepSeekModel(
+        CloudProvider.DEEPSEEK -> KoogModelMapper.getDeepSeekModel(
             apiKeyRepository.getDeepSeekModel().first() ?: DeepSeekModels.DeepSeekChat.id,
         )
-        "ollama" -> LLModel(
+        CloudProvider.OLLAMA -> LLModel(
             provider = LLMProvider.Ollama,
             id = apiKeyRepository.getOllamaModelName().first() ?: "llama3",
             capabilities = listOf(LLMCapability.Completion),
             contextLength = apiKeyRepository.getOllamaContextWindowSize().first().toLong(),
-        )
-        else -> KoogModelMapper.getGoogleModel(
-            apiKeyRepository.getGoogleModel().first() ?: GoogleModels.Gemini3_Flash_Preview.id,
         )
     }
 }

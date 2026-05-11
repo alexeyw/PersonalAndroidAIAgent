@@ -115,12 +115,4 @@ object KoogModelMapper {
         DeepSeekModels.DeepSeekReasoner.id -> DeepSeekModels.DeepSeekReasoner
         else -> DeepSeekModels.DeepSeekChat
     }
-
-    fun getModelForProvider(provider: String): LLModel = when (provider.lowercase()) {
-        "openai" -> OpenAIModels.Chat.GPT4oMini
-        "anthropic" -> AnthropicModels.Haiku_4_5
-        "google" -> GoogleModels.Gemini2_5Flash
-        "deepseek" -> DeepSeekModels.DeepSeekChat
-        else -> GoogleModels.Gemini2_5Flash
-    }
 }

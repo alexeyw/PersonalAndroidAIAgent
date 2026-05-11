@@ -2,6 +2,7 @@ package ai.agent.android.data.engine
 
 import ai.agent.android.domain.engine.LlmInferenceEngine
 import ai.agent.android.domain.models.AppError
+import ai.agent.android.domain.models.LocalBackend
 import ai.agent.android.domain.models.Result
 import ai.agent.android.domain.repositories.SettingsRepository
 import android.content.ComponentCallbacks2
@@ -86,10 +87,12 @@ class LiteRTLlmEngine @Inject constructor(
             val maxTokens = settingsRepository.maxContextLength.first()
             val backendStr = settingsRepository.localModelBackend.first()
 
-            val backend = when (backendStr) {
-                "GPU" -> Backend.GPU()
-                "NPU" -> Backend.NPU()
-                else -> Backend.CPU()
+            // Unknown / corrupted keys fall back to CPU, matching the prior `else` branch
+            // and the default returned by SettingsManager.
+            val backend = when (LocalBackend.fromKey(backendStr) ?: LocalBackend.CPU) {
+                LocalBackend.GPU -> Backend.GPU()
+                LocalBackend.NPU -> Backend.NPU()
+                LocalBackend.CPU -> Backend.CPU()
             }
 
             // Initialize Engine Configuration

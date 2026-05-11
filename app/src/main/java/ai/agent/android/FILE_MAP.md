@@ -85,6 +85,7 @@ This file maps the contents of the main application package.
 - `domain/` - Domain layer containing core business logic and Use Cases.
   - `constants/` - Domain-level constants.
     - `DefaultPrompts.kt` - Default system prompts.
+    - `NotificationChannels.kt` - Canonical ids of every Android `NotificationChannel` (foreground service status, approval prompts).
   - `engine/` - Engine interfaces and abstractions.
     - `CloudLlmClientFactory.kt` - Domain interface for constructing cloud LLM clients (data-layer impl: `KoogClientFactory`).
     - `CloudLlmModelResolver.kt` - Domain interface for resolving cloud-LLM model objects (data-layer impl: `KoogCloudLlmModelResolver`).
@@ -111,10 +112,12 @@ This file maps the contents of the main application package.
     - `ChatMessage.kt` - Chat message model.
     - `ChatSession.kt` - Chat session model.
     - `ClarificationRequest.kt` - Domain model describing a clarification question issued by the agent (id, question, options, timeoutMs).
+    - `CloudProvider.kt` - Typed enum identifying the cloud LLM providers the agent can dispatch to (`openai`, `anthropic`, `google`, `deepseek`, `ollama`); owns `fromId` parsing with legacy `"gemini"` alias and the `AUTO_KEY` UI sentinel.
     - `ConnectionModel.kt` - Connection model.
     - `ConsoleEvent.kt` - Domain model of a single agent-console entry (`timestamp`, `type`, `message`) with `ConsoleEventType` sealed interface (`NodeExecution`, `ToolCall`, `MemoryAccess`, `SystemMessage`, `Error`).
     - `InitProgress.kt` - Domain model of cold-start progress (`stage`, `message`, `completedSteps`, `totalSteps`) plus `InitStage` sealed interface (Initializing, LoadingModel, LoadingPipelines, LoadingChats, LoadingMemory, Done, Failed) consumed by the splash screen.
     - `DownloadState.kt` - Download state model.
+    - `LocalBackend.kt` - Typed enum for the on-device LiteRT execution backend (CPU/GPU/NPU); owns the persisted wire keys via `LocalBackend.key`.
     - `LocalModel.kt` - Domain model for local models.
     - `MemoryChunk.kt` - Memory chunk model.
     - `MemorySummary.kt` - Lightweight memory projection (id/text/timestamp) used by `$MEMORY_SUMMARY`.
@@ -178,7 +181,8 @@ This file maps the contents of the main application package.
   - `notifications/` - Notification handling.
     - `ApprovalNotificationManager.kt` - Manager for approval notifications.
   - `receivers/` - Broadcast receivers.
-    - `AgentApprovalReceiver.kt` - Receiver for agent approvals.
+    - `AgentApprovalReceiver.kt` - Receiver for agent approvals; dispatches via the typed `ApprovalAction` enum.
+    - `ApprovalAction.kt` - Typed enum pairing the Approve/Deny notification actions with their wire `Intent.action` strings; owns `fromAction` parsing.
   - `state/` - State management components.
     - `ActiveSessionTracker.kt` - Tracker for active chat session.
   - `theme/` - Compose theme definitions.
@@ -187,6 +191,8 @@ This file maps the contents of the main application package.
     - `Type.kt` - Typography settings.
   - `ui/` - UI screens and ViewModels.
     - `MainActivity.kt` - Main activity.
+    - `navigation/` - Navigation routing constants.
+      - `NavRoutes.kt` - Canonical `const val` registry of every Jetpack Navigation Compose route string.
     - `chat/` - Chat screen components.
       - `AgentThoughtIndicator.kt` - Indicator for agent thinking.
       - `ChatExportPayload.kt` - Payload carrying exported chat JSON to the share sheet.

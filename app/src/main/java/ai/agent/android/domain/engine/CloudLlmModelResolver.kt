@@ -1,5 +1,7 @@
 package ai.agent.android.domain.engine
 
+import ai.agent.android.domain.models.CloudProvider
+
 /**
  * Domain-level abstraction over cloud-LLM model selection.
  *
@@ -17,9 +19,8 @@ interface CloudLlmModelResolver {
      * its own settings source (e.g. `ApiKeyRepository`) and substituting a sensible
      * provider-specific default when nothing is configured.
      *
-     * @param provider Lowercase provider key — `"openai"`, `"anthropic"`, `"google"`,
-     *                 `"deepseek"`, `"ollama"`.
+     * @param provider The typed [CloudProvider] to resolve a model object for.
      * @return The SDK-specific model object (Koog `LLModel`), as [Any] for layering.
      */
-    suspend fun resolveModel(provider: String): Any
+    suspend fun resolveModel(provider: CloudProvider): Any
 }

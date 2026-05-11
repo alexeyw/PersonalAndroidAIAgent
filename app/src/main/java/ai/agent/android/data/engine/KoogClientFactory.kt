@@ -1,6 +1,7 @@
 package ai.agent.android.data.engine
 
 import ai.agent.android.domain.engine.CloudLlmClientFactory
+import ai.agent.android.domain.models.CloudProvider
 import ai.agent.android.domain.repositories.ApiKeyRepository
 import ai.koog.prompt.executor.clients.LLMClient
 import ai.koog.prompt.executor.clients.anthropic.AnthropicLLMClient
@@ -25,18 +26,18 @@ import javax.inject.Singleton
 class KoogClientFactory @Inject constructor(private val apiKeyRepository: ApiKeyRepository) : CloudLlmClientFactory {
 
     /**
-     * Provider-keyed dispatch used by domain-side consumers.
+     * Provider-keyed dispatch used by domain-side consumers. Exhaustive on
+     * [CloudProvider]; adding a new provider value forces an update here.
      *
-     * @param provider Lowercase provider key (`openai`, `anthropic`, `google`, `deepseek`, `ollama`).
-     * @return The LLMClient on success or `null` if credentials are missing or the key is unknown.
+     * @param provider The typed [CloudProvider] to construct a client for.
+     * @return The LLMClient on success or `null` if credentials are missing.
      */
-    override suspend fun createClient(provider: String): Any? = when (provider.lowercase()) {
-        "openai" -> createOpenAIExecutor()
-        "anthropic" -> createAnthropicExecutor()
-        "google", "gemini" -> createGoogleExecutor()
-        "deepseek" -> createDeepSeekExecutor()
-        "ollama" -> createOllamaExecutor()
-        else -> null
+    override suspend fun createClient(provider: CloudProvider): Any? = when (provider) {
+        CloudProvider.OPENAI -> createOpenAIExecutor()
+        CloudProvider.ANTHROPIC -> createAnthropicExecutor()
+        CloudProvider.GOOGLE -> createGoogleExecutor()
+        CloudProvider.DEEPSEEK -> createDeepSeekExecutor()
+        CloudProvider.OLLAMA -> createOllamaExecutor()
     }
 
     /**

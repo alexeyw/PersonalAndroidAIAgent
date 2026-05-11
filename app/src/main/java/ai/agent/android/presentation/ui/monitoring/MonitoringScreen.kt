@@ -200,9 +200,9 @@ fun MetricsCard(metrics: ai.agent.android.domain.models.AgentMetrics) {
                 metrics.timePerNodeType
                     .toList()
                     .sortedByDescending { it.second }
-                    .forEach { (nodeName, durationMs) ->
+                    .forEach { (nodeType, durationMs) ->
                         Text(
-                            text = stringResource(R.string.monitoring_node_row, nodeName, durationMs),
+                            text = stringResource(R.string.monitoring_node_row, nodeType.name, durationMs),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )

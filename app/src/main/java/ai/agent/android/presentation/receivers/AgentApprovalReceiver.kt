@@ -21,13 +21,11 @@ class AgentApprovalReceiver : BroadcastReceiver() {
     @Inject
     lateinit var orchestratorUseCase: AgentOrchestratorUseCase
 
-    companion object {
-        const val ACTION_APPROVE = "ai.agent.android.ACTION_APPROVE"
-        const val ACTION_DENY = "ai.agent.android.ACTION_DENY"
-    }
-
     /**
      * Called when the BroadcastReceiver is receiving an Intent broadcast.
+     *
+     * Decodes [intent]'s action through [ApprovalAction.fromAction] so the dispatch is
+     * exhaustive on the enum; unknown actions are silently ignored.
      *
      * @param context The Context in which the receiver is running.
      * @param intent The Intent being received.
@@ -38,9 +36,10 @@ class AgentApprovalReceiver : BroadcastReceiver() {
 
         notificationManager.cancel(ApprovalNotificationManager.NOTIFICATION_ID + sessionId.hashCode() % 1000)
 
-        when (intent.action) {
-            ACTION_APPROVE -> orchestratorUseCase.resumeWithApproval(sessionId, true)
-            ACTION_DENY -> orchestratorUseCase.resumeWithApproval(sessionId, false)
+        when (ApprovalAction.fromAction(intent.action)) {
+            ApprovalAction.APPROVE -> orchestratorUseCase.resumeWithApproval(sessionId, true)
+            ApprovalAction.DENY -> orchestratorUseCase.resumeWithApproval(sessionId, false)
+            null -> Unit
         }
     }
 }

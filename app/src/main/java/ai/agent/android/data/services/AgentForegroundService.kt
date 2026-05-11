@@ -1,5 +1,6 @@
 package ai.agent.android.data.services
 
+import ai.agent.android.domain.constants.NotificationChannels
 import ai.agent.android.domain.engine.LlmInferenceEngine
 import ai.agent.android.domain.models.AgentOrchestratorState
 import ai.agent.android.domain.repositories.PowerStateRepository
@@ -62,7 +63,6 @@ class AgentForegroundService : Service() {
     private var wakeLock: PowerManager.WakeLock? = null
 
     companion object {
-        private const val NOTIFICATION_CHANNEL_ID = "AgentForegroundServiceChannel"
         private const val NOTIFICATION_ID = 101
         private const val WAKE_LOCK_TAG = "AndroidAIAgent:InferenceLock"
         private const val WAKE_LOCK_TIMEOUT_MS = 10 * 60 * 1000L
@@ -152,7 +152,7 @@ class AgentForegroundService : Service() {
 
     private fun createNotificationChannel() {
         val channel = NotificationChannel(
-            NOTIFICATION_CHANNEL_ID,
+            NotificationChannels.AGENT_FOREGROUND,
             "Agent Service",
             NotificationManager.IMPORTANCE_LOW,
         )
@@ -177,7 +177,7 @@ class AgentForegroundService : Service() {
     }
 
     private fun buildNotification(status: String): Notification =
-        NotificationCompat.Builder(this, NOTIFICATION_CHANNEL_ID)
+        NotificationCompat.Builder(this, NotificationChannels.AGENT_FOREGROUND)
             .setContentTitle("Android AI Agent")
             .setContentText(status)
             .setSmallIcon(android.R.drawable.ic_dialog_info)

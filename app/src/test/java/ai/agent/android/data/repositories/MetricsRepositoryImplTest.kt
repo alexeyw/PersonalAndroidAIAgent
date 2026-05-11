@@ -1,5 +1,6 @@
 package ai.agent.android.data.repositories
 
+import ai.agent.android.domain.models.NodeType
 import org.junit.Assert.assertEquals
 import org.junit.Before
 import org.junit.Test
@@ -23,12 +24,12 @@ class MetricsRepositoryImplTest {
         assertEquals(0f, metrics.tokensPerSecond, 0.001f)
         assertEquals(0, metrics.totalTokensProcessed)
         assertEquals(0L, metrics.totalExecutionTimeMs)
-        assertEquals(emptyMap<String, Long>(), metrics.timePerNodeType)
+        assertEquals(emptyMap<NodeType, Long>(), metrics.timePerNodeType)
     }
 
     @Test
     fun `given updateMetrics when called then only last-inference fields change`() {
-        repository.recordNodeExecution("LITE_RT", durationMs = 50L, tokenCount = 7)
+        repository.recordNodeExecution(NodeType.LITE_RT, durationMs = 50L, tokenCount = 7)
 
         repository.updateMetrics(timeMs = 2000L, tokensProcessed = 10)
 
@@ -38,7 +39,7 @@ class MetricsRepositoryImplTest {
         // Aggregates must remain those set by recordNodeExecution — updateMetrics no longer touches them.
         assertEquals(50L, metrics.totalExecutionTimeMs)
         assertEquals(7, metrics.totalTokensProcessed)
-        assertEquals(mapOf("LITE_RT" to 50L), metrics.timePerNodeType)
+        assertEquals(mapOf(NodeType.LITE_RT to 50L), metrics.timePerNodeType)
     }
 
     @Test
@@ -50,25 +51,25 @@ class MetricsRepositoryImplTest {
 
     @Test
     fun `given recordNodeExecution when called multiple times then per-type totals accumulate`() {
-        repository.recordNodeExecution("LITE_RT", durationMs = 100L, tokenCount = 20)
-        repository.recordNodeExecution("LITE_RT", durationMs = 150L, tokenCount = 30)
-        repository.recordNodeExecution("INTENT_ROUTER", durationMs = 40L, tokenCount = null)
+        repository.recordNodeExecution(NodeType.LITE_RT, durationMs = 100L, tokenCount = 20)
+        repository.recordNodeExecution(NodeType.LITE_RT, durationMs = 150L, tokenCount = 30)
+        repository.recordNodeExecution(NodeType.INTENT_ROUTER, durationMs = 40L, tokenCount = null)
 
         val metrics = repository.metrics.value
         assertEquals(290L, metrics.totalExecutionTimeMs)
         assertEquals(50, metrics.totalTokensProcessed)
         assertEquals(
-            mapOf("LITE_RT" to 250L, "INTENT_ROUTER" to 40L),
+            mapOf(NodeType.LITE_RT to 250L, NodeType.INTENT_ROUTER to 40L),
             metrics.timePerNodeType,
         )
     }
 
     @Test
     fun `given recordNodeExecution with null tokens when called then totalTokens is unchanged`() {
-        repository.recordNodeExecution("IF_CONDITION", durationMs = 5L, tokenCount = null)
+        repository.recordNodeExecution(NodeType.IF_CONDITION, durationMs = 5L, tokenCount = null)
 
         assertEquals(0, repository.metrics.value.totalTokensProcessed)
         assertEquals(5L, repository.metrics.value.totalExecutionTimeMs)
-        assertEquals(mapOf("IF_CONDITION" to 5L), repository.metrics.value.timePerNodeType)
+        assertEquals(mapOf(NodeType.IF_CONDITION to 5L), repository.metrics.value.timePerNodeType)
     }
 }

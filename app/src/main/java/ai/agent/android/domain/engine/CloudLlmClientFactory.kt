@@ -1,5 +1,7 @@
 package ai.agent.android.domain.engine
 
+import ai.agent.android.domain.models.CloudProvider
+
 /**
  * Domain-level abstraction over the cloud LLM client construction.
  *
@@ -18,10 +20,9 @@ interface CloudLlmClientFactory {
     /**
      * Creates a streaming LLM client for the given [provider].
      *
-     * @param provider Lowercase provider key — `"openai"`, `"anthropic"`, `"google"`,
-     *                 `"deepseek"`, or `"ollama"`. Unknown values yield `null`.
+     * @param provider The typed [CloudProvider] to construct a client for.
      * @return The constructed client, or `null` when the user has not configured the
      *         credentials/base URL required by [provider].
      */
-    suspend fun createClient(provider: String): Any?
+    suspend fun createClient(provider: CloudProvider): Any?
 }

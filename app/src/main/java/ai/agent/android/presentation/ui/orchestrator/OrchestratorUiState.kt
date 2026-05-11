@@ -1,6 +1,7 @@
 package ai.agent.android.presentation.ui.orchestrator
 
 import ai.agent.android.domain.models.AgentTool
+import ai.agent.android.domain.models.CloudProvider
 import ai.agent.android.domain.models.ConnectionModel
 import ai.agent.android.domain.models.NodeModel
 import ai.agent.android.domain.models.PipelineGraph
@@ -50,7 +51,7 @@ data class OrchestratorUiState(
     val isLoading: Boolean = false,
     val errorMessage: UiText? = null,
     val availableTools: List<AgentTool> = emptyList(),
-    val providerKeys: Map<String, Boolean> = emptyMap(),
+    val providerKeys: Map<CloudProvider, Boolean> = emptyMap(),
     val promptTemplates: List<PromptTemplate> = emptyList(),
     val availableVariables: List<String> = emptyList(),
     val previewState: PromptPreviewState = PromptPreviewState.Hidden,

@@ -1,5 +1,6 @@
 package ai.agent.android.domain.engine
 
+import ai.agent.android.domain.models.CloudProvider
 import ai.agent.android.domain.models.ConnectionModel
 import ai.agent.android.domain.models.NodeContextConfig
 import ai.agent.android.domain.models.NodeModel
@@ -62,7 +63,7 @@ object DefaultPipelineFactory {
             id = UUID.randomUUID().toString(),
             type = NodeType.CLOUD,
             label = "Cloud API",
-            cloudProvider = "auto",
+            cloudProvider = CloudProvider.AUTO_KEY,
             x = 500f,
             y = 400f,
             contextConfig = NodeContextConfig.defaultForType(NodeType.CLOUD),

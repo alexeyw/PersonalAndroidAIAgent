@@ -14,7 +14,10 @@ package ai.agent.android.domain.models
  * @property conditionKeywords Comma-separated keywords for condition if type is [NodeType.IF_CONDITION].
  * @property conditionPrompt Free-form prompt for condition classification if type is [NodeType.IF_CONDITION].
  * @property systemPrompt An optional system prompt to configure the behavior of the node.
- * @property cloudProvider An optional provider for a CLOUD node ("auto", "openai", "anthropic", "google", "deepseek").
+ * @property cloudProvider An optional provider id for a CLOUD node. Either [CloudProvider.AUTO_KEY]
+ * (executor picks at runtime) or one of the [CloudProvider.id]s. Persisted as a raw string for
+ * backward compatibility with pipelines created before the typed enum existed; parse with
+ * [CloudProvider.fromId] on the way in.
  * @property clarificationTimeoutMs Timeout (in ms) the [NodeType.CLARIFICATION] node waits for the
  * user's reply before falling back to a default answer. `null` means use the engine's default
  * (60 000 ms). Ignored for non-CLARIFICATION nodes.

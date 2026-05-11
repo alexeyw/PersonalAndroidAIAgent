@@ -202,7 +202,7 @@ class GraphExecutionEngine @Inject constructor(
                 }
                 val nodeDurationMs = System.currentTimeMillis() - nodeStartMs
                 val nodeTokenCount = nodeResult?.tokenCount
-                metricsRepository.recordNodeExecution(currentNode.type.name, nodeDurationMs, nodeTokenCount)
+                metricsRepository.recordNodeExecution(currentNode.type, nodeDurationMs, nodeTokenCount)
 
                 if (nodeResult?.error != null) {
                     Timber.tag(
