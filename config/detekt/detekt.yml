@@ -1,0 +1,64 @@
+# Detekt configuration — Phase 18 / Task 1/10 (report-only mode).
+#
+# Strategy: this file is layered on top of detekt's bundled defaults
+# (buildUponDefaultConfig = true in app/build.gradle.kts). Only rules
+# explicitly required by the task brief, or whose default thresholds we want
+# to tune, are listed below.
+#
+# The reports produced here are an input checklist for tasks 3-8 of phase 18;
+# the build is intentionally NOT failed (ignoreFailures = true on the Gradle
+# side). Strict enforcement is enabled by task 9/10.
+#
+# Property names target detekt 2.0.x: thresholds renamed to allowedXxx,
+# UnusedImports → UnusedImport, etc.
+
+config:
+  validation: true
+  warningsAsErrors: false
+  checkExhaustiveness: false
+
+complexity:
+  active: true
+  ComplexCondition:
+    active: true
+    allowedConditions: 4
+  LongMethod:
+    active: true
+    allowedLines: 60
+  TooManyFunctions:
+    active: true
+    allowedFunctionsPerFile: 11
+    allowedFunctionsPerClass: 11
+    allowedFunctionsPerInterface: 11
+    allowedFunctionsPerObject: 11
+    allowedFunctionsPerEnum: 11
+    ignoreDeprecated: false
+    ignorePrivate: false
+    ignoreOverridden: false
+
+style:
+  active: true
+  MagicNumber:
+    active: true
+    excludes: ['**/test/**', '**/androidTest/**', '**/*.Test.kt', '**/*Test.kt', '**/*Spec.kt']
+    ignoreNumbers: ['-1', '0', '1', '2']
+    ignoreHashCodeFunction: true
+    ignorePropertyDeclaration: false
+    ignoreLocalVariableDeclaration: false
+    ignoreConstantDeclaration: true
+    ignoreCompanionObjectPropertyDeclaration: true
+    ignoreAnnotation: true
+    ignoreNamedArgument: true
+    ignoreEnums: true
+    ignoreRanges: true
+    ignoreExtensionFunctions: true
+  MaxLineLength:
+    active: true
+    maxLineLength: 120
+    excludePackageStatements: true
+    excludeImportStatements: true
+    excludeCommentStatements: false
+    excludeRawStrings: true
+  UnusedImport:
+    active: true
+  # UnusedPrivateClass/Function/Property are enabled in task 8/10.

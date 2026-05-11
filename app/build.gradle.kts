@@ -1,8 +1,12 @@
+import dev.detekt.gradle.Detekt
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.hilt.android)
     alias(libs.plugins.ksp)
+    alias(libs.plugins.detekt)
+    alias(libs.plugins.ktlint)
 }
 
 android {
@@ -48,6 +52,47 @@ android {
         resources {
             excludes += "META-INF/*"
         }
+    }
+
+    lint {
+        baseline = file("lint-baseline.xml")
+        abortOnError = false
+        warningsAsErrors = false
+        checkDependencies = false
+        htmlReport = true
+        xmlReport = true
+    }
+}
+
+detekt {
+    config.setFrom(files("$rootDir/config/detekt/detekt.yml"))
+    buildUponDefaultConfig = true
+    ignoreFailures = true
+    basePath.set(rootDir)
+    source.setFrom("src/main/java", "src/main/kotlin")
+}
+
+tasks.withType<Detekt>().configureEach {
+    reports {
+        html.required.set(true)
+        checkstyle.required.set(true)
+        sarif.required.set(false)
+        markdown.required.set(false)
+    }
+    exclude("**/build/**", "**/generated/**")
+}
+
+ktlint {
+    version.set("1.5.0")
+    android.set(true)
+    ignoreFailures.set(true)
+    filter {
+        exclude { entry -> entry.file.toString().contains("/build/") }
+        exclude { entry -> entry.file.toString().contains("/generated/") }
+    }
+    reporters {
+        reporter(org.jlleitschuh.gradle.ktlint.reporter.ReporterType.HTML)
+        reporter(org.jlleitschuh.gradle.ktlint.reporter.ReporterType.PLAIN)
     }
 }
 
