@@ -80,9 +80,13 @@ class ToolNodeExecutor @Inject constructor(
                 "Tool: ${it.name}\nDescription: ${it.description}\nParameters: ${it.parameters}"
             }
 
-            val prompt = DefaultPrompts.Tool.AUTO_SELECT_TEMPLATE
-                .replace("\$AVAILABLE_TOOLS", toolsDescriptions)
-                .replace("\$INPUT_TEXT", inputText)
+            val prompt = DefaultPrompts.renderTemplate(
+                DefaultPrompts.Tool.AUTO_SELECT_TEMPLATE,
+                mapOf(
+                    "AVAILABLE_TOOLS" to toolsDescriptions,
+                    "INPUT_TEXT" to inputText,
+                ),
+            )
 
             val responseStream = llmEngine.generateResponseStream(prompt)
             val accumulatedResponse = StringBuilder()
@@ -122,11 +126,15 @@ class ToolNodeExecutor @Inject constructor(
                 return@flow
             }
 
-            val prompt = DefaultPrompts.Tool.ARGUMENT_GENERATION_TEMPLATE
-                .replace("\$TOOL_NAME", selectedTool.name)
-                .replace("\$TOOL_DESCRIPTION", selectedTool.description)
-                .replace("\$TOOL_PARAMETERS", selectedTool.parameters)
-                .replace("\$INPUT_TEXT", inputText)
+            val prompt = DefaultPrompts.renderTemplate(
+                DefaultPrompts.Tool.ARGUMENT_GENERATION_TEMPLATE,
+                mapOf(
+                    "TOOL_NAME" to selectedTool.name,
+                    "TOOL_DESCRIPTION" to selectedTool.description,
+                    "TOOL_PARAMETERS" to selectedTool.parameters,
+                    "INPUT_TEXT" to inputText,
+                ),
+            )
 
             val responseStream = llmEngine.generateResponseStream(prompt)
             val accumulatedResponse = StringBuilder()

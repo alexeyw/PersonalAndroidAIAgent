@@ -61,9 +61,13 @@ class EvaluateIfConditionUseCase @Inject constructor(private val llmInferenceEng
         // 3. Evaluate using LLM if a prompt is provided
         val conditionPrompt = node.conditionPrompt
         if (!conditionPrompt.isNullOrBlank()) {
-            val prompt = DefaultPrompts.IfCondition.EVALUATION_TEMPLATE
-                .replace("\$CONDITION_PROMPT", conditionPrompt)
-                .replace("\$INPUT_TEXT", inputText)
+            val prompt = DefaultPrompts.renderTemplate(
+                DefaultPrompts.IfCondition.EVALUATION_TEMPLATE,
+                mapOf(
+                    "CONDITION_PROMPT" to conditionPrompt,
+                    "INPUT_TEXT" to inputText,
+                ),
+            )
 
             return try {
                 val tokens = mutableListOf<String>()

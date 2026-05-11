@@ -27,10 +27,14 @@ class SummaryNodeExecutor @Inject constructor(
     ): Flow<NodeOutput> = flow {
         val nodeSystemPrompt = node.systemPrompt ?: DefaultPrompts.Summary.SYSTEM_FALLBACK
 
-        val fullPrompt = DefaultPrompts.Summary.SYNTHESIS_TEMPLATE
-            .replace("\$NODE_SYSTEM_PROMPT", nodeSystemPrompt)
-            .replace("\$ORIGINAL_TASK", originalPrompt)
-            .replace("\$RESULTS_OF_SUBTASKS", inputText)
+        val fullPrompt = DefaultPrompts.renderTemplate(
+            DefaultPrompts.Summary.SYNTHESIS_TEMPLATE,
+            mapOf(
+                "NODE_SYSTEM_PROMPT" to nodeSystemPrompt,
+                "ORIGINAL_TASK" to originalPrompt,
+                "RESULTS_OF_SUBTASKS" to inputText,
+            ),
+        )
 
         val loadResult = loadModelUseCase(node.modelPath)
         if (loadResult is Result.Error) {

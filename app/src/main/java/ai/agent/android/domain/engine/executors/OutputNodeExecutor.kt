@@ -30,9 +30,13 @@ class OutputNodeExecutor @Inject constructor(
     ): Flow<NodeOutput> = flow {
         val nodeSystemPrompt = node.systemPrompt
         if (!nodeSystemPrompt.isNullOrBlank()) {
-            val fullPrompt = DefaultPrompts.Output.FORMATTING_TEMPLATE
-                .replace("\$NODE_SYSTEM_PROMPT", nodeSystemPrompt)
-                .replace("\$INPUT_TEXT", inputText)
+            val fullPrompt = DefaultPrompts.renderTemplate(
+                DefaultPrompts.Output.FORMATTING_TEMPLATE,
+                mapOf(
+                    "NODE_SYSTEM_PROMPT" to nodeSystemPrompt,
+                    "INPUT_TEXT" to inputText,
+                ),
+            )
 
             val loadResult = loadModelUseCase(node.modelPath)
             if (loadResult is Result.Error) {

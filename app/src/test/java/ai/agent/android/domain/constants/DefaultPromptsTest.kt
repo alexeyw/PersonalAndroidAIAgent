@@ -110,6 +110,53 @@ class DefaultPromptsTest {
     }
 
     @Test
+    fun `given template with placeholders when renderTemplate then substitutes from map`() {
+        val rendered = DefaultPrompts.renderTemplate(
+            template = "Hello \$NAME, welcome to \$PLACE.",
+            values = mapOf("NAME" to "Ada", "PLACE" to "Earth"),
+        )
+        assertEquals("Hello Ada, welcome to Earth.", rendered)
+    }
+
+    @Test
+    fun `given value contains other placeholder token when renderTemplate then does not rescan substituted text`() {
+        // Regression guard for the chained-replace bug: when a value contains a literal `$KEY`
+        // that matches a later substitution, the rescan-free single-pass renderer must keep
+        // that token verbatim instead of rewriting it.
+        val rendered = DefaultPrompts.renderTemplate(
+            template = "[\$NODE_SYSTEM_PROMPT]\n[\$ORIGINAL_TASK]",
+            values = mapOf(
+                "NODE_SYSTEM_PROMPT" to "Echo back \$ORIGINAL_TASK literally",
+                "ORIGINAL_TASK" to "the question",
+            ),
+        )
+        assertEquals(
+            "[Echo back \$ORIGINAL_TASK literally]\n[the question]",
+            rendered,
+        )
+    }
+
+    @Test
+    fun `given unknown placeholder when renderTemplate then leaves token verbatim`() {
+        val rendered = DefaultPrompts.renderTemplate(
+            template = "Known: \$KNOWN; Unknown: \$NOT_A_REAL_KEY",
+            values = mapOf("KNOWN" to "ok"),
+        )
+        assertEquals("Known: ok; Unknown: \$NOT_A_REAL_KEY", rendered)
+    }
+
+    @Test
+    fun `given lowercase or numeric tokens when renderTemplate then ignores them`() {
+        // The placeholder regex requires an uppercase/underscore lead, so $name and $50 are
+        // not placeholders — keeping `$50` reachable as currency etc.
+        val rendered = DefaultPrompts.renderTemplate(
+            template = "\$name pays \$50",
+            values = mapOf("name" to "Bob", "50" to "USD 50"),
+        )
+        assertEquals("\$name pays \$50", rendered)
+    }
+
+    @Test
     fun `given known node types when getDefaultPromptForNodeType then returns canonical prompt`() {
         assertEquals(DefaultPrompts.INTENT_ROUTER_PROMPT, DefaultPrompts.getDefaultPromptForNodeType(NodeType.INTENT_ROUTER))
         assertEquals(DefaultPrompts.DECOMPOSITION_PROMPT, DefaultPrompts.getDefaultPromptForNodeType(NodeType.DECOMPOSITION))

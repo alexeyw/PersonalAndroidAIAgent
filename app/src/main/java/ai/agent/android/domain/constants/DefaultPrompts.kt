@@ -14,8 +14,10 @@ import ai.agent.android.domain.models.NodeType
  *  - **`*_TEMPLATE`** — internal wrap-templates used by an executor to splice the
  *    upstream `inputText`, the resolved `systemPrompt`, and other per-node values
  *    into a final LLM prompt. Placeholders use the literal `${'$'}KEY` form
- *    (e.g. `${'$'}INPUT_TEXT`, `${'$'}ORIGINAL_TASK`) and are replaced locally by
- *    each executor via [String.replace]. They are **not** routed through
+ *    (e.g. `${'$'}INPUT_TEXT`, `${'$'}ORIGINAL_TASK`) and are substituted via
+ *    [renderTemplate] in a **single left-to-right pass** so a value that itself
+ *    contains a `${'$'}KEY` token cannot trigger a follow-up replacement and
+ *    corrupt downstream substitutions. They are **not** routed through
  *    [ai.agent.android.domain.prompt.PromptTemplateEngine] — that engine is
  *    reserved for runtime-resolved variables (`${'$'}DATE`, `${'$'}TOOLS`, …) that
  *    apply to user-authored prompts.
@@ -27,6 +29,38 @@ import ai.agent.android.domain.models.NodeType
  * by reference to avoid drift.
  */
 object DefaultPrompts {
+    /**
+     * Matches a literal `${'$'}KEY` placeholder where `KEY` follows the project-wide
+     * variable convention `[A-Z_][A-Z0-9_]*` (see DESCRIPTION.md §5). Lowercase
+     * tokens or sequences like `${'$'}50` are deliberately not matched.
+     */
+    private val PLACEHOLDER_REGEX = Regex("\\\$([A-Z_][A-Z0-9_]*)")
+
+    /**
+     * Substitutes `${'$'}KEY` placeholders inside [template] with values from
+     * [values] in a **single left-to-right pass** that does not rescan replaced
+     * text. This is critical when a substituted value (for example, a user-authored
+     * `systemPrompt` or a runtime `originalPrompt`) itself contains a literal
+     * `${'$'}KEY` token — a chained `String.replace` sequence would treat such a
+     * token as a follow-up placeholder and corrupt the prompt.
+     *
+     * Unknown placeholders are left verbatim — same defensive behavior as
+     * [ai.agent.android.domain.prompt.PromptTemplateEngine] applied to runtime
+     * variables.
+     *
+     * @param template Template string containing zero or more `${'$'}KEY` placeholders.
+     * @param values Map from placeholder key (no leading `${'$'}`) to its replacement.
+     * @return The template with every recognised placeholder substituted exactly once.
+     */
+    fun renderTemplate(template: String, values: Map<String, String>): String =
+        PLACEHOLDER_REGEX.replace(template) { match ->
+            // Regex.replace builds the result by appending matched-region replacements
+            // to the un-matched prefix; the replacement string itself is not re-scanned,
+            // so a value containing "$OTHER_KEY" stays literal in the output.
+            val key = match.groupValues[1]
+            values[key] ?: match.value
+        }
+
     /**
      * Generic preamble injected at the top of every LiteRT/Cloud system prompt
      * (`${'$'}systemPromptPrefix\n${'$'}nodeSystemPrompt\n` — see
