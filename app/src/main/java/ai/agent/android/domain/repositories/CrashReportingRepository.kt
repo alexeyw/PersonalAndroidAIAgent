@@ -31,15 +31,17 @@ interface CrashReportingRepository {
 
     /**
      * Forwards a non-fatal [Throwable] to Crashlytics for aggregation, with
-     * optional contextual key/value pairs attached as Crashlytics custom keys
-     * for the duration of the report.
+     * optional contextual key/value pairs attached as transient log breadcrumbs
+     * (Crashlytics' `log(...)` channel) so they appear in the report's log
+     * trail without persisting into the session-wide custom-key namespace.
      *
      * When crash reporting is disabled the call must be a strict no-op —
      * the throwable is neither logged nor buffered for later upload.
      *
      * @param throwable The exception to record.
-     * @param extras Optional custom keys attached to the report (e.g. the
-     *               currently executing pipeline id, the active model name).
+     * @param extras Optional per-report context (e.g. the call-site message
+     *               and tag). For session-global values that should appear on
+     *               every subsequent crash, use [setCustomKey] instead.
      */
     suspend fun recordException(throwable: Throwable, extras: Map<String, String> = emptyMap())
 

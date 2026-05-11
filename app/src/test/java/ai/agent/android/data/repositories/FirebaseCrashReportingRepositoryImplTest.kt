@@ -35,10 +35,11 @@ class FirebaseCrashReportingRepositoryImplTest {
     fun `given disabled when recordException then crashlytics is not touched`() = runTest {
         val repository = repositoryWithFlag(enabled = false)
 
-        repository.recordException(IllegalStateException("boom"))
+        repository.recordException(IllegalStateException("boom"), mapOf("k" to "v"))
 
         verify(exactly = 0) { crashlytics.recordException(any()) }
         verify(exactly = 0) { crashlytics.setCustomKey(any<String>(), any<String>()) }
+        verify(exactly = 0) { crashlytics.log(any()) }
     }
 
     @Test
@@ -51,22 +52,24 @@ class FirebaseCrashReportingRepositoryImplTest {
     }
 
     @Test
-    fun `given enabled when recordException then forwards throwable and extras`() = runTest {
-        val repository = repositoryWithFlag(enabled = true)
-        val throwable = RuntimeException("kaboom")
-        justRun { crashlytics.recordException(throwable) }
-        justRun { crashlytics.setCustomKey("active_pipeline_id", "p-1") }
-        justRun { crashlytics.setCustomKey("active_model", "gemma-2b") }
+    fun `given enabled when recordException then forwards throwable with extras as transient log breadcrumbs`() =
+        runTest {
+            val repository = repositoryWithFlag(enabled = true)
+            val throwable = RuntimeException("kaboom")
+            justRun { crashlytics.recordException(throwable) }
+            justRun { crashlytics.log(any()) }
 
-        repository.recordException(
-            throwable,
-            mapOf("active_pipeline_id" to "p-1", "active_model" to "gemma-2b"),
-        )
+            repository.recordException(
+                throwable,
+                mapOf("timber_message" to "node failed", "timber_tag" to "Engine"),
+            )
 
-        verify(exactly = 1) { crashlytics.setCustomKey("active_pipeline_id", "p-1") }
-        verify(exactly = 1) { crashlytics.setCustomKey("active_model", "gemma-2b") }
-        verify(exactly = 1) { crashlytics.recordException(throwable) }
-    }
+            verify(exactly = 1) { crashlytics.log("timber_message=node failed") }
+            verify(exactly = 1) { crashlytics.log("timber_tag=Engine") }
+            verify(exactly = 1) { crashlytics.recordException(throwable) }
+            // Extras must NOT leak into the session-wide custom-key namespace.
+            verify(exactly = 0) { crashlytics.setCustomKey(any<String>(), any<String>()) }
+        }
 
     @Test
     fun `given enabled when setCustomKey then forwards key and value`() = runTest {

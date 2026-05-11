@@ -48,7 +48,12 @@ class FirebaseCrashReportingRepositoryImpl @Inject constructor(
     override suspend fun recordException(throwable: Throwable, extras: Map<String, String>) {
         if (!settingsRepository.crashReportingEnabled.first()) return
         runCatching {
-            extras.forEach { (key, value) -> crashlytics.setCustomKey(key, value) }
+            // Extras are attached as Crashlytics log breadcrumbs (not custom keys) so they
+            // appear in the report's log trail without persisting into the session-wide
+            // custom-key namespace and leaking into every subsequent crash. Use
+            // `setCustomKey` (via [setCustomKey] on this repository) when the value really
+            // is session-global, e.g. the active pipeline / model.
+            extras.forEach { (key, value) -> crashlytics.log("$key=$value") }
             crashlytics.recordException(throwable)
         }.onFailure { error ->
             Timber.e(error, "Failed to record exception to Crashlytics")

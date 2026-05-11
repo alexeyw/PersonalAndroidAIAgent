@@ -63,14 +63,35 @@ class CrashlyticsTimberTreeTest {
     }
 
     @Test
-    fun `error with explicit throwable forwards throwable to repository`() = runTest {
+    fun `error with explicit throwable forwards throwable plus message and tag as extras`() = runTest {
         val throwable = IllegalStateException("boom")
         coEvery { crashReportingRepository.recordException(any(), any()) } returns Unit
 
         Timber.tag("Engine").e(throwable, "node crashed")
         scope.advanceUntilIdle()
 
-        coVerify(exactly = 1) { crashReportingRepository.recordException(throwable, emptyMap()) }
+        coVerify(exactly = 1) {
+            crashReportingRepository.recordException(
+                throwable,
+                mapOf("timber_message" to "node crashed", "timber_tag" to "Engine"),
+            )
+        }
+    }
+
+    @Test
+    fun `error with throwable but no tag still forwards message extra`() = runTest {
+        val throwable = IllegalStateException("boom")
+        coEvery { crashReportingRepository.recordException(any(), any()) } returns Unit
+
+        Timber.e(throwable, "untagged failure")
+        scope.advanceUntilIdle()
+
+        coVerify(exactly = 1) {
+            crashReportingRepository.recordException(
+                throwable,
+                mapOf("timber_message" to "untagged failure"),
+            )
+        }
     }
 
     @Test

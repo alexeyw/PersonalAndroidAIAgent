@@ -6,6 +6,7 @@ import ai.agent.android.domain.constants.SettingsDefaults
 import ai.agent.android.domain.models.LocalBackend
 import ai.agent.android.presentation.ui.common.resolve
 import android.widget.Toast
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -487,8 +488,19 @@ private fun PrivacySection(crashReportingEnabled: Boolean, onCrashReportingChang
         color = MaterialTheme.colorScheme.primary,
     )
     Spacer(modifier = Modifier.height(8.dp))
+    // The whole row toggles the switch so the tap target matches the rest of the
+    // settings screen and stays accessible — the inline Switch only mirrors the
+    // state, hence `onCheckedChange = null`.
     Row(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable {
+                if (!crashReportingEnabled) {
+                    showConsentDialog = true
+                } else {
+                    onCrashReportingChange(false)
+                }
+            },
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(modifier = Modifier.weight(1f)) {
@@ -504,13 +516,7 @@ private fun PrivacySection(crashReportingEnabled: Boolean, onCrashReportingChang
         }
         Switch(
             checked = crashReportingEnabled,
-            onCheckedChange = { newValue ->
-                if (newValue) {
-                    showConsentDialog = true
-                } else {
-                    onCrashReportingChange(false)
-                }
-            },
+            onCheckedChange = null,
         )
     }
 

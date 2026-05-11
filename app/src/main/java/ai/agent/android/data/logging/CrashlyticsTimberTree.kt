@@ -41,13 +41,34 @@ class CrashlyticsTimberTree(
     override fun isLoggable(tag: String?, priority: Int): Boolean = priority >= Log.WARN
 
     /**
-     * Forwards the record to Crashlytics. Messages without an attached
-     * [Throwable] are wrapped in a synthetic exception whose message
-     * preserves the log tag + body so Crashlytics still has something to
-     * stack-trace and group on.
+     * Forwards the record to Crashlytics.
+     *
+     * When the caller supplied a [Throwable] (`Timber.e(t, "context %s", arg)`),
+     * the exception is reported verbatim and the formatted [message] / [tag]
+     * are attached as `extras` so the call-site context survives — otherwise
+     * Crashlytics would only see the bare stack trace.
+     *
+     * Message-only records (no throwable) are wrapped in a synthetic exception
+     * whose message preserves the original tag + body so Crashlytics still has
+     * something to stack-trace and group on.
      */
     override fun log(priority: Int, tag: String?, message: String, t: Throwable?) {
-        val throwable = t ?: SyntheticLogException(
+        if (t != null) {
+            // Timber's base class appends `\n` + stack trace to `message` when a
+            // throwable is present (Timber.Tree.prepareLog). The stack already lives on
+            // the throwable itself — extract only the original call-site message before
+            // the newline so the breadcrumb stays readable.
+            val callSiteMessage = message.substringBefore('\n')
+            val extras = buildMap {
+                put(EXTRA_MESSAGE, callSiteMessage)
+                if (!tag.isNullOrBlank()) put(EXTRA_TAG, tag)
+            }
+            scope.launch {
+                crashReportingRepository.recordException(t, extras)
+            }
+            return
+        }
+        val synthetic = SyntheticLogException(
             buildString {
                 if (!tag.isNullOrBlank()) {
                     append("[")
@@ -58,7 +79,7 @@ class CrashlyticsTimberTree(
             },
         )
         scope.launch {
-            crashReportingRepository.recordException(throwable)
+            crashReportingRepository.recordException(synthetic)
         }
     }
 
@@ -68,4 +89,12 @@ class CrashlyticsTimberTree(
      * message-only events together rather than mixing them with real bugs.
      */
     private class SyntheticLogException(message: String) : Exception(message)
+
+    private companion object {
+        /** Extras key for the Timber call-site message attached to a throwable. */
+        const val EXTRA_MESSAGE = "timber_message"
+
+        /** Extras key for the Timber call-site tag attached to a throwable. */
+        const val EXTRA_TAG = "timber_tag"
+    }
 }
