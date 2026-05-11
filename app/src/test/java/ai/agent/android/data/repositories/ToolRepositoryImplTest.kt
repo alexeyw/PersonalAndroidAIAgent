@@ -3,7 +3,9 @@ package ai.agent.android.data.repositories
 import ai.agent.android.data.mcp.McpClient
 import ai.agent.android.data.mcp.McpClientFactory
 import ai.agent.android.data.tools.local.LocalAppFunctionManager
+import ai.agent.android.data.tools.local.SearchTool
 import ai.agent.android.domain.models.AgentTool
+import ai.agent.android.domain.repositories.ApiKeyRepository
 import ai.agent.android.domain.repositories.LocalToolExecutor
 import ai.agent.android.domain.repositories.SettingsRepository
 import io.mockk.coEvery
@@ -24,8 +26,8 @@ class ToolRepositoryImplTest {
     private val mcpClientFactory: McpClientFactory = mockk()
     private val mcpClient: McpClient = mockk()
     private val localAppFunctionManager: LocalAppFunctionManager = mockk()
-    private val apiKeyRepository: ai.agent.android.domain.repositories.ApiKeyRepository = mockk()
-    private val searchTool: ai.agent.android.data.tools.local.SearchTool = mockk(relaxed = true)
+    private val apiKeyRepository: ApiKeyRepository = mockk()
+    private val searchTool: SearchTool = mockk(relaxed = true)
     private val scheduleTaskExecutor: LocalToolExecutor = mockk(relaxed = true)
     private val searchToolExecutor: LocalToolExecutor = mockk(relaxed = true)
 

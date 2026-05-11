@@ -460,4 +460,3 @@ internal fun plainTextDump(events: List<ConsoleEvent>, tagsByType: Map<ConsoleEv
  * does not collide with the system status bar on tall devices.
  */
 private const val FULL_LOG_SHEET_HEIGHT_FRACTION: Float = 0.92f
-

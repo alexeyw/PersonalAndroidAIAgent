@@ -383,4 +383,3 @@ private fun EmptyStateMessage(message: String) {
 
 /** Number of leading characters of a session UUID embedded into the memory-screen session header. */
 private const val SESSION_ID_DISPLAY_LENGTH: Int = 8
-

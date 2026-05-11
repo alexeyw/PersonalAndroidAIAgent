@@ -38,7 +38,7 @@ class SystemNodeExecutorTest {
     fun `execute emits Thinking and text on success`() = runTest {
         val node = NodeModel("1", NodeType.INTENT_ROUTER, 0f, 0f)
 
-        coEvery { loadModelUseCase(any()) } returns ai.agent.android.domain.models.Result.Success(Unit)
+        coEvery { loadModelUseCase(any()) } returns Result.Success(Unit)
 
         every { llmEngine.generateResponseStream(any()) } returns flowOf("Result")
 

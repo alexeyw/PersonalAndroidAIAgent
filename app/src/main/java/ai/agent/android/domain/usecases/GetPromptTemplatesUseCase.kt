@@ -1,6 +1,7 @@
 package ai.agent.android.domain.usecases
 
 import ai.agent.android.domain.constants.DefaultPrompts
+import ai.agent.android.domain.models.NodeType
 import ai.agent.android.domain.models.PromptTemplate
 import ai.agent.android.domain.repositories.PromptRepository
 import kotlinx.coroutines.flow.Flow
@@ -30,22 +31,22 @@ class GetPromptTemplatesUseCase @Inject constructor(private val repository: Prom
                     PromptTemplate(
                         name = "Classifier",
                         text = DefaultPrompts.INTENT_ROUTER_PROMPT,
-                        category = ai.agent.android.domain.models.NodeType.INTENT_ROUTER.name,
+                        category = NodeType.INTENT_ROUTER.name,
                     ),
                     PromptTemplate(
                         name = "Decomposer",
                         text = DefaultPrompts.DECOMPOSITION_PROMPT,
-                        category = ai.agent.android.domain.models.NodeType.DECOMPOSITION.name,
+                        category = NodeType.DECOMPOSITION.name,
                     ),
                     PromptTemplate(
                         name = "Summarizer",
                         text = DefaultPrompts.SUMMARY_PROMPT,
-                        category = ai.agent.android.domain.models.NodeType.SUMMARY.name,
+                        category = NodeType.SUMMARY.name,
                     ),
                     PromptTemplate(
                         name = "Tool Picker",
                         text = DefaultPrompts.TOOL_USAGE_INSTRUCTION,
-                        category = ai.agent.android.domain.models.NodeType.TOOL.name,
+                        category = NodeType.TOOL.name,
                     ),
                 )
                 defaults.forEach { repository.savePrompt(it) }

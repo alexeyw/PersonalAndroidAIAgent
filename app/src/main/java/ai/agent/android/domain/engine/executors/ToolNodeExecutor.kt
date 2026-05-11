@@ -7,6 +7,7 @@ import ai.agent.android.domain.models.ChatMessage
 import ai.agent.android.domain.models.NodeExecutionResult
 import ai.agent.android.domain.models.NodeModel
 import ai.agent.android.domain.models.NodeOutput
+import ai.agent.android.domain.models.Result
 import ai.agent.android.domain.models.Role
 import ai.agent.android.domain.repositories.ChatRepository
 import ai.agent.android.domain.repositories.SettingsRepository
@@ -57,7 +58,7 @@ class ToolNodeExecutor @Inject constructor(
         emit(NodeOutput.State(AgentOrchestratorState.Thinking("Analyzing task for tool execution...")))
 
         val loadResult = loadModelUseCase(node.modelPath)
-        if (loadResult is ai.agent.android.domain.models.Result.Error) {
+        if (loadResult is Result.Error) {
             val errorMsg = "Error loading local model for tool node"
             emit(NodeOutput.State(AgentOrchestratorState.Error(errorMsg)))
             emit(NodeOutput.Result(NodeExecutionResult(error = errorMsg)))

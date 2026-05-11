@@ -332,7 +332,9 @@ fun ChatScreen(viewModel: ChatViewModel, onBack: () -> Unit = {}) {
                                     contextPercentage > CONTEXT_CRITICAL_RATIO -> MaterialTheme.colorScheme.error
                                     contextPercentage > CONTEXT_WARNING_RATIO ->
                                         colorResource(R.color.chat_context_overflow_warning)
-                                    else -> MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = SECONDARY_LABEL_ALPHA)
+                                    else -> MaterialTheme.colorScheme.onPrimaryContainer.copy(
+                                        alpha = SECONDARY_LABEL_ALPHA,
+                                    )
                                 }
                                 Text(
                                     text = stringResource(
@@ -1191,4 +1193,3 @@ private const val CONTEXT_WARNING_RATIO: Float = 0.7f
 
 /** Alpha applied to secondary labels (pipeline name, context-usage meter) in the chat TopAppBar. */
 private const val SECONDARY_LABEL_ALPHA: Float = 0.6f
-

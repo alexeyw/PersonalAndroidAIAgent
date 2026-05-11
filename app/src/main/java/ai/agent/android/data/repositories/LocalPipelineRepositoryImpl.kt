@@ -4,6 +4,8 @@ import ai.agent.android.data.local.dao.PipelineDao
 import ai.agent.android.data.local.models.ConnectionEntity
 import ai.agent.android.data.local.models.NodeEntity
 import ai.agent.android.data.local.models.PipelineEntity
+import ai.agent.android.data.local.models.PipelineWithNodesAndConnections
+import ai.agent.android.domain.constants.DefaultPrompts
 import ai.agent.android.domain.models.ConnectionModel
 import ai.agent.android.domain.models.NodeModel
 import ai.agent.android.domain.models.NodeType
@@ -67,42 +69,41 @@ class LocalPipelineRepositoryImpl @Inject constructor(private val pipelineDao: P
         pipelineDao.deletePipelineById(pipelineId)
     }
 
-    private fun ai.agent.android.data.local.models.PipelineWithNodesAndConnections.toDomainModel(): PipelineGraph =
-        PipelineGraph(
-            id = this.pipeline.id,
-            name = this.pipeline.name,
-            updatedAt = this.pipeline.updatedAt,
-            nodes = this.nodes.map {
-                NodeModel(
-                    id = it.id,
-                    type = runCatching { NodeType.valueOf(it.type) }.getOrDefault(NodeType.TOOL),
-                    x = it.x,
-                    y = it.y,
-                    label = it.label,
-                    toolName = it.toolName,
-                    modelPath = it.modelPath,
-                    conditionComplexity = it.conditionComplexity,
-                    conditionKeywords = it.conditionKeywords,
-                    conditionPrompt = it.conditionPrompt,
-                    systemPrompt =
-                    it.systemPrompt
-                        ?: ai.agent.android.domain.constants.DefaultPrompts.getDefaultPromptForNodeType(
-                            runCatching {
-                                NodeType.valueOf(it.type)
-                            }.getOrDefault(NodeType.TOOL),
-                        ),
-                    cloudProvider = it.cloudProvider,
-                    clarificationTimeoutMs = it.clarificationTimeoutMs,
-                    contextConfig = it.contextConfig,
-                )
-            },
-            connections = this.connections.map {
-                ConnectionModel(
-                    id = it.id,
-                    sourceNodeId = it.sourceNodeId,
-                    targetNodeId = it.targetNodeId,
-                    label = it.label,
-                )
-            },
-        )
+    private fun PipelineWithNodesAndConnections.toDomainModel(): PipelineGraph = PipelineGraph(
+        id = this.pipeline.id,
+        name = this.pipeline.name,
+        updatedAt = this.pipeline.updatedAt,
+        nodes = this.nodes.map {
+            NodeModel(
+                id = it.id,
+                type = runCatching { NodeType.valueOf(it.type) }.getOrDefault(NodeType.TOOL),
+                x = it.x,
+                y = it.y,
+                label = it.label,
+                toolName = it.toolName,
+                modelPath = it.modelPath,
+                conditionComplexity = it.conditionComplexity,
+                conditionKeywords = it.conditionKeywords,
+                conditionPrompt = it.conditionPrompt,
+                systemPrompt =
+                it.systemPrompt
+                    ?: DefaultPrompts.getDefaultPromptForNodeType(
+                        runCatching {
+                            NodeType.valueOf(it.type)
+                        }.getOrDefault(NodeType.TOOL),
+                    ),
+                cloudProvider = it.cloudProvider,
+                clarificationTimeoutMs = it.clarificationTimeoutMs,
+                contextConfig = it.contextConfig,
+            )
+        },
+        connections = this.connections.map {
+            ConnectionModel(
+                id = it.id,
+                sourceNodeId = it.sourceNodeId,
+                targetNodeId = it.targetNodeId,
+                label = it.label,
+            )
+        },
+    )
 }

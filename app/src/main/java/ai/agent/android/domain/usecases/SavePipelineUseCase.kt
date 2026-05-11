@@ -1,6 +1,7 @@
 package ai.agent.android.domain.usecases
 
 import ai.agent.android.domain.models.PipelineGraph
+import ai.agent.android.domain.models.PipelineValidationException
 import ai.agent.android.domain.repositories.PipelineRepository
 import javax.inject.Inject
 
@@ -19,7 +20,7 @@ class SavePipelineUseCase @Inject constructor(private val pipelineRepository: Pi
     suspend operator fun invoke(pipeline: PipelineGraph): Result<Unit> {
         val errors = pipeline.validate()
         if (errors.isNotEmpty()) {
-            return Result.failure(ai.agent.android.domain.models.PipelineValidationException(errors))
+            return Result.failure(PipelineValidationException(errors))
         }
 
         return try {

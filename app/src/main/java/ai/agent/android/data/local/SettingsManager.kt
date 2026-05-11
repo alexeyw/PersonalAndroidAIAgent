@@ -301,7 +301,8 @@ class SettingsManager @Inject constructor(private val dataStore: DataStore<Prefe
             }
         }
         .map { preferences ->
-            preferences[PreferencesKeys.MAX_MEMORY_CHUNKS_FOR_SEARCH] ?: SettingsDefaults.MEMORY_CHUNK_SEARCH_LIMIT_DEFAULT
+            preferences[PreferencesKeys.MAX_MEMORY_CHUNKS_FOR_SEARCH]
+                ?: SettingsDefaults.MEMORY_CHUNK_SEARCH_LIMIT_DEFAULT
         }
 
     override suspend fun setMaxMemoryChunksForSearch(limit: Int) {

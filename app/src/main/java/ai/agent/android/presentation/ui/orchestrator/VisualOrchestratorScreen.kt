@@ -12,6 +12,7 @@ import ai.agent.android.presentation.ui.components.VariableChipsRow
 import ai.agent.android.presentation.ui.components.insertAtCursor
 import ai.agent.android.presentation.ui.orchestrator.components.DraggableNode
 import ai.agent.android.presentation.ui.orchestrator.components.NodeContextConfigSection
+import ai.agent.android.presentation.ui.orchestrator.components.PromptLibraryDialog
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
@@ -315,7 +316,7 @@ fun VisualOrchestratorScreen(
             ).usesContextConfig()
 
             if (showPromptLibrary) {
-                ai.agent.android.presentation.ui.orchestrator.components.PromptLibraryDialog(
+                PromptLibraryDialog(
                     prompts = uiState.promptTemplates.filter { it.category == node.type.name },
                     onPromptSelected = { text ->
                         systemPromptValue = TextFieldValue(text = text, selection = TextRange(text.length))
@@ -816,7 +817,10 @@ fun VisualOrchestratorScreen(
                                     fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
                                     modifier = Modifier
                                         .offset {
-                                            IntOffset(midX.roundToInt(), midY.roundToInt() - CONNECTION_LABEL_OFFSET_Y_PX)
+                                            IntOffset(
+                                                midX.roundToInt(),
+                                                midY.roundToInt() - CONNECTION_LABEL_OFFSET_Y_PX,
+                                            )
                                         }
                                         .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.8f))
                                         .padding(4.dp),
@@ -969,4 +973,3 @@ private const val CUBIC_BEZIER_TERM_COEFFICIENT: Int = 3
 private const val CONNECTION_LABEL_OFFSET_Y_PX: Int = 20
 
 // endregion
-

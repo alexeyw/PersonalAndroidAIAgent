@@ -2,8 +2,11 @@ package ai.agent.android.data.repositories
 
 import ai.agent.android.data.local.dao.ChatDao
 import ai.agent.android.data.local.dao.TraceStepDao
+import ai.agent.android.data.local.models.ChatSessionEntity
+import ai.agent.android.data.local.models.TraceStepEntity
 import ai.agent.android.data.mappers.toDomain
 import ai.agent.android.data.mappers.toEntity
+import ai.agent.android.domain.models.AgentOrchestratorState
 import ai.agent.android.domain.models.ChatMessage
 import ai.agent.android.domain.models.ChatSession
 import ai.agent.android.domain.repositories.ChatRepository
@@ -39,7 +42,7 @@ class ChatRepositoryImpl @Inject constructor(private val chatDao: ChatDao, priva
                 chatDao.updateSession(existingSession.copy(updatedAt = message.timestamp))
             } else {
                 chatDao.insertSession(
-                    ai.agent.android.data.local.models.ChatSessionEntity(
+                    ChatSessionEntity(
                         id = message.sessionId,
                         name = "Chat " + message.sessionId.take(NEW_SESSION_NAME_SUFFIX_LENGTH),
                         updatedAt = message.timestamp,
@@ -104,7 +107,7 @@ class ChatRepositoryImpl @Inject constructor(private val chatDao: ChatDao, priva
         tokenCount: Int?,
     ) {
         traceStepDao.insertTraceStep(
-            ai.agent.android.data.local.models.TraceStepEntity(
+            TraceStepEntity(
                 sessionId = sessionId,
                 nodeName = nodeName,
                 outputText = outputText,
@@ -115,12 +118,10 @@ class ChatRepositoryImpl @Inject constructor(private val chatDao: ChatDao, priva
         )
     }
 
-    override fun getTraceSteps(
-        sessionId: String,
-    ): Flow<List<ai.agent.android.domain.models.AgentOrchestratorState.TraceStep>> =
+    override fun getTraceSteps(sessionId: String): Flow<List<AgentOrchestratorState.TraceStep>> =
         traceStepDao.getTraceStepsForSession(sessionId).map { entities ->
             entities.map {
-                ai.agent.android.domain.models.AgentOrchestratorState.TraceStep(
+                AgentOrchestratorState.TraceStep(
                     nodeName = it.nodeName,
                     outputText = it.outputText,
                     durationMs = it.durationMs,

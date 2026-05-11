@@ -2,7 +2,9 @@ package ai.agent.android.domain.engine.executors
 
 import ai.agent.android.domain.engine.LlmInferenceEngine
 import ai.agent.android.domain.models.AgentTool
+import ai.agent.android.domain.models.NodeExecutionResult
 import ai.agent.android.domain.models.NodeModel
+import ai.agent.android.domain.models.NodeOutput
 import ai.agent.android.domain.models.NodeType
 import ai.agent.android.domain.models.Result
 import ai.agent.android.domain.repositories.ChatRepository
@@ -118,7 +120,7 @@ class ToolNodeExecutorTest {
         val states = executor.execute(node, "Do something", "session-1", "").toList().unwrap()
 
         // Checking last state
-        val lastState = states.last() as ai.agent.android.domain.models.NodeExecutionResult
+        val lastState = states.last() as NodeExecutionResult
         assertEquals("Tool Success", lastState.outputText)
     }
 
@@ -136,8 +138,8 @@ class ToolNodeExecutorTest {
         val job = launch {
             executor.execute(node, "Do something", "session-1", "").collect { output ->
                 when (output) {
-                    is ai.agent.android.domain.models.NodeOutput.State -> results.add(output.state)
-                    is ai.agent.android.domain.models.NodeOutput.Result -> results.add(output.result)
+                    is NodeOutput.State -> results.add(output.state)
+                    is NodeOutput.Result -> results.add(output.result)
                 }
             }
         }
@@ -145,7 +147,7 @@ class ToolNodeExecutorTest {
         advanceTimeBy(200L)
         advanceUntilIdle()
 
-        val lastResult = results.filterIsInstance<ai.agent.android.domain.models.NodeExecutionResult>().lastOrNull()
+        val lastResult = results.filterIsInstance<NodeExecutionResult>().lastOrNull()
         assertNotNull("Expected NodeExecutionResult with error", lastResult)
         assertNotNull("Expected error field to be set", lastResult?.error)
         assertTrue(lastResult!!.error!!.contains("timed out", ignoreCase = true))
@@ -164,7 +166,7 @@ class ToolNodeExecutorTest {
 
         val states = executor.execute(node, "Do B", "session-1", "").toList().unwrap()
 
-        val lastState = states.last() as ai.agent.android.domain.models.NodeExecutionResult
+        val lastState = states.last() as NodeExecutionResult
         assertEquals("Tool B Success", lastState.outputText)
     }
 }

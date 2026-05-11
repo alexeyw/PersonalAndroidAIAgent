@@ -1,13 +1,25 @@
 package ai.agent.android.di
 
 import ai.agent.android.data.local.AppDatabase
+import ai.agent.android.data.local.Converters
 import ai.agent.android.data.local.EncryptedDbPassphraseProvider
+import ai.agent.android.data.local.dao.ChatDao
+import ai.agent.android.data.local.dao.LocalModelDao
+import ai.agent.android.data.local.dao.MemoryDao
+import ai.agent.android.data.local.dao.PipelineDao
+import ai.agent.android.data.local.dao.PromptTemplateDao
+import ai.agent.android.data.local.dao.TraceStepDao
+import ai.agent.android.data.tools.local.LocalAppFunctionManager
+import ai.agent.android.domain.services.ApprovalNotifier
+import ai.agent.android.presentation.notifications.ApprovalNotificationManager
+import ai.agent.android.presentation.state.ActiveSessionTracker
 import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.preferencesDataStoreFile
 import androidx.room.Room
+import androidx.work.WorkManager
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -92,50 +104,47 @@ object AppModule {
     }
 
     /**
-     * Provides the [ai.agent.android.data.local.dao.LocalModelDao] from the database.
+     * Provides the [LocalModelDao] from the database.
      */
     @Provides
-    fun provideLocalModelDao(database: AppDatabase): ai.agent.android.data.local.dao.LocalModelDao =
-        database.localModelDao()
+    fun provideLocalModelDao(database: AppDatabase): LocalModelDao = database.localModelDao()
 
     /**
-     * Provides the [ai.agent.android.data.local.dao.ChatDao] from the database.
+     * Provides the [ChatDao] from the database.
      */
     @Provides
-    fun provideChatDao(database: AppDatabase): ai.agent.android.data.local.dao.ChatDao = database.chatDao()
+    fun provideChatDao(database: AppDatabase): ChatDao = database.chatDao()
 
     /**
-     * Provides the [ai.agent.android.data.local.dao.MemoryDao] from the database.
+     * Provides the [MemoryDao] from the database.
      */
     @Provides
-    fun provideMemoryDao(database: AppDatabase): ai.agent.android.data.local.dao.MemoryDao = database.memoryDao()
+    fun provideMemoryDao(database: AppDatabase): MemoryDao = database.memoryDao()
 
     /**
-     * Provides the [ai.agent.android.data.local.dao.PipelineDao] from the database.
+     * Provides the [PipelineDao] from the database.
      */
     @Provides
-    fun providePipelineDao(database: AppDatabase): ai.agent.android.data.local.dao.PipelineDao = database.pipelineDao()
+    fun providePipelineDao(database: AppDatabase): PipelineDao = database.pipelineDao()
 
     /**
-     * Provides the [ai.agent.android.data.local.dao.PromptTemplateDao] from the database.
+     * Provides the [PromptTemplateDao] from the database.
      */
     @Provides
-    fun providePromptTemplateDao(database: AppDatabase): ai.agent.android.data.local.dao.PromptTemplateDao =
-        database.promptTemplateDao()
+    fun providePromptTemplateDao(database: AppDatabase): PromptTemplateDao = database.promptTemplateDao()
 
     /**
-     * Provides the [ai.agent.android.data.local.dao.TraceStepDao] from the database.
+     * Provides the [TraceStepDao] from the database.
      */
     @Provides
-    fun provideTraceStepDao(database: AppDatabase): ai.agent.android.data.local.dao.TraceStepDao =
-        database.traceStepDao()
+    fun provideTraceStepDao(database: AppDatabase): TraceStepDao = database.traceStepDao()
 
     /**
      * Provides the singleton instance of Converters for Room mapping.
      */
     @Provides
     @Singleton
-    fun provideConverters(): ai.agent.android.data.local.Converters = ai.agent.android.data.local.Converters()
+    fun provideConverters(): Converters = Converters()
 
     /**
      * Provides the singleton instance of OkHttpClient.
@@ -149,18 +158,15 @@ object AppModule {
      */
     @Provides
     @Singleton
-    fun provideLocalAppFunctionManager(
-        @ApplicationContext appContext: Context,
-    ): ai.agent.android.data.tools.local.LocalAppFunctionManager =
-        ai.agent.android.data.tools.local.LocalAppFunctionManager(appContext)
+    fun provideLocalAppFunctionManager(@ApplicationContext appContext: Context): LocalAppFunctionManager =
+        LocalAppFunctionManager(appContext)
 
     /**
      * Provides the singleton instance of WorkManager.
      */
     @Provides
     @Singleton
-    fun provideWorkManager(@ApplicationContext appContext: Context): androidx.work.WorkManager =
-        androidx.work.WorkManager.getInstance(appContext)
+    fun provideWorkManager(@ApplicationContext appContext: Context): WorkManager = WorkManager.getInstance(appContext)
 
     /**
      * Provides the singleton instance of ApprovalNotifier.
@@ -169,7 +175,6 @@ object AppModule {
     @Singleton
     fun provideApprovalNotifier(
         @ApplicationContext appContext: Context,
-        activeSessionTracker: ai.agent.android.presentation.state.ActiveSessionTracker,
-    ): ai.agent.android.domain.services.ApprovalNotifier =
-        ai.agent.android.presentation.notifications.ApprovalNotificationManager(appContext, activeSessionTracker)
+        activeSessionTracker: ActiveSessionTracker,
+    ): ApprovalNotifier = ApprovalNotificationManager(appContext, activeSessionTracker)
 }

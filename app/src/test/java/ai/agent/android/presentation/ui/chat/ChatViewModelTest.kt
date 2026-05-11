@@ -1,5 +1,6 @@
 package ai.agent.android.presentation.ui.chat
 
+import ai.agent.android.R
 import ai.agent.android.domain.engine.LlmInferenceEngine
 import ai.agent.android.domain.models.AgentOrchestratorState
 import ai.agent.android.domain.models.ChatMessage
@@ -18,6 +19,7 @@ import ai.agent.android.domain.usecases.AgentOrchestratorUseCase
 import ai.agent.android.domain.usecases.GetContextWindowUseCase
 import ai.agent.android.domain.usecases.LoadModelUseCase
 import ai.agent.android.presentation.state.ActiveSessionTracker
+import ai.agent.android.presentation.ui.common.UiText
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -162,8 +164,8 @@ class ChatViewModelTest {
 
         val state = viewModel.uiState.value
         assertNotNull(state.errorMessage)
-        val resolved = state.errorMessage as ai.agent.android.presentation.ui.common.UiText.Resource
-        assertEquals(ai.agent.android.R.string.errors_chat_model_init_failure, resolved.id)
+        val resolved = state.errorMessage as UiText.Resource
+        assertEquals(R.string.errors_chat_model_init_failure, resolved.id)
         assertEquals(listOf(errorMsg), resolved.args)
     }
 
@@ -237,7 +239,7 @@ class ChatViewModelTest {
         val state = viewModel.uiState.value
         assertFalse(state.isGenerating)
         assertEquals(
-            ai.agent.android.presentation.ui.common.UiText.Dynamic(exceptionMessage),
+            UiText.Dynamic(exceptionMessage),
             state.errorMessage,
         )
         assertTrue(state.orchestratorState is AgentOrchestratorState.Error)
@@ -1202,7 +1204,7 @@ class ChatViewModelTest {
         viewModel.signalCopiedToClipboard()
 
         assertEquals(
-            ai.agent.android.presentation.ui.common.UiText.Resource(ai.agent.android.R.string.chat_snackbar_copied),
+            UiText.Resource(R.string.chat_snackbar_copied),
             viewModel.uiState.value.snackbarMessage,
         )
     }
@@ -1613,8 +1615,8 @@ class ChatViewModelTest {
         advanceUntilIdle()
 
         assertEquals(
-            ai.agent.android.presentation.ui.common.UiText.Resource(
-                ai.agent.android.R.string.chat_snackbar_console_copied,
+            UiText.Resource(
+                R.string.chat_snackbar_console_copied,
             ),
             viewModel.uiState.value.snackbarMessage,
         )

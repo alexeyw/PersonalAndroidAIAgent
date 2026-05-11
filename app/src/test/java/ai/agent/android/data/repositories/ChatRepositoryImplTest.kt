@@ -6,6 +6,7 @@ import ai.agent.android.data.local.models.ChatMessageEntity
 import ai.agent.android.data.local.models.ChatSessionEntity
 import ai.agent.android.data.local.models.TraceStepEntity
 import ai.agent.android.domain.models.ChatMessage
+import ai.agent.android.domain.models.ChatSession
 import ai.agent.android.domain.models.Role
 import io.mockk.CapturingSlot
 import io.mockk.coEvery
@@ -193,7 +194,7 @@ class ChatRepositoryImplTest {
         // via `@Upsert`, replacing the previous SELECT + INSERT/UPDATE pattern. Verifying
         // the legacy methods are NOT called also guards against silent regressions where
         // an old code path is reintroduced.
-        val session = ai.agent.android.domain.models.ChatSession(
+        val session = ChatSession(
             id = "sess-x",
             name = "Some chat",
             updatedAt = 1000L,

@@ -472,4 +472,3 @@ private fun formatTimestamp(timestamp: Long): String {
  * label shown for pipelines that have no user-assigned name yet.
  */
 private const val UNNAMED_PIPELINE_ID_SUFFIX_LENGTH: Int = 4
-

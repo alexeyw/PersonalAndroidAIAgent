@@ -3,6 +3,7 @@ package ai.agent.android.data.repositories
 import ai.agent.android.data.mcp.McpClient
 import ai.agent.android.data.mcp.McpClientFactory
 import ai.agent.android.data.tools.local.LocalAppFunctionManager
+import ai.agent.android.data.tools.local.SearchTool
 import ai.agent.android.domain.models.AgentTool
 import ai.agent.android.domain.models.CloudProvider
 import ai.agent.android.domain.repositories.ApiKeyRepository
@@ -28,7 +29,7 @@ class ToolRepositoryImpl @Inject constructor(
     private val mcpClientFactory: McpClientFactory,
     private val localAppFunctionManager: LocalAppFunctionManager,
     private val apiKeyRepository: ApiKeyRepository,
-    private val searchTool: ai.agent.android.data.tools.local.SearchTool,
+    private val searchTool: SearchTool,
     private val localToolExecutors: Map<String, @JvmSuppressWildcards LocalToolExecutor>,
 ) : ToolRepository {
 

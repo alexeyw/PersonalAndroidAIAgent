@@ -1,11 +1,13 @@
 package ai.agent.android.domain.engine.executors
 
+import ai.agent.android.domain.constants.DefaultPrompts
 import ai.agent.android.domain.engine.LlmInferenceEngine
 import ai.agent.android.domain.models.AgentOrchestratorState
 import ai.agent.android.domain.models.ClarificationRequest
 import ai.agent.android.domain.models.NodeExecutionResult
 import ai.agent.android.domain.models.NodeModel
 import ai.agent.android.domain.models.NodeOutput
+import ai.agent.android.domain.models.NodeType
 import ai.agent.android.domain.models.Result
 import ai.agent.android.domain.repositories.ClarificationRepository
 import ai.agent.android.domain.usecases.LoadModelUseCase
@@ -19,7 +21,7 @@ import java.util.UUID
 import javax.inject.Inject
 
 /**
- * Executor for [ai.agent.android.domain.models.NodeType.CLARIFICATION] nodes.
+ * Executor for [NodeType.CLARIFICATION] nodes.
  *
  * The node generates a context-aware clarifying question (and an optional list of
  * answer options) on the fly using the local LLM engine, then suspends the pipeline
@@ -55,7 +57,7 @@ class ClarificationNodeExecutor @Inject constructor(
         originalPrompt: String,
     ): Flow<NodeOutput> = flow {
         val instruction = node.systemPrompt
-            ?: ai.agent.android.domain.constants.DefaultPrompts.CLARIFICATION_PROMPT
+            ?: DefaultPrompts.CLARIFICATION_PROMPT
         val fullPrompt = "$instruction\n\nCONTEXT FROM PREVIOUS NODE:\n$inputText\n\nRESPONSE (JSON only):\n"
 
         val loadResult = loadModelUseCase(node.modelPath)

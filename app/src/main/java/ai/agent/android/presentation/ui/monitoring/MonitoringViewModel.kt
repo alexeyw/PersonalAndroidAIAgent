@@ -1,5 +1,6 @@
 package ai.agent.android.presentation.ui.monitoring
 
+import ai.agent.android.domain.models.ChatMessage
 import ai.agent.android.domain.repositories.ChatRepository
 import ai.agent.android.domain.repositories.MetricsRepository
 import ai.agent.android.domain.repositories.PowerStateRepository
@@ -26,7 +27,7 @@ class MonitoringViewModel @Inject constructor(
 ) : ViewModel() {
 
     private val _isLoading = MutableStateFlow(true)
-    private val _recentLogs = MutableStateFlow<List<ai.agent.android.domain.models.ChatMessage>>(emptyList())
+    private val _recentLogs = MutableStateFlow<List<ChatMessage>>(emptyList())
 
     /**
      * The combined state containing metrics and logs.

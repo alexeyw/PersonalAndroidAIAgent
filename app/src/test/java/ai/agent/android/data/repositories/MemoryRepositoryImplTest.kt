@@ -2,6 +2,8 @@ package ai.agent.android.data.repositories
 
 import ai.agent.android.data.local.Converters
 import ai.agent.android.data.local.dao.MemoryDao
+import ai.agent.android.data.local.models.MemoryChunkEntity
+import ai.agent.android.domain.models.MemorySummary
 import io.mockk.mockk
 import org.junit.Assert.assertEquals
 import org.junit.Before
@@ -79,8 +81,8 @@ class MemoryRepositoryImplTest {
     @Test
     fun `findSimilarMemories uses getRecentMemories and returns correct pairs`() = kotlinx.coroutines.test.runTest {
         val queryEmbedding = floatArrayOf(1f, 0f)
-        val entity1 = ai.agent.android.data.local.models.MemoryChunkEntity(1, "Text 1", "1.0,0.0", 1000L)
-        val entity2 = ai.agent.android.data.local.models.MemoryChunkEntity(2, "Text 2", "0.0,1.0", 2000L)
+        val entity1 = MemoryChunkEntity(1, "Text 1", "1.0,0.0", 1000L)
+        val entity2 = MemoryChunkEntity(2, "Text 2", "0.0,1.0", 2000L)
 
         io.mockk.coEvery { memoryDao.getRecentMemories(100) } returns listOf(entity1, entity2)
 
@@ -102,8 +104,8 @@ class MemoryRepositoryImplTest {
     @Test
     fun `getRecentMemorySummaries forwards limit to dao and returns projections`() = kotlinx.coroutines.test.runTest {
         val expected = listOf(
-            ai.agent.android.domain.models.MemorySummary(id = 2L, text = "newer", timestamp = 200L),
-            ai.agent.android.domain.models.MemorySummary(id = 1L, text = "older", timestamp = 100L),
+            MemorySummary(id = 2L, text = "newer", timestamp = 200L),
+            MemorySummary(id = 1L, text = "older", timestamp = 100L),
         )
         io.mockk.coEvery { memoryDao.getRecentMemorySummaries(2) } returns expected
 
@@ -118,7 +120,7 @@ class MemoryRepositoryImplTest {
         kotlinx.coroutines.test.runTest {
             val result = repository.getRecentMemorySummaries(0)
 
-            assertEquals(emptyList<ai.agent.android.domain.models.MemorySummary>(), result)
+            assertEquals(emptyList<MemorySummary>(), result)
             io.mockk.coVerify(exactly = 0) { memoryDao.getRecentMemorySummaries(any()) }
         }
 }
