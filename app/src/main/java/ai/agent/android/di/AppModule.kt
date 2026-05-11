@@ -20,6 +20,8 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.preferencesDataStoreFile
 import androidx.room.Room
 import androidx.work.WorkManager
+import com.google.firebase.analytics.FirebaseAnalytics
+import com.google.firebase.crashlytics.FirebaseCrashlytics
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -167,6 +169,29 @@ object AppModule {
     @Provides
     @Singleton
     fun provideWorkManager(@ApplicationContext appContext: Context): WorkManager = WorkManager.getInstance(appContext)
+
+    /**
+     * Provides the Firebase Crashlytics singleton.
+     *
+     * Wired through Hilt so unit tests can substitute a mock instead of
+     * touching the static `getInstance()` entry point. Crashlytics
+     * auto-collection is disabled by manifest meta-data — actual
+     * upload only happens once the user opts in via
+     * [ai.agent.android.domain.repositories.CrashReportingRepository.setEnabled].
+     */
+    @Provides
+    @Singleton
+    fun provideFirebaseCrashlytics(): FirebaseCrashlytics = FirebaseCrashlytics.getInstance()
+
+    /**
+     * Provides the Firebase Analytics singleton. Analytics is required as
+     * a transitive dependency of Crashlytics; both opt-in flags toggle
+     * together inside `FirebaseCrashReportingRepositoryImpl`.
+     */
+    @Provides
+    @Singleton
+    fun provideFirebaseAnalytics(@ApplicationContext appContext: Context): FirebaseAnalytics =
+        FirebaseAnalytics.getInstance(appContext)
 
     /**
      * Provides the singleton instance of ApprovalNotifier.

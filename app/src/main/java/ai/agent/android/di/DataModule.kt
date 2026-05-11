@@ -12,6 +12,7 @@ import ai.agent.android.data.mcp.McpClientFactory
 import ai.agent.android.data.network.AndroidModelDownloadManager
 import ai.agent.android.data.repositories.ChatRepositoryImpl
 import ai.agent.android.data.repositories.ClarificationRepositoryImpl
+import ai.agent.android.data.repositories.FirebaseCrashReportingRepositoryImpl
 import ai.agent.android.data.repositories.LocalModelRepositoryImpl
 import ai.agent.android.data.repositories.LocalPipelineRepositoryImpl
 import ai.agent.android.data.repositories.MemoryRepositoryImpl
@@ -26,6 +27,7 @@ import ai.agent.android.domain.engine.TextEmbeddingEngine
 import ai.agent.android.domain.repositories.ApiKeyRepository
 import ai.agent.android.domain.repositories.ChatRepository
 import ai.agent.android.domain.repositories.ClarificationRepository
+import ai.agent.android.domain.repositories.CrashReportingRepository
 import ai.agent.android.domain.repositories.LocalModelRepository
 import ai.agent.android.domain.repositories.MemoryRepository
 import ai.agent.android.domain.repositories.MetricsRepository
@@ -179,4 +181,15 @@ abstract class DataModule {
     @Binds
     @Singleton
     abstract fun bindClarificationRepository(repository: ClarificationRepositoryImpl): ClarificationRepository
+
+    /**
+     * Binds [FirebaseCrashReportingRepositoryImpl] to [CrashReportingRepository]. The implementation
+     * gates every method on [SettingsRepository.crashReportingEnabled], so the binding is safe to
+     * provide unconditionally — no data leaves the device until the user opts in.
+     */
+    @Binds
+    @Singleton
+    abstract fun bindCrashReportingRepository(
+        repository: FirebaseCrashReportingRepositoryImpl,
+    ): CrashReportingRepository
 }

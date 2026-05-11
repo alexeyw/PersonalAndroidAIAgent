@@ -18,6 +18,8 @@ import ai.agent.android.domain.models.usesContextConfig
 import ai.agent.android.domain.prompt.PromptTemplateEngine
 import ai.agent.android.domain.prompt.PromptVariableProvider
 import ai.agent.android.domain.repositories.ChatRepository
+import ai.agent.android.domain.repositories.CrashReportingRepository
+import ai.agent.android.domain.repositories.LocalModelRepository
 import ai.agent.android.domain.repositories.MetricsRepository
 import ai.agent.android.domain.repositories.SettingsRepository
 import ai.agent.android.domain.usecases.RetrieveRelevantMemoryUseCase
@@ -44,6 +46,8 @@ class GraphExecutionEngine @Inject constructor(
     private val promptVariableProviders: Set<@JvmSuppressWildcards PromptVariableProvider>,
     private val nodeContextBuilder: NodeContextBuilder,
     private val retrieveRelevantMemoryUseCase: RetrieveRelevantMemoryUseCase,
+    private val crashReportingRepository: CrashReportingRepository,
+    private val localModelRepository: LocalModelRepository,
 ) {
 
     /**
@@ -97,6 +101,15 @@ class GraphExecutionEngine @Inject constructor(
                 emit(AgentOrchestratorState.Error("Pipeline has no INPUT node"))
                 return@flow
             }
+
+            // Attach Crashlytics custom keys so any non-fatal recorded from
+            // node executors downstream carries the pipeline/model context.
+            // No-op when the user has not opted in to crash reporting.
+            crashReportingRepository.setCustomKey(CRASH_KEY_PIPELINE_ID, graph.id)
+            crashReportingRepository.setCustomKey(
+                CRASH_KEY_ACTIVE_MODEL,
+                localModelRepository.getActiveModel()?.name ?: ACTIVE_MODEL_NONE,
+            )
 
             val maxSteps = settingsRepository.pipelineMaxSteps.first()
             // For deterministic graphs (no routing/queue nodes) the total is fixed from the start.
@@ -522,5 +535,14 @@ class GraphExecutionEngine @Inject constructor(
             NodeType.EVALUATION,
             NodeType.CLARIFICATION,
         )
+
+        /** Crashlytics custom key for the id of the pipeline currently executing. */
+        const val CRASH_KEY_PIPELINE_ID: String = "active_pipeline_id"
+
+        /** Crashlytics custom key for the display name of the active local LLM. */
+        const val CRASH_KEY_ACTIVE_MODEL: String = "active_model"
+
+        /** Value reported when no local model is currently selected. */
+        const val ACTIVE_MODEL_NONE: String = "none"
     }
 }

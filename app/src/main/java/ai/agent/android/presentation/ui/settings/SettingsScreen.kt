@@ -6,6 +6,7 @@ import ai.agent.android.domain.constants.SettingsDefaults
 import ai.agent.android.domain.models.LocalBackend
 import ai.agent.android.presentation.ui.common.resolve
 import android.widget.Toast
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -18,6 +19,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -32,6 +34,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -367,6 +370,16 @@ fun SettingsScreen(
             HorizontalDivider()
             Spacer(modifier = Modifier.height(16.dp))
 
+            // Section: Privacy (Crash Reporting opt-in)
+            PrivacySection(
+                crashReportingEnabled = uiState.crashReportingEnabled,
+                onCrashReportingChange = { enabled -> viewModel.updateCrashReportingEnabled(enabled) },
+            )
+
+            Spacer(modifier = Modifier.height(24.dp))
+            HorizontalDivider()
+            Spacer(modifier = Modifier.height(16.dp))
+
             // Section: External Providers (API Keys & Models)
             Text(
                 text = stringResource(R.string.settings_section_external_providers),
@@ -449,5 +462,84 @@ fun SettingsScreen(
 
             Spacer(modifier = Modifier.height(32.dp))
         }
+    }
+}
+
+/**
+ * Renders the "Privacy" section of the settings screen: a toggle for the
+ * crash-reporting opt-in plus a consent dialog that explains exactly what
+ * gets uploaded the first time the user enables it.
+ *
+ * The toggle is the inverse of the project's default privacy posture
+ * (everything stays on-device), so flipping it ON requires confirmation;
+ * flipping it OFF takes effect immediately.
+ *
+ * @param crashReportingEnabled Current value of the persisted opt-in flag.
+ * @param onCrashReportingChange Callback invoked with the new value after the
+ *                               user confirms (for ON) or immediately (for OFF).
+ */
+@Composable
+private fun PrivacySection(crashReportingEnabled: Boolean, onCrashReportingChange: (Boolean) -> Unit) {
+    var showConsentDialog by remember { mutableStateOf(false) }
+
+    Text(
+        text = stringResource(R.string.settings_section_privacy),
+        style = MaterialTheme.typography.titleMedium,
+        color = MaterialTheme.colorScheme.primary,
+    )
+    Spacer(modifier = Modifier.height(8.dp))
+    // The whole row toggles the switch so the tap target matches the rest of the
+    // settings screen and stays accessible — the inline Switch only mirrors the
+    // state, hence `onCheckedChange = null`.
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable {
+                if (!crashReportingEnabled) {
+                    showConsentDialog = true
+                } else {
+                    onCrashReportingChange(false)
+                }
+            },
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                stringResource(R.string.settings_crash_reporting_label),
+                style = MaterialTheme.typography.bodyLarge,
+            )
+            Text(
+                text = stringResource(R.string.settings_crash_reporting_hint),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Switch(
+            checked = crashReportingEnabled,
+            onCheckedChange = null,
+        )
+    }
+
+    if (showConsentDialog) {
+        AlertDialog(
+            onDismissRequest = { showConsentDialog = false },
+            title = { Text(stringResource(R.string.settings_crash_reporting_dialog_title)) },
+            text = { Text(stringResource(R.string.settings_crash_reporting_dialog_body)) },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showConsentDialog = false
+                        onCrashReportingChange(true)
+                    },
+                ) {
+                    Text(stringResource(R.string.settings_crash_reporting_dialog_confirm))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showConsentDialog = false }) {
+                    Text(stringResource(R.string.settings_crash_reporting_dialog_dismiss))
+                }
+            },
+        )
     }
 }

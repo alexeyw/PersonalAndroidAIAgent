@@ -23,6 +23,7 @@ import ai.agent.android.domain.models.LocalBackend
  * @property ollamaModel The Ollama model name.
  * @property ollamaContextWindow The Ollama context window size.
  * @property pipelineMaxSteps The maximum number of pipeline execution steps (5–100).
+ * @property crashReportingEnabled Whether the user has opted in to anonymous crash reporting.
  */
 data class SettingsUiState(
     val temperature: Float = 0.7f,
@@ -44,4 +45,5 @@ data class SettingsUiState(
     val ollamaContextWindow: String = "4096",
     val localModelBackend: String = LocalBackend.CPU.key,
     val pipelineMaxSteps: Int = 15,
+    val crashReportingEnabled: Boolean = false,
 )

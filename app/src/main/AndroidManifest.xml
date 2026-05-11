@@ -33,6 +33,18 @@
         android:networkSecurityConfig="@xml/network_security_config"
         android:theme="@style/Theme.AndroidAIAgent">
 
+        <!-- Firebase Crashlytics / Analytics — auto-collection is disabled
+             by default to enforce the opt-in flow. The runtime
+             `CrashReportingRepository.setEnabled(true)` flips this on once
+             the user accepts the in-app consent dialog; the setting is
+             persisted by Firebase across launches until cleared. -->
+        <meta-data
+            android:name="firebase_crashlytics_collection_enabled"
+            android:value="false" />
+        <meta-data
+            android:name="firebase_analytics_collection_enabled"
+            android:value="false" />
+
         <!-- Required for LiteRT GPU (OpenCL) acceleration -->
         <uses-native-library android:name="libOpenCL.so" android:required="false" />
         <uses-native-library android:name="libvndksupport.so" android:required="false" />
