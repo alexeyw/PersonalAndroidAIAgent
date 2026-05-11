@@ -1,5 +1,6 @@
 package ai.agent.android.domain.engine
 
+import ai.agent.android.domain.constants.DefaultPrompts
 import ai.agent.android.domain.engine.executors.NodeExecutorFactory
 import ai.agent.android.domain.engine.executors.ToolNodeExecutor
 import ai.agent.android.domain.models.*
@@ -288,7 +289,7 @@ class GraphExecutionEngine @Inject constructor(
                         val contextStr = queueResults.mapIndexed { i, res ->
                             "Result of Subtask ${i + 1}:\n$res"
                         }.joinToString("\n\n")
-                        val subtaskInstruction = "CRITICAL INSTRUCTION: You are executing a single subtask within a larger workflow. Focus ONLY on this specific subtask. Do NOT provide conversational filler, and do NOT attempt to solve the overall task or future steps."
+                        val subtaskInstruction = DefaultPrompts.QueueProcessor.SUBTASK_INSTRUCTION
                         currentInputText = if (contextStr.isNotEmpty()) {
                             "PREVIOUS RESULTS CONTEXT:\n$contextStr\n\n---\n\n$subtaskInstruction\n\nCURRENT SUBTASK TO EXECUTE:\n$nextItem"
                         } else {
@@ -332,7 +333,7 @@ class GraphExecutionEngine @Inject constructor(
                         val contextStr = queueResults.mapIndexed { i, res ->
                             "Result of Subtask ${i + 1}:\n$res"
                         }.joinToString("\n\n")
-                        val subtaskInstruction = "CRITICAL INSTRUCTION: You are executing a single subtask within a larger workflow. Focus ONLY on this specific subtask. Do NOT provide conversational filler, and do NOT attempt to solve the overall task or future steps."
+                        val subtaskInstruction = DefaultPrompts.QueueProcessor.SUBTASK_INSTRUCTION
                         if (contextStr.isNotEmpty()) {
                             currentInputText =
                                 "PREVIOUS RESULTS CONTEXT:\n$contextStr\n\n---\n\n$subtaskInstruction\n\nCURRENT SUBTASK TO EXECUTE:\n$nextItem"

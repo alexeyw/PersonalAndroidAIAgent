@@ -1,5 +1,6 @@
 package ai.agent.android.domain.engine.executors
 
+import ai.agent.android.domain.constants.DefaultPrompts
 import ai.agent.android.domain.engine.LlmInferenceEngine
 import ai.agent.android.domain.models.AgentOrchestratorState
 import ai.agent.android.domain.models.ChatMessage
@@ -79,23 +80,9 @@ class ToolNodeExecutor @Inject constructor(
                 "Tool: ${it.name}\nDescription: ${it.description}\nParameters: ${it.parameters}"
             }
 
-            val prompt = """
-                You are an AI assistant that selects the best tool for a given task and generates arguments.
-                
-                AVAILABLE TOOLS:
-                $toolsDescriptions
-                
-                TASK:
-                $inputText
-                
-                INSTRUCTIONS:
-                Choose the most appropriate tool to solve the task. 
-                Generate strictly valid JSON with two fields: "tool" and "arguments".
-                "tool" should be the exact name of the selected tool.
-                "arguments" should contain the parameters matching the tool's schema.
-                
-                JSON OUTPUT: 
-            """.trimIndent()
+            val prompt = DefaultPrompts.Tool.AUTO_SELECT_TEMPLATE
+                .replace("\$AVAILABLE_TOOLS", toolsDescriptions)
+                .replace("\$INPUT_TEXT", inputText)
 
             val responseStream = llmEngine.generateResponseStream(prompt)
             val accumulatedResponse = StringBuilder()
@@ -135,22 +122,11 @@ class ToolNodeExecutor @Inject constructor(
                 return@flow
             }
 
-            val prompt = """
-                You are an AI assistant that generates arguments for a specific tool.
-                
-                TOOL: ${selectedTool.name}
-                DESCRIPTION: ${selectedTool.description}
-                PARAMETERS SCHEMA: ${selectedTool.parameters}
-                
-                TASK:
-                $inputText
-                
-                INSTRUCTIONS:
-                Based on the task description, generate strictly valid JSON for the tool's "arguments" according to its schema.
-                Do not wrap in anything else, just the JSON for the arguments. If it's a primitive, output {"tool": "${selectedTool.name}", "arguments": <value>}.
-                
-                JSON OUTPUT: 
-            """.trimIndent()
+            val prompt = DefaultPrompts.Tool.ARGUMENT_GENERATION_TEMPLATE
+                .replace("\$TOOL_NAME", selectedTool.name)
+                .replace("\$TOOL_DESCRIPTION", selectedTool.description)
+                .replace("\$TOOL_PARAMETERS", selectedTool.parameters)
+                .replace("\$INPUT_TEXT", inputText)
 
             val responseStream = llmEngine.generateResponseStream(prompt)
             val accumulatedResponse = StringBuilder()

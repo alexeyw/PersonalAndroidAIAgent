@@ -1,5 +1,6 @@
 package ai.agent.android.domain.usecases
 
+import ai.agent.android.domain.constants.DefaultPrompts
 import ai.agent.android.domain.engine.LlmInferenceEngine
 import ai.agent.android.domain.models.NodeModel
 import ai.agent.android.domain.models.NodeType
@@ -60,11 +61,9 @@ class EvaluateIfConditionUseCase @Inject constructor(private val llmInferenceEng
         // 3. Evaluate using LLM if a prompt is provided
         val conditionPrompt = node.conditionPrompt
         if (!conditionPrompt.isNullOrBlank()) {
-            val prompt = """
-                Evaluate the following text against the condition: "$conditionPrompt".
-                Text: "$inputText"
-                Reply strictly with 'true' or 'false'.
-            """.trimIndent()
+            val prompt = DefaultPrompts.IfCondition.EVALUATION_TEMPLATE
+                .replace("\$CONDITION_PROMPT", conditionPrompt)
+                .replace("\$INPUT_TEXT", inputText)
 
             return try {
                 val tokens = mutableListOf<String>()

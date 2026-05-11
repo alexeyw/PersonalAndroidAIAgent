@@ -1,5 +1,6 @@
 package ai.agent.android.domain.engine.executors
 
+import ai.agent.android.domain.constants.DefaultPrompts
 import ai.agent.android.domain.engine.LlmInferenceEngine
 import ai.agent.android.domain.models.AgentOrchestratorState
 import ai.agent.android.domain.models.ChatMessage
@@ -27,8 +28,11 @@ class OutputNodeExecutor @Inject constructor(
         sessionId: String,
         originalPrompt: String,
     ): Flow<NodeOutput> = flow {
-        if (!node.systemPrompt.isNullOrBlank()) {
-            val fullPrompt = "${node.systemPrompt}\n\nCRITICAL INSTRUCTION: Output ONLY the requested format. Do NOT include any conversational filler, explanations, or preambles (e.g., \"Here is the formatted output:\").\n\nINPUT: $inputText\nFORMATTED OUTPUT: "
+        val nodeSystemPrompt = node.systemPrompt
+        if (!nodeSystemPrompt.isNullOrBlank()) {
+            val fullPrompt = DefaultPrompts.Output.FORMATTING_TEMPLATE
+                .replace("\$NODE_SYSTEM_PROMPT", nodeSystemPrompt)
+                .replace("\$INPUT_TEXT", inputText)
 
             val loadResult = loadModelUseCase(node.modelPath)
             if (loadResult is Result.Error) {
