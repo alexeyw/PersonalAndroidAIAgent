@@ -1,6 +1,7 @@
 package ai.agent.android.domain.engine.executors
 
 import ai.agent.android.domain.constants.DefaultPrompts
+import ai.agent.android.domain.constants.PipelineExecutionDefaults
 import ai.agent.android.domain.engine.CloudLlmClientFactory
 import ai.agent.android.domain.engine.CloudLlmModelResolver
 import ai.agent.android.domain.models.AgentOrchestratorState
@@ -118,7 +119,7 @@ class CloudLlmNodeExecutor @Inject constructor(
 
         val fullResponseText = accumulatedResponse.toString().trim()
 
-        kotlinx.coroutines.delay(1000)
+        kotlinx.coroutines.delay(PipelineExecutionDefaults.NODE_RESULT_EMIT_DELAY_MS)
 
         emit(NodeOutput.Result(NodeExecutionResult(outputText = fullResponseText, tokenCount = approximateTokenCount)))
     }

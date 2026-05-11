@@ -292,7 +292,10 @@ private fun PipelineRow(
             ) {
                 Text(
                     text = pipeline.name.ifBlank {
-                        stringResource(R.string.orchestrator_library_pipeline_unnamed, pipeline.id.take(4))
+                        stringResource(
+                            R.string.orchestrator_library_pipeline_unnamed,
+                            pipeline.id.take(UNNAMED_PIPELINE_ID_SUFFIX_LENGTH),
+                        )
                     },
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold,
@@ -463,3 +466,10 @@ private fun formatTimestamp(timestamp: Long): String {
     val formatter = SimpleDateFormat("dd MMM yyyy HH:mm", Locale.getDefault())
     return formatter.format(Date(timestamp))
 }
+
+/**
+ * Number of leading characters of a pipeline UUID embedded into the placeholder
+ * label shown for pipelines that have no user-assigned name yet.
+ */
+private const val UNNAMED_PIPELINE_ID_SUFFIX_LENGTH: Int = 4
+

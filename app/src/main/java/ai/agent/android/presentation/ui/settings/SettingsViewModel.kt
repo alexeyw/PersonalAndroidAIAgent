@@ -1,6 +1,7 @@
 package ai.agent.android.presentation.ui.settings
 
 import ai.agent.android.R
+import ai.agent.android.domain.constants.SettingsDefaults
 import ai.agent.android.domain.models.Result
 import ai.agent.android.domain.repositories.ApiKeyRepository
 import ai.agent.android.domain.repositories.LocalModelRepository
@@ -132,7 +133,12 @@ class SettingsViewModel @Inject constructor(
      */
     fun updatePipelineMaxSteps(steps: Int) {
         viewModelScope.launch {
-            settingsRepository.setPipelineMaxSteps(steps.coerceIn(5, 100))
+            settingsRepository.setPipelineMaxSteps(
+                steps.coerceIn(
+                    SettingsDefaults.PIPELINE_MAX_STEPS_MIN,
+                    SettingsDefaults.PIPELINE_MAX_STEPS_MAX,
+                ),
+            )
         }
     }
 
@@ -146,7 +152,7 @@ class SettingsViewModel @Inject constructor(
 
             try {
                 // Ensure settings are flushed
-                delay(500)
+                delay(BACKEND_TEST_FLUSH_DELAY_MS)
                 val result = loadModelUseCase(activeModel.path)
                 if (result is Result.Success) {
                     onResult(UiText(R.string.settings_backend_test_success))
@@ -342,8 +348,16 @@ class SettingsViewModel @Inject constructor(
      */
     fun updateOllamaContextWindow(window: String) {
         viewModelScope.launch {
-            val size = window.toIntOrNull() ?: 4096
+            val size = window.toIntOrNull() ?: SettingsDefaults.OLLAMA_CONTEXT_WINDOW_DEFAULT
             apiKeyRepository.setOllamaContextWindowSize(size)
         }
+    }
+
+    private companion object {
+        /**
+         * Short delay between writing the backend setting and triggering the test
+         * load, giving DataStore time to flush so the loader observes the new value.
+         */
+        const val BACKEND_TEST_FLUSH_DELAY_MS: Long = 500L
     }
 }

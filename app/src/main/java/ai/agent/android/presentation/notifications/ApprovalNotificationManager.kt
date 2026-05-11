@@ -1,6 +1,7 @@
 package ai.agent.android.presentation.notifications
 
 import ai.agent.android.domain.constants.NotificationChannels
+import ai.agent.android.domain.constants.TimeAndIdConstants
 import ai.agent.android.domain.services.ApprovalNotifier
 import ai.agent.android.presentation.receivers.AgentApprovalReceiver
 import ai.agent.android.presentation.receivers.ApprovalAction
@@ -86,6 +87,9 @@ class ApprovalNotificationManager @Inject constructor(
             .build()
 
         // Use sessionId hashcode as notification ID so multiple requests can be shown if needed
-        notificationManager.notify(NOTIFICATION_ID + sessionId.hashCode() % 1000, notification)
+        notificationManager.notify(
+            NOTIFICATION_ID + sessionId.hashCode() % TimeAndIdConstants.NOTIFICATION_ID_RANGE,
+            notification,
+        )
     }
 }

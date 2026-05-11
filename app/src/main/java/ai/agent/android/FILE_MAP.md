@@ -86,6 +86,9 @@ This file maps the contents of the main application package.
   - `constants/` - Domain-level constants.
     - `DefaultPrompts.kt` - Default system prompts.
     - `NotificationChannels.kt` - Canonical ids of every Android `NotificationChannel` (foreground service status, approval prompts).
+    - `PipelineExecutionDefaults.kt` - Engine-level timing and log-size constants consumed by `GraphExecutionEngine` and the LLM-backed node executors (post-emit pause, LiteRT pre-warm delay, node-IO log char limit).
+    - `SettingsDefaults.kt` - Default values for every user-tunable preference (sampling params, timeouts, pipeline-step bounds, Ollama context window). Single source of truth shared by `SettingsManager`, `SettingsViewModel`, and the visual orchestrator.
+    - `TimeAndIdConstants.kt` - Cross-module numeric constants for time-unit conversion (`MS_PER_SECOND`, `MS_PER_MINUTE`) and the notification-id partition range shared by approval-publish/receive paths.
   - `engine/` - Engine interfaces and abstractions.
     - `CloudLlmClientFactory.kt` - Domain interface for constructing cloud LLM clients (data-layer impl: `KoogClientFactory`).
     - `CloudLlmModelResolver.kt` - Domain interface for resolving cloud-LLM model objects (data-layer impl: `KoogCloudLlmModelResolver`).
@@ -186,8 +189,7 @@ This file maps the contents of the main application package.
   - `state/` - State management components.
     - `ActiveSessionTracker.kt` - Tracker for active chat session.
   - `theme/` - Compose theme definitions.
-    - `Color.kt` - Color palette.
-    - `Theme.kt` - App theme definition.
+    - `Theme.kt` - App theme definition. Reads the static fallback palette from `res/values/colors.xml` via `colorResource(...)`; dynamic color (Android 12+) takes precedence on supported devices.
     - `Type.kt` - Typography settings.
   - `ui/` - UI screens and ViewModels.
     - `MainActivity.kt` - Main activity.

@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+        Chat screen: minimum screen height at which the inline console panel is
+        kept expanded. Below this threshold the panel auto-collapses to free
+        vertical space for the message list.
+    -->
+    <dimen name="chat_compact_console_threshold_height">480dp</dimen>
+</resources>

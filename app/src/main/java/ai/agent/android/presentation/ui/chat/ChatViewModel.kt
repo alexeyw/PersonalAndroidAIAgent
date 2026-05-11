@@ -582,7 +582,11 @@ class ChatViewModel @Inject constructor(
             // Auto-rename logic for new chats
             val currentSession = currentState.sessions.find { it.id == currentState.currentSessionId }
             if (currentSession?.name == DEFAULT_NEW_CHAT_NAME) {
-                val newName = if (prompt.length > 20) prompt.take(20) + "..." else prompt
+                val newName = if (prompt.length > AUTO_RENAME_CHAR_LIMIT) {
+                    prompt.take(AUTO_RENAME_CHAR_LIMIT) + "..."
+                } else {
+                    prompt
+                }
                 renameSession(currentState.currentSessionId, newName)
             }
 
@@ -1160,6 +1164,13 @@ class ChatViewModel @Inject constructor(
          * sessions always carry a name in normal flows).
          */
         const val EXPORT_FALLBACK_SESSION_NAME = "Chat"
+
+        /**
+         * Maximum number of characters of the first user message used as the
+         * auto-generated chat session name (`"<first-N chars>…"`). Keeps the
+         * drawer entry concise without losing the user's framing.
+         */
+        const val AUTO_RENAME_CHAR_LIMIT: Int = 20
 
         /**
          * Suffix appended to a partial agent message persisted by

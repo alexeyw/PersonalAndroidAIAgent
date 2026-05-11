@@ -1,6 +1,7 @@
 package ai.agent.android.domain.engine
 
 import ai.agent.android.domain.constants.DefaultPrompts
+import ai.agent.android.domain.constants.PipelineExecutionDefaults
 import ai.agent.android.domain.engine.executors.NodeExecutorFactory
 import ai.agent.android.domain.engine.executors.ToolNodeExecutor
 import ai.agent.android.domain.models.*
@@ -133,14 +134,17 @@ class GraphExecutionEngine @Inject constructor(
                 pushConsole(ConsoleEventType.NodeExecution, "▶ ${currentNode.type.name}")
 
                 // Give UI time to render the stage before CPU-heavy inference starts
-                kotlinx.coroutines.delay(500)
+                kotlinx.coroutines.delay(PipelineExecutionDefaults.LITE_RT_PREWARM_DELAY_MS)
 
                 var nodeResult: NodeExecutionResult? = null
 
                 val executor = nodeExecutorFactory.getExecutor(currentNode.type)
                 Timber.tag(
                     "PipelineDebug",
-                ).d("[NODE_IN] type=${currentNode.type.name} id=${currentNode.id} input=${currentInputText.take(1000)}")
+                ).d(
+                    "[NODE_IN] type=${currentNode.type.name} id=${currentNode.id} " +
+                        "input=${currentInputText.take(PipelineExecutionDefaults.NODE_IO_LOG_CHAR_LIMIT)}",
+                )
 
                 // Render `$VARIABLE` placeholders in the node's system prompt before the LLM
                 // sees it. We only touch nodes whose system prompt is actually fed into an LLM
@@ -185,9 +189,8 @@ class GraphExecutionEngine @Inject constructor(
                     Timber.tag(
                         "PipelineDebug",
                     ).d(
-                        "[NODE_OUT] type=${currentNode.type.name} id=${currentNode.id} output=${nodeResult?.outputText?.take(
-                            1000,
-                        )}",
+                        "[NODE_OUT] type=${currentNode.type.name} id=${currentNode.id} " +
+                            "output=${nodeResult?.outputText?.take(PipelineExecutionDefaults.NODE_IO_LOG_CHAR_LIMIT)}",
                     )
                 } catch (e: Exception) {
                     Timber.tag(

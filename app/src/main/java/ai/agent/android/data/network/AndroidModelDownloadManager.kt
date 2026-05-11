@@ -63,7 +63,7 @@ class AndroidModelDownloadManager @Inject constructor(
                     var totalBytesRead = 0L
                     var lastProgressEmit = -1
                     val buffer = okio.Buffer()
-                    val bufferSize = 8L * 1024 // 8 KB chunks
+                    val bufferSize = DOWNLOAD_BUFFER_BYTES
 
                     var bytesRead: Long
                     while (source.read(buffer, bufferSize).also { bytesRead = it } != -1L) {
@@ -97,4 +97,9 @@ class AndroidModelDownloadManager @Inject constructor(
      * @property message The error message detailing the failure.
      */
     data class DownloadError(val message: String) : AppError.Network
+
+    private companion object {
+        /** Size, in bytes, of the chunk read from the network and flushed to disk on each loop. */
+        const val DOWNLOAD_BUFFER_BYTES: Long = 8_192L
+    }
 }

@@ -1,5 +1,6 @@
 package ai.agent.android.data.repositories
 
+import ai.agent.android.domain.constants.TimeAndIdConstants
 import ai.agent.android.domain.models.AgentMetrics
 import ai.agent.android.domain.models.NodeType
 import ai.agent.android.domain.repositories.MetricsRepository
@@ -24,7 +25,7 @@ class MetricsRepositoryImpl @Inject constructor() : MetricsRepository {
 
     override fun updateMetrics(timeMs: Long, tokensProcessed: Int) {
         val tps = if (timeMs > 0) {
-            (tokensProcessed.toFloat() / (timeMs.toFloat() / 1000f))
+            (tokensProcessed.toFloat() / (timeMs.toFloat() / TimeAndIdConstants.MS_PER_SECOND.toFloat()))
         } else {
             0f
         }

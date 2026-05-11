@@ -45,7 +45,7 @@ class MonitoringViewModel @Inject constructor(
         )
     }.stateIn(
         scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5000),
+        started = SharingStarted.WhileSubscribed(STATE_STOP_TIMEOUT_MS),
         initialValue = MonitoringUiState(isLoading = true),
     )
 
@@ -64,5 +64,14 @@ class MonitoringViewModel @Inject constructor(
                 _isLoading.value = false
             }
         }
+    }
+
+    private companion object {
+        /**
+         * Grace period in milliseconds the upstream flow keeps running after the
+         * last subscriber detaches; protects the merge against quick navigation
+         * round-trips that would otherwise tear down the chain.
+         */
+        const val STATE_STOP_TIMEOUT_MS: Long = 5_000L
     }
 }

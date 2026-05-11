@@ -41,7 +41,7 @@ class ChatRepositoryImpl @Inject constructor(private val chatDao: ChatDao, priva
                 chatDao.insertSession(
                     ai.agent.android.data.local.models.ChatSessionEntity(
                         id = message.sessionId,
-                        name = "Chat " + message.sessionId.take(6),
+                        name = "Chat " + message.sessionId.take(NEW_SESSION_NAME_SUFFIX_LENGTH),
                         updatedAt = message.timestamp,
                     ),
                 )
@@ -128,4 +128,12 @@ class ChatRepositoryImpl @Inject constructor(private val chatDao: ChatDao, priva
                 )
             }
         }
+
+    private companion object {
+        /**
+         * Number of leading characters of a session UUID embedded into the auto-generated
+         * display name (e.g. `Chat 5b7a2c`) shown when the user has not renamed the chat.
+         */
+        const val NEW_SESSION_NAME_SUFFIX_LENGTH: Int = 6
+    }
 }

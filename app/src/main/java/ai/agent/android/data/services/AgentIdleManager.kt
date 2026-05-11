@@ -1,5 +1,6 @@
 package ai.agent.android.data.services
 
+import ai.agent.android.domain.constants.TimeAndIdConstants
 import ai.agent.android.domain.engine.LlmInferenceEngine
 import ai.agent.android.domain.models.AgentOrchestratorState
 import kotlinx.coroutines.CoroutineScope
@@ -25,7 +26,7 @@ class AgentIdleManager(
     private val scope: CoroutineScope,
     private val engine: LlmInferenceEngine,
     private val agentState: StateFlow<AgentOrchestratorState>,
-    private val idleTimeoutMs: Long = 5 * 60 * 1000L, // 5 minutes default
+    private val idleTimeoutMs: Long = DEFAULT_IDLE_TIMEOUT_MINUTES * TimeAndIdConstants.MS_PER_MINUTE,
 ) {
     private var idleJob: Job? = null
 
@@ -73,5 +74,10 @@ class AgentIdleManager(
     private fun cancelIdleTimer() {
         idleJob?.cancel()
         idleJob = null
+    }
+
+    private companion object {
+        /** Default number of minutes of inactivity before the LLM engine is unloaded from memory. */
+        const val DEFAULT_IDLE_TIMEOUT_MINUTES: Long = 5L
     }
 }

@@ -36,6 +36,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.res.colorResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -87,18 +88,18 @@ fun DraggableNode(
     onCloudProviderSelected: (String, String) -> Unit = { _, _ -> },
 ) {
     val nodeColor = when (node.type) {
-        NodeType.LITE_RT -> Color(0xFF4CAF50)
-        NodeType.CLOUD -> Color(0xFF2196F3)
-        NodeType.TOOL -> Color(0xFFFF9800)
-        NodeType.IF_CONDITION -> Color(0xFFFFC107)
-        NodeType.INTENT_ROUTER -> Color(0xFFE91E63)
-        NodeType.DECOMPOSITION -> Color(0xFF3F51B5)
-        NodeType.QUEUE_PROCESSOR -> Color(0xFF795548)
-        NodeType.EVALUATION -> Color(0xFF009688)
-        NodeType.SUMMARY -> Color(0xFF8BC34A)
-        NodeType.CLARIFICATION -> Color(0xFF9C27B0)
-        NodeType.INPUT -> Color(0xFF607D8B)
-        NodeType.OUTPUT -> Color(0xFFF44336)
+        NodeType.LITE_RT -> colorResource(R.color.node_color_lite_rt)
+        NodeType.CLOUD -> colorResource(R.color.node_color_cloud)
+        NodeType.TOOL -> colorResource(R.color.node_color_tool)
+        NodeType.IF_CONDITION -> colorResource(R.color.node_color_if_condition)
+        NodeType.INTENT_ROUTER -> colorResource(R.color.node_color_intent_router)
+        NodeType.DECOMPOSITION -> colorResource(R.color.node_color_decomposition)
+        NodeType.QUEUE_PROCESSOR -> colorResource(R.color.node_color_queue_processor)
+        NodeType.EVALUATION -> colorResource(R.color.node_color_evaluation)
+        NodeType.SUMMARY -> colorResource(R.color.node_color_summary)
+        NodeType.CLARIFICATION -> colorResource(R.color.node_color_clarification)
+        NodeType.INPUT -> colorResource(R.color.node_color_input)
+        NodeType.OUTPUT -> colorResource(R.color.node_color_output)
     }
 
     Box(

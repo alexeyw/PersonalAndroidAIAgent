@@ -36,7 +36,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.colorResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -170,7 +170,7 @@ fun TaskCard(task: TaskItem, onCancel: (String) -> Unit, onNavigateToChat: (Stri
                         text = stringResource(R.string.taskmonitor_status, task.status.name),
                         style = MaterialTheme.typography.bodySmall,
                         color = when (task.status) {
-                            TaskStatus.RUNNING -> Color(0xFF4CAF50) // Green
+                            TaskStatus.RUNNING -> colorResource(R.color.task_status_running)
                             TaskStatus.FAILED -> MaterialTheme.colorScheme.error
                             TaskStatus.QUEUED -> MaterialTheme.colorScheme.tertiary
                             TaskStatus.COMPLETED -> MaterialTheme.colorScheme.onSurfaceVariant

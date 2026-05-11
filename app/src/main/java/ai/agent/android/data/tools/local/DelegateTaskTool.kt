@@ -115,7 +115,7 @@ class DelegateTaskTool @Inject constructor(
                 }
 
                 // Apply a 60-second timeout for the external API call
-                val result = withTimeoutOrNull(60_000L) {
+                val result = withTimeoutOrNull(LLM_CALL_TIMEOUT_MS) {
                     val stream = client.executeStreaming(prompt("default") { user(taskDescription) }, model)
                     stream.mapNotNull { frame -> (frame as? StreamFrame.TextDelta)?.text }.toList().joinToString("")
                 }
@@ -131,10 +131,18 @@ class DelegateTaskTool @Inject constructor(
                     memoryRepository.saveMemory(responseText, embedding)
 
                     "Success: Task completed by '${provider.id}' and saved to memory. " +
-                        "Summary of response: ${responseText.take(100)}..."
+                        "Summary of response: ${responseText.take(RESPONSE_PREVIEW_CHAR_LIMIT)}..."
                 }
             } catch (e: Exception) {
                 "Error: Task delegation failed due to an exception: ${e.message}"
             }
         }
+
+    private companion object {
+        /** Maximum wall-clock time, in milliseconds, allowed for a single delegated cloud-LLM call. */
+        const val LLM_CALL_TIMEOUT_MS: Long = 60_000L
+
+        /** Maximum number of characters of the delegated response previewed in the success message. */
+        const val RESPONSE_PREVIEW_CHAR_LIMIT: Int = 100
+    }
 }

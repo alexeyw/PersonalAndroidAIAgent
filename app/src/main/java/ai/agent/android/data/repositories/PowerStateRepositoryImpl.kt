@@ -79,17 +79,25 @@ class PowerStateRepositoryImpl @Inject constructor(@ApplicationContext private v
         val scale: Int = batteryStatus.getIntExtra(BatteryManager.EXTRA_SCALE, -1)
 
         val batteryPct = if (level != -1 && scale != -1) {
-            level * 100 / scale.toFloat()
+            level * BATTERY_PERCENT_FULL / scale.toFloat()
         } else {
-            100f
+            BATTERY_PERCENT_FULL.toFloat()
         }
 
         // Android typically broadcasts ACTION_BATTERY_LOW at 15%
-        val isBatteryLow = batteryPct <= 15f
+        val isBatteryLow = batteryPct <= BATTERY_LOW_THRESHOLD_PERCENT
 
         return PowerState(
             isBatteryLow = isBatteryLow,
             isCharging = isCharging,
         )
+    }
+
+    private companion object {
+        /** Value used as both the percentage multiplier and the fallback "fully charged" reading. */
+        const val BATTERY_PERCENT_FULL: Int = 100
+
+        /** Threshold below which the device is considered low on battery (mirrors Android's own `ACTION_BATTERY_LOW`). */
+        const val BATTERY_LOW_THRESHOLD_PERCENT: Float = 15f
     }
 }

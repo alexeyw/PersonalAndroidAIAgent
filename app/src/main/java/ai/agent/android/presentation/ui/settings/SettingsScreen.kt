@@ -2,6 +2,7 @@ package ai.agent.android.presentation.ui.settings
 
 import ai.agent.android.R
 import ai.agent.android.data.engine.KoogModelMapper
+import ai.agent.android.domain.constants.SettingsDefaults
 import ai.agent.android.domain.models.LocalBackend
 import ai.agent.android.presentation.ui.common.resolve
 import android.widget.Toast
@@ -268,7 +269,11 @@ fun SettingsScreen(
             // LaunchedEffect syncs only when the value changes from an external source.
             var pipelineMaxStepsText by remember { mutableStateOf(uiState.pipelineMaxSteps.toString()) }
             LaunchedEffect(uiState.pipelineMaxSteps) {
-                if (pipelineMaxStepsText.toIntOrNull()?.coerceIn(5, 100) != uiState.pipelineMaxSteps) {
+                val coerced = pipelineMaxStepsText.toIntOrNull()?.coerceIn(
+                    SettingsDefaults.PIPELINE_MAX_STEPS_MIN,
+                    SettingsDefaults.PIPELINE_MAX_STEPS_MAX,
+                )
+                if (coerced != uiState.pipelineMaxSteps) {
                     pipelineMaxStepsText = uiState.pipelineMaxSteps.toString()
                 }
             }

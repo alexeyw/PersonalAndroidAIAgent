@@ -1,6 +1,7 @@
 package ai.agent.android.data.local
 
 import ai.agent.android.domain.constants.DefaultPrompts
+import ai.agent.android.domain.constants.SettingsDefaults
 import ai.agent.android.domain.models.LocalBackend
 import ai.agent.android.domain.repositories.SettingsRepository
 import androidx.datastore.core.DataStore
@@ -98,7 +99,7 @@ class SettingsManager @Inject constructor(private val dataStore: DataStore<Prefe
             }
         }
         .map { preferences ->
-            preferences[PreferencesKeys.MAX_CONTEXT_LENGTH] ?: 4000
+            preferences[PreferencesKeys.MAX_CONTEXT_LENGTH] ?: SettingsDefaults.MAX_CONTEXT_LENGTH_DEFAULT
         }
 
     override suspend fun setMaxContextLength(length: Int) {
@@ -117,7 +118,7 @@ class SettingsManager @Inject constructor(private val dataStore: DataStore<Prefe
             }
         }
         .map { preferences ->
-            preferences[PreferencesKeys.TEMPERATURE] ?: 0.7f
+            preferences[PreferencesKeys.TEMPERATURE] ?: SettingsDefaults.TEMPERATURE_DEFAULT
         }
 
     override suspend fun setTemperature(temperature: Float) {
@@ -136,7 +137,7 @@ class SettingsManager @Inject constructor(private val dataStore: DataStore<Prefe
             }
         }
         .map { preferences ->
-            preferences[PreferencesKeys.TOP_K] ?: 40
+            preferences[PreferencesKeys.TOP_K] ?: SettingsDefaults.TOP_K_DEFAULT
         }
 
     override suspend fun setTopK(topK: Int) {
@@ -155,7 +156,7 @@ class SettingsManager @Inject constructor(private val dataStore: DataStore<Prefe
             }
         }
         .map { preferences ->
-            preferences[PreferencesKeys.TOP_P] ?: 0.9f
+            preferences[PreferencesKeys.TOP_P] ?: SettingsDefaults.TOP_P_DEFAULT
         }
 
     override suspend fun setTopP(topP: Float) {
@@ -300,7 +301,7 @@ class SettingsManager @Inject constructor(private val dataStore: DataStore<Prefe
             }
         }
         .map { preferences ->
-            preferences[PreferencesKeys.MAX_MEMORY_CHUNKS_FOR_SEARCH] ?: 1000
+            preferences[PreferencesKeys.MAX_MEMORY_CHUNKS_FOR_SEARCH] ?: SettingsDefaults.MEMORY_CHUNK_SEARCH_LIMIT_DEFAULT
         }
 
     override suspend fun setMaxMemoryChunksForSearch(limit: Int) {
@@ -361,7 +362,7 @@ class SettingsManager @Inject constructor(private val dataStore: DataStore<Prefe
             }
         }
         .map { preferences ->
-            preferences[PreferencesKeys.TOOL_CALL_TIMEOUT_MS] ?: 60_000L
+            preferences[PreferencesKeys.TOOL_CALL_TIMEOUT_MS] ?: SettingsDefaults.TOOL_CALL_TIMEOUT_MS_DEFAULT
         }
 
     override suspend fun setToolCallTimeoutMs(timeoutMs: Long) {
@@ -380,12 +381,15 @@ class SettingsManager @Inject constructor(private val dataStore: DataStore<Prefe
             }
         }
         .map { preferences ->
-            preferences[PreferencesKeys.PIPELINE_MAX_STEPS] ?: 15
+            preferences[PreferencesKeys.PIPELINE_MAX_STEPS] ?: SettingsDefaults.PIPELINE_MAX_STEPS_DEFAULT
         }
 
     override suspend fun setPipelineMaxSteps(steps: Int) {
         dataStore.edit { preferences ->
-            preferences[PreferencesKeys.PIPELINE_MAX_STEPS] = steps.coerceIn(5, 100)
+            preferences[PreferencesKeys.PIPELINE_MAX_STEPS] = steps.coerceIn(
+                SettingsDefaults.PIPELINE_MAX_STEPS_MIN,
+                SettingsDefaults.PIPELINE_MAX_STEPS_MAX,
+            )
         }
     }
 

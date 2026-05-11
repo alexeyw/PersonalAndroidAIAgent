@@ -30,7 +30,6 @@ class EncryptedDbPassphraseProvider @Inject constructor(@ApplicationContext priv
 
     private val prefsName = "secure_db_passphrase"
     private val passphraseKey = "db_passphrase_hex"
-    private val passphraseByteLength = 32
 
     private val masterKey by lazy {
         MasterKey.Builder(context)
@@ -60,12 +59,12 @@ class EncryptedDbPassphraseProvider @Inject constructor(@ApplicationContext priv
         val existingHex = sharedPreferences.getString(passphraseKey, null)
         if (existingHex != null) {
             val decoded = decodeHexOrNull(existingHex)
-            if (decoded != null && decoded.size == passphraseByteLength) {
+            if (decoded != null && decoded.size == PASSPHRASE_BYTE_LENGTH) {
                 return decoded
             }
             Timber.w("Stored DB passphrase is malformed; regenerating.")
         }
-        val generated = ByteArray(passphraseByteLength).also { SecureRandom().nextBytes(it) }
+        val generated = ByteArray(PASSPHRASE_BYTE_LENGTH).also { SecureRandom().nextBytes(it) }
         // commit = true forces synchronous fsync: a freshly generated passphrase must hit disk
         // before it is ever used to open the DB, otherwise a process crash between creating the
         // encrypted DB and flushing the prefs would leave the DB permanently unreadable.
@@ -98,7 +97,7 @@ class EncryptedDbPassphraseProvider @Inject constructor(@ApplicationContext priv
     private fun encodeHex(bytes: ByteArray): String {
         val sb = StringBuilder(bytes.size * 2)
         for (b in bytes) {
-            sb.append(String.format("%02x", b.toInt() and 0xff))
+            sb.append(String.format("%02x", b.toInt() and BYTE_MASK))
         }
         return sb.toString()
     }
@@ -108,12 +107,26 @@ class EncryptedDbPassphraseProvider @Inject constructor(@ApplicationContext priv
         val out = ByteArray(hex.length / 2)
         var i = 0
         while (i < hex.length) {
-            val hi = Character.digit(hex[i], 16)
-            val lo = Character.digit(hex[i + 1], 16)
+            val hi = Character.digit(hex[i], HEX_RADIX)
+            val lo = Character.digit(hex[i + 1], HEX_RADIX)
             if (hi < 0 || lo < 0) return null
-            out[i / 2] = ((hi shl 4) or lo).toByte()
+            out[i / 2] = ((hi shl BITS_PER_NIBBLE) or lo).toByte()
             i += 2
         }
         return out
+    }
+
+    private companion object {
+        /** Length, in bytes, of the random SQLCipher passphrase. */
+        const val PASSPHRASE_BYTE_LENGTH: Int = 32
+
+        /** Bit mask used to widen a signed `Byte` to an unsigned 0..255 `Int`. */
+        const val BYTE_MASK: Int = 0xff
+
+        /** Radix passed to [Character.digit] when decoding hexadecimal characters. */
+        const val HEX_RADIX: Int = 16
+
+        /** Number of bits in one hexadecimal digit; used when packing two nibbles into a byte. */
+        const val BITS_PER_NIBBLE: Int = 4
     }
 }

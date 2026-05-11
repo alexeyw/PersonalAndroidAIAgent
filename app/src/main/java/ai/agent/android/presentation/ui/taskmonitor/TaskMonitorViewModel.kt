@@ -130,7 +130,7 @@ class TaskMonitorViewModel @Inject constructor(
         )
     }.stateIn(
         scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5000),
+        started = SharingStarted.WhileSubscribed(STATE_STOP_TIMEOUT_MS),
         initialValue = TaskMonitorState(),
     )
 
@@ -167,5 +167,14 @@ class TaskMonitorViewModel @Inject constructor(
             settingsRepository.setCurrentChatSessionId(sessionId)
             onComplete()
         }
+    }
+
+    private companion object {
+        /**
+         * Grace period in milliseconds the upstream flow keeps running after the
+         * last subscriber detaches; protects the chain against quick navigation
+         * round-trips that would otherwise tear it down and re-build it.
+         */
+        const val STATE_STOP_TIMEOUT_MS: Long = 5_000L
     }
 }

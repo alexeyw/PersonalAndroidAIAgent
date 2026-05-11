@@ -1,5 +1,6 @@
 package ai.agent.android.data.local
 
+import ai.agent.android.domain.constants.SettingsDefaults
 import ai.agent.android.domain.repositories.ApiKeyRepository
 import android.content.Context
 import android.content.SharedPreferences
@@ -95,7 +96,9 @@ class ApiKeyManager @Inject constructor(@ApplicationContext private val context:
     private val _deepSeekModelFlow by lazy { MutableStateFlow(sharedPreferences.getString(Keys.DEEPSEEK_MODEL, null)) }
     private val _ollamaUrlFlow by lazy { MutableStateFlow(sharedPreferences.getString(Keys.OLLAMA_URL, null)) }
     private val _ollamaModelFlow by lazy { MutableStateFlow(sharedPreferences.getString(Keys.OLLAMA_MODEL, null)) }
-    private val _ollamaContextFlow by lazy { MutableStateFlow(sharedPreferences.getInt(Keys.OLLAMA_CONTEXT, 4096)) }
+    private val _ollamaContextFlow by lazy {
+        MutableStateFlow(sharedPreferences.getInt(Keys.OLLAMA_CONTEXT, SettingsDefaults.OLLAMA_CONTEXT_WINDOW_DEFAULT))
+    }
 
     override fun getOpenAIKey(): Flow<String?> = _openAIKeyFlow.asStateFlow()
 
