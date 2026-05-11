@@ -1,6 +1,7 @@
 package ai.agent.android.domain.repositories
 
 import ai.agent.android.domain.models.AgentMetrics
+import ai.agent.android.domain.models.NodeType
 import kotlinx.coroutines.flow.StateFlow
 
 /**
@@ -26,9 +27,9 @@ interface MetricsRepository {
      * Updates `totalExecutionTimeMs`, `timePerNodeType`, and (when tokens are available)
      * `totalTokensProcessed` so the statistics screen can display cumulative usage.
      *
-     * @param nodeName The node type name (e.g. "LLM", "TOOL", "INTENT_ROUTER").
+     * @param nodeType The typed [NodeType] of the node that just finished executing.
      * @param durationMs Wall-clock time the node took, in milliseconds.
      * @param tokenCount Approximate tokens produced by the node, or `null` for non-LLM nodes.
      */
-    fun recordNodeExecution(nodeName: String, durationMs: Long, tokenCount: Int?)
+    fun recordNodeExecution(nodeType: NodeType, durationMs: Long, tokenCount: Int?)
 }

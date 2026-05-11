@@ -158,12 +158,21 @@ class DefaultPromptsTest {
 
     @Test
     fun `given known node types when getDefaultPromptForNodeType then returns canonical prompt`() {
-        assertEquals(DefaultPrompts.INTENT_ROUTER_PROMPT, DefaultPrompts.getDefaultPromptForNodeType(NodeType.INTENT_ROUTER))
-        assertEquals(DefaultPrompts.DECOMPOSITION_PROMPT, DefaultPrompts.getDefaultPromptForNodeType(NodeType.DECOMPOSITION))
+        assertEquals(
+            DefaultPrompts.INTENT_ROUTER_PROMPT,
+            DefaultPrompts.getDefaultPromptForNodeType(NodeType.INTENT_ROUTER),
+        )
+        assertEquals(
+            DefaultPrompts.DECOMPOSITION_PROMPT,
+            DefaultPrompts.getDefaultPromptForNodeType(NodeType.DECOMPOSITION),
+        )
         assertEquals(DefaultPrompts.EVALUATION_PROMPT, DefaultPrompts.getDefaultPromptForNodeType(NodeType.EVALUATION))
         assertEquals(DefaultPrompts.SUMMARY_PROMPT, DefaultPrompts.getDefaultPromptForNodeType(NodeType.SUMMARY))
         assertEquals(DefaultPrompts.OUTPUT_FORMAT_PROMPT, DefaultPrompts.getDefaultPromptForNodeType(NodeType.OUTPUT))
-        assertEquals(DefaultPrompts.CLARIFICATION_PROMPT, DefaultPrompts.getDefaultPromptForNodeType(NodeType.CLARIFICATION))
+        assertEquals(
+            DefaultPrompts.CLARIFICATION_PROMPT,
+            DefaultPrompts.getDefaultPromptForNodeType(NodeType.CLARIFICATION),
+        )
         assertEquals(DefaultPrompts.SYSTEM_PROMPT_PREFIX, DefaultPrompts.getDefaultPromptForNodeType(NodeType.LITE_RT))
         assertEquals(DefaultPrompts.SYSTEM_PROMPT_PREFIX, DefaultPrompts.getDefaultPromptForNodeType(NodeType.CLOUD))
     }

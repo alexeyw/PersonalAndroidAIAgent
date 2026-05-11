@@ -1,6 +1,7 @@
 package ai.agent.android.data.local
 
 import ai.agent.android.domain.constants.DefaultPrompts
+import ai.agent.android.domain.models.LocalBackend
 import ai.agent.android.domain.repositories.SettingsRepository
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
@@ -341,7 +342,7 @@ class SettingsManager @Inject constructor(private val dataStore: DataStore<Prefe
             }
         }
         .map { preferences ->
-            preferences[PreferencesKeys.LOCAL_MODEL_BACKEND] ?: "CPU"
+            preferences[PreferencesKeys.LOCAL_MODEL_BACKEND] ?: LocalBackend.CPU.key
         }
 
     override suspend fun setLocalModelBackend(backend: String) {

@@ -1,6 +1,7 @@
 package ai.agent.android.data.repositories
 
 import ai.agent.android.domain.models.AgentMetrics
+import ai.agent.android.domain.models.NodeType
 import ai.agent.android.domain.repositories.MetricsRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -35,10 +36,10 @@ class MetricsRepositoryImpl @Inject constructor() : MetricsRepository {
         }
     }
 
-    override fun recordNodeExecution(nodeName: String, durationMs: Long, tokenCount: Int?) {
+    override fun recordNodeExecution(nodeType: NodeType, durationMs: Long, tokenCount: Int?) {
         _metrics.update { current ->
             val updatedPerType = current.timePerNodeType.toMutableMap().apply {
-                put(nodeName, (getOrDefault(nodeName, 0L)) + durationMs)
+                put(nodeType, (getOrDefault(nodeType, 0L)) + durationMs)
             }
             current.copy(
                 totalExecutionTimeMs = current.totalExecutionTimeMs + durationMs,

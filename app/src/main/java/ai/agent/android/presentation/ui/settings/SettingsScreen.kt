@@ -2,6 +2,7 @@ package ai.agent.android.presentation.ui.settings
 
 import ai.agent.android.R
 import ai.agent.android.data.engine.KoogModelMapper
+import ai.agent.android.domain.models.LocalBackend
 import ai.agent.android.presentation.ui.common.resolve
 import android.widget.Toast
 import androidx.compose.foundation.layout.Column
@@ -333,11 +334,11 @@ fun SettingsScreen(
                     expanded = backendExpanded,
                     onDismissRequest = { backendExpanded = false },
                 ) {
-                    listOf("CPU", "GPU", "NPU").forEach { backend ->
+                    LocalBackend.entries.forEach { backend ->
                         DropdownMenuItem(
-                            text = { Text(backend) },
+                            text = { Text(backend.key) },
                             onClick = {
-                                viewModel.updateLocalModelBackend(backend)
+                                viewModel.updateLocalModelBackend(backend.key)
                                 backendExpanded = false
                             },
                         )

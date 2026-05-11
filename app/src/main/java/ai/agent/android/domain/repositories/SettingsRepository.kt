@@ -158,14 +158,17 @@ interface SettingsRepository {
     suspend fun setMaxMemoryChunksForSearch(limit: Int)
 
     /**
-     * A [Flow] representing the selected backend for the local model (CPU, GPU, or NPU).
+     * A [Flow] emitting the wire key of the selected local-model backend
+     * ([ai.agent.android.domain.models.LocalBackend.key]). Stored as a raw string for
+     * backward compatibility with DataStore values written before the typed enum existed.
      */
     val localModelBackend: Flow<String>
 
     /**
      * Updates the selected backend for the local model.
      *
-     * @param backend The new backend (e.g., "CPU", "GPU", "NPU").
+     * @param backend The new backend wire key; use
+     *        [ai.agent.android.domain.models.LocalBackend.key] to obtain it.
      */
     suspend fun setLocalModelBackend(backend: String)
 

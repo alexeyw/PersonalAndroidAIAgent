@@ -4,6 +4,7 @@ import ai.agent.android.domain.constants.DefaultPrompts
 import ai.agent.android.domain.engine.CloudLlmClientFactory
 import ai.agent.android.domain.engine.CloudLlmModelResolver
 import ai.agent.android.domain.models.AgentOrchestratorState
+import ai.agent.android.domain.models.CloudProvider
 import ai.agent.android.domain.models.NodeExecutionResult
 import ai.agent.android.domain.models.NodeModel
 import ai.agent.android.domain.models.NodeOutput
@@ -52,28 +53,25 @@ class CloudLlmNodeExecutor @Inject constructor(
 
         val startTime = System.currentTimeMillis()
 
-        var selectedProvider = node.cloudProvider ?: "auto"
-        if (selectedProvider == "auto") {
-            val googleKey = apiKeyRepository.getGoogleKey().first()
-            val anthropicKey = apiKeyRepository.getAnthropicKey().first()
-            val openAIKey = apiKeyRepository.getOpenAIKey().first()
-            val deepSeekKey = apiKeyRepository.getDeepSeekKey().first()
-
-            selectedProvider = when {
-                !googleKey.isNullOrBlank() -> "google"
-                !anthropicKey.isNullOrBlank() -> "anthropic"
-                !openAIKey.isNullOrBlank() -> "openai"
-                !deepSeekKey.isNullOrBlank() -> "deepseek"
-                else -> "none"
-            }
+        // `node.cloudProvider` is the persisted UI selection: a real provider id, the
+        // sentinel "auto" string, or `null`. `null`/"auto" trigger key-based detection;
+        // everything else is parsed through CloudProvider.fromId so legacy aliases
+        // (e.g. "gemini") still resolve correctly.
+        val configuredProvider = node.cloudProvider
+        val selectedProvider: CloudProvider? = if (
+            configuredProvider == null || configuredProvider == CloudProvider.AUTO_KEY
+        ) {
+            autoDetectProvider()
+        } else {
+            CloudProvider.fromId(configuredProvider)
         }
 
-        val responseStream = if (selectedProvider == "none") {
+        val responseStream = if (selectedProvider == null) {
             flowOf("Error: No cloud provider configured or selected")
         } else {
             val client = cloudLlmClientFactory.createClient(selectedProvider) as? LLMClient
             if (client == null) {
-                flowOf("Error: $selectedProvider not configured")
+                flowOf("Error: ${selectedProvider.id} not configured")
             } else {
                 // The resolver owns the per-provider configured-id ↔ default fallback,
                 // so the executor stays out of the data layer's settings plumbing.
@@ -123,5 +121,21 @@ class CloudLlmNodeExecutor @Inject constructor(
         kotlinx.coroutines.delay(1000)
 
         emit(NodeOutput.Result(NodeExecutionResult(outputText = fullResponseText, tokenCount = approximateTokenCount)))
+    }
+
+    /**
+     * Picks the first [CloudProvider] for which an API key is configured.
+     *
+     * Order mirrors the historical "auto" routing priority (Google → Anthropic → OpenAI →
+     * DeepSeek) so existing pipelines keep their previous default behaviour. Returns
+     * `null` when no provider has credentials, which the caller surfaces to the user as
+     * "No cloud provider configured or selected".
+     */
+    private suspend fun autoDetectProvider(): CloudProvider? {
+        if (!apiKeyRepository.getGoogleKey().first().isNullOrBlank()) return CloudProvider.GOOGLE
+        if (!apiKeyRepository.getAnthropicKey().first().isNullOrBlank()) return CloudProvider.ANTHROPIC
+        if (!apiKeyRepository.getOpenAIKey().first().isNullOrBlank()) return CloudProvider.OPENAI
+        if (!apiKeyRepository.getDeepSeekKey().first().isNullOrBlank()) return CloudProvider.DEEPSEEK
+        return null
     }
 }

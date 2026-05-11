@@ -1,6 +1,7 @@
 package ai.agent.android.presentation.ui.orchestrator
 
 import ai.agent.android.R
+import ai.agent.android.domain.models.CloudProvider
 import ai.agent.android.domain.models.ConnectionModel
 import ai.agent.android.domain.models.NodeContextConfig
 import ai.agent.android.domain.models.NodeModel
@@ -158,27 +159,27 @@ class OrchestratorViewModel @Inject constructor(
     private fun observeProviderKeys() {
         viewModelScope.launch {
             apiKeyRepository.getOpenAIKey().collect { key ->
-                updateProviderKey("openai", !key.isNullOrBlank())
+                updateProviderKey(CloudProvider.OPENAI, !key.isNullOrBlank())
             }
         }
         viewModelScope.launch {
             apiKeyRepository.getAnthropicKey().collect { key ->
-                updateProviderKey("anthropic", !key.isNullOrBlank())
+                updateProviderKey(CloudProvider.ANTHROPIC, !key.isNullOrBlank())
             }
         }
         viewModelScope.launch {
             apiKeyRepository.getGoogleKey().collect { key ->
-                updateProviderKey("google", !key.isNullOrBlank())
+                updateProviderKey(CloudProvider.GOOGLE, !key.isNullOrBlank())
             }
         }
         viewModelScope.launch {
             apiKeyRepository.getDeepSeekKey().collect { key ->
-                updateProviderKey("deepseek", !key.isNullOrBlank())
+                updateProviderKey(CloudProvider.DEEPSEEK, !key.isNullOrBlank())
             }
         }
     }
 
-    private fun updateProviderKey(provider: String, hasKey: Boolean) {
+    private fun updateProviderKey(provider: CloudProvider, hasKey: Boolean) {
         _uiState.update { state ->
             val updatedKeys = state.providerKeys.toMutableMap()
             updatedKeys[provider] = hasKey
@@ -210,7 +211,7 @@ class OrchestratorViewModel @Inject constructor(
             type = type,
             x = x,
             y = y,
-            cloudProvider = if (type == NodeType.CLOUD) "auto" else null,
+            cloudProvider = if (type == NodeType.CLOUD) CloudProvider.AUTO_KEY else null,
             contextConfig = NodeContextConfig.defaultForType(type),
         )
         _uiState.update { state ->

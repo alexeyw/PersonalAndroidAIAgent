@@ -76,13 +76,12 @@ class GraphExecutionEngineTest {
         coEvery { cloudLlmModelResolver.resolveModel(any()) } returns AnthropicModels.Sonnet_4_5
         // Provider-keyed dispatch — tests that exercise CLOUD configure Anthropic.
         coEvery { koogClientFactory.createClient(any()) } coAnswers {
-            when (firstArg<String>().lowercase()) {
-                "anthropic" -> koogClientFactory.createAnthropicExecutor()
-                "openai" -> koogClientFactory.createOpenAIExecutor()
-                "google", "gemini" -> koogClientFactory.createGoogleExecutor()
-                "deepseek" -> koogClientFactory.createDeepSeekExecutor()
-                "ollama" -> koogClientFactory.createOllamaExecutor()
-                else -> null
+            when (firstArg<CloudProvider>()) {
+                CloudProvider.ANTHROPIC -> koogClientFactory.createAnthropicExecutor()
+                CloudProvider.OPENAI -> koogClientFactory.createOpenAIExecutor()
+                CloudProvider.GOOGLE -> koogClientFactory.createGoogleExecutor()
+                CloudProvider.DEEPSEEK -> koogClientFactory.createDeepSeekExecutor()
+                CloudProvider.OLLAMA -> koogClientFactory.createOllamaExecutor()
             }
         }
 
@@ -650,11 +649,11 @@ class GraphExecutionEngineTest {
             engine(sessionId, "prompt", graph).toList()
 
             // INPUT, LITE_RT, OUTPUT — three nodes, three recordings
-            verify(exactly = 1) { metricsRepository.recordNodeExecution("INPUT", any(), any()) }
+            verify(exactly = 1) { metricsRepository.recordNodeExecution(NodeType.INPUT, any(), any()) }
             verify(exactly = 1) {
-                metricsRepository.recordNodeExecution("LITE_RT", any(), match { it != null && it > 0 })
+                metricsRepository.recordNodeExecution(NodeType.LITE_RT, any(), match { it != null && it > 0 })
             }
-            verify(exactly = 1) { metricsRepository.recordNodeExecution("OUTPUT", any(), any()) }
+            verify(exactly = 1) { metricsRepository.recordNodeExecution(NodeType.OUTPUT, any(), any()) }
         }
 
     @Test

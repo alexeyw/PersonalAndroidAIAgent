@@ -2,6 +2,7 @@ package ai.agent.android.presentation.ui.orchestrator.components
 
 import ai.agent.android.R
 import ai.agent.android.domain.models.AgentTool
+import ai.agent.android.domain.models.CloudProvider
 import ai.agent.android.domain.models.NodeModel
 import ai.agent.android.domain.models.NodeType
 import androidx.compose.foundation.background
@@ -38,6 +39,21 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+
+/**
+ * Provider ids offered in the CLOUD-node dropdown, in display order. Begins with the
+ * "auto" sentinel (let the executor pick a provider at runtime) followed by the cloud
+ * [CloudProvider]s. [CloudProvider.OLLAMA] is intentionally excluded because Ollama is
+ * surfaced through a separate routing path (`RoutingDecision.LocalOllama`), not as a
+ * cloud target.
+ */
+private val cloudProviderDropdownOptions: List<String> = listOf(
+    CloudProvider.AUTO_KEY,
+    CloudProvider.GOOGLE.id,
+    CloudProvider.ANTHROPIC.id,
+    CloudProvider.OPENAI.id,
+    CloudProvider.DEEPSEEK.id,
+)
 
 /**
  * A draggable and interactive visual node component.
@@ -159,7 +175,7 @@ fun DraggableNode(
                             expanded = expanded,
                             onDismissRequest = { expanded = false },
                         ) {
-                            listOf("auto", "google", "anthropic", "openai", "deepseek").forEach { provider ->
+                            cloudProviderDropdownOptions.forEach { provider ->
                                 DropdownMenuItem(
                                     text = { Text(provider.replaceFirstChar { it.uppercase() }) },
                                     onClick = {

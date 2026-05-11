@@ -1,5 +1,7 @@
 package ai.agent.android.presentation.ui.settings
 
+import ai.agent.android.domain.models.LocalBackend
+
 /**
  * Represents the UI state for the Settings screen.
  *
@@ -40,6 +42,6 @@ data class SettingsUiState(
     val ollamaBaseUrl: String = "",
     val ollamaModel: String = "",
     val ollamaContextWindow: String = "4096",
-    val localModelBackend: String = "CPU",
+    val localModelBackend: String = LocalBackend.CPU.key,
     val pipelineMaxSteps: Int = 15,
 )

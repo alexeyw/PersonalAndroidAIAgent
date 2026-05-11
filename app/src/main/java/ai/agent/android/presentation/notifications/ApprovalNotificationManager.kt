@@ -1,7 +1,9 @@
 package ai.agent.android.presentation.notifications
 
+import ai.agent.android.domain.constants.NotificationChannels
 import ai.agent.android.domain.services.ApprovalNotifier
 import ai.agent.android.presentation.receivers.AgentApprovalReceiver
+import ai.agent.android.presentation.receivers.ApprovalAction
 import ai.agent.android.presentation.state.ActiveSessionTracker
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -22,7 +24,6 @@ class ApprovalNotificationManager @Inject constructor(
 ) : ApprovalNotifier {
 
     companion object {
-        const val CHANNEL_ID = "AgentApprovalChannel"
         const val NOTIFICATION_ID = 201
     }
 
@@ -43,7 +44,7 @@ class ApprovalNotificationManager @Inject constructor(
         val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
         val channel = NotificationChannel(
-            CHANNEL_ID,
+            NotificationChannels.AGENT_APPROVAL,
             "Agent Approvals",
             NotificationManager.IMPORTANCE_HIGH,
         ).apply {
@@ -52,7 +53,7 @@ class ApprovalNotificationManager @Inject constructor(
         notificationManager.createNotificationChannel(channel)
 
         val approveIntent = Intent(context, AgentApprovalReceiver::class.java).apply {
-            action = AgentApprovalReceiver.ACTION_APPROVE
+            action = ApprovalAction.APPROVE.action
             putExtra("sessionId", sessionId)
         }
         val approvePendingIntent = PendingIntent.getBroadcast(
@@ -63,7 +64,7 @@ class ApprovalNotificationManager @Inject constructor(
         )
 
         val denyIntent = Intent(context, AgentApprovalReceiver::class.java).apply {
-            action = AgentApprovalReceiver.ACTION_DENY
+            action = ApprovalAction.DENY.action
             putExtra("sessionId", sessionId)
         }
         val denyPendingIntent = PendingIntent.getBroadcast(
@@ -73,7 +74,7 @@ class ApprovalNotificationManager @Inject constructor(
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
 
-        val notification = NotificationCompat.Builder(context, CHANNEL_ID)
+        val notification = NotificationCompat.Builder(context, NotificationChannels.AGENT_APPROVAL)
             .setSmallIcon(android.R.drawable.ic_dialog_alert)
             .setContentTitle("Tool Execution Approval")
             .setContentText("Agent wants to use $toolName. Allow?")

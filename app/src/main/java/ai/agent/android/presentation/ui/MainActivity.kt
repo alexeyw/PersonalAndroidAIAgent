@@ -9,6 +9,7 @@ import ai.agent.android.presentation.ui.memory.MemoryScreen
 import ai.agent.android.presentation.ui.models.ModelsScreen
 import ai.agent.android.presentation.ui.monitoring.MonitoringScreen
 import ai.agent.android.presentation.ui.monitoring.MonitoringViewModel
+import ai.agent.android.presentation.ui.navigation.NavRoutes
 import ai.agent.android.presentation.ui.orchestrator.OrchestratorViewModel
 import ai.agent.android.presentation.ui.orchestrator.PipelineLibraryScreen
 import ai.agent.android.presentation.ui.orchestrator.VisualOrchestratorScreen
@@ -101,119 +102,119 @@ class MainActivity : ComponentActivity() {
                 ) { innerPadding ->
                     NavHost(
                         navController = navController,
-                        startDestination = "splash",
+                        startDestination = NavRoutes.SPLASH,
                         modifier = Modifier.padding(innerPadding),
                     ) {
-                        composable("splash") {
+                        composable(NavRoutes.SPLASH) {
                             SplashScreen(
                                 onInitialized = {
-                                    navController.navigate("home") {
+                                    navController.navigate(NavRoutes.HOME) {
                                         // Drop the splash route so Back from
                                         // home exits the app instead of
                                         // re-entering the loading screen.
-                                        popUpTo("splash") { inclusive = true }
+                                        popUpTo(NavRoutes.SPLASH) { inclusive = true }
                                         launchSingleTop = true
                                     }
                                 },
                                 modifier = Modifier.fillMaxSize(),
                             )
                         }
-                        composable("home") {
+                        composable(NavRoutes.HOME) {
                             HomeScreen(
                                 onNavigateToModels = {
-                                    navController.navigate("models") {
+                                    navController.navigate(NavRoutes.MODELS) {
                                         launchSingleTop = true
                                     }
                                 },
                                 onNavigateToMemory = {
-                                    navController.navigate("memory") {
+                                    navController.navigate(NavRoutes.MEMORY) {
                                         launchSingleTop = true
                                     }
                                 },
                                 onNavigateToTools = {
-                                    navController.navigate("tools") {
+                                    navController.navigate(NavRoutes.TOOLS) {
                                         launchSingleTop = true
                                     }
                                 },
                                 onNavigateToChat = {
-                                    navController.navigate("chat") {
+                                    navController.navigate(NavRoutes.CHAT) {
                                         launchSingleTop = true
                                     }
                                 },
                                 onNavigateToMonitoring = {
-                                    navController.navigate("monitoring") {
+                                    navController.navigate(NavRoutes.MONITORING) {
                                         launchSingleTop = true
                                     }
                                 },
                                 onNavigateToTaskMonitor = {
-                                    navController.navigate("taskmonitor") {
+                                    navController.navigate(NavRoutes.TASK_MONITOR) {
                                         launchSingleTop = true
                                     }
                                 },
                                 onNavigateToSettings = {
-                                    navController.navigate("settings") {
+                                    navController.navigate(NavRoutes.SETTINGS) {
                                         launchSingleTop = true
                                     }
                                 },
                                 onNavigateToOrchestrator = {
-                                    navController.navigate("pipelines") {
+                                    navController.navigate(NavRoutes.PIPELINES_GRAPH) {
                                         launchSingleTop = true
                                     }
                                 },
                                 onNavigateToPrompts = {
-                                    navController.navigate("prompts") {
+                                    navController.navigate(NavRoutes.PROMPTS) {
                                         launchSingleTop = true
                                     }
                                 },
                                 modifier = Modifier.fillMaxSize(),
                             )
                         }
-                        composable("chat") {
+                        composable(NavRoutes.CHAT) {
                             val chatViewModel: ChatViewModel = hiltViewModel()
                             ChatScreen(
                                 viewModel = chatViewModel,
                                 onBack = { navController.popBackStack() },
                             )
                         }
-                        composable("models") {
+                        composable(NavRoutes.MODELS) {
                             ModelsScreen(
                                 modifier = Modifier.fillMaxSize(),
                                 onBack = { navController.popBackStack() },
                             )
                         }
-                        composable("memory") {
+                        composable(NavRoutes.MEMORY) {
                             MemoryScreen(onBack = { navController.popBackStack() })
                         }
-                        composable("tools") {
+                        composable(NavRoutes.TOOLS) {
                             ToolsScreen(
                                 modifier = Modifier.fillMaxSize(),
                                 onBack = { navController.popBackStack() },
                             )
                         }
-                        composable("monitoring") {
+                        composable(NavRoutes.MONITORING) {
                             val monitoringViewModel: MonitoringViewModel = hiltViewModel()
                             MonitoringScreen(
                                 viewModel = monitoringViewModel,
                                 onBack = { navController.popBackStack() },
                             )
                         }
-                        composable("taskmonitor") {
+                        composable(NavRoutes.TASK_MONITOR) {
                             val taskMonitorViewModel: TaskMonitorViewModel = hiltViewModel()
                             TaskMonitorScreen(
                                 viewModel = taskMonitorViewModel,
                                 onNavigateToChat = { sessionId ->
-                                    navController.navigate("chat") { launchSingleTop = true }
+                                    navController.navigate(NavRoutes.CHAT) { launchSingleTop = true }
                                 },
                                 onBack = { navController.popBackStack() },
                             )
                         }
-                        composable("settings") {
+                        composable(NavRoutes.SETTINGS) {
                             SettingsScreen(
                                 modifier = Modifier.fillMaxSize(),
                                 onBack = { navController.popBackStack() },
                             )
                         }
-                        composable("prompts") {
+                        composable(NavRoutes.PROMPTS) {
                             PromptLibraryScreen(
                                 modifier = Modifier.fillMaxSize(),
                                 onBack = { navController.popBackStack() },
@@ -224,35 +225,35 @@ class MainActivity : ComponentActivity() {
                         // so creating / renaming / duplicating in the library is
                         // immediately reflected when the editor opens.
                         navigation(
-                            startDestination = "pipeline-library",
-                            route = "pipelines",
+                            startDestination = NavRoutes.PIPELINE_LIBRARY,
+                            route = NavRoutes.PIPELINES_GRAPH,
                         ) {
-                            composable("pipeline-library") { entry ->
+                            composable(NavRoutes.PIPELINE_LIBRARY) { entry ->
                                 val parentEntry = remember(entry) {
-                                    navController.getBackStackEntry("pipelines")
+                                    navController.getBackStackEntry(NavRoutes.PIPELINES_GRAPH)
                                 }
                                 val orchestratorViewModel: OrchestratorViewModel =
                                     hiltViewModel(parentEntry)
                                 PipelineLibraryScreen(
                                     viewModel = orchestratorViewModel,
                                     onOpenEditor = {
-                                        navController.navigate("pipeline-editor") {
+                                        navController.navigate(NavRoutes.PIPELINE_EDITOR) {
                                             launchSingleTop = true
                                         }
                                     },
                                     onBack = { navController.popBackStack() },
                                 )
                             }
-                            composable("pipeline-editor") { entry ->
+                            composable(NavRoutes.PIPELINE_EDITOR) { entry ->
                                 val parentEntry = remember(entry) {
-                                    navController.getBackStackEntry("pipelines")
+                                    navController.getBackStackEntry(NavRoutes.PIPELINES_GRAPH)
                                 }
                                 val orchestratorViewModel: OrchestratorViewModel =
                                     hiltViewModel(parentEntry)
                                 VisualOrchestratorScreen(
                                     viewModel = orchestratorViewModel,
                                     onNavigateToPrompts = {
-                                        navController.navigate("prompts") {
+                                        navController.navigate(NavRoutes.PROMPTS) {
                                             launchSingleTop = true
                                         }
                                     },

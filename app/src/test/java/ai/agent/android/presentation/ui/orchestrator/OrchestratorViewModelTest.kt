@@ -1,6 +1,7 @@
 package ai.agent.android.presentation.ui.orchestrator
 
 import ai.agent.android.domain.models.AgentTool
+import ai.agent.android.domain.models.CloudProvider
 import ai.agent.android.domain.models.NodeContextConfig
 import ai.agent.android.domain.models.NodeType
 import ai.agent.android.domain.models.PipelineGraph
@@ -128,8 +129,8 @@ class OrchestratorViewModelTest {
         testDispatcher.scheduler.advanceUntilIdle()
 
         val state = viewModel.uiState.value
-        assertEquals(true, state.providerKeys["anthropic"])
-        assertEquals(false, state.providerKeys["openai"])
+        assertEquals(true, state.providerKeys[CloudProvider.ANTHROPIC])
+        assertEquals(false, state.providerKeys[CloudProvider.OPENAI])
         assertEquals(1, state.availableTools.size)
         assertEquals("Tool1", state.availableTools[0].name)
     }

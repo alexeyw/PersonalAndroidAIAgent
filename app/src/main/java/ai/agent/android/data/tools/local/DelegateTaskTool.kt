@@ -3,6 +3,7 @@ package ai.agent.android.data.tools.local
 import ai.agent.android.data.engine.KoogClientFactory
 import ai.agent.android.data.engine.KoogModelMapper
 import ai.agent.android.domain.engine.TextEmbeddingEngine
+import ai.agent.android.domain.models.CloudProvider
 import ai.agent.android.domain.repositories.ApiKeyRepository
 import ai.agent.android.domain.repositories.MemoryRepository
 import ai.koog.prompt.dsl.prompt
@@ -63,40 +64,47 @@ class DelegateTaskTool @Inject constructor(
      * @param targetModel The identifier for the external model to use. Supported values: "anthropic", "openai", "google", "deepseek", "ollama". Defaults to "google".
      * @return A summary string detailing the outcome of the delegation, including whether it succeeded, timed out, or encountered an error. This summary is returned back to the calling agent.
      */
-    suspend fun executeDelegation(taskDescription: String, targetModel: String = "google"): String =
+    suspend fun executeDelegation(taskDescription: String, targetModel: String = CloudProvider.GOOGLE.id): String =
         withContext(Dispatchers.IO) {
-            val client = when (targetModel.lowercase()) {
-                "anthropic" -> koogClientFactory.createAnthropicExecutor()
-                "openai" -> koogClientFactory.createOpenAIExecutor()
-                "google", "gemini" -> koogClientFactory.createGoogleExecutor()
-                "deepseek" -> koogClientFactory.createDeepSeekExecutor()
-                "ollama" -> koogClientFactory.createOllamaExecutor()
-                else -> return@withContext "Error: Unsupported target model '$targetModel'. Supported models: anthropic, openai, google, deepseek, ollama."
+            // Tool arguments arrive as raw JSON strings produced by the LLM, so the
+            // provider id is parsed (with legacy aliases) on the way in. Unknown ids
+            // surface as a typed error rather than silently falling through.
+            val provider = CloudProvider.fromId(targetModel)
+                ?: return@withContext "Error: Unsupported target model '$targetModel'." +
+                    " Supported models: anthropic, openai, google, deepseek, ollama."
+
+            val client = when (provider) {
+                CloudProvider.ANTHROPIC -> koogClientFactory.createAnthropicExecutor()
+                CloudProvider.OPENAI -> koogClientFactory.createOpenAIExecutor()
+                CloudProvider.GOOGLE -> koogClientFactory.createGoogleExecutor()
+                CloudProvider.DEEPSEEK -> koogClientFactory.createDeepSeekExecutor()
+                CloudProvider.OLLAMA -> koogClientFactory.createOllamaExecutor()
             }
 
             if (client == null) {
-                return@withContext "Error: Client for '$targetModel' could not be initialized. Please check if the API key or configuration is provided."
+                return@withContext "Error: Client for '${provider.id}' could not be initialized. " +
+                    "Please check if the API key or configuration is provided."
             }
 
             return@withContext try {
-                val model = when (targetModel.lowercase()) {
-                    "anthropic" -> KoogModelMapper.getAnthropicModel(
+                val model = when (provider) {
+                    CloudProvider.ANTHROPIC -> KoogModelMapper.getAnthropicModel(
                         apiKeyRepository.getAnthropicModel().first() ?: AnthropicModels.Sonnet_4_5.id,
                     )
 
-                    "openai" -> KoogModelMapper.getOpenAIModel(
+                    CloudProvider.OPENAI -> KoogModelMapper.getOpenAIModel(
                         apiKeyRepository.getOpenAIModel().first() ?: OpenAIModels.Chat.GPT5_4.id,
                     )
 
-                    "google", "gemini" -> KoogModelMapper.getGoogleModel(
+                    CloudProvider.GOOGLE -> KoogModelMapper.getGoogleModel(
                         apiKeyRepository.getGoogleModel().first() ?: GoogleModels.Gemini3_Flash_Preview.id,
                     )
 
-                    "deepseek" -> KoogModelMapper.getDeepSeekModel(
+                    CloudProvider.DEEPSEEK -> KoogModelMapper.getDeepSeekModel(
                         apiKeyRepository.getDeepSeekModel().first() ?: DeepSeekModels.DeepSeekChat.id,
                     )
 
-                    "ollama" -> LLModel(
+                    CloudProvider.OLLAMA -> LLModel(
                         provider = LLMProvider.Ollama,
                         id = apiKeyRepository.getOllamaModelName().first() ?: "llama3",
                         capabilities = listOf(
@@ -104,8 +112,6 @@ class DelegateTaskTool @Inject constructor(
                         ),
                         contextLength = apiKeyRepository.getOllamaContextWindowSize().first().toLong(),
                     )
-
-                    else -> LLModel(client.llmProvider(), "default")
                 }
 
                 // Apply a 60-second timeout for the external API call
@@ -115,7 +121,7 @@ class DelegateTaskTool @Inject constructor(
                 }
 
                 if (result.isNullOrBlank()) {
-                    "Error: Task delegation to '$targetModel' timed out or returned empty after 60 seconds."
+                    "Error: Task delegation to '${provider.id}' timed out or returned empty after 60 seconds."
                 } else {
                     // Task succeeded. Generate embedding for the result.
                     val responseText = result
@@ -124,9 +130,8 @@ class DelegateTaskTool @Inject constructor(
                     // Save to long-term memory so the local agent can recall it later
                     memoryRepository.saveMemory(responseText, embedding)
 
-                    "Success: Task completed by '$targetModel' and saved to memory. Summary of response: ${responseText.take(
-                        100,
-                    )}..."
+                    "Success: Task completed by '${provider.id}' and saved to memory. " +
+                        "Summary of response: ${responseText.take(100)}..."
                 }
             } catch (e: Exception) {
                 "Error: Task delegation failed due to an exception: ${e.message}"

@@ -4,6 +4,7 @@ import ai.agent.android.data.mcp.McpClient
 import ai.agent.android.data.mcp.McpClientFactory
 import ai.agent.android.data.tools.local.LocalAppFunctionManager
 import ai.agent.android.domain.models.AgentTool
+import ai.agent.android.domain.models.CloudProvider
 import ai.agent.android.domain.repositories.ApiKeyRepository
 import ai.agent.android.domain.repositories.LocalToolExecutor
 import ai.agent.android.domain.repositories.SettingsRepository
@@ -34,12 +35,18 @@ class ToolRepositoryImpl @Inject constructor(
     private val mcpClients = ConcurrentHashMap<String, McpClient>()
 
     private suspend fun getBuiltinTools(): List<AgentTool> {
-        val availableModels = mutableListOf<String>()
-        if (!apiKeyRepository.getOpenAIKey().firstOrNull().isNullOrBlank()) availableModels.add("openai")
-        if (!apiKeyRepository.getAnthropicKey().firstOrNull().isNullOrBlank()) availableModels.add("anthropic")
-        if (!apiKeyRepository.getGoogleKey().firstOrNull().isNullOrBlank()) availableModels.add("google")
-        if (!apiKeyRepository.getDeepSeekKey().firstOrNull().isNullOrBlank()) availableModels.add("deepseek")
-        if (!apiKeyRepository.getOllamaBaseUrl().firstOrNull().isNullOrBlank()) availableModels.add("ollama")
+        val availableModels = mutableListOf<CloudProvider>()
+        if (!apiKeyRepository.getOpenAIKey().firstOrNull().isNullOrBlank()) availableModels.add(CloudProvider.OPENAI)
+        if (!apiKeyRepository.getAnthropicKey().firstOrNull().isNullOrBlank()) {
+            availableModels.add(CloudProvider.ANTHROPIC)
+        }
+        if (!apiKeyRepository.getGoogleKey().firstOrNull().isNullOrBlank()) availableModels.add(CloudProvider.GOOGLE)
+        if (!apiKeyRepository.getDeepSeekKey().firstOrNull().isNullOrBlank()) {
+            availableModels.add(CloudProvider.DEEPSEEK)
+        }
+        if (!apiKeyRepository.getOllamaBaseUrl().firstOrNull().isNullOrBlank()) {
+            availableModels.add(CloudProvider.OLLAMA)
+        }
 
         val scheduleTool = AgentTool(
             name = "schedule_task",
@@ -63,8 +70,8 @@ class ToolRepositoryImpl @Inject constructor(
             return baseTools
         }
 
-        val modelsString = availableModels.joinToString(", ")
-        val defaultModel = availableModels.first()
+        val modelsString = availableModels.joinToString(", ") { it.id }
+        val defaultModel = availableModels.first().id
         val delegateTool = AgentTool(
             name = "delegate_task",
             description = "Delegates a complex or specialized task to an external LLM and saves the result to memory. ONLY use this tool if you need cloud reasoning.",

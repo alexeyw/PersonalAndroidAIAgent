@@ -1,5 +1,6 @@
 package ai.agent.android.domain.usecases
 
+import ai.agent.android.domain.models.CloudProvider
 import ai.agent.android.domain.models.RoutingDecision
 import ai.agent.android.domain.repositories.ApiKeyRepository
 import ai.agent.android.domain.repositories.NetworkStateRepository
@@ -47,22 +48,22 @@ class TaskRouterUseCase @Inject constructor(
             if (networkState.isConnected) {
                 val openAIKey = apiKeyRepository.getOpenAIKey().first()
                 if (!openAIKey.isNullOrBlank()) {
-                    return RoutingDecision.CloudLLM("openai")
+                    return RoutingDecision.CloudLLM(CloudProvider.OPENAI)
                 }
 
                 val googleKey = apiKeyRepository.getGoogleKey().first()
                 if (!googleKey.isNullOrBlank()) {
-                    return RoutingDecision.CloudLLM("google")
+                    return RoutingDecision.CloudLLM(CloudProvider.GOOGLE)
                 }
 
                 val anthropicKey = apiKeyRepository.getAnthropicKey().first()
                 if (!anthropicKey.isNullOrBlank()) {
-                    return RoutingDecision.CloudLLM("anthropic")
+                    return RoutingDecision.CloudLLM(CloudProvider.ANTHROPIC)
                 }
 
                 val deepSeekKey = apiKeyRepository.getDeepSeekKey().first()
                 if (!deepSeekKey.isNullOrBlank()) {
-                    return RoutingDecision.CloudLLM("deepseek")
+                    return RoutingDecision.CloudLLM(CloudProvider.DEEPSEEK)
                 }
             }
 
