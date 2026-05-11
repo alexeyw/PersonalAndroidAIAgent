@@ -2,6 +2,7 @@ package ai.agent.android.presentation.ui.prompts
 
 import ai.agent.android.domain.models.PromptTemplate
 import ai.agent.android.domain.prompt.PromptSegment
+import ai.agent.android.presentation.ui.common.UiText
 
 /**
  * Represents the UI state for the Prompt Library screen.
@@ -16,7 +17,7 @@ import ai.agent.android.domain.prompt.PromptSegment
 data class PromptLibraryUiState(
     val promptTemplates: List<PromptTemplate> = emptyList(),
     val isLoading: Boolean = false,
-    val errorMessage: String? = null,
+    val errorMessage: UiText? = null,
     val availableVariables: List<String> = emptyList(),
     val previewState: PromptPreviewState = PromptPreviewState.Hidden,
 )

@@ -1,5 +1,6 @@
 package ai.agent.android.presentation.ui.orchestrator.components
 
+import ai.agent.android.R
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -13,6 +14,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -62,7 +64,7 @@ fun NodeContextConfigSection(
 ) {
     Column(modifier = modifier.fillMaxWidth()) {
         Text(
-            text = "Input Data",
+            text = stringResource(R.string.orchestrator_context_section_title),
             style = MaterialTheme.typography.titleSmall,
             fontWeight = FontWeight.Bold,
             modifier = Modifier.padding(top = 12.dp, bottom = 4.dp),
@@ -71,36 +73,36 @@ fun NodeContextConfigSection(
         ContextFlagRow(
             checked = true,
             enabled = false,
-            label = "Previous node output",
-            hint = "Result of the previous step (always enabled)",
+            label = stringResource(R.string.orchestrator_context_previous_node_output_label),
+            hint = stringResource(R.string.orchestrator_context_previous_node_output_hint),
             onCheckedChange = null,
         )
         ContextFlagRow(
             checked = originalTask,
             enabled = true,
-            label = "Original user task",
-            hint = "The chat message that started this run",
+            label = stringResource(R.string.orchestrator_context_original_task_label),
+            hint = stringResource(R.string.orchestrator_context_original_task_hint),
             onCheckedChange = onOriginalTaskChange,
         )
         ContextFlagRow(
             checked = chatHistory,
             enabled = true,
-            label = "Chat history",
-            hint = "All earlier messages in the current session",
+            label = stringResource(R.string.orchestrator_context_chat_history_label),
+            hint = stringResource(R.string.orchestrator_context_chat_history_hint),
             onCheckedChange = onChatHistoryChange,
         )
         ContextFlagRow(
             checked = longTermMemory,
             enabled = true,
-            label = "Long-term memory",
-            hint = "Relevant entries from the agent's long-term memory",
+            label = stringResource(R.string.orchestrator_context_long_term_memory_label),
+            hint = stringResource(R.string.orchestrator_context_long_term_memory_hint),
             onCheckedChange = onLongTermMemoryChange,
         )
         ContextFlagRow(
             checked = toolResults,
             enabled = true,
-            label = "Tool results",
-            hint = "Data returned by tools in the current step",
+            label = stringResource(R.string.orchestrator_context_tool_results_label),
+            hint = stringResource(R.string.orchestrator_context_tool_results_hint),
             onCheckedChange = onToolResultsChange,
         )
 
@@ -112,8 +114,7 @@ fun NodeContextConfigSection(
                 .padding(top = 8.dp),
         ) {
             Text(
-                text = "Fewer inputs make the node faster and cheaper. " +
-                    "Enable only what's needed.",
+                text = stringResource(R.string.orchestrator_context_hint),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(8.dp),

@@ -22,10 +22,10 @@ class PowerStateRepositoryImplTest {
     @Before
     fun setup() {
         context = mockk(relaxed = true)
-        
+
         val initialIntent = mockk<Intent>(relaxed = true)
         every { initialIntent.getIntExtra(any(), any()) } returns 2
-        
+
         // Use an answers block to return different mocks depending on arguments
         every { context.registerReceiver(any(), any<IntentFilter>()) } answers {
             val receiver = firstArg<BroadcastReceiver?>()
@@ -36,7 +36,7 @@ class PowerStateRepositoryImplTest {
                 mockk<Intent>(relaxed = true)
             }
         }
-        
+
         // Also handle the specific case where receiver is explicitly null in mockk
         every { context.registerReceiver(isNull(), any<IntentFilter>()) } returns initialIntent
 
@@ -55,9 +55,9 @@ class PowerStateRepositoryImplTest {
         val receiver = receiverSlot.captured
         val intent = mockk<Intent>()
         every { intent.action } returns Intent.ACTION_BATTERY_LOW
-        
+
         receiver.onReceive(context, intent)
-        
+
         val state = repository.powerState.value
         assertEquals(true, state.isBatteryLow)
     }
@@ -65,7 +65,7 @@ class PowerStateRepositoryImplTest {
     @Test
     fun `ACTION_BATTERY_OKAY updates state`() {
         val receiver = receiverSlot.captured
-        
+
         // First set to low
         val intentLow = mockk<Intent>()
         every { intentLow.action } returns Intent.ACTION_BATTERY_LOW
@@ -84,9 +84,9 @@ class PowerStateRepositoryImplTest {
         val receiver = receiverSlot.captured
         val intent = mockk<Intent>()
         every { intent.action } returns Intent.ACTION_POWER_DISCONNECTED
-        
+
         receiver.onReceive(context, intent)
-        
+
         val state = repository.powerState.value
         assertEquals(false, state.isCharging)
     }
@@ -94,7 +94,7 @@ class PowerStateRepositoryImplTest {
     @Test
     fun `ACTION_POWER_CONNECTED updates state`() {
         val receiver = receiverSlot.captured
-        
+
         // First disconnect
         val intentDisconnect = mockk<Intent>()
         every { intentDisconnect.action } returns Intent.ACTION_POWER_DISCONNECTED

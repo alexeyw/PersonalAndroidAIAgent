@@ -1,11 +1,11 @@
 package ai.agent.android.data.services
 
+import ai.agent.android.domain.models.AgentOrchestratorState
+import ai.agent.android.domain.usecases.AgentOrchestratorUseCase
 import android.content.Context
 import androidx.work.Data
 import androidx.work.ListenableWorker.Result
 import androidx.work.WorkerParameters
-import ai.agent.android.domain.models.AgentOrchestratorState
-import ai.agent.android.domain.usecases.AgentOrchestratorUseCase
 import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
@@ -30,7 +30,7 @@ class AgentWorkerTest {
 
         val actualWorker = AgentWorker(context, workerParams, useCase)
         worker = spyk(actualWorker)
-        
+
         // Mock setProgress to prevent it from suspending indefinitely waiting for WorkManager internal futures
         coEvery { worker.setProgress(any()) } returns Unit
     }
@@ -61,7 +61,7 @@ class AgentWorkerTest {
 
         coEvery { useCase(any(), "test prompt") } returns flowOf(
             AgentOrchestratorState.PipelineStage(AgentOrchestratorState.PipelineStepInfo(1, 3, "INPUT")),
-            AgentOrchestratorState.Completed("Done")
+            AgentOrchestratorState.Completed("Done"),
         )
 
         val result = worker.doWork()
@@ -76,7 +76,7 @@ class AgentWorkerTest {
 
         coEvery { useCase(any(), "test prompt") } returns flowOf(
             AgentOrchestratorState.PipelineStage(AgentOrchestratorState.PipelineStepInfo(1, 3, "INPUT")),
-            AgentOrchestratorState.Error("Some error")
+            AgentOrchestratorState.Error("Some error"),
         )
 
         val result = worker.doWork()
@@ -84,7 +84,7 @@ class AgentWorkerTest {
         // It returns success because the worker successfully finished the stream
         assertEquals(Result.success(), result)
     }
-    
+
     @Test
     fun `doWork returns retry on exception`() = runTest {
         val inputData = Data.Builder().putString(AgentWorker.KEY_PROMPT, "test prompt").build()

@@ -65,7 +65,7 @@ class DateVariableProviderTest {
             listOf(
                 Clock.fixed(Instant.parse("2026-05-01T23:30:00Z"), ZoneId.of("UTC")),
                 Clock.fixed(Instant.parse("2026-05-01T23:30:00Z"), ZoneId.of("Asia/Tokyo")),
-            )
+            ),
         )
         val provider = DateVariableProvider(
             clockProvider = { zones.removeFirst() },
@@ -80,6 +80,5 @@ class DateVariableProviderTest {
         assertEquals("02 May 2026", secondCall)
     }
 
-    private fun fixedClockAt(isoInstant: String): Clock =
-        Clock.fixed(Instant.parse(isoInstant), ZoneId.of("UTC"))
+    private fun fixedClockAt(isoInstant: String): Clock = Clock.fixed(Instant.parse(isoInstant), ZoneId.of("UTC"))
 }

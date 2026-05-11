@@ -13,9 +13,7 @@ import javax.inject.Inject
  *
  * @property pipelineRepository Persistence sink for the cascading delete.
  */
-class DeletePipelineUseCase @Inject constructor(
-    private val pipelineRepository: PipelineRepository,
-) {
+class DeletePipelineUseCase @Inject constructor(private val pipelineRepository: PipelineRepository) {
     /**
      * Deletes the pipeline identified by [pipelineId].
      *

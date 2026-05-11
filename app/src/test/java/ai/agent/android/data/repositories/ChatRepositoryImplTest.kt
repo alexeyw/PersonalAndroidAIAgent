@@ -37,7 +37,8 @@ class ChatRepositoryImplTest {
     fun `given same sessionId when saveMessage called twice then getSessionById called only once`() = runTest {
         val sessionId = "session-abc"
         val existingSession = ChatSessionEntity(id = sessionId, name = "Chat session", updatedAt = 0L)
-        val message1 = ChatMessage(id = 1L, sessionId = sessionId, role = Role.USER, content = "Hello", timestamp = 1000L)
+        val message1 =
+            ChatMessage(id = 1L, sessionId = sessionId, role = Role.USER, content = "Hello", timestamp = 1000L)
         val message2 = ChatMessage(id = 2L, sessionId = sessionId, role = Role.AGENT, content = "Hi", timestamp = 2000L)
 
         coEvery { chatDao.getSessionById(sessionId) } returns existingSession
@@ -52,7 +53,8 @@ class ChatRepositoryImplTest {
     @Test
     fun `given non-existent sessionId when saveMessage called then session is created`() = runTest {
         val sessionId = "new-session"
-        val message = ChatMessage(id = 1L, sessionId = sessionId, role = Role.USER, content = "Hello", timestamp = 1000L)
+        val message =
+            ChatMessage(id = 1L, sessionId = sessionId, role = Role.USER, content = "Hello", timestamp = 1000L)
 
         coEvery { chatDao.getSessionById(sessionId) } returns null
 
@@ -64,8 +66,8 @@ class ChatRepositoryImplTest {
                 ChatSessionEntity(
                     id = sessionId,
                     name = "Chat " + sessionId.take(6),
-                    updatedAt = message.timestamp
-                )
+                    updatedAt = message.timestamp,
+                ),
             )
         }
     }

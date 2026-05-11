@@ -38,7 +38,7 @@ class CloudLlmNodeExecutor @Inject constructor(
         node: NodeModel,
         inputText: String,
         sessionId: String,
-        originalPrompt: String
+        originalPrompt: String,
     ): Flow<NodeOutput> = flow {
         val systemPromptPrefix = settingsRepository.systemPromptPrefix.first()
         val nodeSystemPrompt = node.systemPrompt ?: "You are a helpful AI assistant."
@@ -72,7 +72,7 @@ class CloudLlmNodeExecutor @Inject constructor(
         } else {
             val client = cloudLlmClientFactory.createClient(selectedProvider) as? LLMClient
             if (client == null) {
-                flowOf("Error: ${selectedProvider} not configured")
+                flowOf("Error: $selectedProvider not configured")
             } else {
                 // The resolver owns the per-provider configured-id ↔ default fallback,
                 // so the executor stays out of the data layer's settings plumbing.
@@ -106,7 +106,9 @@ class CloudLlmNodeExecutor @Inject constructor(
             // would silently swallow cancellation and leave the parent coroutine running.
             throw e
         } catch (e: Exception) {
-            Timber.tag("PipelineDebug").e(e, "[NODE_ERR] type=${node.type.name} id=${node.id} error in CloudLlmNodeExecutor generation")
+            Timber.tag(
+                "PipelineDebug",
+            ).e(e, "[NODE_ERR] type=${node.type.name} id=${node.id} error in CloudLlmNodeExecutor generation")
             emit(NodeOutput.State(AgentOrchestratorState.Error(e.message ?: "Unknown error during LLM generation")))
             emit(NodeOutput.Result(NodeExecutionResult(error = e.message)))
             return@flow

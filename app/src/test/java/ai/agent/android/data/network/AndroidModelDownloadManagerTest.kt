@@ -33,7 +33,7 @@ class AndroidModelDownloadManagerTest {
     fun setUp() {
         context = mockk(relaxed = true)
         okHttpClient = mockk(relaxed = true)
-        
+
         // Mock getExternalFilesDir to return a temporary directory for testing
         tempDir = File(System.getProperty("java.io.tmpdir"), "test_downloads")
         tempDir.mkdirs()
@@ -72,15 +72,15 @@ class AndroidModelDownloadManagerTest {
 
         assertTrue("Expected at least Pending and Success states", emissions.size >= 2)
         assertTrue(emissions.first() is DownloadState.Pending)
-        
+
         val successState = emissions.last() as DownloadState.Success
         val expectedFile = File(tempDir, fileName)
         assertEquals(expectedFile.absolutePath, successState.fileUri)
-        
+
         // Verify file content was written correctly
         assertTrue(expectedFile.exists())
         assertEquals(expectedContent, expectedFile.readText())
-        
+
         // Cleanup
         expectedFile.delete()
     }

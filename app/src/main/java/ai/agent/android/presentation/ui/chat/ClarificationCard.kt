@@ -1,5 +1,6 @@
 package ai.agent.android.presentation.ui.chat
 
+import ai.agent.android.R
 import android.os.SystemClock
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -19,7 +20,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.HelpOutline
 import androidx.compose.material.icons.automirrored.filled.Send
-import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -39,6 +39,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
@@ -99,7 +100,7 @@ fun ClarificationCard(
                 )
                 Spacer(modifier = Modifier.width(6.dp))
                 Text(
-                    text = "Agent requests clarification",
+                    text = stringResource(R.string.chat_clarification_title),
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSecondaryContainer,
                 )
@@ -117,11 +118,7 @@ fun ClarificationCard(
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun PendingBody(
-    model: ClarificationCardUiModel,
-    onAnswer: (String) -> Unit,
-    onTimeout: (String) -> Unit,
-) {
+private fun PendingBody(model: ClarificationCardUiModel, onAnswer: (String) -> Unit, onTimeout: (String) -> Unit) {
     Text(
         text = model.question,
         style = MaterialTheme.typography.bodyMedium,
@@ -133,9 +130,10 @@ private fun PendingBody(
     if (!options.isNullOrEmpty()) {
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             options.forEach { option ->
+                val optionCd = stringResource(R.string.chat_clarification_option_cd, option)
                 OutlinedButton(
                     onClick = { onAnswer(option) },
-                    modifier = Modifier.semantics { contentDescription = "Option: $option" },
+                    modifier = Modifier.semantics { contentDescription = optionCd },
                 ) {
                     Text(option)
                 }
@@ -150,7 +148,7 @@ private fun PendingBody(
                 modifier = Modifier
                     .weight(1f)
                     .testTag("ClarificationInput"),
-                placeholder = { Text("Your answer") },
+                placeholder = { Text(stringResource(R.string.chat_clarification_answer_placeholder)) },
                 singleLine = true,
             )
             Spacer(modifier = Modifier.width(8.dp))
@@ -163,7 +161,7 @@ private fun PendingBody(
             ) {
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.Send,
-                    contentDescription = "Send answer",
+                    contentDescription = stringResource(R.string.chat_clarification_send_cd),
                 )
             }
         }
@@ -174,10 +172,7 @@ private fun PendingBody(
 }
 
 @Composable
-private fun CountdownRow(
-    model: ClarificationCardUiModel,
-    onTimeout: (String) -> Unit,
-) {
+private fun CountdownRow(model: ClarificationCardUiModel, onTimeout: (String) -> Unit) {
     val deadline = remember(model.id) { model.startedAtMs + model.timeoutMs }
     var remainingMs by remember(model.id) {
         mutableLongStateOf((deadline - SystemClock.uptimeMillis()).coerceAtLeast(0L))
@@ -210,7 +205,7 @@ private fun CountdownRow(
         )
         Spacer(modifier = Modifier.height(4.dp))
         Text(
-            text = "Auto-reply in ${seconds}s",
+            text = stringResource(R.string.chat_clarification_autoreply, seconds),
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSecondaryContainer,
         )
@@ -226,7 +221,7 @@ private fun AnsweredBody(model: ClarificationCardUiModel) {
     )
     Spacer(modifier = Modifier.height(4.dp))
     Text(
-        text = "You answered: ${model.answer.orEmpty()}",
+        text = stringResource(R.string.chat_clarification_answered, model.answer.orEmpty()),
         style = MaterialTheme.typography.bodyMedium,
         color = MaterialTheme.colorScheme.onSecondaryContainer,
         modifier = Modifier.testTag("ClarificationAnswered"),
@@ -242,7 +237,7 @@ private fun TimedOutBody(model: ClarificationCardUiModel) {
     )
     Spacer(modifier = Modifier.height(4.dp))
     Text(
-        text = "Default answer used: ${model.answer.orEmpty()}",
+        text = stringResource(R.string.chat_clarification_default_used, model.answer.orEmpty()),
         style = MaterialTheme.typography.bodyMedium,
         color = MaterialTheme.colorScheme.onSecondaryContainer,
         modifier = Modifier.testTag("ClarificationTimedOut"),

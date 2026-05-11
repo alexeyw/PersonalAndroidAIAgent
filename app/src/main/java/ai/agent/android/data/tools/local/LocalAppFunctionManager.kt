@@ -1,5 +1,6 @@
 package ai.agent.android.data.tools.local
 
+import ai.agent.android.domain.models.AgentTool
 import android.content.Context
 import androidx.appfunctions.AppFunctionManager
 import androidx.appfunctions.AppFunctionSearchSpec
@@ -16,7 +17,6 @@ import androidx.appfunctions.metadata.AppFunctionObjectTypeMetadata
 import androidx.appfunctions.metadata.AppFunctionParameterMetadata
 import androidx.appfunctions.metadata.AppFunctionReferenceTypeMetadata
 import androidx.appfunctions.metadata.AppFunctionStringTypeMetadata
-import ai.agent.android.domain.models.AgentTool
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import org.json.JSONArray
@@ -39,10 +39,9 @@ class LocalAppFunctionManager(private val context: Context) {
      * @param request The request object containing targetPackageName, functionIdentifier, and parameters.
      * @return ExecuteAppFunctionResponse
      */
-    suspend fun executeFunction(
-        request: ExecuteAppFunctionRequest
-    ): ExecuteAppFunctionResponse {
-        val manager = appFunctionManager ?: throw IllegalStateException("AppFunctionManager is not available on this device.")
+    suspend fun executeFunction(request: ExecuteAppFunctionRequest): ExecuteAppFunctionResponse {
+        val manager =
+            appFunctionManager ?: throw IllegalStateException("AppFunctionManager is not available on this device.")
         return manager.executeAppFunction(request)
     }
 
@@ -52,7 +51,7 @@ class LocalAppFunctionManager(private val context: Context) {
     suspend fun getAvailableFunctions(): List<AgentTool> {
         val manager = appFunctionManager ?: return emptyList()
         val searchSpec = AppFunctionSearchSpec()
-        
+
         // Observe app functions once and map them to our domain model
         return manager.observeAppFunctions(searchSpec)
             .map { packages ->
@@ -61,7 +60,7 @@ class LocalAppFunctionManager(private val context: Context) {
                         AgentTool(
                             name = metadata.id,
                             description = metadata.description ?: "App function ${metadata.id}",
-                            parameters = generateJsonSchema(metadata.parameters)
+                            parameters = generateJsonSchema(metadata.parameters),
                         )
                     }
                 }
@@ -71,7 +70,7 @@ class LocalAppFunctionManager(private val context: Context) {
     private fun generateJsonSchema(parameters: List<AppFunctionParameterMetadata>): String {
         val root = JSONObject()
         root.put("type", "object")
-        
+
         val properties = JSONObject()
         val required = JSONArray()
 
@@ -92,7 +91,7 @@ class LocalAppFunctionManager(private val context: Context) {
 
     private fun mapTypeToJsonSchema(dataType: AppFunctionDataTypeMetadata, description: String?): JSONObject {
         val schema = JSONObject()
-        
+
         if (description != null) {
             schema.put("description", description)
         }
@@ -116,7 +115,7 @@ class LocalAppFunctionManager(private val context: Context) {
         }
 
         if (dataType.isNullable) {
-            // JSON Schema approach for nullable: ["type", "null"] or oneOf. 
+            // JSON Schema approach for nullable: ["type", "null"] or oneOf.
             // For simple agent usage, standard types are often enough.
         }
 

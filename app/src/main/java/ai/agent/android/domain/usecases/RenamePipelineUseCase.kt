@@ -18,9 +18,7 @@ import javax.inject.Inject
  *
  * @property pipelineRepository Source of the existing graph and the persistence sink.
  */
-class RenamePipelineUseCase @Inject constructor(
-    private val pipelineRepository: PipelineRepository,
-) {
+class RenamePipelineUseCase @Inject constructor(private val pipelineRepository: PipelineRepository) {
     /**
      * Renames the pipeline identified by [pipelineId] to [newName].
      *

@@ -15,7 +15,7 @@ import javax.inject.Inject
  */
 class LoadModelUseCase @Inject constructor(
     private val localModelRepository: LocalModelRepository,
-    private val llmInferenceEngine: LlmInferenceEngine
+    private val llmInferenceEngine: LlmInferenceEngine,
 ) {
 
     /**
@@ -26,9 +26,9 @@ class LoadModelUseCase @Inject constructor(
     /**
      * Retrieves the specified model or the currently active model from the repository, checks if the file exists on disk,
      * and initializes the LLM engine with the model path.
-     * 
+     *
      * If the requested model is already loaded in the engine, it returns [Result.Success] immediately.
-     * 
+     *
      * @param modelPath Optional absolute path to the model file. If null, the globally active model is used.
      * @return [Result.Success] if the model was successfully loaded, or [Result.Error] otherwise.
      */
@@ -37,7 +37,7 @@ class LoadModelUseCase @Inject constructor(
             val pathToLoad = modelPath ?: localModelRepository.getActiveModel()?.path
                 ?: return@withContext Result.Error(
                     error = LlmSystemError,
-                    message = "No active model found. Please select a model in settings or provide a path."
+                    message = "No active model found. Please select a model in settings or provide a path.",
                 )
 
             // Check if the engine is already initialized with this exact model
@@ -49,7 +49,7 @@ class LoadModelUseCase @Inject constructor(
             if (!file.exists()) {
                 return@withContext Result.Error(
                     error = LlmSystemError,
-                    message = "Model file not found at: $pathToLoad. Please download it again."
+                    message = "Model file not found at: $pathToLoad. Please download it again.",
                 )
             }
 
@@ -58,7 +58,7 @@ class LoadModelUseCase @Inject constructor(
             return@withContext Result.Error(
                 error = LlmSystemError,
                 message = e.localizedMessage ?: "Unknown error while loading model",
-                throwable = e
+                throwable = e,
             )
         }
     }

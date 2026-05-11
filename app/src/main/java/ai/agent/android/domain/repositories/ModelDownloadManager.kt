@@ -9,7 +9,7 @@ import kotlinx.coroutines.flow.Flow
  * a streaming state of the download process.
  */
 interface ModelDownloadManager {
-    
+
     /**
      * Starts a download for a specified model URL and saves it to local storage.
      *

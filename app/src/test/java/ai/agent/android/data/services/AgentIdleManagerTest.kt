@@ -2,8 +2,6 @@ package ai.agent.android.data.services
 
 import ai.agent.android.domain.engine.LlmInferenceEngine
 import ai.agent.android.domain.models.AgentOrchestratorState
-import io.mockk.coEvery
-import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
@@ -48,7 +46,7 @@ class AgentIdleManagerTest {
             scope = CoroutineScope(testDispatcher),
             engine = llmEngine,
             agentState = stateFlow,
-            idleTimeoutMs = 1000L
+            idleTimeoutMs = 1000L,
         )
         idleManager.startObserving()
 
@@ -70,7 +68,7 @@ class AgentIdleManagerTest {
             scope = CoroutineScope(testDispatcher),
             engine = llmEngine,
             agentState = stateFlow,
-            idleTimeoutMs = 1000L
+            idleTimeoutMs = 1000L,
         )
         idleManager.startObserving()
 
@@ -92,7 +90,7 @@ class AgentIdleManagerTest {
             scope = CoroutineScope(testDispatcher),
             engine = llmEngine,
             agentState = stateFlow,
-            idleTimeoutMs = 1000L
+            idleTimeoutMs = 1000L,
         )
         idleManager.startObserving()
 
@@ -112,7 +110,7 @@ class AgentIdleManagerTest {
             scope = CoroutineScope(testDispatcher),
             engine = llmEngine,
             agentState = stateFlow,
-            idleTimeoutMs = 1000L
+            idleTimeoutMs = 1000L,
         )
         idleManager.startObserving()
 
@@ -132,7 +130,7 @@ class AgentIdleManagerTest {
             scope = CoroutineScope(testDispatcher),
             engine = llmEngine,
             agentState = stateFlow,
-            idleTimeoutMs = 1000L
+            idleTimeoutMs = 1000L,
         )
         idleManager.startObserving()
 

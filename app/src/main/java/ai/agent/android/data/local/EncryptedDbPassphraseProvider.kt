@@ -26,9 +26,7 @@ import javax.inject.Singleton
  * @property context The application context used to back the underlying preferences file.
  */
 @Singleton
-class EncryptedDbPassphraseProvider @Inject constructor(
-    @ApplicationContext private val context: Context
-) {
+class EncryptedDbPassphraseProvider @Inject constructor(@ApplicationContext private val context: Context) {
 
     private val prefsName = "secure_db_passphrase"
     private val passphraseKey = "db_passphrase_hex"
@@ -77,15 +75,13 @@ class EncryptedDbPassphraseProvider @Inject constructor(
         return generated.copyOf()
     }
 
-    private fun createEncryptedSharedPreferences(): SharedPreferences {
-        return EncryptedSharedPreferences.create(
-            context,
-            prefsName,
-            masterKey,
-            EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
-            EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
-        )
-    }
+    private fun createEncryptedSharedPreferences(): SharedPreferences = EncryptedSharedPreferences.create(
+        context,
+        prefsName,
+        masterKey,
+        EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+        EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM,
+    )
 
     private fun deleteSharedPreferences(name: String) {
         try {

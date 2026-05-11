@@ -22,9 +22,8 @@ import javax.inject.Singleton
  * @property context The application context used to register broadcast receivers.
  */
 @Singleton
-class PowerStateRepositoryImpl @Inject constructor(
-    @ApplicationContext private val context: Context
-) : PowerStateRepository {
+class PowerStateRepositoryImpl @Inject constructor(@ApplicationContext private val context: Context) :
+    PowerStateRepository {
 
     private val _powerState = MutableStateFlow(getInitialPowerState())
     override val powerState: StateFlow<PowerState> = _powerState.asStateFlow()
@@ -74,23 +73,23 @@ class PowerStateRepositoryImpl @Inject constructor(
 
         val status: Int = batteryStatus.getIntExtra(BatteryManager.EXTRA_STATUS, -1)
         val isCharging: Boolean = status == BatteryManager.BATTERY_STATUS_CHARGING ||
-                                  status == BatteryManager.BATTERY_STATUS_FULL
+            status == BatteryManager.BATTERY_STATUS_FULL
 
         val level: Int = batteryStatus.getIntExtra(BatteryManager.EXTRA_LEVEL, -1)
         val scale: Int = batteryStatus.getIntExtra(BatteryManager.EXTRA_SCALE, -1)
-        
+
         val batteryPct = if (level != -1 && scale != -1) {
             level * 100 / scale.toFloat()
         } else {
             100f
         }
-        
+
         // Android typically broadcasts ACTION_BATTERY_LOW at 15%
         val isBatteryLow = batteryPct <= 15f
 
         return PowerState(
             isBatteryLow = isBatteryLow,
-            isCharging = isCharging
+            isCharging = isCharging,
         )
     }
 }

@@ -20,7 +20,6 @@ interface ToolRepository {
      */
     suspend fun getAllLocalTools(): List<AgentTool>
 
-    
     /**
      * Executes a specific tool by its name with the given arguments.
      *

@@ -13,14 +13,10 @@ import javax.inject.Inject
  *
  * @param dao The DAO for accessing prompt templates in the database.
  */
-class PromptRepositoryImpl @Inject constructor(
-    private val dao: PromptTemplateDao
-) : PromptRepository {
+class PromptRepositoryImpl @Inject constructor(private val dao: PromptTemplateDao) : PromptRepository {
 
-    override fun getAllPrompts(): Flow<List<PromptTemplate>> {
-        return dao.getAllPrompts().map { entities ->
-            entities.map { it.toDomainModel() }
-        }
+    override fun getAllPrompts(): Flow<List<PromptTemplate>> = dao.getAllPrompts().map { entities ->
+        entities.map { it.toDomainModel() }
     }
 
     override suspend fun savePrompt(prompt: PromptTemplate) {
@@ -31,25 +27,19 @@ class PromptRepositoryImpl @Inject constructor(
         dao.deletePrompt(id)
     }
 
-    override suspend fun getPromptsCount(): Int {
-        return dao.getPromptsCount()
-    }
+    override suspend fun getPromptsCount(): Int = dao.getPromptsCount()
 
-    private fun PromptTemplateEntity.toDomainModel(): PromptTemplate {
-        return PromptTemplate(
-            id = id,
-            name = name,
-            text = text,
-            category = category
-        )
-    }
+    private fun PromptTemplateEntity.toDomainModel(): PromptTemplate = PromptTemplate(
+        id = id,
+        name = name,
+        text = text,
+        category = category,
+    )
 
-    private fun PromptTemplate.toEntity(): PromptTemplateEntity {
-        return PromptTemplateEntity(
-            id = id,
-            name = name,
-            text = text,
-            category = category
-        )
-    }
+    private fun PromptTemplate.toEntity(): PromptTemplateEntity = PromptTemplateEntity(
+        id = id,
+        name = name,
+        text = text,
+        category = category,
+    )
 }

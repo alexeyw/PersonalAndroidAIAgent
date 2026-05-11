@@ -1,15 +1,13 @@
 package ai.agent.android.presentation.ui.chat
 
-import android.content.Intent
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.runtime.DisposableEffect
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.LifecycleEventObserver
-import androidx.lifecycle.compose.LocalLifecycleOwner
+import ai.agent.android.R
 import ai.agent.android.domain.models.ChatMessage
 import ai.agent.android.domain.models.ChatSession
 import ai.agent.android.domain.models.Role
+import ai.agent.android.presentation.ui.common.asString
+import android.content.Intent
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -42,13 +40,13 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.StarBorder
@@ -58,7 +56,6 @@ import androidx.compose.material.icons.filled.Upload
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -86,6 +83,7 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -100,9 +98,13 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.mikepenz.markdown.m3.Markdown
 import kotlinx.coroutines.Dispatchers
@@ -118,10 +120,7 @@ import kotlinx.coroutines.withContext
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ChatScreen(
-    viewModel: ChatViewModel,
-    onBack: () -> Unit = {}
-) {
+fun ChatScreen(viewModel: ChatViewModel, onBack: () -> Unit = {}) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
     val listState = rememberLazyListState()
@@ -144,7 +143,7 @@ fun ChatScreen(
                     }.getOrNull()
                 }
                 if (json.isNullOrBlank()) {
-                    snackbarHostState.showSnackbar("Could not read selected file")
+                    snackbarHostState.showSnackbar(context.getString(R.string.errors_chat_file_unreadable))
                 } else {
                     viewModel.importChat(json)
                     drawerState.close()
@@ -160,7 +159,10 @@ fun ChatScreen(
                 putExtra(Intent.EXTRA_SUBJECT, payload.sessionName)
                 putExtra(Intent.EXTRA_TEXT, payload.json)
             }
-            val chooser = Intent.createChooser(sendIntent, "Export chat").apply {
+            val chooser = Intent.createChooser(
+                sendIntent,
+                context.getString(R.string.chat_export_chooser_title),
+            ).apply {
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
             context.startActivity(chooser)
@@ -187,8 +189,9 @@ fun ChatScreen(
     }
 
     // Show error message if present
-    LaunchedEffect(uiState.errorMessage) {
-        uiState.errorMessage?.let {
+    val errorMessageText = uiState.errorMessage?.asString()
+    LaunchedEffect(errorMessageText) {
+        errorMessageText?.let {
             snackbarHostState.showSnackbar(it)
             viewModel.clearError()
         }
@@ -197,8 +200,9 @@ fun ChatScreen(
     // One-shot Snackbar for the deleted-pipeline fallback (Phase 17.2): the
     // chat was silently rebound to the default pipeline because the bound
     // pipeline disappeared from the library.
-    LaunchedEffect(uiState.pipelineFallbackMessage) {
-        uiState.pipelineFallbackMessage?.let {
+    val pipelineFallbackText = uiState.pipelineFallbackMessage?.asString()
+    LaunchedEffect(pipelineFallbackText) {
+        pipelineFallbackText?.let {
             snackbarHostState.showSnackbar(it)
             viewModel.clearPipelineFallback()
         }
@@ -217,8 +221,9 @@ fun ChatScreen(
     // snackbar (errors, pipeline fallback notices) — closing it here would
     // truncate it and could even cancel the queued copy snackbar before it
     // ever became visible.
-    LaunchedEffect(uiState.snackbarMessage) {
-        val msg = uiState.snackbarMessage ?: return@LaunchedEffect
+    val snackbarText = uiState.snackbarMessage?.asString()
+    LaunchedEffect(snackbarText) {
+        val msg = snackbarText ?: return@LaunchedEffect
         val showJob = launch {
             snackbarHostState.showSnackbar(msg, duration = SnackbarDuration.Indefinite)
         }
@@ -282,7 +287,7 @@ fun ChatScreen(
                     },
                 )
             }
-        }
+        },
     ) {
         // Phase 17.6: collapse the input + collapsed-console stack into the
         // Scaffold's `bottomBar` so the chat history's `LazyColumn` owns the
@@ -300,30 +305,37 @@ fun ChatScreen(
         Scaffold(
             topBar = {
                 val currentSession = uiState.sessions.find { it.id == uiState.currentSessionId }
-                val title = currentSession?.name ?: "Agent Chat"
-                
+                val title = currentSession?.name ?: stringResource(R.string.chat_topbar_title_default)
+
                 TopAppBar(
                     title = {
                         Column {
                             Text(title)
                             uiState.currentPipelineName?.let { pipelineName ->
                                 Text(
-                                    text = "Pipeline: $pipelineName",
+                                    text = stringResource(R.string.chat_topbar_pipeline_label, pipelineName),
                                     style = MaterialTheme.typography.labelSmall,
                                     color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.6f),
                                 )
                             }
                             if (uiState.maxContextSize > 0) {
-                                val contextPercentage = (uiState.contextSize.toFloat() / uiState.maxContextSize.toFloat()).coerceIn(0f, 1f)
+                                val contextPercentage = (
+                                    uiState.contextSize.toFloat() /
+                                        uiState.maxContextSize.toFloat()
+                                    ).coerceIn(0f, 1f)
                                 val color = when {
                                     contextPercentage > 0.9f -> MaterialTheme.colorScheme.error
                                     contextPercentage > 0.7f -> androidx.compose.ui.graphics.Color(0xFFFFA000) // Orange
                                     else -> MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.6f)
                                 }
                                 Text(
-                                    text = "Context: ${uiState.contextSize} / ${uiState.maxContextSize}",
+                                    text = stringResource(
+                                        R.string.chat_topbar_context_label,
+                                        uiState.contextSize,
+                                        uiState.maxContextSize,
+                                    ),
                                     style = MaterialTheme.typography.labelSmall,
-                                    color = color
+                                    color = color,
                                 )
                             }
                         }
@@ -332,7 +344,7 @@ fun ChatScreen(
                         IconButton(onClick = onBack) {
                             Icon(
                                 imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                                contentDescription = "Back"
+                                contentDescription = stringResource(R.string.common_back),
                             )
                         }
                     },
@@ -345,23 +357,23 @@ fun ChatScreen(
                                     Icons.Default.StarBorder
                                 },
                                 contentDescription = if (uiState.showStarredOnly) {
-                                    "Show all messages"
+                                    stringResource(R.string.chat_topbar_show_all_cd)
                                 } else {
-                                    "Show only starred"
+                                    stringResource(R.string.chat_topbar_show_starred_cd)
                                 },
                             )
                         }
                         IconButton(onClick = { coroutineScope.launch { drawerState.open() } }) {
                             Icon(
                                 imageVector = Icons.Default.Menu,
-                                contentDescription = "Menu"
+                                contentDescription = stringResource(R.string.common_menu),
                             )
                         }
                         Box {
                             IconButton(onClick = { menuExpanded = true }) {
                                 Icon(
                                     imageVector = Icons.Default.MoreVert,
-                                    contentDescription = "More options",
+                                    contentDescription = stringResource(R.string.common_more_options),
                                 )
                             }
                             DropdownMenu(
@@ -369,7 +381,7 @@ fun ChatScreen(
                                 onDismissRequest = { menuExpanded = false },
                             ) {
                                 DropdownMenuItem(
-                                    text = { Text("Chat settings") },
+                                    text = { Text(stringResource(R.string.chat_menu_chat_settings)) },
                                     onClick = {
                                         menuExpanded = false
                                         if (uiState.currentSessionId.isNotBlank()) {
@@ -381,7 +393,7 @@ fun ChatScreen(
                                     },
                                 )
                                 DropdownMenuItem(
-                                    text = { Text("Export chat") },
+                                    text = { Text(stringResource(R.string.chat_menu_export_chat)) },
                                     onClick = {
                                         menuExpanded = false
                                         val sessionId = uiState.currentSessionId
@@ -398,8 +410,8 @@ fun ChatScreen(
                     },
                     colors = TopAppBarDefaults.topAppBarColors(
                         containerColor = MaterialTheme.colorScheme.primaryContainer,
-                        titleContentColor = MaterialTheme.colorScheme.onPrimaryContainer
-                    )
+                        titleContentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                    ),
                 )
             },
             bottomBar = {
@@ -433,7 +445,7 @@ fun ChatScreen(
                 ) {
                     uiState.inlineError?.let { inlineError ->
                         InlineErrorBanner(
-                            text = inlineError,
+                            text = inlineError.asString(),
                             onDismiss = { viewModel.clearInlineError() },
                         )
                     }
@@ -571,18 +583,18 @@ fun ChatScreen(
     if (uiState.pipelineSwitchConfirm != null) {
         AlertDialog(
             onDismissRequest = { viewModel.dismissPipelineSwitchConfirm() },
-            title = { Text("Generation in progress") },
+            title = { Text(stringResource(R.string.chat_dialog_generation_in_progress_title)) },
             text = {
-                Text("A response is being generated. Cancel it and switch the pipeline?")
+                Text(stringResource(R.string.chat_dialog_generation_in_progress_text))
             },
             confirmButton = {
                 Button(onClick = { viewModel.confirmPipelineSwitchCancelGeneration() }) {
-                    Text("Cancel and switch")
+                    Text(stringResource(R.string.chat_dialog_pipeline_switch_cancel_and_switch))
                 }
             },
             dismissButton = {
                 TextButton(onClick = { viewModel.dismissPipelineSwitchConfirm() }) {
-                    Text("Wait")
+                    Text(stringResource(R.string.chat_dialog_pipeline_switch_wait))
                 }
             },
         )
@@ -637,7 +649,7 @@ private fun NewChatPipelineSheet(
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Text(
-                text = "Choose pipeline for the new chat",
+                text = stringResource(R.string.chat_sheet_new_chat_title),
                 style = MaterialTheme.typography.titleMedium,
             )
             Spacer(modifier = Modifier.height(12.dp))
@@ -661,9 +673,9 @@ private fun NewChatPipelineSheet(
 
             Spacer(modifier = Modifier.height(12.dp))
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                TextButton(onClick = onDismiss) { Text("Cancel") }
+                TextButton(onClick = onDismiss) { Text(stringResource(R.string.common_cancel)) }
                 Spacer(modifier = Modifier.width(8.dp))
-                Button(onClick = { onConfirm(selected) }) { Text("Create") }
+                Button(onClick = { onConfirm(selected) }) { Text(stringResource(R.string.common_create)) }
             }
         }
     }
@@ -694,20 +706,21 @@ private fun ChatSettingsDialog(
     onDismiss: () -> Unit,
     onConfirm: () -> Unit,
 ) {
+    val defaultLabel = defaultPipelineLabel(pipelines, defaultPipelineId)
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Chat settings") },
+        title = { Text(stringResource(R.string.chat_dialog_chat_settings_title)) },
         text = {
             Column {
                 Text(
-                    text = "Pipeline",
+                    text = stringResource(R.string.chat_dialog_chat_settings_pipeline_label),
                     style = MaterialTheme.typography.titleSmall,
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 LazyColumn(modifier = Modifier.fillMaxWidth()) {
                     item {
                         PipelineChoiceRow(
-                            title = defaultPipelineLabel(pipelines, defaultPipelineId),
+                            title = defaultLabel,
                             selected = selectedPipelineId == null,
                             onClick = { onSelectPipeline(null) },
                         )
@@ -723,10 +736,10 @@ private fun ChatSettingsDialog(
             }
         },
         confirmButton = {
-            Button(onClick = onConfirm) { Text("Save") }
+            Button(onClick = onConfirm) { Text(stringResource(R.string.common_save)) }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Cancel") }
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.common_cancel)) }
         },
     )
 }
@@ -752,22 +765,16 @@ private fun ChatSettingsDialog(
  * the library (the same fallback `ChatViewModel.resolvePipelineName` uses
  * for the TopAppBar subtitle, so the two surfaces always agree).
  */
-private fun defaultPipelineLabel(
-    pipelines: List<PipelineSummary>,
-    defaultPipelineId: String?,
-): String {
-    if (pipelines.isEmpty()) return "Use default pipeline"
+@Composable
+private fun defaultPipelineLabel(pipelines: List<PipelineSummary>, defaultPipelineId: String?): String {
+    if (pipelines.isEmpty()) return stringResource(R.string.chat_pipeline_use_default)
     val explicit = defaultPipelineId?.let { id -> pipelines.firstOrNull { it.id == id } }
     val defaultName = (explicit ?: pipelines.first()).name
-    return "Use default pipeline ($defaultName)"
+    return stringResource(R.string.chat_pipeline_use_default_with_name, defaultName)
 }
 
 @Composable
-private fun PipelineChoiceRow(
-    title: String,
-    selected: Boolean,
-    onClick: () -> Unit,
-) {
+private fun PipelineChoiceRow(title: String, selected: Boolean, onClick: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -797,13 +804,13 @@ fun ChatDrawerContent(
     if (sessionToRename != null) {
         AlertDialog(
             onDismissRequest = { sessionToRename = null },
-            title = { Text("Rename Chat") },
+            title = { Text(stringResource(R.string.chat_drawer_rename_chat_title)) },
             text = {
                 OutlinedTextField(
                     value = renameText,
                     onValueChange = { renameText = it },
                     singleLine = true,
-                    label = { Text("Chat Name") }
+                    label = { Text(stringResource(R.string.chat_drawer_rename_chat_name_label)) },
                 )
             },
             confirmButton = {
@@ -813,39 +820,49 @@ fun ChatDrawerContent(
                             onRenameSession(sessionToRename!!.id, renameText)
                         }
                         sessionToRename = null
-                    }
+                    },
                 ) {
-                    Text("Save")
+                    Text(stringResource(R.string.common_save))
                 }
             },
             dismissButton = {
                 TextButton(onClick = { sessionToRename = null }) {
-                    Text("Cancel")
+                    Text(stringResource(R.string.common_cancel))
                 }
-            }
+            },
         )
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
         Text(
-            text = "Chat Sessions",
+            text = stringResource(R.string.chat_drawer_sessions_header),
             style = MaterialTheme.typography.titleMedium,
-            modifier = Modifier.padding(16.dp)
+            modifier = Modifier.padding(16.dp),
         )
         HorizontalDivider()
-        
+
         NavigationDrawerItem(
-            label = { Text("New Chat") },
+            label = { Text(stringResource(R.string.chat_drawer_new_chat)) },
             selected = false,
             onClick = onNewChat,
-            icon = { Icon(Icons.Default.Add, contentDescription = "New Chat") },
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
+            icon = {
+                Icon(
+                    Icons.Default.Add,
+                    contentDescription = stringResource(R.string.chat_drawer_new_chat),
+                )
+            },
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
         )
         NavigationDrawerItem(
-            label = { Text("Import Chat") },
+            label = { Text(stringResource(R.string.chat_drawer_import_chat)) },
             selected = false,
             onClick = onImportChat,
-            icon = { Icon(Icons.Default.Download, contentDescription = "Import Chat") },
+            icon = {
+                Icon(
+                    Icons.Default.Download,
+                    contentDescription = stringResource(R.string.chat_drawer_import_chat),
+                )
+            },
             modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
         )
         HorizontalDivider()
@@ -856,23 +873,29 @@ fun ChatDrawerContent(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 12.dp, vertical = 4.dp)
+                        .padding(horizontal = 12.dp, vertical = 4.dp),
                 ) {
                     Box(modifier = Modifier.weight(1f)) {
                         NavigationDrawerItem(
                             label = { Text(session.name) },
                             selected = session.id == currentSessionId,
-                            onClick = { onSessionSelected(session.id) }
+                            onClick = { onSessionSelected(session.id) },
                         )
                     }
-                    IconButton(onClick = { 
+                    IconButton(onClick = {
                         sessionToRename = session
-                        renameText = session.name 
+                        renameText = session.name
                     }) {
-                        Icon(Icons.Default.Edit, contentDescription = "Rename Session")
+                        Icon(
+                            Icons.Default.Edit,
+                            contentDescription = stringResource(R.string.chat_drawer_rename_session_cd),
+                        )
                     }
                     IconButton(onClick = { onDeleteSession(session.id) }) {
-                        Icon(Icons.Default.Delete, contentDescription = "Delete Session")
+                        Icon(
+                            Icons.Default.Delete,
+                            contentDescription = stringResource(R.string.chat_drawer_delete_session_cd),
+                        )
                     }
                 }
             }
@@ -925,7 +948,7 @@ fun ChatMessageItem(
 
     Box(
         modifier = Modifier.fillMaxWidth(),
-        contentAlignment = alignment
+        contentAlignment = alignment,
     ) {
         Box {
             Column(
@@ -937,7 +960,7 @@ fun ChatMessageItem(
                         onClick = {},
                         onLongClick = { menuExpanded = true },
                     )
-                    .padding(12.dp)
+                    .padding(12.dp),
             ) {
                 if (isSystem) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -945,13 +968,13 @@ fun ChatMessageItem(
                             imageVector = Icons.Default.Info,
                             contentDescription = null,
                             modifier = Modifier.size(16.dp),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                         Spacer(modifier = Modifier.width(4.dp))
                         Text(
                             text = message.content,
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
                 } else if (isUser) {
@@ -959,7 +982,7 @@ fun ChatMessageItem(
                         if (message.isStarred) {
                             Icon(
                                 imageVector = Icons.Default.Star,
-                                contentDescription = "Starred",
+                                contentDescription = stringResource(R.string.chat_message_starred_cd),
                                 modifier = Modifier.size(14.dp),
                                 tint = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f),
                             )
@@ -967,7 +990,7 @@ fun ChatMessageItem(
                         }
                         Text(
                             text = message.content,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                            color = MaterialTheme.colorScheme.onPrimaryContainer,
                         )
                     }
                 } else {
@@ -976,7 +999,7 @@ fun ChatMessageItem(
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Icon(
                                     imageVector = Icons.Default.Star,
-                                    contentDescription = "Starred",
+                                    contentDescription = stringResource(R.string.chat_message_starred_cd),
                                     modifier = Modifier.size(14.dp),
                                     tint = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f),
                                 )
@@ -996,8 +1019,8 @@ fun ChatMessageItem(
                                     h4 = MaterialTheme.typography.bodyLarge,
                                     h5 = MaterialTheme.typography.bodyMedium,
                                     h6 = MaterialTheme.typography.bodySmall,
-                                    text = MaterialTheme.typography.bodyMedium
-                                )
+                                    text = MaterialTheme.typography.bodyMedium,
+                                ),
                             )
                         }
                     }
@@ -1008,7 +1031,7 @@ fun ChatMessageItem(
                 onDismissRequest = { menuExpanded = false },
             ) {
                 DropdownMenuItem(
-                    text = { Text("Copy") },
+                    text = { Text(stringResource(R.string.common_copy)) },
                     leadingIcon = {
                         Icon(Icons.Default.ContentCopy, contentDescription = null)
                     },
@@ -1018,7 +1041,17 @@ fun ChatMessageItem(
                     },
                 )
                 DropdownMenuItem(
-                    text = { Text(if (message.isStarred) "Unsave" else "Save") },
+                    text = {
+                        Text(
+                            stringResource(
+                                if (message.isStarred) {
+                                    R.string.chat_message_menu_unsave
+                                } else {
+                                    R.string.chat_message_menu_save
+                                },
+                            ),
+                        )
+                    },
                     leadingIcon = {
                         Icon(
                             imageVector = if (message.isStarred) {
@@ -1060,13 +1093,13 @@ fun ChatInputBar(
         modifier = Modifier
             .fillMaxWidth()
             .padding(16.dp),
-        verticalAlignment = Alignment.CenterVertically
+        verticalAlignment = Alignment.CenterVertically,
     ) {
         OutlinedTextField(
             value = inputText,
             onValueChange = onInputTextChanged,
             modifier = Modifier.weight(1f),
-            placeholder = { Text("Ask the agent...") },
+            placeholder = { Text(stringResource(R.string.chat_input_placeholder)) },
             enabled = !isGenerating,
             maxLines = 4,
             // Semi-transparent white container so the input visually
@@ -1085,18 +1118,18 @@ fun ChatInputBar(
             IconButton(onClick = onStopClicked) {
                 Icon(
                     imageVector = Icons.Default.Stop,
-                    contentDescription = "Stop generation",
-                    tint = MaterialTheme.colorScheme.error
+                    contentDescription = stringResource(R.string.chat_input_stop_cd),
+                    tint = MaterialTheme.colorScheme.error,
                 )
             }
         } else {
             IconButton(
                 onClick = onSendClicked,
-                enabled = inputText.text.isNotBlank()
+                enabled = inputText.text.isNotBlank(),
             ) {
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.Send,
-                    contentDescription = "Send"
+                    contentDescription = stringResource(R.string.chat_input_send_cd),
                 )
             }
         }
@@ -1111,10 +1144,7 @@ fun ChatInputBar(
  * @param onDismiss Callback invoked when the user dismisses the banner.
  */
 @Composable
-fun InlineErrorBanner(
-    text: String,
-    onDismiss: () -> Unit,
-) {
+fun InlineErrorBanner(text: String, onDismiss: () -> Unit) {
     Surface(
         color = MaterialTheme.colorScheme.errorContainer,
         contentColor = MaterialTheme.colorScheme.onErrorContainer,
@@ -1141,7 +1171,7 @@ fun InlineErrorBanner(
                 modifier = Modifier.weight(1f),
             )
             TextButton(onClick = onDismiss) {
-                Text("Dismiss")
+                Text(stringResource(R.string.common_dismiss))
             }
         }
     }

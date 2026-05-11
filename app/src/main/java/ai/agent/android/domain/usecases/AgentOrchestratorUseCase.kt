@@ -14,9 +14,7 @@ import javax.inject.Singleton
  * It reads the user's input and delegates the execution to the [TaskQueueManager].
  */
 @Singleton
-class AgentOrchestratorUseCase @Inject constructor(
-    private val taskQueueManager: TaskQueueManager
-) {
+class AgentOrchestratorUseCase @Inject constructor(private val taskQueueManager: TaskQueueManager) {
 
     /**
      * A global state flow representing the current processing state of the agent.

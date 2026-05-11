@@ -50,7 +50,7 @@ class TimeVariableProviderTest {
             listOf(
                 Clock.fixed(sameInstant, ZoneId.of("UTC")),
                 Clock.fixed(sameInstant, ZoneId.of("Asia/Tokyo")),
-            )
+            ),
         )
         val provider = TimeVariableProvider(clockProvider = { zones.removeFirst() })
 
@@ -62,6 +62,5 @@ class TimeVariableProviderTest {
         assertEquals("00:00", second)
     }
 
-    private fun fixedClockAt(isoInstant: String): Clock =
-        Clock.fixed(Instant.parse(isoInstant), ZoneId.of("UTC"))
+    private fun fixedClockAt(isoInstant: String): Clock = Clock.fixed(Instant.parse(isoInstant), ZoneId.of("UTC"))
 }

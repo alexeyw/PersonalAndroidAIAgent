@@ -9,31 +9,31 @@ import ai.agent.android.domain.models.Role
  *
  * @return The corresponding [ChatMessage].
  */
-fun ChatMessageEntity.toDomain(): ChatMessage {
-    return ChatMessage(
-        id = id,
-        sessionId = sessionId,
-        role = try { Role.valueOf(role) } catch (e: IllegalArgumentException) { Role.SYSTEM },
-        content = content,
-        timestamp = timestamp,
-        isFinal = isFinal,
-        isStarred = isStarred,
-    )
-}
+fun ChatMessageEntity.toDomain(): ChatMessage = ChatMessage(
+    id = id,
+    sessionId = sessionId,
+    role = try {
+        Role.valueOf(role)
+    } catch (e: IllegalArgumentException) {
+        Role.SYSTEM
+    },
+    content = content,
+    timestamp = timestamp,
+    isFinal = isFinal,
+    isStarred = isStarred,
+)
 
 /**
  * Converts a [ChatMessage] domain model to a [ChatMessageEntity] database model.
  *
  * @return The corresponding [ChatMessageEntity].
  */
-fun ChatMessage.toEntity(): ChatMessageEntity {
-    return ChatMessageEntity(
-        id = id ?: 0,
-        sessionId = sessionId,
-        role = role.name,
-        content = content,
-        timestamp = timestamp,
-        isFinal = isFinal,
-        isStarred = isStarred,
-    )
-}
+fun ChatMessage.toEntity(): ChatMessageEntity = ChatMessageEntity(
+    id = id ?: 0,
+    sessionId = sessionId,
+    role = role.name,
+    content = content,
+    timestamp = timestamp,
+    isFinal = isFinal,
+    isStarred = isStarred,
+)

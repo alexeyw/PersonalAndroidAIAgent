@@ -27,11 +27,11 @@ class ResultTest {
         val errorType = DummyNetworkError()
         val exception = RuntimeException("Test Exception")
         val message = "Something went wrong"
-        
+
         val result: Result<String, AppError> = Result.Error(
             error = errorType,
             message = message,
-            throwable = exception
+            throwable = exception,
         )
 
         assertTrue(result is Result.Error)
@@ -44,7 +44,7 @@ class ResultTest {
     @Test
     fun `Error holds only error type when details are omitted`() {
         val errorType = DummyNetworkError()
-        
+
         val result: Result<String, AppError> = Result.Error(error = errorType)
 
         assertTrue(result is Result.Error)

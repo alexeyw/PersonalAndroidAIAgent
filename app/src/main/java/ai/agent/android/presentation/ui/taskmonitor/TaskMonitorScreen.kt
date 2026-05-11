@@ -1,5 +1,6 @@
 package ai.agent.android.presentation.ui.taskmonitor
 
+import ai.agent.android.R
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -36,6 +37,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 
@@ -53,43 +55,43 @@ fun TaskMonitorScreen(
     viewModel: TaskMonitorViewModel,
     modifier: Modifier = Modifier,
     onNavigateToChat: (String) -> Unit = {},
-    onBack: () -> Unit = {}
+    onBack: () -> Unit = {},
 ) {
     val uiState by viewModel.uiState.collectAsState()
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Active Tasks") },
+                title = { Text(stringResource(R.string.taskmonitor_screen_title)) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back"
+                            contentDescription = stringResource(R.string.common_back),
                         )
                     }
-                }
+                },
             )
-        }
+        },
     ) { paddingValues ->
         Column(
             modifier = modifier
                 .fillMaxSize()
                 .padding(paddingValues)
-                .padding(horizontal = 16.dp)
+                .padding(horizontal = 16.dp),
         ) {
             Spacer(modifier = Modifier.height(16.dp))
 
             // Filters
             LazyRow(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
             ) {
                 items(TaskFilterType.entries.toTypedArray()) { filterType ->
                     FilterChip(
                         selected = uiState.filter == filterType,
                         onClick = { viewModel.onFilterChanged(filterType) },
-                        label = { Text(filterType.displayName) }
+                        label = { Text(stringResource(filterType.displayNameRes)) },
                     )
                 }
             }
@@ -103,24 +105,24 @@ fun TaskMonitorScreen(
             } else if (uiState.tasks.isEmpty()) {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Text(
-                        text = "No tasks found.",
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        text = stringResource(R.string.taskmonitor_empty),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
             } else {
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     items(uiState.tasks, key = { it.id }) { task ->
                         TaskCard(
                             task = task,
                             onCancel = { viewModel.onCancelTaskClicked(it) },
-                            onNavigateToChat = { sessionId -> 
+                            onNavigateToChat = { sessionId ->
                                 viewModel.onOpenChatClicked(sessionId) {
                                     onNavigateToChat(sessionId)
                                 }
-                            }
+                            },
                         )
                     }
                 }
@@ -137,53 +139,49 @@ fun TaskMonitorScreen(
  * @param onNavigateToChat Callback invoked when the 'Open Chat' button is clicked.
  */
 @Composable
-fun TaskCard(
-    task: TaskItem,
-    onCancel: (String) -> Unit,
-    onNavigateToChat: (String) -> Unit
-) {
+fun TaskCard(task: TaskItem, onCancel: (String) -> Unit, onNavigateToChat: (String) -> Unit) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.CenterVertically,
             ) {
                 Icon(
                     imageVector = if (task.type == TaskType.SESSION) Icons.Default.Info else Icons.Default.Build,
                     contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary
+                    tint = MaterialTheme.colorScheme.primary,
                 )
-                
+
                 Column(
                     modifier = Modifier
                         .weight(1f)
-                        .padding(start = 12.dp)
+                        .padding(start = 12.dp),
                 ) {
                     Text(
                         text = task.title,
                         style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold
+                        fontWeight = FontWeight.SemiBold,
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = "Status: ${task.status.name}",
+                        text = stringResource(R.string.taskmonitor_status, task.status.name),
                         style = MaterialTheme.typography.bodySmall,
                         color = when (task.status) {
                             TaskStatus.RUNNING -> Color(0xFF4CAF50) // Green
                             TaskStatus.FAILED -> MaterialTheme.colorScheme.error
                             TaskStatus.QUEUED -> MaterialTheme.colorScheme.tertiary
                             TaskStatus.COMPLETED -> MaterialTheme.colorScheme.onSurfaceVariant
-                        }
+                        },
                     )
                     if (task.pipelineStage != null) {
                         Spacer(modifier = Modifier.height(2.dp))
                         Text(
-                            text = "Stage: ${task.pipelineStage}",
+                            text = stringResource(R.string.taskmonitor_stage, task.pipelineStage),
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.secondary
+                            color = MaterialTheme.colorScheme.secondary,
                         )
                     }
                 }
@@ -197,7 +195,7 @@ fun TaskCard(
                 } else {
                     LinearProgressIndicator(
                         progress = { task.progress },
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier.fillMaxWidth(),
                     )
                 }
             }
@@ -207,18 +205,20 @@ fun TaskCard(
                 Spacer(modifier = Modifier.height(12.dp))
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End
+                    horizontalArrangement = Arrangement.End,
                 ) {
                     if (task.type == TaskType.SESSION) {
                         Button(onClick = { onNavigateToChat(task.id) }) {
-                            Text("Open Chat")
+                            Text(stringResource(R.string.taskmonitor_open_chat))
                         }
-                    } else if (task.type == TaskType.BACKGROUND_WORK && task.status in listOf(TaskStatus.QUEUED, TaskStatus.RUNNING)) {
+                    } else if (task.type == TaskType.BACKGROUND_WORK &&
+                        task.status in listOf(TaskStatus.QUEUED, TaskStatus.RUNNING)
+                    ) {
                         Button(
                             onClick = { onCancel(task.id) },
-                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
                         ) {
-                            Text("Cancel")
+                            Text(stringResource(R.string.common_cancel))
                         }
                     }
                 }

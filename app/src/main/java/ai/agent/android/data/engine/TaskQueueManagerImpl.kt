@@ -1,6 +1,5 @@
 package ai.agent.android.data.engine
 
-import androidx.annotation.VisibleForTesting
 import ai.agent.android.domain.engine.GraphExecutionEngine
 import ai.agent.android.domain.engine.TaskQueueManager
 import ai.agent.android.domain.models.AgentOrchestratorState
@@ -9,9 +8,9 @@ import ai.agent.android.domain.models.ChatMessage
 import ai.agent.android.domain.models.Role
 import ai.agent.android.domain.repositories.ChatRepository
 import ai.agent.android.domain.repositories.PipelineRepository
+import androidx.annotation.VisibleForTesting
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.channels.Channel
@@ -36,7 +35,7 @@ import javax.inject.Singleton
 class TaskQueueManagerImpl @Inject constructor(
     private val chatRepository: ChatRepository,
     private val pipelineRepository: PipelineRepository,
-    private val graphExecutionEngine: GraphExecutionEngine
+    private val graphExecutionEngine: GraphExecutionEngine,
 ) : TaskQueueManager {
 
     @VisibleForTesting
@@ -49,7 +48,7 @@ class TaskQueueManagerImpl @Inject constructor(
         }
 
     internal var scope = CoroutineScope(dispatcher + SupervisorJob())
-    
+
     private val _globalState = MutableStateFlow<AgentOrchestratorState>(AgentOrchestratorState.Idle)
     override val globalState: StateFlow<AgentOrchestratorState> = _globalState.asStateFlow()
 
@@ -60,7 +59,7 @@ class TaskQueueManagerImpl @Inject constructor(
         val p2 = t2.priority.ordinal
         if (p1 != p2) p1.compareTo(p2) else t1.timestamp.compareTo(t2.timestamp)
     }
-    
+
     // Channel to signal new tasks
     private val taskSignal = Channel<Unit>(Channel.CONFLATED)
 
@@ -110,7 +109,7 @@ class TaskQueueManagerImpl @Inject constructor(
             sessionId = task.sessionId,
             role = Role.USER,
             content = task.prompt,
-            timestamp = System.currentTimeMillis()
+            timestamp = System.currentTimeMillis(),
         )
         chatRepository.saveMessage(userMessage)
 
@@ -127,7 +126,9 @@ class TaskQueueManagerImpl @Inject constructor(
         val activePipeline = boundPipeline ?: pipelines.firstOrNull()
 
         if (activePipeline == null) {
-            val errState = AgentOrchestratorState.Error("No active pipeline found. Please create one in the Visual Orchestrator.")
+            val errState = AgentOrchestratorState.Error(
+                "No active pipeline found. Please create one in the Visual Orchestrator.",
+            )
             stateFlow.value = errState
             _globalState.value = errState
             return
@@ -144,7 +145,9 @@ class TaskQueueManagerImpl @Inject constructor(
             stateFlow.value = errState
             _globalState.value = errState
         } finally {
-            if (stateFlow.value !is AgentOrchestratorState.Completed && stateFlow.value !is AgentOrchestratorState.Error) {
+            if (stateFlow.value !is AgentOrchestratorState.Completed &&
+                stateFlow.value !is AgentOrchestratorState.Error
+            ) {
                 stateFlow.value = AgentOrchestratorState.Idle
             }
             _globalState.value = AgentOrchestratorState.Idle
@@ -162,7 +165,10 @@ class TaskQueueManagerImpl @Inject constructor(
         scope.launch {
             queueMutex.withLock {
                 val stateFlow = getOrCreateStateFlow(task.sessionId)
-                if (stateFlow.value == AgentOrchestratorState.Idle || stateFlow.value is AgentOrchestratorState.Completed || stateFlow.value is AgentOrchestratorState.Error) {
+                if (stateFlow.value == AgentOrchestratorState.Idle ||
+                    stateFlow.value is AgentOrchestratorState.Completed ||
+                    stateFlow.value is AgentOrchestratorState.Error
+                ) {
                     stateFlow.value = AgentOrchestratorState.Loading
                     updateActiveSessionsState()
                 }
@@ -172,9 +178,8 @@ class TaskQueueManagerImpl @Inject constructor(
         }
     }
 
-    override fun observeTaskState(sessionId: String): Flow<AgentOrchestratorState> {
-        return getOrCreateStateFlow(sessionId).asStateFlow()
-    }
+    override fun observeTaskState(sessionId: String): Flow<AgentOrchestratorState> =
+        getOrCreateStateFlow(sessionId).asStateFlow()
 
     override fun resumeWithApproval(sessionId: String, isApproved: Boolean) {
         graphExecutionEngine.resumeWithApproval(sessionId, isApproved)

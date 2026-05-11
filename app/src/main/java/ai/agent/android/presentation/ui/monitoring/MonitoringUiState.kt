@@ -15,5 +15,5 @@ data class MonitoringUiState(
     val metrics: AgentMetrics = AgentMetrics(),
     val recentLogs: List<ChatMessage> = emptyList(),
     val isLoading: Boolean = false,
-    val isPowerSavingActive: Boolean = false
+    val isPowerSavingActive: Boolean = false,
 )

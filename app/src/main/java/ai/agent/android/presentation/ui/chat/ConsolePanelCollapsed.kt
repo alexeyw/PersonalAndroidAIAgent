@@ -1,5 +1,9 @@
 package ai.agent.android.presentation.ui.chat
 
+import ai.agent.android.R
+import ai.agent.android.domain.models.AgentOrchestratorState
+import ai.agent.android.domain.models.ConsoleEvent
+import ai.agent.android.domain.models.ConsoleEventType
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -15,12 +19,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import ai.agent.android.domain.models.AgentOrchestratorState
-import ai.agent.android.domain.models.ConsoleEvent
-import ai.agent.android.domain.models.ConsoleEventType
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -112,7 +114,7 @@ fun ConsolePanelCollapsed(
             // something for it — `PipelineTrace`, `ConsoleLog`,
             // `AwaitingClarification` etc. produce no output and would
             // otherwise consume a slot, silently dropping one event line.
-            if (currentState != null && thoughtLineFor(currentState) != null) {
+            if (currentState != null && thoughtLineHasOutput(currentState)) {
                 add(ConsoleLine.State(currentState))
             }
         }
@@ -152,7 +154,11 @@ fun ConsolePanelCollapsed(
                 Slot {
                     when (line) {
                         is ConsoleLine.Event -> Text(
-                            text = formatEventLine(line.event, timeFormatter.format(Date(line.event.timestamp))),
+                            text = formatEventLine(
+                                line.event,
+                                timeFormatter.format(Date(line.event.timestamp)),
+                                consoleTagFor(line.event.type),
+                            ),
                             color = lineColor(line.event.type),
                             fontFamily = FontFamily.Monospace,
                             fontSize = LineFontSize,
@@ -197,16 +203,24 @@ private fun Slot(content: @Composable () -> Unit) {
  * (Phase 17.5) and stays accessible to users who can't distinguish the
  * accent / error colors.
  */
-private fun formatEventLine(event: ConsoleEvent, timeText: String): String {
-    val tag = when (event.type) {
-        ConsoleEventType.NodeExecution -> "NODE"
-        ConsoleEventType.ToolCall -> "TOOL"
-        ConsoleEventType.MemoryAccess -> "MEM"
-        ConsoleEventType.SystemMessage -> "SYS"
-        ConsoleEventType.Error -> "ERR"
-    }
-    return "$timeText [$tag] ${event.message}"
-}
+internal fun formatEventLine(event: ConsoleEvent, timeText: String, tag: String): String =
+    "$timeText [$tag] ${event.message}"
+
+/**
+ * Resolves the localized console tag (NODE / TOOL / MEM / SYS / ERR) for an
+ * event type. Exposed at module scope so both the collapsed strip and the
+ * expanded log sheet pull tags from the same source.
+ */
+@Composable
+internal fun consoleTagFor(type: ConsoleEventType): String = stringResource(
+    when (type) {
+        ConsoleEventType.NodeExecution -> R.string.chat_console_tag_node
+        ConsoleEventType.ToolCall -> R.string.chat_console_tag_tool
+        ConsoleEventType.MemoryAccess -> R.string.chat_console_tag_memory
+        ConsoleEventType.SystemMessage -> R.string.chat_console_tag_system
+        ConsoleEventType.Error -> R.string.chat_console_tag_error
+    },
+)
 
 /**
  * Maps an event category to its line color. Pulled out as a `@Composable`

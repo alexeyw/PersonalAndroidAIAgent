@@ -12,8 +12,8 @@ import io.mockk.mockk
 import io.mockk.verify
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
@@ -41,7 +41,7 @@ class TaskMonitorViewModelTest {
 
         val sessions = listOf(
             ChatSession("session1", "First Session", 1000L),
-            ChatSession("session2", "Second Session", 2000L)
+            ChatSession("session2", "Second Session", 2000L),
         )
 
         val workInfo1 = mockk<WorkInfo>(relaxed = true) {
@@ -57,10 +57,12 @@ class TaskMonitorViewModelTest {
 
         every { chatRepository.getSessionsFlow() } returns flowOf(sessions)
         every { workManager.getWorkInfosFlow(any()) } returns flowOf(listOf(workInfo1, workInfo2))
-        
+
         val activeMap = mapOf(
-            "session1" to AgentOrchestratorState.PipelineStage(AgentOrchestratorState.PipelineStepInfo(1, 3, "LITE_RT")),
-            "session2" to AgentOrchestratorState.Idle
+            "session1" to AgentOrchestratorState.PipelineStage(
+                AgentOrchestratorState.PipelineStepInfo(1, 3, "LITE_RT"),
+            ),
+            "session2" to AgentOrchestratorState.Idle,
         )
         every { taskQueueManager.activeSessionsState } returns kotlinx.coroutines.flow.MutableStateFlow(activeMap)
 
@@ -75,10 +77,10 @@ class TaskMonitorViewModelTest {
     @Test
     fun `initial state shows active tasks by default`() = runTest(testDispatcher) {
         val uiState = viewModel.uiState.first { !it.isLoading }
-        
+
         assertEquals(TaskFilterType.ACTIVE, uiState.filter)
         assertEquals(2, uiState.tasks.size) // 1 active session + 1 running task
-        
+
         val sessions = uiState.tasks.filter { it.type == TaskType.SESSION }
         assertEquals(1, sessions.size)
         assertTrue(sessions.all { it.status == TaskStatus.RUNNING })

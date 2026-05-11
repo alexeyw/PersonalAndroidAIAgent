@@ -1,10 +1,10 @@
 package ai.agent.android.presentation.ui.chat
 
+import ai.agent.android.domain.models.AgentOrchestratorState
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
-import ai.agent.android.domain.models.AgentOrchestratorState
 import org.junit.Rule
 import org.junit.Test
 

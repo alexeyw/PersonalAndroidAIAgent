@@ -1,11 +1,11 @@
 package ai.agent.android.presentation.ui.memory
 
-import androidx.lifecycle.ViewModel
-import androidx.lifecycle.viewModelScope
 import ai.agent.android.domain.models.ChatMessage
 import ai.agent.android.domain.repositories.ChatRepository
 import ai.agent.android.domain.repositories.MemoryRepository
 import ai.agent.android.domain.repositories.SettingsRepository
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -24,10 +24,11 @@ import javax.inject.Inject
 class MemoryViewModel @Inject constructor(
     private val chatRepository: ChatRepository,
     private val memoryRepository: MemoryRepository,
-    private val settingsRepository: SettingsRepository
+    private val settingsRepository: SettingsRepository,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(MemoryUiState(isLoading = true))
+
     /**
      * The current UI state of the Memory screen.
      */
@@ -50,7 +51,7 @@ class MemoryViewModel @Inject constructor(
             // Load chat sessions (short-term memory)
             val sessionIds = chatRepository.getAllSessions()
             val sessionsMap = mutableMapOf<String, List<ChatMessage>>()
-            
+
             for (id in sessionIds) {
                 // Using first() to get the current snapshot of messages for this session
                 val messages = chatRepository.getMessagesForSession(id).first()
@@ -63,7 +64,7 @@ class MemoryViewModel @Inject constructor(
                 it.copy(
                     chatSessions = sessionsMap,
                     vectorMemories = memories,
-                    isLoading = false
+                    isLoading = false,
                 )
             }
         }

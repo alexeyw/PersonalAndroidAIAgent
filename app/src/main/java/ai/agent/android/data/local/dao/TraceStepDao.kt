@@ -1,10 +1,10 @@
 package ai.agent.android.data.local.dao
 
+import ai.agent.android.data.local.models.TraceStepEntity
 import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
-import ai.agent.android.data.local.models.TraceStepEntity
 import kotlinx.coroutines.flow.Flow
 
 /**

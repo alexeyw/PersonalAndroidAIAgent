@@ -28,7 +28,7 @@ class LocalModelRepositoryImplTest {
     fun `getAllModels returns flow from dao mapped to domain`() {
         val entities = listOf(
             LocalModelEntity(1, "Model A", "/path/a", 100L, true),
-            LocalModelEntity(2, "Model B", "/path/b", 200L, false)
+            LocalModelEntity(2, "Model B", "/path/b", 200L, false),
         )
         every { localModelDao.getAllModels() } returns flowOf(entities)
 

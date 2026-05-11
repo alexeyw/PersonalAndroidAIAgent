@@ -9,21 +9,21 @@ import kotlinx.coroutines.flow.Flow
 interface LocalModelRepository {
     /**
      * Retrieves all saved models as a Flow.
-     * 
+     *
      * @return Flow containing a list of [LocalModel].
      */
     fun getAllModels(): Flow<List<LocalModel>>
 
     /**
      * Retrieves the currently active model if one exists.
-     * 
+     *
      * @return The active [LocalModel] or null.
      */
     suspend fun getActiveModel(): LocalModel?
 
     /**
      * Inserts a new model record.
-     * 
+     *
      * @param model The [LocalModel] to insert.
      * @return The row ID of the newly inserted item.
      */
@@ -31,21 +31,21 @@ interface LocalModelRepository {
 
     /**
      * Updates an existing model record.
-     * 
+     *
      * @param model The [LocalModel] to update.
      */
     suspend fun updateModel(model: LocalModel)
 
     /**
      * Deletes a model record by its ID.
-     * 
+     *
      * @param id The ID of the model to delete.
      */
     suspend fun deleteModelById(id: Long)
 
     /**
      * Sets a specific model as the active one, unsetting any previously active models.
-     * 
+     *
      * @param id The ID of the model to activate.
      */
     suspend fun setActiveModel(id: Long)

@@ -15,5 +15,5 @@ data class MemoryUiState(
     val chatSessions: Map<String, List<ChatMessage>> = emptyMap(),
     val vectorMemories: List<MemoryChunk> = emptyList(),
     val isLoading: Boolean = false,
-    val currentTab: Int = 0
+    val currentTab: Int = 0,
 )

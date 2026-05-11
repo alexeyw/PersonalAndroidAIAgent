@@ -16,14 +16,10 @@ import javax.inject.Singleton
  * Implementation of [LocalModelRepository] that uses [LocalModelDao] as the data source.
  */
 @Singleton
-class LocalModelRepositoryImpl @Inject constructor(
-    private val localModelDao: LocalModelDao
-) : LocalModelRepository {
+class LocalModelRepositoryImpl @Inject constructor(private val localModelDao: LocalModelDao) : LocalModelRepository {
 
-    override fun getAllModels(): Flow<List<LocalModel>> {
-        return localModelDao.getAllModels().map { entities -> 
-            entities.map { it.toDomain() } 
-        }
+    override fun getAllModels(): Flow<List<LocalModel>> = localModelDao.getAllModels().map { entities ->
+        entities.map { it.toDomain() }
     }
 
     override suspend fun getActiveModel(): LocalModel? = withContext(Dispatchers.IO) {

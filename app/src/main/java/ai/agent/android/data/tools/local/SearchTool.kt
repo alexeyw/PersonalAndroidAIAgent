@@ -16,9 +16,7 @@ import javax.inject.Singleton
  * This is used for queries that require fetching external data.
  */
 @Singleton
-class SearchTool @Inject constructor(
-    private val llmEngine: LlmInferenceEngine
-) {
+class SearchTool @Inject constructor(private val llmEngine: LlmInferenceEngine) {
 
     companion object {
         const val TOOL_NAME = "search_tool"
@@ -38,30 +36,28 @@ class SearchTool @Inject constructor(
     /**
      * Returns the [AgentTool] representation of this tool.
      */
-    fun asAgentTool(): AgentTool {
-        return AgentTool(
-            name = TOOL_NAME,
-            description = TOOL_DESCRIPTION,
-            parameters = TOOL_PARAMETERS.trimIndent()
-        )
-    }
+    fun asAgentTool(): AgentTool = AgentTool(
+        name = TOOL_NAME,
+        description = TOOL_DESCRIPTION,
+        parameters = TOOL_PARAMETERS.trimIndent(),
+    )
 
     private fun truncateCleanly(extract: String): String {
         val substring = extract.substring(0, 2000)
         val lastPunctuation = maxOf(
             substring.lastIndexOf('.'),
-            maxOf(substring.lastIndexOf('!'), substring.lastIndexOf('?'))
+            maxOf(substring.lastIndexOf('!'), substring.lastIndexOf('?')),
         )
-        
+
         if (lastPunctuation > 0) {
             return substring.substring(0, lastPunctuation + 1)
         }
-        
+
         val lastSpace = substring.lastIndexOf(' ')
         if (lastSpace > 0) {
             return substring.substring(0, lastSpace) + "..."
         }
-        
+
         return "$substring..."
     }
 
@@ -75,9 +71,9 @@ class SearchTool @Inject constructor(
     suspend fun executeSearch(query: String, lang: String): String = withContext(Dispatchers.IO) {
         try {
             val encodedQuery = URLEncoder.encode(query, Charsets.UTF_8.name())
-            
+
             // Using generator=search is much more flexible than titles= because it does a real search.
-            val urlString = "https://$lang.wikipedia.org/w/api.php?action=query&format=json&prop=extracts&exintro=true&explaintext=true&generator=search&gsrsearch=${encodedQuery}&gsrlimit=1"
+            val urlString = "https://$lang.wikipedia.org/w/api.php?action=query&format=json&prop=extracts&exintro=true&explaintext=true&generator=search&gsrsearch=$encodedQuery&gsrlimit=1"
             val url = URL(urlString)
             val connection = url.openConnection() as HttpURLConnection
             connection.requestMethod = "GET"
@@ -87,17 +83,17 @@ class SearchTool @Inject constructor(
             if (connection.responseCode == HttpURLConnection.HTTP_OK) {
                 val response = connection.inputStream.bufferedReader().use { it.readText() }
                 val jsonResponse = JSONObject(response)
-                
+
                 val queryObj = jsonResponse.optJSONObject("query")
                 if (queryObj == null) {
                     return@withContext "No results found for '$query'."
                 }
-                
+
                 val pagesObj = queryObj.optJSONObject("pages")
                 if (pagesObj == null || pagesObj.keys().hasNext().not()) {
                     return@withContext "No results found for '$query'."
                 }
-                
+
                 val firstKey = pagesObj.keys().next()
                 if (firstKey == "-1") {
                     return@withContext "No results found for '$query'."
@@ -105,7 +101,7 @@ class SearchTool @Inject constructor(
 
                 val page = pagesObj.getJSONObject(firstKey)
                 val extract = page.optString("extract", "No summary available.")
-                
+
                 // If the extract is too long, try to summarize it with LLM
                 if (extract.length > 2000) {
                     if (llmEngine.isInitialized) {

@@ -1,13 +1,13 @@
 package ai.agent.android.data.local.dao
 
+import ai.agent.android.data.local.models.ChatMessageEntity
+import ai.agent.android.data.local.models.ChatSessionEntity
 import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Update
 import androidx.room.Upsert
-import ai.agent.android.data.local.models.ChatMessageEntity
-import ai.agent.android.data.local.models.ChatSessionEntity
 import kotlinx.coroutines.flow.Flow
 
 /**

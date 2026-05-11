@@ -4,6 +4,7 @@ import ai.agent.android.domain.models.AgentOrchestratorState
 import ai.agent.android.domain.models.ChatMessage
 import ai.agent.android.domain.models.ChatSession
 import ai.agent.android.domain.models.ConsoleEvent
+import ai.agent.android.presentation.ui.common.UiText
 
 /**
  * Data class representing the state of the Chat UI.
@@ -69,8 +70,8 @@ data class ChatUiState(
     val isGenerating: Boolean = false,
     val orchestratorState: AgentOrchestratorState? = null,
     val currentSessionId: String = "",
-    val errorMessage: String? = null,
-    val inlineError: String? = null,
+    val errorMessage: UiText? = null,
+    val inlineError: UiText? = null,
     val sessions: List<ChatSession> = emptyList(),
     val contextSize: Int = 0,
     val maxContextSize: Int = 0,
@@ -83,8 +84,8 @@ data class ChatUiState(
     val newChatPipelinePrompt: NewChatPipelinePrompt? = null,
     val chatSettingsDialog: ChatSettingsDialogState? = null,
     val pipelineSwitchConfirm: PipelineSwitchConfirmState? = null,
-    val pipelineFallbackMessage: String? = null,
-    val snackbarMessage: String? = null,
+    val pipelineFallbackMessage: UiText? = null,
+    val snackbarMessage: UiText? = null,
     val showStarredOnly: Boolean = false,
     val consoleLines: List<ConsoleEvent> = emptyList(),
     val consoleSheetVisible: Boolean = false,
@@ -100,9 +101,7 @@ data class ChatUiState(
  *   when the sheet first appears (the application-wide default). `null`
  *   means the sheet opens with "Use default" highlighted.
  */
-data class NewChatPipelinePrompt(
-    val preselectedPipelineId: String?,
-)
+data class NewChatPipelinePrompt(val preselectedPipelineId: String?)
 
 /**
  * State of the chat-settings dialog opened from the TopAppBar `⋮` menu.
@@ -112,9 +111,7 @@ data class NewChatPipelinePrompt(
  *   `pipelineId` and updated as the user makes a different pick before
  *   confirming.
  */
-data class ChatSettingsDialogState(
-    val selectedPipelineId: String?,
-)
+data class ChatSettingsDialogState(val selectedPipelineId: String?)
 
 /**
  * Pending pipeline-switch confirmation surfaced when the user picks a
@@ -129,6 +126,4 @@ data class ChatSettingsDialogState(
  * @property targetPipelineId The pipeline the user wants to switch to
  *   (`null` = the application default).
  */
-data class PipelineSwitchConfirmState(
-    val targetPipelineId: String?,
-)
+data class PipelineSwitchConfirmState(val targetPipelineId: String?)

@@ -38,15 +38,15 @@ class LocalPipelineRepositoryImplTest {
         val pipelineEntity = PipelineEntity(id = "p1", name = "Test Pipeline")
         val nodeEntity = NodeEntity(id = "n1", pipelineId = "p1", type = "TOOL", x = 10f, y = 20f, label = "Test Node")
         val connectionEntity = ConnectionEntity(id = "c1", pipelineId = "p1", sourceNodeId = "n1", targetNodeId = "n2")
-        
+
         val entities = listOf(
             PipelineWithNodesAndConnections(
                 pipeline = pipelineEntity,
                 nodes = listOf(nodeEntity),
-                connections = listOf(connectionEntity)
-            )
+                connections = listOf(connectionEntity),
+            ),
         )
-        
+
         every { pipelineDao.getAllPipelines() } returns flowOf(entities)
 
         // Act
@@ -57,7 +57,7 @@ class LocalPipelineRepositoryImplTest {
         val graph = result.first()
         assertEquals("p1", graph.id)
         assertEquals("Test Pipeline", graph.name)
-        
+
         assertEquals(1, graph.nodes.size)
         val node = graph.nodes.first()
         assertEquals("n1", node.id)
@@ -65,7 +65,7 @@ class LocalPipelineRepositoryImplTest {
         assertEquals(10f, node.x)
         assertEquals(20f, node.y)
         assertEquals("Test Node", node.label)
-        
+
         assertEquals(1, graph.connections.size)
         val connection = graph.connections.first()
         assertEquals("c1", connection.id)
@@ -119,7 +119,7 @@ class LocalPipelineRepositoryImplTest {
             id = "p1",
             name = "Test Pipeline",
             nodes = listOf(NodeModel("n1", NodeType.LITE_RT, 0f, 0f, "Label")),
-            connections = listOf(ConnectionModel("c1", "n1", "n2"))
+            connections = listOf(ConnectionModel("c1", "n1", "n2")),
         )
 
         coEvery { pipelineDao.savePipelineTransaction(any(), any(), any()) } returns Unit
@@ -132,7 +132,7 @@ class LocalPipelineRepositoryImplTest {
             pipelineDao.savePipelineTransaction(
                 match { it.id == "p1" && it.name == "Test Pipeline" },
                 match { it.size == 1 && it[0].id == "n1" && it[0].type == "LITE_RT" },
-                match { it.size == 1 && it[0].id == "c1" && it[0].sourceNodeId == "n1" && it[0].targetNodeId == "n2" }
+                match { it.size == 1 && it[0].id == "c1" && it[0].sourceNodeId == "n1" && it[0].targetNodeId == "n2" },
             )
         }
     }

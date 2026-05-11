@@ -17,7 +17,7 @@ class LocalModelMapperTest {
             name = "Test Model",
             path = "/data/local/tmp/model.tflite",
             size = 1024L,
-            isActive = true
+            isActive = true,
         )
 
         val domain = entity.toDomain()
@@ -36,7 +36,7 @@ class LocalModelMapperTest {
             name = "Another Model",
             path = "/path/to/another/model.bin",
             size = 2048L,
-            isActive = false
+            isActive = false,
         )
 
         val entity = domain.toEntity()

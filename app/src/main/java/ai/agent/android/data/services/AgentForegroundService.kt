@@ -11,7 +11,6 @@ import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
-import android.os.Build
 import android.os.IBinder
 import android.os.PowerManager
 import androidx.core.app.NotificationCompat
@@ -26,7 +25,7 @@ import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 /**
- * Foreground service that keeps the Agent (and LiteRT-ML engine) alive in memory 
+ * Foreground service that keeps the Agent (and LiteRT-ML engine) alive in memory
  * while tasks are executing or while waiting for short periods.
  * Includes idle timeout logic to safely deallocate model resources if inactive.
  */
@@ -85,7 +84,7 @@ class AgentForegroundService : Service() {
         idleManager = AgentIdleManager(
             scope = serviceScope,
             engine = llmEngine,
-            agentState = agentOrchestratorUseCase.globalState
+            agentState = agentOrchestratorUseCase.globalState,
         )
         idleManager.startObserving()
 
@@ -93,7 +92,7 @@ class AgentForegroundService : Service() {
             scope = serviceScope,
             powerStateRepository = powerStateRepository,
             engine = llmEngine,
-            workManager = workManager
+            workManager = workManager,
         )
         powerManager.startObserving()
 
@@ -103,10 +102,12 @@ class AgentForegroundService : Service() {
                 when (state) {
                     is AgentOrchestratorState.Loading,
                     is AgentOrchestratorState.Thinking,
-                    is AgentOrchestratorState.ExecutingTool -> acquireWakeLock()
+                    is AgentOrchestratorState.ExecutingTool,
+                    -> acquireWakeLock()
                     is AgentOrchestratorState.Idle,
                     is AgentOrchestratorState.Completed,
-                    is AgentOrchestratorState.Error -> releaseWakeLock()
+                    is AgentOrchestratorState.Error,
+                    -> releaseWakeLock()
                     else -> Unit
                 }
             }
@@ -133,29 +134,27 @@ class AgentForegroundService : Service() {
         }
     }
 
-    private fun getStatusTextForState(state: AgentOrchestratorState): String {
-        return when (state) {
-            is AgentOrchestratorState.Idle -> "Agent is waiting"
-            is AgentOrchestratorState.Loading -> "Loading context..."
-            is AgentOrchestratorState.Thinking -> "Agent is thinking..."
-            is AgentOrchestratorState.ExecutingTool -> "Using tool: ${state.toolName}..."
-            is AgentOrchestratorState.WaitingForApproval -> "Awaiting user confirmation..."
-            is AgentOrchestratorState.AwaitingClarification -> "Awaiting user clarification..."
-            is AgentOrchestratorState.ObservationResult -> "Processing tool result..."
-            is AgentOrchestratorState.Answering -> "Answering..."
-            is AgentOrchestratorState.Completed -> "Task completed"
-            is AgentOrchestratorState.Error -> "Error: ${state.message}"
-            is AgentOrchestratorState.PipelineStage -> "Pipeline stage: ${state.stepInfo.nodeName}"
-            is AgentOrchestratorState.PipelineTrace -> "Pipeline trace updated"
-            is AgentOrchestratorState.ConsoleLog -> "Pipeline running..."
-        }
+    private fun getStatusTextForState(state: AgentOrchestratorState): String = when (state) {
+        is AgentOrchestratorState.Idle -> "Agent is waiting"
+        is AgentOrchestratorState.Loading -> "Loading context..."
+        is AgentOrchestratorState.Thinking -> "Agent is thinking..."
+        is AgentOrchestratorState.ExecutingTool -> "Using tool: ${state.toolName}..."
+        is AgentOrchestratorState.WaitingForApproval -> "Awaiting user confirmation..."
+        is AgentOrchestratorState.AwaitingClarification -> "Awaiting user clarification..."
+        is AgentOrchestratorState.ObservationResult -> "Processing tool result..."
+        is AgentOrchestratorState.Answering -> "Answering..."
+        is AgentOrchestratorState.Completed -> "Task completed"
+        is AgentOrchestratorState.Error -> "Error: ${state.message}"
+        is AgentOrchestratorState.PipelineStage -> "Pipeline stage: ${state.stepInfo.nodeName}"
+        is AgentOrchestratorState.PipelineTrace -> "Pipeline trace updated"
+        is AgentOrchestratorState.ConsoleLog -> "Pipeline running..."
     }
 
     private fun createNotificationChannel() {
         val channel = NotificationChannel(
             NOTIFICATION_CHANNEL_ID,
             "Agent Service",
-            NotificationManager.IMPORTANCE_LOW
+            NotificationManager.IMPORTANCE_LOW,
         )
         channel.description = "Keeps the AI Agent running in the background."
         val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
@@ -165,9 +164,9 @@ class AgentForegroundService : Service() {
     private fun startForegroundServiceWithNotification(status: String) {
         val notification = buildNotification(status)
         startForeground(
-            NOTIFICATION_ID, 
-            notification, 
-            ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
+            NOTIFICATION_ID,
+            notification,
+            ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE,
         )
     }
 
@@ -177,36 +176,31 @@ class AgentForegroundService : Service() {
         manager.notify(NOTIFICATION_ID, notification)
     }
 
-    private fun buildNotification(status: String): Notification {
-        return NotificationCompat.Builder(this, NOTIFICATION_CHANNEL_ID)
+    private fun buildNotification(status: String): Notification =
+        NotificationCompat.Builder(this, NOTIFICATION_CHANNEL_ID)
             .setContentTitle("Android AI Agent")
             .setContentText(status)
             .setSmallIcon(android.R.drawable.ic_dialog_info)
             .setOngoing(true)
             .build()
-    }
 
     /**
      * Called by the system every time a client explicitly starts the service.
-     * 
+     *
      * @param intent The Intent supplied to [android.content.Context.startService].
      * @param flags Additional data about this start request.
      * @param startId A unique integer representing this specific request to start.
      * @return The return value indicates what semantics the system should use for the service's current started state.
      */
-    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        return START_STICKY
-    }
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int = START_STICKY
 
     /**
      * Return the communication channel to the service. This service does not support binding.
-     * 
+     *
      * @param intent The Intent that was used to bind to this service.
      * @return null as binding is not supported.
      */
-    override fun onBind(intent: Intent?): IBinder? {
-        return null
-    }
+    override fun onBind(intent: Intent?): IBinder? = null
 
     /**
      * Called by the system to notify a Service that it is no longer used and is being removed.

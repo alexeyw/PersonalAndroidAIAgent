@@ -5,7 +5,7 @@ import androidx.room.PrimaryKey
 
 /**
  * Room Entity representing a downloaded LLM model's metadata.
- * 
+ *
  * @property id Unique identifier for the model record.
  * @property name Human-readable name of the model.
  * @property path Absolute path to the model file on the device.
@@ -19,5 +19,5 @@ data class LocalModelEntity(
     val name: String,
     val path: String,
     val size: Long,
-    val isActive: Boolean
+    val isActive: Boolean,
 )

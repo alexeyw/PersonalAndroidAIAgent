@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="memory_screen_title">Memory Management</string>
+    <string name="memory_tab_chat_history">Chat History</string>
+    <string name="memory_tab_vector_base">Vector Base</string>
+    <string name="memory_empty_chat_history">No chat history available.</string>
+    <string name="memory_empty_vector">No vector memories stored yet.</string>
+    <string name="memory_chunks_stored">%1$d chunks stored</string>
+    <string name="memory_compact_button">Compact Memory</string>
+    <string name="memory_session_header">Session: %1$s...</string>
+    <string name="memory_session_messages">%1$d messages</string>
+    <string name="memory_delete_session_cd">Delete Session</string>
+    <string name="memory_delete_message_cd">Delete Message</string>
+    <string name="memory_delete_memory_cd">Delete Memory</string>
+    <string name="memory_embedding_size">Embedding size: %1$d dims</string>
+</resources>

@@ -5,7 +5,7 @@ package ai.agent.android.presentation.ui.taskmonitor
  */
 enum class TaskType {
     SESSION,
-    BACKGROUND_WORK
+    BACKGROUND_WORK,
 }
 
 /**
@@ -15,19 +15,21 @@ enum class TaskStatus {
     RUNNING,
     QUEUED,
     FAILED,
-    COMPLETED
+    COMPLETED,
 }
 
 /**
  * Filter types for the task monitoring list.
  *
- * @property displayName The text to display in the UI for this filter.
+ * @property displayNameRes Resource id of the translated chip label rendered
+ *   in the filter row. Resolved by the composable that draws the chip via
+ *   `stringResource(...)` so the enum stays Android-resource-free.
  */
-enum class TaskFilterType(val displayName: String) {
-    ALL("All"),
-    ACTIVE("Active"),
-    BACKGROUND("Background"),
-    COMPLETED("Completed")
+enum class TaskFilterType(@androidx.annotation.StringRes val displayNameRes: Int) {
+    ALL(ai.agent.android.R.string.taskmonitor_filter_all),
+    ACTIVE(ai.agent.android.R.string.taskmonitor_filter_active),
+    BACKGROUND(ai.agent.android.R.string.taskmonitor_filter_background),
+    COMPLETED(ai.agent.android.R.string.taskmonitor_filter_completed),
 }
 
 /**
@@ -46,7 +48,7 @@ data class TaskItem(
     val status: TaskStatus,
     val progress: Float?,
     val type: TaskType,
-    val pipelineStage: String? = null
+    val pipelineStage: String? = null,
 )
 
 /**
@@ -59,5 +61,5 @@ data class TaskItem(
 data class TaskMonitorState(
     val tasks: List<TaskItem> = emptyList(),
     val filter: TaskFilterType = TaskFilterType.ALL,
-    val isLoading: Boolean = true
+    val isLoading: Boolean = true,
 )

@@ -54,7 +54,7 @@ class ToolRepositoryImpl @Inject constructor(
                   },
                   "required": ["prompt"]
                 }
-            """.trimIndent()
+            """.trimIndent(),
         )
 
         val baseTools = mutableListOf(scheduleTool, searchTool.asAgentTool())
@@ -77,7 +77,7 @@ class ToolRepositoryImpl @Inject constructor(
                   },
                   "required": ["taskDescription"]
                 }
-            """.trimIndent()
+            """.trimIndent(),
         )
 
         baseTools.add(delegateTool)
@@ -109,7 +109,6 @@ class ToolRepositoryImpl @Inject constructor(
         }
     }
 
-
     /**
      * Retrieves all locally available tools.
      *
@@ -123,9 +122,7 @@ class ToolRepositoryImpl @Inject constructor(
      *
      * @return A list of [AgentTool] representing the local tools available.
      */
-    override suspend fun getAllLocalTools(): List<AgentTool> {
-        return getBuiltinTools()
-    }
+    override suspend fun getAllLocalTools(): List<AgentTool> = getBuiltinTools()
 
     /**
      * Retrieves all available tools, including both local tools (not disabled) and tools

@@ -1,5 +1,6 @@
 package ai.agent.android.presentation.ui.memory
 
+import ai.agent.android.R
 import ai.agent.android.domain.models.ChatMessage
 import ai.agent.android.domain.models.MemoryChunk
 import androidx.compose.animation.animateContentSize
@@ -18,7 +19,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material3.TextButton
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -31,6 +32,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -42,6 +44,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -49,49 +52,44 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import java.text.SimpleDateFormat
 import java.util.Date
 
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-
 /**
  * The main screen for viewing and managing the agent's short-term and long-term memory.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun MemoryScreen(
-    viewModel: MemoryViewModel = hiltViewModel(),
-    onBack: () -> Unit = {}
-) {
+fun MemoryScreen(viewModel: MemoryViewModel = hiltViewModel(), onBack: () -> Unit = {}) {
     val uiState by viewModel.uiState.collectAsState()
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Memory Management") },
+                title = { Text(stringResource(R.string.memory_screen_title)) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back"
+                            contentDescription = stringResource(R.string.common_back),
                         )
                     }
-                }
+                },
             )
-        }
+        },
     ) { paddingValues ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(paddingValues)
+                .padding(paddingValues),
         ) {
             TabRow(selectedTabIndex = uiState.currentTab) {
                 Tab(
                     selected = uiState.currentTab == 0,
                     onClick = { viewModel.setTab(0) },
-                    text = { Text("Chat History") }
+                    text = { Text(stringResource(R.string.memory_tab_chat_history)) },
                 )
                 Tab(
                     selected = uiState.currentTab == 1,
                     onClick = { viewModel.setTab(1) },
-                    text = { Text("Vector Base") }
+                    text = { Text(stringResource(R.string.memory_tab_vector_base)) },
                 )
             }
 
@@ -103,13 +101,13 @@ fun MemoryScreen(
                         0 -> ChatHistoryTab(
                             sessions = uiState.chatSessions,
                             onDeleteSession = viewModel::deleteChatSession,
-                            onDeleteMessage = viewModel::deleteChatMessage
+                            onDeleteMessage = viewModel::deleteChatMessage,
                         )
 
                         1 -> VectorDatabaseTab(
                             memories = uiState.vectorMemories,
                             onDeleteMemory = viewModel::deleteVectorMemory,
-                            onCompactMemory = viewModel::compactMemory
+                            onCompactMemory = viewModel::compactMemory,
                         )
                     }
                 }
@@ -123,30 +121,30 @@ fun MemoryScreen(
 private fun ChatHistoryTab(
     sessions: Map<String, List<ChatMessage>>,
     onDeleteSession: (String) -> Unit,
-    onDeleteMessage: (Long) -> Unit
+    onDeleteMessage: (Long) -> Unit,
 ) {
     if (sessions.isEmpty()) {
-        EmptyStateMessage("No chat history available.")
+        EmptyStateMessage(stringResource(R.string.memory_empty_chat_history))
         return
     }
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+        verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         sessions.forEach { (sessionId, messages) ->
             stickyHeader {
                 SessionHeader(
                     sessionId = sessionId,
                     messageCount = messages.size,
-                    onDelete = { onDeleteSession(sessionId) }
+                    onDelete = { onDeleteSession(sessionId) },
                 )
             }
             items(messages, key = { it.id ?: it.hashCode() }) { message ->
                 ChatMessageItem(
                     message = message,
-                    onDelete = { message.id?.let { onDeleteMessage(it) } }
+                    onDelete = { message.id?.let { onDeleteMessage(it) } },
                 )
             }
         }
@@ -157,7 +155,7 @@ private fun ChatHistoryTab(
 private fun VectorDatabaseTab(
     memories: List<MemoryChunk>,
     onDeleteMemory: (Long) -> Unit,
-    onCompactMemory: () -> Unit
+    onCompactMemory: () -> Unit,
 ) {
     Column(modifier = Modifier.fillMaxSize()) {
         Row(
@@ -165,21 +163,21 @@ private fun VectorDatabaseTab(
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp, vertical = 8.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+            verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
-                text = "${memories.size} chunks stored",
+                text = stringResource(R.string.memory_chunks_stored, memories.size),
                 style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             androidx.compose.material3.OutlinedButton(onClick = onCompactMemory) {
-                Text("Compact Memory")
+                Text(stringResource(R.string.memory_compact_button))
             }
         }
 
         if (memories.isEmpty()) {
             Box(modifier = Modifier.weight(1f)) {
-                EmptyStateMessage("No vector memories stored yet.")
+                EmptyStateMessage(stringResource(R.string.memory_empty_vector))
             }
             return
         }
@@ -187,12 +185,12 @@ private fun VectorDatabaseTab(
         LazyColumn(
             modifier = Modifier.weight(1f),
             contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+            verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             items(memories, key = { it.id }) { memory ->
                 MemoryChunkItem(
                     memory = memory,
-                    onDelete = { onDeleteMemory(memory.id) }
+                    onDelete = { onDeleteMemory(memory.id) },
                 )
             }
         }
@@ -200,46 +198,39 @@ private fun VectorDatabaseTab(
 }
 
 @Composable
-private fun SessionHeader(
-    sessionId: String,
-    messageCount: Int,
-    onDelete: () -> Unit
-) {
+private fun SessionHeader(sessionId: String, messageCount: Int, onDelete: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .background(MaterialTheme.colorScheme.surfaceVariant)
             .padding(vertical = 8.dp, horizontal = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween
+        horizontalArrangement = Arrangement.SpaceBetween,
     ) {
         Column {
             Text(
-                text = "Session: ${sessionId.take(8)}...",
+                text = stringResource(R.string.memory_session_header, sessionId.take(8)),
                 style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Text(
-                text = "$messageCount messages",
+                text = stringResource(R.string.memory_session_messages, messageCount),
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
         IconButton(onClick = onDelete) {
             Icon(
                 imageVector = Icons.Default.Delete,
-                contentDescription = "Delete Session",
-                tint = MaterialTheme.colorScheme.error
+                contentDescription = stringResource(R.string.memory_delete_session_cd),
+                tint = MaterialTheme.colorScheme.error,
             )
         }
     }
 }
 
 @Composable
-private fun ChatMessageItem(
-    message: ChatMessage,
-    onDelete: () -> Unit
-) {
+private fun ChatMessageItem(message: ChatMessage, onDelete: () -> Unit) {
     val locale = LocalConfiguration.current.locales[0]
     val dateFormat = remember(locale) { SimpleDateFormat("MMM dd, HH:mm", locale) }
     val dateString = dateFormat.format(Date(message.timestamp))
@@ -252,28 +243,28 @@ private fun ChatMessageItem(
             .clickable { expanded = !expanded }
             .animateContentSize(),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
-        )
+            containerColor = MaterialTheme.colorScheme.surface,
+        ),
     ) {
         Row(
             modifier = Modifier.padding(12.dp),
             verticalAlignment = Alignment.Top,
-            horizontalArrangement = Arrangement.SpaceBetween
+            horizontalArrangement = Arrangement.SpaceBetween,
         ) {
             Column(modifier = Modifier.weight(1f)) {
                 Row(
                     horizontalArrangement = Arrangement.SpaceBetween,
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
                 ) {
                     Text(
                         text = message.role.name,
                         style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.primary
+                        color = MaterialTheme.colorScheme.primary,
                     )
                     Text(
                         text = dateString,
                         style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
                 Spacer(modifier = Modifier.height(4.dp))
@@ -281,20 +272,20 @@ private fun ChatMessageItem(
                     text = message.content,
                     style = MaterialTheme.typography.bodyMedium,
                     maxLines = if (expanded) Int.MAX_VALUE else 3,
-                    overflow = TextOverflow.Ellipsis
+                    overflow = TextOverflow.Ellipsis,
                 )
             }
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 IconButton(onClick = onDelete) {
                     Icon(
                         imageVector = Icons.Default.Delete,
-                        contentDescription = "Delete Message",
+                        contentDescription = stringResource(R.string.memory_delete_message_cd),
                         tint = MaterialTheme.colorScheme.error,
-                        modifier = Modifier.padding(start = 8.dp)
+                        modifier = Modifier.padding(start = 8.dp),
                     )
                 }
                 TextButton(onClick = { clipboardManager.setText(AnnotatedString(message.content)) }) {
-                    Text("Copy", style = MaterialTheme.typography.labelMedium)
+                    Text(stringResource(R.string.common_copy), style = MaterialTheme.typography.labelMedium)
                 }
             }
         }
@@ -302,10 +293,7 @@ private fun ChatMessageItem(
 }
 
 @Composable
-private fun MemoryChunkItem(
-    memory: MemoryChunk,
-    onDelete: () -> Unit
-) {
+private fun MemoryChunkItem(memory: MemoryChunk, onDelete: () -> Unit) {
     val locale = LocalConfiguration.current.locales[0]
     val dateFormat = remember(locale) { SimpleDateFormat("MMM dd, yyyy HH:mm", locale) }
     val dateString = dateFormat.format(Date(memory.timestamp))
@@ -318,19 +306,19 @@ private fun MemoryChunkItem(
             .clickable { expanded = !expanded }
             .animateContentSize(),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.secondaryContainer
-        )
+            containerColor = MaterialTheme.colorScheme.secondaryContainer,
+        ),
     ) {
         Row(
             modifier = Modifier.padding(12.dp),
             verticalAlignment = Alignment.Top,
-            horizontalArrangement = Arrangement.SpaceBetween
+            horizontalArrangement = Arrangement.SpaceBetween,
         ) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = dateString,
                     style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSecondaryContainer
+                    color = MaterialTheme.colorScheme.onSecondaryContainer,
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 if (expanded) {
@@ -344,8 +332,8 @@ private fun MemoryChunkItem(
                             h4 = MaterialTheme.typography.bodyLarge,
                             h5 = MaterialTheme.typography.bodyMedium,
                             h6 = MaterialTheme.typography.bodySmall,
-                            text = MaterialTheme.typography.bodyMedium
-                        )
+                            text = MaterialTheme.typography.bodyMedium,
+                        ),
                     )
                 } else {
                     Text(
@@ -353,26 +341,26 @@ private fun MemoryChunkItem(
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSecondaryContainer,
                         maxLines = 4,
-                        overflow = TextOverflow.Ellipsis
+                        overflow = TextOverflow.Ellipsis,
                     )
                 }
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
-                    text = "Embedding size: ${memory.embedding.size} dims",
+                    text = stringResource(R.string.memory_embedding_size, memory.embedding.size),
                     style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f)
+                    color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f),
                 )
             }
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 IconButton(onClick = onDelete) {
                     Icon(
                         imageVector = Icons.Default.Delete,
-                        contentDescription = "Delete Memory",
-                        tint = MaterialTheme.colorScheme.error
+                        contentDescription = stringResource(R.string.memory_delete_memory_cd),
+                        tint = MaterialTheme.colorScheme.error,
                     )
                 }
                 TextButton(onClick = { clipboardManager.setText(AnnotatedString(memory.text)) }) {
-                    Text("Copy", style = MaterialTheme.typography.labelMedium)
+                    Text(stringResource(R.string.common_copy), style = MaterialTheme.typography.labelMedium)
                 }
             }
         }
@@ -383,12 +371,12 @@ private fun MemoryChunkItem(
 private fun EmptyStateMessage(message: String) {
     Box(
         modifier = Modifier.fillMaxSize(),
-        contentAlignment = Alignment.Center
+        contentAlignment = Alignment.Center,
     ) {
         Text(
             text = message,
             style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
 }

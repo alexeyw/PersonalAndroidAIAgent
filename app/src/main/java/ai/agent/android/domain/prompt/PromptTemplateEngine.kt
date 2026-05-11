@@ -65,10 +65,7 @@ class PromptTemplateEngine @Inject constructor() {
      * the last-wins semantics of [Map] construction.
      * @return ordered list of segments. Empty list iff [template] is empty.
      */
-    suspend fun renderSegments(
-        template: String,
-        providers: List<PromptVariableProvider>,
-    ): List<PromptSegment> {
+    suspend fun renderSegments(template: String, providers: List<PromptVariableProvider>): List<PromptSegment> {
         if (template.isEmpty()) return emptyList()
 
         val providerByKey: Map<String, PromptVariableProvider> = buildMap(providers.size) {

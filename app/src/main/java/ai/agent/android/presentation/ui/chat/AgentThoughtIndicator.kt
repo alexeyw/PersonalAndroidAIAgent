@@ -1,5 +1,7 @@
 package ai.agent.android.presentation.ui.chat
 
+import ai.agent.android.R
+import ai.agent.android.domain.models.AgentOrchestratorState
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -10,11 +12,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import ai.agent.android.domain.models.AgentOrchestratorState
 
 /**
  * Console-styled single-line indicator of the agent's current orchestrator
@@ -73,8 +75,8 @@ fun AgentThoughtIndicator(
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f),
             )
-            ConsoleAction(label = "Deny", onClick = onDeny)
-            ConsoleAction(label = "Approve", onClick = onApprove)
+            ConsoleAction(label = stringResource(R.string.chat_thought_deny), onClick = onDeny)
+            ConsoleAction(label = stringResource(R.string.chat_thought_approve), onClick = onApprove)
         }
     } else {
         Text(
@@ -125,27 +127,58 @@ private fun ConsoleAction(label: String, onClick: () -> Unit) {
 }
 
 /**
- * Maps an orchestrator state to the single-line label rendered in the
- * thought indicator. Returns `null` for states that should produce no
- * output. Public to the chat package so [ConsolePanelCollapsed] can
- * decide whether the state would actually consume a console slot — adding
- * a `ConsoleLine.State` for a state that ends up rendering nothing would
- * silently swallow one of the three event lines.
+ * Composable that maps an orchestrator state to the single-line label
+ * rendered in the thought indicator. Returns `null` for states that should
+ * produce no output.
+ *
+ * Composable because the label includes localized text from
+ * `strings_chat.xml`; render-decision callers that only need to know
+ * "would this state produce output?" should consult
+ * [thoughtLineHasOutput] instead (which is pure Kotlin and safe to call
+ * from non-composable scopes such as `remember { … }` blocks).
  */
+@Composable
 internal fun thoughtLineFor(state: AgentOrchestratorState): String? = when (state) {
     is AgentOrchestratorState.Idle,
     is AgentOrchestratorState.Completed,
     is AgentOrchestratorState.Error,
-    is AgentOrchestratorState.AwaitingClarification -> null
-    is AgentOrchestratorState.Loading -> "[NOW] Initializing agent..."
-    is AgentOrchestratorState.Thinking -> "[NOW] Agent is thinking..."
-    is AgentOrchestratorState.Answering -> "[NOW] Agent is answering..."
-    is AgentOrchestratorState.ExecutingTool -> "[NOW] Using tool: ${state.toolName}..."
-    is AgentOrchestratorState.ObservationResult -> "[NOW] Observation: ${state.toolName}"
-    is AgentOrchestratorState.WaitingForApproval -> "[ASK] Approve ${state.toolName}?"
-    is AgentOrchestratorState.PipelineStage -> "[NOW] Stage: ${state.stepInfo.nodeName}"
+    is AgentOrchestratorState.AwaitingClarification,
+    -> null
+    is AgentOrchestratorState.Loading -> stringResource(R.string.chat_thought_now_initializing)
+    is AgentOrchestratorState.Thinking -> stringResource(R.string.chat_thought_now_thinking)
+    is AgentOrchestratorState.Answering -> stringResource(R.string.chat_thought_now_answering)
+    is AgentOrchestratorState.ExecutingTool -> stringResource(R.string.chat_thought_now_using_tool, state.toolName)
+    is AgentOrchestratorState.ObservationResult -> stringResource(R.string.chat_thought_now_observation, state.toolName)
+    is AgentOrchestratorState.WaitingForApproval -> stringResource(R.string.chat_thought_now_approve, state.toolName)
+    is AgentOrchestratorState.PipelineStage -> stringResource(R.string.chat_thought_now_stage, state.stepInfo.nodeName)
     is AgentOrchestratorState.PipelineTrace,
-    is AgentOrchestratorState.ConsoleLog -> null
+    is AgentOrchestratorState.ConsoleLog,
+    -> null
+}
+
+/**
+ * Pure-Kotlin predicate mirroring the null/non-null result of
+ * [thoughtLineFor]. Lets non-composable callers (e.g. the
+ * `remember { ... }` block in [ConsolePanelCollapsed] that decides whether
+ * to consume a console slot for the state line) make the same render
+ * decision without entering a composition scope.
+ */
+internal fun thoughtLineHasOutput(state: AgentOrchestratorState): Boolean = when (state) {
+    is AgentOrchestratorState.Idle,
+    is AgentOrchestratorState.Completed,
+    is AgentOrchestratorState.Error,
+    is AgentOrchestratorState.AwaitingClarification,
+    is AgentOrchestratorState.PipelineTrace,
+    is AgentOrchestratorState.ConsoleLog,
+    -> false
+    is AgentOrchestratorState.Loading,
+    is AgentOrchestratorState.Thinking,
+    is AgentOrchestratorState.Answering,
+    is AgentOrchestratorState.ExecutingTool,
+    is AgentOrchestratorState.ObservationResult,
+    is AgentOrchestratorState.WaitingForApproval,
+    is AgentOrchestratorState.PipelineStage,
+    -> true
 }
 
 /**

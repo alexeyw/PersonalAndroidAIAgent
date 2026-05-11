@@ -1,14 +1,14 @@
 package ai.agent.android.presentation.ui.orchestrator
 
+import ai.agent.android.domain.models.AgentTool
 import ai.agent.android.domain.models.ConnectionModel
 import ai.agent.android.domain.models.NodeModel
 import ai.agent.android.domain.models.PipelineGraph
-import ai.agent.android.domain.models.AgentTool
-import ai.agent.android.domain.models.NodeType
 import ai.agent.android.domain.models.PipelineImportOutcome
 import ai.agent.android.domain.models.PipelineValidationError
 import ai.agent.android.domain.models.PromptTemplate
 import ai.agent.android.domain.prompt.PromptSegment
+import ai.agent.android.presentation.ui.common.UiText
 
 /**
  * Represents the UI state for the Visual Orchestrator screen.
@@ -42,17 +42,20 @@ import ai.agent.android.domain.prompt.PromptSegment
  * `PipelineLibraryScreen`.
  */
 data class OrchestratorUiState(
-    val currentPipeline: PipelineGraph = PipelineGraph(id = java.util.UUID.randomUUID().toString(), name = "New Pipeline"),
+    val currentPipeline: PipelineGraph = PipelineGraph(
+        id = java.util.UUID.randomUUID().toString(),
+        name = DEFAULT_PIPELINE_NAME,
+    ),
     val savedPipelines: List<PipelineGraph> = emptyList(),
     val isLoading: Boolean = false,
-    val errorMessage: String? = null,
+    val errorMessage: UiText? = null,
     val availableTools: List<AgentTool> = emptyList(),
     val providerKeys: Map<String, Boolean> = emptyMap(),
     val promptTemplates: List<PromptTemplate> = emptyList(),
     val availableVariables: List<String> = emptyList(),
     val previewState: PromptPreviewState = PromptPreviewState.Hidden,
     val pendingImport: PipelineImportOutcome.SchemaMismatch? = null,
-    val feedbackMessage: String? = null,
+    val feedbackMessage: UiText? = null,
     val pendingEditorNavigation: Boolean = false,
     val defaultPipelineId: String? = null,
 ) {
@@ -83,6 +86,16 @@ data class OrchestratorUiState(
         get() = currentPipeline.id.takeIf { id ->
             savedPipelines.any { it.id == id } || currentPipeline.nodes.isNotEmpty()
         }
+
+    companion object {
+        /**
+         * Display name applied to a freshly-instantiated scratch pipeline
+         * (the in-memory placeholder shown before the user creates or loads
+         * anything). Kept here so the editor and any tests creating a
+         * scratch state agree on the same baseline label.
+         */
+        const val DEFAULT_PIPELINE_NAME = "New Pipeline"
+    }
 }
 
 /**

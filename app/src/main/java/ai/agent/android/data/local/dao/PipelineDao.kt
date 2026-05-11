@@ -1,14 +1,14 @@
 package ai.agent.android.data.local.dao
 
+import ai.agent.android.data.local.models.ConnectionEntity
+import ai.agent.android.data.local.models.NodeEntity
+import ai.agent.android.data.local.models.PipelineEntity
+import ai.agent.android.data.local.models.PipelineWithNodesAndConnections
 import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Transaction
-import ai.agent.android.data.local.models.ConnectionEntity
-import ai.agent.android.data.local.models.NodeEntity
-import ai.agent.android.data.local.models.PipelineEntity
-import ai.agent.android.data.local.models.PipelineWithNodesAndConnections
 import kotlinx.coroutines.flow.Flow
 
 /**
@@ -19,7 +19,7 @@ interface PipelineDao {
 
     /**
      * Retrieves all saved pipelines with their nodes and connections.
-     * 
+     *
      * @return A [Flow] emitting a list of [PipelineWithNodesAndConnections].
      */
     @Transaction
@@ -28,7 +28,7 @@ interface PipelineDao {
 
     /**
      * Retrieves a specific pipeline by ID.
-     * 
+     *
      * @param pipelineId The ID of the pipeline to retrieve.
      * @return The [PipelineWithNodesAndConnections] or null if not found.
      */
@@ -38,7 +38,7 @@ interface PipelineDao {
 
     /**
      * Inserts or updates a pipeline entity.
-     * 
+     *
      * @param pipeline The [PipelineEntity] to insert or update.
      */
     @Insert(onConflict = OnConflictStrategy.REPLACE)
@@ -46,7 +46,7 @@ interface PipelineDao {
 
     /**
      * Inserts or updates a list of nodes.
-     * 
+     *
      * @param nodes The list of [NodeEntity] to insert or update.
      */
     @Insert(onConflict = OnConflictStrategy.REPLACE)
@@ -54,7 +54,7 @@ interface PipelineDao {
 
     /**
      * Inserts or updates a list of connections.
-     * 
+     *
      * @param connections The list of [ConnectionEntity] to insert or update.
      */
     @Insert(onConflict = OnConflictStrategy.REPLACE)
@@ -62,7 +62,7 @@ interface PipelineDao {
 
     /**
      * Deletes nodes associated with a given pipeline ID.
-     * 
+     *
      * @param pipelineId The ID of the pipeline whose nodes should be deleted.
      */
     @Query("DELETE FROM pipeline_nodes WHERE pipelineId = :pipelineId")
@@ -70,7 +70,7 @@ interface PipelineDao {
 
     /**
      * Deletes connections associated with a given pipeline ID.
-     * 
+     *
      * @param pipelineId The ID of the pipeline whose connections should be deleted.
      */
     @Query("DELETE FROM pipeline_connections WHERE pipelineId = :pipelineId")
@@ -78,7 +78,7 @@ interface PipelineDao {
 
     /**
      * Completely replaces a pipeline's nodes and connections.
-     * 
+     *
      * @param pipeline The new [PipelineEntity].
      * @param nodes The new list of [NodeEntity].
      * @param connections The new list of [ConnectionEntity].
@@ -87,7 +87,7 @@ interface PipelineDao {
     suspend fun savePipelineTransaction(
         pipeline: PipelineEntity,
         nodes: List<NodeEntity>,
-        connections: List<ConnectionEntity>
+        connections: List<ConnectionEntity>,
     ) {
         insertPipeline(pipeline)
         deleteNodesForPipeline(pipeline.id)
@@ -98,7 +98,7 @@ interface PipelineDao {
 
     /**
      * Deletes a pipeline by ID. Associated nodes and connections are deleted via cascade.
-     * 
+     *
      * @param pipelineId The ID of the pipeline to delete.
      */
     @Query("DELETE FROM pipelines WHERE id = :pipelineId")

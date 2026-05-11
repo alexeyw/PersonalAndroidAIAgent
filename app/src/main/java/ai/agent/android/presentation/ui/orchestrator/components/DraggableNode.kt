@@ -1,5 +1,6 @@
 package ai.agent.android.presentation.ui.orchestrator.components
 
+import ai.agent.android.R
 import ai.agent.android.domain.models.AgentTool
 import ai.agent.android.domain.models.NodeModel
 import ai.agent.android.domain.models.NodeType
@@ -10,7 +11,6 @@ import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -35,6 +35,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 
@@ -67,7 +68,7 @@ fun DraggableNode(
     onConfigureClick: () -> Unit = {},
     availableTools: List<AgentTool> = emptyList(),
     onToolSelected: (String, String) -> Unit = { _, _ -> },
-    onCloudProviderSelected: (String, String) -> Unit = { _, _ -> }
+    onCloudProviderSelected: (String, String) -> Unit = { _, _ -> },
 ) {
     val nodeColor = when (node.type) {
         NodeType.LITE_RT -> Color(0xFF4CAF50)
@@ -93,7 +94,7 @@ fun DraggableNode(
                     onPositionDelta(node.id, dragAmount.x, dragAmount.y)
                 }
             },
-        contentAlignment = Alignment.Center
+        contentAlignment = Alignment.Center,
     ) {
         // Main Node Box
         Box(
@@ -102,35 +103,35 @@ fun DraggableNode(
                 .clip(RoundedCornerShape(8.dp))
                 .background(MaterialTheme.colorScheme.surface)
                 .border(
-                    width = if (isConnecting) 4.dp else 2.dp, 
-                    color = if (isConnecting) MaterialTheme.colorScheme.primary else nodeColor, 
-                    shape = RoundedCornerShape(8.dp)
+                    width = if (isConnecting) 4.dp else 2.dp,
+                    color = if (isConnecting) MaterialTheme.colorScheme.primary else nodeColor,
+                    shape = RoundedCornerShape(8.dp),
                 )
                 .padding(16.dp),
-            contentAlignment = Alignment.Center
+            contentAlignment = Alignment.Center,
         ) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(
                     text = node.label,
                     style = MaterialTheme.typography.bodyMedium,
                     fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface
+                    color = MaterialTheme.colorScheme.onSurface,
                 )
                 Text(
                     text = node.type.name,
                     style = MaterialTheme.typography.labelSmall,
-                    color = nodeColor
+                    color = nodeColor,
                 )
-                
+
                 if (node.type == NodeType.TOOL) {
                     var expanded by remember { mutableStateOf(false) }
                     Box(modifier = Modifier.padding(top = 8.dp)) {
                         Button(onClick = { expanded = true }) {
-                            Text(node.toolName ?: "Select Tool")
+                            Text(node.toolName ?: stringResource(R.string.orchestrator_node_select_tool))
                         }
                         DropdownMenu(
                             expanded = expanded,
-                            onDismissRequest = { expanded = false }
+                            onDismissRequest = { expanded = false },
                         ) {
                             availableTools.forEach { tool ->
                                 DropdownMenuItem(
@@ -138,7 +139,7 @@ fun DraggableNode(
                                     onClick = {
                                         onToolSelected(node.id, tool.name)
                                         expanded = false
-                                    }
+                                    },
                                 )
                             }
                         }
@@ -149,11 +150,14 @@ fun DraggableNode(
                     var expanded by remember { mutableStateOf(false) }
                     Box(modifier = Modifier.padding(top = 8.dp)) {
                         Button(onClick = { expanded = true }) {
-                            Text(node.cloudProvider?.replaceFirstChar { it.uppercase() } ?: "Auto")
+                            Text(
+                                node.cloudProvider?.replaceFirstChar { it.uppercase() }
+                                    ?: stringResource(R.string.orchestrator_node_provider_auto),
+                            )
                         }
                         DropdownMenu(
                             expanded = expanded,
-                            onDismissRequest = { expanded = false }
+                            onDismissRequest = { expanded = false },
                         ) {
                             listOf("auto", "google", "anthropic", "openai", "deepseek").forEach { provider ->
                                 DropdownMenuItem(
@@ -161,7 +165,7 @@ fun DraggableNode(
                                     onClick = {
                                         onCloudProviderSelected(node.id, provider)
                                         expanded = false
-                                    }
+                                    },
                                 )
                             }
                         }
@@ -170,18 +174,16 @@ fun DraggableNode(
 
                 if (node.type != NodeType.INPUT) {
                     Button(onClick = onConfigureClick, modifier = Modifier.padding(top = 8.dp)) {
-                        Text("Configure")
+                        Text(stringResource(R.string.orchestrator_node_configure))
                     }
                 }
-
-
 
                 Row(modifier = Modifier.padding(top = 8.dp)) {
                     IconButton(onClick = onDeleteClick) {
                         Icon(
                             imageVector = Icons.Default.Close,
-                            contentDescription = "Delete",
-                            tint = MaterialTheme.colorScheme.error
+                            contentDescription = stringResource(R.string.orchestrator_node_delete_cd),
+                            tint = MaterialTheme.colorScheme.error,
                         )
                     }
                 }
@@ -195,9 +197,17 @@ fun DraggableNode(
                     .align(Alignment.CenterStart)
                     .size(16.dp)
                     .clip(CircleShape)
-                    .background(if (isConnecting && !connectingIsOutput) MaterialTheme.colorScheme.primary else nodeColor)
+                    .background(
+                        if (isConnecting &&
+                            !connectingIsOutput
+                        ) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            nodeColor
+                        },
+                    )
                     .border(2.dp, MaterialTheme.colorScheme.onSurface, CircleShape)
-                    .clickable { onConnectClick(false, null) }
+                    .clickable { onConnectClick(false, null) },
             )
         }
 
@@ -210,27 +220,35 @@ fun DraggableNode(
                         modifier = Modifier
                             .size(16.dp)
                             .clip(CircleShape)
-                            .background(if (isConnecting && connectingIsOutput) MaterialTheme.colorScheme.primary else nodeColor)
+                            .background(
+                                if (isConnecting &&
+                                    connectingIsOutput
+                                ) {
+                                    MaterialTheme.colorScheme.primary
+                                } else {
+                                    nodeColor
+                                },
+                            )
                             .border(2.dp, MaterialTheme.colorScheme.onSurface, CircleShape)
-                            .clickable { expanded = true }
+                            .clickable { expanded = true },
                     )
                     DropdownMenu(
                         expanded = expanded,
-                        onDismissRequest = { expanded = false }
+                        onDismissRequest = { expanded = false },
                     ) {
                         DropdownMenuItem(
-                            text = { Text("True") },
-                            onClick = { 
+                            text = { Text(stringResource(R.string.orchestrator_node_branch_true)) },
+                            onClick = {
                                 onConnectClick(true, "True")
-                                expanded = false 
-                            }
+                                expanded = false
+                            },
                         )
                         DropdownMenuItem(
-                            text = { Text("False") },
-                            onClick = { 
+                            text = { Text(stringResource(R.string.orchestrator_node_branch_false)) },
+                            onClick = {
                                 onConnectClick(true, "False")
-                                expanded = false 
-                            }
+                                expanded = false
+                            },
                         )
                     }
                 }
@@ -241,27 +259,35 @@ fun DraggableNode(
                         modifier = Modifier
                             .size(16.dp)
                             .clip(CircleShape)
-                            .background(if (isConnecting && connectingIsOutput) MaterialTheme.colorScheme.primary else nodeColor)
+                            .background(
+                                if (isConnecting &&
+                                    connectingIsOutput
+                                ) {
+                                    MaterialTheme.colorScheme.primary
+                                } else {
+                                    nodeColor
+                                },
+                            )
                             .border(2.dp, MaterialTheme.colorScheme.onSurface, CircleShape)
-                            .clickable { expanded = true }
+                            .clickable { expanded = true },
                     )
                     DropdownMenu(
                         expanded = expanded,
-                        onDismissRequest = { expanded = false }
+                        onDismissRequest = { expanded = false },
                     ) {
                         DropdownMenuItem(
-                            text = { Text("Task Input (Item)") },
-                            onClick = { 
+                            text = { Text(stringResource(R.string.orchestrator_node_queue_item)) },
+                            onClick = {
                                 onConnectClick(true, "Item")
-                                expanded = false 
-                            }
+                                expanded = false
+                            },
                         )
                         DropdownMenuItem(
-                            text = { Text("Return (Done)") },
-                            onClick = { 
+                            text = { Text(stringResource(R.string.orchestrator_node_queue_done)) },
+                            onClick = {
                                 onConnectClick(true, "Done")
-                                expanded = false 
-                            }
+                                expanded = false
+                            },
                         )
                     }
                 }
@@ -271,9 +297,17 @@ fun DraggableNode(
                         .align(Alignment.CenterEnd)
                         .size(16.dp)
                         .clip(CircleShape)
-                        .background(if (isConnecting && connectingIsOutput) MaterialTheme.colorScheme.primary else nodeColor)
+                        .background(
+                            if (isConnecting &&
+                                connectingIsOutput
+                            ) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                nodeColor
+                            },
+                        )
                         .border(2.dp, MaterialTheme.colorScheme.onSurface, CircleShape)
-                        .clickable { onConnectClick(true, null) }
+                        .clickable { onConnectClick(true, null) },
                 )
             }
         }

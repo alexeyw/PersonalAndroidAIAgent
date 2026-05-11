@@ -13,16 +13,16 @@ import androidx.room.Relation
  */
 data class PipelineWithNodesAndConnections(
     @Embedded val pipeline: PipelineEntity,
-    
+
     @Relation(
         parentColumn = "id",
-        entityColumn = "pipelineId"
+        entityColumn = "pipelineId",
     )
     val nodes: List<NodeEntity>,
-    
+
     @Relation(
         parentColumn = "id",
-        entityColumn = "pipelineId"
+        entityColumn = "pipelineId",
     )
-    val connections: List<ConnectionEntity>
+    val connections: List<ConnectionEntity>,
 )

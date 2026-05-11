@@ -1,35 +1,40 @@
 package ai.agent.android.presentation.ui.chat
 
+import ai.agent.android.R
 import ai.agent.android.domain.models.ConsoleEvent
 import ai.agent.android.domain.models.ConsoleEventType
+import androidx.annotation.StringRes
 
 /**
  * User-selectable category filter applied to the expanded console log
  * (Phase 17.5). Mapped 1-to-1 onto [ConsoleEventType] except for [All],
  * which short-circuits the predicate. The enum is the single source of
  * truth for the chip row inside [ConsoleFullLogSheet]: the chip label is
- * read from [label], and event filtering goes through [matches].
+ * resolved from [labelRes] at render time (so localised strings live in
+ * `strings_chat.xml`), and event filtering goes through [matches].
  *
- * Pure Kotlin (no Compose / Android imports) so the predicate can be unit
- * tested without an instrumented runtime.
+ * Pure Kotlin (no Compose imports) so the predicate can be unit tested
+ * without an instrumented runtime — only the resource id is exposed; the
+ * actual lookup happens in the composable that draws the chip.
  *
- * @property label Human-readable chip label rendered above the log list.
+ * @property labelRes Resource id of the localised chip label rendered above
+ *   the log list.
  */
-enum class ConsoleLogFilter(val label: String) {
+enum class ConsoleLogFilter(@StringRes val labelRes: Int) {
     /** Pass-through filter: every event matches. */
-    All("All"),
+    All(R.string.chat_console_filter_all),
 
     /** Keeps only [ConsoleEventType.NodeExecution] entries. */
-    Nodes("Nodes"),
+    Nodes(R.string.chat_console_filter_nodes),
 
     /** Keeps only [ConsoleEventType.ToolCall] entries. */
-    Tools("Tools"),
+    Tools(R.string.chat_console_filter_tools),
 
     /** Keeps only [ConsoleEventType.MemoryAccess] entries. */
-    Memory("Memory"),
+    Memory(R.string.chat_console_filter_memory),
 
     /** Keeps only [ConsoleEventType.Error] entries. */
-    Errors("Errors"),
+    Errors(R.string.chat_console_filter_errors),
 }
 
 /**

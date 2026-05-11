@@ -36,22 +36,23 @@ class ClarificationRepositoryImplTest {
     }
 
     @Test
-    fun `given pending request when submitClarification called then requestAnswer returns submitted answer`() = runTest {
-        val request = ClarificationRequest(
-            id = "req-1",
-            question = "Pick a colour",
-            options = listOf("red", "blue"),
-            timeoutMs = 60_000L,
-        )
+    fun `given pending request when submitClarification called then requestAnswer returns submitted answer`() =
+        runTest {
+            val request = ClarificationRequest(
+                id = "req-1",
+                question = "Pick a colour",
+                options = listOf("red", "blue"),
+                timeoutMs = 60_000L,
+            )
 
-        val deferredAnswer = async { repository.requestAnswer(request) }
-        // Allow requestAnswer to register the deferred and publish the request.
-        yield()
+            val deferredAnswer = async { repository.requestAnswer(request) }
+            // Allow requestAnswer to register the deferred and publish the request.
+            yield()
 
-        repository.submitClarification("req-1", "blue")
+            repository.submitClarification("req-1", "blue")
 
-        assertEquals("blue", deferredAnswer.await())
-    }
+            assertEquals("blue", deferredAnswer.await())
+        }
 
     @Test
     fun `given options non-empty and timeout elapses then returns first option`() = runTest {

@@ -31,7 +31,7 @@ import org.junit.Test
 class MonitoringViewModelTest {
 
     private val testDispatcher = StandardTestDispatcher()
-    
+
     private lateinit var chatRepository: ChatRepository
     private lateinit var metricsRepository: MetricsRepository
     private lateinit var powerStateRepository: PowerStateRepository
@@ -45,7 +45,7 @@ class MonitoringViewModelTest {
         chatRepository = mockk()
         metricsRepository = mockk()
         powerStateRepository = mockk()
-        
+
         metricsFlow = MutableStateFlow(AgentMetrics())
         every { metricsRepository.metrics } returns metricsFlow
 
@@ -61,19 +61,31 @@ class MonitoringViewModelTest {
     @Test
     fun `init should load recent logs and update uiState`() = runTest {
         val mockLogs = listOf(
-            ChatMessage(id = 1L, sessionId = "session1", role = Role.SYSTEM, content = "Observation 1", timestamp = 1000L),
-            ChatMessage(id = 2L, sessionId = "session1", role = Role.SYSTEM, content = "Observation 2", timestamp = 2000L)
+            ChatMessage(
+                id = 1L,
+                sessionId = "session1",
+                role = Role.SYSTEM,
+                content = "Observation 1",
+                timestamp = 1000L,
+            ),
+            ChatMessage(
+                id = 2L,
+                sessionId = "session1",
+                role = Role.SYSTEM,
+                content = "Observation 2",
+                timestamp = 2000L,
+            ),
         )
-        
+
         every { chatRepository.getRecentSystemMessages(any()) } returns flowOf(mockLogs)
-        
+
         viewModel = MonitoringViewModel(chatRepository, metricsRepository, powerStateRepository)
         val job = backgroundScope.launch(kotlinx.coroutines.test.UnconfinedTestDispatcher(testScheduler)) {
             viewModel.uiState.collect {}
         }
-        
+
         advanceUntilIdle()
-        
+
         val state = viewModel.uiState.value
         assertFalse(state.isLoading)
         assertEquals(2, state.recentLogs.size)
@@ -81,25 +93,25 @@ class MonitoringViewModelTest {
         verify { chatRepository.getRecentSystemMessages(50) }
         job.cancel()
     }
-    
+
     @Test
     fun `uiState should reflect updates from metrics repository`() = runTest {
         every { chatRepository.getRecentSystemMessages(any()) } returns flowOf(emptyList())
-        
+
         viewModel = MonitoringViewModel(chatRepository, metricsRepository, powerStateRepository)
         val job = backgroundScope.launch(kotlinx.coroutines.test.UnconfinedTestDispatcher(testScheduler)) {
             viewModel.uiState.collect {}
         }
         advanceUntilIdle()
-        
+
         // Initial metrics
         assertEquals(0L, viewModel.uiState.value.metrics.lastInferenceTimeMs)
-        
+
         // Update metrics
         val newMetrics = AgentMetrics(lastInferenceTimeMs = 1500L, tokensPerSecond = 20.5f, totalTokensProcessed = 100)
         metricsFlow.value = newMetrics
         advanceUntilIdle()
-        
+
         val state = viewModel.uiState.value
         assertEquals(1500L, state.metrics.lastInferenceTimeMs)
         assertEquals(20.5f, state.metrics.tokensPerSecond)

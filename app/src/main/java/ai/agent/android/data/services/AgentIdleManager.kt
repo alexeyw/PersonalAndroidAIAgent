@@ -25,7 +25,7 @@ class AgentIdleManager(
     private val scope: CoroutineScope,
     private val engine: LlmInferenceEngine,
     private val agentState: StateFlow<AgentOrchestratorState>,
-    private val idleTimeoutMs: Long = 5 * 60 * 1000L // 5 minutes default
+    private val idleTimeoutMs: Long = 5 * 60 * 1000L, // 5 minutes default
 ) {
     private var idleJob: Job? = null
 
@@ -48,8 +48,8 @@ class AgentIdleManager(
 
     private fun handleStateChange(state: AgentOrchestratorState) {
         val isIdle = state is AgentOrchestratorState.Idle ||
-                     state is AgentOrchestratorState.Completed ||
-                     state is AgentOrchestratorState.Error
+            state is AgentOrchestratorState.Completed ||
+            state is AgentOrchestratorState.Error
 
         if (isIdle) {
             startIdleTimer()

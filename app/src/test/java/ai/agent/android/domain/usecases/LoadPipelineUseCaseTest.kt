@@ -21,7 +21,7 @@ class LoadPipelineUseCaseTest {
         every { pipelineRepository.getAllPipelines() } returns flowOf(pipelines)
 
         val result = useCase.observeAllPipelines()
-        
+
         result.collect { list ->
             assertEquals(2, list.size)
         }
@@ -33,7 +33,7 @@ class LoadPipelineUseCaseTest {
         coEvery { pipelineRepository.getPipelineById("1") } returns pipeline
 
         val result = useCase.getPipelineById("1")
-        
+
         assertEquals(pipeline, result)
     }
 }

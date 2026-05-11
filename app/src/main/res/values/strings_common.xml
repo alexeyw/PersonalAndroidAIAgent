@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Shared, feature-agnostic UI strings.
+
+    Keys follow the convention `common_<purpose>` and cover affordances that
+    appear in multiple features (dialog actions, generic verbs, simple
+    placeholders). Anything specific to a single feature lives in that
+    feature's strings file.
+-->
+<resources>
+    <string name="common_cancel">Cancel</string>
+    <string name="common_save">Save</string>
+    <string name="common_delete">Delete</string>
+    <string name="common_create">Create</string>
+    <string name="common_clear">Clear</string>
+    <string name="common_close">Close</string>
+    <string name="common_back">Back</string>
+    <string name="common_dismiss">Dismiss</string>
+    <string name="common_copy">Copy</string>
+    <string name="common_retry">Retry</string>
+    <string name="common_ok">OK</string>
+    <string name="common_enable">Enable</string>
+    <string name="common_disable">Disable</string>
+    <string name="common_edit">Edit</string>
+    <string name="common_rename">Rename</string>
+    <string name="common_duplicate">Duplicate</string>
+    <string name="common_load">Load</string>
+    <string name="common_done">Done</string>
+    <string name="common_apply">Apply</string>
+    <string name="common_more_options">More options</string>
+    <string name="common_menu">Menu</string>
+
+    <!-- Home screen / drawer navigation labels -->
+    <string name="home_title">Android AI Agent Home</string>
+    <string name="home_open_chat">Open Chat</string>
+    <string name="home_manage_models">Manage Models</string>
+    <string name="home_memory_management">Memory Management</string>
+    <string name="home_manage_tools">Manage Tools &amp; MCP</string>
+    <string name="home_monitor_tasks">Monitor Tasks &amp; Logs</string>
+    <string name="home_manage_active_tasks">Manage Active Tasks</string>
+    <string name="home_settings">Settings</string>
+    <string name="home_visual_orchestrator">Visual Orchestrator</string>
+    <string name="home_prompt_library">Prompt Library</string>
+
+    <!-- Prompt preview bottom sheet (reused across orchestrator + prompts) -->
+    <string name="prompt_preview_title">Prompt preview</string>
+    <string name="prompt_preview_variable_not_found">Variable not found</string>
+</resources>

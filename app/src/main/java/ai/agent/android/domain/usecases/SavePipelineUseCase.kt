@@ -9,9 +9,7 @@ import javax.inject.Inject
  *
  * @property pipelineRepository The repository used for storing pipelines.
  */
-class SavePipelineUseCase @Inject constructor(
-    private val pipelineRepository: PipelineRepository
-) {
+class SavePipelineUseCase @Inject constructor(private val pipelineRepository: PipelineRepository) {
     /**
      * Executes the use case to save a pipeline.
      *
@@ -23,7 +21,7 @@ class SavePipelineUseCase @Inject constructor(
         if (errors.isNotEmpty()) {
             return Result.failure(ai.agent.android.domain.models.PipelineValidationException(errors))
         }
-        
+
         return try {
             pipelineRepository.savePipeline(pipeline)
             Result.success(Unit)

@@ -49,7 +49,7 @@ class ToolsViewModelTest {
     fun `initial state reflects repository values`() = runTest {
         mcpServersFlow.value = setOf("http://test.com")
         disabledAppFunctionsFlow.value = setOf("get_system_time")
-        
+
         advanceUntilIdle()
 
         assertEquals(listOf("http://test.com"), viewModel.uiState.value.mcpServers)

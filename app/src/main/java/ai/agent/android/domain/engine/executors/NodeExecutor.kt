@@ -14,10 +14,5 @@ interface NodeExecutor {
      * @return A [Flow] of [NodeOutput.State] progress updates terminated by exactly one
      * [NodeOutput.Result] carrying the node's [ai.agent.android.domain.models.NodeExecutionResult].
      */
-    fun execute(
-        node: NodeModel,
-        inputText: String,
-        sessionId: String,
-        originalPrompt: String
-    ): Flow<NodeOutput>
+    fun execute(node: NodeModel, inputText: String, sessionId: String, originalPrompt: String): Flow<NodeOutput>
 }

@@ -217,11 +217,11 @@ object PipelineJsonSerializer {
         val contextConfigJson = json.optJSONObject("contextConfig")
         val contextConfig = if (contextConfigJson != null) {
             NodeContextConfig(
-                chatHistory   = contextConfigJson.optBoolean("chatHistory", true),
-                originalTask  = contextConfigJson.optBoolean("originalTask", true),
-                nodeInput     = contextConfigJson.optBoolean("nodeInput", true),
+                chatHistory = contextConfigJson.optBoolean("chatHistory", true),
+                originalTask = contextConfigJson.optBoolean("originalTask", true),
+                nodeInput = contextConfigJson.optBoolean("nodeInput", true),
                 longTermMemory = contextConfigJson.optBoolean("longTermMemory", true),
-                toolResults   = contextConfigJson.optBoolean("toolResults", true),
+                toolResults = contextConfigJson.optBoolean("toolResults", true),
             )
         } else {
             // Legacy / minimal documents fall back to the per-type recommended
@@ -255,7 +255,7 @@ object PipelineJsonSerializer {
         val to = json.optString("toNodeId").takeIf { it.isNotBlank() }
             ?: throw PipelineParseException("Connection \"$id\" missing toNodeId")
         if (from !in nodeIds) throw PipelineParseException("Connection \"$id\" references unknown node \"$from\"")
-        if (to !in nodeIds)   throw PipelineParseException("Connection \"$id\" references unknown node \"$to\"")
+        if (to !in nodeIds) throw PipelineParseException("Connection \"$id\" references unknown node \"$to\"")
         val label = json.optStringOrNull("label")
         return ConnectionModel(id = id, sourceNodeId = from, targetNodeId = to, label = label)
     }
@@ -272,8 +272,6 @@ object PipelineJsonSerializer {
 private fun JSONObject.optStringOrNull(name: String): String? =
     if (!has(name) || isNull(name)) null else getString(name).takeIf { it.isNotEmpty() }
 
-private fun JSONObject.optIntOrNull(name: String): Int? =
-    if (!has(name) || isNull(name)) null else getInt(name)
+private fun JSONObject.optIntOrNull(name: String): Int? = if (!has(name) || isNull(name)) null else getInt(name)
 
-private fun JSONObject.optLongOrNull(name: String): Long? =
-    if (!has(name) || isNull(name)) null else getLong(name)
+private fun JSONObject.optLongOrNull(name: String): Long? = if (!has(name) || isNull(name)) null else getLong(name)

@@ -1,5 +1,6 @@
 package ai.agent.android.presentation.ui.chat
 
+import ai.agent.android.R
 import ai.agent.android.domain.models.AgentOrchestratorState
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.clickable
@@ -22,6 +23,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 
 /**
@@ -40,8 +42,8 @@ fun PipelineTraceCard(steps: List<AgentOrchestratorState.TraceStep>) {
             .fillMaxWidth()
             .padding(vertical = 4.dp),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant
-        )
+            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+        ),
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
             Row(
@@ -49,18 +51,20 @@ fun PipelineTraceCard(steps: List<AgentOrchestratorState.TraceStep>) {
                     .fillMaxWidth()
                     .clickable { expanded = !expanded }
                     .padding(12.dp),
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
-                    text = "Pipeline trace (${steps.size} steps)",
+                    text = stringResource(R.string.chat_trace_title, steps.size),
                     style = MaterialTheme.typography.labelLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier.weight(1f),
                 )
                 Icon(
                     imageVector = if (expanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
-                    contentDescription = if (expanded) "Collapse" else "Expand",
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    contentDescription = stringResource(
+                        if (expanded) R.string.chat_trace_collapse_cd else R.string.chat_trace_expand_cd,
+                    ),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
 
@@ -68,7 +72,7 @@ fun PipelineTraceCard(steps: List<AgentOrchestratorState.TraceStep>) {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(start = 12.dp, end = 12.dp, bottom = 12.dp)
+                        .padding(start = 12.dp, end = 12.dp, bottom = 12.dp),
                 ) {
                     steps.forEachIndexed { index, step ->
                         val outputPreview = if (step.outputText.length > 100) {
@@ -76,9 +80,13 @@ fun PipelineTraceCard(steps: List<AgentOrchestratorState.TraceStep>) {
                         } else {
                             step.outputText
                         }
+                        val msText = stringResource(R.string.chat_trace_ms, step.durationMs)
+                        val tokenText = step.tokenCount?.let {
+                            stringResource(R.string.chat_trace_tokens, it)
+                        }
                         val metaParts = buildList {
-                            add("${step.durationMs} ms")
-                            step.tokenCount?.let { add("$it tokens") }
+                            add(msText)
+                            tokenText?.let { add(it) }
                         }
                         val metaLabel = metaParts.joinToString(", ")
 
@@ -86,7 +94,7 @@ fun PipelineTraceCard(steps: List<AgentOrchestratorState.TraceStep>) {
                             text = "${index + 1}. [${step.nodeName}] ($metaLabel) -> $outputPreview",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(vertical = 4.dp)
+                            modifier = Modifier.padding(vertical = 4.dp),
                         )
                     }
                 }

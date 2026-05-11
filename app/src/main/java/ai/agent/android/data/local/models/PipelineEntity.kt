@@ -14,5 +14,5 @@ data class PipelineEntity(
     @PrimaryKey
     val id: String,
     val name: String,
-    val updatedAt: Long = System.currentTimeMillis()
+    val updatedAt: Long = System.currentTimeMillis(),
 )

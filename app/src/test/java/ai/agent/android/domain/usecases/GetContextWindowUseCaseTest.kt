@@ -33,7 +33,7 @@ class GetContextWindowUseCaseTest {
         val sessionId = "session1"
         val messages = listOf(
             ChatMessage(1, sessionId, Role.USER, "Hello", 1000),
-            ChatMessage(2, sessionId, Role.AGENT, "Hi there", 2000)
+            ChatMessage(2, sessionId, Role.AGENT, "Hi there", 2000),
         )
         // USER: Hello -> 11 chars
         // AGENT: Hi there -> 15 chars
@@ -54,7 +54,7 @@ class GetContextWindowUseCaseTest {
         val messages = listOf(
             ChatMessage(1, sessionId, Role.USER, "First message", 1000), // USER: First message -> 19
             ChatMessage(2, sessionId, Role.AGENT, "Second message", 2000), // AGENT: Second message -> 21
-            ChatMessage(3, sessionId, Role.USER, "Third message", 3000) // USER: Third message -> 19
+            ChatMessage(3, sessionId, Role.USER, "Third message", 3000), // USER: Third message -> 19
         )
 
         coEvery { chatRepository.getMessagesForSession(sessionId) } returns flowOf(messages)
@@ -84,10 +84,10 @@ class GetContextWindowUseCaseTest {
         val sessionId = "session1"
         val messages = listOf(
             ChatMessage(1, sessionId, Role.USER, "Short", 1000),
-            ChatMessage(2, sessionId, Role.AGENT, "This is a very long message indeed", 2000)
+            ChatMessage(2, sessionId, Role.AGENT, "This is a very long message indeed", 2000),
         )
         // AGENT: This is a very long message indeed -> 41 chars
-        
+
         coEvery { chatRepository.getMessagesForSession(sessionId) } returns flowOf(messages)
         coEvery { settingsRepository.maxContextLength } returns flowOf(41)
 
@@ -102,10 +102,10 @@ class GetContextWindowUseCaseTest {
         val sessionId = "session1"
         val messages = listOf(
             ChatMessage(1, sessionId, Role.USER, "Short", 1000),
-            ChatMessage(2, sessionId, Role.AGENT, "This is a very long message indeed", 2000)
+            ChatMessage(2, sessionId, Role.AGENT, "This is a very long message indeed", 2000),
         )
         // AGENT: This is a very long message indeed -> 41 chars
-        
+
         coEvery { chatRepository.getMessagesForSession(sessionId) } returns flowOf(messages)
         coEvery { settingsRepository.maxContextLength } returns flowOf(20)
 

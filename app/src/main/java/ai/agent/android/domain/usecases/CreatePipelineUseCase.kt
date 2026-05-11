@@ -22,9 +22,7 @@ import javax.inject.Inject
  *
  * @property pipelineRepository Persistence sink for the seeded graph.
  */
-class CreatePipelineUseCase @Inject constructor(
-    private val pipelineRepository: PipelineRepository,
-) {
+class CreatePipelineUseCase @Inject constructor(private val pipelineRepository: PipelineRepository) {
     /**
      * Creates and persists a new pipeline named [name].
      *

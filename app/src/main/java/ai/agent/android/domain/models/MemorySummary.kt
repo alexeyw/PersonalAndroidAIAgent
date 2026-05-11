@@ -16,8 +16,4 @@ package ai.agent.android.domain.models
  * @property timestamp The time the memory was created, in milliseconds since
  * the Unix epoch.
  */
-data class MemorySummary(
-    val id: Long,
-    val text: String,
-    val timestamp: Long,
-)
+data class MemorySummary(val id: Long, val text: String, val timestamp: Long)

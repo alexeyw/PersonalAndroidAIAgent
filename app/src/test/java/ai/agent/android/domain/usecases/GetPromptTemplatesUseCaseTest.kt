@@ -31,7 +31,7 @@ class GetPromptTemplatesUseCaseTest {
         // Arrange
         val expectedPrompts = listOf(
             PromptTemplate(id = 1, name = "Test1", text = "Text1", category = "Cat1"),
-            PromptTemplate(id = 2, name = "Test2", text = "Text2", category = "Cat2")
+            PromptTemplate(id = 2, name = "Test2", text = "Text2", category = "Cat2"),
         )
         coEvery { repository.getAllPrompts() } returns flowOf(expectedPrompts)
         coEvery { repository.getPromptsCount() } returns 2

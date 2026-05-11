@@ -14,31 +14,33 @@ import javax.inject.Singleton
 @Singleton
 class TaskRouterUseCase @Inject constructor(
     private val networkStateRepository: NetworkStateRepository,
-    private val apiKeyRepository: ApiKeyRepository
+    private val apiKeyRepository: ApiKeyRepository,
 ) {
-    
+
     // Keywords that suggest the prompt involves private data or system functions
-    private val privateDataKeywords = listOf("contact", "call", "sms", "email", "calendar", "alarm", "setting", "private", "system")
-    
+    private val privateDataKeywords =
+        listOf("contact", "call", "sms", "email", "calendar", "alarm", "setting", "private", "system")
+
     // Keywords that suggest heavy reasoning or coding
-    private val complexTaskKeywords = listOf("code", "programming", "architect", "complex", "analyze", "explain", "refactor")
+    private val complexTaskKeywords =
+        listOf("code", "programming", "architect", "complex", "analyze", "explain", "refactor")
 
     /**
      * Determines the best routing decision for the given prompt.
-     * 
+     *
      * @param prompt The user's input prompt.
      * @return The [RoutingDecision] indicating which engine to use.
      */
     suspend operator fun invoke(prompt: String): RoutingDecision {
         val lowerPrompt = prompt.lowercase()
-        
+
         // 1. Check for private/local operations -> strictly LocalLiteRT
         if (privateDataKeywords.any { lowerPrompt.contains(it) }) {
             return RoutingDecision.LocalLiteRT
         }
 
         val networkState = networkStateRepository.networkState.value
-        
+
         // 2. Complex tasks handling
         if (complexTaskKeywords.any { lowerPrompt.contains(it) }) {
             // Prefer Cloud if keys are available and we have internet
@@ -57,13 +59,13 @@ class TaskRouterUseCase @Inject constructor(
                 if (!anthropicKey.isNullOrBlank()) {
                     return RoutingDecision.CloudLLM("anthropic")
                 }
-                
+
                 val deepSeekKey = apiKeyRepository.getDeepSeekKey().first()
                 if (!deepSeekKey.isNullOrBlank()) {
                     return RoutingDecision.CloudLLM("deepseek")
                 }
             }
-            
+
             // If Wi-Fi is connected, try Ollama
             if (networkState.isWifiConnected) {
                 val ollamaUrl = apiKeyRepository.getOllamaBaseUrl().first()
@@ -72,7 +74,7 @@ class TaskRouterUseCase @Inject constructor(
                 }
             }
         }
-        
+
         // Default fallback to LocalLiteRT
         return RoutingDecision.LocalLiteRT
     }

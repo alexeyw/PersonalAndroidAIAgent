@@ -16,7 +16,4 @@ package ai.agent.android.domain.models
  * @property output The raw textual output returned by the tool. May be plain text,
  * JSON, or any other representation the tool emits.
  */
-data class ToolInvocationResult(
-    val toolName: String,
-    val output: String,
-)
+data class ToolInvocationResult(val toolName: String, val output: String)

@@ -20,9 +20,8 @@ import javax.inject.Singleton
  * returned across processes.
  */
 @Singleton
-class ModelVariableProvider @Inject constructor(
-    private val localModelRepository: LocalModelRepository,
-) : PromptVariableProvider {
+class ModelVariableProvider @Inject constructor(private val localModelRepository: LocalModelRepository) :
+    PromptVariableProvider {
 
     override fun key(): String = KEY
 
@@ -32,8 +31,7 @@ class ModelVariableProvider @Inject constructor(
      * @return [ai.agent.android.domain.models.LocalModel.name] of the active
      * model, or an empty string when no model is currently active.
      */
-    override suspend fun resolve(): String =
-        localModelRepository.getActiveModel()?.name ?: ""
+    override suspend fun resolve(): String = localModelRepository.getActiveModel()?.name ?: ""
 
     private companion object {
         const val KEY = "MODEL"

@@ -84,11 +84,7 @@ sealed interface AgentOrchestratorState {
      *   (e.g. before a routing decision is made or a queue is populated).
      * @property nodeName The type name of the node currently being executed.
      */
-    data class PipelineStepInfo(
-        val stepIndex: Int,
-        val totalSteps: Int?,
-        val nodeName: String,
-    )
+    data class PipelineStepInfo(val stepIndex: Int, val totalSteps: Int?, val nodeName: String)
 
     /**
      * Indicates the current pipeline stage (node) the agent is executing.

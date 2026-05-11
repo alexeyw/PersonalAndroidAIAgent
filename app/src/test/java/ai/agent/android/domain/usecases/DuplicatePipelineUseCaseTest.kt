@@ -162,36 +162,37 @@ class DuplicatePipelineUseCaseTest {
     }
 
     @Test
-    fun `given source has connections referencing missing node ids when invoke then drops them and returns success`() = runTest {
-        // The source graph has a "dangling" connection — its target id
-        // (`ghost`) is not present in the nodes list. Without the guard the
-        // `getValue` lookup would throw and the whole duplicate would crash.
-        val source = PipelineGraph(
-            id = "src",
-            name = "Source",
-            nodes = listOf(
-                NodeModel("n1", NodeType.INPUT, 0f, 0f),
-                NodeModel("n2", NodeType.OUTPUT, 10f, 10f),
-            ),
-            connections = listOf(
-                ConnectionModel("c1", "n1", "n2"),
-                ConnectionModel("c2", "n1", "ghost"),
-                ConnectionModel("c3", "ghost", "n2"),
-            ),
-        )
-        coEvery { pipelineRepository.getPipelineById("src") } returns source
-        val saved = slot<PipelineGraph>()
-        coEvery { pipelineRepository.savePipeline(capture(saved)) } returns Unit
+    fun `given source has connections referencing missing node ids when invoke then drops them and returns success`() =
+        runTest {
+            // The source graph has a "dangling" connection — its target id
+            // (`ghost`) is not present in the nodes list. Without the guard the
+            // `getValue` lookup would throw and the whole duplicate would crash.
+            val source = PipelineGraph(
+                id = "src",
+                name = "Source",
+                nodes = listOf(
+                    NodeModel("n1", NodeType.INPUT, 0f, 0f),
+                    NodeModel("n2", NodeType.OUTPUT, 10f, 10f),
+                ),
+                connections = listOf(
+                    ConnectionModel("c1", "n1", "n2"),
+                    ConnectionModel("c2", "n1", "ghost"),
+                    ConnectionModel("c3", "ghost", "n2"),
+                ),
+            )
+            coEvery { pipelineRepository.getPipelineById("src") } returns source
+            val saved = slot<PipelineGraph>()
+            coEvery { pipelineRepository.savePipeline(capture(saved)) } returns Unit
 
-        val result = useCase("src")
+            val result = useCase("src")
 
-        assertTrue(result.isSuccess)
-        val duplicate = result.getOrNull()
-        assertNotNull(duplicate)
-        // Dangling connections are filtered; only the well-formed one survives.
-        assertEquals(1, duplicate!!.connections.size)
-        assertEquals(2, duplicate.nodes.size)
-        // The persisted graph matches the returned graph.
-        assertEquals(duplicate, saved.captured)
-    }
+            assertTrue(result.isSuccess)
+            val duplicate = result.getOrNull()
+            assertNotNull(duplicate)
+            // Dangling connections are filtered; only the well-formed one survives.
+            assertEquals(1, duplicate!!.connections.size)
+            assertEquals(2, duplicate.nodes.size)
+            // The persisted graph matches the returned graph.
+            assertEquals(duplicate, saved.captured)
+        }
 }

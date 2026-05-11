@@ -9,7 +9,6 @@ import io.mockk.mockk
 import io.mockk.verify
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.Before
@@ -28,7 +27,7 @@ class AgentPowerManagerTest {
         powerStateRepository = mockk()
         engine = mockk(relaxed = true)
         workManager = mockk(relaxed = true)
-        
+
         powerStateFlow = MutableStateFlow(PowerState(isBatteryLow = false, isCharging = true))
         every { powerStateRepository.powerState } returns powerStateFlow
     }
@@ -39,9 +38,9 @@ class AgentPowerManagerTest {
             scope = backgroundScope,
             powerStateRepository = powerStateRepository,
             engine = engine,
-            workManager = workManager
+            workManager = workManager,
         )
-        
+
         every { engine.isInitialized } returns true
 
         powerManager.startObserving()
@@ -61,9 +60,9 @@ class AgentPowerManagerTest {
             scope = backgroundScope,
             powerStateRepository = powerStateRepository,
             engine = engine,
-            workManager = workManager
+            workManager = workManager,
         )
-        
+
         every { engine.isInitialized } returns true
 
         powerManager.startObserving()
@@ -83,9 +82,9 @@ class AgentPowerManagerTest {
             scope = backgroundScope,
             powerStateRepository = powerStateRepository,
             engine = engine,
-            workManager = workManager
+            workManager = workManager,
         )
-        
+
         every { engine.isInitialized } returns true
 
         powerManager.startObserving()

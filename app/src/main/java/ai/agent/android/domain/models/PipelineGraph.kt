@@ -15,7 +15,7 @@ data class PipelineGraph(
     val name: String,
     val nodes: List<NodeModel> = emptyList(),
     val connections: List<ConnectionModel> = emptyList(),
-    val updatedAt: Long = System.currentTimeMillis()
+    val updatedAt: Long = System.currentTimeMillis(),
 ) {
     /**
      * Validates if the current graph is a valid Directed Acyclic Graph (DAG).
@@ -27,7 +27,7 @@ data class PipelineGraph(
 
         val adjacencyList = mutableMapOf<String, MutableList<String>>()
         nodes.forEach { adjacencyList[it.id] = mutableListOf() }
-        
+
         connections.forEach { connection ->
             val targetNode = nodes.find { it.id == connection.targetNodeId }
             // Ignore back-edges to QUEUE_PROCESSOR for DAG validation
@@ -75,7 +75,7 @@ data class PipelineGraph(
      */
     fun validate(): List<PipelineValidationError> {
         val errors = mutableListOf<PipelineValidationError>()
-        
+
         val inputs = nodes.filter { it.type == NodeType.INPUT }
         if (inputs.isEmpty()) errors.add(PipelineValidationError.MissingInput)
         if (inputs.size > 1) errors.add(PipelineValidationError.MultipleInputs)
@@ -91,11 +91,11 @@ data class PipelineGraph(
         if (nodes.isNotEmpty()) {
             val adjForward = mutableMapOf<String, MutableList<String>>()
             val adjBackward = mutableMapOf<String, MutableList<String>>()
-            nodes.forEach { 
+            nodes.forEach {
                 adjForward[it.id] = mutableListOf()
                 adjBackward[it.id] = mutableListOf()
             }
-            connections.forEach { 
+            connections.forEach {
                 if (adjForward.containsKey(it.sourceNodeId)) {
                     adjForward[it.sourceNodeId]?.add(it.targetNodeId)
                 }
@@ -112,7 +112,7 @@ data class PipelineGraph(
 
             val reachableFromInput = mutableSetOf<String>()
             val inputQueue = ArrayDeque<String>()
-            inputs.forEach { 
+            inputs.forEach {
                 reachableFromInput.add(it.id)
                 inputQueue.add(it.id)
             }
@@ -127,7 +127,7 @@ data class PipelineGraph(
 
             val canReachOutput = mutableSetOf<String>()
             val outputQueue = ArrayDeque<String>()
-            outputs.forEach { 
+            outputs.forEach {
                 canReachOutput.add(it.id)
                 outputQueue.add(it.id)
             }

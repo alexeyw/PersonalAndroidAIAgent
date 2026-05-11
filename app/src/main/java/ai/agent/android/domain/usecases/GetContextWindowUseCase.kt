@@ -17,7 +17,7 @@ import javax.inject.Inject
  */
 class GetContextWindowUseCase @Inject constructor(
     private val chatRepository: ChatRepository,
-    private val settingsRepository: SettingsRepository
+    private val settingsRepository: SettingsRepository,
 ) {
     /**
      * Retrieves the chat history for the given session ID, truncates old messages
@@ -39,7 +39,7 @@ class GetContextWindowUseCase @Inject constructor(
             val formattedMessage = formatMessage(message)
             // Add +1 for a newline separator if it's not the first message being added
             val separatorLength = if (formattedMessages.isNotEmpty()) 1 else 0
-            
+
             if (currentLength + formattedMessage.length + separatorLength <= maxLength) {
                 formattedMessages.add(0, formattedMessage)
                 currentLength += formattedMessage.length + separatorLength

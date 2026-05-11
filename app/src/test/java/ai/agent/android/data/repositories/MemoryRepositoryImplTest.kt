@@ -65,7 +65,7 @@ class MemoryRepositoryImplTest {
 
         assertEquals(0.0f, similarity, 0.0f)
     }
-    
+
     @Test
     fun `cosineSimilarity returns 0 for zero vectors`() {
         val vectorA = floatArrayOf(0f, 0f)
@@ -114,10 +114,11 @@ class MemoryRepositoryImplTest {
     }
 
     @Test
-    fun `getRecentMemorySummaries with non positive limit short-circuits without dao call`() = kotlinx.coroutines.test.runTest {
-        val result = repository.getRecentMemorySummaries(0)
+    fun `getRecentMemorySummaries with non positive limit short-circuits without dao call`() =
+        kotlinx.coroutines.test.runTest {
+            val result = repository.getRecentMemorySummaries(0)
 
-        assertEquals(emptyList<ai.agent.android.domain.models.MemorySummary>(), result)
-        io.mockk.coVerify(exactly = 0) { memoryDao.getRecentMemorySummaries(any()) }
-    }
+            assertEquals(emptyList<ai.agent.android.domain.models.MemorySummary>(), result)
+            io.mockk.coVerify(exactly = 0) { memoryDao.getRecentMemorySummaries(any()) }
+        }
 }

@@ -36,11 +36,8 @@ sealed class PipelineImportOutcome {
      * @property foundVersion The `schemaVersion` value read from the file.
      * @property expectedVersion The version this build expects.
      */
-    data class SchemaMismatch(
-        val graph: PipelineGraph,
-        val foundVersion: Int,
-        val expectedVersion: Int,
-    ) : PipelineImportOutcome()
+    data class SchemaMismatch(val graph: PipelineGraph, val foundVersion: Int, val expectedVersion: Int) :
+        PipelineImportOutcome()
 
     /**
      * Parsing failed irrecoverably (malformed JSON, missing required

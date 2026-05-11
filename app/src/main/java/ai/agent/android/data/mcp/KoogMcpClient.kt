@@ -2,8 +2,6 @@ package ai.agent.android.data.mcp
 
 import ai.agent.android.domain.models.AgentTool
 import ai.koog.agents.core.tools.ToolRegistry
-import org.json.JSONArray
-import org.json.JSONObject
 import ai.koog.agents.mcp.McpToolRegistryProvider
 import ai.koog.agents.mcp.metadata.McpServerInfo
 import ai.koog.serialization.kotlinx.KotlinxSerializer
@@ -13,6 +11,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
+import org.json.JSONArray
+import org.json.JSONObject
 import javax.inject.Inject
 
 /**
@@ -22,6 +22,7 @@ import javax.inject.Inject
 @OptIn(ai.koog.agents.core.tools.annotations.InternalAgentToolsApi::class)
 class KoogMcpClient : McpClient {
     private var registry: ToolRegistry? = null
+
     // The HTTP client is recreated on every [connect] so the same client instance can be
     // disconnected and reconnected cleanly. Holding a single client across disconnect would
     // leave it in a closed state, and a subsequent [connect] would immediately fail when the
@@ -87,31 +88,29 @@ class KoogMcpClient : McpClient {
      *
      * @return A list of [AgentTool] objects, or an empty list if not connected.
      */
-    override suspend fun getTools(): List<AgentTool> {
-        return withContext(Dispatchers.IO) {
-            registry?.tools?.map { tool ->
-                AgentTool(
-                    name = tool.name,
-                    description = tool.descriptor.description,
-                    parameters = run {
-                        val root = JSONObject()
-                        root.put("type", "object")
-                        val props = JSONObject()
-                        val required = JSONArray()
-                        tool.descriptor.requiredParameters.forEach { param ->
-                            props.put(param.name, JSONObject().put("type", "string"))
-                            required.put(param.name)
-                        }
-                        tool.descriptor.optionalParameters.forEach { param ->
-                            props.put(param.name, JSONObject().put("type", "string"))
-                        }
-                        root.put("properties", props)
-                        if (required.length() > 0) root.put("required", required)
-                        root.toString()
+    override suspend fun getTools(): List<AgentTool> = withContext(Dispatchers.IO) {
+        registry?.tools?.map { tool ->
+            AgentTool(
+                name = tool.name,
+                description = tool.descriptor.description,
+                parameters = run {
+                    val root = JSONObject()
+                    root.put("type", "object")
+                    val props = JSONObject()
+                    val required = JSONArray()
+                    tool.descriptor.requiredParameters.forEach { param ->
+                        props.put(param.name, JSONObject().put("type", "string"))
+                        required.put(param.name)
                     }
-                )
-            } ?: emptyList()
-        }
+                    tool.descriptor.optionalParameters.forEach { param ->
+                        props.put(param.name, JSONObject().put("type", "string"))
+                    }
+                    root.put("properties", props)
+                    if (required.length() > 0) root.put("required", required)
+                    root.toString()
+                },
+            )
+        } ?: emptyList()
     }
 
     /**
@@ -123,18 +122,16 @@ class KoogMcpClient : McpClient {
      * @return A string containing the serialized result of the execution.
      * @throws IllegalArgumentException if the tool is not found.
      */
-    override suspend fun executeTool(name: String, arguments: String): String {
-        return withContext(Dispatchers.IO) {
-            val tool = registry?.getToolOrNull(name) 
-                ?: throw IllegalArgumentException("Tool $name not found")
-            
-            val kotlinxJsonArgs = Json.parseToJsonElement(arguments).jsonObject
-            val koogJsonArgs = kotlinxJsonArgs.toKoogJSONObject()
-            val args = tool.decodeArgs(koogJsonArgs, serializer)
-            
-            val result = tool.executeUnsafe(args!!)
-            tool.encodeResultToStringUnsafe(result!!, serializer)
-        }
+    override suspend fun executeTool(name: String, arguments: String): String = withContext(Dispatchers.IO) {
+        val tool = registry?.getToolOrNull(name)
+            ?: throw IllegalArgumentException("Tool $name not found")
+
+        val kotlinxJsonArgs = Json.parseToJsonElement(arguments).jsonObject
+        val koogJsonArgs = kotlinxJsonArgs.toKoogJSONObject()
+        val args = tool.decodeArgs(koogJsonArgs, serializer)
+
+        val result = tool.executeUnsafe(args!!)
+        tool.encodeResultToStringUnsafe(result!!, serializer)
     }
 }
 
@@ -148,7 +145,5 @@ class KoogMcpClientFactory @Inject constructor() : McpClientFactory {
      *
      * @return A new [McpClient] implementation.
      */
-    override fun create(): McpClient {
-        return KoogMcpClient()
-    }
+    override fun create(): McpClient = KoogMcpClient()
 }

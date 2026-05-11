@@ -12,7 +12,6 @@ import ai.koog.prompt.executor.clients.google.GoogleModels
 import ai.koog.prompt.executor.clients.openai.OpenAIModels
 import ai.koog.prompt.llm.LLMCapability
 import ai.koog.prompt.llm.LLMProvider
-import ai.koog.prompt.llm.LLMProvider.Companion
 import ai.koog.prompt.llm.LLModel
 import ai.koog.prompt.streaming.StreamFrame
 import kotlinx.coroutines.Dispatchers
@@ -45,7 +44,7 @@ class DelegateTaskTool @Inject constructor(
     private val koogClientFactory: KoogClientFactory,
     private val memoryRepository: MemoryRepository,
     private val textEmbeddingEngine: TextEmbeddingEngine,
-    private val apiKeyRepository: ApiKeyRepository
+    private val apiKeyRepository: ApiKeyRepository,
 ) {
 
     /**
@@ -64,73 +63,73 @@ class DelegateTaskTool @Inject constructor(
      * @param targetModel The identifier for the external model to use. Supported values: "anthropic", "openai", "google", "deepseek", "ollama". Defaults to "google".
      * @return A summary string detailing the outcome of the delegation, including whether it succeeded, timed out, or encountered an error. This summary is returned back to the calling agent.
      */
-    suspend fun executeDelegation(
-        taskDescription: String,
-        targetModel: String = "google"
-    ): String = withContext(Dispatchers.IO) {
-        val client = when (targetModel.lowercase()) {
-            "anthropic" -> koogClientFactory.createAnthropicExecutor()
-            "openai" -> koogClientFactory.createOpenAIExecutor()
-            "google", "gemini" -> koogClientFactory.createGoogleExecutor()
-            "deepseek" -> koogClientFactory.createDeepSeekExecutor()
-            "ollama" -> koogClientFactory.createOllamaExecutor()
-            else -> return@withContext "Error: Unsupported target model '$targetModel'. Supported models: anthropic, openai, google, deepseek, ollama."
-        }
-
-        if (client == null) {
-            return@withContext "Error: Client for '$targetModel' could not be initialized. Please check if the API key or configuration is provided."
-        }
-
-        return@withContext try {
-            val model = when (targetModel.lowercase()) {
-                "anthropic" -> KoogModelMapper.getAnthropicModel(
-                    apiKeyRepository.getAnthropicModel().first() ?: AnthropicModels.Sonnet_4_5.id
-                )
-
-                "openai" -> KoogModelMapper.getOpenAIModel(
-                    apiKeyRepository.getOpenAIModel().first() ?: OpenAIModels.Chat.GPT5_4.id
-                )
-
-                "google", "gemini" -> KoogModelMapper.getGoogleModel(
-                    apiKeyRepository.getGoogleModel().first() ?: GoogleModels.Gemini3_Flash_Preview.id
-                )
-
-                "deepseek" -> KoogModelMapper.getDeepSeekModel(
-                    apiKeyRepository.getDeepSeekModel().first() ?: DeepSeekModels.DeepSeekChat.id
-                )
-
-                "ollama" -> LLModel(
-                    provider = LLMProvider.Ollama,
-                    id = apiKeyRepository.getOllamaModelName().first() ?: "llama3",
-                    capabilities = listOf(
-                        LLMCapability.Completion
-                    ),
-                    contextLength = apiKeyRepository.getOllamaContextWindowSize().first().toLong(),
-                )
-
-                else -> LLModel(client.llmProvider(), "default")
+    suspend fun executeDelegation(taskDescription: String, targetModel: String = "google"): String =
+        withContext(Dispatchers.IO) {
+            val client = when (targetModel.lowercase()) {
+                "anthropic" -> koogClientFactory.createAnthropicExecutor()
+                "openai" -> koogClientFactory.createOpenAIExecutor()
+                "google", "gemini" -> koogClientFactory.createGoogleExecutor()
+                "deepseek" -> koogClientFactory.createDeepSeekExecutor()
+                "ollama" -> koogClientFactory.createOllamaExecutor()
+                else -> return@withContext "Error: Unsupported target model '$targetModel'. Supported models: anthropic, openai, google, deepseek, ollama."
             }
 
-            // Apply a 60-second timeout for the external API call
-            val result = withTimeoutOrNull(60_000L) {
-                val stream = client.executeStreaming(prompt("default") { user(taskDescription) }, model)
-                stream.mapNotNull { frame -> (frame as? StreamFrame.TextDelta)?.text }.toList().joinToString("")
+            if (client == null) {
+                return@withContext "Error: Client for '$targetModel' could not be initialized. Please check if the API key or configuration is provided."
             }
 
-            if (result.isNullOrBlank()) {
-                "Error: Task delegation to '$targetModel' timed out or returned empty after 60 seconds."
-            } else {
-                // Task succeeded. Generate embedding for the result.
-                val responseText = result
-                val embedding = textEmbeddingEngine.generateEmbedding(responseText)
+            return@withContext try {
+                val model = when (targetModel.lowercase()) {
+                    "anthropic" -> KoogModelMapper.getAnthropicModel(
+                        apiKeyRepository.getAnthropicModel().first() ?: AnthropicModels.Sonnet_4_5.id,
+                    )
 
-                // Save to long-term memory so the local agent can recall it later
-                memoryRepository.saveMemory(responseText, embedding)
+                    "openai" -> KoogModelMapper.getOpenAIModel(
+                        apiKeyRepository.getOpenAIModel().first() ?: OpenAIModels.Chat.GPT5_4.id,
+                    )
 
-                "Success: Task completed by '$targetModel' and saved to memory. Summary of response: ${responseText.take(100)}..."
+                    "google", "gemini" -> KoogModelMapper.getGoogleModel(
+                        apiKeyRepository.getGoogleModel().first() ?: GoogleModels.Gemini3_Flash_Preview.id,
+                    )
+
+                    "deepseek" -> KoogModelMapper.getDeepSeekModel(
+                        apiKeyRepository.getDeepSeekModel().first() ?: DeepSeekModels.DeepSeekChat.id,
+                    )
+
+                    "ollama" -> LLModel(
+                        provider = LLMProvider.Ollama,
+                        id = apiKeyRepository.getOllamaModelName().first() ?: "llama3",
+                        capabilities = listOf(
+                            LLMCapability.Completion,
+                        ),
+                        contextLength = apiKeyRepository.getOllamaContextWindowSize().first().toLong(),
+                    )
+
+                    else -> LLModel(client.llmProvider(), "default")
+                }
+
+                // Apply a 60-second timeout for the external API call
+                val result = withTimeoutOrNull(60_000L) {
+                    val stream = client.executeStreaming(prompt("default") { user(taskDescription) }, model)
+                    stream.mapNotNull { frame -> (frame as? StreamFrame.TextDelta)?.text }.toList().joinToString("")
+                }
+
+                if (result.isNullOrBlank()) {
+                    "Error: Task delegation to '$targetModel' timed out or returned empty after 60 seconds."
+                } else {
+                    // Task succeeded. Generate embedding for the result.
+                    val responseText = result
+                    val embedding = textEmbeddingEngine.generateEmbedding(responseText)
+
+                    // Save to long-term memory so the local agent can recall it later
+                    memoryRepository.saveMemory(responseText, embedding)
+
+                    "Success: Task completed by '$targetModel' and saved to memory. Summary of response: ${responseText.take(
+                        100,
+                    )}..."
+                }
+            } catch (e: Exception) {
+                "Error: Task delegation failed due to an exception: ${e.message}"
             }
-        } catch (e: Exception) {
-            "Error: Task delegation failed due to an exception: ${e.message}"
         }
-    }
 }

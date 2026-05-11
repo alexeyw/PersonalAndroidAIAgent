@@ -17,5 +17,5 @@ enum class Role {
     /**
      * A system prompt or internal message.
      */
-    SYSTEM
+    SYSTEM,
 }

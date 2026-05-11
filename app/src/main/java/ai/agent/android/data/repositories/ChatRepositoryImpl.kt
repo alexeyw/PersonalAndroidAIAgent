@@ -22,10 +22,8 @@ import javax.inject.Singleton
  * @property chatDao The Data Access Object for chat messages.
  */
 @Singleton
-class ChatRepositoryImpl @Inject constructor(
-    private val chatDao: ChatDao,
-    private val traceStepDao: TraceStepDao
-) : ChatRepository {
+class ChatRepositoryImpl @Inject constructor(private val chatDao: ChatDao, private val traceStepDao: TraceStepDao) :
+    ChatRepository {
 
     @Volatile
     private var cachedSessionId: String? = null
@@ -44,34 +42,30 @@ class ChatRepositoryImpl @Inject constructor(
                     ai.agent.android.data.local.models.ChatSessionEntity(
                         id = message.sessionId,
                         name = "Chat " + message.sessionId.take(6),
-                        updatedAt = message.timestamp
-                    )
+                        updatedAt = message.timestamp,
+                    ),
                 )
             }
             cachedSessionId = message.sessionId
         }
     }
 
-    override fun getMessagesForSession(sessionId: String): Flow<List<ChatMessage>> {
-        return chatDao.getMessagesBySessionId(sessionId).map { entities ->
+    override fun getMessagesForSession(sessionId: String): Flow<List<ChatMessage>> =
+        chatDao.getMessagesBySessionId(sessionId).map { entities ->
             entities.map { it.toDomain() }
         }
-    }
 
-    override fun getDisplayMessagesForSession(sessionId: String): Flow<List<ChatMessage>> {
-        return chatDao.getDisplayMessagesBySessionId(sessionId).map { entities ->
+    override fun getDisplayMessagesForSession(sessionId: String): Flow<List<ChatMessage>> =
+        chatDao.getDisplayMessagesBySessionId(sessionId).map { entities ->
             entities.map { it.toDomain() }
         }
-    }
 
     override suspend fun setMessageStarred(messageId: Long, starred: Boolean) {
         chatDao.setMessageStarred(messageId, starred)
     }
 
-    override fun getStarredMessages(): Flow<List<ChatMessage>> {
-        return chatDao.getStarredMessages().map { entities ->
-            entities.map { it.toDomain() }
-        }
+    override fun getStarredMessages(): Flow<List<ChatMessage>> = chatDao.getStarredMessages().map { entities ->
+        entities.map { it.toDomain() }
     }
 
     override suspend fun deleteSession(sessionId: String) {
@@ -79,19 +73,16 @@ class ChatRepositoryImpl @Inject constructor(
         chatDao.deleteSession(sessionId)
     }
 
-    override suspend fun getAllSessions(): List<String> {
-        return chatDao.getAllSessions()
-    }
+    override suspend fun getAllSessions(): List<String> = chatDao.getAllSessions()
 
     override suspend fun deleteMessage(messageId: Long) {
         chatDao.deleteMessageById(messageId)
     }
 
-    override fun getRecentSystemMessages(limit: Int): Flow<List<ChatMessage>> {
-        return chatDao.getRecentMessagesByRole("SYSTEM", limit).map { entities ->
+    override fun getRecentSystemMessages(limit: Int): Flow<List<ChatMessage>> =
+        chatDao.getRecentMessagesByRole("SYSTEM", limit).map { entities ->
             entities.map { it.toDomain() }
         }
-    }
 
     override suspend fun saveSession(session: ChatSession) {
         // Single round-trip via Room's @Upsert — eliminates the SELECT + INSERT/UPDATE
@@ -99,15 +90,11 @@ class ChatRepositoryImpl @Inject constructor(
         chatDao.upsertSession(session.toEntity())
     }
 
-    override fun getSessionsFlow(): Flow<List<ChatSession>> {
-        return chatDao.getSessionsFlow().map { entities ->
-            entities.map { it.toDomain() }
-        }
+    override fun getSessionsFlow(): Flow<List<ChatSession>> = chatDao.getSessionsFlow().map { entities ->
+        entities.map { it.toDomain() }
     }
 
-    override suspend fun getSessionById(id: String): ChatSession? {
-        return chatDao.getSessionById(id)?.toDomain()
-    }
+    override suspend fun getSessionById(id: String): ChatSession? = chatDao.getSessionById(id)?.toDomain()
 
     override suspend fun saveTraceStep(
         sessionId: String,
@@ -124,12 +111,14 @@ class ChatRepositoryImpl @Inject constructor(
                 timestamp = System.currentTimeMillis(),
                 durationMs = durationMs,
                 tokenCount = tokenCount,
-            )
+            ),
         )
     }
 
-    override fun getTraceSteps(sessionId: String): Flow<List<ai.agent.android.domain.models.AgentOrchestratorState.TraceStep>> {
-        return traceStepDao.getTraceStepsForSession(sessionId).map { entities ->
+    override fun getTraceSteps(
+        sessionId: String,
+    ): Flow<List<ai.agent.android.domain.models.AgentOrchestratorState.TraceStep>> =
+        traceStepDao.getTraceStepsForSession(sessionId).map { entities ->
             entities.map {
                 ai.agent.android.domain.models.AgentOrchestratorState.TraceStep(
                     nodeName = it.nodeName,
@@ -139,5 +128,4 @@ class ChatRepositoryImpl @Inject constructor(
                 )
             }
         }
-    }
 }

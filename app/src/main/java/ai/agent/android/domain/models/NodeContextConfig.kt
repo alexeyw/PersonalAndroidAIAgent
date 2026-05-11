@@ -37,8 +37,7 @@ data class NodeContextConfig(
      * Returns `true` when every flag is `false`, meaning a node executed with
      * this configuration would receive an empty input string.
      */
-    fun isEmpty(): Boolean =
-        !chatHistory && !originalTask && !nodeInput && !longTermMemory && !toolResults
+    fun isEmpty(): Boolean = !chatHistory && !originalTask && !nodeInput && !longTermMemory && !toolResults
 
     companion object {
         /**

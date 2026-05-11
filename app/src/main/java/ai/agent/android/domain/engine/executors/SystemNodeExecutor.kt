@@ -2,13 +2,11 @@ package ai.agent.android.domain.engine.executors
 
 import ai.agent.android.domain.engine.LlmInferenceEngine
 import ai.agent.android.domain.models.AgentOrchestratorState
-import ai.agent.android.domain.models.ChatMessage
 import ai.agent.android.domain.models.NodeExecutionResult
 import ai.agent.android.domain.models.NodeModel
 import ai.agent.android.domain.models.NodeOutput
 import ai.agent.android.domain.models.NodeType
 import ai.agent.android.domain.models.Result
-import ai.agent.android.domain.models.Role
 import ai.agent.android.domain.repositories.ChatRepository
 import ai.agent.android.domain.usecases.LoadModelUseCase
 import kotlinx.coroutines.CancellationException
@@ -20,14 +18,14 @@ import javax.inject.Inject
 class SystemNodeExecutor @Inject constructor(
     private val llmEngine: LlmInferenceEngine,
     private val loadModelUseCase: LoadModelUseCase,
-    private val chatRepository: ChatRepository
+    private val chatRepository: ChatRepository,
 ) : NodeExecutor {
 
     override fun execute(
         node: NodeModel,
         inputText: String,
         sessionId: String,
-        originalPrompt: String
+        originalPrompt: String,
     ): Flow<NodeOutput> = flow {
         val nodeSystemPrompt = node.systemPrompt ?: "You are an AI assistant."
         val fullPrompt = "$nodeSystemPrompt\n\nUSER: $inputText\nAGENT: "
@@ -53,7 +51,9 @@ class SystemNodeExecutor @Inject constructor(
             // would silently swallow cancellation and leave the parent coroutine running.
             throw e
         } catch (e: Exception) {
-            Timber.tag("PipelineDebug").e(e, "[NODE_ERR] type=${node.type.name} id=${node.id} error in SystemNodeExecutor generation")
+            Timber.tag(
+                "PipelineDebug",
+            ).e(e, "[NODE_ERR] type=${node.type.name} id=${node.id} error in SystemNodeExecutor generation")
             emit(NodeOutput.State(AgentOrchestratorState.Error(e.message ?: "Unknown error")))
             emit(NodeOutput.Result(NodeExecutionResult(error = e.message)))
             return@flow

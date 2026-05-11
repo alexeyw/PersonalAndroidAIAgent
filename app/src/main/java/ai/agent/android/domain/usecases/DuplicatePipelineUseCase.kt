@@ -21,9 +21,7 @@ import javax.inject.Inject
  *
  * @property pipelineRepository Source of the original graph and the persistence sink.
  */
-class DuplicatePipelineUseCase @Inject constructor(
-    private val pipelineRepository: PipelineRepository,
-) {
+class DuplicatePipelineUseCase @Inject constructor(private val pipelineRepository: PipelineRepository) {
     /**
      * Duplicates the pipeline identified by [pipelineId].
      *

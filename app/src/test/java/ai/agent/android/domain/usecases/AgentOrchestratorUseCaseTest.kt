@@ -32,13 +32,13 @@ class AgentOrchestratorUseCaseTest {
 
         every { taskQueueManager.observeTaskState(sessionId) } returns flowOf(
             AgentOrchestratorState.Loading,
-            AgentOrchestratorState.Completed("Done")
+            AgentOrchestratorState.Completed("Done"),
         )
 
         val states = useCase(sessionId, userPrompt).toList()
 
         verify { taskQueueManager.enqueueTask(match { it.sessionId == sessionId && it.prompt == userPrompt }) }
-        
+
         assertTrue(states[0] is AgentOrchestratorState.Loading)
         assertTrue(states[1] is AgentOrchestratorState.Completed)
     }

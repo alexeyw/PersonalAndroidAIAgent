@@ -1,9 +1,9 @@
 package ai.agent.android.presentation.ui.orchestrator
 
+import ai.agent.android.domain.models.AgentTool
 import ai.agent.android.domain.models.NodeContextConfig
 import ai.agent.android.domain.models.NodeType
 import ai.agent.android.domain.models.PipelineGraph
-import ai.agent.android.domain.models.AgentTool
 import ai.agent.android.domain.prompt.PromptSegment
 import ai.agent.android.domain.prompt.PromptTemplateEngine
 import ai.agent.android.domain.prompt.PromptVariableProvider
@@ -12,10 +12,10 @@ import ai.agent.android.domain.repositories.ToolRepository
 import ai.agent.android.domain.usecases.CreatePipelineUseCase
 import ai.agent.android.domain.usecases.DeletePipelineUseCase
 import ai.agent.android.domain.usecases.DuplicatePipelineUseCase
+import ai.agent.android.domain.usecases.GetPromptTemplatesUseCase
 import ai.agent.android.domain.usecases.LoadPipelineUseCase
 import ai.agent.android.domain.usecases.RenamePipelineUseCase
 import ai.agent.android.domain.usecases.SavePipelineUseCase
-import ai.agent.android.domain.usecases.GetPromptTemplatesUseCase
 import ai.agent.android.domain.usecases.SavePromptTemplateUseCase
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -79,10 +79,10 @@ class OrchestratorViewModelTest {
         settingsRepository = mockk(relaxed = true) {
             every { defaultPipelineId } returns flowOf(null)
         }
-        
+
         every { loadPipelineUseCase.observeAllPipelines() } returns flowOf(emptyList())
         every { getPromptTemplatesUseCase() } returns flowOf(emptyList())
-        
+
         every { apiKeyRepository.getOpenAIKey() } returns flowOf(null)
         every { apiKeyRepository.getAnthropicKey() } returns flowOf("key")
         every { apiKeyRepository.getGoogleKey() } returns flowOf(null)
@@ -126,7 +126,7 @@ class OrchestratorViewModelTest {
     @Test
     fun `init loads provider keys and tools`() = runTest {
         testDispatcher.scheduler.advanceUntilIdle()
-        
+
         val state = viewModel.uiState.value
         assertEquals(true, state.providerKeys["anthropic"])
         assertEquals(false, state.providerKeys["openai"])
@@ -203,7 +203,12 @@ class OrchestratorViewModelTest {
         assertEquals(null, connectionId)
         val connections = viewModel.uiState.value.currentPipeline.connections
         assertEquals(1, connections.size) // The cyclic connection should not be added
-        assertTrue(viewModel.uiState.value.errorMessage?.contains("Cycle detected") == true)
+        assertEquals(
+            ai.agent.android.presentation.ui.common.UiText.Resource(
+                ai.agent.android.R.string.errors_orchestrator_cycle_detected,
+            ),
+            viewModel.uiState.value.errorMessage,
+        )
     }
 
     @Test
@@ -266,7 +271,7 @@ class OrchestratorViewModelTest {
     fun `clearPipeline empties nodes and connections`() {
         viewModel.addNode(NodeType.INPUT, 0f, 0f)
         viewModel.clearPipeline()
-        
+
         val state = viewModel.uiState.value
         assertEquals(0, state.currentPipeline.nodes.size)
         assertEquals(0, state.currentPipeline.connections.size)
@@ -275,10 +280,10 @@ class OrchestratorViewModelTest {
     @Test
     fun `saveCurrentPipeline calls use case and updates state`() = runTest {
         coEvery { savePipelineUseCase(any()) } returns Result.success(Unit)
-        
+
         viewModel.saveCurrentPipeline()
         testDispatcher.scheduler.advanceUntilIdle()
-        
+
         coEvery { savePipelineUseCase(any()) }
         assertEquals(false, viewModel.uiState.value.isLoading)
         assertEquals(null, viewModel.uiState.value.errorMessage)
@@ -288,28 +293,30 @@ class OrchestratorViewModelTest {
     fun `saveCurrentPipeline handles validation errors and updates errorMessage`() = runTest {
         val errors = listOf(
             ai.agent.android.domain.models.PipelineValidationError.MissingInput,
-            ai.agent.android.domain.models.PipelineValidationError.MissingOutput
+            ai.agent.android.domain.models.PipelineValidationError.MissingOutput,
         )
         val exception = ai.agent.android.domain.models.PipelineValidationException(errors)
         coEvery { savePipelineUseCase(any()) } returns Result.failure(exception)
-        
+
         viewModel.saveCurrentPipeline()
         testDispatcher.scheduler.advanceUntilIdle()
-        
+
         val errorMessage = viewModel.uiState.value.errorMessage
         assertEquals(false, viewModel.uiState.value.isLoading)
-        assertTrue(errorMessage?.contains("Missing INPUT node") == true)
-        assertTrue(errorMessage?.contains("Missing OUTPUT node") == true)
+        val joined = errorMessage as ai.agent.android.presentation.ui.common.UiText.Joined
+        val ids = joined.parts.map { (it as ai.agent.android.presentation.ui.common.UiText.Resource).id }
+        assertTrue(ai.agent.android.R.string.errors_orchestrator_validation_missing_input in ids)
+        assertTrue(ai.agent.android.R.string.errors_orchestrator_validation_missing_output in ids)
     }
 
     @Test
     fun `loadPipeline loads from use case and updates current pipeline`() = runTest {
         val mockPipeline = PipelineGraph(id = "test-1", name = "Test Pipeline")
         coEvery { loadPipelineUseCase.getPipelineById("test-1") } returns mockPipeline
-        
+
         viewModel.loadPipeline("test-1")
         testDispatcher.scheduler.advanceUntilIdle()
-        
+
         assertEquals("test-1", viewModel.uiState.value.currentPipeline.id)
         assertEquals(false, viewModel.uiState.value.isLoading)
         assertEquals(null, viewModel.uiState.value.errorMessage)
@@ -323,7 +330,7 @@ class OrchestratorViewModelTest {
         viewModel.addConnection(nodes[0].id, nodes[1].id) // valid
         viewModel.addConnection(nodes[1].id, nodes[0].id) // invalid cycle
         assertTrue(viewModel.uiState.value.errorMessage != null)
-        
+
         viewModel.clearError()
         assertEquals(null, viewModel.uiState.value.errorMessage)
     }
@@ -332,9 +339,9 @@ class OrchestratorViewModelTest {
     fun `updateNodeTool updates the tool assigned to a specific node`() {
         viewModel.addNode(NodeType.TOOL, 0f, 0f)
         val nodeId = viewModel.uiState.value.currentPipeline.nodes.first().id
-        
+
         viewModel.updateNodeTool(nodeId, "CalendarTool")
-        
+
         val updatedNode = viewModel.uiState.value.currentPipeline.nodes.first()
         assertEquals("CalendarTool", updatedNode.toolName)
         assertEquals("CalendarTool", updatedNode.label)
@@ -400,8 +407,8 @@ class OrchestratorViewModelTest {
         viewModel.importPipelineFromJson("{ invalid json }")
         testDispatcher.scheduler.advanceUntilIdle()
 
-        assertNotNull(viewModel.uiState.value.errorMessage)
-        assertTrue(viewModel.uiState.value.errorMessage!!.contains("Invalid JSON"))
+        val err = viewModel.uiState.value.errorMessage as ai.agent.android.presentation.ui.common.UiText.Dynamic
+        assertTrue(err.text.contains("Invalid JSON"))
     }
 
     @Test
@@ -579,7 +586,9 @@ class OrchestratorViewModelTest {
         val updated = viewModel.uiState.value.currentPipeline.nodes.single { it.id == nodeId }
         assertEquals(true, updated.contextConfig.nodeInput)
         assertEquals(
-            "At least one data source must remain enabled",
+            ai.agent.android.presentation.ui.common.UiText.Resource(
+                ai.agent.android.R.string.errors_orchestrator_at_least_one_source,
+            ),
             viewModel.uiState.value.errorMessage,
         )
     }
@@ -653,10 +662,12 @@ class OrchestratorViewModelTest {
         viewModel.saveCurrentPipeline()
         testDispatcher.scheduler.advanceUntilIdle()
 
-        val msg = viewModel.uiState.value.errorMessage
-        assertNotNull(msg)
-        assertTrue(msg!!.contains("Node \"${node.label}\""))
-        assertTrue(msg.contains("enable at least one source"))
+        val msg = viewModel.uiState.value.errorMessage as ai.agent.android.presentation.ui.common.UiText.Resource
+        assertEquals(
+            ai.agent.android.R.string.errors_orchestrator_validation_node_no_sources,
+            msg.id,
+        )
+        assertEquals(listOf(node.label), msg.args)
     }
 
     @Test
@@ -688,7 +699,12 @@ class OrchestratorViewModelTest {
         assertEquals("New Name", state.currentPipeline.name)
         assertEquals(false, state.isLoading)
         assertEquals(null, state.errorMessage)
-        assertEquals("Pipeline renamed", state.feedbackMessage)
+        assertEquals(
+            ai.agent.android.presentation.ui.common.UiText.Resource(
+                ai.agent.android.R.string.orchestrator_feedback_pipeline_renamed,
+            ),
+            state.feedbackMessage,
+        )
         coVerify { renamePipelineUseCase("active", "  New Name  ") }
     }
 
@@ -702,7 +718,10 @@ class OrchestratorViewModelTest {
         testDispatcher.scheduler.advanceUntilIdle()
 
         val state = viewModel.uiState.value
-        assertEquals("Pipeline name cannot be empty", state.errorMessage)
+        assertEquals(
+            ai.agent.android.presentation.ui.common.UiText.Dynamic("Pipeline name cannot be empty"),
+            state.errorMessage,
+        )
         assertEquals(null, state.feedbackMessage)
     }
 
@@ -717,7 +736,12 @@ class OrchestratorViewModelTest {
         val state = viewModel.uiState.value
         assertEquals("dup", state.currentPipeline.id)
         assertEquals("Source (copy)", state.currentPipeline.name)
-        assertEquals("Pipeline duplicated", state.feedbackMessage)
+        assertEquals(
+            ai.agent.android.presentation.ui.common.UiText.Resource(
+                ai.agent.android.R.string.orchestrator_feedback_pipeline_duplicated,
+            ),
+            state.feedbackMessage,
+        )
         assertEquals(null, state.errorMessage)
     }
 
@@ -733,7 +757,10 @@ class OrchestratorViewModelTest {
 
         val state = viewModel.uiState.value
         assertEquals(previousPipelineId, state.currentPipeline.id)
-        assertEquals("Pipeline not found", state.errorMessage)
+        assertEquals(
+            ai.agent.android.presentation.ui.common.UiText.Dynamic("Pipeline not found"),
+            state.errorMessage,
+        )
     }
 
     @Test
@@ -750,7 +777,10 @@ class OrchestratorViewModelTest {
         testDispatcher.scheduler.advanceUntilIdle()
 
         val state = viewModel.uiState.value
-        assertEquals("Active pipeline cannot be deleted", state.errorMessage)
+        assertEquals(
+            ai.agent.android.presentation.ui.common.UiText.Dynamic("Active pipeline cannot be deleted"),
+            state.errorMessage,
+        )
         assertEquals(null, state.feedbackMessage)
         coVerify { deletePipelineUseCase("active", "active") }
     }
@@ -763,7 +793,12 @@ class OrchestratorViewModelTest {
         testDispatcher.scheduler.advanceUntilIdle()
 
         val state = viewModel.uiState.value
-        assertEquals("Pipeline deleted", state.feedbackMessage)
+        assertEquals(
+            ai.agent.android.presentation.ui.common.UiText.Resource(
+                ai.agent.android.R.string.orchestrator_feedback_pipeline_deleted,
+            ),
+            state.feedbackMessage,
+        )
         assertEquals(null, state.errorMessage)
     }
 
@@ -788,7 +823,12 @@ class OrchestratorViewModelTest {
         val state = viewModel.uiState.value
         assertEquals("new", state.currentPipeline.id)
         assertEquals(2, state.currentPipeline.nodes.size)
-        assertEquals("Pipeline created", state.feedbackMessage)
+        assertEquals(
+            ai.agent.android.presentation.ui.common.UiText.Resource(
+                ai.agent.android.R.string.orchestrator_feedback_pipeline_created,
+            ),
+            state.feedbackMessage,
+        )
     }
 
     @Test
@@ -801,7 +841,10 @@ class OrchestratorViewModelTest {
         testDispatcher.scheduler.advanceUntilIdle()
 
         val state = viewModel.uiState.value
-        assertEquals("Pipeline name cannot be empty", state.errorMessage)
+        assertEquals(
+            ai.agent.android.presentation.ui.common.UiText.Dynamic("Pipeline name cannot be empty"),
+            state.errorMessage,
+        )
         assertEquals(null, state.feedbackMessage)
     }
 
@@ -810,7 +853,12 @@ class OrchestratorViewModelTest {
         coEvery { deletePipelineUseCase("p2", any()) } returns Result.success(Unit)
         viewModel.deletePipeline("p2")
         testDispatcher.scheduler.advanceUntilIdle()
-        assertEquals("Pipeline deleted", viewModel.uiState.value.feedbackMessage)
+        assertEquals(
+            ai.agent.android.presentation.ui.common.UiText.Resource(
+                ai.agent.android.R.string.orchestrator_feedback_pipeline_deleted,
+            ),
+            viewModel.uiState.value.feedbackMessage,
+        )
 
         viewModel.clearFeedback()
 

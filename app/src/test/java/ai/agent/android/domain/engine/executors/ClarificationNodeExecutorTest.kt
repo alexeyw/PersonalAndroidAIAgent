@@ -62,7 +62,7 @@ class ClarificationNodeExecutorTest {
         val node = clarificationNode()
         coEvery { loadModelUseCase(any()) } returns Result.Success(Unit)
         every { llmEngine.generateResponseStream(any()) } returns flowOf(
-            "{\"question\":\"Pick a color\",\"options\":[\"red\",\"blue\"]}"
+            "{\"question\":\"Pick a color\",\"options\":[\"red\",\"blue\"]}",
         )
         val captured = slot<ClarificationRequest>()
         coEvery { clarificationRepository.requestAnswer(capture(captured)) } returns "red"
@@ -90,7 +90,7 @@ class ClarificationNodeExecutorTest {
         val node = clarificationNode()
         coEvery { loadModelUseCase(any()) } returns Result.Success(Unit)
         every { llmEngine.generateResponseStream(any()) } returns flowOf(
-            "{\"question\":\"Describe issue\",\"options\":[]}"
+            "{\"question\":\"Describe issue\",\"options\":[]}",
         )
         coEvery { clarificationRepository.requestAnswer(any()) } returns "free text"
 
@@ -108,7 +108,7 @@ class ClarificationNodeExecutorTest {
         val node = clarificationNode()
         coEvery { loadModelUseCase(any()) } returns Result.Success(Unit)
         every { llmEngine.generateResponseStream(any()) } returns flowOf(
-            "Sure, here is the JSON:\n```json\n{\"question\":\"Confirm?\",\"options\":[\"yes\"]}\n```\n"
+            "Sure, here is the JSON:\n```json\n{\"question\":\"Confirm?\",\"options\":[\"yes\"]}\n```\n",
         )
         coEvery { clarificationRepository.requestAnswer(any()) } returns "yes"
 
@@ -124,7 +124,7 @@ class ClarificationNodeExecutorTest {
         val node = clarificationNode()
         coEvery { loadModelUseCase(any()) } returns Result.Success(Unit)
         every { llmEngine.generateResponseStream(any()) } returns flowOf(
-            "Could not produce JSON. Please confirm."
+            "Could not produce JSON. Please confirm.",
         )
         coEvery { clarificationRepository.requestAnswer(any()) } returns ""
 
@@ -140,7 +140,7 @@ class ClarificationNodeExecutorTest {
         val node = clarificationNode(timeoutMs = 12_345L)
         coEvery { loadModelUseCase(any()) } returns Result.Success(Unit)
         every { llmEngine.generateResponseStream(any()) } returns flowOf(
-            "{\"question\":\"q\",\"options\":[]}"
+            "{\"question\":\"q\",\"options\":[]}",
         )
         coEvery { clarificationRepository.requestAnswer(any()) } returns "a"
 
@@ -200,7 +200,7 @@ class ClarificationNodeExecutorTest {
         val node = clarificationNode()
         coEvery { loadModelUseCase(any()) } returns Result.Success(Unit)
         every { llmEngine.generateResponseStream(any()) } returns flowOf(
-            "{\"question\":\"q\",\"options\":[\"a\"]}"
+            "{\"question\":\"q\",\"options\":[\"a\"]}",
         )
         coEvery { clarificationRepository.requestAnswer(any()) } returns "a"
 

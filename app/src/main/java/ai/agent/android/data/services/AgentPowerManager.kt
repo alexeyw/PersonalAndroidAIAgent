@@ -23,7 +23,7 @@ class AgentPowerManager(
     private val scope: CoroutineScope,
     private val powerStateRepository: PowerStateRepository,
     private val engine: LlmInferenceEngine,
-    private val workManager: WorkManager
+    private val workManager: WorkManager,
 ) {
 
     /**
@@ -33,7 +33,7 @@ class AgentPowerManager(
         scope.launch {
             powerStateRepository.powerState.collectLatest { state ->
                 Timber.d("Power state updated: isBatteryLow=${state.isBatteryLow}, isCharging=${state.isCharging}")
-                
+
                 if (state.isBatteryLow && !state.isCharging) {
                     Timber.w("Power saving mode activated! Battery is low and not charging.")
                     enforcePowerSavingMode()
@@ -50,8 +50,8 @@ class AgentPowerManager(
         }
 
         // We avoid calling workManager.cancelAllWork() here because it would
-        // permanently delete scheduled tasks. WorkManager constraints (like 
-        // setRequiresBatteryNotLow(true)) should be used in ScheduleTaskUseCase 
+        // permanently delete scheduled tasks. WorkManager constraints (like
+        // setRequiresBatteryNotLow(true)) should be used in ScheduleTaskUseCase
         // to naturally pause execution without losing the task definitions.
         Timber.i("Power saving mode enforced. Scheduled tasks will pause if they have battery constraints.")
     }

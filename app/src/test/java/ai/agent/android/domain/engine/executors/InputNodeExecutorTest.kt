@@ -13,7 +13,7 @@ class InputNodeExecutorTest {
     fun `execute returns input text`() = runTest {
         val executor = InputNodeExecutor()
         val node = NodeModel("1", NodeType.INPUT, 0f, 0f)
-        
+
         val results = executor.execute(node, "test input", "session-1", "prompt").toList().unwrap()
 
         assertEquals(1, results.size)

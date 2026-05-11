@@ -1,7 +1,7 @@
 package ai.agent.android.domain.usecases
 
-import ai.agent.android.domain.pipelineio.PipelineJsonSerializer
 import ai.agent.android.domain.models.PipelineImportOutcome
+import ai.agent.android.domain.pipelineio.PipelineJsonSerializer
 import javax.inject.Inject
 
 /**
@@ -24,9 +24,7 @@ import javax.inject.Inject
  * fake `Activity` and lets the UI display a confirm-dialog before any
  * mutation hits the database.
  */
-class ImportPipelineUseCase @Inject constructor(
-    private val savePipelineUseCase: SavePipelineUseCase,
-) {
+class ImportPipelineUseCase @Inject constructor(private val savePipelineUseCase: SavePipelineUseCase) {
 
     /**
      * Parses [jsonText] and, if it cleanly matches the current schema,
@@ -66,7 +64,4 @@ class ImportPipelineUseCase @Inject constructor(
  * persistence result. Modelled as a `data class` so consumers can pattern
  * match on `outcome` and look at `saveResult` only when relevant.
  */
-data class ImportInvocation(
-    val outcome: PipelineImportOutcome,
-    val saveResult: Result<Unit>?,
-)
+data class ImportInvocation(val outcome: PipelineImportOutcome, val saveResult: Result<Unit>?)

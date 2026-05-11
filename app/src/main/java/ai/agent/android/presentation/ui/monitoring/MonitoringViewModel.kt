@@ -1,10 +1,10 @@
 package ai.agent.android.presentation.ui.monitoring
 
-import androidx.lifecycle.ViewModel
-import androidx.lifecycle.viewModelScope
 import ai.agent.android.domain.repositories.ChatRepository
 import ai.agent.android.domain.repositories.MetricsRepository
 import ai.agent.android.domain.repositories.PowerStateRepository
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -22,7 +22,7 @@ import javax.inject.Inject
 class MonitoringViewModel @Inject constructor(
     private val chatRepository: ChatRepository,
     metricsRepository: MetricsRepository,
-    powerStateRepository: PowerStateRepository
+    powerStateRepository: PowerStateRepository,
 ) : ViewModel() {
 
     private val _isLoading = MutableStateFlow(true)
@@ -35,18 +35,18 @@ class MonitoringViewModel @Inject constructor(
         metricsRepository.metrics,
         _recentLogs,
         _isLoading,
-        powerStateRepository.powerState
+        powerStateRepository.powerState,
     ) { metrics, logs, isLoading, powerState ->
         MonitoringUiState(
             metrics = metrics,
             recentLogs = logs,
             isLoading = isLoading,
-            isPowerSavingActive = powerState.isBatteryLow && !powerState.isCharging
+            isPowerSavingActive = powerState.isBatteryLow && !powerState.isCharging,
         )
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
-        initialValue = MonitoringUiState(isLoading = true)
+        initialValue = MonitoringUiState(isLoading = true),
     )
 
     init {

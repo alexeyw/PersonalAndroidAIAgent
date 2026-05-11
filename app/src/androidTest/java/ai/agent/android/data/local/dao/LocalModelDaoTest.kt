@@ -51,7 +51,7 @@ class LocalModelDaoTest {
     fun getActiveModel() = runBlocking {
         val model1 = LocalModelEntity(name = "Model A", path = "/a", size = 100, isActive = false)
         val model2 = LocalModelEntity(name = "Model B", path = "/b", size = 200, isActive = true)
-        
+
         dao.insertModel(model1)
         dao.insertModel(model2)
 

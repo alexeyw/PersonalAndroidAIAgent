@@ -7,16 +7,14 @@ import ai.agent.android.domain.models.ChatSession
 import ai.agent.android.domain.models.ClarificationRequest
 import ai.agent.android.domain.models.ConsoleEvent
 import ai.agent.android.domain.models.ConsoleEventType
-import ai.agent.android.domain.models.Role
-import kotlinx.coroutines.delay
-import ai.agent.android.domain.models.Result
 import ai.agent.android.domain.models.PipelineGraph
+import ai.agent.android.domain.models.Result
+import ai.agent.android.domain.models.Role
 import ai.agent.android.domain.repositories.ChatRepository
 import ai.agent.android.domain.repositories.ClarificationRepository
 import ai.agent.android.domain.repositories.PipelineRepository
-import ai.agent.android.domain.usecases.AgentOrchestratorUseCase
 import ai.agent.android.domain.repositories.SettingsRepository
-import kotlinx.coroutines.flow.MutableStateFlow
+import ai.agent.android.domain.usecases.AgentOrchestratorUseCase
 import ai.agent.android.domain.usecases.GetContextWindowUseCase
 import ai.agent.android.domain.usecases.LoadModelUseCase
 import ai.agent.android.presentation.state.ActiveSessionTracker
@@ -27,6 +25,8 @@ import io.mockk.mockk
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
@@ -50,7 +50,7 @@ import org.junit.Test
 class ChatViewModelTest {
 
     private val testDispatcher = StandardTestDispatcher()
-    
+
     private lateinit var agentOrchestratorUseCase: AgentOrchestratorUseCase
     private lateinit var chatRepository: ChatRepository
     private lateinit var settingsRepository: SettingsRepository
@@ -81,8 +81,7 @@ class ChatViewModelTest {
      * flows. `ChatViewModel` only consumes `id` and `name` from the graph,
      * so node/connection contents are deliberately omitted.
      */
-    private fun pipeline(id: String, name: String): PipelineGraph =
-        PipelineGraph(id = id, name = name)
+    private fun pipeline(id: String, name: String): PipelineGraph = PipelineGraph(id = id, name = name)
 
     @Before
     fun setup() {
@@ -163,14 +162,16 @@ class ChatViewModelTest {
 
         val state = viewModel.uiState.value
         assertNotNull(state.errorMessage)
-        assertTrue(state.errorMessage!!.contains(errorMsg))
+        val resolved = state.errorMessage as ai.agent.android.presentation.ui.common.UiText.Resource
+        assertEquals(ai.agent.android.R.string.errors_chat_model_init_failure, resolved.id)
+        assertEquals(listOf(errorMsg), resolved.args)
     }
 
     @Test
     fun `init should restore session id from settings`() = runTest {
         val savedId = "saved-session-123"
         every { settingsRepository.currentChatSessionId } returns flowOf(savedId)
-        
+
         viewModel = createViewModel()
         advanceUntilIdle()
 
@@ -193,7 +194,7 @@ class ChatViewModelTest {
     @Test
     fun `sendMessage should update state to generating and collect orchestrator states`() = runTest {
         val userPrompt = "Test prompt"
-        
+
         viewModel = createViewModel()
         advanceUntilIdle()
 
@@ -220,7 +221,7 @@ class ChatViewModelTest {
     fun `sendMessage should handle error from orchestrator`() = runTest {
         val userPrompt = "Test prompt"
         val exceptionMessage = "Network failure"
-        
+
         viewModel = createViewModel()
         advanceUntilIdle()
 
@@ -235,7 +236,10 @@ class ChatViewModelTest {
 
         val state = viewModel.uiState.value
         assertFalse(state.isGenerating)
-        assertEquals(exceptionMessage, state.errorMessage)
+        assertEquals(
+            ai.agent.android.presentation.ui.common.UiText.Dynamic(exceptionMessage),
+            state.errorMessage,
+        )
         assertTrue(state.orchestratorState is AgentOrchestratorState.Error)
         assertEquals(exceptionMessage, (state.orchestratorState as AgentOrchestratorState.Error).message)
     }
@@ -352,7 +356,7 @@ class ChatViewModelTest {
 
         coVerify {
             chatRepository.saveMessage(
-                match { it.content.contains(partialText) && it.content.contains("[stopped]") }
+                match { it.content.contains(partialText) && it.content.contains("[stopped]") },
             )
         }
     }
@@ -360,7 +364,7 @@ class ChatViewModelTest {
     @Test
     fun `resumeWithApproval should call orchestrator usecase with correct session id and approval state`() = runTest {
         every { agentOrchestratorUseCase.resumeWithApproval(any(), any()) } returns Unit
-        
+
         viewModel = createViewModel()
         advanceUntilIdle()
 
@@ -1197,7 +1201,10 @@ class ChatViewModelTest {
 
         viewModel.signalCopiedToClipboard()
 
-        assertEquals("Copied", viewModel.uiState.value.snackbarMessage)
+        assertEquals(
+            ai.agent.android.presentation.ui.common.UiText.Resource(ai.agent.android.R.string.chat_snackbar_copied),
+            viewModel.uiState.value.snackbarMessage,
+        )
     }
 
     @Test
@@ -1349,39 +1356,40 @@ class ChatViewModelTest {
     }
 
     @Test
-    fun `given prior console events when sendMessage starts then consoleLines cleared before new emissions`() = runTest {
-        val firstPrompt = "first"
-        val secondPrompt = "second"
-        val staleEvent = ConsoleEvent(
-            timestamp = 1_700_000_000_000L,
-            type = ConsoleEventType.NodeExecution,
-            message = "stale",
-        )
+    fun `given prior console events when sendMessage starts then consoleLines cleared before new emissions`() =
+        runTest {
+            val firstPrompt = "first"
+            val secondPrompt = "second"
+            val staleEvent = ConsoleEvent(
+                timestamp = 1_700_000_000_000L,
+                type = ConsoleEventType.NodeExecution,
+                message = "stale",
+            )
 
-        viewModel = createViewModel()
-        advanceUntilIdle()
+            viewModel = createViewModel()
+            advanceUntilIdle()
 
-        val sessionId = viewModel.uiState.value.currentSessionId
-        coEvery { agentOrchestratorUseCase(sessionId, firstPrompt, any()) } returns flow {
-            emit(AgentOrchestratorState.ConsoleLog(listOf(staleEvent)))
-            emit(AgentOrchestratorState.Completed("ok"))
+            val sessionId = viewModel.uiState.value.currentSessionId
+            coEvery { agentOrchestratorUseCase(sessionId, firstPrompt, any()) } returns flow {
+                emit(AgentOrchestratorState.ConsoleLog(listOf(staleEvent)))
+                emit(AgentOrchestratorState.Completed("ok"))
+            }
+
+            viewModel.sendMessage(firstPrompt)
+            advanceUntilIdle()
+            assertEquals(1, viewModel.uiState.value.consoleLines.size)
+
+            // Second send: orchestrator never emits ConsoleLog. Verifies that the
+            // ChatViewModel resets consoleLines on send-start rather than relying
+            // on the engine to send an empty snapshot.
+            coEvery { agentOrchestratorUseCase(sessionId, secondPrompt, any()) } returns flow {
+                emit(AgentOrchestratorState.Completed("ok2"))
+            }
+            viewModel.sendMessage(secondPrompt)
+            advanceUntilIdle()
+
+            assertTrue(viewModel.uiState.value.consoleLines.isEmpty())
         }
-
-        viewModel.sendMessage(firstPrompt)
-        advanceUntilIdle()
-        assertEquals(1, viewModel.uiState.value.consoleLines.size)
-
-        // Second send: orchestrator never emits ConsoleLog. Verifies that the
-        // ChatViewModel resets consoleLines on send-start rather than relying
-        // on the engine to send an empty snapshot.
-        coEvery { agentOrchestratorUseCase(sessionId, secondPrompt, any()) } returns flow {
-            emit(AgentOrchestratorState.Completed("ok2"))
-        }
-        viewModel.sendMessage(secondPrompt)
-        advanceUntilIdle()
-
-        assertTrue(viewModel.uiState.value.consoleLines.isEmpty())
-    }
 
     @Test
     fun `given prior console events when switchSession called then consoleLines cleared`() = runTest {
@@ -1509,47 +1517,48 @@ class ChatViewModelTest {
     }
 
     @Test
-    fun `given clearConsoleLog mid-generation when next ConsoleLog snapshot arrives then dropped events stay gone`() = runTest {
-        val userPrompt = "durable clear"
-        val event1 = ConsoleEvent(
-            timestamp = 1_700_000_000_000L,
-            type = ConsoleEventType.NodeExecution,
-            message = "▶ NODE_A",
-        )
-        val event2 = ConsoleEvent(
-            timestamp = 1_700_000_001_000L,
-            type = ConsoleEventType.NodeExecution,
-            message = "▶ NODE_B",
-        )
-        val event3 = ConsoleEvent(
-            timestamp = 1_700_000_002_000L,
-            type = ConsoleEventType.ToolCall,
-            message = "search_tool",
-        )
+    fun `given clearConsoleLog mid-generation when next ConsoleLog snapshot arrives then dropped events stay gone`() =
+        runTest {
+            val userPrompt = "durable clear"
+            val event1 = ConsoleEvent(
+                timestamp = 1_700_000_000_000L,
+                type = ConsoleEventType.NodeExecution,
+                message = "▶ NODE_A",
+            )
+            val event2 = ConsoleEvent(
+                timestamp = 1_700_000_001_000L,
+                type = ConsoleEventType.NodeExecution,
+                message = "▶ NODE_B",
+            )
+            val event3 = ConsoleEvent(
+                timestamp = 1_700_000_002_000L,
+                type = ConsoleEventType.ToolCall,
+                message = "search_tool",
+            )
 
-        viewModel = createViewModel()
-        advanceUntilIdle()
+            viewModel = createViewModel()
+            advanceUntilIdle()
 
-        val sessionId = viewModel.uiState.value.currentSessionId
+            val sessionId = viewModel.uiState.value.currentSessionId
 
-        // Three-step orchestrator run with a Clear injected after step 2.
-        // The orchestrator emits cumulative `events` snapshots, so without
-        // the baseline the third snapshot would re-introduce event1/event2.
-        coEvery { agentOrchestratorUseCase(sessionId, userPrompt, any()) } returns flow {
-            emit(AgentOrchestratorState.ConsoleLog(listOf(event1)))
-            emit(AgentOrchestratorState.ConsoleLog(listOf(event1, event2)))
-            // Simulate the user tapping Clear right before the next step.
-            viewModel.clearConsoleLog()
-            emit(AgentOrchestratorState.ConsoleLog(listOf(event1, event2, event3)))
-            emit(AgentOrchestratorState.Completed("done"))
+            // Three-step orchestrator run with a Clear injected after step 2.
+            // The orchestrator emits cumulative `events` snapshots, so without
+            // the baseline the third snapshot would re-introduce event1/event2.
+            coEvery { agentOrchestratorUseCase(sessionId, userPrompt, any()) } returns flow {
+                emit(AgentOrchestratorState.ConsoleLog(listOf(event1)))
+                emit(AgentOrchestratorState.ConsoleLog(listOf(event1, event2)))
+                // Simulate the user tapping Clear right before the next step.
+                viewModel.clearConsoleLog()
+                emit(AgentOrchestratorState.ConsoleLog(listOf(event1, event2, event3)))
+                emit(AgentOrchestratorState.Completed("done"))
+            }
+
+            viewModel.sendMessage(userPrompt)
+            advanceUntilIdle()
+
+            // Only event3 — the events appended after the Clear — survives.
+            assertEquals(listOf(event3), viewModel.uiState.value.consoleLines)
         }
-
-        viewModel.sendMessage(userPrompt)
-        advanceUntilIdle()
-
-        // Only event3 — the events appended after the Clear — survives.
-        assertEquals(listOf(event3), viewModel.uiState.value.consoleLines)
-    }
 
     @Test
     fun `given clearConsoleLog then sendMessage starts then baseline reset for new run`() = runTest {
@@ -1603,6 +1612,11 @@ class ChatViewModelTest {
         viewModel.signalConsoleCopied()
         advanceUntilIdle()
 
-        assertEquals("Console log copied", viewModel.uiState.value.snackbarMessage)
+        assertEquals(
+            ai.agent.android.presentation.ui.common.UiText.Resource(
+                ai.agent.android.R.string.chat_snackbar_console_copied,
+            ),
+            viewModel.uiState.value.snackbarMessage,
+        )
     }
 }

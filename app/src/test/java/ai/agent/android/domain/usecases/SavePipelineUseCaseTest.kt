@@ -26,11 +26,11 @@ class SavePipelineUseCaseTest {
             name = "Test 1",
             nodes = listOf(
                 NodeModel("n1", NodeType.INPUT, 0f, 0f),
-                NodeModel("n2", NodeType.OUTPUT, 10f, 10f)
+                NodeModel("n2", NodeType.OUTPUT, 10f, 10f),
             ),
             connections = listOf(
-                ConnectionModel("c1", "n1", "n2")
-            )
+                ConnectionModel("c1", "n1", "n2"),
+            ),
         )
 
         val result = useCase(validPipeline)
@@ -46,19 +46,21 @@ class SavePipelineUseCaseTest {
             name = "Test 2",
             nodes = listOf(
                 NodeModel("n1", NodeType.INPUT, 0f, 0f),
-                NodeModel("n2", NodeType.OUTPUT, 10f, 10f)
+                NodeModel("n2", NodeType.OUTPUT, 10f, 10f),
             ),
             connections = listOf(
                 ConnectionModel("c1", "n1", "n2"),
-                ConnectionModel("c2", "n2", "n1") // cycle
-            )
+                ConnectionModel("c2", "n2", "n1"), // cycle
+            ),
         )
 
         val result = useCase(invalidPipeline)
 
         assertTrue(result.isFailure)
         val exception = result.exceptionOrNull() as? ai.agent.android.domain.models.PipelineValidationException
-        assertTrue(exception?.errors?.contains(ai.agent.android.domain.models.PipelineValidationError.HasCycles) == true)
+        assertTrue(
+            exception?.errors?.contains(ai.agent.android.domain.models.PipelineValidationError.HasCycles) == true,
+        )
         coVerify(exactly = 0) { pipelineRepository.savePipeline(any()) }
     }
 
@@ -68,15 +70,17 @@ class SavePipelineUseCaseTest {
             id = "3",
             name = "Test 3",
             nodes = listOf(
-                NodeModel("n2", NodeType.OUTPUT, 10f, 10f)
-            )
+                NodeModel("n2", NodeType.OUTPUT, 10f, 10f),
+            ),
         )
 
         val result = useCase(invalidPipeline)
 
         assertTrue(result.isFailure)
         val exception = result.exceptionOrNull() as? ai.agent.android.domain.models.PipelineValidationException
-        assertTrue(exception?.errors?.contains(ai.agent.android.domain.models.PipelineValidationError.MissingInput) == true)
+        assertTrue(
+            exception?.errors?.contains(ai.agent.android.domain.models.PipelineValidationError.MissingInput) == true,
+        )
         coVerify(exactly = 0) { pipelineRepository.savePipeline(any()) }
     }
 
@@ -86,15 +90,17 @@ class SavePipelineUseCaseTest {
             id = "4",
             name = "Test 4",
             nodes = listOf(
-                NodeModel("n1", NodeType.INPUT, 0f, 0f)
-            )
+                NodeModel("n1", NodeType.INPUT, 0f, 0f),
+            ),
         )
 
         val result = useCase(invalidPipeline)
 
         assertTrue(result.isFailure)
         val exception = result.exceptionOrNull() as? ai.agent.android.domain.models.PipelineValidationException
-        assertTrue(exception?.errors?.contains(ai.agent.android.domain.models.PipelineValidationError.MissingOutput) == true)
+        assertTrue(
+            exception?.errors?.contains(ai.agent.android.domain.models.PipelineValidationError.MissingOutput) == true,
+        )
         coVerify(exactly = 0) { pipelineRepository.savePipeline(any()) }
     }
 
@@ -106,15 +112,17 @@ class SavePipelineUseCaseTest {
             nodes = listOf(
                 NodeModel("n1", NodeType.INPUT, 0f, 0f),
                 NodeModel("n2", NodeType.INPUT, 0f, 0f),
-                NodeModel("n3", NodeType.OUTPUT, 10f, 10f)
-            )
+                NodeModel("n3", NodeType.OUTPUT, 10f, 10f),
+            ),
         )
 
         val result = useCase(invalidPipeline)
 
         assertTrue(result.isFailure)
         val exception = result.exceptionOrNull() as? ai.agent.android.domain.models.PipelineValidationException
-        assertTrue(exception?.errors?.contains(ai.agent.android.domain.models.PipelineValidationError.MultipleInputs) == true)
+        assertTrue(
+            exception?.errors?.contains(ai.agent.android.domain.models.PipelineValidationError.MultipleInputs) == true,
+        )
         coVerify(exactly = 0) { pipelineRepository.savePipeline(any()) }
     }
 
@@ -126,15 +134,17 @@ class SavePipelineUseCaseTest {
             nodes = listOf(
                 NodeModel("n1", NodeType.INPUT, 0f, 0f),
                 NodeModel("n2", NodeType.OUTPUT, 10f, 10f),
-                NodeModel("n3", NodeType.OUTPUT, 20f, 20f)
-            )
+                NodeModel("n3", NodeType.OUTPUT, 20f, 20f),
+            ),
         )
 
         val result = useCase(invalidPipeline)
 
         assertTrue(result.isFailure)
         val exception = result.exceptionOrNull() as? ai.agent.android.domain.models.PipelineValidationException
-        assertTrue(exception?.errors?.contains(ai.agent.android.domain.models.PipelineValidationError.MultipleOutputs) == true)
+        assertTrue(
+            exception?.errors?.contains(ai.agent.android.domain.models.PipelineValidationError.MultipleOutputs) == true,
+        )
         coVerify(exactly = 0) { pipelineRepository.savePipeline(any()) }
     }
 
@@ -145,17 +155,23 @@ class SavePipelineUseCaseTest {
             name = "Test 7",
             nodes = listOf(
                 NodeModel("n1", NodeType.INPUT, 0f, 0f),
-                NodeModel("n2", NodeType.OUTPUT, 10f, 10f)
+                NodeModel("n2", NodeType.OUTPUT, 10f, 10f),
             ),
-            connections = emptyList() // n1 is disconnected, n2 is disconnected
+            connections = emptyList(), // n1 is disconnected, n2 is disconnected
         )
 
         val result = useCase(invalidPipeline)
 
         assertTrue(result.isFailure)
         val exception = result.exceptionOrNull() as? ai.agent.android.domain.models.PipelineValidationException
-        assertTrue(exception?.errors?.contains(ai.agent.android.domain.models.PipelineValidationError.DisconnectedInput) == true)
-        assertTrue(exception?.errors?.contains(ai.agent.android.domain.models.PipelineValidationError.DisconnectedOutput) == true)
+        assertTrue(
+            exception?.errors?.contains(ai.agent.android.domain.models.PipelineValidationError.DisconnectedInput) ==
+                true,
+        )
+        assertTrue(
+            exception?.errors?.contains(ai.agent.android.domain.models.PipelineValidationError.DisconnectedOutput) ==
+                true,
+        )
         coVerify(exactly = 0) { pipelineRepository.savePipeline(any()) }
     }
 
@@ -367,19 +383,23 @@ class SavePipelineUseCaseTest {
             nodes = listOf(
                 NodeModel("n1", NodeType.INPUT, 0f, 0f),
                 NodeModel("n2", NodeType.OUTPUT, 10f, 10f),
-                NodeModel("n3", NodeType.TOOL, 20f, 20f)
+                NodeModel("n3", NodeType.TOOL, 20f, 20f),
             ),
             connections = listOf(
-                ConnectionModel("c1", "n1", "n2") // n3 is completely disconnected
-            )
+                ConnectionModel("c1", "n1", "n2"), // n3 is completely disconnected
+            ),
         )
 
         val result = useCase(invalidPipeline)
 
         assertTrue(result.isFailure)
         val exception = result.exceptionOrNull() as? ai.agent.android.domain.models.PipelineValidationException
-        assertTrue(exception?.errors?.contains(ai.agent.android.domain.models.PipelineValidationError.UnreachableNode) == true)
-        assertTrue(exception?.errors?.contains(ai.agent.android.domain.models.PipelineValidationError.DeadEndNode) == true)
+        assertTrue(
+            exception?.errors?.contains(ai.agent.android.domain.models.PipelineValidationError.UnreachableNode) == true,
+        )
+        assertTrue(
+            exception?.errors?.contains(ai.agent.android.domain.models.PipelineValidationError.DeadEndNode) == true,
+        )
         coVerify(exactly = 0) { pipelineRepository.savePipeline(any()) }
     }
 }

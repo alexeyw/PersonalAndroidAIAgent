@@ -17,5 +17,5 @@ data class MemoryChunkEntity(
     val id: Long = 0,
     val text: String,
     val embedding: String,
-    val timestamp: Long
+    val timestamp: Long,
 )

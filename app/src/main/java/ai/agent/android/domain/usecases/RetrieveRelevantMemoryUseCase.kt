@@ -17,7 +17,7 @@ import javax.inject.Inject
 class RetrieveRelevantMemoryUseCase @Inject constructor(
     private val textEmbeddingEngine: TextEmbeddingEngine,
     private val memoryRepository: MemoryRepository,
-    private val settingsRepository: SettingsRepository
+    private val settingsRepository: SettingsRepository,
 ) {
     /**
      * Executes the retrieval process.
@@ -27,22 +27,18 @@ class RetrieveRelevantMemoryUseCase @Inject constructor(
      * @param threshold The minimum cosine similarity score (0.0 to 1.0) for a memory to be considered relevant.
      * @return A list of relevant [MemoryChunk]s that meet the threshold.
      */
-    suspend operator fun invoke(
-        query: String, 
-        limit: Int = 3,
-        threshold: Float = 0.5f
-    ): List<MemoryChunk> = withContext(Dispatchers.Default) {
-        
-        // 1. Generate embedding for the query
-        val queryEmbedding = textEmbeddingEngine.generateEmbedding(query)
-        
-        // 2. Find similar memories
-        val searchPoolLimit = settingsRepository.maxMemoryChunksForSearch.first()
-        val similarMemories = memoryRepository.findSimilarMemories(queryEmbedding, searchPoolLimit, limit)
-        
-        // 3. Filter by threshold and extract just the chunks
-        similarMemories
-            .filter { it.second >= threshold }
-            .map { it.first }
-    }
+    suspend operator fun invoke(query: String, limit: Int = 3, threshold: Float = 0.5f): List<MemoryChunk> =
+        withContext(Dispatchers.Default) {
+            // 1. Generate embedding for the query
+            val queryEmbedding = textEmbeddingEngine.generateEmbedding(query)
+
+            // 2. Find similar memories
+            val searchPoolLimit = settingsRepository.maxMemoryChunksForSearch.first()
+            val similarMemories = memoryRepository.findSimilarMemories(queryEmbedding, searchPoolLimit, limit)
+
+            // 3. Filter by threshold and extract just the chunks
+            similarMemories
+                .filter { it.second >= threshold }
+                .map { it.first }
+        }
 }

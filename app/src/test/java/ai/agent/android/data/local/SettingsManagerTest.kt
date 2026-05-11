@@ -1,23 +1,18 @@
 package ai.agent.android.data.local
 
 import androidx.datastore.core.DataStore
-import androidx.datastore.preferences.core.MutablePreferences
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
-import androidx.datastore.preferences.core.emptyPreferences
-import io.mockk.coEvery
-import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
-import io.mockk.slot
-import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.IOException
-import kotlinx.coroutines.flow.flow
 
 /**
  * Unit tests for [SettingsManager].
@@ -25,13 +20,16 @@ import kotlinx.coroutines.flow.flow
 class SettingsManagerTest {
 
     private val dataStore = mockk<DataStore<Preferences>>()
-    //private val settingsManager = SettingsManager(dataStore)
+
+    // private val settingsManager = SettingsManager(dataStore)
     private val isFirstLaunchKey = booleanPreferencesKey("is_first_launch")
     private val temperatureKey = androidx.datastore.preferences.core.floatPreferencesKey("temperature")
     private val topKKey = androidx.datastore.preferences.core.intPreferencesKey("top_k")
     private val topPKey = androidx.datastore.preferences.core.floatPreferencesKey("top_p")
     private val requiresUserConfirmationKey = booleanPreferencesKey("requires_user_confirmation")
-    private val maxMemoryChunksForSearchKey = androidx.datastore.preferences.core.intPreferencesKey("max_memory_chunks_for_search")
+    private val maxMemoryChunksForSearchKey = androidx.datastore.preferences.core.intPreferencesKey(
+        "max_memory_chunks_for_search",
+    )
     private val pipelineMaxStepsKey = androidx.datastore.preferences.core.intPreferencesKey("pipeline_max_steps")
 
     @Test

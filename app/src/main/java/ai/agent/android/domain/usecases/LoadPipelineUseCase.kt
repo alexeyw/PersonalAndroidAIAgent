@@ -10,17 +10,13 @@ import javax.inject.Inject
  *
  * @property pipelineRepository The repository used for retrieving pipelines.
  */
-class LoadPipelineUseCase @Inject constructor(
-    private val pipelineRepository: PipelineRepository
-) {
+class LoadPipelineUseCase @Inject constructor(private val pipelineRepository: PipelineRepository) {
     /**
      * Observes all saved pipelines.
      *
      * @return A [Flow] emitting the list of all stored [PipelineGraph]s.
      */
-    fun observeAllPipelines(): Flow<List<PipelineGraph>> {
-        return pipelineRepository.getAllPipelines()
-    }
+    fun observeAllPipelines(): Flow<List<PipelineGraph>> = pipelineRepository.getAllPipelines()
 
     /**
      * Loads a specific pipeline by its ID.
@@ -28,7 +24,5 @@ class LoadPipelineUseCase @Inject constructor(
      * @param pipelineId The ID of the pipeline to load.
      * @return The [PipelineGraph] if found, null otherwise.
      */
-    suspend fun getPipelineById(pipelineId: String): PipelineGraph? {
-        return pipelineRepository.getPipelineById(pipelineId)
-    }
+    suspend fun getPipelineById(pipelineId: String): PipelineGraph? = pipelineRepository.getPipelineById(pipelineId)
 }

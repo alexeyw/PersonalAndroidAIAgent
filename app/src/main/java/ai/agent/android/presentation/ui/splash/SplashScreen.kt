@@ -1,5 +1,6 @@
 package ai.agent.android.presentation.ui.splash
 
+import ai.agent.android.R
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -19,6 +20,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
@@ -70,7 +72,7 @@ fun SplashScreen(
             verticalArrangement = Arrangement.Center,
         ) {
             Text(
-                text = "Android AI Agent",
+                text = stringResource(R.string.app_name),
                 style = MaterialTheme.typography.headlineMedium,
                 color = MaterialTheme.colorScheme.onBackground,
             )
@@ -81,8 +83,18 @@ fun SplashScreen(
                 modifier = Modifier.fillMaxWidth(),
             )
             Spacer(modifier = Modifier.height(16.dp))
+            // The default `message` is a build-time string constant
+            // (`Starting…`) because `data class` defaults must be
+            // compile-time values. We swap it with the localised resource
+            // here so the rendered text follows the device language until
+            // the first real `InitProgress` emission overrides it.
+            val displayedMessage = if (uiState.message == SplashUiState.DEFAULT_STARTING_MESSAGE) {
+                stringResource(R.string.splash_starting)
+            } else {
+                uiState.message
+            }
             Text(
-                text = uiState.message,
+                text = displayedMessage,
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center,
@@ -98,7 +110,7 @@ fun SplashScreen(
                 )
                 Spacer(modifier = Modifier.height(16.dp))
                 Button(onClick = { viewModel.retry() }) {
-                    Text("Retry")
+                    Text(stringResource(R.string.common_retry))
                 }
             }
         }

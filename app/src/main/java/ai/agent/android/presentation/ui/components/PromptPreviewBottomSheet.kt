@@ -1,5 +1,6 @@
 package ai.agent.android.presentation.ui.components
 
+import ai.agent.android.R
 import ai.agent.android.domain.prompt.PromptSegment
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -8,6 +9,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.InlineTextContent
+import androidx.compose.foundation.text.appendInlineContent
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -25,8 +28,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.foundation.text.InlineTextContent
-import androidx.compose.foundation.text.appendInlineContent
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.Placeholder
 import androidx.compose.ui.text.PlaceholderVerticalAlign
@@ -59,11 +61,7 @@ import androidx.compose.ui.unit.dp
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun PromptPreviewBottomSheet(
-    segments: List<PromptSegment>?,
-    onDismiss: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
+fun PromptPreviewBottomSheet(segments: List<PromptSegment>?, onDismiss: () -> Unit, modifier: Modifier = Modifier) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -77,7 +75,7 @@ fun PromptPreviewBottomSheet(
                 .verticalScroll(rememberScrollState()),
         ) {
             Text(
-                text = "Prompt preview",
+                text = stringResource(R.string.prompt_preview_title),
                 style = MaterialTheme.typography.titleMedium,
             )
             if (segments == null) {
@@ -106,10 +104,7 @@ fun PromptPreviewBottomSheet(
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun PreviewBody(
-    segments: List<PromptSegment>,
-    modifier: Modifier = Modifier,
-) {
+private fun PreviewBody(segments: List<PromptSegment>, modifier: Modifier = Modifier) {
     val resolvedBg = MaterialTheme.colorScheme.tertiaryContainer
     val resolvedFg = MaterialTheme.colorScheme.onTertiaryContainer
     val unknownBg = MaterialTheme.colorScheme.errorContainer
@@ -211,7 +206,7 @@ private fun buildInlineContent(
                     positionProvider = TooltipDefaults.rememberTooltipPositionProvider(
                         TooltipAnchorPosition.Above,
                     ),
-                    tooltip = { PlainTooltip { Text("Variable not found") } },
+                    tooltip = { PlainTooltip { Text(stringResource(R.string.prompt_preview_variable_not_found)) } },
                     state = tooltipState,
                 ) {
                     Box(

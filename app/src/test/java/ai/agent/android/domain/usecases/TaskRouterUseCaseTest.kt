@@ -27,9 +27,9 @@ class TaskRouterUseCaseTest {
     fun setup() {
         networkStateRepository = mockk()
         apiKeyRepository = mockk()
-        
+
         every { networkStateRepository.networkState } returns networkStateFlow
-        
+
         // Default empty keys
         coEvery { apiKeyRepository.getOpenAIKey() } returns flowOf(null)
         coEvery { apiKeyRepository.getGoogleKey() } returns flowOf(null)

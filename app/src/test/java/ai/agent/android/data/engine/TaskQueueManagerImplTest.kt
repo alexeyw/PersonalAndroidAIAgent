@@ -7,20 +7,15 @@ import ai.agent.android.domain.models.PipelineGraph
 import ai.agent.android.domain.models.TaskPriority
 import ai.agent.android.domain.repositories.ChatRepository
 import ai.agent.android.domain.repositories.PipelineRepository
-import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.toList
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
-import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
@@ -30,7 +25,6 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
-import java.util.UUID
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class TaskQueueManagerImplTest {
@@ -47,7 +41,7 @@ class TaskQueueManagerImplTest {
     @Before
     fun setup() {
         Dispatchers.setMain(testDispatcher)
-        
+
         chatRepository = mockk(relaxed = true)
         pipelineRepository = mockk()
         graphExecutionEngine = mockk()
@@ -58,7 +52,7 @@ class TaskQueueManagerImplTest {
         taskQueueManager = TaskQueueManagerImpl(
             chatRepository = chatRepository,
             pipelineRepository = pipelineRepository,
-            graphExecutionEngine = graphExecutionEngine
+            graphExecutionEngine = graphExecutionEngine,
         ).apply {
             dispatcher = testDispatcher
         }
@@ -104,7 +98,7 @@ class TaskQueueManagerImplTest {
         val task = AgentTask(
             sessionId = sessionId,
             prompt = prompt,
-            priority = TaskPriority.NORMAL
+            priority = TaskPriority.NORMAL,
         )
 
         every {
@@ -117,8 +111,10 @@ class TaskQueueManagerImplTest {
 
         val state = taskQueueManager.observeTaskState(sessionId).first()
         println("Final state: $state")
-        assertTrue("Expected Completed or Idle after processing, got $state",
-            state is AgentOrchestratorState.Idle || state is AgentOrchestratorState.Completed)
+        assertTrue(
+            "Expected Completed or Idle after processing, got $state",
+            state is AgentOrchestratorState.Idle || state is AgentOrchestratorState.Completed,
+        )
     }
 
     /**

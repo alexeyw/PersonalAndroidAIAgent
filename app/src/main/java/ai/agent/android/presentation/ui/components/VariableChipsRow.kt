@@ -24,11 +24,7 @@ import androidx.compose.ui.unit.dp
  * @param modifier optional [Modifier] applied to the underlying [LazyRow].
  */
 @Composable
-fun VariableChipsRow(
-    variables: List<String>,
-    onChipClick: (String) -> Unit,
-    modifier: Modifier = Modifier,
-) {
+fun VariableChipsRow(variables: List<String>, onChipClick: (String) -> Unit, modifier: Modifier = Modifier) {
     LazyRow(
         modifier = modifier,
         horizontalArrangement = Arrangement.spacedBy(8.dp),

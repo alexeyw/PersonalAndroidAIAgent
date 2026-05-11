@@ -19,7 +19,7 @@ import javax.inject.Inject
  */
 class MediaPipeTextEmbeddingEngine @Inject constructor(
     @ApplicationContext private val context: Context,
-    private val embedderFactory: TextEmbedderFactory
+    private val embedderFactory: TextEmbedderFactory,
 ) : TextEmbeddingEngine {
 
     private var textEmbedder: TextEmbedder? = null
@@ -35,9 +35,9 @@ class MediaPipeTextEmbeddingEngine @Inject constructor(
 
         withContext(Dispatchers.IO) {
             val modelFile = File(context.getExternalFilesDir(null), modelFileName)
-            
+
             val baseOptionsBuilder = BaseOptions.builder()
-            
+
             if (modelFile.exists()) {
                 baseOptionsBuilder.setModelAssetPath(modelFile.absolutePath)
             } else {
@@ -63,15 +63,15 @@ class MediaPipeTextEmbeddingEngine @Inject constructor(
      */
     override suspend fun generateEmbedding(text: String): FloatArray = withContext(Dispatchers.Default) {
         initializeEmbedderIfNeeded()
-        
+
         val embedder = textEmbedder ?: throw IllegalStateException("TextEmbedder is not initialized")
         val result = embedder.embed(text)
-        
+
         val embeddings = result.embeddingResult().embeddings()
         if (embeddings.isEmpty()) {
             throw IllegalStateException("Failed to generate embedding: empty result")
         }
-        
+
         embeddings.first().floatEmbedding()
     }
 }

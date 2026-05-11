@@ -7,8 +7,4 @@ package ai.agent.android.domain.models
  * @property description A human-readable description of what the tool does.
  * @property parameters Schema of the parameters the tool accepts (e.g. JSON schema).
  */
-data class AgentTool(
-    val name: String,
-    val description: String,
-    val parameters: String
-)
+data class AgentTool(val name: String, val description: String, val parameters: String)

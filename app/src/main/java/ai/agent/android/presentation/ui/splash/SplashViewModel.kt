@@ -1,10 +1,10 @@
 package ai.agent.android.presentation.ui.splash
 
-import androidx.lifecycle.ViewModel
-import androidx.lifecycle.viewModelScope
 import ai.agent.android.domain.models.InitProgress
 import ai.agent.android.domain.models.InitStage
 import ai.agent.android.domain.usecases.AppInitializationUseCase
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -21,9 +21,8 @@ import javax.inject.Inject
  * a fatal failure.
  */
 @HiltViewModel
-class SplashViewModel @Inject constructor(
-    private val appInitializationUseCase: AppInitializationUseCase,
-) : ViewModel() {
+class SplashViewModel @Inject constructor(private val appInitializationUseCase: AppInitializationUseCase) :
+    ViewModel() {
 
     private val _uiState = MutableStateFlow(SplashUiState())
     val uiState: StateFlow<SplashUiState> = _uiState.asStateFlow()

@@ -1,12 +1,13 @@
 package ai.agent.android.presentation.ui.models
 
-import androidx.lifecycle.ViewModel
-import androidx.lifecycle.viewModelScope
-import ai.agent.android.domain.models.LocalModel
 import ai.agent.android.data.network.AndroidModelDownloadManager
 import ai.agent.android.domain.models.DownloadState
+import ai.agent.android.domain.models.LocalModel
 import ai.agent.android.domain.repositories.LocalModelRepository
 import ai.agent.android.domain.repositories.ModelDownloadManager
+import ai.agent.android.domain.repositories.SettingsRepository
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -17,8 +18,6 @@ import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
-
-import ai.agent.android.domain.repositories.SettingsRepository
 
 /**
  * ViewModel responsible for managing the state and business logic of the Models UI.
@@ -33,10 +32,11 @@ import ai.agent.android.domain.repositories.SettingsRepository
 class ModelsViewModel @Inject constructor(
     private val localModelRepository: LocalModelRepository,
     private val downloadManager: ModelDownloadManager,
-    private val settingsRepository: SettingsRepository
+    private val settingsRepository: SettingsRepository,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ModelsUiState())
+
     /**
      * The current UI state of the Models screen.
      */
@@ -54,7 +54,7 @@ class ModelsViewModel @Inject constructor(
                 _uiState.update { state ->
                     state.copy(
                         downloadedModels = models,
-                        activeModel = active
+                        activeModel = active,
                     )
                 }
             }
@@ -105,7 +105,7 @@ class ModelsViewModel @Inject constructor(
             it.copy(
                 isDownloading = true,
                 downloadProgress = 0,
-                downloadError = null
+                downloadError = null,
             )
         }
 
@@ -122,7 +122,7 @@ class ModelsViewModel @Inject constructor(
                         _uiState.update {
                             it.copy(
                                 isDownloading = false,
-                                downloadProgress = null
+                                downloadProgress = null,
                             )
                         }
                         // Save the downloaded model metadata to the local database
@@ -131,7 +131,7 @@ class ModelsViewModel @Inject constructor(
                                 name = fileName,
                                 path = state.fileUri,
                                 size = 0L, // Size is not provided by OkHttp DownloadManager currently, could be added later
-                                isActive = false
+                                isActive = false,
                             )
                             localModelRepository.insertModel(newModel)
                         }
@@ -141,7 +141,7 @@ class ModelsViewModel @Inject constructor(
                             it.copy(
                                 isDownloading = false,
                                 downloadProgress = null,
-                                downloadError = state.error
+                                downloadError = state.error,
                             )
                         }
                     }
@@ -152,7 +152,9 @@ class ModelsViewModel @Inject constructor(
                     it.copy(
                         isDownloading = false,
                         downloadProgress = null,
-                        downloadError = AndroidModelDownloadManager.DownloadError(e.message ?: "Unknown error occurred")
+                        downloadError = AndroidModelDownloadManager.DownloadError(
+                            e.message ?: "Unknown error occurred",
+                        ),
                     )
                 }
             }
