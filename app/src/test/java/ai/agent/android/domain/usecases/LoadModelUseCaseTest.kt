@@ -1,8 +1,7 @@
 package ai.agent.android.domain.usecases
 
-import ai.agent.android.domain.models.LocalModel
 import ai.agent.android.domain.engine.LlmInferenceEngine
-import ai.agent.android.domain.models.AppError
+import ai.agent.android.domain.models.LocalModel
 import ai.agent.android.domain.models.Result
 import ai.agent.android.domain.repositories.LocalModelRepository
 import io.mockk.coEvery
@@ -26,7 +25,7 @@ class LoadModelUseCaseTest {
         localModelRepository = mockk()
         llmInferenceEngine = mockk(relaxed = true)
         loadModelUseCase = LoadModelUseCase(localModelRepository, llmInferenceEngine)
-        
+
         // Default: not initialized
         every { llmInferenceEngine.isInitialized } returns false
         every { llmInferenceEngine.currentModelPath } returns null
@@ -47,7 +46,7 @@ class LoadModelUseCaseTest {
         val path = "/path/to/model.bin"
         val model = LocalModel(1, "Model", path, 100, true)
         coEvery { localModelRepository.getActiveModel() } returns model
-        
+
         every { llmInferenceEngine.isInitialized } returns true
         every { llmInferenceEngine.currentModelPath } returns path
 

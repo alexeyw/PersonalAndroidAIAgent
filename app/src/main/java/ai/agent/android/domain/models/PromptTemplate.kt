@@ -8,9 +8,4 @@ package ai.agent.android.domain.models
  * @property text The actual prompt content.
  * @property category The category corresponding to a NodeType name.
  */
-data class PromptTemplate(
-    val id: Long = 0,
-    val name: String,
-    val text: String,
-    val category: String
-)
+data class PromptTemplate(val id: Long = 0, val name: String, val text: String, val category: String)

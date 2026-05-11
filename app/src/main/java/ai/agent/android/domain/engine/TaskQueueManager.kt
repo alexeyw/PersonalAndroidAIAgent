@@ -10,7 +10,7 @@ import kotlinx.coroutines.flow.StateFlow
  * the LLM processes one request at a time without memory issues.
  */
 interface TaskQueueManager {
-    
+
     /**
      * A global state flow representing the overall processing state of the agent across all tasks.
      */
@@ -27,7 +27,7 @@ interface TaskQueueManager {
      * @param task The [AgentTask] to add to the queue.
      */
     fun enqueueTask(task: AgentTask)
-    
+
     /**
      * Observes the execution state for a specific session.
      *

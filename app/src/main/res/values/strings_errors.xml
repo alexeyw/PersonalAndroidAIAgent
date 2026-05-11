@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Error / failure messages surfaced through Snackbars, inline banners, or
+    feedback callbacks across the app.
+
+    Keys follow `errors_<feature>_<purpose>` so error strings stay grouped by
+    the surface that emits them while remaining in a single localisation
+    file. Generic fallbacks live under `errors_generic_*`.
+-->
+<resources>
+    <!-- Generic fallbacks -->
+    <string name="errors_generic_unknown">Unknown error</string>
+    <string name="errors_generic_unexpected">An unexpected error occurred</string>
+    <string name="errors_generic_unknown_lower">unknown error</string>
+    <string name="errors_generic_invalid_json">invalid JSON</string>
+
+    <!-- Chat feature -->
+    <string name="errors_chat_model_init_failure">Model Error: %1$s. Please check your model settings.</string>
+    <string name="errors_chat_pipeline_removed">The pipeline was deleted. Default pipeline is used now.</string>
+    <string name="errors_chat_load_model_first">Please load a model in Settings before sending a message.</string>
+    <string name="errors_chat_export_failed">Failed to export chat: %1$s</string>
+    <string name="errors_chat_import_failed">Failed to import chat: %1$s</string>
+    <string name="errors_chat_file_unreadable">Could not read selected file</string>
+
+    <!-- Orchestrator feature -->
+    <string name="errors_orchestrator_cycle_detected">Cannot connect: Cycle detected</string>
+    <string name="errors_orchestrator_at_least_one_source">At least one data source must remain enabled</string>
+    <string name="errors_orchestrator_pipeline_not_found">Pipeline not found</string>
+    <string name="errors_orchestrator_validation_missing_input">Missing INPUT node</string>
+    <string name="errors_orchestrator_validation_missing_output">Missing OUTPUT node</string>
+    <string name="errors_orchestrator_validation_multiple_inputs">Multiple INPUT nodes are not allowed</string>
+    <string name="errors_orchestrator_validation_multiple_outputs">Multiple OUTPUT nodes are not allowed</string>
+    <string name="errors_orchestrator_validation_has_cycles">Pipeline contains cycles</string>
+    <string name="errors_orchestrator_validation_disconnected_input">INPUT node is not connected</string>
+    <string name="errors_orchestrator_validation_disconnected_output">OUTPUT node is not connected</string>
+    <string name="errors_orchestrator_validation_unreachable_node">Some nodes are unreachable from INPUT</string>
+    <string name="errors_orchestrator_validation_dead_end">Some nodes do not reach OUTPUT</string>
+    <string name="errors_orchestrator_validation_node_no_sources">Node \"%1$s\" will not receive any data — enable at least one source</string>
+
+    <!-- Settings feature -->
+    <string name="errors_settings_no_active_model">No active local model found. Please download and select one first.</string>
+    <string name="errors_settings_test_backend_failed">Failed: %1$s</string>
+    <string name="errors_settings_test_backend_exception">Exception: %1$s</string>
+</resources>

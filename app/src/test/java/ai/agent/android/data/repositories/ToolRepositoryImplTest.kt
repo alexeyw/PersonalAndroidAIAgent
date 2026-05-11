@@ -11,12 +11,12 @@ import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
-import kotlinx.coroutines.launch
 
 class ToolRepositoryImplTest {
 
@@ -36,7 +36,8 @@ class ToolRepositoryImplTest {
         every { mcpClientFactory.create() } returns mcpClient
         every { settingsRepository.mcpServerUrls } returns flowOf(setOf("http://localhost:8080"))
         every { settingsRepository.disabledAppFunctions } returns flowOf(emptySet())
-        coEvery { localAppFunctionManager.getAvailableFunctions() } returns listOf(AgentTool("get_system_time", "desc", "{}"))
+        coEvery { localAppFunctionManager.getAvailableFunctions() } returns
+            listOf(AgentTool("get_system_time", "desc", "{}"))
         coEvery { mcpClient.connect(any()) } returns Unit
         coEvery { mcpClient.disconnect() } returns Unit
 

@@ -77,8 +77,16 @@ class ClarificationNodeExecutor @Inject constructor(
             // below would otherwise swallow it and the caller would never see the cancel.
             throw e
         } catch (e: Exception) {
-            Timber.tag(TAG).e(e, "[NODE_ERR] type=${node.type.name} id=${node.id} error during clarification generation")
-            emit(NodeOutput.State(AgentOrchestratorState.Error(e.message ?: "Unknown error during clarification generation")))
+            Timber.tag(
+                TAG,
+            ).e(e, "[NODE_ERR] type=${node.type.name} id=${node.id} error during clarification generation")
+            emit(
+                NodeOutput.State(
+                    AgentOrchestratorState.Error(
+                        e.message ?: "Unknown error during clarification generation",
+                    ),
+                ),
+            )
             emit(NodeOutput.Result(NodeExecutionResult(error = e.message)))
             return@flow
         }

@@ -4,7 +4,6 @@ import ai.agent.android.data.engine.KoogClientFactory
 import ai.agent.android.data.engine.KoogCloudLlmModelResolver
 import ai.agent.android.data.repositories.ClarificationRepositoryImpl
 import ai.agent.android.domain.engine.executors.*
-import ai.koog.prompt.executor.clients.anthropic.AnthropicModels
 import ai.agent.android.domain.models.*
 import ai.agent.android.domain.prompt.PromptTemplateEngine
 import ai.agent.android.domain.prompt.PromptVariableProvider
@@ -12,10 +11,11 @@ import ai.agent.android.domain.repositories.*
 import ai.agent.android.domain.services.ApprovalNotifier
 import ai.agent.android.domain.usecases.EvaluateIfConditionUseCase
 import ai.agent.android.domain.usecases.GetContextWindowUseCase
-import ai.agent.android.domain.usecases.RetrieveRelevantMemoryUseCase
 import ai.agent.android.domain.usecases.LoadModelUseCase
+import ai.agent.android.domain.usecases.RetrieveRelevantMemoryUseCase
 import ai.koog.prompt.dsl.Prompt
 import ai.koog.prompt.executor.clients.LLMClient
+import ai.koog.prompt.executor.clients.anthropic.AnthropicModels
 import ai.koog.prompt.llm.LLModel
 import ai.koog.prompt.streaming.StreamFrame
 import io.mockk.coEvery
@@ -90,31 +90,50 @@ class GraphExecutionEngineTest {
         val outputNodeExecutor = OutputNodeExecutor(llmEngine, loadModelUseCase, chatRepository)
         val ifConditionNodeExecutor = IfConditionNodeExecutor(evaluateIfConditionUseCase)
         val queueProcessorNodeExecutor = QueueProcessorNodeExecutor()
-        
+
         val toolNodeExecutor = ToolNodeExecutor(
-            llmEngine, loadModelUseCase, toolRepository, settingsRepository, approvalNotifier, chatRepository
+            llmEngine,
+            loadModelUseCase,
+            toolRepository,
+            settingsRepository,
+            approvalNotifier,
+            chatRepository,
         )
-        
+
         val liteRtNodeExecutor = LiteRtNodeExecutor(
-            llmEngine, toolRepository, chatRepository,
-            settingsRepository, metricsRepository, loadModelUseCase
+            llmEngine,
+            toolRepository,
+            chatRepository,
+            settingsRepository,
+            metricsRepository,
+            loadModelUseCase,
         )
 
         val cloudLlmNodeExecutor = CloudLlmNodeExecutor(
-            toolRepository, chatRepository, settingsRepository, apiKeyRepository,
-            metricsRepository, koogClientFactory, cloudLlmModelResolver
+            toolRepository,
+            chatRepository,
+            settingsRepository,
+            apiKeyRepository,
+            metricsRepository,
+            koogClientFactory,
+            cloudLlmModelResolver,
         )
-        
+
         val systemNodeExecutor = SystemNodeExecutor(
-            llmEngine, loadModelUseCase, chatRepository
+            llmEngine,
+            loadModelUseCase,
+            chatRepository,
         )
 
         val summaryNodeExecutor = ai.agent.android.domain.engine.executors.SummaryNodeExecutor(
-            llmEngine, loadModelUseCase
+            llmEngine,
+            loadModelUseCase,
         )
 
         val clarificationNodeExecutor = ClarificationNodeExecutor(
-            llmEngine, loadModelUseCase, clarificationRepository
+            llmEngine,
+            loadModelUseCase,
+            clarificationRepository,
         )
 
         val nodeExecutorFactory = NodeExecutorFactory(
@@ -146,7 +165,7 @@ class GraphExecutionEngineTest {
         every { settingsRepository.requiresUserConfirmation } returns flowOf(false)
         every { settingsRepository.pipelineMaxSteps } returns flowOf(15)
         coEvery { toolRepository.getAvailableTools() } returns emptyList()
-        
+
         coEvery { loadModelUseCase(any()) } returns ai.agent.android.domain.models.Result.Success(Unit)
     }
 
@@ -167,16 +186,17 @@ class GraphExecutionEngineTest {
         val outputNode = NodeModel("output_1", NodeType.OUTPUT, 0f, 0f, systemPrompt = null)
 
         val graph = PipelineGraph(
-            id = "g1", name = "Clarification Graph",
+            id = "g1",
+            name = "Clarification Graph",
             nodes = listOf(inputNode, clarificationNode, outputNode),
             connections = listOf(
                 ConnectionModel("c1", "input_1", "clar_1"),
                 ConnectionModel("c2", "clar_1", "output_1"),
-            )
+            ),
         )
 
         every { llmEngine.generateResponseStream(any()) } returns flowOf(
-            "{\"question\":\"Confirm?\",\"options\":[\"yes\",\"no\"]}"
+            "{\"question\":\"Confirm?\",\"options\":[\"yes\",\"no\"]}",
         )
         coEvery { clarificationRepository.requestAnswer(any()) } returns "user reply"
 
@@ -202,12 +222,13 @@ class GraphExecutionEngineTest {
         val outputNode = NodeModel("output_1", NodeType.OUTPUT, 0f, 0f)
 
         val graph = PipelineGraph(
-            id = "g1", name = "Test Graph",
+            id = "g1",
+            name = "Test Graph",
             nodes = listOf(inputNode, llmNode, outputNode),
             connections = listOf(
                 ConnectionModel("c1", "input_1", "llm_1"),
-                ConnectionModel("c2", "llm_1", "output_1")
-            )
+                ConnectionModel("c2", "llm_1", "output_1"),
+            ),
         )
 
         every { llmEngine.generateResponseStream(any()) } returns flowOf("LLM ", "Response")
@@ -226,13 +247,14 @@ class GraphExecutionEngineTest {
         val outputFalse = NodeModel("out_false", NodeType.OUTPUT, 0f, 0f)
 
         val graph = PipelineGraph(
-            id = "g1", name = "Test Graph",
+            id = "g1",
+            name = "Test Graph",
             nodes = listOf(inputNode, ifNode, outputTrue, outputFalse),
             connections = listOf(
                 ConnectionModel("c1", "input_1", "if_1"),
                 ConnectionModel("c2", "if_1", "out_true", label = "True"),
-                ConnectionModel("c3", "if_1", "out_false", label = "False")
-            )
+                ConnectionModel("c3", "if_1", "out_false", label = "False"),
+            ),
         )
 
         // Evaluate to true
@@ -241,7 +263,7 @@ class GraphExecutionEngineTest {
 
         val statesTrue = engine(sessionId, "Test prompt", graph).toList()
         assertTrue(statesTrue.last() is AgentOrchestratorState.Completed)
-        
+
         // Output text is preserved as input text across nodes if not modified
         assertEquals("Test prompt", (statesTrue.last() as AgentOrchestratorState.Completed).finalResponse)
     }
@@ -252,35 +274,43 @@ class GraphExecutionEngineTest {
         val outputNode = NodeModel("output_1", NodeType.OUTPUT, 0f, 0f, systemPrompt = "Format this text:")
 
         val graph = PipelineGraph(
-            id = "g1", name = "Output Test",
+            id = "g1",
+            name = "Output Test",
             nodes = listOf(inputNode, outputNode),
             connections = listOf(
-                ConnectionModel("c1", "input_1", "output_1")
-            )
+                ConnectionModel("c1", "input_1", "output_1"),
+            ),
         )
 
         every { llmEngine.generateResponseStream(any()) } returns flowOf("Formatted Response")
 
         val states = engine(sessionId, "Raw User Input", graph).toList()
-        
+
         val completedState = states.last() as AgentOrchestratorState.Completed
         assertEquals("Formatted Response", completedState.finalResponse)
-        
-        io.mockk.verify { llmEngine.generateResponseStream(match { it.contains("Format this text:") && it.contains("Raw User Input") }) }
+
+        io.mockk.verify {
+            llmEngine.generateResponseStream(
+                match {
+                    it.contains("Format this text:") && it.contains("Raw User Input")
+                },
+            )
+        }
     }
 
     @Test
     fun `prevents infinite cycles via DAG validation`() = runTest {
         val n1 = NodeModel("n1", NodeType.INPUT, 0f, 0f)
         val n2 = NodeModel("n2", NodeType.LITE_RT, 0f, 0f)
-        
+
         val cyclicGraph = PipelineGraph(
-            id = "g1", name = "Cyclic",
+            id = "g1",
+            name = "Cyclic",
             nodes = listOf(n1, n2),
             connections = listOf(
                 ConnectionModel("c1", "n1", "n2"),
-                ConnectionModel("c2", "n2", "n1") // cycle back
-            )
+                ConnectionModel("c2", "n2", "n1"), // cycle back
+            ),
         )
 
         val states = engine(sessionId, "Test", cyclicGraph).toList()
@@ -299,18 +329,19 @@ class GraphExecutionEngineTest {
         val llmNode = NodeModel("llm_1", NodeType.LITE_RT, 0f, 0f)
 
         val graph = PipelineGraph(
-            id = "g1", name = "Incomplete",
+            id = "g1",
+            name = "Incomplete",
             nodes = listOf(inputNode, llmNode),
             connections = listOf(
-                ConnectionModel("c1", "input_1", "llm_1")
+                ConnectionModel("c1", "input_1", "llm_1"),
                 // No connection to an output node
-            )
+            ),
         )
-        
+
         every { llmEngine.generateResponseStream(any()) } returns flowOf("Response")
 
         val states = engine(sessionId, "Test", graph).toList()
-        
+
         val lastState = states.last()
         assertTrue(lastState is AgentOrchestratorState.Error)
         assertTrue((lastState as AgentOrchestratorState.Error).message.contains("without reaching OUTPUT"))
@@ -347,9 +378,10 @@ class GraphExecutionEngineTest {
         val llmNode = NodeModel("llm_1", NodeType.LITE_RT, 0f, 0f)
 
         val graph = PipelineGraph(
-            id = "g1", name = "Long Graph",
+            id = "g1",
+            name = "Long Graph",
             nodes = listOf(inputNode, llmNode),
-            connections = listOf(ConnectionModel("c1", "input_1", "llm_1"))
+            connections = listOf(ConnectionModel("c1", "input_1", "llm_1")),
         )
         every { llmEngine.generateResponseStream(any()) } returns flowOf("response")
 
@@ -368,9 +400,10 @@ class GraphExecutionEngineTest {
         val outputNode = NodeModel("output_1", NodeType.OUTPUT, 0f, 0f)
 
         val graph = PipelineGraph(
-            id = "g1", name = "Short Graph",
+            id = "g1",
+            name = "Short Graph",
             nodes = listOf(inputNode, outputNode),
-            connections = listOf(ConnectionModel("c1", "input_1", "output_1"))
+            connections = listOf(ConnectionModel("c1", "input_1", "output_1")),
         )
         every { llmEngine.generateResponseStream(any()) } returns flowOf("done")
 
@@ -390,12 +423,13 @@ class GraphExecutionEngineTest {
         val outputNode = NodeModel("output", NodeType.OUTPUT, 0f, 0f)
 
         val graph = PipelineGraph(
-            id = "g1", name = "Linear",
+            id = "g1",
+            name = "Linear",
             nodes = listOf(inputNode, liteRtNode, outputNode),
             connections = listOf(
                 ConnectionModel("c1", "input", "lite_rt"),
                 ConnectionModel("c2", "lite_rt", "output"),
-            )
+            ),
         )
         every { llmEngine.generateResponseStream(any()) } returns flowOf("answer")
 
@@ -417,13 +451,14 @@ class GraphExecutionEngineTest {
         val outputNode = NodeModel("output", NodeType.OUTPUT, 0f, 0f)
 
         val graph = PipelineGraph(
-            id = "g1", name = "Branching",
+            id = "g1",
+            name = "Branching",
             nodes = listOf(inputNode, routerNode, liteRtNode, outputNode),
             connections = listOf(
                 ConnectionModel("c1", "input", "router"),
                 ConnectionModel("c2", "router", "lite_rt", label = "Data"),
                 ConnectionModel("c3", "lite_rt", "output"),
-            )
+            ),
         )
         every { llmEngine.generateResponseStream(any()) } returnsMany listOf(
             flowOf("Data"),
@@ -436,100 +471,118 @@ class GraphExecutionEngineTest {
 
         // INPUT and INTENT_ROUTER stages must show unknown total
         val unknownStages = stages.take(2)
-        assertTrue("INPUT and INTENT_ROUTER should have null totalSteps",
-            unknownStages.all { it.stepInfo.totalSteps == null })
+        assertTrue(
+            "INPUT and INTENT_ROUTER should have null totalSteps",
+            unknownStages.all { it.stepInfo.totalSteps == null },
+        )
 
         // After routing resolves, LITE_RT and OUTPUT stages must have a concrete total
         val knownStages = stages.drop(2)
-        assertTrue("Post-routing stages should have concrete totalSteps",
-            knownStages.all { it.stepInfo.totalSteps != null })
+        assertTrue(
+            "Post-routing stages should have concrete totalSteps",
+            knownStages.all { it.stepInfo.totalSteps != null },
+        )
         // stepIndex must never exceed totalSteps
         knownStages.forEach { stage ->
-            assertTrue("stepIndex ${stage.stepInfo.stepIndex} must not exceed totalSteps ${stage.stepInfo.totalSteps}",
-                stage.stepInfo.stepIndex <= stage.stepInfo.totalSteps!!)
+            assertTrue(
+                "stepIndex ${stage.stepInfo.stepIndex} must not exceed totalSteps ${stage.stepInfo.totalSteps}",
+                stage.stepInfo.stepIndex <= stage.stepInfo.totalSteps!!,
+            )
         }
     }
 
     // ─── INTENT_ROUTER tests ─────────────────────────────────────────────────
 
     @Test
-    fun `given INTENT_ROUTER when routing key emitted then downstream node receives original user query not routing key`() = runTest {
-        every { settingsRepository.pipelineMaxSteps } returns flowOf(15)
+    fun `given INTENT_ROUTER when routing key emitted then downstream node receives original user query not routing key`() =
+        runTest {
+            every { settingsRepository.pipelineMaxSteps } returns flowOf(15)
 
-        val inputNode = NodeModel("input", NodeType.INPUT, 0f, 0f)
-        val routerNode = NodeModel("router", NodeType.INTENT_ROUTER, 0f, 0f)
-        val liteRtNode = NodeModel("lite_rt", NodeType.LITE_RT, 0f, 0f)
-        val outputNode = NodeModel("output", NodeType.OUTPUT, 0f, 0f)
+            val inputNode = NodeModel("input", NodeType.INPUT, 0f, 0f)
+            val routerNode = NodeModel("router", NodeType.INTENT_ROUTER, 0f, 0f)
+            val liteRtNode = NodeModel("lite_rt", NodeType.LITE_RT, 0f, 0f)
+            val outputNode = NodeModel("output", NodeType.OUTPUT, 0f, 0f)
 
-        val graph = PipelineGraph(
-            id = "g1", name = "Router Fix Test",
-            nodes = listOf(inputNode, routerNode, liteRtNode, outputNode),
-            connections = listOf(
-                ConnectionModel("c1", "input", "router"),
-                ConnectionModel("c2", "router", "lite_rt", label = "Data"),
-                ConnectionModel("c3", "lite_rt", "output"),
+            val graph = PipelineGraph(
+                id = "g1",
+                name = "Router Fix Test",
+                nodes = listOf(inputNode, routerNode, liteRtNode, outputNode),
+                connections = listOf(
+                    ConnectionModel("c1", "input", "router"),
+                    ConnectionModel("c2", "router", "lite_rt", label = "Data"),
+                    ConnectionModel("c3", "lite_rt", "output"),
+                ),
             )
-        )
 
-        every { llmEngine.generateResponseStream(any()) } returnsMany listOf(
-            flowOf("Data"),           // INTENT_ROUTER routing decision
-            flowOf("Correct answer"), // LITE_RT processes original prompt
-            flowOf("Final"),          // OUTPUT formats the response
-        )
+            every { llmEngine.generateResponseStream(any()) } returnsMany listOf(
+                flowOf("Data"), // INTENT_ROUTER routing decision
+                flowOf("Correct answer"), // LITE_RT processes original prompt
+                flowOf("Final"), // OUTPUT formats the response
+            )
 
-        val states = engine(sessionId, "fuel consumption query", graph).toList()
+            val states = engine(sessionId, "fuel consumption query", graph).toList()
 
-        assertTrue("Expected Completed but got: ${states.last()}", states.last() is AgentOrchestratorState.Completed)
+            assertTrue(
+                "Expected Completed but got: ${states.last()}",
+                states.last() is AgentOrchestratorState.Completed,
+            )
 
-        // LITE_RT must receive the original user query (now wrapped by NodeContextBuilder),
-        // not the routing key. The Phase 17 cleanup removed the legacy "USER/INPUT:" prefix
-        // because the assembled context already carries `--- Previous Node Output ---`,
-        // so we assert via the context-builder header instead.
-        io.mockk.verify {
-            llmEngine.generateResponseStream(match {
-                it.contains("--- Previous Node Output ---") && it.contains("fuel consumption query")
-            })
+            // LITE_RT must receive the original user query (now wrapped by NodeContextBuilder),
+            // not the routing key. The Phase 17 cleanup removed the legacy "USER/INPUT:" prefix
+            // because the assembled context already carries `--- Previous Node Output ---`,
+            // so we assert via the context-builder header instead.
+            io.mockk.verify {
+                llmEngine.generateResponseStream(
+                    match {
+                        it.contains("--- Previous Node Output ---") && it.contains("fuel consumption query")
+                    },
+                )
+            }
+            // No downstream node must receive the routing key as its previous-node-output payload.
+            io.mockk.verify(exactly = 0) {
+                llmEngine.generateResponseStream(match { it.contains("Previous Node Output ---\nData") })
+            }
         }
-        // No downstream node must receive the routing key as its previous-node-output payload.
-        io.mockk.verify(exactly = 0) {
-            llmEngine.generateResponseStream(match { it.contains("Previous Node Output ---\nData") })
-        }
-    }
 
     // ─── QUEUE_PROCESSOR tests ────────────────────────────────────────────────
 
     @Test
-    fun `given QUEUE_PROCESSOR when LLM returns JSON list then each item is processed and pipeline completes`() = runTest {
-        every { settingsRepository.pipelineMaxSteps } returns flowOf(20)
+    fun `given QUEUE_PROCESSOR when LLM returns JSON list then each item is processed and pipeline completes`() =
+        runTest {
+            every { settingsRepository.pipelineMaxSteps } returns flowOf(20)
 
-        val inputNode = NodeModel("input", NodeType.INPUT, 0f, 0f)
-        val listGenNode = NodeModel("list_gen", NodeType.LITE_RT, 0f, 0f)
-        val queueNode = NodeModel("queue", NodeType.QUEUE_PROCESSOR, 0f, 0f)
-        val itemProcNode = NodeModel("item_proc", NodeType.LITE_RT, 0f, 0f)
-        val outputNode = NodeModel("output", NodeType.OUTPUT, 0f, 0f)
+            val inputNode = NodeModel("input", NodeType.INPUT, 0f, 0f)
+            val listGenNode = NodeModel("list_gen", NodeType.LITE_RT, 0f, 0f)
+            val queueNode = NodeModel("queue", NodeType.QUEUE_PROCESSOR, 0f, 0f)
+            val itemProcNode = NodeModel("item_proc", NodeType.LITE_RT, 0f, 0f)
+            val outputNode = NodeModel("output", NodeType.OUTPUT, 0f, 0f)
 
-        // item_proc has no outgoing connection — engine treats it as end-of-subtask
-        val graph = PipelineGraph(
-            id = "g1", name = "Queue Test",
-            nodes = listOf(inputNode, listGenNode, queueNode, itemProcNode, outputNode),
-            connections = listOf(
-                ConnectionModel("c1", "input", "list_gen"),
-                ConnectionModel("c2", "list_gen", "queue"),
-                ConnectionModel("c3", "queue", "item_proc", label = "Item"),
-                ConnectionModel("c4", "queue", "output", label = "Done"),
+            // item_proc has no outgoing connection — engine treats it as end-of-subtask
+            val graph = PipelineGraph(
+                id = "g1",
+                name = "Queue Test",
+                nodes = listOf(inputNode, listGenNode, queueNode, itemProcNode, outputNode),
+                connections = listOf(
+                    ConnectionModel("c1", "input", "list_gen"),
+                    ConnectionModel("c2", "list_gen", "queue"),
+                    ConnectionModel("c3", "queue", "item_proc", label = "Item"),
+                    ConnectionModel("c4", "queue", "output", label = "Done"),
+                ),
             )
-        )
 
-        every { llmEngine.generateResponseStream(any()) } returnsMany listOf(
-            flowOf("""["subtask_one", "subtask_two"]"""),
-            flowOf("result_one"),
-            flowOf("result_two"),
-        )
+            every { llmEngine.generateResponseStream(any()) } returnsMany listOf(
+                flowOf("""["subtask_one", "subtask_two"]"""),
+                flowOf("result_one"),
+                flowOf("result_two"),
+            )
 
-        val states = engine(sessionId, "Process the list", graph).toList()
+            val states = engine(sessionId, "Process the list", graph).toList()
 
-        assertTrue("Expected Completed but got: ${states.last()}", states.last() is AgentOrchestratorState.Completed)
-    }
+            assertTrue(
+                "Expected Completed but got: ${states.last()}",
+                states.last() is AgentOrchestratorState.Completed,
+            )
+        }
 
     @Test
     fun `given QUEUE_PROCESSOR when maxSteps exceeded during queue iteration then emits error`() = runTest {
@@ -543,14 +596,15 @@ class GraphExecutionEngineTest {
         val outputNode = NodeModel("output", NodeType.OUTPUT, 0f, 0f)
 
         val graph = PipelineGraph(
-            id = "g2", name = "Queue MaxSteps",
+            id = "g2",
+            name = "Queue MaxSteps",
             nodes = listOf(inputNode, listGenNode, queueNode, itemProcNode, outputNode),
             connections = listOf(
                 ConnectionModel("c1", "input", "list_gen"),
                 ConnectionModel("c2", "list_gen", "queue"),
                 ConnectionModel("c3", "queue", "item_proc", label = "Item"),
                 ConnectionModel("c4", "queue", "output", label = "Done"),
-            )
+            ),
         )
 
         every { llmEngine.generateResponseStream(any()) } returnsMany listOf(
@@ -569,35 +623,39 @@ class GraphExecutionEngineTest {
     // ─── Per-node metrics tests ───────────────────────────────────────────────
 
     @Test
-    fun `given pipeline executes LITE_RT node then metricsRepository records node execution with tokenCount`() = runTest {
-        every { settingsRepository.pipelineMaxSteps } returns flowOf(15)
+    fun `given pipeline executes LITE_RT node then metricsRepository records node execution with tokenCount`() =
+        runTest {
+            every { settingsRepository.pipelineMaxSteps } returns flowOf(15)
 
-        val inputNode = NodeModel("input", NodeType.INPUT, 0f, 0f)
-        val llmNode = NodeModel("llm", NodeType.LITE_RT, 0f, 0f)
-        val outputNode = NodeModel("output", NodeType.OUTPUT, 0f, 0f)
+            val inputNode = NodeModel("input", NodeType.INPUT, 0f, 0f)
+            val llmNode = NodeModel("llm", NodeType.LITE_RT, 0f, 0f)
+            val outputNode = NodeModel("output", NodeType.OUTPUT, 0f, 0f)
 
-        val graph = PipelineGraph(
-            id = "g1", name = "Metrics Test",
-            nodes = listOf(inputNode, llmNode, outputNode),
-            connections = listOf(
-                ConnectionModel("c1", "input", "llm"),
-                ConnectionModel("c2", "llm", "output"),
+            val graph = PipelineGraph(
+                id = "g1",
+                name = "Metrics Test",
+                nodes = listOf(inputNode, llmNode, outputNode),
+                connections = listOf(
+                    ConnectionModel("c1", "input", "llm"),
+                    ConnectionModel("c2", "llm", "output"),
+                ),
             )
-        )
 
-        // LITE_RT should emit 3 tokens, OUTPUT executor also calls generateResponseStream.
-        every { llmEngine.generateResponseStream(any()) } returnsMany listOf(
-            flowOf("one ", "two ", "three"),
-            flowOf("final"),
-        )
+            // LITE_RT should emit 3 tokens, OUTPUT executor also calls generateResponseStream.
+            every { llmEngine.generateResponseStream(any()) } returnsMany listOf(
+                flowOf("one ", "two ", "three"),
+                flowOf("final"),
+            )
 
-        engine(sessionId, "prompt", graph).toList()
+            engine(sessionId, "prompt", graph).toList()
 
-        // INPUT, LITE_RT, OUTPUT — three nodes, three recordings
-        verify(exactly = 1) { metricsRepository.recordNodeExecution("INPUT", any(), any()) }
-        verify(exactly = 1) { metricsRepository.recordNodeExecution("LITE_RT", any(), match { it != null && it > 0 }) }
-        verify(exactly = 1) { metricsRepository.recordNodeExecution("OUTPUT", any(), any()) }
-    }
+            // INPUT, LITE_RT, OUTPUT — three nodes, three recordings
+            verify(exactly = 1) { metricsRepository.recordNodeExecution("INPUT", any(), any()) }
+            verify(exactly = 1) {
+                metricsRepository.recordNodeExecution("LITE_RT", any(), match { it != null && it > 0 })
+            }
+            verify(exactly = 1) { metricsRepository.recordNodeExecution("OUTPUT", any(), any()) }
+        }
 
     @Test
     fun `given pipeline executes node then trace step includes durationMs and tokenCount`() = runTest {
@@ -608,12 +666,13 @@ class GraphExecutionEngineTest {
         val outputNode = NodeModel("output", NodeType.OUTPUT, 0f, 0f)
 
         val graph = PipelineGraph(
-            id = "g1", name = "Trace Timing",
+            id = "g1",
+            name = "Trace Timing",
             nodes = listOf(inputNode, llmNode, outputNode),
             connections = listOf(
                 ConnectionModel("c1", "input", "llm"),
                 ConnectionModel("c2", "llm", "output"),
-            )
+            ),
         )
         every { llmEngine.generateResponseStream(any()) } returnsMany listOf(
             flowOf("tok1 tok2"),
@@ -647,14 +706,15 @@ class GraphExecutionEngineTest {
         val outputNode = NodeModel("output", NodeType.OUTPUT, 0f, 0f)
 
         val graph = PipelineGraph(
-            id = "g3", name = "Queue Error",
+            id = "g3",
+            name = "Queue Error",
             nodes = listOf(inputNode, listGenNode, queueNode, itemProcNode, outputNode),
             connections = listOf(
                 ConnectionModel("c1", "input", "list_gen"),
                 ConnectionModel("c2", "list_gen", "queue"),
                 ConnectionModel("c3", "queue", "item_proc", label = "Item"),
                 ConnectionModel("c4", "queue", "output", label = "Done"),
-            )
+            ),
         )
 
         every { llmEngine.generateResponseStream(any()) } returnsMany listOf(
@@ -686,14 +746,30 @@ class GraphExecutionEngineTest {
             InputNodeExecutor(),
             OutputNodeExecutor(llmEngine, loadModelUseCase, chatRepository),
             IfConditionNodeExecutor(evaluateIfConditionUseCase),
-            ToolNodeExecutor(llmEngine, loadModelUseCase, toolRepository, settingsRepository, approvalNotifier, chatRepository),
+            ToolNodeExecutor(
+                llmEngine,
+                loadModelUseCase,
+                toolRepository,
+                settingsRepository,
+                approvalNotifier,
+                chatRepository,
+            ),
             LiteRtNodeExecutor(
-                llmEngine, toolRepository, chatRepository,
-                settingsRepository, metricsRepository, loadModelUseCase,
+                llmEngine,
+                toolRepository,
+                chatRepository,
+                settingsRepository,
+                metricsRepository,
+                loadModelUseCase,
             ),
             CloudLlmNodeExecutor(
-                toolRepository, chatRepository, settingsRepository, apiKeyRepository,
-                metricsRepository, koogClientFactory, cloudLlmModelResolver,
+                toolRepository,
+                chatRepository,
+                settingsRepository,
+                apiKeyRepository,
+                metricsRepository,
+                koogClientFactory,
+                cloudLlmModelResolver,
             ),
             SystemNodeExecutor(llmEngine, loadModelUseCase, chatRepository),
             QueueProcessorNodeExecutor(),
@@ -702,7 +778,14 @@ class GraphExecutionEngineTest {
         )
         val engineWithProvider = GraphExecutionEngine(
             realFactory,
-            ToolNodeExecutor(llmEngine, loadModelUseCase, toolRepository, settingsRepository, approvalNotifier, chatRepository),
+            ToolNodeExecutor(
+                llmEngine,
+                loadModelUseCase,
+                toolRepository,
+                settingsRepository,
+                approvalNotifier,
+                chatRepository,
+            ),
             chatRepository,
             settingsRepository,
             metricsRepository,
@@ -717,7 +800,8 @@ class GraphExecutionEngineTest {
         val outputNode = NodeModel("output", NodeType.OUTPUT, 0f, 0f)
 
         val graph = PipelineGraph(
-            id = "g1", name = "Render Test",
+            id = "g1",
+            name = "Render Test",
             nodes = listOf(inputNode, llmNode, outputNode),
             connections = listOf(
                 ConnectionModel("c1", "input", "llm"),
@@ -737,166 +821,193 @@ class GraphExecutionEngineTest {
     // ─── End-to-end clarification scenarios ──────────────────────────────────
 
     @Test
-    fun `given INPUT to CLARIFICATION to CLOUD to OUTPUT pipeline when user replies then clarification answer flows through CLOUD into final response`() = runTest {
-        every { settingsRepository.pipelineMaxSteps } returns flowOf(15)
+    fun `given INPUT to CLARIFICATION to CLOUD to OUTPUT pipeline when user replies then clarification answer flows through CLOUD into final response`() =
+        runTest {
+            every { settingsRepository.pipelineMaxSteps } returns flowOf(15)
 
-        // Wire CLOUD to a mocked Anthropic client so we can capture the prompt it
-        // receives and verify that the user's clarification reply flows downstream.
-        val mockAnthropicClient: LLMClient = mockk(relaxed = true)
-        val capturedPrompt = slot<Prompt>()
-        coEvery {
-            mockAnthropicClient.executeStreaming(capture(capturedPrompt), any<LLModel>())
-        } returns flowOf(StreamFrame.TextDelta("cloud_response_for_user_reply"))
-        coEvery { koogClientFactory.createAnthropicExecutor() } returns mockAnthropicClient
+            // Wire CLOUD to a mocked Anthropic client so we can capture the prompt it
+            // receives and verify that the user's clarification reply flows downstream.
+            val mockAnthropicClient: LLMClient = mockk(relaxed = true)
+            val capturedPrompt = slot<Prompt>()
+            coEvery {
+                mockAnthropicClient.executeStreaming(capture(capturedPrompt), any<LLModel>())
+            } returns flowOf(StreamFrame.TextDelta("cloud_response_for_user_reply"))
+            coEvery { koogClientFactory.createAnthropicExecutor() } returns mockAnthropicClient
 
-        every { apiKeyRepository.getAnthropicKey() } returns flowOf("anthropic-test-key")
-        every { apiKeyRepository.getAnthropicModel() } returns flowOf("claude-sonnet-4-5")
-        // Other providers are unconfigured so the auto-selection path also lands on Anthropic.
-        every { apiKeyRepository.getOpenAIKey() } returns flowOf(null)
-        every { apiKeyRepository.getGoogleKey() } returns flowOf(null)
-        every { apiKeyRepository.getDeepSeekKey() } returns flowOf(null)
+            every { apiKeyRepository.getAnthropicKey() } returns flowOf("anthropic-test-key")
+            every { apiKeyRepository.getAnthropicModel() } returns flowOf("claude-sonnet-4-5")
+            // Other providers are unconfigured so the auto-selection path also lands on Anthropic.
+            every { apiKeyRepository.getOpenAIKey() } returns flowOf(null)
+            every { apiKeyRepository.getGoogleKey() } returns flowOf(null)
+            every { apiKeyRepository.getDeepSeekKey() } returns flowOf(null)
 
-        // CLARIFICATION uses llmEngine to generate the JSON question; OUTPUT has no
-        // systemPrompt so it just echoes its input — that lets us assert that the
-        // CLOUD response is what the user finally sees.
-        every { llmEngine.generateResponseStream(any()) } returns flowOf(
-            "{\"question\":\"Confirm?\",\"options\":[\"yes\",\"no\"]}",
-        )
-        coEvery { clarificationRepository.requestAnswer(any()) } returns "user reply"
+            // CLARIFICATION uses llmEngine to generate the JSON question; OUTPUT has no
+            // systemPrompt so it just echoes its input — that lets us assert that the
+            // CLOUD response is what the user finally sees.
+            every { llmEngine.generateResponseStream(any()) } returns flowOf(
+                "{\"question\":\"Confirm?\",\"options\":[\"yes\",\"no\"]}",
+            )
+            coEvery { clarificationRepository.requestAnswer(any()) } returns "user reply"
 
-        val inputNode = NodeModel("input_1", NodeType.INPUT, 0f, 0f)
-        val clarificationNode = NodeModel(
-            id = "clar_1",
-            type = NodeType.CLARIFICATION,
-            x = 0f,
-            y = 0f,
-            systemPrompt = "Ask user for clarification.",
-            clarificationTimeoutMs = 5_000L,
-        )
-        val cloudNode = NodeModel(
-            id = "cloud_1",
-            type = NodeType.CLOUD,
-            x = 0f,
-            y = 0f,
-            cloudProvider = "anthropic",
-            systemPrompt = "Answer the user.",
-        )
-        val outputNode = NodeModel("output_1", NodeType.OUTPUT, 0f, 0f, systemPrompt = null)
+            val inputNode = NodeModel("input_1", NodeType.INPUT, 0f, 0f)
+            val clarificationNode = NodeModel(
+                id = "clar_1",
+                type = NodeType.CLARIFICATION,
+                x = 0f,
+                y = 0f,
+                systemPrompt = "Ask user for clarification.",
+                clarificationTimeoutMs = 5_000L,
+            )
+            val cloudNode = NodeModel(
+                id = "cloud_1",
+                type = NodeType.CLOUD,
+                x = 0f,
+                y = 0f,
+                cloudProvider = "anthropic",
+                systemPrompt = "Answer the user.",
+            )
+            val outputNode = NodeModel("output_1", NodeType.OUTPUT, 0f, 0f, systemPrompt = null)
 
-        val graph = PipelineGraph(
-            id = "g1", name = "Clarification → Cloud Graph",
-            nodes = listOf(inputNode, clarificationNode, cloudNode, outputNode),
-            connections = listOf(
-                ConnectionModel("c1", "input_1", "clar_1"),
-                ConnectionModel("c2", "clar_1", "cloud_1"),
-                ConnectionModel("c3", "cloud_1", "output_1"),
-            ),
-        )
+            val graph = PipelineGraph(
+                id = "g1",
+                name = "Clarification → Cloud Graph",
+                nodes = listOf(inputNode, clarificationNode, cloudNode, outputNode),
+                connections = listOf(
+                    ConnectionModel("c1", "input_1", "clar_1"),
+                    ConnectionModel("c2", "clar_1", "cloud_1"),
+                    ConnectionModel("c3", "cloud_1", "output_1"),
+                ),
+            )
 
-        val states = engine(sessionId, "User prompt", graph).toList()
+            val states = engine(sessionId, "User prompt", graph).toList()
 
-        // The clarification request reached the user.
-        val awaiting = states.filterIsInstance<AgentOrchestratorState.AwaitingClarification>().single()
-        assertEquals("Confirm?", awaiting.request.question)
-        assertEquals(listOf("yes", "no"), awaiting.request.options)
-        coVerify { clarificationRepository.requestAnswer(any()) }
+            // The clarification request reached the user.
+            val awaiting = states.filterIsInstance<AgentOrchestratorState.AwaitingClarification>().single()
+            assertEquals("Confirm?", awaiting.request.question)
+            assertEquals(listOf("yes", "no"), awaiting.request.options)
+            coVerify { clarificationRepository.requestAnswer(any()) }
 
-        // The CLOUD node was invoked with the user's reply embedded in its prompt.
-        coVerify { mockAnthropicClient.executeStreaming(any<Prompt>(), any<LLModel>()) }
-        val cloudPromptText = capturedPrompt.captured.messages.joinToString("\n") { it.content }
-        assertTrue(
-            "Cloud prompt must contain the clarification reply, was: $cloudPromptText",
-            cloudPromptText.contains("user reply"),
-        )
+            // The CLOUD node was invoked with the user's reply embedded in its prompt.
+            coVerify { mockAnthropicClient.executeStreaming(any<Prompt>(), any<LLModel>()) }
+            val cloudPromptText = capturedPrompt.captured.messages.joinToString("\n") { it.content }
+            assertTrue(
+                "Cloud prompt must contain the clarification reply, was: $cloudPromptText",
+                cloudPromptText.contains("user reply"),
+            )
 
-        // OUTPUT (no systemPrompt) echoes its input verbatim, so the cloud's response
-        // is what propagates to the final Completed state.
-        val completed = states.last() as AgentOrchestratorState.Completed
-        assertEquals("cloud_response_for_user_reply", completed.finalResponse)
-    }
+            // OUTPUT (no systemPrompt) echoes its input verbatim, so the cloud's response
+            // is what propagates to the final Completed state.
+            val completed = states.last() as AgentOrchestratorState.Completed
+            assertEquals("cloud_response_for_user_reply", completed.finalResponse)
+        }
 
     @Test
-    fun `given CLARIFICATION node when no answer arrives before timeout then pipeline continues with default option`() = runTest {
-        every { settingsRepository.pipelineMaxSteps } returns flowOf(15)
+    fun `given CLARIFICATION node when no answer arrives before timeout then pipeline continues with default option`() =
+        runTest {
+            every { settingsRepository.pipelineMaxSteps } returns flowOf(15)
 
-        // Use a real ClarificationRepositoryImpl to exercise the actual withTimeout
-        // behaviour: when no reply arrives, the suspended request resolves with the
-        // first option and the pipeline keeps going. A mock would only prove that
-        // the executor consumes whatever the repository returns — not that the
-        // timeout machinery itself works under the engine.
-        val realClarificationRepository = ClarificationRepositoryImpl()
+            // Use a real ClarificationRepositoryImpl to exercise the actual withTimeout
+            // behaviour: when no reply arrives, the suspended request resolves with the
+            // first option and the pipeline keeps going. A mock would only prove that
+            // the executor consumes whatever the repository returns — not that the
+            // timeout machinery itself works under the engine.
+            val realClarificationRepository = ClarificationRepositoryImpl()
 
-        val realFactory = NodeExecutorFactory(
-            InputNodeExecutor(),
-            OutputNodeExecutor(llmEngine, loadModelUseCase, chatRepository),
-            IfConditionNodeExecutor(evaluateIfConditionUseCase),
-            ToolNodeExecutor(llmEngine, loadModelUseCase, toolRepository, settingsRepository, approvalNotifier, chatRepository),
-            LiteRtNodeExecutor(
-                llmEngine, toolRepository, chatRepository,
-                settingsRepository, metricsRepository, loadModelUseCase,
-            ),
-            CloudLlmNodeExecutor(
-                toolRepository, chatRepository, settingsRepository, apiKeyRepository,
-                metricsRepository, koogClientFactory, cloudLlmModelResolver,
-            ),
-            SystemNodeExecutor(llmEngine, loadModelUseCase, chatRepository),
-            QueueProcessorNodeExecutor(),
-            SummaryNodeExecutor(llmEngine, loadModelUseCase),
-            ClarificationNodeExecutor(llmEngine, loadModelUseCase, realClarificationRepository),
-        )
-        val engineWithRealRepo = GraphExecutionEngine(
-            realFactory,
-            ToolNodeExecutor(llmEngine, loadModelUseCase, toolRepository, settingsRepository, approvalNotifier, chatRepository),
-            chatRepository,
-            settingsRepository,
-            metricsRepository,
-            PromptTemplateEngine(),
-            emptySet(),
-            NodeContextBuilder(),
-            retrieveRelevantMemoryUseCase,
-        )
+            val realFactory = NodeExecutorFactory(
+                InputNodeExecutor(),
+                OutputNodeExecutor(llmEngine, loadModelUseCase, chatRepository),
+                IfConditionNodeExecutor(evaluateIfConditionUseCase),
+                ToolNodeExecutor(
+                    llmEngine,
+                    loadModelUseCase,
+                    toolRepository,
+                    settingsRepository,
+                    approvalNotifier,
+                    chatRepository,
+                ),
+                LiteRtNodeExecutor(
+                    llmEngine,
+                    toolRepository,
+                    chatRepository,
+                    settingsRepository,
+                    metricsRepository,
+                    loadModelUseCase,
+                ),
+                CloudLlmNodeExecutor(
+                    toolRepository,
+                    chatRepository,
+                    settingsRepository,
+                    apiKeyRepository,
+                    metricsRepository,
+                    koogClientFactory,
+                    cloudLlmModelResolver,
+                ),
+                SystemNodeExecutor(llmEngine, loadModelUseCase, chatRepository),
+                QueueProcessorNodeExecutor(),
+                SummaryNodeExecutor(llmEngine, loadModelUseCase),
+                ClarificationNodeExecutor(llmEngine, loadModelUseCase, realClarificationRepository),
+            )
+            val engineWithRealRepo = GraphExecutionEngine(
+                realFactory,
+                ToolNodeExecutor(
+                    llmEngine,
+                    loadModelUseCase,
+                    toolRepository,
+                    settingsRepository,
+                    approvalNotifier,
+                    chatRepository,
+                ),
+                chatRepository,
+                settingsRepository,
+                metricsRepository,
+                PromptTemplateEngine(),
+                emptySet(),
+                NodeContextBuilder(),
+                retrieveRelevantMemoryUseCase,
+            )
 
-        // Generate a question with two options; the first one is the default the
-        // repository falls back to on timeout.
-        every { llmEngine.generateResponseStream(any()) } returns flowOf(
-            "{\"question\":\"Pick one\",\"options\":[\"default-option\",\"other\"]}",
-        )
+            // Generate a question with two options; the first one is the default the
+            // repository falls back to on timeout.
+            every { llmEngine.generateResponseStream(any()) } returns flowOf(
+                "{\"question\":\"Pick one\",\"options\":[\"default-option\",\"other\"]}",
+            )
 
-        val inputNode = NodeModel("input_1", NodeType.INPUT, 0f, 0f)
-        val clarificationNode = NodeModel(
-            id = "clar_1",
-            type = NodeType.CLARIFICATION,
-            x = 0f,
-            y = 0f,
-            systemPrompt = "Ask user for clarification.",
-            // Short timeout — runTest virtual time advances past it without any
-            // submitClarification call, so the repository returns the default.
-            clarificationTimeoutMs = 50L,
-        )
-        val outputNode = NodeModel("output_1", NodeType.OUTPUT, 0f, 0f, systemPrompt = null)
+            val inputNode = NodeModel("input_1", NodeType.INPUT, 0f, 0f)
+            val clarificationNode = NodeModel(
+                id = "clar_1",
+                type = NodeType.CLARIFICATION,
+                x = 0f,
+                y = 0f,
+                systemPrompt = "Ask user for clarification.",
+                // Short timeout — runTest virtual time advances past it without any
+                // submitClarification call, so the repository returns the default.
+                clarificationTimeoutMs = 50L,
+            )
+            val outputNode = NodeModel("output_1", NodeType.OUTPUT, 0f, 0f, systemPrompt = null)
 
-        val graph = PipelineGraph(
-            id = "g1", name = "Clarification Timeout Graph",
-            nodes = listOf(inputNode, clarificationNode, outputNode),
-            connections = listOf(
-                ConnectionModel("c1", "input_1", "clar_1"),
-                ConnectionModel("c2", "clar_1", "output_1"),
-            ),
-        )
+            val graph = PipelineGraph(
+                id = "g1",
+                name = "Clarification Timeout Graph",
+                nodes = listOf(inputNode, clarificationNode, outputNode),
+                connections = listOf(
+                    ConnectionModel("c1", "input_1", "clar_1"),
+                    ConnectionModel("c2", "clar_1", "output_1"),
+                ),
+            )
 
-        val states = engineWithRealRepo(sessionId, "User prompt", graph).toList()
+            val states = engineWithRealRepo(sessionId, "User prompt", graph).toList()
 
-        // The clarification was published before timing out.
-        val awaiting = states.filterIsInstance<AgentOrchestratorState.AwaitingClarification>().single()
-        assertEquals("Pick one", awaiting.request.question)
-        assertEquals(50L, awaiting.request.timeoutMs)
+            // The clarification was published before timing out.
+            val awaiting = states.filterIsInstance<AgentOrchestratorState.AwaitingClarification>().single()
+            assertEquals("Pick one", awaiting.request.question)
+            assertEquals(50L, awaiting.request.timeoutMs)
 
-        // The default option (first in the list) reached OUTPUT and surfaced as the
-        // final completed response — proving the pipeline did NOT stall on the
-        // unanswered request.
-        val completed = states.last() as AgentOrchestratorState.Completed
-        assertEquals("default-option", completed.finalResponse)
-    }
+            // The default option (first in the list) reached OUTPUT and surfaced as the
+            // final completed response — proving the pipeline did NOT stall on the
+            // unanswered request.
+            val completed = states.last() as AgentOrchestratorState.Completed
+            assertEquals("default-option", completed.finalResponse)
+        }
 
     // ─── NodeContextBuilder integration ──────────────────────────────────────
 
@@ -909,7 +1020,8 @@ class GraphExecutionEngineTest {
         val outputNode = NodeModel("output", NodeType.OUTPUT, 0f, 0f, systemPrompt = null)
 
         val graph = PipelineGraph(
-            id = "g1", name = "Context Wrap Test",
+            id = "g1",
+            name = "Context Wrap Test",
             nodes = listOf(inputNode, llmNode, outputNode),
             connections = listOf(
                 ConnectionModel("c1", "input", "llm"),
@@ -924,138 +1036,148 @@ class GraphExecutionEngineTest {
         // The Original Task header must wrap the user message; Previous Node Output
         // header must carry INPUT's echoed payload (also "what's the weather?").
         io.mockk.verify {
-            llmEngine.generateResponseStream(match {
-                it.contains("--- Original Task ---") &&
-                    it.contains("what's the weather?") &&
-                    it.contains("--- Previous Node Output ---")
-            })
+            llmEngine.generateResponseStream(
+                match {
+                    it.contains("--- Original Task ---") &&
+                        it.contains("what's the weather?") &&
+                        it.contains("--- Previous Node Output ---")
+                },
+            )
         }
     }
 
     @Test
-    fun `given LITE_RT with only originalTask flag when executed then disabled blocks are absent from prompt`() = runTest {
-        every { settingsRepository.pipelineMaxSteps } returns flowOf(15)
+    fun `given LITE_RT with only originalTask flag when executed then disabled blocks are absent from prompt`() =
+        runTest {
+            every { settingsRepository.pipelineMaxSteps } returns flowOf(15)
 
-        val inputNode = NodeModel("input", NodeType.INPUT, 0f, 0f)
-        val llmNode = NodeModel(
-            id = "llm",
-            type = NodeType.LITE_RT,
-            x = 0f,
-            y = 0f,
-            contextConfig = NodeContextConfig(
-                chatHistory = false,
-                originalTask = true,
-                nodeInput = false,
-                longTermMemory = false,
-                toolResults = false,
-            ),
-        )
-        val outputNode = NodeModel("output", NodeType.OUTPUT, 0f, 0f, systemPrompt = null)
+            val inputNode = NodeModel("input", NodeType.INPUT, 0f, 0f)
+            val llmNode = NodeModel(
+                id = "llm",
+                type = NodeType.LITE_RT,
+                x = 0f,
+                y = 0f,
+                contextConfig = NodeContextConfig(
+                    chatHistory = false,
+                    originalTask = true,
+                    nodeInput = false,
+                    longTermMemory = false,
+                    toolResults = false,
+                ),
+            )
+            val outputNode = NodeModel("output", NodeType.OUTPUT, 0f, 0f, systemPrompt = null)
 
-        val graph = PipelineGraph(
-            id = "g1", name = "Single-Flag Config Test",
-            nodes = listOf(inputNode, llmNode, outputNode),
-            connections = listOf(
-                ConnectionModel("c1", "input", "llm"),
-                ConnectionModel("c2", "llm", "output"),
-            ),
-        )
+            val graph = PipelineGraph(
+                id = "g1",
+                name = "Single-Flag Config Test",
+                nodes = listOf(inputNode, llmNode, outputNode),
+                connections = listOf(
+                    ConnectionModel("c1", "input", "llm"),
+                    ConnectionModel("c2", "llm", "output"),
+                ),
+            )
 
-        every { llmEngine.generateResponseStream(any()) } returns flowOf("ok")
+            every { llmEngine.generateResponseStream(any()) } returns flowOf("ok")
 
-        engine(sessionId, "the question", graph).toList()
+            engine(sessionId, "the question", graph).toList()
 
-        // Only the Original Task block (with the user prompt) is allowed in the prompt;
-        // the headers for disabled blocks must not appear.
-        io.mockk.verify {
-            llmEngine.generateResponseStream(match {
-                it.contains("--- Original Task ---") &&
-                    it.contains("the question") &&
-                    !it.contains("--- Chat History ---") &&
-                    !it.contains("--- Long-Term Memory ---") &&
-                    !it.contains("--- Tool Results ---") &&
-                    !it.contains("--- Previous Node Output ---")
-            })
+            // Only the Original Task block (with the user prompt) is allowed in the prompt;
+            // the headers for disabled blocks must not appear.
+            io.mockk.verify {
+                llmEngine.generateResponseStream(
+                    match {
+                        it.contains("--- Original Task ---") &&
+                            it.contains("the question") &&
+                            !it.contains("--- Chat History ---") &&
+                            !it.contains("--- Long-Term Memory ---") &&
+                            !it.contains("--- Tool Results ---") &&
+                            !it.contains("--- Previous Node Output ---")
+                    },
+                )
+            }
         }
-    }
 
     @Test
-    fun `given TOOL node configured as auto when executed then resolved tool name is recorded for downstream Tool Results block`() = runTest {
-        every { settingsRepository.pipelineMaxSteps } returns flowOf(15)
-        every { settingsRepository.requiresUserConfirmation } returns flowOf(false)
+    fun `given TOOL node configured as auto when executed then resolved tool name is recorded for downstream Tool Results block`() =
+        runTest {
+            every { settingsRepository.pipelineMaxSteps } returns flowOf(15)
+            every { settingsRepository.requiresUserConfirmation } returns flowOf(false)
 
-        // Two tools registered; the LITE_RT used by ToolNodeExecutor for auto-selection
-        // returns a JSON object naming "web.search" — so the observation must be
-        // attributed to "web.search", not to the configured placeholder "auto".
-        coEvery { toolRepository.getAvailableTools() } returns listOf(
-            AgentTool("web.search", "Search the web", "{}"),
-            AgentTool("calendar.read", "Read the calendar", "{}"),
-        )
-        coEvery { toolRepository.executeTool("web.search", any()) } returns "search-result"
+            // Two tools registered; the LITE_RT used by ToolNodeExecutor for auto-selection
+            // returns a JSON object naming "web.search" — so the observation must be
+            // attributed to "web.search", not to the configured placeholder "auto".
+            coEvery { toolRepository.getAvailableTools() } returns listOf(
+                AgentTool("web.search", "Search the web", "{}"),
+                AgentTool("calendar.read", "Read the calendar", "{}"),
+            )
+            coEvery { toolRepository.executeTool("web.search", any()) } returns "search-result"
 
-        val inputNode = NodeModel("input", NodeType.INPUT, 0f, 0f)
-        val toolNode = NodeModel(
-            id = "tool",
-            type = NodeType.TOOL,
-            x = 0f,
-            y = 0f,
-            toolName = "auto",
-            // Sparse config: only Tool Results — proves that downstream nodes see
-            // the resolved tool, not the literal "auto" placeholder.
-            contextConfig = NodeContextConfig(
-                chatHistory = false,
-                originalTask = false,
-                nodeInput = false,
-                longTermMemory = false,
-                toolResults = true,
-            ),
-        )
-        val downstreamNode = NodeModel(
-            id = "llm",
-            type = NodeType.LITE_RT,
-            x = 0f,
-            y = 0f,
-            contextConfig = NodeContextConfig(
-                chatHistory = false,
-                originalTask = false,
-                nodeInput = false,
-                longTermMemory = false,
-                toolResults = true,
-            ),
-        )
-        val outputNode = NodeModel("output", NodeType.OUTPUT, 0f, 0f, systemPrompt = null)
+            val inputNode = NodeModel("input", NodeType.INPUT, 0f, 0f)
+            val toolNode = NodeModel(
+                id = "tool",
+                type = NodeType.TOOL,
+                x = 0f,
+                y = 0f,
+                toolName = "auto",
+                // Sparse config: only Tool Results — proves that downstream nodes see
+                // the resolved tool, not the literal "auto" placeholder.
+                contextConfig = NodeContextConfig(
+                    chatHistory = false,
+                    originalTask = false,
+                    nodeInput = false,
+                    longTermMemory = false,
+                    toolResults = true,
+                ),
+            )
+            val downstreamNode = NodeModel(
+                id = "llm",
+                type = NodeType.LITE_RT,
+                x = 0f,
+                y = 0f,
+                contextConfig = NodeContextConfig(
+                    chatHistory = false,
+                    originalTask = false,
+                    nodeInput = false,
+                    longTermMemory = false,
+                    toolResults = true,
+                ),
+            )
+            val outputNode = NodeModel("output", NodeType.OUTPUT, 0f, 0f, systemPrompt = null)
 
-        val graph = PipelineGraph(
-            id = "g1", name = "Auto Tool Attribution",
-            nodes = listOf(inputNode, toolNode, downstreamNode, outputNode),
-            connections = listOf(
-                ConnectionModel("c1", "input", "tool"),
-                ConnectionModel("c2", "tool", "llm"),
-                ConnectionModel("c3", "llm", "output"),
-            ),
-        )
+            val graph = PipelineGraph(
+                id = "g1",
+                name = "Auto Tool Attribution",
+                nodes = listOf(inputNode, toolNode, downstreamNode, outputNode),
+                connections = listOf(
+                    ConnectionModel("c1", "input", "tool"),
+                    ConnectionModel("c2", "tool", "llm"),
+                    ConnectionModel("c3", "llm", "output"),
+                ),
+            )
 
-        // Two LLM consumers fire in order:
-        //   1. ToolNodeExecutor's auto-selection LLM → returns the JSON tool choice
-        //   2. The downstream LITE_RT node → return value is irrelevant for this test
-        every { llmEngine.generateResponseStream(any()) } returnsMany listOf(
-            flowOf("{\"tool\":\"web.search\",\"arguments\":{\"q\":\"weather\"}}"),
-            flowOf("downstream answer"),
-        )
+            // Two LLM consumers fire in order:
+            //   1. ToolNodeExecutor's auto-selection LLM → returns the JSON tool choice
+            //   2. The downstream LITE_RT node → return value is irrelevant for this test
+            every { llmEngine.generateResponseStream(any()) } returnsMany listOf(
+                flowOf("{\"tool\":\"web.search\",\"arguments\":{\"q\":\"weather\"}}"),
+                flowOf("downstream answer"),
+            )
 
-        engine(sessionId, "find weather", graph).toList()
+            engine(sessionId, "find weather", graph).toList()
 
-        // The downstream LITE_RT prompt must carry the Tool Results block attributed
-        // to the resolved tool name, NOT the literal "auto" or the node label.
-        io.mockk.verify {
-            llmEngine.generateResponseStream(match {
-                it.contains("--- Tool Results ---") &&
-                    it.contains("web.search: search-result") &&
-                    !it.contains("auto: search-result") &&
-                    !it.contains("TOOL: search-result")
-            })
+            // The downstream LITE_RT prompt must carry the Tool Results block attributed
+            // to the resolved tool name, NOT the literal "auto" or the node label.
+            io.mockk.verify {
+                llmEngine.generateResponseStream(
+                    match {
+                        it.contains("--- Tool Results ---") &&
+                            it.contains("web.search: search-result") &&
+                            !it.contains("auto: search-result") &&
+                            !it.contains("TOOL: search-result")
+                    },
+                )
+            }
         }
-    }
 
     @Test
     fun `given control-flow nodes when executed then their input is not wrapped with context headers`() = runTest {
@@ -1068,7 +1190,8 @@ class GraphExecutionEngineTest {
         val outputNode = NodeModel("output", NodeType.OUTPUT, 0f, 0f, systemPrompt = null)
 
         val graph = PipelineGraph(
-            id = "g1", name = "Passthrough Test",
+            id = "g1",
+            name = "Passthrough Test",
             nodes = listOf(inputNode, outputNode),
             connections = listOf(
                 ConnectionModel("c1", "input", "output"),
@@ -1082,176 +1205,196 @@ class GraphExecutionEngineTest {
     }
 
     @Test
-    fun `given INPUT to TOOL to CLOUD to OUTPUT pipeline with distinct NodeContextConfigs when executed then TOOL receives only nodeInput and CLOUD plus OUTPUT receive full context`() = runTest {
-        every { settingsRepository.pipelineMaxSteps } returns flowOf(15)
-        every { settingsRepository.requiresUserConfirmation } returns flowOf(false)
+    fun `given INPUT to TOOL to CLOUD to OUTPUT pipeline with distinct NodeContextConfigs when executed then TOOL receives only nodeInput and CLOUD plus OUTPUT receive full context`() =
+        runTest {
+            every { settingsRepository.pipelineMaxSteps } returns flowOf(15)
+            every { settingsRepository.requiresUserConfirmation } returns flowOf(false)
 
-        // Pre-seed the pipeline-scoped data sources so every block in
-        // ALL_ENABLED has something visible to render. Without these stubs the
-        // builder would correctly drop empty blocks and we could not
-        // distinguish "block omitted because flag is false" from "block
-        // omitted because data is empty".
-        every { chatRepository.getMessagesForSession(sessionId) } returns flowOf(
-            listOf(
-                ChatMessage(
-                    id = 1L,
-                    sessionId = sessionId,
-                    role = Role.USER,
-                    content = "earlier question",
+            // Pre-seed the pipeline-scoped data sources so every block in
+            // ALL_ENABLED has something visible to render. Without these stubs the
+            // builder would correctly drop empty blocks and we could not
+            // distinguish "block omitted because flag is false" from "block
+            // omitted because data is empty".
+            every { chatRepository.getMessagesForSession(sessionId) } returns flowOf(
+                listOf(
+                    ChatMessage(
+                        id = 1L,
+                        sessionId = sessionId,
+                        role = Role.USER,
+                        content = "earlier question",
+                        timestamp = 0L,
+                    ),
+                    ChatMessage(
+                        id = 2L,
+                        sessionId = sessionId,
+                        role = Role.AGENT,
+                        content = "earlier answer",
+                        timestamp = 1L,
+                    ),
+                ),
+            )
+            coEvery { retrieveRelevantMemoryUseCase(any()) } returns listOf(
+                MemoryChunk(
+                    id = 99L,
+                    text = "user lives in Berlin",
+                    embedding = FloatArray(0),
                     timestamp = 0L,
                 ),
-                ChatMessage(
-                    id = 2L,
-                    sessionId = sessionId,
-                    role = Role.AGENT,
-                    content = "earlier answer",
-                    timestamp = 1L,
+            )
+
+            // ToolRepository: one available tool plus a deterministic execution
+            // result. The auto-selector LLM call (see returnsMany below) names
+            // "web.search", so this is the tool the engine actually invokes.
+            coEvery { toolRepository.getAvailableTools() } returns listOf(
+                AgentTool("web.search", "Search the web", "{}"),
+            )
+            coEvery { toolRepository.executeTool("web.search", any()) } returns "search-result"
+
+            // Cloud client mock — captures the prompt the CLOUD node receives so we
+            // can assert that the full-context wrap reached the cloud LLM.
+            val mockAnthropicClient: LLMClient = mockk(relaxed = true)
+            val capturedCloudPrompt = slot<Prompt>()
+            coEvery {
+                mockAnthropicClient.executeStreaming(capture(capturedCloudPrompt), any<LLModel>())
+            } returns flowOf(StreamFrame.TextDelta("cloud_answer"))
+            coEvery { koogClientFactory.createAnthropicExecutor() } returns mockAnthropicClient
+
+            every { apiKeyRepository.getAnthropicKey() } returns flowOf("anthropic-test-key")
+            every { apiKeyRepository.getAnthropicModel() } returns flowOf("claude-sonnet-4-5")
+            every { apiKeyRepository.getOpenAIKey() } returns flowOf(null)
+            every { apiKeyRepository.getGoogleKey() } returns flowOf(null)
+            every { apiKeyRepository.getDeepSeekKey() } returns flowOf(null)
+
+            // Two LITE_RT consumers fire in order:
+            //   1. ToolNodeExecutor's auto-selection LLM → returns the JSON tool choice
+            //   2. OUTPUT (with systemPrompt set) → returns the final formatted reply
+            every { llmEngine.generateResponseStream(any()) } returnsMany listOf(
+                flowOf("{\"tool\":\"web.search\",\"arguments\":{\"q\":\"weather\"}}"),
+                flowOf("final_formatted_reply"),
+            )
+
+            // ─── Pipeline definition ───
+            // TOOL: nodeInput-only — must NOT see chat history, memory or tool
+            //                        results (none yet) in its assembled input.
+            // CLOUD: ALL_ENABLED   — should see every block, including the tool
+            //                        result produced by the upstream TOOL node.
+            // OUTPUT: ALL_ENABLED + systemPrompt — should also see every block.
+            val inputNode = NodeModel("input_1", NodeType.INPUT, 0f, 0f)
+            val toolNode = NodeModel(
+                id = "tool_1",
+                type = NodeType.TOOL,
+                x = 0f,
+                y = 0f,
+                toolName = "auto",
+                contextConfig = NodeContextConfig(
+                    chatHistory = false,
+                    originalTask = false,
+                    nodeInput = true,
+                    longTermMemory = false,
+                    toolResults = false,
                 ),
-            ),
-        )
-        coEvery { retrieveRelevantMemoryUseCase(any()) } returns listOf(
-            MemoryChunk(
-                id = 99L,
-                text = "user lives in Berlin",
-                embedding = FloatArray(0),
-                timestamp = 0L,
-            ),
-        )
+            )
+            val cloudNode = NodeModel(
+                id = "cloud_1",
+                type = NodeType.CLOUD,
+                x = 0f,
+                y = 0f,
+                cloudProvider = "anthropic",
+                systemPrompt = "Answer the user.",
+                contextConfig = NodeContextConfig.ALL_ENABLED,
+            )
+            val outputNode = NodeModel(
+                id = "output_1",
+                type = NodeType.OUTPUT,
+                x = 0f,
+                y = 0f,
+                systemPrompt = "Format reply:",
+                contextConfig = NodeContextConfig.ALL_ENABLED,
+            )
 
-        // ToolRepository: one available tool plus a deterministic execution
-        // result. The auto-selector LLM call (see returnsMany below) names
-        // "web.search", so this is the tool the engine actually invokes.
-        coEvery { toolRepository.getAvailableTools() } returns listOf(
-            AgentTool("web.search", "Search the web", "{}"),
-        )
-        coEvery { toolRepository.executeTool("web.search", any()) } returns "search-result"
+            val graph = PipelineGraph(
+                id = "g1",
+                name = "Phase 15-6 integration",
+                nodes = listOf(inputNode, toolNode, cloudNode, outputNode),
+                connections = listOf(
+                    ConnectionModel("c1", "input_1", "tool_1"),
+                    ConnectionModel("c2", "tool_1", "cloud_1"),
+                    ConnectionModel("c3", "cloud_1", "output_1"),
+                ),
+            )
 
-        // Cloud client mock — captures the prompt the CLOUD node receives so we
-        // can assert that the full-context wrap reached the cloud LLM.
-        val mockAnthropicClient: LLMClient = mockk(relaxed = true)
-        val capturedCloudPrompt = slot<Prompt>()
-        coEvery {
-            mockAnthropicClient.executeStreaming(capture(capturedCloudPrompt), any<LLModel>())
-        } returns flowOf(StreamFrame.TextDelta("cloud_answer"))
-        coEvery { koogClientFactory.createAnthropicExecutor() } returns mockAnthropicClient
+            // ─── Act ───
+            val states = engine(sessionId, "user prompt", graph).toList()
 
-        every { apiKeyRepository.getAnthropicKey() } returns flowOf("anthropic-test-key")
-        every { apiKeyRepository.getAnthropicModel() } returns flowOf("claude-sonnet-4-5")
-        every { apiKeyRepository.getOpenAIKey() } returns flowOf(null)
-        every { apiKeyRepository.getGoogleKey() } returns flowOf(null)
-        every { apiKeyRepository.getDeepSeekKey() } returns flowOf(null)
+            // ─── Assert: pipeline ran end-to-end ───
+            val completed = states.last() as AgentOrchestratorState.Completed
+            assertEquals("final_formatted_reply", completed.finalResponse)
 
-        // Two LITE_RT consumers fire in order:
-        //   1. ToolNodeExecutor's auto-selection LLM → returns the JSON tool choice
-        //   2. OUTPUT (with systemPrompt set) → returns the final formatted reply
-        every { llmEngine.generateResponseStream(any()) } returnsMany listOf(
-            flowOf("{\"tool\":\"web.search\",\"arguments\":{\"q\":\"weather\"}}"),
-            flowOf("final_formatted_reply"),
-        )
+            // ─── Assert: TOOL's auto-selector LITE_RT prompt carries ONLY the
+            // Previous Node Output block — no chat history, memory or tool
+            // results bleed in (TOOL has not produced any results at that point
+            // anyway, but the configuration must also block the other blocks).
+            io.mockk.verify {
+                llmEngine.generateResponseStream(
+                    match {
+                        it.contains("--- Previous Node Output ---") &&
+                            it.contains("user prompt") &&
+                            !it.contains("--- Chat History ---") &&
+                            !it.contains("--- Long-Term Memory ---") &&
+                            !it.contains("--- Tool Results ---") &&
+                            !it.contains("--- Original Task ---")
+                    },
+                )
+            }
 
-        // ─── Pipeline definition ───
-        // TOOL: nodeInput-only — must NOT see chat history, memory or tool
-        //                        results (none yet) in its assembled input.
-        // CLOUD: ALL_ENABLED   — should see every block, including the tool
-        //                        result produced by the upstream TOOL node.
-        // OUTPUT: ALL_ENABLED + systemPrompt — should also see every block.
-        val inputNode = NodeModel("input_1", NodeType.INPUT, 0f, 0f)
-        val toolNode = NodeModel(
-            id = "tool_1",
-            type = NodeType.TOOL,
-            x = 0f,
-            y = 0f,
-            toolName = "auto",
-            contextConfig = NodeContextConfig(
-                chatHistory = false,
-                originalTask = false,
-                nodeInput = true,
-                longTermMemory = false,
-                toolResults = false,
-            ),
-        )
-        val cloudNode = NodeModel(
-            id = "cloud_1",
-            type = NodeType.CLOUD,
-            x = 0f,
-            y = 0f,
-            cloudProvider = "anthropic",
-            systemPrompt = "Answer the user.",
-            contextConfig = NodeContextConfig.ALL_ENABLED,
-        )
-        val outputNode = NodeModel(
-            id = "output_1",
-            type = NodeType.OUTPUT,
-            x = 0f,
-            y = 0f,
-            systemPrompt = "Format reply:",
-            contextConfig = NodeContextConfig.ALL_ENABLED,
-        )
+            // ─── Assert: OUTPUT's LITE_RT prompt carries the full ALL_ENABLED
+            // wrap, including the tool result accumulated upstream.
+            io.mockk.verify {
+                llmEngine.generateResponseStream(
+                    match {
+                        it.contains("--- Original Task ---") &&
+                            it.contains("user prompt") &&
+                            it.contains("--- Chat History ---") &&
+                            it.contains("USER: earlier question") &&
+                            it.contains("--- Long-Term Memory ---") &&
+                            it.contains("user lives in Berlin") &&
+                            it.contains("--- Tool Results ---") &&
+                            it.contains("web.search: search-result") &&
+                            it.contains("--- Previous Node Output ---")
+                    },
+                )
+            }
 
-        val graph = PipelineGraph(
-            id = "g1", name = "Phase 15-6 integration",
-            nodes = listOf(inputNode, toolNode, cloudNode, outputNode),
-            connections = listOf(
-                ConnectionModel("c1", "input_1", "tool_1"),
-                ConnectionModel("c2", "tool_1", "cloud_1"),
-                ConnectionModel("c3", "cloud_1", "output_1"),
-            ),
-        )
-
-        // ─── Act ───
-        val states = engine(sessionId, "user prompt", graph).toList()
-
-        // ─── Assert: pipeline ran end-to-end ───
-        val completed = states.last() as AgentOrchestratorState.Completed
-        assertEquals("final_formatted_reply", completed.finalResponse)
-
-        // ─── Assert: TOOL's auto-selector LITE_RT prompt carries ONLY the
-        // Previous Node Output block — no chat history, memory or tool
-        // results bleed in (TOOL has not produced any results at that point
-        // anyway, but the configuration must also block the other blocks).
-        io.mockk.verify {
-            llmEngine.generateResponseStream(match {
-                it.contains("--- Previous Node Output ---") &&
-                    it.contains("user prompt") &&
-                    !it.contains("--- Chat History ---") &&
-                    !it.contains("--- Long-Term Memory ---") &&
-                    !it.contains("--- Tool Results ---") &&
-                    !it.contains("--- Original Task ---")
-            })
+            // ─── Assert: CLOUD received the full context wrap (ALL_ENABLED). The
+            // cloud client serialises every prompt message into its own field, so
+            // we collapse them into a single string for substring assertions.
+            coVerify { mockAnthropicClient.executeStreaming(any<Prompt>(), any<LLModel>()) }
+            val cloudPromptText = capturedCloudPrompt.captured.messages.joinToString("\n") { it.content }
+            assertTrue(
+                "CLOUD prompt missing Original Task block: $cloudPromptText",
+                cloudPromptText.contains("--- Original Task ---") && cloudPromptText.contains("user prompt"),
+            )
+            assertTrue(
+                "CLOUD prompt missing Chat History block: $cloudPromptText",
+                cloudPromptText.contains("--- Chat History ---") && cloudPromptText.contains("earlier question"),
+            )
+            assertTrue(
+                "CLOUD prompt missing Long-Term Memory block: $cloudPromptText",
+                cloudPromptText.contains(
+                    "--- Long-Term Memory ---",
+                ) &&
+                    cloudPromptText.contains("user lives in Berlin"),
+            )
+            assertTrue(
+                "CLOUD prompt missing Tool Results block: $cloudPromptText",
+                cloudPromptText.contains("--- Tool Results ---") &&
+                    cloudPromptText.contains("web.search: search-result"),
+            )
+            assertTrue(
+                "CLOUD prompt missing Previous Node Output block: $cloudPromptText",
+                cloudPromptText.contains("--- Previous Node Output ---"),
+            )
         }
-
-        // ─── Assert: OUTPUT's LITE_RT prompt carries the full ALL_ENABLED
-        // wrap, including the tool result accumulated upstream.
-        io.mockk.verify {
-            llmEngine.generateResponseStream(match {
-                it.contains("--- Original Task ---") &&
-                    it.contains("user prompt") &&
-                    it.contains("--- Chat History ---") &&
-                    it.contains("USER: earlier question") &&
-                    it.contains("--- Long-Term Memory ---") &&
-                    it.contains("user lives in Berlin") &&
-                    it.contains("--- Tool Results ---") &&
-                    it.contains("web.search: search-result") &&
-                    it.contains("--- Previous Node Output ---")
-            })
-        }
-
-        // ─── Assert: CLOUD received the full context wrap (ALL_ENABLED). The
-        // cloud client serialises every prompt message into its own field, so
-        // we collapse them into a single string for substring assertions.
-        coVerify { mockAnthropicClient.executeStreaming(any<Prompt>(), any<LLModel>()) }
-        val cloudPromptText = capturedCloudPrompt.captured.messages.joinToString("\n") { it.content }
-        assertTrue("CLOUD prompt missing Original Task block: $cloudPromptText",
-            cloudPromptText.contains("--- Original Task ---") && cloudPromptText.contains("user prompt"))
-        assertTrue("CLOUD prompt missing Chat History block: $cloudPromptText",
-            cloudPromptText.contains("--- Chat History ---") && cloudPromptText.contains("earlier question"))
-        assertTrue("CLOUD prompt missing Long-Term Memory block: $cloudPromptText",
-            cloudPromptText.contains("--- Long-Term Memory ---") && cloudPromptText.contains("user lives in Berlin"))
-        assertTrue("CLOUD prompt missing Tool Results block: $cloudPromptText",
-            cloudPromptText.contains("--- Tool Results ---") && cloudPromptText.contains("web.search: search-result"))
-        assertTrue("CLOUD prompt missing Previous Node Output block: $cloudPromptText",
-            cloudPromptText.contains("--- Previous Node Output ---"))
-    }
 
     // ─── Phase 17.4 — Agent console event emissions ──────────────────────────
 
@@ -1264,12 +1407,13 @@ class GraphExecutionEngineTest {
         val outputNode = NodeModel("output_1", NodeType.OUTPUT, 0f, 0f)
 
         val graph = PipelineGraph(
-            id = "g1", name = "Console Linear",
+            id = "g1",
+            name = "Console Linear",
             nodes = listOf(inputNode, llmNode, outputNode),
             connections = listOf(
                 ConnectionModel("c1", "input_1", "llm_1"),
                 ConnectionModel("c2", "llm_1", "output_1"),
-            )
+            ),
         )
         every { llmEngine.generateResponseStream(any()) } returns flowOf("answer")
 
@@ -1291,9 +1435,9 @@ class GraphExecutionEngineTest {
         val nodeMessages = finalLog.filter { it.type == ConsoleEventType.NodeExecution }
             .map { it.message }
         assertTrue("Missing INPUT start", nodeMessages.any { it.startsWith("▶") && it.contains("INPUT") })
-        assertTrue("Missing INPUT done",  nodeMessages.any { it.startsWith("✓") && it.contains("INPUT") })
+        assertTrue("Missing INPUT done", nodeMessages.any { it.startsWith("✓") && it.contains("INPUT") })
         assertTrue("Missing LITE_RT start", nodeMessages.any { it.startsWith("▶") && it.contains("LITE_RT") })
-        assertTrue("Missing LITE_RT done",  nodeMessages.any { it.startsWith("✓") && it.contains("LITE_RT") })
+        assertTrue("Missing LITE_RT done", nodeMessages.any { it.startsWith("✓") && it.contains("LITE_RT") })
         assertTrue("Missing OUTPUT start", nodeMessages.any { it.startsWith("▶") && it.contains("OUTPUT") })
         assertTrue("OUTPUT must not push ✓", nodeMessages.none { it.startsWith("✓") && it.contains("OUTPUT") })
     }
@@ -1306,7 +1450,8 @@ class GraphExecutionEngineTest {
         val llmNode = NodeModel("llm_1", NodeType.LITE_RT, 0f, 0f)
 
         val graph = PipelineGraph(
-            id = "g1", name = "No Output",
+            id = "g1",
+            name = "No Output",
             nodes = listOf(inputNode, llmNode),
             connections = listOf(ConnectionModel("c1", "input_1", "llm_1")),
         )

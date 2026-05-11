@@ -12,9 +12,7 @@ import javax.inject.Inject
  * to [DelegateTaskTool], which forwards the prompt to the configured cloud provider
  * and persists the response in long-term memory.
  */
-class DelegateTaskExecutor @Inject constructor(
-    private val delegateTaskTool: DelegateTaskTool,
-) : LocalToolExecutor {
+class DelegateTaskExecutor @Inject constructor(private val delegateTaskTool: DelegateTaskTool) : LocalToolExecutor {
 
     override val toolName: String = TOOL_NAME
 

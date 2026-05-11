@@ -6,8 +6,8 @@ import ai.koog.prompt.executor.clients.LLMClient
 import ai.koog.prompt.executor.clients.anthropic.AnthropicLLMClient
 import ai.koog.prompt.executor.clients.deepseek.DeepSeekLLMClient
 import ai.koog.prompt.executor.clients.google.GoogleLLMClient
-import ai.koog.prompt.executor.ollama.client.OllamaClient
 import ai.koog.prompt.executor.clients.openai.OpenAILLMClient
+import ai.koog.prompt.executor.ollama.client.OllamaClient
 import kotlinx.coroutines.flow.firstOrNull
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -22,9 +22,7 @@ import javax.inject.Singleton
  * while internal callers (e.g. `DelegateTaskTool`) retain the typed per-provider helpers.
  */
 @Singleton
-class KoogClientFactory @Inject constructor(
-    private val apiKeyRepository: ApiKeyRepository
-) : CloudLlmClientFactory {
+class KoogClientFactory @Inject constructor(private val apiKeyRepository: ApiKeyRepository) : CloudLlmClientFactory {
 
     /**
      * Provider-keyed dispatch used by domain-side consumers.

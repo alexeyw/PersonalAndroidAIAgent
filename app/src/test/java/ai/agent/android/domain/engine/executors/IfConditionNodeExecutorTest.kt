@@ -17,9 +17,9 @@ class IfConditionNodeExecutorTest {
         val evaluateIfConditionUseCase: EvaluateIfConditionUseCase = mockk()
         val executor = IfConditionNodeExecutor(evaluateIfConditionUseCase)
         val node = NodeModel("1", NodeType.IF_CONDITION, 0f, 0f)
-        
+
         coEvery { evaluateIfConditionUseCase(node, "test input") } returns true
-        
+
         val results = executor.execute(node, "test input", "session-1", "prompt").toList().unwrap()
 
         assertEquals(1, results.size)

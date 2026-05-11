@@ -53,9 +53,4 @@ sealed interface InitStage {
  * @property totalSteps Total number of stages, fixed for the duration of a
  *   single initialization attempt. Renderer uses this as the denominator.
  */
-data class InitProgress(
-    val stage: InitStage,
-    val message: String,
-    val completedSteps: Int,
-    val totalSteps: Int,
-)
+data class InitProgress(val stage: InitStage, val message: String, val completedSteps: Int, val totalSteps: Int)

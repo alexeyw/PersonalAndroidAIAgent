@@ -1,13 +1,16 @@
 package ai.agent.android.presentation.ui.settings
 
-import ai.agent.android.domain.usecases.LoadModelUseCase
-import ai.agent.android.domain.repositories.LocalModelRepository
+import ai.agent.android.R
 import ai.agent.android.domain.models.Result
+import ai.agent.android.domain.repositories.ApiKeyRepository
+import ai.agent.android.domain.repositories.LocalModelRepository
+import ai.agent.android.domain.repositories.SettingsRepository
+import ai.agent.android.domain.usecases.LoadModelUseCase
+import ai.agent.android.presentation.ui.common.UiText
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import ai.agent.android.domain.repositories.ApiKeyRepository
-import ai.agent.android.domain.repositories.SettingsRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -15,7 +18,6 @@ import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.delay
 import javax.inject.Inject
 
 /**
@@ -29,7 +31,7 @@ class SettingsViewModel @Inject constructor(
     private val settingsRepository: SettingsRepository,
     private val apiKeyRepository: ApiKeyRepository,
     private val loadModelUseCase: LoadModelUseCase,
-    private val localModelRepository: LocalModelRepository
+    private val localModelRepository: LocalModelRepository,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(SettingsUiState())
@@ -134,25 +136,25 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
-    fun testBackend(onResult: (String) -> Unit) {
+    fun testBackend(onResult: (UiText) -> Unit) {
         viewModelScope.launch {
             val activeModel = localModelRepository.getActiveModel()
             if (activeModel == null) {
-                onResult("No active local model found. Please download and select one first.")
+                onResult(UiText(R.string.errors_settings_no_active_model))
                 return@launch
             }
-            
+
             try {
                 // Ensure settings are flushed
                 delay(500)
                 val result = loadModelUseCase(activeModel.path)
                 if (result is Result.Success) {
-                    onResult("Success! Backend initialized correctly.")
+                    onResult(UiText(R.string.settings_backend_test_success))
                 } else if (result is Result.Error) {
-                    onResult("Failed: ${result.message}")
+                    onResult(UiText.of(R.string.errors_settings_test_backend_failed, result.message ?: ""))
                 }
             } catch (e: Exception) {
-                onResult("Exception: ${e.message}")
+                onResult(UiText.of(R.string.errors_settings_test_backend_exception, e.message ?: ""))
             }
         }
     }

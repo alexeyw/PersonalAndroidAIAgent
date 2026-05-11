@@ -112,31 +112,84 @@ object DefaultPipelineFactory {
             contextConfig = NodeContextConfig.defaultForType(NodeType.OUTPUT),
         )
 
-        val nodes = listOf(inputNode, intentRouterNode, liteRtNode, searchToolNode, cloudNode, decompositionNode, queueProcessorNode, taskToolNode, summaryNode, outputNode)
-        
+        val nodes =
+            listOf(inputNode, intentRouterNode, liteRtNode, searchToolNode, cloudNode, decompositionNode, queueProcessorNode, taskToolNode, summaryNode, outputNode)
+
         val connections = listOf(
-            ConnectionModel(id = UUID.randomUUID().toString(), sourceNodeId = inputNode.id, targetNodeId = intentRouterNode.id),
-            
+            ConnectionModel(
+                id = UUID.randomUUID().toString(),
+                sourceNodeId = inputNode.id,
+                targetNodeId = intentRouterNode.id,
+            ),
+
             // Routing edges
-            ConnectionModel(id = UUID.randomUUID().toString(), sourceNodeId = intentRouterNode.id, targetNodeId = liteRtNode.id, label = "Simple"),
-            ConnectionModel(id = UUID.randomUUID().toString(), sourceNodeId = intentRouterNode.id, targetNodeId = searchToolNode.id, label = "Data"),
-            ConnectionModel(id = UUID.randomUUID().toString(), sourceNodeId = intentRouterNode.id, targetNodeId = cloudNode.id, label = "Complex"),
-            ConnectionModel(id = UUID.randomUUID().toString(), sourceNodeId = intentRouterNode.id, targetNodeId = decompositionNode.id, label = "Task"),
-            
+            ConnectionModel(
+                id = UUID.randomUUID().toString(),
+                sourceNodeId = intentRouterNode.id,
+                targetNodeId = liteRtNode.id,
+                label = "Simple",
+            ),
+            ConnectionModel(
+                id = UUID.randomUUID().toString(),
+                sourceNodeId = intentRouterNode.id,
+                targetNodeId = searchToolNode.id,
+                label = "Data",
+            ),
+            ConnectionModel(
+                id = UUID.randomUUID().toString(),
+                sourceNodeId = intentRouterNode.id,
+                targetNodeId = cloudNode.id,
+                label = "Complex",
+            ),
+            ConnectionModel(
+                id = UUID.randomUUID().toString(),
+                sourceNodeId = intentRouterNode.id,
+                targetNodeId = decompositionNode.id,
+                label = "Task",
+            ),
+
             // Simple Path
-            ConnectionModel(id = UUID.randomUUID().toString(), sourceNodeId = liteRtNode.id, targetNodeId = outputNode.id),
-            
+            ConnectionModel(
+                id = UUID.randomUUID().toString(),
+                sourceNodeId = liteRtNode.id,
+                targetNodeId = outputNode.id,
+            ),
+
             // Data Path
-            ConnectionModel(id = UUID.randomUUID().toString(), sourceNodeId = searchToolNode.id, targetNodeId = outputNode.id),
-            
+            ConnectionModel(
+                id = UUID.randomUUID().toString(),
+                sourceNodeId = searchToolNode.id,
+                targetNodeId = outputNode.id,
+            ),
+
             // Complex Path
-            ConnectionModel(id = UUID.randomUUID().toString(), sourceNodeId = cloudNode.id, targetNodeId = outputNode.id),
-            
+            ConnectionModel(
+                id = UUID.randomUUID().toString(),
+                sourceNodeId = cloudNode.id,
+                targetNodeId = outputNode.id,
+            ),
+
             // Task Path
-            ConnectionModel(id = UUID.randomUUID().toString(), sourceNodeId = decompositionNode.id, targetNodeId = queueProcessorNode.id),
-            ConnectionModel(id = UUID.randomUUID().toString(), sourceNodeId = queueProcessorNode.id, targetNodeId = taskToolNode.id),
-            ConnectionModel(id = UUID.randomUUID().toString(), sourceNodeId = taskToolNode.id, targetNodeId = summaryNode.id),
-            ConnectionModel(id = UUID.randomUUID().toString(), sourceNodeId = summaryNode.id, targetNodeId = outputNode.id)
+            ConnectionModel(
+                id = UUID.randomUUID().toString(),
+                sourceNodeId = decompositionNode.id,
+                targetNodeId = queueProcessorNode.id,
+            ),
+            ConnectionModel(
+                id = UUID.randomUUID().toString(),
+                sourceNodeId = queueProcessorNode.id,
+                targetNodeId = taskToolNode.id,
+            ),
+            ConnectionModel(
+                id = UUID.randomUUID().toString(),
+                sourceNodeId = taskToolNode.id,
+                targetNodeId = summaryNode.id,
+            ),
+            ConnectionModel(
+                id = UUID.randomUUID().toString(),
+                sourceNodeId = summaryNode.id,
+                targetNodeId = outputNode.id,
+            ),
         )
 
         return PipelineGraph(
@@ -144,7 +197,7 @@ object DefaultPipelineFactory {
             name = name,
             updatedAt = System.currentTimeMillis(),
             nodes = nodes,
-            connections = connections
+            connections = connections,
         )
     }
 }

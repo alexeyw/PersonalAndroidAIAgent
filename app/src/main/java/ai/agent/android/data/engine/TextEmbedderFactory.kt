@@ -10,7 +10,7 @@ import javax.inject.Inject
 interface TextEmbedderFactory {
     /**
      * Creates a [TextEmbedder] from the given [options].
-     * 
+     *
      * @param context Application context
      * @param options Configuration options for the embedder
      * @return A ready-to-use [TextEmbedder]
@@ -25,7 +25,6 @@ class DefaultTextEmbedderFactory @Inject constructor() : TextEmbedderFactory {
     /**
      * @inheritDoc
      */
-    override fun createFromOptions(context: Context, options: TextEmbedder.TextEmbedderOptions): TextEmbedder {
-        return TextEmbedder.createFromOptions(context, options)
-    }
+    override fun createFromOptions(context: Context, options: TextEmbedder.TextEmbedderOptions): TextEmbedder =
+        TextEmbedder.createFromOptions(context, options)
 }

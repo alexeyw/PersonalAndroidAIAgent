@@ -8,7 +8,6 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
-import android.os.Build
 import androidx.core.app.NotificationCompat
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
@@ -19,7 +18,7 @@ import javax.inject.Inject
  */
 class ApprovalNotificationManager @Inject constructor(
     @ApplicationContext private val context: Context,
-    private val activeSessionTracker: ActiveSessionTracker
+    private val activeSessionTracker: ActiveSessionTracker,
 ) : ApprovalNotifier {
 
     companion object {
@@ -46,7 +45,7 @@ class ApprovalNotificationManager @Inject constructor(
         val channel = NotificationChannel(
             CHANNEL_ID,
             "Agent Approvals",
-            NotificationManager.IMPORTANCE_HIGH
+            NotificationManager.IMPORTANCE_HIGH,
         ).apply {
             description = "Notifications for tool execution approvals"
         }
@@ -57,7 +56,10 @@ class ApprovalNotificationManager @Inject constructor(
             putExtra("sessionId", sessionId)
         }
         val approvePendingIntent = PendingIntent.getBroadcast(
-            context, sessionId.hashCode(), approveIntent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            context,
+            sessionId.hashCode(),
+            approveIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
 
         val denyIntent = Intent(context, AgentApprovalReceiver::class.java).apply {
@@ -65,7 +67,10 @@ class ApprovalNotificationManager @Inject constructor(
             putExtra("sessionId", sessionId)
         }
         val denyPendingIntent = PendingIntent.getBroadcast(
-            context, sessionId.hashCode() + 1, denyIntent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            context,
+            sessionId.hashCode() + 1,
+            denyIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
 
         val notification = NotificationCompat.Builder(context, CHANNEL_ID)

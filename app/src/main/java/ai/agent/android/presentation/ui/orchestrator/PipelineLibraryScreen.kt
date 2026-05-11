@@ -1,6 +1,8 @@
 package ai.agent.android.presentation.ui.orchestrator
 
+import ai.agent.android.R
 import ai.agent.android.domain.models.PipelineGraph
+import ai.agent.android.presentation.ui.common.asString
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
@@ -46,6 +48,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
@@ -84,14 +87,16 @@ fun PipelineLibraryScreen(
     var renameTarget by remember { mutableStateOf<PipelineGraph?>(null) }
     var deleteTarget by remember { mutableStateOf<PipelineGraph?>(null) }
 
-    LaunchedEffect(uiState.errorMessage) {
-        uiState.errorMessage?.let { error ->
+    val errorText = uiState.errorMessage?.asString()
+    LaunchedEffect(errorText) {
+        errorText?.let { error ->
             snackbarHostState.showSnackbar(error)
             viewModel.clearError()
         }
     }
-    LaunchedEffect(uiState.feedbackMessage) {
-        uiState.feedbackMessage?.let { message ->
+    val feedbackText = uiState.feedbackMessage?.asString()
+    LaunchedEffect(feedbackText) {
+        feedbackText?.let { message ->
             snackbarHostState.showSnackbar(message)
             viewModel.clearFeedback()
         }
@@ -110,12 +115,12 @@ fun PipelineLibraryScreen(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
-                title = { Text("Pipelines") },
+                title = { Text(stringResource(R.string.orchestrator_library_title)) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back",
+                            contentDescription = stringResource(R.string.common_back),
                         )
                     }
                 },
@@ -126,7 +131,10 @@ fun PipelineLibraryScreen(
                 onClick = { showCreateDialog = true },
                 modifier = Modifier.testTag("library_new_pipeline_fab"),
             ) {
-                Icon(imageVector = Icons.Default.Add, contentDescription = "New pipeline")
+                Icon(
+                    imageVector = Icons.Default.Add,
+                    contentDescription = stringResource(R.string.orchestrator_library_new_pipeline_cd),
+                )
             }
         },
     ) { paddingValues ->
@@ -170,8 +178,8 @@ fun PipelineLibraryScreen(
 
     if (showCreateDialog) {
         PipelineNameDialog(
-            title = "New pipeline",
-            confirmLabel = "Create",
+            title = stringResource(R.string.orchestrator_library_new_pipeline_title),
+            confirmLabel = stringResource(R.string.common_create),
             initialName = "",
             onDismiss = { showCreateDialog = false },
             onConfirm = { name ->
@@ -188,8 +196,8 @@ fun PipelineLibraryScreen(
 
     renameTarget?.let { target ->
         PipelineNameDialog(
-            title = "Rename pipeline",
-            confirmLabel = "Save",
+            title = stringResource(R.string.orchestrator_library_rename_pipeline_title),
+            confirmLabel = stringResource(R.string.common_save),
             initialName = target.name,
             onDismiss = { renameTarget = null },
             onConfirm = { name ->
@@ -202,10 +210,10 @@ fun PipelineLibraryScreen(
     deleteTarget?.let { target ->
         AlertDialog(
             onDismissRequest = { deleteTarget = null },
-            title = { Text("Delete pipeline") },
+            title = { Text(stringResource(R.string.orchestrator_library_delete_pipeline_title)) },
             text = {
                 Text(
-                    "Delete pipeline «${target.name}»? This cannot be undone.",
+                    stringResource(R.string.orchestrator_library_delete_confirm, target.name),
                 )
             },
             confirmButton = {
@@ -215,11 +223,13 @@ fun PipelineLibraryScreen(
                         deleteTarget = null
                     },
                 ) {
-                    Text("Delete")
+                    Text(stringResource(R.string.common_delete))
                 }
             },
             dismissButton = {
-                TextButton(onClick = { deleteTarget = null }) { Text("Cancel") }
+                TextButton(onClick = { deleteTarget = null }) {
+                    Text(stringResource(R.string.common_cancel))
+                }
             },
         )
     }
@@ -281,26 +291,32 @@ private fun PipelineRow(
                     .padding(horizontal = 12.dp, vertical = 12.dp),
             ) {
                 Text(
-                    text = pipeline.name.ifBlank { "Unnamed (${pipeline.id.take(4)})" },
+                    text = pipeline.name.ifBlank {
+                        stringResource(R.string.orchestrator_library_pipeline_unnamed, pipeline.id.take(4))
+                    },
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold,
                 )
                 if (isActive) {
                     Text(
-                        text = "Active",
+                        text = stringResource(R.string.orchestrator_library_badge_active),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.primary,
                     )
                 }
                 if (isDefault) {
                     Text(
-                        text = "Default",
+                        text = stringResource(R.string.orchestrator_library_badge_default),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.tertiary,
                     )
                 }
                 Text(
-                    text = "Updated ${formatTimestamp(pipeline.updatedAt)} · ${pipeline.nodes.size} nodes",
+                    text = stringResource(
+                        R.string.orchestrator_library_pipeline_subtitle,
+                        formatTimestamp(pipeline.updatedAt),
+                        pipeline.nodes.size,
+                    ),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -310,28 +326,31 @@ private fun PipelineRow(
                     onClick = { menuExpanded = true },
                     modifier = Modifier.testTag("pipeline_row_menu_${pipeline.id}"),
                 ) {
-                    Icon(imageVector = Icons.Default.MoreVert, contentDescription = "Pipeline actions")
+                    Icon(
+                        imageVector = Icons.Default.MoreVert,
+                        contentDescription = stringResource(R.string.orchestrator_library_pipeline_actions_cd),
+                    )
                 }
                 DropdownMenu(
                     expanded = menuExpanded,
                     onDismissRequest = { menuExpanded = false },
                 ) {
                     DropdownMenuItem(
-                        text = { Text("Load") },
+                        text = { Text(stringResource(R.string.common_load)) },
                         onClick = {
                             menuExpanded = false
                             onLoad()
                         },
                     )
                     DropdownMenuItem(
-                        text = { Text("Rename") },
+                        text = { Text(stringResource(R.string.common_rename)) },
                         onClick = {
                             menuExpanded = false
                             onRename()
                         },
                     )
                     DropdownMenuItem(
-                        text = { Text("Duplicate") },
+                        text = { Text(stringResource(R.string.common_duplicate)) },
                         onClick = {
                             menuExpanded = false
                             onDuplicate()
@@ -339,7 +358,15 @@ private fun PipelineRow(
                     )
                     DropdownMenuItem(
                         text = {
-                            Text(if (isDefault) "Default pipeline" else "Set as default")
+                            Text(
+                                stringResource(
+                                    if (isDefault) {
+                                        R.string.orchestrator_library_menu_default_pipeline
+                                    } else {
+                                        R.string.orchestrator_library_menu_set_as_default
+                                    },
+                                ),
+                            )
                         },
                         enabled = onSetAsDefault != null,
                         onClick = {
@@ -348,7 +375,7 @@ private fun PipelineRow(
                         },
                     )
                     DropdownMenuItem(
-                        text = { Text("Delete") },
+                        text = { Text(stringResource(R.string.common_delete)) },
                         enabled = !isActive,
                         onClick = {
                             menuExpanded = false
@@ -385,7 +412,7 @@ private fun PipelineNameDialog(
             OutlinedTextField(
                 value = name,
                 onValueChange = { name = it },
-                label = { Text("Name") },
+                label = { Text(stringResource(R.string.orchestrator_library_name_field_label)) },
                 singleLine = true,
                 modifier = Modifier.testTag("pipeline_name_field"),
             )
@@ -399,7 +426,7 @@ private fun PipelineNameDialog(
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Cancel") }
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.common_cancel)) }
         },
     )
 }
@@ -414,11 +441,11 @@ private fun EmptyLibraryState(modifier: Modifier = Modifier) {
     Box(modifier = modifier, contentAlignment = Alignment.Center) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text(
-                text = "No pipelines yet",
+                text = stringResource(R.string.orchestrator_library_empty_title),
                 style = MaterialTheme.typography.titleMedium,
             )
             Text(
-                text = "Tap + to create your first pipeline.",
+                text = stringResource(R.string.orchestrator_library_empty_subtitle),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

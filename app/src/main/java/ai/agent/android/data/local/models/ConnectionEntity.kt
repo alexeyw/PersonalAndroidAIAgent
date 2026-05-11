@@ -21,10 +21,10 @@ import androidx.room.PrimaryKey
             entity = PipelineEntity::class,
             parentColumns = ["id"],
             childColumns = ["pipelineId"],
-            onDelete = ForeignKey.CASCADE
-        )
+            onDelete = ForeignKey.CASCADE,
+        ),
     ],
-    indices = [Index("pipelineId")]
+    indices = [Index("pipelineId")],
 )
 data class ConnectionEntity(
     @PrimaryKey
@@ -32,5 +32,5 @@ data class ConnectionEntity(
     val pipelineId: String,
     val sourceNodeId: String,
     val targetNodeId: String,
-    val label: String? = null
+    val label: String? = null,
 )

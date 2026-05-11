@@ -47,7 +47,7 @@ class RetrieveRelevantMemoryUseCaseTest {
         coEvery { textEmbeddingEngine.generateEmbedding(query) } returns queryEmbedding
         coEvery { memoryRepository.findSimilarMemories(queryEmbedding, searchPoolLimit, limit) } returns listOf(
             Pair(chunk1, 0.9f), // Should pass threshold
-            Pair(chunk2, 0.2f)  // Should fail threshold
+            Pair(chunk2, 0.2f), // Should fail threshold
         )
 
         // Execute

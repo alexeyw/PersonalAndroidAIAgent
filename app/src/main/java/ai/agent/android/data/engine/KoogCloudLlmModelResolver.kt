@@ -22,9 +22,8 @@ import javax.inject.Singleton
  * `OpenAIModels`, …) and the per-provider `apiKeyRepository.get*Model()` branching.
  */
 @Singleton
-class KoogCloudLlmModelResolver @Inject constructor(
-    private val apiKeyRepository: ApiKeyRepository,
-) : CloudLlmModelResolver {
+class KoogCloudLlmModelResolver @Inject constructor(private val apiKeyRepository: ApiKeyRepository) :
+    CloudLlmModelResolver {
 
     /**
      * Resolves the Koog [LLModel] to use for a given provider.
@@ -32,29 +31,27 @@ class KoogCloudLlmModelResolver @Inject constructor(
      * @param provider Lowercase provider key.
      * @return The Koog [LLModel] cast to [Any] for the domain boundary.
      */
-    override suspend fun resolveModel(provider: String): Any {
-        return when (provider.lowercase()) {
-            "openai" -> KoogModelMapper.getOpenAIModel(
-                apiKeyRepository.getOpenAIModel().first() ?: OpenAIModels.Chat.GPT5_4.id
-            )
-            "anthropic" -> KoogModelMapper.getAnthropicModel(
-                apiKeyRepository.getAnthropicModel().first() ?: AnthropicModels.Sonnet_4_5.id
-            )
-            "google", "gemini" -> KoogModelMapper.getGoogleModel(
-                apiKeyRepository.getGoogleModel().first() ?: GoogleModels.Gemini3_Flash_Preview.id
-            )
-            "deepseek" -> KoogModelMapper.getDeepSeekModel(
-                apiKeyRepository.getDeepSeekModel().first() ?: DeepSeekModels.DeepSeekChat.id
-            )
-            "ollama" -> LLModel(
-                provider = LLMProvider.Ollama,
-                id = apiKeyRepository.getOllamaModelName().first() ?: "llama3",
-                capabilities = listOf(LLMCapability.Completion),
-                contextLength = apiKeyRepository.getOllamaContextWindowSize().first().toLong(),
-            )
-            else -> KoogModelMapper.getGoogleModel(
-                apiKeyRepository.getGoogleModel().first() ?: GoogleModels.Gemini3_Flash_Preview.id
-            )
-        }
+    override suspend fun resolveModel(provider: String): Any = when (provider.lowercase()) {
+        "openai" -> KoogModelMapper.getOpenAIModel(
+            apiKeyRepository.getOpenAIModel().first() ?: OpenAIModels.Chat.GPT5_4.id,
+        )
+        "anthropic" -> KoogModelMapper.getAnthropicModel(
+            apiKeyRepository.getAnthropicModel().first() ?: AnthropicModels.Sonnet_4_5.id,
+        )
+        "google", "gemini" -> KoogModelMapper.getGoogleModel(
+            apiKeyRepository.getGoogleModel().first() ?: GoogleModels.Gemini3_Flash_Preview.id,
+        )
+        "deepseek" -> KoogModelMapper.getDeepSeekModel(
+            apiKeyRepository.getDeepSeekModel().first() ?: DeepSeekModels.DeepSeekChat.id,
+        )
+        "ollama" -> LLModel(
+            provider = LLMProvider.Ollama,
+            id = apiKeyRepository.getOllamaModelName().first() ?: "llama3",
+            capabilities = listOf(LLMCapability.Completion),
+            contextLength = apiKeyRepository.getOllamaContextWindowSize().first().toLong(),
+        )
+        else -> KoogModelMapper.getGoogleModel(
+            apiKeyRepository.getGoogleModel().first() ?: GoogleModels.Gemini3_Flash_Preview.id,
+        )
     }
 }

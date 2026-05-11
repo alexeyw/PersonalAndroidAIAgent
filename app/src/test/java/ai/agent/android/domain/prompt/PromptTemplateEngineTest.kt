@@ -262,9 +262,8 @@ class PromptTemplateEngineTest {
         }
     }
 
-    private fun providerOf(key: String, value: String): PromptVariableProvider =
-        mockk<PromptVariableProvider>().also {
-            every { it.key() } returns key
-            coEvery { it.resolve() } returns value
-        }
+    private fun providerOf(key: String, value: String): PromptVariableProvider = mockk<PromptVariableProvider>().also {
+        every { it.key() } returns key
+        coEvery { it.resolve() } returns value
+    }
 }

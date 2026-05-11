@@ -1,7 +1,9 @@
 package ai.agent.android.presentation.ui.prompts
 
+import ai.agent.android.R
 import ai.agent.android.domain.models.NodeType
 import ai.agent.android.domain.models.PromptTemplate
+import ai.agent.android.presentation.ui.common.asString
 import ai.agent.android.presentation.ui.components.PromptPreviewBottomSheet
 import ai.agent.android.presentation.ui.components.VariableChipsRow
 import ai.agent.android.presentation.ui.components.insertAtCursor
@@ -41,7 +43,6 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Tab
-import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -53,6 +54,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
@@ -64,7 +66,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 fun PromptLibraryScreen(
     modifier: Modifier = Modifier,
     viewModel: PromptLibraryViewModel = hiltViewModel(),
-    onBack: () -> Unit
+    onBack: () -> Unit,
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
@@ -74,20 +76,21 @@ fun PromptLibraryScreen(
     val categories = remember(uiState.promptTemplates) {
         val usedCategories = uiState.promptTemplates.map { it.category }.distinct()
         val baseCategories = listOf(
-            NodeType.INTENT_ROUTER.name, 
-            NodeType.DECOMPOSITION.name, 
+            NodeType.INTENT_ROUTER.name,
+            NodeType.DECOMPOSITION.name,
             NodeType.SUMMARY.name,
             NodeType.TOOL.name,
-            NodeType.IF_CONDITION.name
+            NodeType.IF_CONDITION.name,
         )
         (baseCategories + usedCategories).distinct().sorted()
     }
-    
+
     var showEditDialog by remember { mutableStateOf(false) }
     var editingPrompt by remember { mutableStateOf<PromptTemplate?>(null) }
 
-    LaunchedEffect(uiState.errorMessage) {
-        uiState.errorMessage?.let { error ->
+    val errorText = uiState.errorMessage?.asString()
+    LaunchedEffect(errorText) {
+        errorText?.let { error ->
             snackbarHostState.showSnackbar(error)
             viewModel.clearError()
         }
@@ -103,7 +106,7 @@ fun PromptLibraryScreen(
                 showEditDialog = false
             },
             onPreviewRequested = { template -> viewModel.requestPromptPreview(template) },
-            onDismiss = { showEditDialog = false }
+            onDismiss = { showEditDialog = false },
         )
     }
 
@@ -111,7 +114,7 @@ fun PromptLibraryScreen(
     if (previewState !is PromptPreviewState.Hidden) {
         PromptPreviewBottomSheet(
             segments = (previewState as? PromptPreviewState.Ready)?.segments,
-            onDismiss = { viewModel.dismissPromptPreview() }
+            onDismiss = { viewModel.dismissPromptPreview() },
         )
     }
 
@@ -119,41 +122,47 @@ fun PromptLibraryScreen(
         modifier = modifier,
         topBar = {
             TopAppBar(
-                title = { Text("Prompt Library") },
+                title = { Text(stringResource(R.string.prompts_screen_title)) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(imageVector = Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = stringResource(R.string.common_back),
+                        )
                     }
-                }
+                },
             )
         },
         snackbarHost = { SnackbarHost(snackbarHostState) },
         floatingActionButton = {
-            FloatingActionButton(onClick = { 
+            FloatingActionButton(onClick = {
                 editingPrompt = null
                 showEditDialog = true
             }) {
-                Icon(Icons.Default.Add, contentDescription = "Add Prompt")
+                Icon(
+                    Icons.Default.Add,
+                    contentDescription = stringResource(R.string.prompts_add_prompt_cd),
+                )
             }
-        }
+        },
     ) { padding ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(padding)
+                .padding(padding),
         ) {
             if (categories.isNotEmpty()) {
                 val currentCategory = categories.getOrNull(selectedTab) ?: categories.first()
-                
+
                 androidx.compose.material3.ScrollableTabRow(
                     selectedTabIndex = selectedTab,
-                    edgePadding = 16.dp
+                    edgePadding = 16.dp,
                 ) {
                     categories.forEachIndexed { index, category ->
                         Tab(
                             selected = selectedTab == index,
                             onClick = { selectedTab = index },
-                            text = { Text(category) }
+                            text = { Text(category) },
                         )
                     }
                 }
@@ -167,16 +176,16 @@ fun PromptLibraryScreen(
                 } else if (promptsToShow.isEmpty()) {
                     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         Text(
-                            text = "No prompts in this category.",
+                            text = stringResource(R.string.prompts_empty_category),
                             style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
                 } else {
                     LazyColumn(
                         modifier = Modifier.fillMaxSize(),
                         contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
                         items(promptsToShow, key = { it.id }) { prompt ->
                             PromptCard(
@@ -185,14 +194,14 @@ fun PromptLibraryScreen(
                                     editingPrompt = prompt
                                     showEditDialog = true
                                 },
-                                onDelete = { viewModel.deletePrompt(prompt.id) }
+                                onDelete = { viewModel.deletePrompt(prompt.id) },
                             )
                         }
                     }
                 }
             } else {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text("No prompts available.")
+                    Text(stringResource(R.string.prompts_no_prompts))
                 }
             }
         }
@@ -200,32 +209,32 @@ fun PromptLibraryScreen(
 }
 
 @Composable
-private fun PromptCard(
-    prompt: PromptTemplate,
-    onEdit: () -> Unit,
-    onDelete: () -> Unit
-) {
+private fun PromptCard(prompt: PromptTemplate, onEdit: () -> Unit, onDelete: () -> Unit) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
                     text = prompt.name,
                     style = MaterialTheme.typography.titleMedium,
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier.weight(1f),
                 )
                 Row {
                     IconButton(onClick = onEdit) {
-                        Icon(Icons.Default.Edit, contentDescription = "Edit")
+                        Icon(Icons.Default.Edit, contentDescription = stringResource(R.string.prompts_card_edit_cd))
                     }
                     IconButton(onClick = onDelete) {
-                        Icon(Icons.Default.Delete, contentDescription = "Delete", tint = MaterialTheme.colorScheme.error)
+                        Icon(
+                            Icons.Default.Delete,
+                            contentDescription = stringResource(R.string.prompts_card_delete_cd),
+                            tint = MaterialTheme.colorScheme.error,
+                        )
                     }
                 }
             }
@@ -233,7 +242,7 @@ private fun PromptCard(
             Text(
                 text = prompt.text,
                 style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
     }
@@ -254,40 +263,54 @@ private fun EditPromptDialog(
         val initial = prompt?.text ?: ""
         mutableStateOf(TextFieldValue(text = initial, selection = TextRange(initial.length)))
     }
-    var category by remember { mutableStateOf(prompt?.category ?: availableCategories.firstOrNull() ?: NodeType.INTENT_ROUTER.name) }
+    var category by remember {
+        mutableStateOf(
+            prompt?.category ?: availableCategories.firstOrNull() ?: NodeType.INTENT_ROUTER.name,
+        )
+    }
     var expanded by remember { mutableStateOf(false) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(if (prompt == null) "New Prompt" else "Edit Prompt") },
+        title = {
+            Text(
+                stringResource(
+                    if (prompt == null) R.string.prompts_dialog_new_title else R.string.prompts_dialog_edit_title,
+                ),
+            )
+        },
         text = {
             Column {
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it },
-                    label = { Text("Name") },
+                    label = { Text(stringResource(R.string.prompts_field_name)) },
                     modifier = Modifier.fillMaxWidth(),
-                    singleLine = true
+                    singleLine = true,
                 )
                 Spacer(modifier = Modifier.height(8.dp))
-                
+
                 // Category Dropdown
                 Box {
                     OutlinedTextField(
                         value = category,
                         onValueChange = {},
                         readOnly = true,
-                        label = { Text("Category (Node Type)") },
+                        label = { Text(stringResource(R.string.prompts_field_category)) },
                         modifier = Modifier.fillMaxWidth(),
                         trailingIcon = {
                             IconButton(onClick = { expanded = true }) {
-                                Icon(Icons.Default.ArrowDropDown, contentDescription = "Select Category", modifier = Modifier.padding(end = 4.dp))
+                                Icon(
+                                    Icons.Default.ArrowDropDown,
+                                    contentDescription = stringResource(R.string.prompts_select_category_cd),
+                                    modifier = Modifier.padding(end = 4.dp),
+                                )
                             }
-                        }
+                        },
                     )
                     DropdownMenu(
                         expanded = expanded,
-                        onDismissRequest = { expanded = false }
+                        onDismissRequest = { expanded = false },
                     ) {
                         NodeType.entries.forEach { type ->
                             DropdownMenuItem(
@@ -295,27 +318,30 @@ private fun EditPromptDialog(
                                 onClick = {
                                     category = type.name
                                     expanded = false
-                                }
+                                },
                             )
                         }
                     }
                 }
-                
+
                 Spacer(modifier = Modifier.height(8.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     OutlinedTextField(
                         value = text,
                         onValueChange = { text = it },
-                        label = { Text("Prompt Text") },
+                        label = { Text(stringResource(R.string.prompts_field_text)) },
                         modifier = Modifier
                             .weight(1f)
-                            .height(150.dp)
+                            .height(150.dp),
                     )
                     IconButton(
                         onClick = { onPreviewRequested(text.text) },
                         modifier = Modifier.padding(start = 4.dp),
                     ) {
-                        Icon(Icons.Default.Visibility, contentDescription = "Preview prompt")
+                        Icon(
+                            Icons.Default.Visibility,
+                            contentDescription = stringResource(R.string.prompts_preview_cd),
+                        )
                     }
                 }
                 VariableChipsRow(
@@ -336,20 +362,20 @@ private fun EditPromptDialog(
                                 id = prompt?.id ?: 0,
                                 name = name,
                                 text = text.text,
-                                category = category
-                            )
+                                category = category,
+                            ),
                         )
                     }
                 },
-                enabled = name.isNotBlank() && text.text.isNotBlank()
+                enabled = name.isNotBlank() && text.text.isNotBlank(),
             ) {
-                Text("Save")
+                Text(stringResource(R.string.common_save))
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Cancel")
+                Text(stringResource(R.string.common_cancel))
             }
-        }
+        },
     )
 }

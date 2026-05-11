@@ -168,6 +168,9 @@ This file maps the contents of the main application package.
     - `ScheduleTaskUseCase.kt` - Use case to schedule tasks.
     - `TaskRouterUseCase.kt` - Use case to route tasks.
 - `presentation/` - UI and presentation layer.
+  - `common/` - Cross-feature presentation utilities.
+    - `UiText.kt` - Sealed `UiText` (`Resource` / `Dynamic` / `Joined` / `Empty`) used by `UiState`s to carry user-visible text without holding a `Context`.
+    - `UiTextExt.kt` - `@Composable UiText.asString()` and `Context.resolve(UiText)` resolution helpers.
   - `components/` - Reusable UI components.
     - `VariableChipsRow.kt` - Horizontal chip row for inserting `$VARIABLE` tokens into prompt editors.
     - `PromptPreviewBottomSheet.kt` - Modal bottom sheet that renders a prompt with substituted values highlighted.

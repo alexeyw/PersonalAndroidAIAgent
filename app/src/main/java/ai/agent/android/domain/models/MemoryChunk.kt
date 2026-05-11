@@ -8,12 +8,7 @@ package ai.agent.android.domain.models
  * @property embedding The vector embedding of the text.
  * @property timestamp The time the memory was created.
  */
-data class MemoryChunk(
-    val id: Long,
-    val text: String,
-    val embedding: FloatArray,
-    val timestamp: Long
-) {
+data class MemoryChunk(val id: Long, val text: String, val embedding: FloatArray, val timestamp: Long) {
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
         if (javaClass != other?.javaClass) return false

@@ -29,7 +29,7 @@ class SearchToolTest {
         // Should not crash, will likely return an error string or "No results found"
         assertTrue(result.isNotEmpty())
     }
-    
+
     // We avoid testing a real network call extensively in unit tests to prevent flaky CI.
     // However, executeSearch is fundamentally IO-based, so checking basic behavior is good.
 }

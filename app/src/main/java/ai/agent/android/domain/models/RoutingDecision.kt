@@ -16,7 +16,7 @@ sealed class RoutingDecision {
 
     /**
      * Route to a cloud-based LLM (e.g., OpenAI, Anthropic, DeepSeek).
-     * 
+     *
      * @property provider The name of the cloud provider to use (e.g., "openai", "anthropic").
      */
     data class CloudLLM(val provider: String) : RoutingDecision()

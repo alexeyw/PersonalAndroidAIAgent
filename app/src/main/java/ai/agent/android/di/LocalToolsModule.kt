@@ -34,23 +34,17 @@ abstract class LocalToolsModule {
     @Binds
     @IntoMap
     @StringKey(ScheduleTaskExecutor.TOOL_NAME)
-    abstract fun bindScheduleTaskExecutor(
-        executor: ScheduleTaskExecutor,
-    ): LocalToolExecutor
+    abstract fun bindScheduleTaskExecutor(executor: ScheduleTaskExecutor): LocalToolExecutor
 
     @Binds
     @IntoMap
     @StringKey(DelegateTaskExecutor.TOOL_NAME)
-    abstract fun bindDelegateTaskExecutor(
-        executor: DelegateTaskExecutor,
-    ): LocalToolExecutor
+    abstract fun bindDelegateTaskExecutor(executor: DelegateTaskExecutor): LocalToolExecutor
 
     @Binds
     @IntoMap
     @StringKey(SearchTool.TOOL_NAME)
-    abstract fun bindSearchToolExecutor(
-        executor: SearchToolExecutor,
-    ): LocalToolExecutor
+    abstract fun bindSearchToolExecutor(executor: SearchToolExecutor): LocalToolExecutor
 
     /**
      * Domain-level binding for the cloud client factory. The data-layer impl
@@ -60,16 +54,12 @@ abstract class LocalToolsModule {
      */
     @Binds
     @Singleton
-    abstract fun bindCloudLlmClientFactory(
-        impl: KoogClientFactory,
-    ): CloudLlmClientFactory
+    abstract fun bindCloudLlmClientFactory(impl: KoogClientFactory): CloudLlmClientFactory
 
     /**
      * Domain-level binding for the cloud model resolver.
      */
     @Binds
     @Singleton
-    abstract fun bindCloudLlmModelResolver(
-        impl: KoogCloudLlmModelResolver,
-    ): CloudLlmModelResolver
+    abstract fun bindCloudLlmModelResolver(impl: KoogCloudLlmModelResolver): CloudLlmModelResolver
 }

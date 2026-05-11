@@ -1,7 +1,6 @@
 package ai.agent.android.domain.usecases
 
 import ai.agent.android.domain.models.AppError
-import ai.agent.android.domain.models.InitProgress
 import ai.agent.android.domain.models.InitStage
 import ai.agent.android.domain.models.MemorySummary
 import ai.agent.android.domain.models.PipelineGraph

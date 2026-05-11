@@ -45,7 +45,7 @@ class PromptLibraryViewModelTest {
         deletePromptTemplateUseCase = mockk()
 
         val initialPrompts = listOf(
-            PromptTemplate(1, "Test", "Content", "TOOL")
+            PromptTemplate(1, "Test", "Content", "TOOL"),
         )
         coEvery { getPromptTemplatesUseCase() } returns flowOf(initialPrompts)
 

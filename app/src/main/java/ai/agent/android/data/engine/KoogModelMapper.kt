@@ -34,7 +34,7 @@ object KoogModelMapper {
         OpenAIModels.Chat.GPT5_2Codex.id,
         OpenAIModels.Chat.GPT5_3Codex.id,
         OpenAIModels.Chat.GPT5_4.id,
-        OpenAIModels.Chat.GPT5_4Pro.id
+        OpenAIModels.Chat.GPT5_4Pro.id,
     )
 
     fun getOpenAIModel(name: String): LLModel = when (name) {
@@ -70,7 +70,7 @@ object KoogModelMapper {
         AnthropicModels.Opus_4.id,
         AnthropicModels.Opus_4_1.id,
         AnthropicModels.Opus_4_5.id,
-        AnthropicModels.Opus_4_6.id
+        AnthropicModels.Opus_4_6.id,
     )
 
     fun getAnthropicModel(name: String): LLModel = when (name) {
@@ -91,7 +91,7 @@ object KoogModelMapper {
         GoogleModels.Gemini2_5Flash.id,
         GoogleModels.Gemini2_5FlashLite.id,
         GoogleModels.Gemini3_Flash_Preview.id,
-        GoogleModels.Gemini3_Pro_Preview.id
+        GoogleModels.Gemini3_Pro_Preview.id,
     )
 
     fun getGoogleModel(name: String): LLModel = when (name) {
@@ -107,7 +107,7 @@ object KoogModelMapper {
 
     fun getDeepSeekModelIdList(): List<String> = listOf(
         DeepSeekModels.DeepSeekChat.id,
-        DeepSeekModels.DeepSeekReasoner.id
+        DeepSeekModels.DeepSeekReasoner.id,
     )
 
     fun getDeepSeekModel(name: String): LLModel = when (name) {

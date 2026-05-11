@@ -1,12 +1,12 @@
 package ai.agent.android.data.local
 
+import ai.agent.android.domain.repositories.ApiKeyRepository
 import android.content.Context
 import android.content.SharedPreferences
+import androidx.core.content.edit
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
-import ai.agent.android.domain.repositories.ApiKeyRepository
 import dagger.hilt.android.qualifiers.ApplicationContext
-import androidx.core.content.edit
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -18,13 +18,11 @@ import javax.inject.Singleton
 /**
  * Concrete implementation of [ApiKeyRepository] that securely stores API keys
  * using Android's EncryptedSharedPreferences.
- * 
+ *
  * @property context The application context used to create the shared preferences.
  */
 @Singleton
-class ApiKeyManager @Inject constructor(
-    @ApplicationContext private val context: Context
-) : ApiKeyRepository {
+class ApiKeyManager @Inject constructor(@ApplicationContext private val context: Context) : ApiKeyRepository {
 
     private val prefsName = "secure_api_keys"
 
@@ -38,22 +36,23 @@ class ApiKeyManager @Inject constructor(
         try {
             createEncryptedSharedPreferences()
         } catch (e: Exception) {
-            Timber.e(e, "Failed to initialize EncryptedSharedPreferences. Attempting recovery by clearing corrupt data.")
+            Timber.e(
+                e,
+                "Failed to initialize EncryptedSharedPreferences. Attempting recovery by clearing corrupt data.",
+            )
             // Recovery path: if data is corrupted (e.g. key lost during backup/restore), delete the file and recreate
             deleteSharedPreferences(prefsName)
             createEncryptedSharedPreferences()
         }
     }
 
-    private fun createEncryptedSharedPreferences(): SharedPreferences {
-        return EncryptedSharedPreferences.create(
-            context,
-            prefsName,
-            masterKey,
-            EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
-            EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
-        )
-    }
+    private fun createEncryptedSharedPreferences(): SharedPreferences = EncryptedSharedPreferences.create(
+        context,
+        prefsName,
+        masterKey,
+        EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+        EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM,
+    )
 
     private fun deleteSharedPreferences(name: String) {
         try {
@@ -87,7 +86,9 @@ class ApiKeyManager @Inject constructor(
     private val _openAIKeyFlow by lazy { MutableStateFlow(sharedPreferences.getString(Keys.OPENAI_KEY, null)) }
     private val _openAIModelFlow by lazy { MutableStateFlow(sharedPreferences.getString(Keys.OPENAI_MODEL, null)) }
     private val _anthropicKeyFlow by lazy { MutableStateFlow(sharedPreferences.getString(Keys.ANTHROPIC_KEY, null)) }
-    private val _anthropicModelFlow by lazy { MutableStateFlow(sharedPreferences.getString(Keys.ANTHROPIC_MODEL, null)) }
+    private val _anthropicModelFlow by lazy {
+        MutableStateFlow(sharedPreferences.getString(Keys.ANTHROPIC_MODEL, null))
+    }
     private val _googleKeyFlow by lazy { MutableStateFlow(sharedPreferences.getString(Keys.GOOGLE_KEY, null)) }
     private val _googleModelFlow by lazy { MutableStateFlow(sharedPreferences.getString(Keys.GOOGLE_MODEL, null)) }
     private val _deepSeekKeyFlow by lazy { MutableStateFlow(sharedPreferences.getString(Keys.DEEPSEEK_KEY, null)) }

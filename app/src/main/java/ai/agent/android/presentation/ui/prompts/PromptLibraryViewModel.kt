@@ -1,11 +1,13 @@
 package ai.agent.android.presentation.ui.prompts
 
+import ai.agent.android.R
 import ai.agent.android.domain.models.PromptTemplate
 import ai.agent.android.domain.prompt.PromptTemplateEngine
 import ai.agent.android.domain.prompt.PromptVariableProvider
 import ai.agent.android.domain.usecases.DeletePromptTemplateUseCase
 import ai.agent.android.domain.usecases.GetPromptTemplatesUseCase
 import ai.agent.android.domain.usecases.SavePromptTemplateUseCase
+import ai.agent.android.presentation.ui.common.UiText
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -47,7 +49,13 @@ class PromptLibraryViewModel @Inject constructor(
             _uiState.update { it.copy(isLoading = true) }
             getPromptTemplatesUseCase()
                 .catch { e ->
-                    _uiState.update { it.copy(isLoading = false, errorMessage = e.message) }
+                    _uiState.update {
+                        it.copy(
+                            isLoading = false,
+                            errorMessage =
+                            e.message?.let { UiText.Dynamic(it) } ?: UiText(R.string.errors_generic_unexpected),
+                        )
+                    }
                 }
                 .collect { templates ->
                     _uiState.update { state ->
@@ -65,7 +73,12 @@ class PromptLibraryViewModel @Inject constructor(
             try {
                 savePromptTemplateUseCase(prompt)
             } catch (e: Exception) {
-                _uiState.update { it.copy(errorMessage = e.message) }
+                _uiState.update {
+                    it.copy(
+                        errorMessage =
+                        e.message?.let { UiText.Dynamic(it) } ?: UiText(R.string.errors_generic_unexpected),
+                    )
+                }
             }
         }
     }
@@ -78,7 +91,12 @@ class PromptLibraryViewModel @Inject constructor(
             try {
                 deletePromptTemplateUseCase(id)
             } catch (e: Exception) {
-                _uiState.update { it.copy(errorMessage = e.message) }
+                _uiState.update {
+                    it.copy(
+                        errorMessage =
+                        e.message?.let { UiText.Dynamic(it) } ?: UiText(R.string.errors_generic_unexpected),
+                    )
+                }
             }
         }
     }
@@ -117,9 +135,7 @@ class PromptLibraryViewModel @Inject constructor(
          * provider whose `key()` throws is silently skipped so a misbehaving DI binding
          * cannot empty the chip row.
          */
-        private fun computeAvailableVariables(
-            providers: Set<PromptVariableProvider>,
-        ): List<String> = providers
+        private fun computeAvailableVariables(providers: Set<PromptVariableProvider>): List<String> = providers
             .mapNotNull { runCatching { it.key() }.getOrNull() }
             .distinct()
             .sorted()

@@ -1,7 +1,6 @@
 package ai.agent.android.domain.engine.executors
 
 import ai.agent.android.domain.engine.LlmInferenceEngine
-import ai.agent.android.domain.models.NodeExecutionResult
 import ai.agent.android.domain.models.NodeModel
 import ai.agent.android.domain.models.NodeOutput
 import ai.agent.android.domain.models.NodeType
@@ -48,7 +47,7 @@ class LiteRtNodeExecutorTest {
             chatRepository,
             settingsRepository,
             metricsRepository,
-            loadModelUseCase
+            loadModelUseCase,
         )
     }
 

@@ -10,10 +10,4 @@ package ai.agent.android.domain.models
  * @property size Size of the model file in bytes.
  * @property isActive Flag indicating if this model is currently active/selected.
  */
-data class LocalModel(
-    val id: Long = 0,
-    val name: String,
-    val path: String,
-    val size: Long,
-    val isActive: Boolean
-)
+data class LocalModel(val id: Long = 0, val name: String, val path: String, val size: Long, val isActive: Boolean)

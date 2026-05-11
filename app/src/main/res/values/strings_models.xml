@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="models_screen_title">Model Management</string>
+    <string name="models_field_auth_token">HuggingFace Auth Token (Optional)</string>
+    <string name="models_field_custom_url">Custom Model URL</string>
+    <string name="models_button_download_custom">Download Custom Model</string>
+    <string name="models_section_presets">Available Presets</string>
+    <string name="models_section_downloaded">Downloaded Models</string>
+    <string name="models_progress_downloading">Downloading...</string>
+    <string name="models_progress_percent">%1$d%%</string>
+    <string name="models_button_download">Download</string>
+    <string name="models_button_downloaded">Downloaded</string>
+    <string name="models_button_make_active">Make Active</string>
+    <string name="models_badge_active">Active</string>
+    <string name="models_default_custom_filename">custom_model.bin</string>
+    <string name="models_error_unknown">An unknown error occurred</string>
+</resources>

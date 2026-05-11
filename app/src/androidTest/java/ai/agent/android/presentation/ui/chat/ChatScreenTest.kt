@@ -1,15 +1,15 @@
 package ai.agent.android.presentation.ui.chat
 
+import ai.agent.android.domain.models.ChatMessage
+import ai.agent.android.domain.models.ConsoleEvent
+import ai.agent.android.domain.models.ConsoleEventType
+import ai.agent.android.domain.models.Role
 import android.content.res.Configuration
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
-import ai.agent.android.domain.models.ChatMessage
-import ai.agent.android.domain.models.ConsoleEvent
-import ai.agent.android.domain.models.ConsoleEventType
-import ai.agent.android.domain.models.Role
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.flow.MutableSharedFlow

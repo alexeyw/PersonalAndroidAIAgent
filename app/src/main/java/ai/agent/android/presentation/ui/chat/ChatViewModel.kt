@@ -1,8 +1,6 @@
 package ai.agent.android.presentation.ui.chat
 
-import android.os.SystemClock
-import androidx.lifecycle.ViewModel
-import androidx.lifecycle.viewModelScope
+import ai.agent.android.R
 import ai.agent.android.domain.engine.LlmInferenceEngine
 import ai.agent.android.domain.models.AgentOrchestratorState
 import ai.agent.android.domain.models.ChatMessage
@@ -19,6 +17,10 @@ import ai.agent.android.domain.usecases.AgentOrchestratorUseCase
 import ai.agent.android.domain.usecases.GetContextWindowUseCase
 import ai.agent.android.domain.usecases.LoadModelUseCase
 import ai.agent.android.presentation.state.ActiveSessionTracker
+import ai.agent.android.presentation.ui.common.UiText
+import android.os.SystemClock
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -58,12 +60,14 @@ class ChatViewModel @Inject constructor(
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ChatUiState())
+
     /**
      * The current UI state of the Chat screen.
      */
     val uiState: StateFlow<ChatUiState> = _uiState.asStateFlow()
 
     private val _exportEvents = MutableSharedFlow<ChatExportPayload>(extraBufferCapacity = 1)
+
     /**
      * One-shot events emitted when the user triggers a chat export. Consumed by the UI to
      * launch a system share sheet ([android.content.Intent.ACTION_SEND]).
@@ -230,7 +234,7 @@ class ChatViewModel @Inject constructor(
 
         chatRepository.saveSession(session.copy(pipelineId = null))
         _uiState.update {
-            it.copy(pipelineFallbackMessage = "The pipeline was deleted. Default pipeline is used now.")
+            it.copy(pipelineFallbackMessage = UiText(R.string.errors_chat_pipeline_removed))
         }
     }
 
@@ -307,8 +311,13 @@ class ChatViewModel @Inject constructor(
             // Check if model is loaded by attempting to load it
             val modelResult = loadModelUseCase()
             if (modelResult is Result.Error) {
-                _uiState.update { 
-                    it.copy(errorMessage = "Model Error: ${modelResult.message}. Please check your model settings.") 
+                _uiState.update {
+                    it.copy(
+                        errorMessage = UiText.of(
+                            R.string.errors_chat_model_init_failure,
+                            modelResult.message ?: GENERIC_ERROR_FALLBACK,
+                        ),
+                    )
                 }
             }
 
@@ -316,19 +325,19 @@ class ChatViewModel @Inject constructor(
             val sessionId = if (savedSessionId.isNullOrBlank()) {
                 val newId = UUID.randomUUID().toString()
                 settingsRepository.setCurrentChatSessionId(newId)
-                
+
                 chatRepository.saveSession(
                     ChatSession(
                         id = newId,
-                        name = "New Chat",
-                        updatedAt = System.currentTimeMillis()
-                    )
+                        name = DEFAULT_NEW_CHAT_NAME,
+                        updatedAt = System.currentTimeMillis(),
+                    ),
                 )
                 newId
             } else {
                 savedSessionId
             }
-            
+
             _uiState.update { it.copy(currentSessionId = sessionId) }
             loadMessages(sessionId)
             // activeSessionTracker is managed exclusively by setChatVisible via Lifecycle events
@@ -391,10 +400,10 @@ class ChatViewModel @Inject constructor(
             chatRepository.saveSession(
                 ChatSession(
                     id = newId,
-                    name = "New Chat",
+                    name = DEFAULT_NEW_CHAT_NAME,
                     updatedAt = System.currentTimeMillis(),
                     pipelineId = pipelineId,
-                )
+                ),
             )
             switchSession(newId)
         }
@@ -539,7 +548,7 @@ class ChatViewModel @Inject constructor(
      * so the ViewModel itself stays free of Android-framework dependencies.
      */
     fun signalCopiedToClipboard() {
-        _uiState.update { it.copy(snackbarMessage = "Copied") }
+        _uiState.update { it.copy(snackbarMessage = UiText(R.string.chat_snackbar_copied)) }
     }
 
     /**
@@ -564,7 +573,7 @@ class ChatViewModel @Inject constructor(
 
         if (!llmInferenceEngine.isInitialized) {
             _uiState.update {
-                it.copy(inlineError = "Please load a model in Settings before sending a message.")
+                it.copy(inlineError = UiText(R.string.errors_chat_load_model_first))
             }
             return
         }
@@ -572,7 +581,7 @@ class ChatViewModel @Inject constructor(
         generationJob = viewModelScope.launch {
             // Auto-rename logic for new chats
             val currentSession = currentState.sessions.find { it.id == currentState.currentSessionId }
-            if (currentSession?.name == "New Chat") {
+            if (currentSession?.name == DEFAULT_NEW_CHAT_NAME) {
                 val newName = if (prompt.length > 20) prompt.take(20) + "..." else prompt
                 renameSession(currentState.currentSessionId, newName)
             }
@@ -603,8 +612,12 @@ class ChatViewModel @Inject constructor(
                         it.copy(
                             isGenerating = false,
                             currentStep = null,
-                            errorMessage = error.message ?: "An unexpected error occurred",
-                            orchestratorState = AgentOrchestratorState.Error(error.message ?: "Unknown error")
+                            errorMessage = error.message
+                                ?.let { msg -> UiText.Dynamic(msg) }
+                                ?: UiText(R.string.errors_generic_unexpected),
+                            orchestratorState = AgentOrchestratorState.Error(
+                                error.message ?: UNKNOWN_ERROR_FALLBACK,
+                            ),
                         )
                     }
                 }
@@ -636,7 +649,7 @@ class ChatViewModel @Inject constructor(
                 }
         }
     }
-    
+
     /**
      * Cancels the active generation job and saves the partial response as a stopped message.
      * If the orchestrator was in a [AgentOrchestratorState.Thinking] or [AgentOrchestratorState.Answering]
@@ -646,7 +659,7 @@ class ChatViewModel @Inject constructor(
     fun stopGeneration() {
         generationJob?.cancel()
         val partial = when (val s = _uiState.value.orchestratorState) {
-            is AgentOrchestratorState.Thinking  -> s.partialText
+            is AgentOrchestratorState.Thinking -> s.partialText
             is AgentOrchestratorState.Answering -> s.partialText
             else -> null
         }
@@ -656,9 +669,9 @@ class ChatViewModel @Inject constructor(
                     ChatMessage(
                         sessionId = _uiState.value.currentSessionId,
                         role = Role.AGENT,
-                        content = "$partial [stopped]",
+                        content = "$partial $STOPPED_SUFFIX",
                         timestamp = System.currentTimeMillis(),
-                    )
+                    ),
                 )
             }
         }
@@ -715,7 +728,7 @@ class ChatViewModel @Inject constructor(
             try {
                 val messages = chatRepository.getMessagesForSession(sessionId).first()
                 val session = chatRepository.getSessionById(sessionId)
-                val sessionName = session?.name ?: "Chat"
+                val sessionName = session?.name ?: EXPORT_FALLBACK_SESSION_NAME
 
                 val messagesArray = JSONArray()
                 messages.forEach { message ->
@@ -734,7 +747,12 @@ class ChatViewModel @Inject constructor(
                 _exportEvents.emit(ChatExportPayload(sessionName = sessionName, json = root.toString(2)))
             } catch (e: Exception) {
                 _uiState.update {
-                    it.copy(errorMessage = "Failed to export chat: ${e.localizedMessage ?: "unknown error"}")
+                    it.copy(
+                        errorMessage = UiText.of(
+                            R.string.errors_chat_export_failed,
+                            e.localizedMessage ?: GENERIC_ERROR_FALLBACK,
+                        ),
+                    )
                 }
             }
         }
@@ -755,7 +773,7 @@ class ChatViewModel @Inject constructor(
             try {
                 val trimmed = json.trim()
                 val messagesArray: JSONArray
-                var importedSessionName = "Imported Chat"
+                var importedSessionName = DEFAULT_IMPORTED_CHAT_NAME
                 when {
                     trimmed.startsWith("{") -> {
                         val root = JSONObject(trimmed)
@@ -798,7 +816,12 @@ class ChatViewModel @Inject constructor(
                 switchSession(newId)
             } catch (e: Exception) {
                 _uiState.update {
-                    it.copy(errorMessage = "Failed to import chat: ${e.localizedMessage ?: "invalid JSON"}")
+                    it.copy(
+                        errorMessage = UiText.of(
+                            R.string.errors_chat_import_failed,
+                            e.localizedMessage ?: INVALID_JSON_FALLBACK,
+                        ),
+                    )
                 }
             }
         }
@@ -1094,7 +1117,7 @@ class ChatViewModel @Inject constructor(
      * layer (which has access to `LocalClipboardManager`).
      */
     fun signalConsoleCopied() {
-        _uiState.update { it.copy(snackbarMessage = "Console log copied") }
+        _uiState.update { it.copy(snackbarMessage = UiText(R.string.chat_snackbar_console_copied)) }
     }
 
     /**
@@ -1114,5 +1137,49 @@ class ChatViewModel @Inject constructor(
             timeoutMs = request.timeoutMs,
             startedAtMs = SystemClock.uptimeMillis(),
         )
+    }
+
+    companion object {
+        /**
+         * Default name assigned to a freshly-created chat session. Persisted
+         * in the database as the session label until the auto-rename logic
+         * replaces it on the first user message. Also compared against the
+         * stored name to gate that auto-rename — must stay in sync everywhere.
+         */
+        const val DEFAULT_NEW_CHAT_NAME = "New Chat"
+
+        /**
+         * Default name assigned to a chat session created via the JSON-import
+         * path when the incoming document carries no `sessionName` field.
+         */
+        const val DEFAULT_IMPORTED_CHAT_NAME = "Imported Chat"
+
+        /**
+         * Fallback session name used as the `EXTRA_SUBJECT` of the share-sheet
+         * intent when the exported chat has no stored name yet (defensive —
+         * sessions always carry a name in normal flows).
+         */
+        const val EXPORT_FALLBACK_SESSION_NAME = "Chat"
+
+        /**
+         * Suffix appended to a partial agent message persisted by
+         * [stopGeneration] so the chat history records that the user
+         * interrupted generation rather than the agent producing this exact
+         * content.
+         */
+        const val STOPPED_SUFFIX = "[stopped]"
+
+        /**
+         * Fallback message attached to [AgentOrchestratorState.Error] when the
+         * thrown exception has no `message`. Internal — never expected to
+         * surface to the user under normal operation.
+         */
+        const val UNKNOWN_ERROR_FALLBACK = "Unknown error"
+
+        /** Inline fallback used in the export-failure message string. */
+        const val GENERIC_ERROR_FALLBACK = "unknown error"
+
+        /** Inline fallback used in the import-failure message string. */
+        const val INVALID_JSON_FALLBACK = "invalid JSON"
     }
 }

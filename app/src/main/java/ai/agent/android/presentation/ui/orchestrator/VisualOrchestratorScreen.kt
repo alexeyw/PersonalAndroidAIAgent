@@ -1,8 +1,10 @@
 package ai.agent.android.presentation.ui.orchestrator
 
+import ai.agent.android.R
 import ai.agent.android.domain.models.NodeContextConfig
 import ai.agent.android.domain.models.NodeType
 import ai.agent.android.domain.models.usesContextConfig
+import ai.agent.android.presentation.ui.common.asString
 import ai.agent.android.presentation.ui.components.PromptPreviewBottomSheet
 import ai.agent.android.presentation.ui.components.VariableChipsRow
 import ai.agent.android.presentation.ui.components.insertAtCursor
@@ -61,13 +63,14 @@ import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
-import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -85,7 +88,7 @@ import kotlin.math.roundToInt
 fun VisualOrchestratorScreen(
     viewModel: OrchestratorViewModel = hiltViewModel(),
     onNavigateToPrompts: () -> Unit = {},
-    onBack: () -> Unit = {}
+    onBack: () -> Unit = {},
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
@@ -104,21 +107,22 @@ fun VisualOrchestratorScreen(
     var editingConnectionId by remember { mutableStateOf<String?>(null) }
 
     var showPromptLibrary by remember { mutableStateOf(false) }
-    
+
     var canvasSize by remember { mutableStateOf(IntSize.Zero) }
     var nodeSizes by remember { mutableStateOf(mapOf<String, IntSize>()) }
 
-    val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
-        uri?.let {
-            try {
-                contentResolver.openOutputStream(it)?.use { stream ->
-                    stream.write(viewModel.exportPipelineToJson().toByteArray())
+    val exportLauncher =
+        rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
+            uri?.let {
+                try {
+                    contentResolver.openOutputStream(it)?.use { stream ->
+                        stream.write(viewModel.exportPipelineToJson().toByteArray())
+                    }
+                } catch (e: Exception) {
+                    // Ignore or handle
                 }
-            } catch (e: Exception) {
-                // Ignore or handle
             }
         }
-    }
 
     val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         uri?.let {
@@ -133,8 +137,9 @@ fun VisualOrchestratorScreen(
         }
     }
 
-    LaunchedEffect(uiState.errorMessage) {
-        uiState.errorMessage?.let { error ->
+    val errorText = uiState.errorMessage?.asString()
+    LaunchedEffect(errorText) {
+        errorText?.let { error ->
             snackbarHostState.showSnackbar(error)
             viewModel.clearError()
         }
@@ -146,27 +151,27 @@ fun VisualOrchestratorScreen(
             val maxX = uiState.nodes.maxOf { it.x + 200f } // Add width for node
             val minY = uiState.nodes.minOf { it.y }
             val maxY = uiState.nodes.maxOf { it.y + 100f } // Add height for node
-            
+
             val graphWidth = maxX - minX
             val graphHeight = maxY - minY
-            
+
             val padding = 100f
             val availableWidth = canvasSize.width - padding * 2
             val availableHeight = canvasSize.height - padding * 2
-            
+
             if (graphWidth > 0 && graphHeight > 0) {
                 val scaleX = availableWidth / graphWidth
                 val scaleY = availableHeight / graphHeight
                 val targetScale = minOf(scaleX, scaleY).coerceIn(0.1f, 1f)
-                
+
                 scale = targetScale
-                
+
                 val scaledGraphWidth = graphWidth * targetScale
                 val scaledGraphHeight = graphHeight * targetScale
-                
+
                 val offsetX = (canvasSize.width - scaledGraphWidth) / 2f - (minX * targetScale)
                 val offsetY = (canvasSize.height - scaledGraphHeight) / 2f - (minY * targetScale)
-                
+
                 panOffset = Offset(offsetX, offsetY)
             }
         }
@@ -175,33 +180,32 @@ fun VisualOrchestratorScreen(
     uiState.pendingImport?.let { pending ->
         AlertDialog(
             onDismissRequest = { viewModel.cancelPendingImport() },
-            title = { Text("Schema version mismatch") },
+            title = { Text(stringResource(R.string.orchestrator_dialog_schema_mismatch_title)) },
             text = {
                 Text(
-                    "This pipeline file was created in a different editor version " +
-                        "(found schemaVersion=${pending.foundVersion}, expected " +
-                        "${pending.expectedVersion}). Some configuration may not " +
-                        "round-trip cleanly. Import anyway?"
+                    stringResource(
+                        R.string.orchestrator_dialog_schema_mismatch_text,
+                    ) + " (found schemaVersion=${pending.foundVersion}, expected ${pending.expectedVersion})",
                 )
             },
             confirmButton = {
                 TextButton(onClick = { viewModel.confirmPendingImport() }) {
-                    Text("Import anyway")
+                    Text(stringResource(R.string.orchestrator_dialog_import_anyway))
                 }
             },
             dismissButton = {
                 TextButton(onClick = { viewModel.cancelPendingImport() }) {
-                    Text("Cancel")
+                    Text(stringResource(R.string.common_cancel))
                 }
-            }
+            },
         )
     }
 
     if (showClearDialog) {
         AlertDialog(
             onDismissRequest = { showClearDialog = false },
-            title = { Text("Clear Pipeline") },
-            text = { Text("Are you sure you want to clear the entire pipeline? This action cannot be undone.") },
+            title = { Text(stringResource(R.string.orchestrator_dialog_clear_title)) },
+            text = { Text(stringResource(R.string.orchestrator_dialog_clear_text)) },
             confirmButton = {
                 TextButton(onClick = {
                     viewModel.clearPipeline()
@@ -209,14 +213,14 @@ fun VisualOrchestratorScreen(
                     panOffset = Offset.Zero
                     scale = 1f
                 }) {
-                    Text("Clear", color = MaterialTheme.colorScheme.error)
+                    Text(stringResource(R.string.common_clear), color = MaterialTheme.colorScheme.error)
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showClearDialog = false }) {
-                    Text("Cancel")
+                    Text(stringResource(R.string.common_cancel))
                 }
-            }
+            },
         )
     }
 
@@ -226,14 +230,14 @@ fun VisualOrchestratorScreen(
             var connLabel by remember(connection) { mutableStateOf(connection.label ?: "") }
             AlertDialog(
                 onDismissRequest = { editingConnectionId = null },
-                title = { Text("Connection Properties") },
+                title = { Text(stringResource(R.string.orchestrator_dialog_connection_props_title)) },
                 text = {
                     Column {
                         androidx.compose.material3.OutlinedTextField(
                             value = connLabel,
                             onValueChange = { connLabel = it },
-                            label = { Text("Label (e.g., Intent Name)") },
-                            modifier = Modifier.padding(top = 8.dp)
+                            label = { Text(stringResource(R.string.orchestrator_dialog_connection_label)) },
+                            modifier = Modifier.padding(top = 8.dp),
                         )
                     }
                 },
@@ -242,7 +246,7 @@ fun VisualOrchestratorScreen(
                         viewModel.updateConnectionLabel(connection.id, connLabel.takeIf { it.isNotBlank() })
                         editingConnectionId = null
                     }) {
-                        Text("Save")
+                        Text(stringResource(R.string.common_save))
                     }
                 },
                 dismissButton = {
@@ -251,13 +255,16 @@ fun VisualOrchestratorScreen(
                             viewModel.removeConnection(connection.id)
                             editingConnectionId = null
                         }) {
-                            Text("Delete Connection", color = MaterialTheme.colorScheme.error)
+                            Text(
+                                stringResource(R.string.orchestrator_dialog_connection_delete),
+                                color = MaterialTheme.colorScheme.error,
+                            )
                         }
                         TextButton(onClick = { editingConnectionId = null }) {
-                            Text("Cancel")
+                            Text(stringResource(R.string.common_cancel))
                         }
                     }
-                }
+                },
             )
         } else {
             editingConnectionId = null
@@ -310,7 +317,7 @@ fun VisualOrchestratorScreen(
                         systemPromptValue = TextFieldValue(text = text, selection = TextRange(text.length))
                         showPromptLibrary = false
                     },
-                    onDismissRequest = { showPromptLibrary = false }
+                    onDismissRequest = { showPromptLibrary = false },
                 )
             }
 
@@ -318,11 +325,13 @@ fun VisualOrchestratorScreen(
                 onDismissRequest = { configuringNodeId = null },
                 title = {
                     Text(
-                        when (node.type) {
-                            NodeType.IF_CONDITION -> "Configure IF Condition"
-                            NodeType.CLARIFICATION -> "Configure Clarification"
-                            else -> "Configure Node"
-                        }
+                        stringResource(
+                            when (node.type) {
+                                NodeType.IF_CONDITION -> R.string.orchestrator_dialog_configure_if
+                                NodeType.CLARIFICATION -> R.string.orchestrator_dialog_configure_clarification
+                                else -> R.string.orchestrator_dialog_configure_node
+                            },
+                        ),
                     )
                 },
                 text = {
@@ -333,7 +342,7 @@ fun VisualOrchestratorScreen(
                     Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
                         Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
                             TextButton(onClick = { showPromptLibrary = true }) {
-                                Text("Load")
+                                Text(stringResource(R.string.common_load))
                             }
                             TextButton(onClick = {
                                 val current = systemPromptValue.text
@@ -342,7 +351,7 @@ fun VisualOrchestratorScreen(
                                     viewModel.clearError() // Just in case, might want a success message
                                 }
                             }) {
-                                Text("Save")
+                                Text(stringResource(R.string.common_save))
                             }
                             TextButton(onClick = { viewModel.requestPromptPreview(systemPromptValue.text) }) {
                                 Icon(
@@ -350,7 +359,7 @@ fun VisualOrchestratorScreen(
                                     contentDescription = null,
                                     modifier = Modifier.padding(end = 4.dp),
                                 )
-                                Text("Preview")
+                                Text(stringResource(R.string.orchestrator_dialog_preview))
                             }
                         }
                         androidx.compose.material3.OutlinedTextField(
@@ -358,11 +367,13 @@ fun VisualOrchestratorScreen(
                             onValueChange = { systemPromptValue = it },
                             label = {
                                 Text(
-                                    if (node.type == NodeType.CLARIFICATION) {
-                                        "Clarification instruction (LLM)"
-                                    } else {
-                                        "System Prompt"
-                                    }
+                                    stringResource(
+                                        if (node.type == NodeType.CLARIFICATION) {
+                                            R.string.orchestrator_dialog_clarification_instruction
+                                        } else {
+                                            R.string.orchestrator_dialog_system_prompt
+                                        },
+                                    ),
                                 )
                             },
                             modifier = Modifier
@@ -382,20 +393,20 @@ fun VisualOrchestratorScreen(
                             androidx.compose.material3.OutlinedTextField(
                                 value = complexity,
                                 onValueChange = { complexity = it },
-                                label = { Text("Complexity Threshold (Int)") },
-                                modifier = Modifier.padding(top = 8.dp)
+                                label = { Text(stringResource(R.string.orchestrator_dialog_complexity_threshold)) },
+                                modifier = Modifier.padding(top = 8.dp),
                             )
                             androidx.compose.material3.OutlinedTextField(
                                 value = keywords,
                                 onValueChange = { keywords = it },
-                                label = { Text("Keywords (comma separated)") },
-                                modifier = Modifier.padding(top = 8.dp)
+                                label = { Text(stringResource(R.string.orchestrator_dialog_keywords)) },
+                                modifier = Modifier.padding(top = 8.dp),
                             )
                             androidx.compose.material3.OutlinedTextField(
                                 value = prompt,
                                 onValueChange = { prompt = it },
-                                label = { Text("LLM Condition Prompt") },
-                                modifier = Modifier.padding(top = 8.dp)
+                                label = { Text(stringResource(R.string.orchestrator_dialog_llm_condition_prompt)) },
+                                modifier = Modifier.padding(top = 8.dp),
                             )
                         }
                         if (node.type == NodeType.CLARIFICATION) {
@@ -404,7 +415,7 @@ fun VisualOrchestratorScreen(
                                 onValueChange = { new ->
                                     clarificationTimeoutSeconds = new.filter { it.isDigit() }
                                 },
-                                label = { Text("Reply timeout (seconds)") },
+                                label = { Text(stringResource(R.string.orchestrator_dialog_reply_timeout)) },
                                 modifier = Modifier.padding(top = 8.dp),
                             )
                         }
@@ -429,7 +440,7 @@ fun VisualOrchestratorScreen(
                             if (node.type == NodeType.IF_CONDITION) complexity.toIntOrNull() else null,
                             if (node.type == NodeType.IF_CONDITION) keywords.takeIf { it.isNotBlank() } else null,
                             if (node.type == NodeType.IF_CONDITION) prompt.takeIf { it.isNotBlank() } else null,
-                            systemPromptValue.text.takeIf { it.isNotBlank() }
+                            systemPromptValue.text.takeIf { it.isNotBlank() },
                         )
                         if (node.type == NodeType.CLARIFICATION) {
                             val timeoutMs = clarificationTimeoutSeconds
@@ -461,14 +472,14 @@ fun VisualOrchestratorScreen(
                         }
                         configuringNodeId = null
                     }) {
-                        Text("Save")
+                        Text(stringResource(R.string.common_save))
                     }
                 },
                 dismissButton = {
                     TextButton(onClick = { configuringNodeId = null }) {
-                        Text("Cancel")
+                        Text(stringResource(R.string.common_cancel))
                     }
-                }
+                },
             )
         } else {
             configuringNodeId = null
@@ -487,24 +498,30 @@ fun VisualOrchestratorScreen(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
-                title = { Text("Visual Orchestrator") },
+                title = { Text(stringResource(R.string.orchestrator_screen_title)) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(imageVector = Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = stringResource(R.string.common_back),
+                        )
                     }
                 },
                 actions = {
                     IconButton(onClick = onNavigateToPrompts) {
-                        Icon(imageVector = Icons.AutoMirrored.Filled.List, contentDescription = "Prompt Library")
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.List,
+                            contentDescription = stringResource(R.string.orchestrator_prompt_library_cd),
+                        )
                     }
-                }
+                },
             )
-        }
+        },
     ) { paddingValues ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(paddingValues)
+                .padding(paddingValues),
         ) {
             // Toolbar row for actions
             Row(
@@ -513,27 +530,33 @@ fun VisualOrchestratorScreen(
                     .background(MaterialTheme.colorScheme.surfaceVariant)
                     .padding(horizontal = 8.dp, vertical = 4.dp)
                     .horizontalScroll(rememberScrollState()),
-                verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
+                verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
             ) {
                 Box {
                     Button(
                         onClick = { showNodeMenu = true },
-                        modifier = Modifier.padding(end = 8.dp)
+                        modifier = Modifier.padding(end = 8.dp),
                     ) {
-                        Icon(imageVector = Icons.Default.Add, contentDescription = "Add Node", modifier = Modifier.padding(end = 4.dp))
-                        Text("Add Node")
+                        Icon(
+                            imageVector = Icons.Default.Add,
+                            contentDescription = stringResource(R.string.orchestrator_add_node_cd),
+                            modifier = Modifier.padding(end = 4.dp),
+                        )
+                        Text(stringResource(R.string.orchestrator_add_node))
                     }
                     DropdownMenu(
                         expanded = showNodeMenu,
-                        onDismissRequest = { showNodeMenu = false }
+                        onDismissRequest = { showNodeMenu = false },
                     ) {
                         NodeType.entries.forEach { nodeType ->
                             val isProvider = nodeType == NodeType.CLOUD
-                            
+
                             val hasKey = if (isProvider) {
                                 uiState.providerKeys.values.any { it }
-                            } else true
-                            
+                            } else {
+                                true
+                            }
+
                             if (!isProvider || hasKey) {
                                 DropdownMenuItem(
                                     text = { Text(nodeType.name) },
@@ -542,7 +565,7 @@ fun VisualOrchestratorScreen(
                                         val centerY = (-panOffset.y + 400f) / scale
                                         viewModel.addNode(nodeType, centerX, centerY)
                                         showNodeMenu = false
-                                    }
+                                    },
                                 )
                             }
                         }
@@ -551,14 +574,14 @@ fun VisualOrchestratorScreen(
 
                 Button(
                     onClick = { viewModel.applyBasePreset() },
-                    modifier = Modifier.padding(end = 8.dp)
+                    modifier = Modifier.padding(end = 8.dp),
                 ) {
-                    Text("Base Preset")
+                    Text(stringResource(R.string.orchestrator_base_preset))
                 }
 
                 Button(
                     onClick = { viewModel.saveCurrentPipeline() },
-                    modifier = Modifier.padding(end = 8.dp)
+                    modifier = Modifier.padding(end = 8.dp),
                 ) {
                     androidx.compose.material3.BadgedBox(
                         badge = {
@@ -568,33 +591,40 @@ fun VisualOrchestratorScreen(
                                 }
                             }
                         },
-                        modifier = Modifier.padding(end = 8.dp)
+                        modifier = Modifier.padding(end = 8.dp),
                     ) {
-                        Icon(imageVector = Icons.Default.Check, contentDescription = "Save Pipeline")
+                        Icon(
+                            imageVector = Icons.Default.Check,
+                            contentDescription = stringResource(R.string.orchestrator_save_pipeline_cd),
+                        )
                     }
-                    Text("Save")
+                    Text(stringResource(R.string.orchestrator_save_pipeline))
                 }
 
                 Button(
                     onClick = { exportLauncher.launch("pipeline.json") },
-                    modifier = Modifier.padding(end = 8.dp)
+                    modifier = Modifier.padding(end = 8.dp),
                 ) {
-                    Text("Export JSON")
+                    Text(stringResource(R.string.orchestrator_export_json))
                 }
 
                 Button(
                     onClick = { importLauncher.launch(arrayOf("application/json")) },
-                    modifier = Modifier.padding(end = 8.dp)
+                    modifier = Modifier.padding(end = 8.dp),
                 ) {
-                    Text("Import JSON")
+                    Text(stringResource(R.string.orchestrator_import_json))
                 }
 
                 Button(
                     onClick = { showClearDialog = true },
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
                 ) {
-                    Icon(imageVector = Icons.Default.Clear, contentDescription = "Clear Pipeline", modifier = Modifier.padding(end = 4.dp))
-                    Text("Clear")
+                    Icon(
+                        imageVector = Icons.Default.Clear,
+                        contentDescription = stringResource(R.string.orchestrator_clear_cd),
+                        modifier = Modifier.padding(end = 4.dp),
+                    )
+                    Text(stringResource(R.string.orchestrator_clear))
                 }
             }
 
@@ -621,9 +651,26 @@ fun VisualOrchestratorScreen(
                                     val targetSize = nodeSizes[target.id] ?: IntSize(0, 0)
                                     if (sourceSize.width > 0 && targetSize.width > 0) {
                                         val portRadiusPx = 8.dp.toPx()
-                                        val startX = source.x + if (source.type == NodeType.OUTPUT) sourceSize.width.toFloat() / 2f else sourceSize.width.toFloat() - portRadiusPx
+                                        val startX =
+                                            source.x +
+                                                if (source.type ==
+                                                    NodeType.OUTPUT
+                                                ) {
+                                                    sourceSize.width.toFloat() / 2f
+                                                } else {
+                                                    sourceSize.width.toFloat() -
+                                                        portRadiusPx
+                                                }
                                         val startY = source.y + sourceSize.height.toFloat() / 2f
-                                        val endX = target.x + if (target.type == NodeType.INPUT) targetSize.width.toFloat() / 2f else portRadiusPx
+                                        val endX =
+                                            target.x +
+                                                if (target.type ==
+                                                    NodeType.INPUT
+                                                ) {
+                                                    targetSize.width.toFloat() / 2f
+                                                } else {
+                                                    portRadiusPx
+                                                }
                                         val endY = target.y + targetSize.height.toFloat() / 2f
                                         isPointNearCubicBezier(
                                             clickLogicPoint,
@@ -631,10 +678,14 @@ fun VisualOrchestratorScreen(
                                             Offset(startX + 100f, startY),
                                             Offset(endX - 100f, endY),
                                             Offset(endX, endY),
-                                            threshold
+                                            threshold,
                                         )
-                                    } else false
-                                } else false
+                                    } else {
+                                        false
+                                    }
+                                } else {
+                                    false
+                                }
                             }
                             if (clickedConnection != null) {
                                 editingConnectionId = clickedConnection.id
@@ -648,7 +699,7 @@ fun VisualOrchestratorScreen(
                             panOffset = centroid - (centroid - p) * (newScale / scale)
                             scale = newScale
                         }
-                    }
+                    },
             ) {
                 Box(
                     modifier = Modifier
@@ -659,7 +710,7 @@ fun VisualOrchestratorScreen(
                             translationX = panOffset.x
                             translationY = panOffset.y
                             transformOrigin = TransformOrigin(0f, 0f)
-                        }
+                        },
                 ) {
                     val density = LocalDensity.current
                     val portRadiusPx = with(density) { 8.dp.toPx() }
@@ -678,26 +729,46 @@ fun VisualOrchestratorScreen(
 
                                 if (sourceSize.width == 0 || targetSize.width == 0) return@forEach
 
-                                val startX = source.x + if (source.type == NodeType.OUTPUT) sourceSize.width.toFloat() / 2f else sourceSize.width.toFloat() - portRadiusPx
+                                val startX =
+                                    source.x +
+                                        if (source.type ==
+                                            NodeType.OUTPUT
+                                        ) {
+                                            sourceSize.width.toFloat() / 2f
+                                        } else {
+                                            sourceSize.width.toFloat() -
+                                                portRadiusPx
+                                        }
                                 val startY = source.y + sourceSize.height.toFloat() / 2f
-                                
-                                val endX = target.x + if (target.type == NodeType.INPUT) targetSize.width.toFloat() / 2f else portRadiusPx
+
+                                val endX =
+                                    target.x +
+                                        if (target.type ==
+                                            NodeType.INPUT
+                                        ) {
+                                            targetSize.width.toFloat() / 2f
+                                        } else {
+                                            portRadiusPx
+                                        }
                                 val endY = target.y + targetSize.height.toFloat() / 2f
 
                                 val path = Path().apply {
                                     moveTo(startX, startY)
                                     cubicTo(
-                                        startX + 100f, startY,
-                                        endX - 100f, endY,
-                                        endX, endY
+                                        startX + 100f,
+                                        startY,
+                                        endX - 100f,
+                                        endY,
+                                        endX,
+                                        endY,
                                     )
                                 }
                                 drawPath(
                                     path = path,
                                     color = Color.Gray,
-                                    style = Stroke(width = 4.dp.toPx()) 
+                                    style = Stroke(width = 4.dp.toPx()),
                                 )
-                                
+
                                 val arrowTipX = endX - portRadiusPx
                                 val arrowPath = Path().apply {
                                     moveTo(arrowTipX, endY)
@@ -708,7 +779,7 @@ fun VisualOrchestratorScreen(
                                 drawPath(
                                     path = arrowPath,
                                     color = Color.Gray,
-                                    style = androidx.compose.ui.graphics.drawscope.Fill
+                                    style = androidx.compose.ui.graphics.drawscope.Fill,
                                 )
                             }
                         }
@@ -727,7 +798,7 @@ fun VisualOrchestratorScreen(
                                 val startY = source.y + sourceSize.height.toFloat() / 2f
                                 val endX = target.x + portRadiusPx
                                 val endY = target.y + targetSize.height.toFloat() / 2f
-                                
+
                                 val midX = (startX + endX) / 2f
                                 val midY = (startY + endY) / 2f
 
@@ -738,7 +809,7 @@ fun VisualOrchestratorScreen(
                                     modifier = Modifier
                                         .offset { IntOffset(midX.roundToInt(), midY.roundToInt() - 20) }
                                         .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.8f))
-                                        .padding(4.dp)
+                                        .padding(4.dp),
                                 )
                             }
                         }
@@ -769,13 +840,13 @@ fun VisualOrchestratorScreen(
                                     val sourceId = if (connectingIsOutput == true) connectingFromNodeId!! else node.id
                                     val targetId = if (connectingIsOutput == false) connectingFromNodeId!! else node.id
                                     val connLabel = if (connectingIsOutput == true) connectingLabel else label
-                                    
+
                                     val newConnectionId = viewModel.addConnection(sourceId, targetId, connLabel)
                                     val sourceNode = uiState.nodes.find { it.id == sourceId }
                                     if (sourceNode?.type == NodeType.INTENT_ROUTER && newConnectionId != null) {
                                         editingConnectionId = newConnectionId
                                     }
-                                    
+
                                     connectingFromNodeId = null
                                     connectingIsOutput = null
                                     connectingLabel = null
@@ -798,7 +869,7 @@ fun VisualOrchestratorScreen(
                             },
                             availableTools = uiState.availableTools,
                             onToolSelected = viewModel::updateNodeTool,
-                            onCloudProviderSelected = viewModel::updateNodeCloudProvider
+                            onCloudProviderSelected = viewModel::updateNodeCloudProvider,
                         )
                     }
                 }
@@ -813,7 +884,7 @@ private fun isPointNearCubicBezier(
     p1: Offset,
     p2: Offset,
     p3: Offset,
-    threshold: Float
+    threshold: Float,
 ): Boolean {
     val steps = 20
     var prev = p0
@@ -822,7 +893,7 @@ private fun isPointNearCubicBezier(
         val u = 1 - t
         val current = Offset(
             u * u * u * p0.x + 3 * u * u * t * p1.x + 3 * u * t * t * p2.x + t * t * t * p3.x,
-            u * u * u * p0.y + 3 * u * u * t * p1.y + 3 * u * t * t * p2.y + t * t * t * p3.y
+            u * u * u * p0.y + 3 * u * u * t * p1.y + 3 * u * t * t * p2.y + t * t * t * p3.y,
         )
         if (distanceFromPointToLineSegment(point, prev, current) <= threshold) {
             return true

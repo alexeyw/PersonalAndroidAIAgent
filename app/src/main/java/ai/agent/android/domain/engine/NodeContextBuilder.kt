@@ -81,18 +81,16 @@ class NodeContextBuilder @Inject constructor() {
 
     private fun renderBlock(header: String, body: String): String = "$header\n$body"
 
-    private fun formatChatHistory(messages: List<ChatMessage>): String =
-        messages.mapIndexed { index, message ->
-            "${index + 1}. ${message.role.name}: ${message.content}"
-        }.joinToString("\n")
+    private fun formatChatHistory(messages: List<ChatMessage>): String = messages.mapIndexed { index, message ->
+        "${index + 1}. ${message.role.name}: ${message.content}"
+    }.joinToString("\n")
 
     private fun formatMemory(entries: List<MemoryChunk>): String =
         entries.mapIndexed { index, chunk -> "${index + 1}. ${chunk.text}" }.joinToString("\n")
 
-    private fun formatToolResults(results: List<ToolInvocationResult>): String =
-        results.mapIndexed { index, result ->
-            "${index + 1}. ${result.toolName}: ${result.output}"
-        }.joinToString("\n")
+    private fun formatToolResults(results: List<ToolInvocationResult>): String = results.mapIndexed { index, result ->
+        "${index + 1}. ${result.toolName}: ${result.output}"
+    }.joinToString("\n")
 
     private companion object {
         private const val HEADER_ORIGINAL_TASK = "--- Original Task ---"

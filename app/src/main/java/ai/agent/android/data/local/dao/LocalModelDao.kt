@@ -1,11 +1,11 @@
 package ai.agent.android.data.local.dao
 
+import ai.agent.android.data.local.models.LocalModelEntity
 import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Update
-import ai.agent.android.data.local.models.LocalModelEntity
 import kotlinx.coroutines.flow.Flow
 
 /**
@@ -15,7 +15,7 @@ import kotlinx.coroutines.flow.Flow
 interface LocalModelDao {
     /**
      * Retrieves all saved models as a Flow.
-     * 
+     *
      * @return Flow containing a list of [LocalModelEntity].
      */
     @Query("SELECT * FROM local_models")
@@ -23,7 +23,7 @@ interface LocalModelDao {
 
     /**
      * Retrieves the currently active model if one exists.
-     * 
+     *
      * @return The active [LocalModelEntity] or null.
      */
     @Query("SELECT * FROM local_models WHERE isActive = 1 LIMIT 1")
@@ -31,7 +31,7 @@ interface LocalModelDao {
 
     /**
      * Inserts a new model record. Replaces if a conflict occurs.
-     * 
+     *
      * @param model The [LocalModelEntity] to insert.
      * @return The row ID of the newly inserted item.
      */
@@ -40,7 +40,7 @@ interface LocalModelDao {
 
     /**
      * Updates an existing model record.
-     * 
+     *
      * @param model The [LocalModelEntity] to update.
      */
     @Update
@@ -48,12 +48,12 @@ interface LocalModelDao {
 
     /**
      * Deletes a model record by its ID.
-     * 
+     *
      * @param id The ID of the model to delete.
      */
     @Query("DELETE FROM local_models WHERE id = :id")
     suspend fun deleteModelById(id: Long)
-    
+
     /**
      * Unsets the isActive flag for all models.
      */
@@ -62,7 +62,7 @@ interface LocalModelDao {
 
     /**
      * Sets the isActive flag to 1 for a specific model by its ID.
-     * 
+     *
      * @param id The ID of the model to activate.
      */
     @Query("UPDATE local_models SET isActive = 1 WHERE id = :id")

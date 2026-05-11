@@ -1,7 +1,7 @@
 package ai.agent.android.data.local
 
-import androidx.room.TypeConverter
 import ai.agent.android.domain.models.NodeContextConfig
+import androidx.room.TypeConverter
 import org.json.JSONException
 import org.json.JSONObject
 import timber.log.Timber
@@ -22,9 +22,7 @@ class Converters {
      * @return A comma-separated string representation of the array, or null if the array is null.
      */
     @TypeConverter
-    fun fromFloatArray(array: FloatArray?): String? {
-        return array?.joinToString(separator = ",")
-    }
+    fun fromFloatArray(array: FloatArray?): String? = array?.joinToString(separator = ",")
 
     /**
      * Converts a comma-separated [String] back into a [FloatArray].
@@ -47,15 +45,13 @@ class Converters {
      * @return A JSON object string with all five boolean flags.
      */
     @TypeConverter
-    fun fromNodeContextConfig(config: NodeContextConfig): String {
-        return JSONObject().apply {
-            put(KEY_CHAT_HISTORY, config.chatHistory)
-            put(KEY_ORIGINAL_TASK, config.originalTask)
-            put(KEY_NODE_INPUT, config.nodeInput)
-            put(KEY_LONG_TERM_MEMORY, config.longTermMemory)
-            put(KEY_TOOL_RESULTS, config.toolResults)
-        }.toString()
-    }
+    fun fromNodeContextConfig(config: NodeContextConfig): String = JSONObject().apply {
+        put(KEY_CHAT_HISTORY, config.chatHistory)
+        put(KEY_ORIGINAL_TASK, config.originalTask)
+        put(KEY_NODE_INPUT, config.nodeInput)
+        put(KEY_LONG_TERM_MEMORY, config.longTermMemory)
+        put(KEY_TOOL_RESULTS, config.toolResults)
+    }.toString()
 
     /**
      * Deserialises a JSON string produced by [fromNodeContextConfig] back into

@@ -25,5 +25,4 @@ internal inline fun <reified T : AgentOrchestratorState> List<NodeOutput>.filter
     filterIsInstance<NodeOutput.State>().map { it.state }.filterIsInstance<T>()
 
 /** Returns the single terminal [NodeExecutionResult] emitted by an executor flow. */
-internal fun List<NodeOutput>.lastResult(): NodeExecutionResult =
-    (last() as NodeOutput.Result).result
+internal fun List<NodeOutput>.lastResult(): NodeExecutionResult = (last() as NodeOutput.Result).result

@@ -38,18 +38,18 @@ class DelegateTaskToolTest {
         textEmbeddingEngine = mockk()
         apiKeyRepository = mockk(relaxed = true)
         mockClient = mockk(relaxed = true)
-        
+
         every { apiKeyRepository.getAnthropicModel() } returns flowOf("claude-3-5-sonnet-20240620")
         every { apiKeyRepository.getOpenAIModel() } returns flowOf("gpt-4o")
         every { apiKeyRepository.getGoogleModel() } returns flowOf("gemini-1.5-pro-preview-0409")
         every { apiKeyRepository.getDeepSeekModel() } returns flowOf("deepseek-chat")
         every { apiKeyRepository.getOllamaModelName() } returns flowOf("llama3")
-        
+
         delegateTaskTool = DelegateTaskTool(
             koogClientFactory = koogClientFactory,
             memoryRepository = memoryRepository,
             textEmbeddingEngine = textEmbeddingEngine,
-            apiKeyRepository = apiKeyRepository
+            apiKeyRepository = apiKeyRepository,
         )
     }
 
@@ -60,19 +60,20 @@ class DelegateTaskToolTest {
             val taskDescription = "Write a hello world app"
             val mockResponseText = "Here is your hello world app"
             val mockEmbedding = floatArrayOf(0.1f, 0.2f, 0.3f)
-            
+
             val mockMessageResponse = mockk<Message.Response>()
             every { mockMessageResponse.content } returns mockResponseText
-            
+
             coEvery { koogClientFactory.createAnthropicExecutor() } returns mockClient
             coEvery { mockClient.models() } returns emptyList()
             every { mockClient.llmProvider() } returns mockk(relaxed = true)
-            coEvery { mockClient.executeStreaming(any<Prompt>(), any<LLModel>()) } returns kotlinx.coroutines.flow.flowOf(StreamFrame.TextDelta(mockResponseText))
-            
+            coEvery { mockClient.executeStreaming(any<Prompt>(), any<LLModel>()) } returns
+                kotlinx.coroutines.flow.flowOf(StreamFrame.TextDelta(mockResponseText))
+
             coEvery { textEmbeddingEngine.generateEmbedding(mockResponseText) } returns mockEmbedding
 
             val result = delegateTaskTool.executeDelegation(taskDescription, targetModel)
-            
+
             assertTrue(result.startsWith("Success: Task completed"))
             coVerify(exactly = 1) { memoryRepository.saveMemory(mockResponseText, mockEmbedding) }
         }
@@ -99,10 +100,11 @@ class DelegateTaskToolTest {
             coEvery { koogClientFactory.createAnthropicExecutor() } returns mockClient
             coEvery { mockClient.models() } returns emptyList()
             every { mockClient.llmProvider() } returns mockk(relaxed = true)
-            coEvery { mockClient.executeStreaming(any<Prompt>(), any<LLModel>()) } throws RuntimeException("Network error")
+            coEvery { mockClient.executeStreaming(any<Prompt>(), any<LLModel>()) } throws
+                RuntimeException("Network error")
 
             val result = delegateTaskTool.executeDelegation("Task", "anthropic")
-            
+
             assertTrue(result.startsWith("Error: Task delegation failed"))
             coVerify(exactly = 0) { memoryRepository.saveMemory(any(), any()) }
         }

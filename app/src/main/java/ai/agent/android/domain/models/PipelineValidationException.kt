@@ -5,5 +5,5 @@ package ai.agent.android.domain.models
  *
  * @property errors The list of validation errors.
  */
-class PipelineValidationException(val errors: List<PipelineValidationError>) : 
+class PipelineValidationException(val errors: List<PipelineValidationError>) :
     Exception("Pipeline validation failed with ${errors.size} errors.")

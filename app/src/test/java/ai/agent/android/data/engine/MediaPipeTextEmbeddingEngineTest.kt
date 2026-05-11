@@ -22,13 +22,13 @@ class MediaPipeTextEmbeddingEngineTest {
     fun setup() {
         context = mockk(relaxed = true)
         embedderFactory = mockk(relaxed = true)
-        
+
         val filesDir = File(System.getProperty("java.io.tmpdir") ?: "/tmp")
         every { context.getExternalFilesDir(null) } returns filesDir
-        
-        // We cannot mock TextEmbedder here because its static initializer loads native libraries 
+
+        // We cannot mock TextEmbedder here because its static initializer loads native libraries
         // which crash the JVM test with UnsatisfiedLinkError.
-        // The fact that embedderFactory is a dependency allows Robolectric or AndroidTests 
+        // The fact that embedderFactory is a dependency allows Robolectric or AndroidTests
         // to mock it if needed in the future.
         engine = MediaPipeTextEmbeddingEngine(context, embedderFactory)
     }

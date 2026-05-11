@@ -1,11 +1,11 @@
 package ai.agent.android.data.repositories
 
+import ai.agent.android.domain.models.NetworkState
 import android.content.Context
 import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
 import android.net.NetworkRequest
-import ai.agent.android.domain.models.NetworkState
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.mockkConstructor
@@ -25,7 +25,8 @@ class NetworkStateRepositoryImplTest {
     @Before
     fun setup() {
         mockkConstructor(NetworkRequest.Builder::class)
-        every { anyConstructed<NetworkRequest.Builder>().addCapability(any()) } answers { self as NetworkRequest.Builder }
+        every { anyConstructed<NetworkRequest.Builder>().addCapability(any()) } answers
+            { self as NetworkRequest.Builder }
         every { anyConstructed<NetworkRequest.Builder>().build() } returns mockk()
 
         connectivityManager = mockk(relaxed = true)

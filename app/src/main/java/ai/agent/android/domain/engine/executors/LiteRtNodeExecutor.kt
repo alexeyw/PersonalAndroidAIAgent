@@ -24,14 +24,14 @@ class LiteRtNodeExecutor @Inject constructor(
     private val chatRepository: ChatRepository,
     private val settingsRepository: SettingsRepository,
     private val metricsRepository: MetricsRepository,
-    private val loadModelUseCase: LoadModelUseCase
+    private val loadModelUseCase: LoadModelUseCase,
 ) : NodeExecutor {
 
     override fun execute(
         node: NodeModel,
         inputText: String,
         sessionId: String,
-        originalPrompt: String
+        originalPrompt: String,
     ): Flow<NodeOutput> = flow {
         val systemPromptPrefix = settingsRepository.systemPromptPrefix.first()
         val nodeSystemPrompt = node.systemPrompt ?: "You are a helpful AI assistant."
@@ -76,7 +76,9 @@ class LiteRtNodeExecutor @Inject constructor(
             // would silently swallow cancellation and leave the parent coroutine running.
             throw e
         } catch (e: Exception) {
-            Timber.tag("PipelineDebug").e(e, "[NODE_ERR] type=${node.type.name} id=${node.id} error in LiteRtNodeExecutor generation")
+            Timber.tag(
+                "PipelineDebug",
+            ).e(e, "[NODE_ERR] type=${node.type.name} id=${node.id} error in LiteRtNodeExecutor generation")
             emit(NodeOutput.State(AgentOrchestratorState.Error(e.message ?: "Unknown error during LLM generation")))
             emit(NodeOutput.Result(NodeExecutionResult(error = e.message)))
             return@flow

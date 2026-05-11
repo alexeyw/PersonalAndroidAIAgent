@@ -34,7 +34,7 @@ class EvaluateIfConditionUseCaseTest {
             type = NodeType.IF_CONDITION,
             x = 0f,
             y = 0f,
-            conditionKeywords = "urgent, important"
+            conditionKeywords = "urgent, important",
         )
         val inputText = "This is an URGENT message."
 
@@ -50,7 +50,7 @@ class EvaluateIfConditionUseCaseTest {
             type = NodeType.IF_CONDITION,
             x = 0f,
             y = 0f,
-            conditionKeywords = "urgent, important"
+            conditionKeywords = "urgent, important",
         )
         val inputText = "This is a normal message."
 
@@ -66,7 +66,7 @@ class EvaluateIfConditionUseCaseTest {
             type = NodeType.IF_CONDITION,
             x = 0f,
             y = 0f,
-            conditionComplexity = 10
+            conditionComplexity = 10,
         )
         val inputText = "This message is definitely longer than 10 characters."
 
@@ -82,7 +82,7 @@ class EvaluateIfConditionUseCaseTest {
             type = NodeType.IF_CONDITION,
             x = 0f,
             y = 0f,
-            conditionComplexity = 50
+            conditionComplexity = 50,
         )
         val inputText = "Short message."
 
@@ -98,7 +98,7 @@ class EvaluateIfConditionUseCaseTest {
             type = NodeType.IF_CONDITION,
             x = 0f,
             y = 0f,
-            conditionPrompt = "Is this text asking a question?"
+            conditionPrompt = "Is this text asking a question?",
         )
         val inputText = "How are you?"
 
@@ -116,7 +116,7 @@ class EvaluateIfConditionUseCaseTest {
             type = NodeType.IF_CONDITION,
             x = 0f,
             y = 0f,
-            conditionPrompt = "Is this text asking a question?"
+            conditionPrompt = "Is this text asking a question?",
         )
         val inputText = "I am fine."
 
@@ -133,7 +133,7 @@ class EvaluateIfConditionUseCaseTest {
             id = UUID.randomUUID().toString(),
             type = NodeType.TOOL,
             x = 0f,
-            y = 0f
+            y = 0f,
         )
         val inputText = "Text"
 
@@ -147,21 +147,21 @@ class EvaluateIfConditionUseCaseTest {
             type = NodeType.IF_CONDITION,
             x = 0f,
             y = 0f,
-            conditionKeywords = "urgent"
+            conditionKeywords = "urgent",
         )
 
         val result = evaluateIfConditionUseCase(node, "   ")
 
         assertFalse(result)
     }
-    
+
     @Test
     fun `invoke returns false when no conditions are set`() = runTest {
         val node = NodeModel(
             id = UUID.randomUUID().toString(),
             type = NodeType.IF_CONDITION,
             x = 0f,
-            y = 0f
+            y = 0f,
         )
 
         val result = evaluateIfConditionUseCase(node, "Some text")

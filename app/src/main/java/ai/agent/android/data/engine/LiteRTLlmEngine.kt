@@ -1,19 +1,21 @@
 package ai.agent.android.data.engine
 
-import android.content.ComponentCallbacks2
-import android.content.Context
-import android.content.res.Configuration
 import ai.agent.android.domain.engine.LlmInferenceEngine
 import ai.agent.android.domain.models.AppError
 import ai.agent.android.domain.models.Result
+import ai.agent.android.domain.repositories.SettingsRepository
+import android.content.ComponentCallbacks2
+import android.content.Context
+import android.content.res.Configuration
 import com.google.ai.edge.litertlm.Backend
-import com.google.ai.edge.litertlm.Engine
-import com.google.ai.edge.litertlm.EngineConfig
 import com.google.ai.edge.litertlm.Content
 import com.google.ai.edge.litertlm.Conversation
+import com.google.ai.edge.litertlm.Engine
+import com.google.ai.edge.litertlm.EngineConfig
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.withContext
@@ -22,20 +24,18 @@ import java.io.File
 import javax.inject.Inject
 import javax.inject.Singleton
 
-import ai.agent.android.domain.repositories.SettingsRepository
-import kotlinx.coroutines.flow.first
-
 /**
  * An implementation of [LlmInferenceEngine] using the specialized LiteRT-LM library.
- * 
+ *
  * This engine manages the lifecycle of the LiteRT-LM [Engine], which is optimized
  * specifically for Large Language Models (LLMs) on edge devices.
  */
 @Singleton
 class LiteRTLlmEngine @Inject constructor(
     @ApplicationContext private val context: Context,
-    private val settingsRepository: SettingsRepository
-) : LlmInferenceEngine, ComponentCallbacks2 {
+    private val settingsRepository: SettingsRepository,
+) : LlmInferenceEngine,
+    ComponentCallbacks2 {
 
     private var engine: Engine? = null
     private var conversation: Conversation? = null
@@ -63,7 +63,7 @@ class LiteRTLlmEngine @Inject constructor(
     /**
      * Initializes the LiteRT-LM engine by configuring its options with the
      * specified model path.
-     * 
+     *
      * @param modelPath The exact path to the locally downloaded model file.
      * @return [Result.Success] on successful initialization, or [Result.Error] on failure.
      */
@@ -76,7 +76,7 @@ class LiteRTLlmEngine @Inject constructor(
                 _currentModelPath = null
                 return@withContext Result.Error(
                     error = LlmSystemError,
-                    message = errorMsg
+                    message = errorMsg,
                 )
             }
 
@@ -108,7 +108,7 @@ class LiteRTLlmEngine @Inject constructor(
             }
             _currentModelPath = modelPath
             Timber.i("LiteRT-LM Engine successfully initialized with $modelPath")
-            
+
             Result.Success(Unit)
         } catch (e: Exception) {
             Timber.e(e, "Failed to initialize LiteRTLlmEngine")
@@ -116,14 +116,14 @@ class LiteRTLlmEngine @Inject constructor(
             Result.Error(
                 error = LlmSystemError,
                 message = e.localizedMessage ?: "Unknown initialization error",
-                throwable = e
+                throwable = e,
             )
         }
     }
 
     /**
      * Generates a response stream from the LLM based on the provided prompt.
-     * 
+     *
      * @param prompt The input text prompt for the LLM.
      * @return A [Flow] of strings representing the generated tokens as they are produced.
      */
@@ -136,13 +136,13 @@ class LiteRTLlmEngine @Inject constructor(
 
         try {
             Timber.d("Starting inference for prompt: %s", prompt)
-            
+
             // LiteRT-LM allows only one active session. Since the Orchestrator manually
             // supplies the full history context every time, we must close the old conversation
             // and create a fresh one to prevent token accumulation and OOM crashes.
             conversation?.close()
             conversation = currentEngine.createConversation()
-            
+
             // Stream the tokens directly from the LiteRT-LM conversation
             conversation?.let { conversation ->
                 conversation.sendMessageAsync(prompt).collect { chunk ->
@@ -153,7 +153,6 @@ class LiteRTLlmEngine @Inject constructor(
                     }
                 }
             }
-            
         } catch (e: Exception) {
             Timber.e(e, "Error during text generation")
             throw e
@@ -187,7 +186,7 @@ class LiteRTLlmEngine @Inject constructor(
 
     /**
      * Called by the system when the device configuration changes while your component is running.
-     * 
+     *
      * @param newConfig The new device configuration.
      */
     override fun onConfigurationChanged(newConfig: Configuration) {
@@ -206,7 +205,7 @@ class LiteRTLlmEngine @Inject constructor(
     /**
      * Called when the operating system has determined that it is a good time for a process to trim unneeded memory from its process.
      * Unloads the engine if the memory trim level is critical.
-     * 
+     *
      * @param level The context of the trim, giving a hint of the amount of trimming the application may like to perform.
      */
     override fun onTrimMemory(level: Int) {

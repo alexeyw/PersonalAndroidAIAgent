@@ -19,13 +19,13 @@ import javax.inject.Inject
 class OutputNodeExecutor @Inject constructor(
     private val llmEngine: LlmInferenceEngine,
     private val loadModelUseCase: LoadModelUseCase,
-    private val chatRepository: ChatRepository
+    private val chatRepository: ChatRepository,
 ) : NodeExecutor {
     override fun execute(
         node: NodeModel,
         inputText: String,
         sessionId: String,
-        originalPrompt: String
+        originalPrompt: String,
     ): Flow<NodeOutput> = flow {
         if (!node.systemPrompt.isNullOrBlank()) {
             val fullPrompt = "${node.systemPrompt}\n\nCRITICAL INSTRUCTION: Output ONLY the requested format. Do NOT include any conversational filler, explanations, or preambles (e.g., \"Here is the formatted output:\").\n\nINPUT: $inputText\nFORMATTED OUTPUT: "
@@ -57,7 +57,9 @@ class OutputNodeExecutor @Inject constructor(
                 // would silently swallow cancellation and leave the parent coroutine running.
                 throw e
             } catch (e: Exception) {
-                Timber.tag("PipelineDebug").e(e, "[NODE_ERR] type=${node.type.name} id=${node.id} error in OutputNodeExecutor generation")
+                Timber.tag(
+                    "PipelineDebug",
+                ).e(e, "[NODE_ERR] type=${node.type.name} id=${node.id} error in OutputNodeExecutor generation")
                 emit(NodeOutput.State(AgentOrchestratorState.Error(e.message ?: "Unknown error")))
                 emit(NodeOutput.Result(NodeExecutionResult(error = e.message)))
                 return@flow
@@ -72,7 +74,7 @@ class OutputNodeExecutor @Inject constructor(
                 "here is the formatted output:",
                 "here is the output:",
                 "formatted output:",
-                "here is the result:"
+                "here is the result:",
             )
             for (prefix in prefixesToRemove) {
                 if (lowerCaseOutput.startsWith(prefix)) {
@@ -86,8 +88,8 @@ class OutputNodeExecutor @Inject constructor(
                     sessionId = sessionId,
                     role = Role.AGENT,
                     content = finalOutput,
-                    timestamp = System.currentTimeMillis()
-                )
+                    timestamp = System.currentTimeMillis(),
+                ),
             )
             emit(NodeOutput.State(AgentOrchestratorState.Completed(finalOutput)))
             emit(NodeOutput.Result(NodeExecutionResult(outputText = finalOutput)))
@@ -97,8 +99,8 @@ class OutputNodeExecutor @Inject constructor(
                     sessionId = sessionId,
                     role = Role.AGENT,
                     content = inputText,
-                    timestamp = System.currentTimeMillis()
-                )
+                    timestamp = System.currentTimeMillis(),
+                ),
             )
             emit(NodeOutput.State(AgentOrchestratorState.Completed(inputText)))
             emit(NodeOutput.Result(NodeExecutionResult(outputText = inputText)))

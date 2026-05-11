@@ -10,7 +10,7 @@ import android.os.OutcomeReceiver
 
 /**
  * The service that exposes our AppFunctions to the system and AI agents.
- * 
+ *
  * Note: If we use androidx.appfunctions, we might not strictly need to manually
  * override onExecuteFunction unless we are doing custom routing, but it's required
  * to declare a service that extends AppFunctionService in the manifest.
@@ -22,7 +22,7 @@ class AgentAppFunctionService : AppFunctionService() {
         callingPackage: String,
         callingPackageSignature: SigningInfo,
         cancellationSignal: CancellationSignal,
-        callback: OutcomeReceiver<ExecuteAppFunctionResponse, AppFunctionException>
+        callback: OutcomeReceiver<ExecuteAppFunctionResponse, AppFunctionException>,
     ) {
         try {
             val result = dispatchFunction(request)
@@ -31,15 +31,14 @@ class AgentAppFunctionService : AppFunctionService() {
             callback.onError(e)
         } catch (e: Exception) {
             callback.onError(
-                AppFunctionException(AppFunctionException.ERROR_APP_UNKNOWN_ERROR, e.message ?: "")
+                AppFunctionException(AppFunctionException.ERROR_APP_UNKNOWN_ERROR, e.message ?: ""),
             )
         }
     }
 
-    private fun dispatchFunction(request: ExecuteAppFunctionRequest): ExecuteAppFunctionResponse {
+    private fun dispatchFunction(request: ExecuteAppFunctionRequest): ExecuteAppFunctionResponse =
         throw AppFunctionException(
             AppFunctionException.ERROR_APP_UNKNOWN_ERROR,
-            "AppFunction '${request.functionIdentifier}' routing not implemented"
+            "AppFunction '${request.functionIdentifier}' routing not implemented",
         )
-    }
 }

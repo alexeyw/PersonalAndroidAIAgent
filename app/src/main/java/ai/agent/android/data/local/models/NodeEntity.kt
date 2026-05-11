@@ -1,11 +1,11 @@
 package ai.agent.android.data.local.models
 
+import ai.agent.android.domain.models.NodeContextConfig
 import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.ForeignKey
 import androidx.room.Index
 import androidx.room.PrimaryKey
-import ai.agent.android.domain.models.NodeContextConfig
 
 /**
  * Room entity representing a single node in a pipeline.
@@ -38,10 +38,10 @@ import ai.agent.android.domain.models.NodeContextConfig
             entity = PipelineEntity::class,
             parentColumns = ["id"],
             childColumns = ["pipelineId"],
-            onDelete = ForeignKey.CASCADE
-        )
+            onDelete = ForeignKey.CASCADE,
+        ),
     ],
-    indices = [Index("pipelineId")]
+    indices = [Index("pipelineId")],
 )
 data class NodeEntity(
     @PrimaryKey

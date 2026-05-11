@@ -3,7 +3,7 @@ package ai.agent.android.domain.repositories
 import kotlinx.coroutines.flow.Flow
 
 /**
- * Repository interface for managing API keys for external LLM providers and 
+ * Repository interface for managing API keys for external LLM providers and
  * configuration settings for local network providers (like Ollama).
  */
 interface ApiKeyRepository {

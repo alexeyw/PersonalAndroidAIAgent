@@ -7,8 +7,8 @@ import ai.agent.android.domain.models.NodeType
 import ai.agent.android.domain.models.PipelineGraph
 import ai.agent.android.domain.models.PipelineImportOutcome
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNull
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -249,7 +249,8 @@ class PipelineJsonSerializerTest {
                 NodeModel(
                     id = "n1",
                     type = NodeType.INPUT,
-                    x = 0f, y = 0f,
+                    x = 0f,
+                    y = 0f,
                     systemPrompt = null,
                 ),
             ),

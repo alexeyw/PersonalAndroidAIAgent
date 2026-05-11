@@ -17,19 +17,17 @@ import kotlin.math.sqrt
  * in-memory cosine similarity search for vector embeddings.
  */
 @Singleton
-class MemoryRepositoryImpl @Inject constructor(
-    private val memoryDao: MemoryDao,
-    private val converters: Converters
-) : MemoryRepository {
+class MemoryRepositoryImpl @Inject constructor(private val memoryDao: MemoryDao, private val converters: Converters) :
+    MemoryRepository {
 
     override suspend fun saveMemory(text: String, embedding: FloatArray): Long = withContext(Dispatchers.IO) {
-        val embeddingString = converters.fromFloatArray(embedding) 
+        val embeddingString = converters.fromFloatArray(embedding)
             ?: throw IllegalArgumentException("Failed to serialize embedding")
-            
+
         val entity = MemoryChunkEntity(
             text = text,
             embedding = embeddingString,
-            timestamp = System.currentTimeMillis()
+            timestamp = System.currentTimeMillis(),
         )
         memoryDao.insertMemory(entity)
     }
@@ -42,7 +40,7 @@ class MemoryRepositoryImpl @Inject constructor(
                     id = entity.id,
                     text = entity.text,
                     embedding = embeddingArray,
-                    timestamp = entity.timestamp
+                    timestamp = entity.timestamp,
                 )
             } else {
                 null
@@ -50,19 +48,18 @@ class MemoryRepositoryImpl @Inject constructor(
         }
     }
 
-    override suspend fun getRecentMemorySummaries(limit: Int): List<MemorySummary> =
-        if (limit <= 0) {
-            emptyList()
-        } else {
-            withContext(Dispatchers.IO) {
-                memoryDao.getRecentMemorySummaries(limit)
-            }
+    override suspend fun getRecentMemorySummaries(limit: Int): List<MemorySummary> = if (limit <= 0) {
+        emptyList()
+    } else {
+        withContext(Dispatchers.IO) {
+            memoryDao.getRecentMemorySummaries(limit)
         }
+    }
 
     override suspend fun findSimilarMemories(
         queryEmbedding: FloatArray,
         searchPoolLimit: Int,
-        limit: Int
+        limit: Int,
     ): List<Pair<MemoryChunk, Float>> = withContext(Dispatchers.Default) {
         val recentMemories = memoryDao.getRecentMemories(searchPoolLimit).mapNotNull { entity ->
             val embeddingArray = converters.toFloatArray(entity.embedding)
@@ -71,19 +68,19 @@ class MemoryRepositoryImpl @Inject constructor(
                     id = entity.id,
                     text = entity.text,
                     embedding = embeddingArray,
-                    timestamp = entity.timestamp
+                    timestamp = entity.timestamp,
                 )
             } else {
                 null
             }
         }
-        
+
         recentMemories.map { memory ->
             val similarity = cosineSimilarity(queryEmbedding, memory.embedding)
             memory to similarity
         }
-        .sortedByDescending { it.second }
-        .take(limit)
+            .sortedByDescending { it.second }
+            .take(limit)
     }
 
     override suspend fun compactMemory(keepLimit: Int) = withContext(Dispatchers.IO) {
@@ -96,7 +93,7 @@ class MemoryRepositoryImpl @Inject constructor(
 
     /**
      * Calculates the cosine similarity between two vectors.
-     * 
+     *
      * @param vectorA The first vector.
      * @param vectorB The second vector.
      * @return The cosine similarity score, ranging from -1.0 (opposite) to 1.0 (identical).

@@ -14,15 +14,14 @@ import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.toList
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
-import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -49,14 +48,14 @@ class ToolNodeExecutorTest {
         settingsRepository = mockk(relaxed = true)
         approvalNotifier = mockk(relaxed = true)
         chatRepository = mockk(relaxed = true)
-        
+
         executor = ToolNodeExecutor(
             llmEngine = llmEngine,
             loadModelUseCase = loadModelUseCase,
             toolRepository = toolRepository,
             settingsRepository = settingsRepository,
             approvalNotifier = approvalNotifier,
-            chatRepository = chatRepository
+            chatRepository = chatRepository,
         )
 
         coEvery { loadModelUseCase(any()) } returns Result.Success(Unit)
@@ -112,7 +111,8 @@ class ToolNodeExecutorTest {
         val toolName = "MyTool"
         val node = NodeModel("1", NodeType.TOOL, 0f, 0f, toolName = toolName)
         coEvery { toolRepository.getAvailableTools() } returns listOf(AgentTool(toolName, "Desc", "Schema"))
-        every { llmEngine.generateResponseStream(any()) } returns flowOf("""{"tool": "MyTool", "arguments": "arg_value"}""")
+        every { llmEngine.generateResponseStream(any()) } returns
+            flowOf("""{"tool": "MyTool", "arguments": "arg_value"}""")
         coEvery { toolRepository.executeTool(toolName, "arg_value") } returns "Tool Success"
 
         val states = executor.execute(node, "Do something", "session-1", "").toList().unwrap()
@@ -157,7 +157,7 @@ class ToolNodeExecutorTest {
         val node = NodeModel("1", NodeType.TOOL, 0f, 0f, toolName = "auto")
         coEvery { toolRepository.getAvailableTools() } returns listOf(
             AgentTool("ToolA", "DescA", "SchemaA"),
-            AgentTool("ToolB", "DescB", "SchemaB")
+            AgentTool("ToolB", "DescB", "SchemaB"),
         )
         every { llmEngine.generateResponseStream(any()) } returns flowOf("""{"tool": "ToolB", "arguments": "arg_b"}""")
         coEvery { toolRepository.executeTool("ToolB", "arg_b") } returns "Tool B Success"

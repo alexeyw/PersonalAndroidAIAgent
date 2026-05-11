@@ -24,10 +24,10 @@ import androidx.room.PrimaryKey
             entity = ChatSessionEntity::class,
             parentColumns = arrayOf("id"),
             childColumns = arrayOf("sessionId"),
-            onDelete = ForeignKey.CASCADE
-        )
+            onDelete = ForeignKey.CASCADE,
+        ),
     ],
-    indices = [Index(value = ["sessionId"])]
+    indices = [Index(value = ["sessionId"])],
 )
 data class TraceStepEntity(
     @PrimaryKey(autoGenerate = true)

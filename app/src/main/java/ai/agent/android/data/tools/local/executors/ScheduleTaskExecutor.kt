@@ -12,9 +12,8 @@ import javax.inject.Inject
  * optional `delayMinutes`) and forwards them to [ScheduleTaskUseCase] which enqueues
  * the task with `WorkManager`.
  */
-class ScheduleTaskExecutor @Inject constructor(
-    private val scheduleTaskUseCase: ScheduleTaskUseCase,
-) : LocalToolExecutor {
+class ScheduleTaskExecutor @Inject constructor(private val scheduleTaskUseCase: ScheduleTaskUseCase) :
+    LocalToolExecutor {
 
     override val toolName: String = TOOL_NAME
 

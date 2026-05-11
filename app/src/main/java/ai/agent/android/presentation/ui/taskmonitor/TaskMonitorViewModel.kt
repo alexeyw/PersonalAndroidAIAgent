@@ -28,7 +28,7 @@ class TaskMonitorViewModel @Inject constructor(
     chatRepository: ChatRepository,
     private val workManager: WorkManager,
     private val settingsRepository: SettingsRepository,
-    private val taskQueueManager: TaskQueueManager
+    private val taskQueueManager: TaskQueueManager,
 ) : ViewModel() {
 
     private val _filter = MutableStateFlow(TaskFilterType.ACTIVE)
@@ -41,9 +41,9 @@ class TaskMonitorViewModel @Inject constructor(
                 WorkInfo.State.SUCCEEDED,
                 WorkInfo.State.FAILED,
                 WorkInfo.State.BLOCKED,
-                WorkInfo.State.CANCELLED
-            )
-        ).build()
+                WorkInfo.State.CANCELLED,
+            ),
+        ).build(),
     )
 
     /**
@@ -53,11 +53,11 @@ class TaskMonitorViewModel @Inject constructor(
         chatRepository.getSessionsFlow(),
         workInfosFlow,
         taskQueueManager.activeSessionsState,
-        _filter
+        _filter,
     ) { sessions, workInfos, activeSessionsMap, filter ->
         val sessionTasks = sessions.mapNotNull { session ->
             val orchestratorState = activeSessionsMap[session.id] ?: AgentOrchestratorState.Idle
-            
+
             // Map Orchestrator State to TaskStatus
             val status = when (orchestratorState) {
                 is AgentOrchestratorState.Idle -> TaskStatus.COMPLETED
@@ -65,7 +65,7 @@ class TaskMonitorViewModel @Inject constructor(
                 is AgentOrchestratorState.Error -> TaskStatus.FAILED
                 else -> TaskStatus.RUNNING
             }
-            
+
             // Map Orchestrator State to Pipeline Stage
             val stage = when (orchestratorState) {
                 is AgentOrchestratorState.PipelineStage -> orchestratorState.stepInfo.nodeName
@@ -83,7 +83,7 @@ class TaskMonitorViewModel @Inject constructor(
                 status = status,
                 progress = null,
                 type = TaskType.SESSION,
-                pipelineStage = stage
+                pipelineStage = stage,
             )
         }
 
@@ -104,7 +104,7 @@ class TaskMonitorViewModel @Inject constructor(
                 },
                 progress = if (info.state == WorkInfo.State.RUNNING) -1f else 1f,
                 type = TaskType.BACKGROUND_WORK,
-                pipelineStage = stage
+                pipelineStage = stage,
             )
         }
 
@@ -113,19 +113,25 @@ class TaskMonitorViewModel @Inject constructor(
         val filteredTasks = when (filter) {
             TaskFilterType.ALL -> allTasks
             TaskFilterType.ACTIVE -> allTasks.filter { it.status == TaskStatus.RUNNING }
-            TaskFilterType.BACKGROUND -> allTasks.filter { it.type == TaskType.BACKGROUND_WORK && it.status == TaskStatus.QUEUED }
-            TaskFilterType.COMPLETED -> allTasks.filter { it.status == TaskStatus.COMPLETED || it.status == TaskStatus.FAILED }
+            TaskFilterType.BACKGROUND -> allTasks.filter {
+                it.type == TaskType.BACKGROUND_WORK &&
+                    it.status == TaskStatus.QUEUED
+            }
+            TaskFilterType.COMPLETED -> allTasks.filter {
+                it.status == TaskStatus.COMPLETED ||
+                    it.status == TaskStatus.FAILED
+            }
         }
 
         TaskMonitorState(
             tasks = filteredTasks,
             filter = filter,
-            isLoading = false
+            isLoading = false,
         )
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
-        initialValue = TaskMonitorState()
+        initialValue = TaskMonitorState(),
     )
 
     /**

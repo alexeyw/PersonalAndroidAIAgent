@@ -1,14 +1,16 @@
 package ai.agent.android.data.engine
 
+import ai.agent.android.domain.models.Result
+import ai.agent.android.domain.repositories.SettingsRepository
 import android.content.ComponentCallbacks2
 import android.content.Context
-import ai.agent.android.domain.models.Result
 import com.google.ai.edge.litertlm.Engine
-import com.google.ai.edge.litertlm.Conversation
+import io.mockk.every
 import io.mockk.mockk
 import io.mockk.mockkConstructor
 import io.mockk.unmockkAll
 import io.mockk.verify
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.runTest
 import org.junit.After
@@ -16,9 +18,6 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
-import ai.agent.android.domain.repositories.SettingsRepository
-import io.mockk.every
-import kotlinx.coroutines.flow.flowOf
 import java.io.File
 
 /**
@@ -63,13 +62,13 @@ class LiteRTLlmEngineTest {
     fun `initialize returns Success when model file exists`() = runTest {
         val tempFile = File.createTempFile("model", ".tflite")
         tempFile.deleteOnExit()
-        
+
         val result = engine.initialize(tempFile.absolutePath)
-        
+
         assertTrue(result is Result.Success)
         assertEquals(tempFile.absolutePath, engine.currentModelPath)
         assertTrue(engine.isInitialized)
-        
+
         verify { anyConstructed<Engine>().initialize() }
     }
 
@@ -94,12 +93,12 @@ class LiteRTLlmEngineTest {
         tempFile.deleteOnExit()
         engine.initialize(tempFile.absolutePath)
         assertTrue(engine.isInitialized)
-        
+
         engine.onTrimMemory(ComponentCallbacks2.TRIM_MEMORY_BACKGROUND)
-        
+
         assertTrue(!engine.isInitialized)
         verify { anyConstructed<Engine>().close() }
-        
+
         engine.close()
         verify { context.unregisterComponentCallbacks(engine) }
     }

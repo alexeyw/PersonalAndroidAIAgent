@@ -24,9 +24,7 @@ import javax.inject.Singleton
  * with a fixed clock for deterministic assertions.
  */
 @Singleton
-class TimeVariableProvider internal constructor(
-    private val clockProvider: () -> Clock,
-) : PromptVariableProvider {
+class TimeVariableProvider internal constructor(private val clockProvider: () -> Clock) : PromptVariableProvider {
 
     /**
      * Hilt-visible no-arg constructor wiring the production default: a fresh
@@ -50,8 +48,7 @@ class TimeVariableProvider internal constructor(
      *
      * @return The current time in the `HH:mm` 24-hour pattern with zero padding.
      */
-    override suspend fun resolve(): String =
-        LocalTime.now(clockProvider()).format(FORMATTER)
+    override suspend fun resolve(): String = LocalTime.now(clockProvider()).format(FORMATTER)
 
     private companion object {
         const val KEY = "TIME"

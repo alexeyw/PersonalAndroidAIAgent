@@ -29,7 +29,7 @@ import javax.inject.Inject
  */
 class AndroidModelDownloadManager @Inject constructor(
     @ApplicationContext private val context: Context,
-    private val client: OkHttpClient
+    private val client: OkHttpClient,
 ) : ModelDownloadManager {
 
     override fun downloadModel(url: String, fileName: String, authToken: String?): Flow<DownloadState> = flow {
@@ -86,7 +86,6 @@ class AndroidModelDownloadManager @Inject constructor(
             }
 
             emit(DownloadState.Success(targetFile.absolutePath))
-
         } catch (e: Exception) {
             emit(DownloadState.Error(DownloadError(e.message ?: "Unknown download error")))
         }

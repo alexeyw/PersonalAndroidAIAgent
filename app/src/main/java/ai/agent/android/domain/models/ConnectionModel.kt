@@ -12,5 +12,5 @@ data class ConnectionModel(
     val id: String,
     val sourceNodeId: String,
     val targetNodeId: String,
-    val label: String? = null
+    val label: String? = null,
 )

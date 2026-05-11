@@ -39,14 +39,22 @@ class AppDatabaseMigrationTest {
 
         verify(exactly = 1) { db.execSQL(capture(sqlSlot)) }
         val sql = sqlSlot.captured.uppercase()
-        assertTrue("Expected ALTER TABLE on pipeline_nodes, got: ${sqlSlot.captured}",
-            sql.contains("ALTER TABLE") && sql.contains("PIPELINE_NODES"))
-        assertTrue("Expected new context_config column, got: ${sqlSlot.captured}",
-            sql.contains("CONTEXT_CONFIG"))
-        assertTrue("Column must be NOT NULL so existing rows keep working: ${sqlSlot.captured}",
-            sql.contains("NOT NULL"))
-        assertTrue("Migration must declare a DEFAULT value: ${sqlSlot.captured}",
-            sql.contains("DEFAULT"))
+        assertTrue(
+            "Expected ALTER TABLE on pipeline_nodes, got: ${sqlSlot.captured}",
+            sql.contains("ALTER TABLE") && sql.contains("PIPELINE_NODES"),
+        )
+        assertTrue(
+            "Expected new context_config column, got: ${sqlSlot.captured}",
+            sql.contains("CONTEXT_CONFIG"),
+        )
+        assertTrue(
+            "Column must be NOT NULL so existing rows keep working: ${sqlSlot.captured}",
+            sql.contains("NOT NULL"),
+        )
+        assertTrue(
+            "Migration must declare a DEFAULT value: ${sqlSlot.captured}",
+            sql.contains("DEFAULT"),
+        )
     }
 
     @Test

@@ -7,7 +7,4 @@ package ai.agent.android.presentation.ui.chat
  * @property sessionName Human-readable name of the exported session (used as share subject).
  * @property json Full JSON representation of the session (list of messages with role, text, timestamp).
  */
-data class ChatExportPayload(
-    val sessionName: String,
-    val json: String,
-)
+data class ChatExportPayload(val sessionName: String, val json: String)

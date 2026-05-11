@@ -1,10 +1,10 @@
 package ai.agent.android.data.local.dao
 
+import ai.agent.android.data.local.models.PromptTemplateEntity
 import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
-import ai.agent.android.data.local.models.PromptTemplateEntity
 import kotlinx.coroutines.flow.Flow
 
 /**
@@ -35,10 +35,10 @@ interface PromptTemplateDao {
      */
     @Query("DELETE FROM prompt_templates WHERE id = :id")
     suspend fun deletePrompt(id: Long)
-    
+
     /**
      * Checks if any prompts exist in the database.
-     * 
+     *
      * @return Number of prompts.
      */
     @Query("SELECT COUNT(id) FROM prompt_templates")

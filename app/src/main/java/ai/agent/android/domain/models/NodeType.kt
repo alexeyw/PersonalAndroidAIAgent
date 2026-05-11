@@ -68,5 +68,5 @@ enum class NodeType {
     /**
      * The ending point of the pipeline.
      */
-    OUTPUT
+    OUTPUT,
 }

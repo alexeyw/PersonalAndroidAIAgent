@@ -18,9 +18,4 @@ package ai.agent.android.domain.models
  * @property timeoutMs Maximum time, in milliseconds, the agent will wait for the
  *   user's response before falling back to the default answer.
  */
-data class ClarificationRequest(
-    val id: String,
-    val question: String,
-    val options: List<String>?,
-    val timeoutMs: Long,
-)
+data class ClarificationRequest(val id: String, val question: String, val options: List<String>?, val timeoutMs: Long)

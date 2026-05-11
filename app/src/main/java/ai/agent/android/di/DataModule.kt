@@ -1,23 +1,23 @@
 package ai.agent.android.di
 
 import ai.agent.android.data.engine.LiteRTLlmEngine
-import ai.agent.android.data.local.SettingsManager
-import ai.agent.android.domain.engine.LlmInferenceEngine
-import ai.agent.android.domain.repositories.SettingsRepository
-import ai.agent.android.data.network.AndroidModelDownloadManager
-import ai.agent.android.domain.repositories.ModelDownloadManager
-import ai.agent.android.data.repositories.LocalModelRepositoryImpl
-import ai.agent.android.domain.repositories.LocalModelRepository
-import ai.agent.android.data.repositories.ChatRepositoryImpl
-import ai.agent.android.domain.repositories.ChatRepository
-import ai.agent.android.data.repositories.ClarificationRepositoryImpl
-import ai.agent.android.domain.repositories.ClarificationRepository
-import ai.agent.android.data.repositories.MemoryRepositoryImpl
-import ai.agent.android.domain.repositories.MemoryRepository
 import ai.agent.android.data.engine.MediaPipeTextEmbeddingEngine
-import ai.agent.android.domain.engine.TextEmbeddingEngine
 import ai.agent.android.data.local.ApiKeyManager
+import ai.agent.android.data.local.SettingsManager
+import ai.agent.android.data.network.AndroidModelDownloadManager
+import ai.agent.android.data.repositories.ChatRepositoryImpl
+import ai.agent.android.data.repositories.ClarificationRepositoryImpl
+import ai.agent.android.data.repositories.LocalModelRepositoryImpl
+import ai.agent.android.data.repositories.MemoryRepositoryImpl
+import ai.agent.android.domain.engine.LlmInferenceEngine
+import ai.agent.android.domain.engine.TextEmbeddingEngine
 import ai.agent.android.domain.repositories.ApiKeyRepository
+import ai.agent.android.domain.repositories.ChatRepository
+import ai.agent.android.domain.repositories.ClarificationRepository
+import ai.agent.android.domain.repositories.LocalModelRepository
+import ai.agent.android.domain.repositories.MemoryRepository
+import ai.agent.android.domain.repositories.ModelDownloadManager
+import ai.agent.android.domain.repositories.SettingsRepository
 import dagger.Binds
 import dagger.Module
 import dagger.hilt.InstallIn
@@ -26,7 +26,7 @@ import javax.inject.Singleton
 
 /**
  * Data layer dependency injection module.
- * 
+ *
  * This module is responsible for binding repository implementations from the
  * data layer to their corresponding interfaces in the domain layer.
  * It is installed in the SingletonComponent to ensure that repositories
@@ -41,45 +41,35 @@ abstract class DataModule {
      */
     @Binds
     @Singleton
-    abstract fun bindApiKeyRepository(
-        apiKeyManager: ApiKeyManager
-    ): ApiKeyRepository
+    abstract fun bindApiKeyRepository(apiKeyManager: ApiKeyManager): ApiKeyRepository
 
     /**
      * Binds the [ai.agent.android.data.repositories.LocalModelRepositoryImpl] implementation to the [ai.agent.android.domain.repositories.LocalModelRepository] interface.
      */
     @Binds
     @Singleton
-    abstract fun bindLocalModelRepository(
-        repository: LocalModelRepositoryImpl
-    ): LocalModelRepository
+    abstract fun bindLocalModelRepository(repository: LocalModelRepositoryImpl): LocalModelRepository
 
     /**
      * Binds the [SettingsManager] implementation to the [SettingsRepository] interface.
      */
     @Binds
     @Singleton
-    abstract fun bindSettingsRepository(
-        settingsManager: SettingsManager
-    ): SettingsRepository
+    abstract fun bindSettingsRepository(settingsManager: SettingsManager): SettingsRepository
 
     /**
      * Binds the [LiteRTLlmEngine] implementation to the [LlmInferenceEngine] interface.
      */
     @Binds
     @Singleton
-    abstract fun bindLlmInferenceEngine(
-        engine: LiteRTLlmEngine
-    ): LlmInferenceEngine
+    abstract fun bindLlmInferenceEngine(engine: LiteRTLlmEngine): LlmInferenceEngine
 
     /**
      * Binds the [MediaPipeTextEmbeddingEngine] implementation to the [TextEmbeddingEngine] interface.
      */
     @Binds
     @Singleton
-    abstract fun bindTextEmbeddingEngine(
-        engine: MediaPipeTextEmbeddingEngine
-    ): TextEmbeddingEngine
+    abstract fun bindTextEmbeddingEngine(engine: MediaPipeTextEmbeddingEngine): TextEmbeddingEngine
 
     /**
      * Binds the [ai.agent.android.data.engine.DefaultTextEmbedderFactory] implementation to the [ai.agent.android.data.engine.TextEmbedderFactory] interface.
@@ -87,7 +77,7 @@ abstract class DataModule {
     @Binds
     @Singleton
     abstract fun bindTextEmbedderFactory(
-        factory: ai.agent.android.data.engine.DefaultTextEmbedderFactory
+        factory: ai.agent.android.data.engine.DefaultTextEmbedderFactory,
     ): ai.agent.android.data.engine.TextEmbedderFactory
 
     /**
@@ -95,27 +85,21 @@ abstract class DataModule {
      */
     @Binds
     @Singleton
-    abstract fun bindMemoryRepository(
-        repository: MemoryRepositoryImpl
-    ): MemoryRepository
+    abstract fun bindMemoryRepository(repository: MemoryRepositoryImpl): MemoryRepository
 
     /**
      * Binds the [AndroidModelDownloadManager] implementation to the [ModelDownloadManager] interface.
      */
     @Binds
     @Singleton
-    abstract fun bindModelDownloadManager(
-        downloadManager: AndroidModelDownloadManager
-    ): ModelDownloadManager
+    abstract fun bindModelDownloadManager(downloadManager: AndroidModelDownloadManager): ModelDownloadManager
 
     /**
      * Binds the [ChatRepositoryImpl] implementation to the [ChatRepository] interface.
      */
     @Binds
     @Singleton
-    abstract fun bindChatRepository(
-        repository: ChatRepositoryImpl
-    ): ChatRepository
+    abstract fun bindChatRepository(repository: ChatRepositoryImpl): ChatRepository
 
     /**
      * Binds the [ai.agent.android.data.repositories.ToolRepositoryImpl] implementation to the [ai.agent.android.domain.repositories.ToolRepository] interface.
@@ -123,7 +107,7 @@ abstract class DataModule {
     @Binds
     @Singleton
     abstract fun bindToolRepository(
-        repository: ai.agent.android.data.repositories.ToolRepositoryImpl
+        repository: ai.agent.android.data.repositories.ToolRepositoryImpl,
     ): ai.agent.android.domain.repositories.ToolRepository
 
     /**
@@ -132,7 +116,7 @@ abstract class DataModule {
     @Binds
     @Singleton
     abstract fun bindMcpClientFactory(
-        factory: ai.agent.android.data.mcp.KoogMcpClientFactory
+        factory: ai.agent.android.data.mcp.KoogMcpClientFactory,
     ): ai.agent.android.data.mcp.McpClientFactory
 
     /**
@@ -141,7 +125,7 @@ abstract class DataModule {
     @Binds
     @Singleton
     abstract fun bindMetricsRepository(
-        repository: ai.agent.android.data.repositories.MetricsRepositoryImpl
+        repository: ai.agent.android.data.repositories.MetricsRepositoryImpl,
     ): ai.agent.android.domain.repositories.MetricsRepository
 
     /**
@@ -150,7 +134,7 @@ abstract class DataModule {
     @Binds
     @Singleton
     abstract fun bindPowerStateRepository(
-        repository: ai.agent.android.data.repositories.PowerStateRepositoryImpl
+        repository: ai.agent.android.data.repositories.PowerStateRepositoryImpl,
     ): ai.agent.android.domain.repositories.PowerStateRepository
 
     /**
@@ -159,7 +143,7 @@ abstract class DataModule {
     @Binds
     @Singleton
     abstract fun bindNetworkStateRepository(
-        repository: ai.agent.android.data.repositories.NetworkStateRepositoryImpl
+        repository: ai.agent.android.data.repositories.NetworkStateRepositoryImpl,
     ): ai.agent.android.domain.repositories.NetworkStateRepository
 
     /**
@@ -168,7 +152,7 @@ abstract class DataModule {
     @Binds
     @Singleton
     abstract fun bindTaskQueueManager(
-        taskQueueManager: ai.agent.android.data.engine.TaskQueueManagerImpl
+        taskQueueManager: ai.agent.android.data.engine.TaskQueueManagerImpl,
     ): ai.agent.android.domain.engine.TaskQueueManager
 
     /**
@@ -177,7 +161,7 @@ abstract class DataModule {
     @Binds
     @Singleton
     abstract fun bindPipelineRepository(
-        repository: ai.agent.android.data.repositories.LocalPipelineRepositoryImpl
+        repository: ai.agent.android.data.repositories.LocalPipelineRepositoryImpl,
     ): ai.agent.android.domain.repositories.PipelineRepository
 
     /**
@@ -186,7 +170,7 @@ abstract class DataModule {
     @Binds
     @Singleton
     abstract fun bindPromptRepository(
-        repository: ai.agent.android.data.repositories.PromptRepositoryImpl
+        repository: ai.agent.android.data.repositories.PromptRepositoryImpl,
     ): ai.agent.android.domain.repositories.PromptRepository
 
     /**
@@ -194,8 +178,5 @@ abstract class DataModule {
      */
     @Binds
     @Singleton
-    abstract fun bindClarificationRepository(
-        repository: ClarificationRepositoryImpl
-    ): ClarificationRepository
+    abstract fun bindClarificationRepository(repository: ClarificationRepositoryImpl): ClarificationRepository
 }
-

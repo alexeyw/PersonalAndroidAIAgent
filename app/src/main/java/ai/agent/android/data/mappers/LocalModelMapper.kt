@@ -8,27 +8,23 @@ import ai.agent.android.domain.models.LocalModel
  *
  * @return The mapped [LocalModel].
  */
-fun LocalModelEntity.toDomain(): LocalModel {
-    return LocalModel(
-        id = this.id,
-        name = this.name,
-        path = this.path,
-        size = this.size,
-        isActive = this.isActive
-    )
-}
+fun LocalModelEntity.toDomain(): LocalModel = LocalModel(
+    id = this.id,
+    name = this.name,
+    path = this.path,
+    size = this.size,
+    isActive = this.isActive,
+)
 
 /**
  * Maps a [LocalModel] domain model to a [LocalModelEntity] data transfer object.
  *
  * @return The mapped [LocalModelEntity].
  */
-fun LocalModel.toEntity(): LocalModelEntity {
-    return LocalModelEntity(
-        id = this.id,
-        name = this.name,
-        path = this.path,
-        size = this.size,
-        isActive = this.isActive
-    )
-}
+fun LocalModel.toEntity(): LocalModelEntity = LocalModelEntity(
+    id = this.id,
+    name = this.name,
+    path = this.path,
+    size = this.size,
+    isActive = this.isActive,
+)

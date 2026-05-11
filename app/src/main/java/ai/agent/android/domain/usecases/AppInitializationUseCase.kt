@@ -104,16 +104,15 @@ class AppInitializationUseCase @Inject constructor(
     private fun progress(stage: InitStage, message: String, completed: Int): InitProgress =
         InitProgress(stage = stage, message = message, completedSteps = completed, totalSteps = TOTAL_STEPS)
 
-    private fun failure(stage: InitStage, cause: Throwable): InitProgress =
-        InitProgress(
-            stage = InitStage.Failed(
-                cause = cause.localizedMessage ?: cause.javaClass.simpleName,
-                failedStage = stage,
-            ),
-            message = cause.localizedMessage ?: "Initialization failed",
-            completedSteps = 0,
-            totalSteps = TOTAL_STEPS,
-        )
+    private fun failure(stage: InitStage, cause: Throwable): InitProgress = InitProgress(
+        stage = InitStage.Failed(
+            cause = cause.localizedMessage ?: cause.javaClass.simpleName,
+            failedStage = stage,
+        ),
+        message = cause.localizedMessage ?: "Initialization failed",
+        completedSteps = 0,
+        totalSteps = TOTAL_STEPS,
+    )
 
     private companion object {
         const val TAG = "AppInit"

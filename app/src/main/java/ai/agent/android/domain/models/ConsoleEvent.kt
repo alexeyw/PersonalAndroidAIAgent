@@ -19,11 +19,7 @@ package ai.agent.android.domain.models
  *   console (e.g. `"▶ LITE_RT"`, `"calendar_create_event"`, `"Memory: 3 chunks
  *   retrieved"`).
  */
-data class ConsoleEvent(
-    val timestamp: Long,
-    val type: ConsoleEventType,
-    val message: String,
-)
+data class ConsoleEvent(val timestamp: Long, val type: ConsoleEventType, val message: String)
 
 /**
  * Category of a [ConsoleEvent]. Modelled as a sealed interface with `data

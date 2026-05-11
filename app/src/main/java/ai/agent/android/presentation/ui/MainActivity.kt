@@ -1,5 +1,6 @@
 package ai.agent.android.presentation.ui
 
+import ai.agent.android.R
 import ai.agent.android.data.services.AgentForegroundService
 import ai.agent.android.presentation.theme.AndroidAIAgentTheme
 import ai.agent.android.presentation.ui.chat.ChatScreen
@@ -13,7 +14,6 @@ import ai.agent.android.presentation.ui.orchestrator.PipelineLibraryScreen
 import ai.agent.android.presentation.ui.orchestrator.VisualOrchestratorScreen
 import ai.agent.android.presentation.ui.prompts.PromptLibraryScreen
 import ai.agent.android.presentation.ui.settings.SettingsScreen
-import ai.agent.android.presentation.ui.settings.SettingsViewModel
 import ai.agent.android.presentation.ui.splash.SplashScreen
 import ai.agent.android.presentation.ui.taskmonitor.TaskMonitorScreen
 import ai.agent.android.presentation.ui.taskmonitor.TaskMonitorViewModel
@@ -41,6 +41,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
@@ -58,7 +59,7 @@ import dagger.hilt.android.AndroidEntryPoint
 class MainActivity : ComponentActivity() {
 
     private val requestPermissionLauncher = registerForActivityResult(
-        ActivityResultContracts.RequestPermission()
+        ActivityResultContracts.RequestPermission(),
     ) { isGranted: Boolean ->
         // Handle permission result if needed
     }
@@ -68,7 +69,7 @@ class MainActivity : ComponentActivity() {
 
         if (ContextCompat.checkSelfPermission(
                 this,
-                Manifest.permission.POST_NOTIFICATIONS
+                Manifest.permission.POST_NOTIFICATIONS,
             ) != PackageManager.PERMISSION_GRANTED
         ) {
             requestPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
@@ -101,7 +102,7 @@ class MainActivity : ComponentActivity() {
                     NavHost(
                         navController = navController,
                         startDestination = "splash",
-                        modifier = Modifier.padding(innerPadding)
+                        modifier = Modifier.padding(innerPadding),
                     ) {
                         composable("splash") {
                             SplashScreen(
@@ -164,19 +165,21 @@ class MainActivity : ComponentActivity() {
                                         launchSingleTop = true
                                     }
                                 },
-                                modifier = Modifier.fillMaxSize()
+                                modifier = Modifier.fillMaxSize(),
                             )
                         }
                         composable("chat") {
                             val chatViewModel: ChatViewModel = hiltViewModel()
                             ChatScreen(
                                 viewModel = chatViewModel,
-                                onBack = { navController.popBackStack() })
+                                onBack = { navController.popBackStack() },
+                            )
                         }
                         composable("models") {
                             ModelsScreen(
                                 modifier = Modifier.fillMaxSize(),
-                                onBack = { navController.popBackStack() })
+                                onBack = { navController.popBackStack() },
+                            )
                         }
                         composable("memory") {
                             MemoryScreen(onBack = { navController.popBackStack() })
@@ -184,32 +187,37 @@ class MainActivity : ComponentActivity() {
                         composable("tools") {
                             ToolsScreen(
                                 modifier = Modifier.fillMaxSize(),
-                                onBack = { navController.popBackStack() })
+                                onBack = { navController.popBackStack() },
+                            )
                         }
                         composable("monitoring") {
                             val monitoringViewModel: MonitoringViewModel = hiltViewModel()
                             MonitoringScreen(
                                 viewModel = monitoringViewModel,
-                                onBack = { navController.popBackStack() })
+                                onBack = { navController.popBackStack() },
+                            )
                         }
                         composable("taskmonitor") {
                             val taskMonitorViewModel: TaskMonitorViewModel = hiltViewModel()
                             TaskMonitorScreen(
                                 viewModel = taskMonitorViewModel,
-                                onNavigateToChat = { sessionId -> 
+                                onNavigateToChat = { sessionId ->
                                     navController.navigate("chat") { launchSingleTop = true }
                                 },
-                                onBack = { navController.popBackStack() })
+                                onBack = { navController.popBackStack() },
+                            )
                         }
                         composable("settings") {
                             SettingsScreen(
                                 modifier = Modifier.fillMaxSize(),
-                                onBack = { navController.popBackStack() })
+                                onBack = { navController.popBackStack() },
+                            )
                         }
                         composable("prompts") {
                             PromptLibraryScreen(
                                 modifier = Modifier.fillMaxSize(),
-                                onBack = { navController.popBackStack() })
+                                onBack = { navController.popBackStack() },
+                            )
                         }
                         // Pipelines feature: library + editor share one
                         // OrchestratorViewModel scoped to the nested nav graph,
@@ -282,7 +290,7 @@ fun HomeScreen(
     onNavigateToSettings: () -> Unit,
     onNavigateToOrchestrator: () -> Unit,
     onNavigateToPrompts: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     Column(
         modifier = modifier
@@ -291,44 +299,44 @@ fun HomeScreen(
             // clear of system surfaces.
             .systemBarsPadding()
             .padding(16.dp)
-            .verticalScroll(rememberScrollState())
+            .verticalScroll(rememberScrollState()),
     ) {
-        Text(text = "Android AI Agent Home")
+        Text(text = stringResource(R.string.home_title))
         Spacer(modifier = Modifier.height(16.dp))
         Button(onClick = onNavigateToChat) {
-            Text("Open Chat")
+            Text(stringResource(R.string.home_open_chat))
         }
         Spacer(modifier = Modifier.height(16.dp))
         Button(onClick = onNavigateToModels) {
-            Text("Manage Models")
+            Text(stringResource(R.string.home_manage_models))
         }
         Spacer(modifier = Modifier.height(16.dp))
         Button(onClick = onNavigateToMemory) {
-            Text("Memory Management")
+            Text(stringResource(R.string.home_memory_management))
         }
         Spacer(modifier = Modifier.height(16.dp))
         Button(onClick = onNavigateToTools) {
-            Text("Manage Tools & MCP")
+            Text(stringResource(R.string.home_manage_tools))
         }
         Spacer(modifier = Modifier.height(16.dp))
         Button(onClick = onNavigateToMonitoring) {
-            Text("Monitor Tasks & Logs")
+            Text(stringResource(R.string.home_monitor_tasks))
         }
         Spacer(modifier = Modifier.height(16.dp))
         Button(onClick = onNavigateToTaskMonitor) {
-            Text("Manage Active Tasks")
+            Text(stringResource(R.string.home_manage_active_tasks))
         }
         Spacer(modifier = Modifier.height(16.dp))
         Button(onClick = onNavigateToSettings) {
-            Text("Settings")
+            Text(stringResource(R.string.home_settings))
         }
         Spacer(modifier = Modifier.height(16.dp))
         Button(onClick = onNavigateToOrchestrator) {
-            Text("Visual Orchestrator")
+            Text(stringResource(R.string.home_visual_orchestrator))
         }
         Spacer(modifier = Modifier.height(16.dp))
         Button(onClick = onNavigateToPrompts) {
-            Text("Prompt Library")
+            Text(stringResource(R.string.home_prompt_library))
         }
     }
 }

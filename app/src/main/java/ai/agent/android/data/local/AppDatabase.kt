@@ -1,32 +1,32 @@
 package ai.agent.android.data.local
 
+import ai.agent.android.data.local.dao.ChatDao
+import ai.agent.android.data.local.dao.LocalModelDao
+import ai.agent.android.data.local.dao.MemoryDao
+import ai.agent.android.data.local.dao.PipelineDao
+import ai.agent.android.data.local.dao.PromptTemplateDao
+import ai.agent.android.data.local.models.ChatMessageEntity
+import ai.agent.android.data.local.models.ChatSessionEntity
+import ai.agent.android.data.local.models.ConnectionEntity
+import ai.agent.android.data.local.models.LocalModelEntity
+import ai.agent.android.data.local.models.MemoryChunkEntity
+import ai.agent.android.data.local.models.NodeEntity
+import ai.agent.android.data.local.models.PipelineEntity
+import ai.agent.android.data.local.models.PromptTemplateEntity
 import androidx.room.Database
 import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
-import ai.agent.android.data.local.models.LocalModelEntity
-import ai.agent.android.data.local.dao.LocalModelDao
-import ai.agent.android.data.local.models.ChatMessageEntity
-import ai.agent.android.data.local.models.ChatSessionEntity
-import ai.agent.android.data.local.dao.ChatDao
-import ai.agent.android.data.local.models.MemoryChunkEntity
-import ai.agent.android.data.local.dao.MemoryDao
-import ai.agent.android.data.local.models.PipelineEntity
-import ai.agent.android.data.local.models.NodeEntity
-import ai.agent.android.data.local.models.ConnectionEntity
-import ai.agent.android.data.local.dao.PipelineDao
-import ai.agent.android.data.local.models.PromptTemplateEntity
-import ai.agent.android.data.local.dao.PromptTemplateDao
 
 /**
  * Main Room Database for the Android AI Agent.
- * 
+ *
  * Future entities (e.g., PromptTemplates) will be registered here.
  */
 @Database(
     entities = [
-        LocalModelEntity::class, 
+        LocalModelEntity::class,
         ChatMessageEntity::class,
         ChatSessionEntity::class,
         MemoryChunkEntity::class,
@@ -34,16 +34,16 @@ import ai.agent.android.data.local.dao.PromptTemplateDao
         NodeEntity::class,
         ConnectionEntity::class,
         PromptTemplateEntity::class,
-        ai.agent.android.data.local.models.TraceStepEntity::class
+        ai.agent.android.data.local.models.TraceStepEntity::class,
     ],
     version = 20,
-    exportSchema = false
+    exportSchema = false,
 )
 @TypeConverters(Converters::class)
 abstract class AppDatabase : RoomDatabase() {
     /**
      * Provides access to the LocalModelDao.
-     * 
+     *
      * @return The [LocalModelDao] instance.
      */
     abstract fun localModelDao(): LocalModelDao
@@ -98,7 +98,7 @@ abstract class AppDatabase : RoomDatabase() {
                         `text` TEXT NOT NULL, 
                         `category` TEXT NOT NULL
                     )
-                    """.trimIndent()
+                    """.trimIndent(),
                 )
             }
         }
@@ -117,13 +117,13 @@ abstract class AppDatabase : RoomDatabase() {
                         `text` TEXT NOT NULL, 
                         `category` TEXT NOT NULL
                     )
-                    """.trimIndent()
+                    """.trimIndent(),
                 )
                 db.execSQL(
                     """
                     INSERT INTO `prompt_templates_new` (`id`, `name`, `text`, `category`)
                     SELECT `id`, `name`, `text`, COALESCE(`category`, 'Default') FROM `prompt_templates`
-                    """.trimIndent()
+                    """.trimIndent(),
                 )
                 db.execSQL("DROP TABLE `prompt_templates`")
                 db.execSQL("ALTER TABLE `prompt_templates_new` RENAME TO `prompt_templates`")
@@ -136,12 +136,20 @@ abstract class AppDatabase : RoomDatabase() {
          */
         val MIGRATION_11_12 = object : Migration(11, 12) {
             override fun migrate(db: SupportSQLiteDatabase) {
-                db.execSQL("UPDATE `prompt_templates` SET `category` = 'INTENT_ROUTER' WHERE `category` = 'Default' AND `name` = 'Classifier'")
-                db.execSQL("UPDATE `prompt_templates` SET `category` = 'DECOMPOSITION' WHERE `category` = 'Default' AND `name` = 'Decomposer'")
-                db.execSQL("UPDATE `prompt_templates` SET `category` = 'SUMMARY' WHERE `category` = 'Default' AND `name` = 'Summarizer'")
-                db.execSQL("UPDATE `prompt_templates` SET `category` = 'TOOL' WHERE `category` = 'Default' AND `name` = 'Tool Picker'")
-                
-                // For any other prompts that somehow ended up as 'Default', reassign them to CUSTOM or something safe, or leave them. 
+                db.execSQL(
+                    "UPDATE `prompt_templates` SET `category` = 'INTENT_ROUTER' WHERE `category` = 'Default' AND `name` = 'Classifier'",
+                )
+                db.execSQL(
+                    "UPDATE `prompt_templates` SET `category` = 'DECOMPOSITION' WHERE `category` = 'Default' AND `name` = 'Decomposer'",
+                )
+                db.execSQL(
+                    "UPDATE `prompt_templates` SET `category` = 'SUMMARY' WHERE `category` = 'Default' AND `name` = 'Summarizer'",
+                )
+                db.execSQL(
+                    "UPDATE `prompt_templates` SET `category` = 'TOOL' WHERE `category` = 'Default' AND `name` = 'Tool Picker'",
+                )
+
+                // For any other prompts that somehow ended up as 'Default', reassign them to CUSTOM or something safe, or leave them.
                 // We'll leave the rest as is, but users can edit them.
             }
         }
@@ -182,7 +190,7 @@ abstract class AppDatabase : RoomDatabase() {
                         `timestamp` INTEGER NOT NULL,
                         FOREIGN KEY(`sessionId`) REFERENCES `chat_sessions`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE
                     )
-                    """.trimIndent()
+                    """.trimIndent(),
                 )
                 db.execSQL("CREATE INDEX IF NOT EXISTS `index_trace_steps_sessionId` ON `trace_steps` (`sessionId`)")
             }
@@ -227,7 +235,7 @@ abstract class AppDatabase : RoomDatabase() {
                 db.execSQL(
                     "ALTER TABLE `pipeline_nodes` ADD COLUMN `context_config` TEXT NOT NULL " +
                         "DEFAULT '{\"chatHistory\":true,\"originalTask\":true,\"nodeInput\":true," +
-                        "\"longTermMemory\":true,\"toolResults\":true}'"
+                        "\"longTermMemory\":true,\"toolResults\":true}'",
                 )
             }
         }

@@ -193,20 +193,32 @@ class NodeContextBuilderTest {
         // blocks.
         val subsets = listOf(
             NodeContextConfig(
-                originalTask = true, chatHistory = false, longTermMemory = true,
-                toolResults = false, nodeInput = true,
+                originalTask = true,
+                chatHistory = false,
+                longTermMemory = true,
+                toolResults = false,
+                nodeInput = true,
             ),
             NodeContextConfig(
-                originalTask = false, chatHistory = true, longTermMemory = false,
-                toolResults = true, nodeInput = false,
+                originalTask = false,
+                chatHistory = true,
+                longTermMemory = false,
+                toolResults = true,
+                nodeInput = false,
             ),
             NodeContextConfig(
-                originalTask = false, chatHistory = false, longTermMemory = true,
-                toolResults = true, nodeInput = true,
+                originalTask = false,
+                chatHistory = false,
+                longTermMemory = true,
+                toolResults = true,
+                nodeInput = true,
             ),
             NodeContextConfig(
-                originalTask = true, chatHistory = true, longTermMemory = false,
-                toolResults = false, nodeInput = false,
+                originalTask = true,
+                chatHistory = true,
+                longTermMemory = false,
+                toolResults = false,
+                nodeInput = false,
             ),
         )
 
@@ -429,12 +441,7 @@ class NodeContextBuilderTest {
         assertEquals("$previousNodeOutputHeader\nupstream payload", rendered)
     }
 
-    private fun assertHeaderPresence(
-        rendered: String,
-        mask: Int,
-        header: String,
-        expected: Boolean,
-    ) {
+    private fun assertHeaderPresence(rendered: String, mask: Int, header: String, expected: Boolean) {
         val actual = rendered.contains(header)
         if (expected != actual) {
             val maskBin = mask.toString(2).padStart(5, '0')

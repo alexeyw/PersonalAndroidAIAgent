@@ -17,8 +17,20 @@ import ai.agent.android.domain.models.InitStage
  *   terminal state. Drives the inline error text + retry button.
  */
 data class SplashUiState(
-    val message: String = "Starting…",
+    val message: String = DEFAULT_STARTING_MESSAGE,
     val progressFraction: Float = 0f,
     val isDone: Boolean = false,
     val errorMessage: String? = null,
-)
+) {
+    companion object {
+        /**
+         * Default `message` used before the first [InitStage] emission lands.
+         * Kept as a plain `const val` (not a resource) because it is a Kotlin
+         * default argument and `data class` defaults must be compile-time
+         * constants; the screen is allowed to override the rendered text via
+         * `stringResource(R.string.splash_starting)` when the user-visible
+         * value is needed.
+         */
+        const val DEFAULT_STARTING_MESSAGE: String = "Starting…"
+    }
+}

@@ -1,7 +1,6 @@
 package ai.agent.android.presentation.ui.orchestrator
 
-import androidx.lifecycle.ViewModel
-import androidx.lifecycle.viewModelScope
+import ai.agent.android.R
 import ai.agent.android.domain.models.ConnectionModel
 import ai.agent.android.domain.models.NodeContextConfig
 import ai.agent.android.domain.models.NodeModel
@@ -18,12 +17,15 @@ import ai.agent.android.domain.repositories.ToolRepository
 import ai.agent.android.domain.usecases.CreatePipelineUseCase
 import ai.agent.android.domain.usecases.DeletePipelineUseCase
 import ai.agent.android.domain.usecases.DuplicatePipelineUseCase
+import ai.agent.android.domain.usecases.GetPromptTemplatesUseCase
 import ai.agent.android.domain.usecases.ImportPipelineUseCase
 import ai.agent.android.domain.usecases.LoadPipelineUseCase
 import ai.agent.android.domain.usecases.RenamePipelineUseCase
 import ai.agent.android.domain.usecases.SavePipelineUseCase
-import ai.agent.android.domain.usecases.GetPromptTemplatesUseCase
 import ai.agent.android.domain.usecases.SavePromptTemplateUseCase
+import ai.agent.android.presentation.ui.common.UiText
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -59,7 +61,7 @@ class OrchestratorViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(
         OrchestratorUiState(availableVariables = computeAvailableVariables(promptVariableProviders)),
     )
-    
+
     /**
      * The current UI state of the Orchestrator screen.
      */
@@ -95,7 +97,9 @@ class OrchestratorViewModel @Inject constructor(
     fun setDefaultPipeline(pipelineId: String) {
         viewModelScope.launch {
             settingsRepository.setDefaultPipelineId(pipelineId)
-            _uiState.update { it.copy(feedbackMessage = "Default pipeline updated") }
+            _uiState.update {
+                it.copy(feedbackMessage = UiText(R.string.orchestrator_feedback_default_pipeline_updated))
+            }
         }
     }
 
@@ -103,11 +107,11 @@ class OrchestratorViewModel @Inject constructor(
         viewModelScope.launch {
             getPromptTemplatesUseCase()
                 .catch { e ->
-                    _uiState.update { it.copy(errorMessage = e.message) }
+                    _uiState.update { it.copy(errorMessage = throwableAsUiText(e)) }
                 }
                 .collect { templates ->
-                    _uiState.update { state -> 
-                        state.copy(promptTemplates = templates) 
+                    _uiState.update { state ->
+                        state.copy(promptTemplates = templates)
                     }
                 }
         }
@@ -115,7 +119,7 @@ class OrchestratorViewModel @Inject constructor(
 
     /**
      * Saves a new prompt template.
-     * 
+     *
      * @param name The name of the prompt.
      * @param text The prompt content.
      * @param category The category corresponding to NodeType.
@@ -124,10 +128,10 @@ class OrchestratorViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 savePromptTemplateUseCase(
-                    PromptTemplate(name = name, text = text, category = category)
+                    PromptTemplate(name = name, text = text, category = category),
                 )
             } catch (e: Exception) {
-                _uiState.update { it.copy(errorMessage = e.message) }
+                _uiState.update { it.copy(errorMessage = throwableAsUiText(e)) }
             }
         }
     }
@@ -136,16 +140,16 @@ class OrchestratorViewModel @Inject constructor(
         viewModelScope.launch {
             loadPipelineUseCase.observeAllPipelines()
                 .catch { e ->
-                    _uiState.update { it.copy(errorMessage = e.message) }
+                    _uiState.update { it.copy(errorMessage = throwableAsUiText(e)) }
                 }
                 .collect { pipelines ->
-                    _uiState.update { state -> 
+                    _uiState.update { state ->
                         val newCurrent = if (state.currentPipeline.nodes.isEmpty() && pipelines.isNotEmpty()) {
                             pipelines.first()
                         } else {
                             state.currentPipeline
                         }
-                        state.copy(savedPipelines = pipelines, currentPipeline = newCurrent) 
+                        state.copy(savedPipelines = pipelines, currentPipeline = newCurrent)
                     }
                 }
         }
@@ -188,7 +192,7 @@ class OrchestratorViewModel @Inject constructor(
                 val tools = toolRepository.getAvailableTools()
                 _uiState.update { it.copy(availableTools = tools) }
             } catch (e: Exception) {
-                _uiState.update { it.copy(errorMessage = e.message) }
+                _uiState.update { it.copy(errorMessage = throwableAsUiText(e)) }
             }
         }
     }
@@ -211,7 +215,7 @@ class OrchestratorViewModel @Inject constructor(
         )
         _uiState.update { state ->
             val updatedPipeline = state.currentPipeline.copy(
-                nodes = state.currentPipeline.nodes + newNode
+                nodes = state.currentPipeline.nodes + newNode,
             )
             state.copy(currentPipeline = updatedPipeline)
         }
@@ -230,7 +234,7 @@ class OrchestratorViewModel @Inject constructor(
                 if (it.id == nodeId) it.copy(x = it.x + deltaX, y = it.y + deltaY) else it
             }
             state.copy(
-                currentPipeline = state.currentPipeline.copy(nodes = updatedNodes)
+                currentPipeline = state.currentPipeline.copy(nodes = updatedNodes),
             )
         }
     }
@@ -248,19 +252,19 @@ class OrchestratorViewModel @Inject constructor(
             id = UUID.randomUUID().toString(),
             sourceNodeId = sourceNodeId,
             targetNodeId = targetNodeId,
-            label = label
+            label = label,
         )
         var createdConnectionId: String? = null
         _uiState.update { state ->
-            // Remove previous connection if it's between the same source and target, 
+            // Remove previous connection if it's between the same source and target,
             // OR if it's from the same source with the same label (e.g. "True" / "False")
-            val filteredConnections = state.currentPipeline.connections.filterNot { 
+            val filteredConnections = state.currentPipeline.connections.filterNot {
                 (it.sourceNodeId == sourceNodeId && it.targetNodeId == targetNodeId) ||
-                (it.sourceNodeId == sourceNodeId && it.label == label && label != null)
+                    (it.sourceNodeId == sourceNodeId && it.label == label && label != null)
             }
 
             val tempPipeline = state.currentPipeline.copy(
-                connections = filteredConnections + newConnection
+                connections = filteredConnections + newConnection,
             )
 
             // Validate DAG
@@ -268,7 +272,7 @@ class OrchestratorViewModel @Inject constructor(
                 createdConnectionId = newConnection.id
                 state.copy(currentPipeline = tempPipeline, errorMessage = null)
             } else {
-                state.copy(errorMessage = "Cannot connect: Cycle detected")
+                state.copy(errorMessage = UiText(R.string.errors_orchestrator_cycle_detected))
             }
         }
         return createdConnectionId
@@ -286,7 +290,7 @@ class OrchestratorViewModel @Inject constructor(
                 if (it.id == connectionId) it.copy(label = label) else it
             }
             state.copy(
-                currentPipeline = state.currentPipeline.copy(connections = updatedConnections)
+                currentPipeline = state.currentPipeline.copy(connections = updatedConnections),
             )
         }
     }
@@ -302,7 +306,7 @@ class OrchestratorViewModel @Inject constructor(
                 it.id != connectionId
             }
             state.copy(
-                currentPipeline = state.currentPipeline.copy(connections = updatedConnections)
+                currentPipeline = state.currentPipeline.copy(connections = updatedConnections),
             )
         }
     }
@@ -316,7 +320,13 @@ class OrchestratorViewModel @Inject constructor(
      * @param prompt Free-form prompt.
      * @param systemPrompt The system prompt configuring the behavior of the node.
      */
-    fun updateNodeConfiguration(nodeId: String, complexity: Int?, keywords: String?, prompt: String?, systemPrompt: String?) {
+    fun updateNodeConfiguration(
+        nodeId: String,
+        complexity: Int?,
+        keywords: String?,
+        prompt: String?,
+        systemPrompt: String?,
+    ) {
         _uiState.update { state ->
             val updatedNodes = state.currentPipeline.nodes.map {
                 if (it.id == nodeId) {
@@ -324,12 +334,14 @@ class OrchestratorViewModel @Inject constructor(
                         conditionComplexity = complexity,
                         conditionKeywords = keywords,
                         conditionPrompt = prompt,
-                        systemPrompt = systemPrompt
+                        systemPrompt = systemPrompt,
                     )
-                } else it
+                } else {
+                    it
+                }
             }
             state.copy(
-                currentPipeline = state.currentPipeline.copy(nodes = updatedNodes)
+                currentPipeline = state.currentPipeline.copy(nodes = updatedNodes),
             )
         }
     }
@@ -348,15 +360,15 @@ class OrchestratorViewModel @Inject constructor(
             state.copy(
                 currentPipeline = state.currentPipeline.copy(
                     nodes = updatedNodes,
-                    connections = updatedConnections
-                )
+                    connections = updatedConnections,
+                ),
             )
         }
     }
 
     /**
      * Updates the tool assigned to a specific node.
-     * 
+     *
      * @param nodeId The unique identifier of the node.
      * @param toolName The name of the tool to assign.
      */
@@ -366,7 +378,7 @@ class OrchestratorViewModel @Inject constructor(
                 if (it.id == nodeId) it.copy(toolName = toolName, label = toolName) else it
             }
             state.copy(
-                currentPipeline = state.currentPipeline.copy(nodes = updatedNodes)
+                currentPipeline = state.currentPipeline.copy(nodes = updatedNodes),
             )
         }
     }
@@ -383,7 +395,7 @@ class OrchestratorViewModel @Inject constructor(
                 if (it.id == nodeId) it.copy(clarificationTimeoutMs = timeoutMs) else it
             }
             state.copy(
-                currentPipeline = state.currentPipeline.copy(nodes = updatedNodes)
+                currentPipeline = state.currentPipeline.copy(nodes = updatedNodes),
             )
         }
     }
@@ -418,7 +430,7 @@ class OrchestratorViewModel @Inject constructor(
             state.copy(
                 currentPipeline = state.currentPipeline.copy(nodes = updatedNodes),
                 errorMessage = if (incomingAllDisabled) {
-                    "At least one data source must remain enabled"
+                    UiText(R.string.errors_orchestrator_at_least_one_source)
                 } else {
                     null
                 },
@@ -438,7 +450,7 @@ class OrchestratorViewModel @Inject constructor(
                 if (it.id == nodeId) it.copy(cloudProvider = provider) else it
             }
             state.copy(
-                currentPipeline = state.currentPipeline.copy(nodes = updatedNodes)
+                currentPipeline = state.currentPipeline.copy(nodes = updatedNodes),
             )
         }
     }
@@ -451,8 +463,8 @@ class OrchestratorViewModel @Inject constructor(
             state.copy(
                 currentPipeline = state.currentPipeline.copy(
                     nodes = emptyList(),
-                    connections = emptyList()
-                )
+                    connections = emptyList(),
+                ),
             )
         }
     }
@@ -481,8 +493,7 @@ class OrchestratorViewModel @Inject constructor(
      * Exports the current pipeline to a JSON string in the schema-versioned
      * format consumed by the browser-side editor (`pipeline-editor.html`).
      */
-    fun exportPipelineToJson(): String =
-        PipelineJsonSerializer.serialize(_uiState.value.currentPipeline)
+    fun exportPipelineToJson(): String = PipelineJsonSerializer.serialize(_uiState.value.currentPipeline)
 
     /**
      * Parses [jsonString] and, on success, persists the imported pipeline
@@ -519,7 +530,7 @@ class OrchestratorViewModel @Inject constructor(
                         state.copy(
                             isLoading = false,
                             pendingImport = null,
-                            errorMessage = outcome.message,
+                            errorMessage = UiText.Dynamic(outcome.message),
                         )
                 }
             }
@@ -577,31 +588,68 @@ class OrchestratorViewModel @Inject constructor(
 
     /**
      * Translates a save failure (validation or generic) into a UI-ready
-     * string. Shared by [saveCurrentPipeline], [importPipelineFromJson]
+     * [UiText]. Shared by [saveCurrentPipeline], [importPipelineFromJson]
      * and [confirmPendingImport] so the user sees the same wording
      * regardless of which entry point triggered the validator.
+     *
+     * Returns a single `UiText.Resource` when the failure is a single
+     * `PipelineValidationException` with exactly one error; multi-error
+     * validation collapses into a `UiText.Dynamic` with a comma-joined
+     * resolved-at-display-time list (this keeps the API typed without
+     * forcing the resource layer to model arbitrarily many error
+     * combinations). Generic exceptions become `UiText.Dynamic`.
      */
-    private fun messageForSaveError(e: Throwable): String? {
-        if (e !is ai.agent.android.domain.models.PipelineValidationException) return e.message
-        return e.errors.joinToString(", ") { err ->
-            when (err) {
-                is ai.agent.android.domain.models.PipelineValidationError.MissingInput -> "Missing INPUT node"
-                is ai.agent.android.domain.models.PipelineValidationError.MissingOutput -> "Missing OUTPUT node"
-                is ai.agent.android.domain.models.PipelineValidationError.MultipleInputs -> "Multiple INPUT nodes are not allowed"
-                is ai.agent.android.domain.models.PipelineValidationError.MultipleOutputs -> "Multiple OUTPUT nodes are not allowed"
-                is ai.agent.android.domain.models.PipelineValidationError.HasCycles -> "Pipeline contains cycles"
-                is ai.agent.android.domain.models.PipelineValidationError.DisconnectedInput -> "INPUT node is not connected"
-                is ai.agent.android.domain.models.PipelineValidationError.DisconnectedOutput -> "OUTPUT node is not connected"
-                is ai.agent.android.domain.models.PipelineValidationError.UnreachableNode -> "Some nodes are unreachable from INPUT"
-                is ai.agent.android.domain.models.PipelineValidationError.DeadEndNode -> "Some nodes do not reach OUTPUT"
-                is ai.agent.android.domain.models.PipelineValidationError.NodeEmptyContext -> {
-                    val name = _uiState.value.currentPipeline.nodes
-                        .find { it.id == err.nodeId }?.label ?: err.nodeId
-                    "Node \"$name\" will not receive any data — enable at least one source"
-                }
-            }
+    private fun messageForSaveError(e: Throwable): UiText? {
+        if (e !is ai.agent.android.domain.models.PipelineValidationException) {
+            return e.message?.let { UiText.Dynamic(it) }
+        }
+        val parts = e.errors.map { err -> validationErrorAsUiText(err) }
+        return when (parts.size) {
+            0 -> null
+            1 -> parts.first()
+            else -> UiText.Joined(parts)
         }
     }
+
+    /**
+     * Resolves a single [ai.agent.android.domain.models.PipelineValidationError] to
+     * its `UiText` representation. Pulled out so [messageForSaveError] can
+     * decide whether to keep the typed `Resource` (single error) or collapse
+     * into a `Dynamic` join (multiple errors).
+     */
+    private fun validationErrorAsUiText(err: ai.agent.android.domain.models.PipelineValidationError): UiText =
+        when (err) {
+            is ai.agent.android.domain.models.PipelineValidationError.MissingInput ->
+                UiText(R.string.errors_orchestrator_validation_missing_input)
+            is ai.agent.android.domain.models.PipelineValidationError.MissingOutput ->
+                UiText(R.string.errors_orchestrator_validation_missing_output)
+            is ai.agent.android.domain.models.PipelineValidationError.MultipleInputs ->
+                UiText(R.string.errors_orchestrator_validation_multiple_inputs)
+            is ai.agent.android.domain.models.PipelineValidationError.MultipleOutputs ->
+                UiText(R.string.errors_orchestrator_validation_multiple_outputs)
+            is ai.agent.android.domain.models.PipelineValidationError.HasCycles ->
+                UiText(R.string.errors_orchestrator_validation_has_cycles)
+            is ai.agent.android.domain.models.PipelineValidationError.DisconnectedInput ->
+                UiText(R.string.errors_orchestrator_validation_disconnected_input)
+            is ai.agent.android.domain.models.PipelineValidationError.DisconnectedOutput ->
+                UiText(R.string.errors_orchestrator_validation_disconnected_output)
+            is ai.agent.android.domain.models.PipelineValidationError.UnreachableNode ->
+                UiText(R.string.errors_orchestrator_validation_unreachable_node)
+            is ai.agent.android.domain.models.PipelineValidationError.DeadEndNode ->
+                UiText(R.string.errors_orchestrator_validation_dead_end)
+            is ai.agent.android.domain.models.PipelineValidationError.NodeEmptyContext -> {
+                val name = _uiState.value.currentPipeline.nodes
+                    .find { it.id == err.nodeId }?.label ?: err.nodeId
+                UiText.of(R.string.errors_orchestrator_validation_node_no_sources, name)
+            }
+        }
+
+    /**
+     * Lifts a thrown exception into a `UiText`, falling back to the generic
+     * "unexpected error" resource when the throwable carries no message.
+     */
+    private fun throwableAsUiText(e: Throwable): UiText =
+        e.message?.let { UiText.Dynamic(it) } ?: UiText(R.string.errors_generic_unexpected)
 
     /**
      * Loads a specific pipeline by ID.
@@ -616,7 +664,10 @@ class OrchestratorViewModel @Inject constructor(
                 if (pipeline != null) {
                     state.copy(currentPipeline = pipeline, isLoading = false, errorMessage = null)
                 } else {
-                    state.copy(isLoading = false, errorMessage = "Pipeline not found")
+                    state.copy(
+                        isLoading = false,
+                        errorMessage = UiText(R.string.errors_orchestrator_pipeline_not_found),
+                    )
                 }
             }
         }
@@ -641,7 +692,7 @@ class OrchestratorViewModel @Inject constructor(
             _uiState.update { it.copy(isLoading = true) }
             val result = renamePipelineUseCase(pipelineId, newName)
             _uiState.update { state ->
-                val error = result.exceptionOrNull()?.message
+                val error = result.exceptionOrNull()?.message?.let { UiText.Dynamic(it) }
                 val patchedCurrent = if (
                     result.isSuccess && state.currentPipeline.id == pipelineId
                 ) {
@@ -653,7 +704,11 @@ class OrchestratorViewModel @Inject constructor(
                     isLoading = false,
                     currentPipeline = patchedCurrent,
                     errorMessage = error,
-                    feedbackMessage = if (result.isSuccess) "Pipeline renamed" else state.feedbackMessage,
+                    feedbackMessage = if (result.isSuccess) {
+                        UiText(R.string.orchestrator_feedback_pipeline_renamed)
+                    } else {
+                        state.feedbackMessage
+                    },
                 )
             }
         }
@@ -676,12 +731,16 @@ class OrchestratorViewModel @Inject constructor(
             val result = duplicatePipelineUseCase(pipelineId)
             _uiState.update { state ->
                 val duplicate = result.getOrNull()
-                val error = result.exceptionOrNull()?.message
+                val error = result.exceptionOrNull()?.message?.let { UiText.Dynamic(it) }
                 state.copy(
                     isLoading = false,
                     currentPipeline = duplicate ?: state.currentPipeline,
                     errorMessage = error,
-                    feedbackMessage = if (duplicate != null) "Pipeline duplicated" else state.feedbackMessage,
+                    feedbackMessage = if (duplicate != null) {
+                        UiText(R.string.orchestrator_feedback_pipeline_duplicated)
+                    } else {
+                        state.feedbackMessage
+                    },
                 )
             }
         }
@@ -712,8 +771,12 @@ class OrchestratorViewModel @Inject constructor(
             _uiState.update { state ->
                 state.copy(
                     isLoading = false,
-                    errorMessage = result.exceptionOrNull()?.message,
-                    feedbackMessage = if (result.isSuccess) "Pipeline deleted" else state.feedbackMessage,
+                    errorMessage = result.exceptionOrNull()?.message?.let { UiText.Dynamic(it) },
+                    feedbackMessage = if (result.isSuccess) {
+                        UiText(R.string.orchestrator_feedback_pipeline_deleted)
+                    } else {
+                        state.feedbackMessage
+                    },
                 )
             }
         }
@@ -738,8 +801,12 @@ class OrchestratorViewModel @Inject constructor(
                 state.copy(
                     isLoading = false,
                     currentPipeline = created ?: state.currentPipeline,
-                    errorMessage = result.exceptionOrNull()?.message,
-                    feedbackMessage = if (created != null) "Pipeline created" else state.feedbackMessage,
+                    errorMessage = result.exceptionOrNull()?.message?.let { UiText.Dynamic(it) },
+                    feedbackMessage = if (created != null) {
+                        UiText(R.string.orchestrator_feedback_pipeline_created)
+                    } else {
+                        state.feedbackMessage
+                    },
                     // Only request navigation on a successful create; a failed
                     // create (validation, persistence error) must keep the user
                     // in the library so they can retry, instead of pushing
@@ -811,9 +878,7 @@ class OrchestratorViewModel @Inject constructor(
          * silently skipped — this mirrors the engine's tolerance for broken providers
          * so a single misbehaving DI binding cannot empty the chip row.
          */
-        private fun computeAvailableVariables(
-            providers: Set<PromptVariableProvider>,
-        ): List<String> = providers
+        private fun computeAvailableVariables(providers: Set<PromptVariableProvider>): List<String> = providers
             .mapNotNull { runCatching { it.key() }.getOrNull() }
             .distinct()
             .sorted()

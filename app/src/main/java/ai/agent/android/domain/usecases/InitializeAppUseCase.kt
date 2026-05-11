@@ -15,14 +15,14 @@ import javax.inject.Inject
  */
 class InitializeAppUseCase @Inject constructor(
     private val settingsRepository: SettingsRepository,
-    private val pipelineRepository: PipelineRepository
+    private val pipelineRepository: PipelineRepository,
 ) {
     /**
      * Executes the initialization logic.
      */
     suspend operator fun invoke() {
         val isFirstLaunch = settingsRepository.isFirstLaunch.first()
-        
+
         if (isFirstLaunch) {
             // Save default prompts to settings so they can be modified later by the user
             settingsRepository.setSystemPromptPrefix(DefaultPrompts.SYSTEM_PROMPT_PREFIX)

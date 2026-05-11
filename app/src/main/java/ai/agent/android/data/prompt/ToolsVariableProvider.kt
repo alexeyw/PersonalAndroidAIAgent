@@ -22,9 +22,7 @@ import javax.inject.Singleton
  * its `getAvailableTools()` already filters out user-disabled local tools.
  */
 @Singleton
-class ToolsVariableProvider @Inject constructor(
-    private val toolRepository: ToolRepository,
-) : PromptVariableProvider {
+class ToolsVariableProvider @Inject constructor(private val toolRepository: ToolRepository) : PromptVariableProvider {
 
     override fun key(): String = KEY
 

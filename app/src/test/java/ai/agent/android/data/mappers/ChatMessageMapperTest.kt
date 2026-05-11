@@ -15,7 +15,7 @@ class ChatMessageMapperTest {
             sessionId = "session123",
             role = "USER",
             content = "Hello there",
-            timestamp = 1600000000L
+            timestamp = 1600000000L,
         )
 
         val domain = entity.toDomain()
@@ -34,7 +34,7 @@ class ChatMessageMapperTest {
             sessionId = "session123",
             role = "UNKNOWN_ROLE",
             content = "Error message",
-            timestamp = 1600000000L
+            timestamp = 1600000000L,
         )
 
         val domain = entity.toDomain()
@@ -49,7 +49,7 @@ class ChatMessageMapperTest {
             sessionId = "session456",
             role = Role.AGENT,
             content = "How can I help?",
-            timestamp = 1600000000L
+            timestamp = 1600000000L,
         )
 
         val entity = domainModel.toEntity()
@@ -68,7 +68,7 @@ class ChatMessageMapperTest {
             sessionId = "session789",
             role = Role.USER,
             content = "New message",
-            timestamp = 1600000000L
+            timestamp = 1600000000L,
         )
 
         val entity = domain.toEntity()

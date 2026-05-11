@@ -112,12 +112,11 @@ class ClarificationCardTest {
         composeTestRule.onNodeWithText("Default answer used: A").assertIsDisplayed()
     }
 
-    private fun pendingModel(options: List<String>?): ClarificationCardUiModel =
-        ClarificationCardUiModel(
-            id = "card-${System.nanoTime()}",
-            question = "Continue?",
-            options = options,
-            timeoutMs = 60_000L,
-            startedAtMs = SystemClock.uptimeMillis(),
-        )
+    private fun pendingModel(options: List<String>?): ClarificationCardUiModel = ClarificationCardUiModel(
+        id = "card-${System.nanoTime()}",
+        question = "Continue?",
+        options = options,
+        timeoutMs = 60_000L,
+        startedAtMs = SystemClock.uptimeMillis(),
+    )
 }

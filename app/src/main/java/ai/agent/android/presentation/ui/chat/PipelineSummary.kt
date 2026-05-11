@@ -12,7 +12,4 @@ package ai.agent.android.presentation.ui.chat
  * @property id Pipeline identifier matching `ChatSession.pipelineId`.
  * @property name Display name shown to the user.
  */
-data class PipelineSummary(
-    val id: String,
-    val name: String,
-)
+data class PipelineSummary(val id: String, val name: String)

@@ -16,25 +16,20 @@ import javax.inject.Inject
 /**
  * Local Room-based implementation of [PipelineRepository].
  */
-class LocalPipelineRepositoryImpl @Inject constructor(
-    private val pipelineDao: PipelineDao
-) : PipelineRepository {
+class LocalPipelineRepositoryImpl @Inject constructor(private val pipelineDao: PipelineDao) : PipelineRepository {
 
-    override fun getAllPipelines(): Flow<List<PipelineGraph>> {
-        return pipelineDao.getAllPipelines().map { entities ->
-            entities.map { it.toDomainModel() }
-        }
+    override fun getAllPipelines(): Flow<List<PipelineGraph>> = pipelineDao.getAllPipelines().map { entities ->
+        entities.map { it.toDomainModel() }
     }
 
-    override suspend fun getPipelineById(pipelineId: String): PipelineGraph? {
-        return pipelineDao.getPipelineById(pipelineId)?.toDomainModel()
-    }
+    override suspend fun getPipelineById(pipelineId: String): PipelineGraph? =
+        pipelineDao.getPipelineById(pipelineId)?.toDomainModel()
 
     override suspend fun savePipeline(pipeline: PipelineGraph) {
         val pipelineEntity = PipelineEntity(
             id = pipeline.id,
             name = pipeline.name,
-            updatedAt = System.currentTimeMillis()
+            updatedAt = System.currentTimeMillis(),
         )
         val nodeEntities = pipeline.nodes.map {
             NodeEntity(
@@ -61,7 +56,7 @@ class LocalPipelineRepositoryImpl @Inject constructor(
                 pipelineId = pipeline.id,
                 sourceNodeId = it.sourceNodeId,
                 targetNodeId = it.targetNodeId,
-                label = it.label
+                label = it.label,
             )
         }
 
@@ -72,8 +67,8 @@ class LocalPipelineRepositoryImpl @Inject constructor(
         pipelineDao.deletePipelineById(pipelineId)
     }
 
-    private fun ai.agent.android.data.local.models.PipelineWithNodesAndConnections.toDomainModel(): PipelineGraph {
-        return PipelineGraph(
+    private fun ai.agent.android.data.local.models.PipelineWithNodesAndConnections.toDomainModel(): PipelineGraph =
+        PipelineGraph(
             id = this.pipeline.id,
             name = this.pipeline.name,
             updatedAt = this.pipeline.updatedAt,
@@ -89,7 +84,13 @@ class LocalPipelineRepositoryImpl @Inject constructor(
                     conditionComplexity = it.conditionComplexity,
                     conditionKeywords = it.conditionKeywords,
                     conditionPrompt = it.conditionPrompt,
-                    systemPrompt = it.systemPrompt ?: ai.agent.android.domain.constants.DefaultPrompts.getDefaultPromptForNodeType(runCatching { NodeType.valueOf(it.type) }.getOrDefault(NodeType.TOOL)),
+                    systemPrompt =
+                    it.systemPrompt
+                        ?: ai.agent.android.domain.constants.DefaultPrompts.getDefaultPromptForNodeType(
+                            runCatching {
+                                NodeType.valueOf(it.type)
+                            }.getOrDefault(NodeType.TOOL),
+                        ),
                     cloudProvider = it.cloudProvider,
                     clarificationTimeoutMs = it.clarificationTimeoutMs,
                     contextConfig = it.contextConfig,
@@ -100,9 +101,8 @@ class LocalPipelineRepositoryImpl @Inject constructor(
                     id = it.id,
                     sourceNodeId = it.sourceNodeId,
                     targetNodeId = it.targetNodeId,
-                    label = it.label
+                    label = it.label,
                 )
-            }
+            },
         )
-    }
 }

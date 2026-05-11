@@ -12,9 +12,4 @@ package ai.agent.android.domain.models
  *   pre-Phase-17.2 behaviour for legacy sessions and any chat that does not
  *   explicitly opt into a specific pipeline.
  */
-data class ChatSession(
-    val id: String,
-    val name: String,
-    val updatedAt: Long,
-    val pipelineId: String? = null,
-)
+data class ChatSession(val id: String, val name: String, val updatedAt: Long, val pipelineId: String? = null)

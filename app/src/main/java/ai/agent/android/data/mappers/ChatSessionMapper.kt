@@ -8,25 +8,21 @@ import ai.agent.android.domain.models.ChatSession
  *
  * @return The mapped [ChatSession] instance.
  */
-fun ChatSessionEntity.toDomain(): ChatSession {
-    return ChatSession(
-        id = id,
-        name = name,
-        updatedAt = updatedAt,
-        pipelineId = pipelineId,
-    )
-}
+fun ChatSessionEntity.toDomain(): ChatSession = ChatSession(
+    id = id,
+    name = name,
+    updatedAt = updatedAt,
+    pipelineId = pipelineId,
+)
 
 /**
  * Maps a [ChatSession] domain model to a [ChatSessionEntity] for the data layer.
  *
  * @return The mapped [ChatSessionEntity] instance.
  */
-fun ChatSession.toEntity(): ChatSessionEntity {
-    return ChatSessionEntity(
-        id = id,
-        name = name,
-        updatedAt = updatedAt,
-        pipelineId = pipelineId,
-    )
-}
+fun ChatSession.toEntity(): ChatSessionEntity = ChatSessionEntity(
+    id = id,
+    name = name,
+    updatedAt = updatedAt,
+    pipelineId = pipelineId,
+)

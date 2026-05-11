@@ -49,8 +49,12 @@ interface MemoryRepository {
      * @return A list of pairs containing the [MemoryChunk] and its similarity score (0.0 to 1.0),
      *         sorted by similarity in descending order (highest first).
      */
-    suspend fun findSimilarMemories(queryEmbedding: FloatArray, searchPoolLimit: Int, limit: Int = 5): List<Pair<MemoryChunk, Float>>
-    
+    suspend fun findSimilarMemories(
+        queryEmbedding: FloatArray,
+        searchPoolLimit: Int,
+        limit: Int = 5,
+    ): List<Pair<MemoryChunk, Float>>
+
     /**
      * Deletes older memory chunks, keeping only the specified number of the most recent ones.
      *

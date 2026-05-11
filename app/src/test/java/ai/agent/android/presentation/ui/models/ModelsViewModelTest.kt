@@ -1,8 +1,8 @@
 package ai.agent.android.presentation.ui.models
 
-import ai.agent.android.domain.models.LocalModel
 import ai.agent.android.data.network.AndroidModelDownloadManager
 import ai.agent.android.domain.models.DownloadState
+import ai.agent.android.domain.models.LocalModel
 import ai.agent.android.domain.repositories.LocalModelRepository
 import ai.agent.android.domain.repositories.ModelDownloadManager
 import ai.agent.android.domain.repositories.SettingsRepository
@@ -39,10 +39,10 @@ class ModelsViewModelTest {
     @Before
     fun setup() {
         Dispatchers.setMain(testDispatcher)
-        
+
         // Default mock for initial state
         every { localModelRepository.getAllModels() } returns flowOf(emptyList())
-        
+
         viewModel = ModelsViewModel(localModelRepository, downloadManager, settingsRepository)
     }
 
@@ -55,16 +55,16 @@ class ModelsViewModelTest {
     fun `initial state loads downloaded models and active model`() = runTest {
         val models = listOf(
             LocalModel(id = 1, name = "Model 1", path = "/path", size = 100, isActive = false),
-            LocalModel(id = 2, name = "Model 2", path = "/path", size = 100, isActive = true)
+            LocalModel(id = 2, name = "Model 2", path = "/path", size = 100, isActive = true),
         )
-        
+
         every { localModelRepository.getAllModels() } returns flowOf(models)
-        
+
         // Re-initialize to pick up the new flow
         viewModel = ModelsViewModel(localModelRepository, downloadManager, settingsRepository)
-        
+
         advanceUntilIdle()
-        
+
         val state = viewModel.uiState.value
         assertEquals(models, state.downloadedModels)
         assertEquals(models[1], state.activeModel)
@@ -74,7 +74,7 @@ class ModelsViewModelTest {
     fun `onCustomUrlChanged updates state`() {
         val newUrl = "http://example.com/model.bin"
         viewModel.onCustomUrlChanged(newUrl)
-        
+
         assertEquals(newUrl, viewModel.uiState.value.customUrlInput)
         assertEquals(null, viewModel.uiState.value.downloadError)
     }
@@ -110,21 +110,21 @@ class ModelsViewModelTest {
     fun `startDownload updates state through download lifecycle`() = runTest {
         val url = "http://example.com/model.bin"
         val fileName = "model.bin"
-        
+
         every { downloadManager.downloadModel(url, fileName) } returns flowOf(
             DownloadState.Pending,
             DownloadState.Downloading(50),
-            DownloadState.Success("/local/path")
+            DownloadState.Success("/local/path"),
         )
-        
+
         viewModel.startDownload(url, fileName)
-        
+
         // Assert initial downloading state
         var state = viewModel.uiState.value
         assertEquals(true, state.isDownloading)
-        
+
         advanceUntilIdle()
-        
+
         // Assert final state after success
         state = viewModel.uiState.value
         assertEquals(false, state.isDownloading)
@@ -136,15 +136,15 @@ class ModelsViewModelTest {
         val url = "http://example.com/model.bin"
         val fileName = "model.bin"
         val error = AndroidModelDownloadManager.DownloadError("Network failed")
-        
+
         every { downloadManager.downloadModel(url, fileName) } returns flowOf(
-            DownloadState.Error(error)
+            DownloadState.Error(error),
         )
-        
+
         viewModel.startDownload(url, fileName)
-        
+
         advanceUntilIdle()
-        
+
         val state = viewModel.uiState.value
         assertEquals(false, state.isDownloading)
         assertEquals(error, state.downloadError)
@@ -162,19 +162,19 @@ class ModelsViewModelTest {
         val url = "http://example.com/model.bin"
         val fileName = "model.bin"
         val error = AndroidModelDownloadManager.DownloadError("Network failed")
-        
+
         every { downloadManager.downloadModel(url, fileName) } returns flowOf(
-            DownloadState.Error(error)
+            DownloadState.Error(error),
         )
-        
+
         viewModel.startDownload(url, fileName)
         advanceUntilIdle()
-        
+
         assertEquals(error, viewModel.uiState.value.downloadError)
-        
+
         viewModel.clearError()
         advanceUntilIdle()
-        
+
         assertEquals(null, viewModel.uiState.value.downloadError)
     }
 }

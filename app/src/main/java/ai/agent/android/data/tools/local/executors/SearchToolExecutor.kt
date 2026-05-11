@@ -12,9 +12,7 @@ import javax.inject.Inject
  * the Wikipedia API. Returns an inline error message when `query` is blank instead of
  * silently issuing an empty request.
  */
-class SearchToolExecutor @Inject constructor(
-    private val searchTool: SearchTool,
-) : LocalToolExecutor {
+class SearchToolExecutor @Inject constructor(private val searchTool: SearchTool) : LocalToolExecutor {
 
     override val toolName: String = SearchTool.TOOL_NAME
 

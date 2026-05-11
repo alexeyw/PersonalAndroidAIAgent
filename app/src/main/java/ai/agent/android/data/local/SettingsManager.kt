@@ -1,11 +1,15 @@
 package ai.agent.android.data.local
 
+import ai.agent.android.domain.constants.DefaultPrompts
+import ai.agent.android.domain.repositories.SettingsRepository
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.emptyPreferences
-import ai.agent.android.domain.repositories.SettingsRepository
+import androidx.datastore.preferences.core.intPreferencesKey
+import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.core.stringSetPreferencesKey
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.map
@@ -13,19 +17,12 @@ import timber.log.Timber
 import java.io.IOException
 import javax.inject.Inject
 
-import ai.agent.android.domain.constants.DefaultPrompts
-import androidx.datastore.preferences.core.intPreferencesKey
-import androidx.datastore.preferences.core.stringPreferencesKey
-import androidx.datastore.preferences.core.stringSetPreferencesKey
-
 /**
  * Concrete implementation of [SettingsRepository] utilizing Androidx DataStore Preferences.
- * 
+ *
  * @property dataStore The underlying DataStore instance for persistence.
  */
-class SettingsManager @Inject constructor(
-    private val dataStore: DataStore<Preferences>
-) : SettingsRepository {
+class SettingsManager @Inject constructor(private val dataStore: DataStore<Preferences>) : SettingsRepository {
 
     private object PreferencesKeys {
         val IS_FIRST_LAUNCH = booleanPreferencesKey("is_first_launch")

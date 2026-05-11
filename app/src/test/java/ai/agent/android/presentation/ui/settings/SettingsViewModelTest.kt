@@ -1,9 +1,9 @@
 package ai.agent.android.presentation.ui.settings
 
-import ai.agent.android.domain.usecases.LoadModelUseCase
-import ai.agent.android.domain.repositories.LocalModelRepository
 import ai.agent.android.domain.repositories.ApiKeyRepository
+import ai.agent.android.domain.repositories.LocalModelRepository
 import ai.agent.android.domain.repositories.SettingsRepository
+import ai.agent.android.domain.usecases.LoadModelUseCase
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk

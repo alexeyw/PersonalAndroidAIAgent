@@ -55,7 +55,7 @@ class MemoryViewModelTest {
         val memories = listOf(MemoryChunk(1, "Memory 1", floatArrayOf(0.1f), 1000L))
         val sessionId = "session-1"
         val messages = listOf(ChatMessage(1, sessionId, Role.USER, "Hello", 1000L))
-        
+
         coEvery { memoryRepository.getAllMemories() } returns memories
         coEvery { chatRepository.getAllSessions() } returns listOf(sessionId)
         coEvery { chatRepository.getMessagesForSession(sessionId) } returns flowOf(messages)
@@ -107,7 +107,7 @@ class MemoryViewModelTest {
         coVerify(exactly = 1) { memoryRepository.deleteMemory(200L) }
         coVerify(atLeast = 2) { memoryRepository.getAllMemories() }
     }
-    
+
     @Test
     fun `compactMemory calls repository and reloads data`() = runTest {
         viewModel = MemoryViewModel(chatRepository, memoryRepository, settingsRepository)
@@ -123,10 +123,10 @@ class MemoryViewModelTest {
     @Test
     fun `setTab updates currentTab state`() = runTest {
         viewModel = MemoryViewModel(chatRepository, memoryRepository, settingsRepository)
-        
+
         viewModel.setTab(1)
         assertEquals(1, viewModel.uiState.value.currentTab)
-        
+
         viewModel.setTab(0)
         assertEquals(0, viewModel.uiState.value.currentTab)
     }

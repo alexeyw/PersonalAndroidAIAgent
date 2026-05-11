@@ -3,8 +3,6 @@ package ai.agent.android.domain.usecases
 import ai.agent.android.domain.engine.LlmInferenceEngine
 import ai.agent.android.domain.models.NodeModel
 import ai.agent.android.domain.models.NodeType
-import kotlinx.coroutines.flow.reduce
-import kotlinx.coroutines.flow.toList
 import javax.inject.Inject
 
 /**
@@ -15,9 +13,7 @@ import javax.inject.Inject
  *
  * @property llmInferenceEngine The engine used to evaluate free-form prompt conditions via LLM.
  */
-class EvaluateIfConditionUseCase @Inject constructor(
-    private val llmInferenceEngine: LlmInferenceEngine
-) {
+class EvaluateIfConditionUseCase @Inject constructor(private val llmInferenceEngine: LlmInferenceEngine) {
 
     /**
      * Evaluates the condition against the provided input text.
@@ -26,7 +22,7 @@ class EvaluateIfConditionUseCase @Inject constructor(
      * 1. **Keywords:** If [NodeModel.conditionKeywords] is provided, returns true if the input contains any of the keywords (case-insensitive).
      * 2. **Complexity:** If [NodeModel.conditionComplexity] is provided, returns true if the input length exceeds the complexity threshold.
      * 3. **Prompt:** If [NodeModel.conditionPrompt] is provided, uses the LLM to classify the input. Returns true if the LLM responds positively.
-     * 
+     *
      * If no configuration is provided, it defaults to false.
      *
      * @param node The [NodeModel] containing the condition configuration. Must be of type [NodeType.IF_CONDITION].
@@ -44,7 +40,7 @@ class EvaluateIfConditionUseCase @Inject constructor(
             val keywords = keywordsStr.split(",")
                 .map { it.trim().lowercase() }
                 .filter { it.isNotEmpty() }
-                
+
             if (keywords.isNotEmpty()) {
                 val lowerInput = inputText.lowercase()
                 if (keywords.any { lowerInput.contains(it) }) {
@@ -69,7 +65,7 @@ class EvaluateIfConditionUseCase @Inject constructor(
                 Text: "$inputText"
                 Reply strictly with 'true' or 'false'.
             """.trimIndent()
-            
+
             return try {
                 val tokens = mutableListOf<String>()
                 llmInferenceEngine.generateResponseStream(prompt).collect { tokens.add(it) }

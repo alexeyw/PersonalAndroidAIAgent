@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_screen_title">Agent Settings</string>
+    <string name="settings_section_system_instructions">System Instructions</string>
+    <string name="settings_field_system_prompt_prefix">System Prompt Prefix</string>
+    <string name="settings_section_restrictions">Restrictions</string>
+    <string name="settings_human_in_loop_label">Human-in-the-loop</string>
+    <string name="settings_human_in_loop_hint">Require confirmation for critical tool executions.</string>
+    <string name="settings_section_llm_parameters">LLM Parameters</string>
+    <string name="settings_param_temperature">Temperature: %1$s</string>
+    <string name="settings_param_top_k">Top-K: %1$d</string>
+    <string name="settings_param_top_p">Top-P: %1$s</string>
+    <string name="settings_param_max_context">Max Context Tokens: %1$d</string>
+    <string name="settings_pipeline_max_steps_label">Pipeline Max Steps (5–100)</string>
+    <string name="settings_pipeline_max_steps_helper">Enter a value between 5 and 100</string>
+    <string name="settings_section_local_model">Local Model Settings</string>
+    <string name="settings_inference_backend">Inference Backend</string>
+    <string name="settings_select_backend">Select Backend</string>
+    <string name="settings_test_backend_button">Test Local Model with %1$s</string>
+    <string name="settings_section_external_providers">External Providers (API Keys &amp; Models)</string>
+    <string name="settings_section_ollama">Local Network Models (Ollama)</string>
+    <string name="settings_ollama_base_url_label">Ollama Base URL (e.g., http://192.168.1.100:11434)</string>
+    <string name="settings_ollama_model_label">Ollama Model Name</string>
+    <string name="settings_ollama_context_label">Ollama Context Window Size</string>
+    <string name="settings_provider_api_key_label">%1$s API Key</string>
+    <string name="settings_provider_model_label">%1$s Model</string>
+    <string name="settings_backend_test_success">Success! Backend initialized correctly.</string>
+</resources>

@@ -31,7 +31,7 @@ class ToolNodeExecutor @Inject constructor(
     private val toolRepository: ToolRepository,
     private val settingsRepository: SettingsRepository,
     private val approvalNotifier: ApprovalNotifier,
-    private val chatRepository: ChatRepository
+    private val chatRepository: ChatRepository,
 ) : NodeExecutor {
 
     private val activeApprovalDeferreds = ConcurrentHashMap<String, CompletableDeferred<Boolean>>()
@@ -45,7 +45,7 @@ class ToolNodeExecutor @Inject constructor(
         node: NodeModel,
         inputText: String,
         sessionId: String,
-        originalPrompt: String
+        originalPrompt: String,
     ): Flow<NodeOutput> = flow {
         val toolNameConfig = node.toolName
         if (toolNameConfig.isNullOrBlank()) {
@@ -176,7 +176,8 @@ class ToolNodeExecutor @Inject constructor(
                 resolvedToolArgs = parsedSelection.second
             } else {
                 resolvedToolName = toolNameConfig
-                resolvedToolArgs = parseToolArguments(accumulatedResponse.toString()) ?: accumulatedResponse.toString().trim()
+                resolvedToolArgs =
+                    parseToolArguments(accumulatedResponse.toString()) ?: accumulatedResponse.toString().trim()
             }
         }
 
@@ -209,13 +210,21 @@ class ToolNodeExecutor @Inject constructor(
                         content = "User denied execution of tool: $resolvedToolName",
                         timestamp = System.currentTimeMillis(),
                         isFinal = false,
-                    )
+                    ),
                 )
-                emit(NodeOutput.State(AgentOrchestratorState.ObservationResult(resolvedToolName, "Execution denied by user")))
-                emit(NodeOutput.Result(NodeExecutionResult(
-                    outputText = "Execution denied by user",
-                    resolvedToolName = resolvedToolName,
-                )))
+                emit(
+                    NodeOutput.State(
+                        AgentOrchestratorState.ObservationResult(resolvedToolName, "Execution denied by user"),
+                    ),
+                )
+                emit(
+                    NodeOutput.Result(
+                        NodeExecutionResult(
+                            outputText = "Execution denied by user",
+                            resolvedToolName = resolvedToolName,
+                        ),
+                    ),
+                )
                 return@flow
             }
         }
@@ -228,7 +237,9 @@ class ToolNodeExecutor @Inject constructor(
             // and a broad `catch (Exception)` would silently swallow the cancel.
             throw e
         } catch (e: Exception) {
-            Timber.tag("PipelineDebug").e(e, "[NODE_ERR] type=${node.type.name} id=${node.id} error executing tool: $resolvedToolName")
+            Timber.tag(
+                "PipelineDebug",
+            ).e(e, "[NODE_ERR] type=${node.type.name} id=${node.id} error executing tool: $resolvedToolName")
             "Error executing $resolvedToolName: ${e.message}"
         }
 
@@ -240,7 +251,7 @@ class ToolNodeExecutor @Inject constructor(
                 content = "Observation from $resolvedToolName: $result",
                 timestamp = System.currentTimeMillis(),
                 isFinal = false,
-            )
+            ),
         )
         emit(NodeOutput.Result(NodeExecutionResult(outputText = result, resolvedToolName = resolvedToolName)))
     }
@@ -249,7 +260,7 @@ class ToolNodeExecutor @Inject constructor(
     internal fun parseToolSelection(response: String): Pair<String, String>? {
         val blockRegex = """```json\s*(\{.*?\})\s*```""".toRegex(RegexOption.DOT_MATCHES_ALL)
         var jsonBlock = blockRegex.find(response)?.groups?.get(1)?.value
-        
+
         if (jsonBlock == null) {
             val startIndex = response.indexOf('{')
             val endIndex = response.lastIndexOf('}')
@@ -259,7 +270,7 @@ class ToolNodeExecutor @Inject constructor(
                 response
             }
         }
-        
+
         return try {
             val jsonObject = org.json.JSONObject(jsonBlock)
             val tool = if (jsonObject.has("tool")) jsonObject.getString("tool") else null
@@ -270,8 +281,10 @@ class ToolNodeExecutor @Inject constructor(
                 } else {
                     argsObj.toString()
                 }
-            } else null
-            
+            } else {
+                null
+            }
+
             if (tool != null && args != null) {
                 Pair(tool, args)
             } else {
@@ -287,7 +300,7 @@ class ToolNodeExecutor @Inject constructor(
     internal fun parseToolArguments(response: String): String? {
         val blockRegex = """```json\s*(\{.*?\})\s*```""".toRegex(RegexOption.DOT_MATCHES_ALL)
         var jsonBlock = blockRegex.find(response)?.groups?.get(1)?.value
-        
+
         if (jsonBlock == null) {
             val startIndex = response.indexOf('{')
             val endIndex = response.lastIndexOf('}')
@@ -297,11 +310,11 @@ class ToolNodeExecutor @Inject constructor(
                 response
             }
         }
-        
+
         return try {
             val jsonObject = org.json.JSONObject(jsonBlock)
             if (!jsonObject.has("arguments")) return null
-            
+
             jsonObject.get("arguments").toString()
         } catch (e: org.json.JSONException) {
             Timber.tag("PipelineDebug").e(e, "Error parsing tool arguments JSON")

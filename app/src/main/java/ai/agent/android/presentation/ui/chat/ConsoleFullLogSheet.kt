@@ -1,5 +1,8 @@
 package ai.agent.android.presentation.ui.chat
 
+import ai.agent.android.R
+import ai.agent.android.domain.models.ConsoleEvent
+import ai.agent.android.domain.models.ConsoleEventType
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -54,10 +57,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
-import ai.agent.android.domain.models.ConsoleEvent
-import ai.agent.android.domain.models.ConsoleEventType
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -114,6 +117,19 @@ fun ConsoleFullLogSheet(
     val listState = rememberLazyListState()
     val coroutineScope = rememberCoroutineScope()
     var clearDialogVisible by remember { mutableStateOf(false) }
+    val context = LocalContext.current
+    // Pre-resolved console tag map. Captured at composition time so
+    // [plainTextDump] — which is plain Kotlin and cannot call
+    // `stringResource` — can produce a localised clipboard payload.
+    val tagsByType = remember(context) {
+        mapOf(
+            ConsoleEventType.NodeExecution to context.getString(R.string.chat_console_tag_node),
+            ConsoleEventType.ToolCall to context.getString(R.string.chat_console_tag_tool),
+            ConsoleEventType.MemoryAccess to context.getString(R.string.chat_console_tag_memory),
+            ConsoleEventType.SystemMessage to context.getString(R.string.chat_console_tag_system),
+            ConsoleEventType.Error to context.getString(R.string.chat_console_tag_error),
+        )
+    }
 
     // Hoisted out of `ConsoleLogRow` because `LazyColumn` items are
     // disposed and re-entered on scroll, which would re-instantiate the
@@ -189,7 +205,7 @@ fun ConsoleFullLogSheet(
                 .fillMaxHeight(0.92f),
             topBar = {
                 TopAppBar(
-                    title = { Text("Console log") },
+                    title = { Text(stringResource(R.string.chat_console_title)) },
                     actions = {
                         IconButton(
                             onClick = { clearDialogVisible = true },
@@ -197,16 +213,16 @@ fun ConsoleFullLogSheet(
                         ) {
                             Icon(
                                 imageVector = Icons.Default.ClearAll,
-                                contentDescription = "Clear log",
+                                contentDescription = stringResource(R.string.chat_console_clear_cd),
                             )
                         }
                         IconButton(
-                            onClick = { onCopyAll(plainTextDump(events)) },
+                            onClick = { onCopyAll(plainTextDump(events, tagsByType)) },
                             enabled = events.isNotEmpty(),
                         ) {
                             Icon(
                                 imageVector = Icons.Default.ContentCopy,
-                                contentDescription = "Copy all",
+                                contentDescription = stringResource(R.string.chat_console_copy_all_cd),
                             )
                         }
                     },
@@ -237,7 +253,7 @@ fun ConsoleFullLogSheet(
                                 contentDescription = null,
                             )
                         },
-                        text = { Text("New events") },
+                        text = { Text(stringResource(R.string.chat_console_new_events)) },
                     )
                 }
             },
@@ -253,11 +269,13 @@ fun ConsoleFullLogSheet(
                 )
                 if (visibleEvents.isEmpty()) {
                     EmptyState(
-                        message = if (events.isEmpty()) {
-                            "Console log is empty"
-                        } else {
-                            "No events match this filter"
-                        },
+                        message = stringResource(
+                            if (events.isEmpty()) {
+                                R.string.chat_console_empty
+                            } else {
+                                R.string.chat_console_no_match
+                            },
+                        ),
                         modifier = Modifier.fillMaxSize(),
                     )
                 } else {
@@ -287,21 +305,21 @@ fun ConsoleFullLogSheet(
     if (clearDialogVisible) {
         AlertDialog(
             onDismissRequest = { clearDialogVisible = false },
-            title = { Text("Clear console log?") },
+            title = { Text(stringResource(R.string.chat_console_clear_dialog_title)) },
             text = {
-                Text("This removes every event from the current session log. The action cannot be undone.")
+                Text(stringResource(R.string.chat_console_clear_dialog_text))
             },
             confirmButton = {
                 Button(onClick = {
                     clearDialogVisible = false
                     onClear()
                 }) {
-                    Text("Clear")
+                    Text(stringResource(R.string.common_clear))
                 }
             },
             dismissButton = {
                 TextButton(onClick = { clearDialogVisible = false }) {
-                    Text("Cancel")
+                    Text(stringResource(R.string.common_cancel))
                 }
             },
         )
@@ -359,10 +377,7 @@ private fun ConsoleLogRow(event: ConsoleEvent, timeFormatter: SimpleDateFormat) 
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun FilterChipsRow(
-    selected: ConsoleLogFilter,
-    onSelect: (ConsoleLogFilter) -> Unit,
-) {
+private fun FilterChipsRow(selected: ConsoleLogFilter, onSelect: (ConsoleLogFilter) -> Unit) {
     val scrollState = rememberScrollState()
     Row(
         modifier = Modifier
@@ -375,7 +390,7 @@ private fun FilterChipsRow(
             FilterChip(
                 selected = selected == value,
                 onClick = { onSelect(value) },
-                label = { Text(value.label) },
+                label = { Text(stringResource(value.labelRes)) },
             )
         }
     }
@@ -430,18 +445,11 @@ private fun lineColor(type: ConsoleEventType): Color = when (type) {
  * (`HH:mm:ss.SSS  [TAG] message`) so a paste into a bug report mirrors the
  * UI exactly. Always dumps the unfiltered list — "Copy all" means all.
  */
-internal fun plainTextDump(events: List<ConsoleEvent>): String {
+internal fun plainTextDump(events: List<ConsoleEvent>, tagsByType: Map<ConsoleEventType, String>): String {
     if (events.isEmpty()) return ""
     val formatter = SimpleDateFormat("HH:mm:ss.SSS", Locale.US)
     return events.joinToString(separator = "\n") { event ->
-        val tag = when (event.type) {
-            ConsoleEventType.NodeExecution -> "NODE"
-            ConsoleEventType.ToolCall -> "TOOL"
-            ConsoleEventType.MemoryAccess -> "MEM"
-            ConsoleEventType.SystemMessage -> "SYS"
-            ConsoleEventType.Error -> "ERR"
-        }
+        val tag = tagsByType[event.type].orEmpty()
         "${formatter.format(Date(event.timestamp))} [$tag] ${event.message}"
     }
 }
-
