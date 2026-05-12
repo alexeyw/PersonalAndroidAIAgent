@@ -26,6 +26,11 @@ details.
 
 ### Changed
 
+- Coverage policy wording in `docs/testing.md` aligned with the actual
+  enforcement: target 100% logic coverage for new code in `domain` /
+  `data`, build gate at 70% LINE aggregate (per-package decomposition in
+  `docs/coverage-baseline.md`, full policy in `docs/static-analysis.md`).
+
 ### Deprecated
 
 ### Removed
