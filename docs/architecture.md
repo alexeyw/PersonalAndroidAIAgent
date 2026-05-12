@@ -1,0 +1,420 @@
+# Architecture
+
+This document is a developer-facing overview of the On-Device AI Agent for
+Android. It is intended for contributors and external readers who want to
+understand the shape of the codebase without reading every file. For
+end-user guidance, see [`docs/user-guide.md`](user-guide.md); for recipes
+on adding new functionality, see [`docs/extending.md`](extending.md).
+
+All diagrams below are written in [Mermaid](https://mermaid.js.org/) and
+render natively in GitHub markdown — no external tooling required.
+
+---
+
+## 1. Clean Architecture overview
+
+The codebase is split into three layers under
+`app/src/main/java/ai/agent/android/`:
+
+```
+app/
+├── presentation/   # Jetpack Compose UI, ViewModels (MVVM)
+├── domain/         # Use cases, agent logic, tool abstractions, models
+└── data/           # Repository implementations, engines, I/O, services
+```
+
+Dependencies flow strictly inward — `data` and `presentation` both depend
+on `domain`, but `domain` depends on nothing else in the project. The
+`domain` layer contains zero Android-framework imports (`android.*`,
+`androidx.*`) and is pure Kotlin plus Coroutines.
+
+```mermaid
+flowchart LR
+    Presentation[presentation/<br/>Compose · ViewModels]
+    Domain[domain/<br/>UseCases · Engine · Models · Repositories - interfaces]
+    Data[data/<br/>Repositories - impl · LiteRT · Room · MCP · Services]
+
+    Presentation -->|depends on| Domain
+    Data -->|implements| Domain
+```
+
+Each layer maps onto concrete packages:
+
+| Layer          | Packages                                                                                          |
+|----------------|---------------------------------------------------------------------------------------------------|
+| `presentation` | `presentation/ui/{chat,memory,models,monitoring,orchestrator,prompts,settings,splash,tools}`, `presentation/{components,state,theme,notifications,receivers}` |
+| `domain`       | `domain/{usecases,engine,models,repositories,prompt,constants,services,pipelineio}`               |
+| `data`         | `data/{engine,local,repositories,prompt,mcp,services,tools,network,mappers,logging}`              |
+
+Cross-layer wiring is handled by **Hilt**. Modules in `di/` provide
+external dependencies (Room, Retrofit, LiteRT, prompt-variable providers,
+local-tool executors) and bind data-layer implementations to domain-layer
+interfaces.
+
+---
+
+## 2. Data flow — life of a user message
+
+The most common code path in the app is: the user types a message in the
+chat screen and receives an agent response. The diagram below shows the
+key actors and the order in which they collaborate.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor User
+    participant UI as ChatScreen<br/>(Compose)
+    participant VM as ChatViewModel
+    participant UC as AgentOrchestratorUseCase
+    participant Engine as GraphExecutionEngine
+    participant Ctx as NodeContextBuilder
+    participant Exec as NodeExecutor
+    participant LLM as LiteRtRepository /<br/>CloudLlmProvider
+    participant Repo as ChatRepository<br/>(Room + SQLCipher)
+
+    User->>UI: types message
+    UI->>VM: sendMessage(text)
+    VM->>Repo: save user ChatMessage (isFinal = true)
+    VM->>UC: invoke(text, sessionId)
+    UC->>Engine: execute(pipelineGraph, executionContext)
+    loop For each node in topological order
+        Engine->>Ctx: build(input, NodeContextConfig)
+        Ctx-->>Engine: assembled prompt
+        Engine->>Exec: execute(node, assembledInput)
+        Exec->>LLM: generate(prompt) / call tool
+        LLM-->>Exec: Flow<String> tokens / ToolResult
+        Exec-->>Engine: NodeOutput.State (console events)
+        Engine-->>VM: AgentOrchestratorState (consoleLines)
+    end
+    Exec-->>Engine: NodeOutput.Result (final text)
+    Engine-->>UC: result
+    UC->>Repo: save agent ChatMessage (isFinal = true)
+    Repo-->>VM: Flow<List<ChatMessage>> emission
+    VM-->>UI: ChatUiState (StateFlow)
+    UI-->>User: rendered reply
+```
+
+Step-by-step notes:
+
+1. The Compose layer is **stateless with respect to data** — `ChatScreen`
+   only observes `ChatUiState` (a `StateFlow`) and forwards user input
+   to `ChatViewModel`. There are no direct repository or use-case calls
+   from any `@Composable`.
+2. `ChatViewModel.sendMessage(...)` persists the user message first
+   (so it survives crashes), then launches the agent on
+   `viewModelScope`.
+3. `AgentOrchestratorUseCase` resolves the pipeline bound to the active
+   chat session (or the default one if the binding is `null`) and asks
+   `GraphExecutionEngine` to run the graph.
+4. `GraphExecutionEngine` walks the graph in topological order. For
+   every node, it consults `NodeContextBuilder` to assemble the input
+   prompt out of the blocks selected by the node's `NodeContextConfig`
+   (see §3.2).
+5. The matching `NodeExecutor` (one per `NodeType`, registered via Hilt
+   multibinding) runs the node. Long-running nodes (`LITE_RT`, `CLOUD`)
+   emit token-streaming and progress events as `NodeOutput.State`
+   values; the terminal `NodeOutput.Result` carries the node's textual
+   output to the engine.
+6. While the graph executes, the engine emits
+   `AgentOrchestratorState.ConsoleLog` events. The view-model folds
+   them into `ChatUiState.consoleLines`, which `ChatScreen` renders in
+   the inline mini-console above the input field.
+7. Intermediate node outputs are persisted with `isFinal = false`. The
+   main message list filters those out via
+   `ChatRepository.getDisplayMessagesForSession(...)`, but they remain
+   available for debugging and export paths.
+8. The final agent reply (`isFinal = true`) is saved through the
+   repository; the resulting `Flow` emission updates
+   `ChatUiState.messages` and the UI re-composes.
+
+---
+
+## 3. Pipeline engine
+
+Pipelines are first-class. A `PipelineGraph` is a directed graph of typed
+`NodeModel` values connected by `ConnectionModel` edges. The engine that
+runs them is `GraphExecutionEngine`, decomposed into per-type
+`NodeExecutor` strategies.
+
+### 3.1. Node types
+
+| `NodeType`         | Purpose                                                                                       |
+|--------------------|-----------------------------------------------------------------------------------------------|
+| `INPUT`            | Entry point. Echoes the user's original message downstream. Exactly one per graph.            |
+| `LITE_RT`          | On-device LLM call via LiteRT-LM. Streams tokens as `Flow<String>`.                           |
+| `CLOUD`            | Cloud LLM call. Provider (OpenAI / Anthropic / Google / DeepSeek / Ollama) selected by param. |
+| `OUTPUT`           | Final answer to the user. Optionally wraps upstream text with a system prompt.                |
+| `SUMMARY`          | Condenses tool results / multi-turn output into a single message.                             |
+| `INTENT_ROUTER`    | Routes execution down one branch based on classified intent.                                  |
+| `DECOMPOSITION`    | Splits a complex task into ordered subtasks; feeds them into a downstream queue.              |
+| `EVALUATION`       | Scores or critiques an intermediate result; can short-circuit the graph.                      |
+| `CLARIFICATION`    | Asks the user a follow-up question and suspends the pipeline until they answer.               |
+| `TOOL`             | Invokes an AppFunctions or MCP tool. Gated by `ToolRisk` (see §4.2).                          |
+| `IF_CONDITION`     | Boolean branch on a condition evaluated against the running context.                          |
+| `QUEUE_PROCESSOR`  | Drains the priority task queue produced by `DECOMPOSITION`, one item per iteration.           |
+
+### 3.2. `NodeContextBuilder` and the fixed block order
+
+Every node receives an **assembled input**, not the raw text of the
+previous node. `NodeContextBuilder` is the single source of truth for
+that format. Each enabled block is wrapped in a `--- <Block Name> ---`
+header; blocks are concatenated in this **fixed order** regardless of
+which subset is enabled:
+
+1. `--- Original Task ---` — the user message that started the current
+   run.
+2. `--- Chat History ---` — numbered conversation history with
+   `USER`/`AGENT` roles.
+3. `--- Long-Term Memory ---` — semantic-retrieval hits over past
+   memory chunks.
+4. `--- Tool Results ---` — outputs of every tool invocation made
+   during the current run.
+5. `--- Previous Node Output ---` — the text produced by the
+   immediately upstream node.
+
+The order is **not** an implementation detail. It is fixed for two
+reasons:
+
+- **Prompt cache stability.** Downstream LLMs (Anthropic, OpenAI, the
+  local LiteRT runtime) hash the prefix to reuse cache. Reordering
+  blocks between runs would invalidate that cache.
+- **Position sensitivity.** LLMs respond best when the payload of the
+  current iteration sits closest to the generation point, so
+  `Previous Node Output` is always last.
+
+An enabled block with no data does not produce an empty header — the
+block is simply skipped. If no enabled block has content, the builder
+returns an empty string.
+
+### 3.3. `NodeContextConfig` flags
+
+`NodeContextConfig` is a data class of five booleans, one per block:
+
+| Flag             | Includes                                                                     |
+|------------------|------------------------------------------------------------------------------|
+| `originalTask`   | The user message that started the current pipeline run.                      |
+| `chatHistory`    | Numbered messages from the active chat session (`USER` / `AGENT`).           |
+| `longTermMemory` | Memory chunks retrieved by semantic search against the original task.        |
+| `toolResults`    | All `toolName: output` snapshots accumulated during this run.                |
+| `nodeInput`      | The text produced by the previous node in the chain.                         |
+
+Recommended defaults per node type (`NodeContextConfig.defaultForType`):
+
+- `INPUT`, `IF_CONDITION` → `nodeInput` only (control flow).
+- `LITE_RT`, `CLARIFICATION`, `QUEUE_PROCESSOR`, `DECOMPOSITION`
+  → `nodeInput + originalTask` (minimum context for a small model).
+- `CLOUD`, `INTENT_ROUTER` → `nodeInput + originalTask + chatHistory`
+  (large context window, history is cheap).
+- `TOOL` → `nodeInput` only (the tool just needs its arguments).
+- `SUMMARY`, `EVALUATION`
+  → `nodeInput + originalTask + toolResults` (aggregation).
+- `OUTPUT` → all five flags (final answer should see everything).
+
+### 3.4. Validation rules
+
+`PipelineGraph.validate()` enforces graph-level invariants before the
+engine accepts a graph for execution:
+
+- Exactly one `INPUT` node and at least one `OUTPUT` node.
+- No cycles; the graph must be a DAG.
+- Every connection refers to existing source and target node ids.
+- Nodes for which `NodeModel.usesContextConfig() == true` must have at
+  least one flag enabled — an empty config would feed the executor
+  nothing to work with.
+- Nodes that ignore the config (`INPUT`, `IF_CONDITION`,
+  `QUEUE_PROCESSOR`, and `OUTPUT` when it has no `systemPrompt`) are
+  exempt from the empty-config rule — they always forward upstream
+  text verbatim.
+
+System prompts on LLM-driven nodes can contain `$KEY` placeholders. The
+`PromptTemplateEngine` substitutes them on every render via Hilt-bound
+`PromptVariableProvider` instances. Built-in keys: `$DATE`, `$TIME`,
+`$TOOLS`, `$MODEL`, `$MEMORY_SUMMARY`. Unknown placeholders are kept
+verbatim and logged as a warning. See
+[`docs/extending.md`](extending.md) for the recipe to add new
+variables.
+
+---
+
+## 4. Integrations
+
+### 4.1. LiteRT-LM (on-device inference)
+
+`LiteRtRepository` is the contract between the agent and the on-device
+model:
+
+```kotlin
+interface LiteRtRepository {
+    suspend fun loadModel(modelPath: String): Result<Unit>
+    fun generate(prompt: String): Flow<String>
+    suspend fun unloadModel()
+    val isModelLoaded: StateFlow<Boolean>
+}
+```
+
+Rules the implementation guarantees:
+
+- Model loading runs on `Dispatchers.IO` inside a coroutine. The native
+  handle is held by a `ModelSession` wrapper.
+- Inference is exposed as a **token-streaming** `Flow<String>` — UI and
+  the orchestrator can render partial output as it arrives.
+- A `Mutex` gates inference. Concurrent calls to `generate(...)` are
+  serialized so the native session is never accessed from two
+  coroutines at once.
+- `ModelSession.close()` is called from `ViewModel.onCleared()` and
+  from the foreground service's `onDestroy()` to release native memory
+  and avoid OOM.
+- Memory usage is logged with `Timber.d` before and after model load
+  so that regressions show up immediately in logcat.
+
+### 4.2. AppFunctions Jetpack (tool calling)
+
+Local tools are declared as `@AppFunction`-annotated suspend functions
+under `data/tools/local`. They are mapped to the domain-side `Tool`
+abstraction by `ToolRepositoryImpl`. Every `Tool` carries an explicit
+risk level:
+
+```kotlin
+enum class ToolRisk { READ_ONLY, SENSITIVE, DESTRUCTIVE }
+
+interface Tool {
+    val id: String
+    val risk: ToolRisk
+    val description: String
+    suspend fun execute(args: Map<String, String>): ToolResult
+}
+```
+
+Before a `SENSITIVE` or `DESTRUCTIVE` tool runs, the orchestrator emits
+a `PendingConfirmation` state and **suspends until the user
+responds** through the UI. `READ_ONLY` tools run without a prompt. This
+human-in-the-loop gate is non-optional — there is no code path that
+bypasses it for a destructive call.
+
+### 4.3. Model Context Protocol (MCP)
+
+External tool servers are integrated through MCP clients in
+`data/mcp/` (`KoogMcpClient`, `McpClient`). `ToolRepositoryImpl` holds
+active connections in a `ConcurrentHashMap<String, McpClient>` keyed by
+server id. Connections are **lazy**: they open on first use and close
+when the agent session ends. Every MCP call is wrapped in
+`runCatching` and converted to a `ToolResult.Error` on failure — raw
+exceptions never reach the presentation layer.
+
+### 4.4. Cloud LLM providers
+
+Cloud providers (`openai`, `anthropic`, `google`, `deepseek`, `ollama`)
+implement the `CloudLlmProvider` interface in `domain`. They are
+dispatched by the single unified `CLOUD` node, which takes the
+provider id as a parameter — there is no provider-specific node type,
+and adding a new provider does not require touching the pipeline
+engine. API keys live in `EncryptedSharedPreferences` (see §5.2) and
+are never serialized into DataStore or git.
+
+---
+
+## 5. Persistence
+
+### 5.1. Room
+
+The local database (`AppDatabase`, `agent_database.db`) holds chat
+sessions and messages, long-term memory chunks, local-model metadata,
+pipelines (nodes and connections), prompt templates, and pipeline
+trace steps. DAOs are split per aggregate (`ChatDao`, `MemoryDao`,
+`PipelineDao`, …) and live under `data/local/dao/`.
+
+Migration rules:
+
+- Schema migrations are explicit
+  (`Migration(oldVersion, newVersion) { … }`).
+- Auto-migrations are allowed for additive changes only.
+- DAO methods returning `Flow<T>` are annotated with `@Query` — no
+  ad-hoc reactive wrapping.
+- Operations that touch multiple tables use `@Transaction`.
+- `CoroutineDispatcher` is injected into data sources for
+  testability; heavy I/O runs on `Dispatchers.IO`.
+
+### 5.2. At-rest encryption
+
+The Room database is encrypted at rest with **SQLCipher** via
+`SupportOpenHelperFactory` from `net.zetetic:sqlcipher-android`.
+Encryption applies to every table that may hold user-derived content:
+
+- `chat_messages`, `chat_sessions` — user messages and LLM replies.
+- `memory_chunks` — long-term memory fragments distilled from
+  conversations.
+- `trace_steps` — intermediate pipeline-node outputs derived from
+  user input.
+
+The SQLCipher passphrase is a 32-byte random value generated on first
+launch and stored in `EncryptedSharedPreferences`. The master key
+backing those preferences lives in the Android Keystore.
+`EncryptedSharedPreferences` also stores per-provider cloud API keys.
+
+User-tunable settings (sampling parameters, timeouts, pipeline-step
+bounds, default pipeline id, opt-in flags) live in **DataStore**, one
+instance per feature module. DataStore is not encrypted — it is
+explicitly reserved for non-sensitive preferences. Any value that is
+sensitive (an API key, a passphrase, a personal identifier) goes
+through `EncryptedSharedPreferences` instead.
+
+### 5.3. JSON parsing
+
+Pipeline import/export and tool-argument parsing use
+`kotlinx.serialization` or `org.json.JSONObject` only — no manual
+string parsing. `JSONException`s are caught and converted to typed
+result classes (`PipelineImportOutcome`, `ToolResult.Error`).
+
+---
+
+## 6. Background work
+
+The agent must survive backgrounding without being killed by the
+system, and it must release native model memory when it is genuinely
+idle. Three components coordinate that lifecycle:
+
+| Component                  | Responsibility                                                                                |
+|----------------------------|-----------------------------------------------------------------------------------------------|
+| `AgentForegroundService`   | Keeps the process alive while a pipeline runs; shows a persistent notification.               |
+| `AgentWorker` (WorkManager)| Executes deferred / scheduled tasks (driven by `ScheduleTaskUseCase`).                        |
+| `AgentIdleManager`         | Watches device idle / Doze state and signals when the agent can safely unload the model.     |
+| `AgentPowerManager`        | Watches charging and battery state; throttles or defers work on low battery.                  |
+
+The model-unload contract is non-negotiable: when the agent has been
+inactive in the background for the configured idle window, the
+foreground service triggers `LiteRtRepository.unloadModel()` to release
+~hundreds of megabytes of native memory. The next user message
+re-loads the model via `LoadModelUseCase`. This trade-off is
+deliberate — a small cold-start cost is preferable to draining the
+battery or starving other apps of RAM.
+
+```mermaid
+flowchart TD
+    Start[User opens chat] --> Service[Start AgentForegroundService]
+    Service --> Load[LoadModelUseCase<br/>→ LiteRtRepository.loadModel]
+    Load --> Run[Pipeline runs]
+    Run --> Idle{Idle window<br/>exceeded?}
+    Idle -- no --> Run
+    Idle -- yes --> Unload[LiteRtRepository.unloadModel]
+    Unload --> Wait[Service stays alive,<br/>model evicted]
+    Wait --> NewMsg{New message?}
+    NewMsg -- yes --> Load
+    NewMsg -- no --> Wait
+```
+
+---
+
+## 7. Further reading
+
+- [`docs/user-guide.md`](user-guide.md) — using the app as an end user
+  (chats, console, pipelines, memory, settings, troubleshooting).
+- [`docs/extending.md`](extending.md) — recipes for adding new
+  `NodeType`s, `Tool`s, cloud providers, and prompt variables.
+- [`docs/code-style.md`](code-style.md) — Kotlin conventions and
+  architectural constraints enforced in code review.
+- [`docs/testing.md`](testing.md) — testing rules and coverage policy.
+- [`docs/api-conventions.md`](api-conventions.md) — concrete
+  integration conventions for LiteRT-LM, AppFunctions, MCP, Room,
+  DataStore, and JSON parsing.
+- [`SECURITY.md`](../SECURITY.md) — threat model and vulnerability
+  reporting policy.
