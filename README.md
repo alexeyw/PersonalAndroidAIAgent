@@ -132,6 +132,7 @@ After installing:
   variables) — `docs/extending.md` (TBD).
 - Contributing guide — `CONTRIBUTING.md` (TBD).
 - Security policy and threat model — [SECURITY.md](SECURITY.md).
+- Release notes and version history — [CHANGELOG.md](CHANGELOG.md).
 
 ## License
 
