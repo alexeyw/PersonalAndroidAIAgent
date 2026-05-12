@@ -7,11 +7,10 @@ instrumented tests (`app/src/androidTest/`).
 
 ## Coverage policy
 
-Target **100% logic coverage** in newly written or modified code in the
-`domain` and `data` layers. The build-side gate is more lenient: a
-**70% LINE aggregate** threshold across the module, with per-package
-decomposition documented in
-[`coverage-baseline.md`](coverage-baseline.md). The full policy — what is
+Target **100% logic coverage** in new or modified code of the `domain` and
+`data` layers; the build-side gate is **70% LINE aggregate** across the
+module. Per-package decomposition is documented in
+[`coverage-baseline.md`](coverage-baseline.md); the full policy — what is
 counted, what is excluded, and how regressions are handled — lives in
 [`static-analysis.md`](static-analysis.md).
 
