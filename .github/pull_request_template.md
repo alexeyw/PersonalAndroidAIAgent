@@ -34,12 +34,15 @@ Closes #
       testDebugUnitTest, koverVerifyDebug).
 - [ ] Tests added or updated for the changed code (target 100% logic
       coverage in new `domain` / `data` code; see `docs/testing.md`).
-- [ ] Public documentation updated where relevant — see the documentation
-      triggers in [`CLAUDE.md`](../blob/main/CLAUDE.md) (for example:
+- [ ] Public documentation updated where relevant (see the *Pull
+      requests* section in
+      [`CONTRIBUTING.md`](../blob/main/CONTRIBUTING.md)). Typical
+      triggers:
       user-visible feature → `README.md` + `docs/user-guide.md`; new
       `NodeType` / `Tool` / prompt variable → `docs/extending.md` and
-      `pipeline-editor.html`; architecture change → `docs/architecture.md`;
-      any merge to `main` → `CHANGELOG.md` `[Unreleased]`).
+      `pipeline-editor.html`; architecture change →
+      `docs/architecture.md`; any merge to `main` → `CHANGELOG.md`
+      `[Unreleased]`.
 - [ ] `FILE_MAP.md` updated when files or directories were added, moved,
       or removed (package map under
       `app/src/main/java/ai/agent/android/FILE_MAP.md` and/or the root
