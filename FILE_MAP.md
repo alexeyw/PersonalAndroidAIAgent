@@ -7,8 +7,10 @@
 - `app/` - The main Android application module containing the UI and business logic.
 - `build/` - Root build output directory for the project.
 - `config/detekt/` - Detekt static-analysis rule configuration (`detekt.yml`).
-- `docs/` - Project documentation (e.g. `static-analysis.md`).
+- `docs/` - Project documentation (architecture, user guide, extending, code style, testing, API conventions, static analysis, coverage baseline).
   - `screenshots/` - Placeholder directory for README screenshots (`TODO.png` referenced from `README.md`).
+- `CONTRIBUTING.md` - Contributor guide: dev setup, build & test, branch model, Conventional Commits, PR checklist, language policy.
+- `CODE_OF_CONDUCT.md` - Contributor Covenant 2.1 community standards and enforcement guidelines.
 - `gradle/` - Gradle wrapper and global dependency versions configuration.
 - `.editorconfig` - Cross-IDE Kotlin coding-style rules consumed by ktlint.
 - `.gitignore` - Specifies intentionally untracked files to ignore for Git.
