@@ -126,7 +126,7 @@ After installing:
 
 ## Documentation
 
-- Architecture overview — `docs/architecture.md` (TBD).
+- Architecture overview — [docs/architecture.md](docs/architecture.md).
 - User guide — `docs/user-guide.md` (TBD).
 - Extending the agent (new node types, tools, providers, prompt
   variables) — `docs/extending.md` (TBD).
