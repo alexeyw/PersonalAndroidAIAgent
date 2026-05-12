@@ -1,0 +1,64 @@
+name: Feature request
+description: Suggest a new capability or improvement to the On-Device AI Agent.
+title: "[Feature] "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to propose an improvement.
+
+        Before submitting, please:
+
+        - Search [existing issues](../issues?q=is%3Aissue) (including closed)
+          to avoid duplicates.
+        - Skim [`docs/extending.md`](../blob/main/docs/extending.md) — many
+          extension points (new node types, tools, prompt variables, cloud
+          providers) are already supported and may not require a code change
+          in the core.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: |
+        What user-facing problem or limitation does this feature address?
+        Describe the scenario, not the solution.
+      placeholder: |
+        Today, when I do X, I have to ... because the agent does not ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed solution
+      description: |
+        How would you like this to work? Be concrete about UI, behaviour,
+        configuration surface, and any non-obvious edge cases.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: |
+        Other approaches you considered and why they are less suitable.
+        Helps reviewers understand the design space.
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: |
+        Links to related issues, prior art, mockups, papers, vendor
+        documentation, or anything else useful for evaluating the proposal.
+
+  - type: checkboxes
+    id: preflight
+    attributes:
+      label: Pre-flight
+      options:
+        - label: I searched existing issues and this is not a duplicate.
+          required: true

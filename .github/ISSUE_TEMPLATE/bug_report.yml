@@ -1,0 +1,107 @@
+name: Bug report
+description: Report a defect or unexpected behaviour in the On-Device AI Agent.
+title: "[Bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to file a bug report.
+
+        Before submitting, please:
+
+        - Search [existing issues](../issues?q=is%3Aissue) to avoid duplicates.
+        - **Do not file security vulnerabilities here.** Report them privately
+          through the **Security** tab → *Report a vulnerability*, as described
+          in [`SECURITY.md`](../blob/main/SECURITY.md).
+        - Reproduce the issue on the latest `main` build if you can.
+
+  - type: input
+    id: summary
+    attributes:
+      label: Summary
+      description: One-line description of the problem.
+      placeholder: "e.g. Crash when loading a pipeline with an empty INPUT node"
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Minimal numbered steps that reliably trigger the bug.
+      placeholder: |
+        1. Open the app and navigate to Pipelines.
+        2. Create a new pipeline named "test".
+        3. Tap the FAB to add a node.
+        4. ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behaviour
+      description: What you expected to happen.
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behaviour
+      description: What actually happened, including error messages if any.
+    validations:
+      required: true
+
+  - type: input
+    id: device-model
+    attributes:
+      label: Device model
+      description: Manufacturer and model of the device the bug was observed on.
+      placeholder: "e.g. Pixel 8 Pro"
+    validations:
+      required: true
+
+  - type: input
+    id: android-version
+    attributes:
+      label: Android version
+      description: Android version and API level, as shown in Settings → About phone.
+      placeholder: "e.g. Android 16 (API 36)"
+    validations:
+      required: true
+
+  - type: input
+    id: app-version
+    attributes:
+      label: App version + build flavour
+      description: Version reported in the app, plus whether this is a debug or release build.
+      placeholder: "e.g. 0.1.0 (debug)"
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs or stack trace
+      description: Relevant logcat output, stack trace, or in-app console log. Redact any sensitive content first.
+      render: shell
+
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: Screenshots or screen recordings
+      description: |
+        Drag-and-drop images or short videos into this field to attach them.
+        GitHub Issue Forms attach uploads inline in the rendered issue.
+
+  - type: checkboxes
+    id: preflight
+    attributes:
+      label: Pre-flight
+      options:
+        - label: I searched existing issues and this is not a duplicate.
+          required: true
+        - label: This is not a security vulnerability (those go through the Security tab).
+          required: true

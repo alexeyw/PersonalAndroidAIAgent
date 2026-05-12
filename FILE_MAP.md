@@ -1,6 +1,13 @@
 # Directory Map: src
 
 - `.git/` - Git version control system internal directory.
+- `.github/` - GitHub-specific configuration.
+  - `workflows/` - GitHub Actions workflows (`check.yml` — CI quality gate).
+  - `ISSUE_TEMPLATE/` - GitHub Issue Forms templates.
+    - `bug_report.yml` - Bug report form (summary, repro steps, expected/actual, device + Android + app build metadata, logs, screenshots).
+    - `feature_request.yml` - Feature request form (problem, proposed solution, alternatives, context).
+    - `config.yml` - Disables blank issues and routes security reports to the private GitHub Security Advisory channel; Discussions link is commented out until Discussions are enabled.
+  - `pull_request_template.md` - Pull request template (summary, Conventional-Commits type checkboxes, linked issue, quality-gate checklist).
 - `.gradle/` - Gradle caching and local configuration directory.
 - `.idea/` - IntelliJ IDEA / Android Studio project configuration directory.
 - `.kotlin/` - Kotlin compiler working cache directory.
