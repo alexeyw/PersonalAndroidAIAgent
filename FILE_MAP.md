@@ -8,6 +8,7 @@
 - `build/` - Root build output directory for the project.
 - `config/detekt/` - Detekt static-analysis rule configuration (`detekt.yml`).
 - `docs/` - Project documentation (e.g. `static-analysis.md`).
+  - `screenshots/` - Placeholder directory for README screenshots (`TODO.png` referenced from `README.md`).
 - `gradle/` - Gradle wrapper and global dependency versions configuration.
 - `.editorconfig` - Cross-IDE Kotlin coding-style rules consumed by ktlint.
 - `.gitignore` - Specifies intentionally untracked files to ignore for Git.
