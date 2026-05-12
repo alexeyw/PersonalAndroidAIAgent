@@ -129,8 +129,12 @@ After installing:
 - Architecture overview — [docs/architecture.md](docs/architecture.md).
 - User guide — [docs/user-guide.md](docs/user-guide.md).
 - Extending the agent (new node types, tools, providers, prompt
-  variables) — `docs/extending.md` (TBD).
-- Contributing guide — `CONTRIBUTING.md` (TBD).
+  variables) — [docs/extending.md](docs/extending.md).
+- Code style — [docs/code-style.md](docs/code-style.md).
+- Testing strategy and coverage — [docs/testing.md](docs/testing.md).
+- API & integration conventions — [docs/api-conventions.md](docs/api-conventions.md).
+- Contributing guide — [CONTRIBUTING.md](CONTRIBUTING.md).
+- Code of Conduct — [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md).
 - Security policy and threat model — [SECURITY.md](SECURITY.md).
 - Release notes and version history — [CHANGELOG.md](CHANGELOG.md).
 

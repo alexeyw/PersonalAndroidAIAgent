@@ -15,6 +15,15 @@ details.
 
 ### Added
 
+- `CONTRIBUTING.md` at the repository root covering dev setup, build & test
+  commands, branch model, Conventional Commits, the pull-request checklist,
+  and the English-only language policy.
+- `CODE_OF_CONDUCT.md` at the repository root adopting Contributor
+  Covenant 2.1; reporting routes through the same private GitHub Security
+  Advisories channel as `SECURITY.md`.
+- Public contributor-facing documentation under `docs/`:
+  `docs/code-style.md`, `docs/testing.md`, `docs/api-conventions.md`.
+
 ### Changed
 
 ### Deprecated
