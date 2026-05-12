@@ -26,6 +26,12 @@ android {
         versionName = "0.1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        // Phase 19 / Task 1/10: license metadata exposed as Android string
+        // resources so a future "About" dialog can render the license name and
+        // link to the canonical text without hardcoding the values in UI code.
+        resValue("string", "license_name", "Apache License 2.0")
+        resValue("string", "license_url", "https://www.apache.org/licenses/LICENSE-2.0")
     }
 
     buildTypes {
@@ -45,6 +51,7 @@ android {
     buildFeatures {
         compose = true
         buildConfig = true
+        resValues = true
     }
 
     testOptions {
