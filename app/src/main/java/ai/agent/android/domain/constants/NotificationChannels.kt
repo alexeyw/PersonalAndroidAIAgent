@@ -20,6 +20,18 @@ object NotificationChannels {
     /** Channel for the long-running foreground service notification (status, "Agent is thinking…"). */
     const val AGENT_FOREGROUND: String = "AgentForegroundServiceChannel"
 
-    /** High-importance channel for "approve / deny tool execution" prompts (Human-in-the-loop). */
+    /**
+     * High-importance channel for "approve / deny" prompts on `SENSITIVE` /
+     * `READ_ONLY` (the latter only when the user has globally opted into "ask on
+     * every tool call") tool executions.
+     */
     const val AGENT_APPROVAL: String = "AgentApprovalChannel"
+
+    /**
+     * Separate high-importance channel for `DESTRUCTIVE` approvals. Splitting the
+     * channel lets the user tune visibility independently (e.g. allow heads-up only
+     * for destructive actions) and shows a distinct icon / title in the shade so
+     * irreversible operations are easy to spot among other approval prompts.
+     */
+    const val AGENT_APPROVAL_DESTRUCTIVE: String = "AgentApprovalDestructiveChannel"
 }

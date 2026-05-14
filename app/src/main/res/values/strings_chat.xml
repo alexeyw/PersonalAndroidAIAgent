@@ -106,6 +106,12 @@
     <string name="chat_thought_deny">Deny</string>
     <string name="chat_thought_approve">Approve</string>
 
+    <!-- Risk chip rendered next to the tool name in the approval prompt. Temporary
+         constants until the Phase 21 design pass replaces them with palette tokens. -->
+    <string name="chat_risk_chip_read_only">READ</string>
+    <string name="chat_risk_chip_sensitive">SENS</string>
+    <string name="chat_risk_chip_destructive">DEST</string>
+
     <!-- Snackbar feedback -->
     <string name="chat_snackbar_copied">Copied</string>
     <string name="chat_snackbar_console_copied">Console log copied</string>

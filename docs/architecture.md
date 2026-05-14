@@ -295,13 +295,27 @@ merges three layers:
 3. **MCP tools** are blanket `SENSITIVE` until a per-server policy
    scheme is introduced.
 
-The intended HITL contract (planned, not yet wired up — phase 20 task
-4/7): before a `SENSITIVE` or `DESTRUCTIVE` tool runs, the orchestrator
-emits a `PendingConfirmation` state and **suspends until the user
-responds** through the UI; `READ_ONLY` tools run without a prompt. As
-of this writing the gate still consumes the global
-`SettingsRepository.requiresUserConfirmation` flag; the risk-aware path
-above is the target of phase 20 task 4/7.
+HITL contract (live):
+
+- Before dispatching a tool, `ToolNodeExecutor` resolves the tool's risk
+  through `ToolRepository.getRisk(name)` and applies the gate:
+  - `SENSITIVE` and `DESTRUCTIVE` — always emit
+    `AgentOrchestratorState.WaitingForApproval(toolName, args, risk)` and
+    suspend on the per-session approval `CompletableDeferred` until the
+    user resolves it via the chat console row, the system notification
+    action, or the configured timeout.
+  - `READ_ONLY` — run without a prompt **unless** the user has globally
+    enabled `SettingsRepository.requiresUserConfirmation`. That flag is
+    now an opt-in "ask on every single tool call" override and never
+    silences `SENSITIVE` / `DESTRUCTIVE`.
+- `WaitingForApproval` carries the resolved `risk` so the chat console
+  can render a coloured risk chip (`READ` / `SENS` / `DEST`) next to the
+  tool name without re-resolving.
+- The notification fallback (`ApprovalNotificationManager`) uses two
+  `IMPORTANCE_HIGH` channels: `AgentApprovalChannel` for `SENSITIVE` /
+  opt-in `READ_ONLY` and `AgentApprovalDestructiveChannel` for
+  `DESTRUCTIVE`, with distinct icon and title so the destructive prompt
+  is recognisable at a glance in the system shade.
 
 ### 4.3. Model Context Protocol (MCP)
 

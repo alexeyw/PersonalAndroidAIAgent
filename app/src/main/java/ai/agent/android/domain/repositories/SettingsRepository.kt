@@ -78,7 +78,16 @@ interface SettingsRepository {
     suspend fun setTopP(topP: Float)
 
     /**
-     * A [Flow] indicating if user confirmation is required for critical actions (Human-in-the-loop).
+     * Global "ask before every tool call" override for the Human-in-the-loop gate.
+     *
+     * Semantics (canonical implementation in `ToolNodeExecutor`):
+     *  - `SENSITIVE` and `DESTRUCTIVE` tools **always** prompt; this flag has no effect.
+     *  - `READ_ONLY` tools prompt **only** when this flag is `true`. Default `false`:
+     *    read-only invocations run silently so the agent feels fluid.
+     *
+     * Renamed semantically from "requires confirmation for critical actions" — critical
+     * actions are now classified per-tool by `ToolRepository.getRisk`. This flag exists
+     * solely to let cautious users opt into a prompt on every single tool invocation.
      */
     val requiresUserConfirmation: Flow<Boolean>
 

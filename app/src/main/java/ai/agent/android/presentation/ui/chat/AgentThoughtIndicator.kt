@@ -2,18 +2,23 @@ package ai.agent.android.presentation.ui.chat
 
 import ai.agent.android.R
 import ai.agent.android.domain.models.AgentOrchestratorState
+import ai.agent.android.domain.models.ToolRisk
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -37,12 +42,15 @@ import androidx.compose.ui.unit.sp
  *  - Otherwise emits **one** monospace row in the same `[TAG] message`
  *    format as [ConsoleEvent]s, color-coded by urgency.
  *  - For [AgentOrchestratorState.WaitingForApproval] the row is a `Row` with
- *    the question on the left (taking remaining width with `weight(1f)`) and
- *    `Deny` / `Approve` clickable Text affordances on the right. Tap target
- *    is 6dp horizontal + 2dp vertical padding around an 11sp glyph — small
- *    but acceptable inside the dense status strip; the system notification
- *    fallback (`ApprovalNotificationManager`) provides the larger touch
- *    surface when the chat isn't visible.
+ *    the question on the left (taking remaining width with `weight(1f)`), a
+ *    compact risk chip (`READ` / `SENS` / `DEST`, coloured by
+ *    [AgentOrchestratorState.WaitingForApproval.risk]) and `Deny` / `Approve`
+ *    clickable Text affordances on the right. Tap target is 6dp horizontal +
+ *    2dp vertical padding around an 11sp glyph — small but acceptable inside
+ *    the dense status strip; the system notification fallback
+ *    (`ApprovalNotificationManager`) provides the larger touch surface when
+ *    the chat isn't visible. The chip colour is a temporary code constant
+ *    until the Phase 21 design pass replaces it with palette tokens.
  *
  * @param state Current orchestrator state. Caller is expected to gate
  *   visibility (e.g. `isGenerating && !hasPendingClarification`); this
@@ -75,6 +83,7 @@ fun AgentThoughtIndicator(
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f),
             )
+            RiskChip(risk = state.risk)
             ConsoleAction(label = stringResource(R.string.chat_thought_deny), onClick = onDeny)
             ConsoleAction(label = stringResource(R.string.chat_thought_approve), onClick = onApprove)
         }
@@ -102,6 +111,16 @@ internal val LineFontSize = 11.sp
 internal val LineHeight = 14.sp
 private const val NEUTRAL_ALPHA = 0.6f
 
+// Temporary risk-chip palette. Phase 21 will replace these with proper
+// MaterialTheme tokens; baked into code here so the gate ships without
+// blocking on the design pass.
+private const val RISK_COLOR_READ_ONLY = 0xFF808080
+private const val RISK_COLOR_SENSITIVE = 0xFFFFC107
+private const val RISK_COLOR_DESTRUCTIVE = 0xFFD32F2F
+private val RiskColorReadOnly = Color(RISK_COLOR_READ_ONLY)
+private val RiskColorSensitive = Color(RISK_COLOR_SENSITIVE)
+private val RiskColorDestructive = Color(RISK_COLOR_DESTRUCTIVE)
+
 /**
  * Compact in-line action affordance used by [AgentOrchestratorState.WaitingForApproval].
  * Clickable monospace text with minimal padding so the entire approval row
@@ -123,6 +142,34 @@ private fun ConsoleAction(label: String, onClick: () -> Unit) {
         fontFamily = FontFamily.Monospace,
         fontSize = LineFontSize,
         lineHeight = LineHeight,
+    )
+}
+
+/**
+ * Risk badge rendered between the question and the Approve / Deny actions.
+ * Uses a temporary three-colour palette (read-only/grey, sensitive/amber,
+ * destructive/red) until the Phase 21 design pass swaps it for palette
+ * tokens; intentionally **not** wired into the Material theme so the choice
+ * is visible in code review during the transition phase.
+ */
+@Composable
+private fun RiskChip(risk: ToolRisk) {
+    val (label, bg) = when (risk) {
+        ToolRisk.READ_ONLY -> stringResource(R.string.chat_risk_chip_read_only) to RiskColorReadOnly
+        ToolRisk.SENSITIVE -> stringResource(R.string.chat_risk_chip_sensitive) to RiskColorSensitive
+        ToolRisk.DESTRUCTIVE -> stringResource(R.string.chat_risk_chip_destructive) to RiskColorDestructive
+    }
+    Text(
+        text = label,
+        color = Color.White,
+        fontFamily = FontFamily.Monospace,
+        fontWeight = FontWeight.Bold,
+        fontSize = LineFontSize,
+        lineHeight = LineHeight,
+        modifier = Modifier
+            .clip(RoundedCornerShape(2.dp))
+            .background(bg)
+            .padding(horizontal = 4.dp),
     )
 }
 

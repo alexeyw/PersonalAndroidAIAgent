@@ -27,6 +27,7 @@ import ai.agent.android.domain.models.NodeType
 import ai.agent.android.domain.models.PipelineGraph
 import ai.agent.android.domain.models.Result
 import ai.agent.android.domain.models.Role
+import ai.agent.android.domain.models.ToolRisk
 import ai.agent.android.domain.prompt.PromptTemplateEngine
 import ai.agent.android.domain.prompt.PromptVariableProvider
 import ai.agent.android.domain.repositories.ApiKeyRepository
@@ -1520,6 +1521,54 @@ class GraphExecutionEngineTest {
         assertTrue(
             "Last error should mention missing OUTPUT: ${finalLog.last().message}",
             finalLog.last().message.contains("OUTPUT", ignoreCase = true),
+        )
+    }
+
+    // ─── Phase 20 / 4 — Risk-based HITL gate end-to-end ──────────────────────
+
+    @Test
+    fun `given pipeline with READ_ONLY tool node when run then completes without HITL pause`() = runTest {
+        every { settingsRepository.pipelineMaxSteps } returns flowOf(15)
+        every { settingsRepository.requiresUserConfirmation } returns flowOf(false)
+
+        // READ_ONLY + global override OFF must skip the HITL gate entirely: no
+        // WaitingForApproval emission, no notifier call, and the pipeline
+        // reaches OUTPUT without intervention.
+        coEvery { toolRepository.getRisk("web.search") } returns ToolRisk.READ_ONLY
+        coEvery { toolRepository.getAvailableTools() } returns listOf(AgentTool("web.search", "Search", "{}"))
+        coEvery { toolRepository.executeTool("web.search", any()) } returns "search-result"
+
+        val inputNode = NodeModel("input", NodeType.INPUT, 0f, 0f)
+        val toolNode = NodeModel(
+            id = "tool",
+            type = NodeType.TOOL,
+            x = 0f,
+            y = 0f,
+            toolName = "web.search",
+        )
+        val outputNode = NodeModel("output", NodeType.OUTPUT, 0f, 0f, systemPrompt = null)
+
+        val graph = PipelineGraph(
+            id = "g1",
+            name = "Read-only Tool Without HITL",
+            nodes = listOf(inputNode, toolNode, outputNode),
+            connections = listOf(
+                ConnectionModel("c1", "input", "tool"),
+                ConnectionModel("c2", "tool", "output"),
+            ),
+        )
+
+        every { llmEngine.generateResponseStream(any()) } returns
+            flowOf("""{"tool":"web.search","arguments":"q=weather"}""")
+
+        val emissions = engine(sessionId, "find weather", graph).toList()
+
+        val sawApproval = emissions.any { it is AgentOrchestratorState.WaitingForApproval }
+        assertTrue("READ_ONLY tool must not pause for approval", !sawApproval)
+        verify(exactly = 0) { approvalNotifier.sendApprovalRequest(any(), any(), any(), any()) }
+        assertTrue(
+            "Pipeline should reach Completed when HITL is skipped",
+            emissions.any { it is AgentOrchestratorState.Completed },
         )
     }
 }

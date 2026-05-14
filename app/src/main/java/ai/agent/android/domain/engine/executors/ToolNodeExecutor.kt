@@ -9,6 +9,7 @@ import ai.agent.android.domain.models.NodeModel
 import ai.agent.android.domain.models.NodeOutput
 import ai.agent.android.domain.models.Result
 import ai.agent.android.domain.models.Role
+import ai.agent.android.domain.models.ToolRisk
 import ai.agent.android.domain.repositories.ChatRepository
 import ai.agent.android.domain.repositories.SettingsRepository
 import ai.agent.android.domain.repositories.ToolRepository
@@ -31,11 +32,22 @@ import javax.inject.Singleton
  *
  * Resolves which tool to run (either the explicit `node.toolName` or LLM-driven auto
  * selection via [DefaultPrompts.Tool.AUTO_SELECT_TEMPLATE]), builds its arguments, and
- * dispatches the call through [ToolRepository]. When the user has enabled
- * `requiresUserConfirmation`, the executor goes through a Human-in-the-Loop gate:
+ * dispatches the call through [ToolRepository]. Before dispatching, the executor goes
+ * through a Human-in-the-Loop (HITL) gate driven by the resolved tool's
+ * [ToolRisk][ai.agent.android.domain.models.ToolRisk] (canonical source:
+ * [ToolRepository.getRisk][ai.agent.android.domain.repositories.ToolRepository.getRisk]):
+ *
+ *  - [READ_ONLY][ai.agent.android.domain.models.ToolRisk.READ_ONLY] — runs without a
+ *    prompt unless the user has globally enabled `requiresUserConfirmation`, which
+ *    acts as an "ask on every tool call" override.
+ *  - [SENSITIVE][ai.agent.android.domain.models.ToolRisk.SENSITIVE] — always prompts.
+ *  - [DESTRUCTIVE][ai.agent.android.domain.models.ToolRisk.DESTRUCTIVE] — always
+ *    prompts; the notification fallback uses a distinct high-importance channel.
+ *
+ * When the gate fires, the executor:
  *
  * 1. publishes [WaitingForApproval][ai.agent.android.domain.models.AgentOrchestratorState.WaitingForApproval];
- * 2. sends a notification via [ApprovalNotifier];
+ * 2. sends a notification via [ApprovalNotifier] (channel / icon picked by risk);
  * 3. suspends on a [CompletableDeferred] keyed by `sessionId`, bounded by
  *    [SettingsRepository.toolCallTimeoutMs][ai.agent.android.domain.repositories.SettingsRepository.toolCallTimeoutMs];
  * 4. resumes when [resumeWithApproval] is called from `MainActivity` /
@@ -205,12 +217,21 @@ class ToolNodeExecutor @Inject constructor(
             }
         }
 
-        val requiresUserConfirmation = settingsRepository.requiresUserConfirmation.first()
+        val risk = toolRepository.getRisk(resolvedToolName)
+        val globalConfirmationOverride = settingsRepository.requiresUserConfirmation.first()
+        val needsApproval = when (risk) {
+            ToolRisk.READ_ONLY -> globalConfirmationOverride
+            ToolRisk.SENSITIVE, ToolRisk.DESTRUCTIVE -> true
+        }
         var isApproved = true
 
-        if (requiresUserConfirmation) {
-            emit(NodeOutput.State(AgentOrchestratorState.WaitingForApproval(resolvedToolName, resolvedToolArgs)))
-            approvalNotifier.sendApprovalRequest(sessionId, resolvedToolName, resolvedToolArgs)
+        if (needsApproval) {
+            emit(
+                NodeOutput.State(
+                    AgentOrchestratorState.WaitingForApproval(resolvedToolName, resolvedToolArgs, risk),
+                ),
+            )
+            approvalNotifier.sendApprovalRequest(sessionId, resolvedToolName, resolvedToolArgs, risk)
 
             // Register deferred before any suspension point so a fast approval is not dropped
             val deferred = CompletableDeferred<Boolean>()
