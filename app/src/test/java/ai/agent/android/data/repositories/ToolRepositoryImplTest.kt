@@ -44,6 +44,10 @@ class ToolRepositoryImplTest {
         every { settingsRepository.appFunctionRiskOverrides } returns flowOf(emptyMap())
         coEvery { localAppFunctionManager.getAvailableFunctions() } returns
             listOf(AgentTool("get_system_time", "desc", "{}"))
+        // mockk picks the most recent matching stub: default everything to "not discovered"
+        // and then override the specific names the tests rely on.
+        coEvery { localAppFunctionManager.isDiscovered(any()) } returns false
+        coEvery { localAppFunctionManager.isDiscovered("get_system_time") } returns true
         coEvery { mcpClient.connect(any()) } returns Unit
         coEvery { mcpClient.disconnect() } returns Unit
 

@@ -212,8 +212,7 @@ class ToolRepositoryImpl @Inject constructor(
         }
 
         val builtinNames = builtinTools.mapTo(mutableSetOf()) { it.name }
-        val appFunctions = localAppFunctionManager.getAvailableFunctions()
-        if (appFunctions.any { it.name == name && name !in builtinNames }) {
+        if (name !in builtinNames && localAppFunctionManager.isDiscovered(name)) {
             if (name in disabled) {
                 throw IllegalArgumentException("Tool $name is disabled")
             }
@@ -251,8 +250,7 @@ class ToolRepositoryImpl @Inject constructor(
             return builtinRisk
         }
 
-        val appFunctions = localAppFunctionManager.getAvailableFunctions()
-        if (appFunctions.any { it.name == toolName }) {
+        if (localAppFunctionManager.isDiscovered(toolName)) {
             val overrides = settingsRepository.appFunctionRiskOverrides.first()
             return overrides[toolName] ?: ToolRisk.SENSITIVE
         }

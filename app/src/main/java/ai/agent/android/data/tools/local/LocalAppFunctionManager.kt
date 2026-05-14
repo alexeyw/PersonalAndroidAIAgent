@@ -23,7 +23,6 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import org.json.JSONArray
 import org.json.JSONObject
-import java.util.concurrent.ConcurrentHashMap
 
 /**
  * Manager class responsible for orchestrating AppFunctions execution.
@@ -47,11 +46,18 @@ class LocalAppFunctionManager(private val context: Context, private val codec: A
      * Holds the three facts the caller-side execution path needs but [AgentTool] cannot
      * carry: the source package, the un-qualified system-side identifier that
      * `ExecuteAppFunctionRequest.functionIdentifier` expects, and the typed parameter
-     * metadata required by `AppFunctionDataCodec.encode`. Rewritten on every
-     * [getAvailableFunctions] call — the freshest system-reported state always wins;
-     * qualified names that have disappeared from discovery are evicted.
+     * metadata required by `AppFunctionDataCodec.encode`.
+     *
+     * Stored as an immutable [Map] behind a `@Volatile` reference, swapped wholesale on
+     * every [getAvailableFunctions] call. The atomic reference replacement guarantees
+     * that concurrent readers (e.g. [invokeByName] / [isDiscovered]) always observe a
+     * fully consistent snapshot — they can never see a transient state where some valid
+     * entries have already been evicted and the replacements have not yet been
+     * published, which a two-step `retainAll` + `putAll` on a `ConcurrentHashMap` would
+     * allow.
      */
-    private val discoveredCache = ConcurrentHashMap<String, DiscoveredAppFunction>()
+    @Volatile
+    private var discoveredCache: Map<String, DiscoveredAppFunction> = emptyMap()
 
     /**
      * Executes an AppFunction by its identifier using the system AppFunctionManager.
@@ -119,15 +125,14 @@ class LocalAppFunctionManager(private val context: Context, private val codec: A
      */
     suspend fun getAvailableFunctions(): List<AgentTool> {
         val manager = appFunctionManager ?: run {
-            discoveredCache.clear()
+            discoveredCache = emptyMap()
             return emptyList()
         }
         val searchSpec = AppFunctionSearchSpec()
 
-        // Observe app functions once, refresh the discovery cache, and project to the
-        // public AgentTool model. The cache rewrite mirrors the observation slice — any
-        // function the system no longer reports is evicted so stale execution targets
-        // cannot leak into the caller-side path.
+        // Observe app functions once, build the fresh discovery snapshot, and publish it
+        // atomically: the new immutable map replaces the @Volatile reference in a single
+        // write, so concurrent readers cannot observe a partially-mutated cache.
         return manager.observeAppFunctions(searchSpec)
             .map { packages ->
                 val fresh = mutableMapOf<String, DiscoveredAppFunction>()
@@ -147,11 +152,20 @@ class LocalAppFunctionManager(private val context: Context, private val codec: A
                         )
                     }
                 }
-                discoveredCache.keys.retainAll(fresh.keys)
-                discoveredCache.putAll(fresh)
+                discoveredCache = fresh.toMap()
                 tools
             }.first()
     }
+
+    /**
+     * Cheap existence check for a discovered AppFunction by qualified name. Hits the
+     * volatile snapshot first; only when the entry is absent does it pay the cost of a
+     * fresh discovery pass. Lets callers (e.g. `ToolRepositoryImpl.executeTool`) decide
+     * whether to dispatch through [invokeByName] without an extra blanket
+     * [getAvailableFunctions] call per execution — the common cache-hit path is O(1)
+     * and IPC-free.
+     */
+    suspend fun isDiscovered(name: String): Boolean = lookup(name) != null
 
     /**
      * Returns the typed [AppFunctionParameterMetadata] tree for the qualified
