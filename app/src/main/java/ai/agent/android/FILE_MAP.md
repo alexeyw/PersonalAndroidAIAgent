@@ -73,6 +73,7 @@ This file maps the contents of the main application package.
   - `tools/` - Tool and action implementations.
     - `local/` - Local tools implementations.
       - `AgentAppFunctionService.kt` - Service for app functions.
+      - `AppFunctionDataCodec.kt` - Bidirectional codec between LLM-emitted JSON argument strings and the typed `AppFunctionData` consumed by `AppFunctionManager.executeAppFunction`, plus a flat-JSON projection of `ExecuteAppFunctionResponse` for the agent's observation log.
       - `DelegateTaskTool.kt` - Task delegation tool.
       - `LocalAppFunctionManager.kt` - Manager for local app functions.
       - `SearchTool.kt` - Local web search tool.
