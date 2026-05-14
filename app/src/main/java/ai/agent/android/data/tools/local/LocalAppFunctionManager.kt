@@ -37,14 +37,19 @@ class LocalAppFunctionManager(private val context: Context, private val codec: A
     }
 
     /**
-     * In-memory snapshot of the most recent discovery pass, keyed by the AppFunction id
-     * (the same string surfaced through [getAvailableFunctions] as `AgentTool.name`).
+     * In-memory snapshot of the most recent discovery pass, keyed by the **qualified**
+     * AppFunction name (`"${packageName}/${id}"` — see [qualify]). AppFunction ids are
+     * unique only within their declaring package; keying by the qualified name prevents
+     * a later package's entry from silently overwriting an earlier one when two
+     * providers expose the same identifier, which would otherwise let `invokeByName`
+     * route to the wrong target package or use mismatched parameter metadata.
      *
-     * Holds the two facts the caller-side execution path needs but [AgentTool] cannot
-     * carry: the target package and the typed parameter metadata required by
-     * `AppFunctionDataCodec.encode`. Rewritten on every [getAvailableFunctions] call —
-     * the freshest system-reported state always wins; functions that have disappeared
-     * from discovery are evicted.
+     * Holds the three facts the caller-side execution path needs but [AgentTool] cannot
+     * carry: the source package, the un-qualified system-side identifier that
+     * `ExecuteAppFunctionRequest.functionIdentifier` expects, and the typed parameter
+     * metadata required by `AppFunctionDataCodec.encode`. Rewritten on every
+     * [getAvailableFunctions] call — the freshest system-reported state always wins;
+     * qualified names that have disappeared from discovery are evicted.
      */
     private val discoveredCache = ConcurrentHashMap<String, DiscoveredAppFunction>()
 
@@ -81,13 +86,15 @@ class LocalAppFunctionManager(private val context: Context, private val codec: A
      *   missing.
      */
     suspend fun invokeByName(name: String, arguments: String): String {
-        val parameters = getParametersMetadata(name)
-            ?: throw IllegalArgumentException("AppFunction $name has no parameter metadata")
-        val targetPackage = getTargetPackageName(name)
-            ?: throw IllegalArgumentException("AppFunction $name has no target package")
+        val discovered = lookup(name)
+            ?: throw IllegalArgumentException("AppFunction $name is not currently discovered")
         return runCatching {
-            val data = codec.encode(arguments, parameters)
-            val request = ExecuteAppFunctionRequest(targetPackage, name, data)
+            val data = codec.encode(arguments, discovered.parameters)
+            val request = ExecuteAppFunctionRequest(
+                discovered.packageName,
+                discovered.functionIdentifier,
+                data,
+            )
             val response = executeFunction(request)
             codec.decode(response)
         }.getOrElse { e ->
@@ -126,13 +133,15 @@ class LocalAppFunctionManager(private val context: Context, private val codec: A
                 val fresh = mutableMapOf<String, DiscoveredAppFunction>()
                 val tools = packages.flatMap { pkg ->
                     pkg.appFunctions.map { metadata ->
-                        fresh[metadata.id] = DiscoveredAppFunction(
+                        val qualified = qualify(pkg.packageName, metadata.id)
+                        fresh[qualified] = DiscoveredAppFunction(
                             packageName = pkg.packageName,
+                            functionIdentifier = metadata.id,
                             parameters = metadata.parameters,
                         )
                         AgentTool(
-                            name = metadata.id,
-                            description = metadata.description ?: "App function ${metadata.id}",
+                            name = qualified,
+                            description = metadata.description ?: "App function $qualified",
                             parameters = generateJsonSchema(metadata.parameters),
                             risk = ToolRisk.SENSITIVE,
                         )
@@ -145,7 +154,8 @@ class LocalAppFunctionManager(private val context: Context, private val codec: A
     }
 
     /**
-     * Returns the typed [AppFunctionParameterMetadata] tree for [name], required by
+     * Returns the typed [AppFunctionParameterMetadata] tree for the qualified
+     * AppFunction [name] (`"${packageName}/${id}"`), required by
      * `AppFunctionDataCodec.encode` to translate LLM-emitted JSON arguments into an
      * [androidx.appfunctions.AppFunctionData] payload.
      *
@@ -154,33 +164,46 @@ class LocalAppFunctionManager(private val context: Context, private val codec: A
      * correct answer. Returns `null` only when [name] is genuinely not a discovered
      * AppFunction on this device.
      */
-    suspend fun getParametersMetadata(name: String): List<AppFunctionParameterMetadata>? {
-        discoveredCache[name]?.let { return it.parameters }
-        getAvailableFunctions()
-        return discoveredCache[name]?.parameters
-    }
+    suspend fun getParametersMetadata(name: String): List<AppFunctionParameterMetadata>? = lookup(name)?.parameters
 
     /**
      * Returns the source `packageName` reported by the system for the discovered
-     * AppFunction [name]. Required to build [androidx.appfunctions.ExecuteAppFunctionRequest].
+     * AppFunction with qualified name [name]. Required to build
+     * [androidx.appfunctions.ExecuteAppFunctionRequest].
      *
      * Same cache-then-rediscover policy as [getParametersMetadata]; `null` means the
      * function is not visible on this device.
      */
-    suspend fun getTargetPackageName(name: String): String? {
-        discoveredCache[name]?.let { return it.packageName }
+    suspend fun getTargetPackageName(name: String): String? = lookup(name)?.packageName
+
+    private suspend fun lookup(qualifiedName: String): DiscoveredAppFunction? {
+        discoveredCache[qualifiedName]?.let { return it }
         getAvailableFunctions()
-        return discoveredCache[name]?.packageName
+        return discoveredCache[qualifiedName]
     }
 
     /**
      * Snapshot of the per-AppFunction facts that [AgentTool] cannot carry — held in
-     * [discoveredCache] for the caller-side execution path.
+     * [discoveredCache] for the caller-side execution path. [functionIdentifier] is the
+     * un-qualified id reported by the system; it is what `ExecuteAppFunctionRequest`
+     * expects, while [discoveredCache] is keyed by the qualified
+     * `"${packageName}/${functionIdentifier}"` form.
      */
     private data class DiscoveredAppFunction(
         val packageName: String,
+        val functionIdentifier: String,
         val parameters: List<AppFunctionParameterMetadata>,
     )
+
+    private companion object {
+        /**
+         * Builds the qualified AppFunction name used throughout the caller-side path
+         * (`AgentTool.name`, [discoveredCache] key, and the value the agent's LLM sees
+         * in `$TOOLS`). The qualified form disambiguates AppFunctions whose un-qualified
+         * `id` collides across packages.
+         */
+        fun qualify(packageName: String, id: String): String = "$packageName/$id"
+    }
 
     private fun generateJsonSchema(parameters: List<AppFunctionParameterMetadata>): String {
         val root = JSONObject()
