@@ -13,6 +13,7 @@ import ai.agent.android.domain.repositories.SettingsRepository
 import ai.agent.android.domain.repositories.ToolRepository
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.firstOrNull
+import timber.log.Timber
 import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 
@@ -127,33 +128,45 @@ class ToolRepositoryImpl @Inject constructor(
     }
 
     /**
-     * Retrieves all locally available tools.
+     * Retrieves all locally available tools — built-in tools first (stable ordering for
+     * prompt engineering), then AppFunctions discovered via
+     * [LocalAppFunctionManager.getAvailableFunctions].
      *
-     * AppFunctions discovered via [LocalAppFunctionManager.getAvailableFunctions] are
-     * intentionally **not** included until end-to-end execution (building
-     * `ExecuteAppFunctionRequest` with typed `AppFunctionData` from the LLM-supplied
-     * arguments) is wired up. Advertising them here would let the agent
-     * deterministically pick a tool that cannot run, and `executeTool` would have to
-     * raise `Local tool $name has no executor registered` — a worse failure mode than
-     * simply hiding them from the catalog.
+     * Built-ins always win on name collisions: a discovered AppFunction whose id matches
+     * a built-in (`schedule_task`, `search_tool`, `delegate_task`) is dropped with a
+     * `Timber.w` to preserve the executor mapping in [executeTool] and the risk classification
+     * in `getRisk`. This keeps the deterministic built-in path intact even when the host
+     * device exposes AppFunctions advertising the same identifier.
      *
      * @return A list of [AgentTool] representing the local tools available.
      */
-    override suspend fun getAllLocalTools(): List<AgentTool> = getBuiltinTools()
+    override suspend fun getAllLocalTools(): List<AgentTool> {
+        val builtins = getBuiltinTools()
+        val builtinNames = builtins.mapTo(mutableSetOf()) { it.name }
+        val appFunctions = localAppFunctionManager.getAvailableFunctions().filter { tool ->
+            if (tool.name in builtinNames) {
+                Timber.w("AppFunction %s collides with built-in tool; built-in wins", tool.name)
+                false
+            } else {
+                true
+            }
+        }
+        return builtins + appFunctions
+    }
 
     /**
      * Retrieves all available tools, including both local tools (not disabled) and tools
      * fetched from connected MCP servers.
      *
-     * See [getAllLocalTools] for the rationale behind excluding AppFunctions from the
-     * advertised set.
+     * The `disabledAppFunctions` setting filters the merged local catalogue — it gates
+     * both built-ins and discovered AppFunctions by name.
      *
      * @return A list of [AgentTool] representing all tools currently available to the agent.
      */
     override suspend fun getAvailableTools(): List<AgentTool> {
         syncMcpClients()
         val disabled = settingsRepository.disabledAppFunctions.first()
-        val availableLocal = getBuiltinTools().filter { it.name !in disabled }
+        val availableLocal = getAllLocalTools().filter { it.name !in disabled }
 
         val mcpTools = mcpClients.values.flatMap { client ->
             try {
@@ -168,21 +181,24 @@ class ToolRepositoryImpl @Inject constructor(
 
     /**
      * Executes a tool by its name with the given arguments.
-     * The tool is first looked up in built-in local tools (each backed by a registered
-     * [LocalToolExecutor]); if not found, the request is forwarded to any MCP server
-     * that advertises the name.
      *
-     * AppFunctions discovered via [LocalAppFunctionManager] are not handled here yet —
-     * see [getAllLocalTools] for the rationale.
+     * Dispatch order:
+     *  1. Built-in tools — handled by a [LocalToolExecutor] registered in DI.
+     *  2. AppFunctions discovered via [LocalAppFunctionManager.invokeByName] — the manager
+     *     owns the end-to-end pipeline (codec encode → `ExecuteAppFunctionRequest` →
+     *     system call → codec decode). All Android AppFunctions types stay encapsulated
+     *     behind that surface; this method only sees plain `String` in and out.
+     *  3. MCP — forwarded to any connected client that advertises the name.
      *
      * @param name The name of the tool to execute.
      * @param arguments A JSON string containing the arguments required by the tool.
      * @return A string representing the result of the tool execution.
      * @throws IllegalArgumentException If the tool is disabled, has no executor registered,
-     * or is not found across active providers.
+     *   or is not found across active providers.
+     * @throws IllegalStateException If a system-level AppFunction call reports a failure
+     *   (re-thrown verbatim by [LocalAppFunctionManager.invokeByName]).
      */
     override suspend fun executeTool(name: String, arguments: String): String {
-        // Check if the tool is a known built-in local tool and is not disabled
         val builtinTools = getBuiltinTools()
         val disabled = settingsRepository.disabledAppFunctions.first()
         if (builtinTools.any { it.name == name }) {
@@ -195,7 +211,15 @@ class ToolRepositoryImpl @Inject constructor(
             return executor.execute(arguments)
         }
 
-        // Ensure MCP clients are synced before searching for the tool
+        val builtinNames = builtinTools.mapTo(mutableSetOf()) { it.name }
+        val appFunctions = localAppFunctionManager.getAvailableFunctions()
+        if (appFunctions.any { it.name == name && name !in builtinNames }) {
+            if (name in disabled) {
+                throw IllegalArgumentException("Tool $name is disabled")
+            }
+            return localAppFunctionManager.invokeByName(name, arguments)
+        }
+
         syncMcpClients()
 
         for (client in mcpClients.values) {
