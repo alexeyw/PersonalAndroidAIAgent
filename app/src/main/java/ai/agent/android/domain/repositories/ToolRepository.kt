@@ -1,6 +1,7 @@
 package ai.agent.android.domain.repositories
 
 import ai.agent.android.domain.models.AgentTool
+import ai.agent.android.domain.models.ToolRisk
 
 /**
  * Repository interface for managing and accessing tools available to the AI agent.
@@ -28,4 +29,27 @@ interface ToolRepository {
      * @return The result of the tool execution as a string.
      */
     suspend fun executeTool(name: String, arguments: String): String
+
+    /**
+     * Resolves the effective [ToolRisk] for a tool by its name. This is the single
+     * seam consumed by the Human-in-the-Loop gate: the gate must never read
+     * `AgentTool.risk` directly so that user-supplied overrides take precedence
+     * over whatever the discovery source declared.
+     *
+     * Resolution order:
+     * 1. Built-in tools (`schedule_task`, `search_tool`, `delegate_task`) return
+     *    their hard-coded risk constants.
+     * 2. Discovered AppFunctions return the user override from
+     *    `SettingsRepository.appFunctionRiskOverrides` if set, otherwise
+     *    [ToolRisk.SENSITIVE] (we cannot trust the AppFunctionManager metadata
+     *    for side-effect signal).
+     * 3. MCP tools return a blanket [ToolRisk.SENSITIVE] until a finer-grained
+     *    per-server policy is introduced.
+     *
+     * @param toolName The name of the tool to look up.
+     * @return The effective [ToolRisk].
+     * @throws IllegalArgumentException if no tool with the given name is known to
+     * any of the active sources.
+     */
+    suspend fun getRisk(toolName: String): ToolRisk
 }

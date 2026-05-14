@@ -5,6 +5,7 @@ import ai.agent.android.data.mcp.McpClientFactory
 import ai.agent.android.data.tools.local.LocalAppFunctionManager
 import ai.agent.android.data.tools.local.SearchTool
 import ai.agent.android.domain.models.AgentTool
+import ai.agent.android.domain.models.ToolRisk
 import ai.agent.android.domain.repositories.ApiKeyRepository
 import ai.agent.android.domain.repositories.LocalToolExecutor
 import ai.agent.android.domain.repositories.SettingsRepository
@@ -16,6 +17,7 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -38,6 +40,7 @@ class ToolRepositoryImplTest {
         every { mcpClientFactory.create() } returns mcpClient
         every { settingsRepository.mcpServerUrls } returns flowOf(setOf("http://localhost:8080"))
         every { settingsRepository.disabledAppFunctions } returns flowOf(emptySet())
+        every { settingsRepository.appFunctionRiskOverrides } returns flowOf(emptyMap())
         coEvery { localAppFunctionManager.getAvailableFunctions() } returns
             listOf(AgentTool("get_system_time", "desc", "{}"))
         coEvery { mcpClient.connect(any()) } returns Unit
@@ -164,6 +167,104 @@ class ToolRepositoryImplTest {
         assertTrue("Expected IllegalArgumentException, got $exception", exception is IllegalArgumentException)
         assertTrue(exception!!.message!!.contains(toolName))
         assertTrue(exception.message!!.contains("no executor registered"))
+    }
+
+    @Test
+    fun `given builtin search_tool when getRisk then returns READ_ONLY`() = runTest {
+        coEvery { mcpClient.getTools() } returns emptyList()
+
+        val risk = repository.getRisk("search_tool")
+
+        assertEquals(ToolRisk.READ_ONLY, risk)
+    }
+
+    @Test
+    fun `given builtin schedule_task when getRisk then returns SENSITIVE`() = runTest {
+        coEvery { mcpClient.getTools() } returns emptyList()
+
+        val risk = repository.getRisk("schedule_task")
+
+        assertEquals(ToolRisk.SENSITIVE, risk)
+    }
+
+    @Test
+    fun `given builtin delegate_task when getRisk then returns SENSITIVE`() = runTest {
+        // delegate_task is only advertised when a cloud API key is present.
+        every { apiKeyRepository.getAnthropicKey() } returns flowOf("anthropic-test-key")
+        coEvery { mcpClient.getTools() } returns emptyList()
+
+        val risk = repository.getRisk("delegate_task")
+
+        assertEquals(ToolRisk.SENSITIVE, risk)
+    }
+
+    @Test
+    fun `given discovered AppFunction without override when getRisk then returns SENSITIVE`() = runTest {
+        // Setup already mocks `localAppFunctionManager.getAvailableFunctions()` to return `get_system_time`
+        // and `settingsRepository.appFunctionRiskOverrides` to emit an empty map.
+        coEvery { mcpClient.getTools() } returns emptyList()
+
+        val risk = repository.getRisk("get_system_time")
+
+        assertEquals(ToolRisk.SENSITIVE, risk)
+    }
+
+    @Test
+    fun `given discovered AppFunction with READ_ONLY override when getRisk then returns READ_ONLY`() = runTest {
+        every { settingsRepository.appFunctionRiskOverrides } returns
+            flowOf(mapOf("get_system_time" to ToolRisk.READ_ONLY))
+        coEvery { mcpClient.getTools() } returns emptyList()
+
+        val risk = repository.getRisk("get_system_time")
+
+        assertEquals(ToolRisk.READ_ONLY, risk)
+    }
+
+    @Test
+    fun `given discovered AppFunction with DESTRUCTIVE override when getRisk then returns DESTRUCTIVE`() = runTest {
+        every { settingsRepository.appFunctionRiskOverrides } returns
+            flowOf(mapOf("get_system_time" to ToolRisk.DESTRUCTIVE))
+        coEvery { mcpClient.getTools() } returns emptyList()
+
+        val risk = repository.getRisk("get_system_time")
+
+        assertEquals(ToolRisk.DESTRUCTIVE, risk)
+    }
+
+    @Test
+    fun `given MCP tool when getRisk then returns SENSITIVE`() = runTest {
+        coEvery { mcpClient.getTools() } returns listOf(AgentTool("remote_tool", "desc", "{}"))
+
+        val risk = repository.getRisk("remote_tool")
+
+        assertEquals(ToolRisk.SENSITIVE, risk)
+    }
+
+    @Test
+    fun `given unknown tool when getRisk then throws IllegalArgumentException`() = runTest {
+        coEvery { mcpClient.getTools() } returns emptyList()
+
+        val exception = assertThrows(IllegalArgumentException::class.java) {
+            kotlinx.coroutines.runBlocking { repository.getRisk("phantom_tool") }
+        }
+        assertTrue(exception.message!!.contains("phantom_tool"))
+    }
+
+    @Test
+    fun `given override is set after first lookup when getRisk runs again then override wins`() = runTest {
+        // Regression guard for accidental caching: the resolver must observe the latest
+        // setting on every call, not the value captured at construction time.
+        every { settingsRepository.appFunctionRiskOverrides } returns flowOf(emptyMap())
+        coEvery { mcpClient.getTools() } returns emptyList()
+
+        val firstRisk = repository.getRisk("get_system_time")
+        assertEquals(ToolRisk.SENSITIVE, firstRisk)
+
+        every { settingsRepository.appFunctionRiskOverrides } returns
+            flowOf(mapOf("get_system_time" to ToolRisk.READ_ONLY))
+
+        val secondRisk = repository.getRisk("get_system_time")
+        assertEquals(ToolRisk.READ_ONLY, secondRisk)
     }
 
     @Test

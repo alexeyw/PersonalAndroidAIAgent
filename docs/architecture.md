@@ -270,26 +270,38 @@ Rules the implementation guarantees:
 ### 4.2. AppFunctions Jetpack (tool calling)
 
 Local tools are declared as `@AppFunction`-annotated suspend functions
-under `data/tools/local`. They are mapped to the domain-side `Tool`
-abstraction by `ToolRepositoryImpl`. Every `Tool` carries an explicit
-risk level:
+under `data/tools/local`. They are mapped to the domain-side `AgentTool`
+model by `ToolRepositoryImpl`. Every tool carries an effective
+[`ToolRisk`](../app/src/main/java/ai/agent/android/domain/models/ToolRisk.kt):
 
 ```kotlin
 enum class ToolRisk { READ_ONLY, SENSITIVE, DESTRUCTIVE }
-
-interface Tool {
-    val id: String
-    val risk: ToolRisk
-    val description: String
-    suspend fun execute(args: Map<String, String>): ToolResult
-}
 ```
 
-Before a `SENSITIVE` or `DESTRUCTIVE` tool runs, the orchestrator emits
-a `PendingConfirmation` state and **suspends until the user
-responds** through the UI. `READ_ONLY` tools run without a prompt. This
-human-in-the-loop gate is non-optional — there is no code path that
-bypasses it for a destructive call.
+`AgentTool.risk` is informational on the model itself. The single source
+of truth for HITL decisions is `ToolRepository.getRisk(name)`, which
+merges three layers:
+
+1. **Built-in tools** carry hard-coded constants set in
+   `ToolRepositoryImpl.getBuiltinTools()`: `search_tool` → `READ_ONLY`,
+   `schedule_task` → `SENSITIVE`, `delegate_task` → `SENSITIVE`.
+2. **Discovered AppFunctions** (from `LocalAppFunctionManager`) default
+   to `SENSITIVE` because the platform `AppFunctionManager` metadata
+   gives no trustworthy signal about side effects. Users can override
+   per-tool through `SettingsRepository.appFunctionRiskOverrides`, which
+   persists a JSON map under DataStore key
+   `app_function_risk_overrides`. The override always wins over the
+   conservative default.
+3. **MCP tools** are blanket `SENSITIVE` until a per-server policy
+   scheme is introduced.
+
+The intended HITL contract (planned, not yet wired up — phase 20 task
+4/7): before a `SENSITIVE` or `DESTRUCTIVE` tool runs, the orchestrator
+emits a `PendingConfirmation` state and **suspends until the user
+responds** through the UI; `READ_ONLY` tools run without a prompt. As
+of this writing the gate still consumes the global
+`SettingsRepository.requiresUserConfirmation` flag; the risk-aware path
+above is the target of phase 20 task 4/7.
 
 ### 4.3. Model Context Protocol (MCP)
 

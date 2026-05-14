@@ -1,9 +1,11 @@
 package ai.agent.android.data.local
 
 import ai.agent.android.domain.constants.SettingsDefaults
+import ai.agent.android.domain.models.ToolRisk
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
+import androidx.datastore.preferences.core.stringPreferencesKey
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.flow.first
@@ -33,6 +35,7 @@ class SettingsManagerTest {
     )
     private val pipelineMaxStepsKey = androidx.datastore.preferences.core.intPreferencesKey("pipeline_max_steps")
     private val crashReportingEnabledKey = booleanPreferencesKey("crash_reporting_enabled")
+    private val appFunctionRiskOverridesKey = stringPreferencesKey("app_function_risk_overrides")
 
     @Test
     fun `isFirstLaunch returns true by default`() = runTest {
@@ -171,6 +174,67 @@ class SettingsManagerTest {
         val settingsManager = SettingsManager(dataStore)
         val result = settingsManager.crashReportingEnabled.first()
         assertEquals(false, result)
+    }
+
+    @Test
+    fun `appFunctionRiskOverrides returns empty map when nothing is stored`() = runTest {
+        val prefs = mockk<Preferences>()
+        every { prefs[appFunctionRiskOverridesKey] } returns null
+        every { dataStore.data } returns flowOf(prefs)
+
+        val settingsManager = SettingsManager(dataStore)
+        val result = settingsManager.appFunctionRiskOverrides.first()
+        assertTrue(result.isEmpty())
+    }
+
+    @Test
+    fun `appFunctionRiskOverrides parses stored JSON map into typed risks`() = runTest {
+        val prefs = mockk<Preferences>()
+        every { prefs[appFunctionRiskOverridesKey] } returns
+            "{\"echo\":\"READ_ONLY\",\"send_email\":\"DESTRUCTIVE\"}"
+        every { dataStore.data } returns flowOf(prefs)
+
+        val settingsManager = SettingsManager(dataStore)
+        val result = settingsManager.appFunctionRiskOverrides.first()
+
+        assertEquals(2, result.size)
+        assertEquals(ToolRisk.READ_ONLY, result["echo"])
+        assertEquals(ToolRisk.DESTRUCTIVE, result["send_email"])
+    }
+
+    @Test
+    fun `appFunctionRiskOverrides drops entries with unknown risk values`() = runTest {
+        val prefs = mockk<Preferences>()
+        every { prefs[appFunctionRiskOverridesKey] } returns
+            "{\"echo\":\"READ_ONLY\",\"bogus\":\"NOT_A_REAL_RISK\"}"
+        every { dataStore.data } returns flowOf(prefs)
+
+        val settingsManager = SettingsManager(dataStore)
+        val result = settingsManager.appFunctionRiskOverrides.first()
+
+        assertEquals(1, result.size)
+        assertEquals(ToolRisk.READ_ONLY, result["echo"])
+        assertTrue(!result.containsKey("bogus"))
+    }
+
+    @Test
+    fun `appFunctionRiskOverrides returns empty map on malformed JSON`() = runTest {
+        val prefs = mockk<Preferences>()
+        every { prefs[appFunctionRiskOverridesKey] } returns "this is not json"
+        every { dataStore.data } returns flowOf(prefs)
+
+        val settingsManager = SettingsManager(dataStore)
+        val result = settingsManager.appFunctionRiskOverrides.first()
+        assertTrue(result.isEmpty())
+    }
+
+    @Test
+    fun `appFunctionRiskOverrides handles IOException and falls back to empty map`() = runTest {
+        every { dataStore.data } returns flow { throw IOException("Test") }
+
+        val settingsManager = SettingsManager(dataStore)
+        val result = settingsManager.appFunctionRiskOverrides.first()
+        assertTrue(result.isEmpty())
     }
 
     @Test

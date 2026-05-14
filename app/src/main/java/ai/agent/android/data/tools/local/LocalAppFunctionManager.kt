@@ -1,6 +1,7 @@
 package ai.agent.android.data.tools.local
 
 import ai.agent.android.domain.models.AgentTool
+import ai.agent.android.domain.models.ToolRisk
 import android.content.Context
 import androidx.appfunctions.AppFunctionManager
 import androidx.appfunctions.AppFunctionSearchSpec
@@ -47,6 +48,15 @@ class LocalAppFunctionManager(private val context: Context) {
 
     /**
      * Queries the system to discover available AppFunctions for this application.
+     *
+     * Every discovered AppFunction is tagged with [ToolRisk.SENSITIVE]. The platform
+     * `AppFunctionManager` metadata exposes no trustworthy signal about side effects —
+     * a function called `read_*` from a third-party package may still write, send or
+     * delete. Defaulting conservatively means the Human-in-the-Loop gate prompts the
+     * user on the first call; users can downgrade specific AppFunctions to
+     * [ToolRisk.READ_ONLY] (or upgrade to [ToolRisk.DESTRUCTIVE]) via
+     * `SettingsRepository.setAppFunctionRiskOverride`. The override is the
+     * authoritative source consumed by `ToolRepository.getRisk`.
      */
     suspend fun getAvailableFunctions(): List<AgentTool> {
         val manager = appFunctionManager ?: return emptyList()
@@ -61,6 +71,7 @@ class LocalAppFunctionManager(private val context: Context) {
                             name = metadata.id,
                             description = metadata.description ?: "App function ${metadata.id}",
                             parameters = generateJsonSchema(metadata.parameters),
+                            risk = ToolRisk.SENSITIVE,
                         )
                     }
                 }
