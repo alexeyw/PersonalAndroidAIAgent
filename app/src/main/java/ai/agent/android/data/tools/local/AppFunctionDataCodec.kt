@@ -107,23 +107,21 @@ class AppFunctionDataCodec @Inject constructor() {
                     qualifiedName = returnValue.qualifiedName,
                     containsKey = { runCatching { returnValue.containsKey(it) }.getOrDefault(false) },
                     getString = { runCatching { returnValue.getString(it) }.getOrNull() },
-                    getInt = {
-                        runCatching { returnValue.getInt(it, Int.MIN_VALUE) }.getOrNull()
-                            ?.takeIf { v -> v != Int.MIN_VALUE }
+                    getInt = { k ->
+                        runCatching { probeInt { default -> returnValue.getInt(k, default) } }.getOrNull()
                     },
-                    getLong = {
-                        runCatching { returnValue.getLong(it, Long.MIN_VALUE) }.getOrNull()
-                            ?.takeIf { v -> v != Long.MIN_VALUE }
+                    getLong = { k ->
+                        runCatching { probeLong { default -> returnValue.getLong(k, default) } }.getOrNull()
                     },
-                    getFloat = {
-                        runCatching { returnValue.getFloat(it, Float.NaN) }.getOrNull()
-                            ?.takeIf { v -> !v.isNaN() }
+                    getFloat = { k ->
+                        runCatching { probeFloat { default -> returnValue.getFloat(k, default) } }.getOrNull()
                     },
-                    getDouble = {
-                        runCatching { returnValue.getDouble(it, Double.NaN) }.getOrNull()
-                            ?.takeIf { v -> !v.isNaN() }
+                    getDouble = { k ->
+                        runCatching { probeDouble { default -> returnValue.getDouble(k, default) } }.getOrNull()
                     },
-                    getBoolean = { runCatching { returnValue.getBoolean(it, false) }.getOrNull() },
+                    getBoolean = { k ->
+                        runCatching { probeBoolean { default -> returnValue.getBoolean(k, default) } }.getOrNull()
+                    },
                     key = key,
                 )
             }
@@ -325,8 +323,66 @@ class AppFunctionDataCodec @Inject constructor() {
         return obj.toString()
     }
 
+    /**
+     * Resolves whether the scalar value addressed by [getter] is actually present at the
+     * scalar slot or whether the underlying `getX(key, default)` would silently fall back
+     * to the supplied default.
+     *
+     * [AppFunctionData]'s typed scalar getters return their supplied default when the
+     * property is absent from the typed slot, so naïvely treating the returned value as
+     * the real result conflates "missing scalar" with "legitimate sentinel-valued result"
+     * (e.g. `Long.MIN_VALUE`, `Int.MIN_VALUE`, `Double.NaN`, `false`). The double-probe
+     * pattern invokes the getter twice with two distinct defaults: if the two return
+     * values agree the property genuinely resolves to that value, otherwise the property
+     * is absent from this scalar slot and we report `null`.
+     *
+     * Helpers are exposed as `internal` so unit tests can verify the probe semantics
+     * directly without an Android-bound `AppFunctionData`.
+     */
+    internal fun probeLong(getter: (Long) -> Long): Long? {
+        val first = getter(LONG_PROBE_A)
+        val second = getter(LONG_PROBE_B)
+        return first.takeIf { it == second }
+    }
+
+    internal fun probeInt(getter: (Int) -> Int): Int? {
+        val first = getter(INT_PROBE_A)
+        val second = getter(INT_PROBE_B)
+        return first.takeIf { it == second }
+    }
+
+    internal fun probeDouble(getter: (Double) -> Double): Double? {
+        val first = getter(DOUBLE_PROBE_A)
+        val second = getter(DOUBLE_PROBE_B)
+        return first.takeIf { it == second }
+    }
+
+    internal fun probeFloat(getter: (Float) -> Float): Float? {
+        val first = getter(FLOAT_PROBE_A)
+        val second = getter(FLOAT_PROBE_B)
+        return first.takeIf { it == second }
+    }
+
+    internal fun probeBoolean(getter: (Boolean) -> Boolean): Boolean? {
+        val first = getter(false)
+        val second = getter(true)
+        return first.takeIf { it == second }
+    }
+
     private companion object {
         const val FALLBACK_DECODE_ERROR = """{"error":"Failed to decode AppFunction response"}"""
+
+        // Probe defaults — two arbitrary but distinct values per scalar type. Numeric
+        // probes must remain finite (NaN is not equal to itself, which would break the
+        // double-probe equality check).
+        const val LONG_PROBE_A = 0L
+        const val LONG_PROBE_B = 1L
+        const val INT_PROBE_A = 0
+        const val INT_PROBE_B = 1
+        const val DOUBLE_PROBE_A = 0.0
+        const val DOUBLE_PROBE_B = 1.0
+        const val FLOAT_PROBE_A = 0f
+        const val FLOAT_PROBE_B = 1f
     }
 }
 

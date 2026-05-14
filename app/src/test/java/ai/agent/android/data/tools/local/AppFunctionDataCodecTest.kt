@@ -596,6 +596,111 @@ class AppFunctionDataCodecTest {
         assertNotNull(parsed)
     }
 
+    @Test
+    fun `probeLong returns the value when both probes agree`() {
+        // Both calls return the stored value, ignoring the supplied default.
+        val result = codec.probeLong { _ -> 42L }
+
+        assertEquals(42L, result)
+    }
+
+    @Test
+    fun `probeLong returns null when the underlying getter echoes the default`() {
+        // Echoing the default mimics AppFunctionData's behaviour when the key is absent
+        // from the scalar slot; the two probes diverge and the helper reports null.
+        val result = codec.probeLong { default -> default }
+
+        assertEquals(null, result)
+    }
+
+    @Test
+    fun `probeLong preserves Long MIN_VALUE as a legitimate return value`() {
+        // Regression: previously a Long.MIN_VALUE sentinel filter silently dropped this
+        // value from the observation log.
+        val result = codec.probeLong { _ -> Long.MIN_VALUE }
+
+        assertEquals(Long.MIN_VALUE, result)
+    }
+
+    @Test
+    fun `probeLong preserves Long MAX_VALUE as a legitimate return value`() {
+        val result = codec.probeLong { _ -> Long.MAX_VALUE }
+
+        assertEquals(Long.MAX_VALUE, result)
+    }
+
+    @Test
+    fun `probeInt returns the value when both probes agree`() {
+        val result = codec.probeInt { _ -> 7 }
+
+        assertEquals(7, result)
+    }
+
+    @Test
+    fun `probeInt returns null when the underlying getter echoes the default`() {
+        val result = codec.probeInt { default -> default }
+
+        assertEquals(null, result)
+    }
+
+    @Test
+    fun `probeInt preserves Int MIN_VALUE as a legitimate return value`() {
+        val result = codec.probeInt { _ -> Int.MIN_VALUE }
+
+        assertEquals(Int.MIN_VALUE, result)
+    }
+
+    @Test
+    fun `probeDouble returns the value when both probes agree`() {
+        val result = codec.probeDouble { _ -> 3.14 }
+
+        assertEquals(3.14, result!!, 1e-9)
+    }
+
+    @Test
+    fun `probeDouble returns null when the underlying getter echoes the default`() {
+        val result = codec.probeDouble { default -> default }
+
+        assertEquals(null, result)
+    }
+
+    @Test
+    fun `probeFloat returns the value when both probes agree`() {
+        val result = codec.probeFloat { _ -> 2.5f }
+
+        assertEquals(2.5f, result!!, 1e-6f)
+    }
+
+    @Test
+    fun `probeFloat returns null when the underlying getter echoes the default`() {
+        val result = codec.probeFloat { default -> default }
+
+        assertEquals(null, result)
+    }
+
+    @Test
+    fun `probeBoolean returns true when both probes agree on true`() {
+        val result = codec.probeBoolean { _ -> true }
+
+        assertEquals(true, result)
+    }
+
+    @Test
+    fun `probeBoolean returns false when both probes agree on false`() {
+        // Regression: previously the getter's `false` default conflated absent values
+        // with a legitimately false result. The double-probe distinguishes the two.
+        val result = codec.probeBoolean { _ -> false }
+
+        assertEquals(false, result)
+    }
+
+    @Test
+    fun `probeBoolean returns null when the underlying getter echoes the default`() {
+        val result = codec.probeBoolean { default -> default }
+
+        assertEquals(null, result)
+    }
+
     private fun param(name: String, dataType: AppFunctionDataTypeMetadata) =
         AppFunctionParameterMetadata(name = name, isRequired = false, dataType = dataType)
 
