@@ -49,6 +49,12 @@ details.
   enforcement: target 100% logic coverage for new code in `domain` /
   `data`, build gate at 70% LINE aggregate (per-package decomposition in
   `docs/coverage-baseline.md`, full policy in `docs/static-analysis.md`).
+- Prominent inline approval prompt (`ApprovalBanner`) rendered directly
+  above the chat input whenever the orchestrator is in `WaitingForApproval`.
+  Replaces the easy-to-miss 16dp console-line affordance as the primary
+  surface for the HITL decision; the console line still appears as a
+  short status echo. Full-width Approve / Deny buttons meet the 48dp tap
+  target and the banner is unaffected by the compact-console layout.
 - Risk-based Human-in-the-Loop (HITL) gate. `ToolNodeExecutor` now consults
   `ToolRepository.getRisk(name)` instead of a global flag: `SENSITIVE` and
   `DESTRUCTIVE` tools always prompt; `READ_ONLY` tools run silently unless

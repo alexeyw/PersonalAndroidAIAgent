@@ -461,6 +461,16 @@ fun ChatScreen(viewModel: ChatViewModel, onBack: () -> Unit = {}) {
                         )
                     }
 
+                    // Prominent inline approval prompt — rendered independently of the
+                    // collapsed console so a 16dp slot strip is not the only surface
+                    // carrying an actionable Approve/Deny decision. Visible whenever the
+                    // orchestrator is in WaitingForApproval, regardless of compact mode.
+                    ApprovalBanner(
+                        state = uiState.orchestratorState,
+                        onApprove = { viewModel.resumeWithApproval(true) },
+                        onDeny = { viewModel.resumeWithApproval(false) },
+                    )
+
                     ChatInputBar(
                         inputText = inputText,
                         onInputTextChanged = { newValue ->

@@ -112,6 +112,10 @@
     <string name="chat_risk_chip_sensitive">SENS</string>
     <string name="chat_risk_chip_destructive">DEST</string>
 
+    <!-- Inline approval banner shown above the chat input when the agent is waiting for
+         the user to confirm a tool execution. -->
+    <string name="chat_approval_banner_title">Approve %1$s?</string>
+
     <!-- Snackbar feedback -->
     <string name="chat_snackbar_copied">Copied</string>
     <string name="chat_snackbar_console_copied">Console log copied</string>
