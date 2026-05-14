@@ -1,7 +1,9 @@
 package ai.agent.android.presentation.notifications
 
+import ai.agent.android.R
 import ai.agent.android.domain.constants.NotificationChannels
 import ai.agent.android.domain.constants.TimeAndIdConstants
+import ai.agent.android.domain.models.ToolRisk
 import ai.agent.android.domain.services.ApprovalNotifier
 import ai.agent.android.presentation.receivers.AgentApprovalReceiver
 import ai.agent.android.presentation.receivers.ApprovalAction
@@ -18,6 +20,13 @@ import javax.inject.Inject
 /**
  * Manager that sends a high-priority notification to the user requesting approval
  * to execute a tool, as part of the Human-in-the-loop mechanism.
+ *
+ * Maintains two `IMPORTANCE_HIGH` notification channels so the user can
+ * distinguish [ToolRisk.DESTRUCTIVE] approvals (warning glyph, distinct title)
+ * from reversible [ToolRisk.SENSITIVE] / opt-in [ToolRisk.READ_ONLY] approvals
+ * even in the system shade. Both channels are eagerly registered on every send
+ * — `NotificationManager.createNotificationChannel` is idempotent and the
+ * channels survive process death.
  */
 class ApprovalNotificationManager @Inject constructor(
     @ApplicationContext private val context: Context,
@@ -35,54 +44,51 @@ class ApprovalNotificationManager @Inject constructor(
      * @param sessionId The ID of the session requesting approval.
      * @param toolName The name of the tool to be executed.
      * @param arguments The arguments to be passed to the tool.
+     * @param risk Risk classification, drives the channel / icon / title selection.
      */
-    override fun sendApprovalRequest(sessionId: String, toolName: String, arguments: String) {
+    override fun sendApprovalRequest(sessionId: String, toolName: String, arguments: String, risk: ToolRisk) {
         // If the user is currently on the chat screen for this session, they will see the inline prompt.
         if (activeSessionTracker.activeSessionId.value == sessionId) {
             return
         }
 
         val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        ensureChannelsRegistered(notificationManager)
 
-        val channel = NotificationChannel(
-            NotificationChannels.AGENT_APPROVAL,
-            "Agent Approvals",
-            NotificationManager.IMPORTANCE_HIGH,
-        ).apply {
-            description = "Notifications for tool execution approvals"
+        val approvePendingIntent = approvalPendingIntent(sessionId, ApprovalAction.APPROVE, requestCodeOffset = 0)
+        val denyPendingIntent = approvalPendingIntent(sessionId, ApprovalAction.DENY, requestCodeOffset = 1)
+
+        val channelId = when (risk) {
+            ToolRisk.DESTRUCTIVE -> NotificationChannels.AGENT_APPROVAL_DESTRUCTIVE
+            ToolRisk.SENSITIVE, ToolRisk.READ_ONLY -> NotificationChannels.AGENT_APPROVAL
         }
-        notificationManager.createNotificationChannel(channel)
-
-        val approveIntent = Intent(context, AgentApprovalReceiver::class.java).apply {
-            action = ApprovalAction.APPROVE.action
-            putExtra("sessionId", sessionId)
+        val smallIcon = when (risk) {
+            ToolRisk.DESTRUCTIVE -> android.R.drawable.stat_sys_warning
+            ToolRisk.SENSITIVE, ToolRisk.READ_ONLY -> android.R.drawable.ic_dialog_alert
         }
-        val approvePendingIntent = PendingIntent.getBroadcast(
-            context,
-            sessionId.hashCode(),
-            approveIntent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
-        )
-
-        val denyIntent = Intent(context, AgentApprovalReceiver::class.java).apply {
-            action = ApprovalAction.DENY.action
-            putExtra("sessionId", sessionId)
+        val title = when (risk) {
+            ToolRisk.DESTRUCTIVE -> context.getString(R.string.approval_notification_title_destructive)
+            ToolRisk.SENSITIVE, ToolRisk.READ_ONLY -> context.getString(R.string.approval_notification_title_sensitive)
         }
-        val denyPendingIntent = PendingIntent.getBroadcast(
-            context,
-            sessionId.hashCode() + 1,
-            denyIntent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
-        )
+        val contentText = context.getString(R.string.approval_notification_text, toolName)
+        val bigText = context.getString(R.string.approval_notification_big_text, toolName, arguments)
 
-        val notification = NotificationCompat.Builder(context, NotificationChannels.AGENT_APPROVAL)
-            .setSmallIcon(android.R.drawable.ic_dialog_alert)
-            .setContentTitle("Tool Execution Approval")
-            .setContentText("Agent wants to use $toolName. Allow?")
-            .setStyle(NotificationCompat.BigTextStyle().bigText("Agent wants to use $toolName with args:\n$arguments"))
+        val notification = NotificationCompat.Builder(context, channelId)
+            .setSmallIcon(smallIcon)
+            .setContentTitle(title)
+            .setContentText(contentText)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(bigText))
             .setPriority(NotificationCompat.PRIORITY_HIGH)
-            .addAction(android.R.drawable.ic_media_play, "Approve", approvePendingIntent)
-            .addAction(android.R.drawable.ic_delete, "Deny", denyPendingIntent)
+            .addAction(
+                android.R.drawable.ic_media_play,
+                context.getString(R.string.chat_thought_approve),
+                approvePendingIntent,
+            )
+            .addAction(
+                android.R.drawable.ic_delete,
+                context.getString(R.string.chat_thought_deny),
+                denyPendingIntent,
+            )
             .setAutoCancel(true)
             .build()
 
@@ -90,6 +96,42 @@ class ApprovalNotificationManager @Inject constructor(
         notificationManager.notify(
             NOTIFICATION_ID + sessionId.hashCode() % TimeAndIdConstants.NOTIFICATION_ID_RANGE,
             notification,
+        )
+    }
+
+    private fun ensureChannelsRegistered(notificationManager: NotificationManager) {
+        val sensitiveChannel = NotificationChannel(
+            NotificationChannels.AGENT_APPROVAL,
+            context.getString(R.string.approval_channel_sensitive_name),
+            NotificationManager.IMPORTANCE_HIGH,
+        ).apply {
+            description = context.getString(R.string.approval_channel_sensitive_description)
+        }
+        val destructiveChannel = NotificationChannel(
+            NotificationChannels.AGENT_APPROVAL_DESTRUCTIVE,
+            context.getString(R.string.approval_channel_destructive_name),
+            NotificationManager.IMPORTANCE_HIGH,
+        ).apply {
+            description = context.getString(R.string.approval_channel_destructive_description)
+        }
+        notificationManager.createNotificationChannel(sensitiveChannel)
+        notificationManager.createNotificationChannel(destructiveChannel)
+    }
+
+    private fun approvalPendingIntent(
+        sessionId: String,
+        action: ApprovalAction,
+        requestCodeOffset: Int,
+    ): PendingIntent {
+        val intent = Intent(context, AgentApprovalReceiver::class.java).apply {
+            this.action = action.action
+            putExtra("sessionId", sessionId)
+        }
+        return PendingIntent.getBroadcast(
+            context,
+            sessionId.hashCode() + requestCodeOffset,
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
     }
 }

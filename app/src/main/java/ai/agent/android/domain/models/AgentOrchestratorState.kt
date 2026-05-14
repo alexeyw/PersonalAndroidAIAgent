@@ -34,8 +34,12 @@ sealed interface AgentOrchestratorState {
      *
      * @property toolName The name of the tool.
      * @property arguments The arguments for the tool.
+     * @property risk Risk classification of the tool, surfaced to the UI so the
+     *   approval prompt can show a risk chip (and, in the notification fallback,
+     *   pick a channel / icon that matches the action's reversibility).
      */
-    data class WaitingForApproval(val toolName: String, val arguments: String) : AgentOrchestratorState
+    data class WaitingForApproval(val toolName: String, val arguments: String, val risk: ToolRisk) :
+        AgentOrchestratorState
 
     /**
      * The agent has paused pipeline execution and is waiting for the user to answer a

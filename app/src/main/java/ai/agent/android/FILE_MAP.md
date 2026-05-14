@@ -203,6 +203,7 @@ This file maps the contents of the main application package.
       - `NavRoutes.kt` - Canonical `const val` registry of every Jetpack Navigation Compose route string.
     - `chat/` - Chat screen components.
       - `AgentThoughtIndicator.kt` - Indicator for agent thinking.
+      - `ApprovalBanner.kt` - Prominent inline approval prompt rendered above the chat input bar whenever the orchestrator is in `WaitingForApproval`; complements the compact console-line indicator with full-width Approve / Deny buttons and a risk-coloured badge.
       - `ChatExportPayload.kt` - Payload carrying exported chat JSON to the share sheet.
       - `ChatScreen.kt` - Chat UI screen.
       - `ChatUiState.kt` - Chat UI state.

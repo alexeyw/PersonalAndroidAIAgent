@@ -1,3 +1,13 @@
 <resources>
     <string name="app_name">Android AI Agent</string>
+
+    <!-- Approval notification (Human-in-the-loop fallback when chat is not visible) -->
+    <string name="approval_channel_sensitive_name">Agent Approvals</string>
+    <string name="approval_channel_sensitive_description">Confirmations for sensitive tool executions.</string>
+    <string name="approval_channel_destructive_name">Agent Approvals — Destructive</string>
+    <string name="approval_channel_destructive_description">Confirmations for irreversible tool executions (e.g. send, delete, purchase).</string>
+    <string name="approval_notification_title_sensitive">Tool execution approval</string>
+    <string name="approval_notification_title_destructive">Destructive action requires approval</string>
+    <string name="approval_notification_text">Agent wants to use %1$s. Allow?</string>
+    <string name="approval_notification_big_text">Agent wants to use %1$s with args:\n%2$s</string>
 </resources>

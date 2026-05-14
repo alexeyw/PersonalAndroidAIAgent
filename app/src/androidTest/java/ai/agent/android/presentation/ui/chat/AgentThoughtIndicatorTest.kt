@@ -1,6 +1,7 @@
 package ai.agent.android.presentation.ui.chat
 
 import ai.agent.android.domain.models.AgentOrchestratorState
+import ai.agent.android.domain.models.ToolRisk
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
@@ -79,6 +80,7 @@ class AgentThoughtIndicatorTest {
                 state = AgentOrchestratorState.WaitingForApproval(
                     toolName = "Calendar",
                     arguments = "date=today",
+                    risk = ToolRisk.SENSITIVE,
                 ),
                 onApprove = { approveCount++ },
                 onDeny = { denyCount++ },
@@ -88,12 +90,43 @@ class AgentThoughtIndicatorTest {
         composeTestRule.onNodeWithText("[ASK] Approve Calendar?").assertIsDisplayed()
         composeTestRule.onNodeWithText("Approve").assertIsDisplayed()
         composeTestRule.onNodeWithText("Deny").assertIsDisplayed()
+        composeTestRule.onNodeWithText("SENS").assertIsDisplayed()
 
         composeTestRule.onNodeWithText("Approve").performClick()
         composeTestRule.onNodeWithText("Deny").performClick()
 
         assert(approveCount == 1) { "Approve callback should fire once, fired $approveCount" }
         assert(denyCount == 1) { "Deny callback should fire once, fired $denyCount" }
+    }
+
+    @Test
+    fun shouldRenderDestructiveRiskChip() {
+        composeTestRule.setContent {
+            AgentThoughtIndicator(
+                state = AgentOrchestratorState.WaitingForApproval(
+                    toolName = "PurgeData",
+                    arguments = "{}",
+                    risk = ToolRisk.DESTRUCTIVE,
+                ),
+            )
+        }
+
+        composeTestRule.onNodeWithText("DEST").assertIsDisplayed()
+    }
+
+    @Test
+    fun shouldRenderReadOnlyRiskChip() {
+        composeTestRule.setContent {
+            AgentThoughtIndicator(
+                state = AgentOrchestratorState.WaitingForApproval(
+                    toolName = "Search",
+                    arguments = "q=test",
+                    risk = ToolRisk.READ_ONLY,
+                ),
+            )
+        }
+
+        composeTestRule.onNodeWithText("READ").assertIsDisplayed()
     }
 
     @Test
