@@ -6,6 +6,7 @@ import ai.agent.android.data.tools.local.LocalAppFunctionManager
 import ai.agent.android.data.tools.local.SearchTool
 import ai.agent.android.domain.models.AgentTool
 import ai.agent.android.domain.models.CloudProvider
+import ai.agent.android.domain.models.ToolRisk
 import ai.agent.android.domain.repositories.ApiKeyRepository
 import ai.agent.android.domain.repositories.LocalToolExecutor
 import ai.agent.android.domain.repositories.SettingsRepository
@@ -65,9 +66,13 @@ class ToolRepositoryImpl @Inject constructor(
                   "required": ["prompt"]
                 }
             """.trimIndent(),
+            risk = ToolRisk.SENSITIVE,
         )
 
-        val baseTools = mutableListOf(scheduleTool, searchTool.asAgentTool())
+        val baseTools = mutableListOf(
+            scheduleTool,
+            searchTool.asAgentTool().copy(risk = ToolRisk.READ_ONLY),
+        )
 
         if (availableModels.isEmpty()) {
             return baseTools
@@ -89,6 +94,7 @@ class ToolRepositoryImpl @Inject constructor(
                   "required": ["taskDescription"]
                 }
             """.trimIndent(),
+            risk = ToolRisk.SENSITIVE,
         )
 
         baseTools.add(delegateTool)
@@ -204,5 +210,37 @@ class ToolRepositoryImpl @Inject constructor(
         }
 
         throw IllegalArgumentException("Tool $name not found across active providers")
+    }
+
+    /**
+     * Resolves the effective [ToolRisk] for a tool by name. See [ToolRepository.getRisk]
+     * KDoc for the resolution contract.
+     *
+     * The lookup intentionally does **not** cache discovery / settings results: AppFunction
+     * availability and risk overrides are user-controlled and must reflect the latest
+     * device state on every call. The HITL gate executes this exactly once per tool
+     * invocation, so the extra Flow read is not on a hot path.
+     */
+    override suspend fun getRisk(toolName: String): ToolRisk {
+        val builtinRisk = getBuiltinTools().firstOrNull { it.name == toolName }?.risk
+        if (builtinRisk != null) {
+            return builtinRisk
+        }
+
+        val appFunctions = localAppFunctionManager.getAvailableFunctions()
+        if (appFunctions.any { it.name == toolName }) {
+            val overrides = settingsRepository.appFunctionRiskOverrides.first()
+            return overrides[toolName] ?: ToolRisk.SENSITIVE
+        }
+
+        syncMcpClients()
+        for (client in mcpClients.values) {
+            val isMcpTool = runCatching { client.getTools().any { it.name == toolName } }.getOrDefault(false)
+            if (isMcpTool) {
+                return ToolRisk.SENSITIVE
+            }
+        }
+
+        throw IllegalArgumentException("Unknown tool: $toolName")
     }
 }

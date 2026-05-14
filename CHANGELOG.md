@@ -15,6 +15,13 @@ details.
 
 ### Added
 
+- `ToolRisk` domain model (`READ_ONLY` / `SENSITIVE` / `DESTRUCTIVE`) with
+  per-tool defaults: `search_tool` → `READ_ONLY`, `schedule_task` /
+  `delegate_task` → `SENSITIVE`, discovered AppFunctions → `SENSITIVE` (with
+  per-tool override via `SettingsRepository.appFunctionRiskOverrides`),
+  MCP tools → blanket `SENSITIVE`. Resolved through the new
+  `ToolRepository.getRisk(name)` seam. HITL gate consumption lands in a
+  follow-up task; this change ships the data model only.
 - `CONTRIBUTING.md` at the repository root covering dev setup, build & test
   commands, branch model, Conventional Commits, the pull-request checklist,
   and the English-only language policy.

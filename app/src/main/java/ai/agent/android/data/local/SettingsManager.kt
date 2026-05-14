@@ -3,6 +3,7 @@ package ai.agent.android.data.local
 import ai.agent.android.domain.constants.DefaultPrompts
 import ai.agent.android.domain.constants.SettingsDefaults
 import ai.agent.android.domain.models.LocalBackend
+import ai.agent.android.domain.models.ToolRisk
 import ai.agent.android.domain.repositories.SettingsRepository
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
@@ -15,6 +16,7 @@ import androidx.datastore.preferences.core.stringSetPreferencesKey
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.map
+import org.json.JSONObject
 import timber.log.Timber
 import java.io.IOException
 import javax.inject.Inject
@@ -38,6 +40,7 @@ class SettingsManager @Inject constructor(private val dataStore: DataStore<Prefe
         val TOOL_USAGE_INSTRUCTION = stringPreferencesKey("tool_usage_instruction")
         val MCP_SERVER_URLS = stringSetPreferencesKey("mcp_server_urls")
         val DISABLED_APP_FUNCTIONS = stringSetPreferencesKey("disabled_app_functions")
+        val APP_FUNCTION_RISK_OVERRIDES = stringPreferencesKey("app_function_risk_overrides")
         val CURRENT_CHAT_SESSION_ID = stringPreferencesKey("current_chat_session_id")
         val MAX_MEMORY_CHUNKS_FOR_SEARCH = intPreferencesKey("max_memory_chunks_for_search")
         val LOCAL_MODEL_BACKEND = stringPreferencesKey("local_model_backend")
@@ -267,6 +270,58 @@ class SettingsManager @Inject constructor(private val dataStore: DataStore<Prefe
         dataStore.edit { preferences ->
             preferences[PreferencesKeys.DISABLED_APP_FUNCTIONS] = functions
         }
+    }
+
+    override val appFunctionRiskOverrides: Flow<Map<String, ToolRisk>> = dataStore.data
+        .catch { exception ->
+            if (exception is IOException) {
+                Timber.e(exception, "Error reading preferences")
+                emit(emptyPreferences())
+            } else {
+                throw exception
+            }
+        }
+        .map { preferences ->
+            decodeRiskOverrides(preferences[PreferencesKeys.APP_FUNCTION_RISK_OVERRIDES])
+        }
+
+    override suspend fun setAppFunctionRiskOverride(toolName: String, risk: ToolRisk) {
+        dataStore.edit { preferences ->
+            val current = decodeRiskOverrides(preferences[PreferencesKeys.APP_FUNCTION_RISK_OVERRIDES])
+            val merged = current + (toolName to risk)
+            preferences[PreferencesKeys.APP_FUNCTION_RISK_OVERRIDES] = encodeRiskOverrides(merged)
+        }
+    }
+
+    private fun decodeRiskOverrides(raw: String?): Map<String, ToolRisk> {
+        if (raw.isNullOrBlank()) return emptyMap()
+        return try {
+            val json = JSONObject(raw)
+            buildMap {
+                val keys = json.keys()
+                while (keys.hasNext()) {
+                    val key = keys.next()
+                    val value = json.optString(key)
+                    val risk = runCatching { ToolRisk.valueOf(value) }.getOrNull()
+                    if (risk != null) {
+                        put(key, risk)
+                    } else {
+                        Timber.w("Dropping AppFunction risk override for $key — unknown risk value '$value'")
+                    }
+                }
+            }
+        } catch (e: org.json.JSONException) {
+            Timber.w(e, "Failed to parse app_function_risk_overrides — falling back to empty map")
+            emptyMap()
+        }
+    }
+
+    private fun encodeRiskOverrides(overrides: Map<String, ToolRisk>): String {
+        val json = JSONObject()
+        for ((name, risk) in overrides) {
+            json.put(name, risk.name)
+        }
+        return json.toString()
     }
 
     override val currentChatSessionId: Flow<String?> = dataStore.data

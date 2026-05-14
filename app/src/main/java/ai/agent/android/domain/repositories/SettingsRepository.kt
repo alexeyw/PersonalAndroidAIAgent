@@ -1,5 +1,6 @@
 package ai.agent.android.domain.repositories
 
+import ai.agent.android.domain.models.ToolRisk
 import kotlinx.coroutines.flow.Flow
 
 /**
@@ -134,6 +135,34 @@ interface SettingsRepository {
      * Updates the set of disabled local app functions.
      */
     suspend fun setDisabledAppFunctions(functions: Set<String>)
+
+    /**
+     * A [Flow] of per-AppFunction risk overrides, keyed by the AppFunction's
+     * tool name. The map is the user's authoritative voice on what risk class a
+     * discovered AppFunction should be treated as; when an entry is present it
+     * takes precedence over the conservative `SENSITIVE` default applied by
+     * `LocalAppFunctionManager`.
+     *
+     * The map applies only to discovered AppFunctions. Built-in tools carry
+     * hard-coded risk constants (see `ToolRepositoryImpl.getBuiltinTools`) and
+     * are not affected by entries in this map. MCP tools are governed by a
+     * blanket policy until a per-server scheme is introduced.
+     *
+     * Missing entries (or an empty map) mean "no override, use the source
+     * default" — the canonical resolution lives in `ToolRepository.getRisk`.
+     */
+    val appFunctionRiskOverrides: Flow<Map<String, ToolRisk>>
+
+    /**
+     * Sets (or replaces) the risk override for a single AppFunction. To remove
+     * an override, callers should pass the source-default value or wait for the
+     * removal API to land in a follow-up task; this initial cut intentionally
+     * keeps the surface minimal because there is no UI surface yet.
+     *
+     * @param toolName Name of the AppFunction to override.
+     * @param risk Effective risk class to associate with [toolName].
+     */
+    suspend fun setAppFunctionRiskOverride(toolName: String, risk: ToolRisk)
 
     /**
      * A [Flow] representing the current active chat session ID.
