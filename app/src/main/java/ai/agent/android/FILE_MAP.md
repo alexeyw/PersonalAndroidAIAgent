@@ -72,11 +72,15 @@ This file maps the contents of the main application package.
     - `AgentWorker.kt` - WorkManager worker for agent tasks.
   - `tools/` - Tool and action implementations.
     - `local/` - Local tools implementations.
-      - `AgentAppFunctionService.kt` - Service for app functions.
+      - `AgentAppFunctionService.kt` - Platform-bound `AppFunctionService` that translates incoming `ExecuteAppFunctionRequest`s into [AppFunctionRouter] calls and packages the typed outcome back into `ExecuteAppFunctionResponse` / `AppFunctionException` for the system AppFunctions framework.
       - `AppFunctionDataCodec.kt` - Bidirectional codec between LLM-emitted JSON argument strings and the typed `AppFunctionData` consumed by `AppFunctionManager.executeAppFunction`, plus a flat-JSON projection of `ExecuteAppFunctionResponse` for the agent's observation log.
       - `DelegateTaskTool.kt` - Task delegation tool.
       - `LocalAppFunctionManager.kt` - Manager for local app functions.
       - `SearchTool.kt` - Local web search tool.
+      - `appfunctions/` - Callee-side wrappers exposing curated agent built-ins to other apps through the system AppFunctions framework.
+        - `AppFunctionDispatchEntryPoint.kt` - Hilt `EntryPoint` resolved from the application context by `AgentAppFunctionService`; exposes per-AppFunction singleton wrappers without requiring the platform-bound service to participate in Hilt's component graph.
+        - `AppFunctionRouter.kt` - Pure-Kotlin router mapping a `functionIdentifier` plus a string-keyed argument lookup onto the matching wrapper invocation; returns a typed [DispatchOutcome] (Success / FunctionNotFound / InvalidArgument / InternalError) that the platform shim translates back into AppFunctions response codes.
+        - `SearchAppFunction.kt` - Thin callee-side wrapper around `SearchTool.executeSearch`; validates the externally-supplied `query` / `lang` arguments and delegates to the same code path the agent uses internally.
       - `executors/` - `LocalToolExecutor` implementations registered via Hilt multibinding.
         - `DelegateTaskExecutor.kt` - `LocalToolExecutor` bridging the `delegate_task` tool to `DelegateTaskTool`.
         - `ScheduleTaskExecutor.kt` - `LocalToolExecutor` bridging the `schedule_task` tool to `ScheduleTaskUseCase`.
