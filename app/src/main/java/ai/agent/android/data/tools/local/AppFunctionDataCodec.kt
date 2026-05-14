@@ -107,9 +107,17 @@ class AppFunctionDataCodec @Inject constructor() {
                     qualifiedName = returnValue.qualifiedName,
                     containsKey = { runCatching { returnValue.containsKey(it) }.getOrDefault(false) },
                     getString = { runCatching { returnValue.getString(it) }.getOrNull() },
+                    getInt = {
+                        runCatching { returnValue.getInt(it, Int.MIN_VALUE) }.getOrNull()
+                            ?.takeIf { v -> v != Int.MIN_VALUE }
+                    },
                     getLong = {
                         runCatching { returnValue.getLong(it, Long.MIN_VALUE) }.getOrNull()
                             ?.takeIf { v -> v != Long.MIN_VALUE }
+                    },
+                    getFloat = {
+                        runCatching { returnValue.getFloat(it, Float.NaN) }.getOrNull()
+                            ?.takeIf { v -> !v.isNaN() }
                     },
                     getDouble = {
                         runCatching { returnValue.getDouble(it, Double.NaN) }.getOrNull()
@@ -283,14 +291,21 @@ class AppFunctionDataCodec @Inject constructor() {
 
     /**
      * Renders a `{"result":...}` payload by probing the typed getters in
-     * `string → long → double → boolean` order. Pure: callers pass closure-based getters,
-     * making the function trivially testable without `AppFunctionData`.
+     * `string → int → long → float → double → boolean` order. Every numeric type that
+     * `AppFunctionData` exposes is queried, so successful AppFunctions that return `Int`
+     * or `Float` are serialized as JSON numbers instead of `null` (the previous behaviour
+     * silently swallowed type-mismatch exceptions and dropped real numeric results from
+     * the observation log). Pure: callers pass closure-based getters, making the function
+     * trivially testable without `AppFunctionData`.
      */
+    @Suppress("LongParameterList") // One getter per AppFunctionData typed accessor — by design.
     internal fun renderSuccess(
         qualifiedName: String,
         containsKey: (String) -> Boolean,
         getString: (String) -> String?,
+        getInt: (String) -> Int?,
         getLong: (String) -> Long?,
+        getFloat: (String) -> Float?,
         getDouble: (String) -> Double?,
         getBoolean: (String) -> Boolean?,
         key: String,
@@ -301,7 +316,9 @@ class AppFunctionDataCodec @Inject constructor() {
             return obj.toString()
         }
         val resolved: Any? = getString(key)
+            ?: getInt(key)
             ?: getLong(key)
+            ?: getFloat(key)
             ?: getDouble(key)
             ?: getBoolean(key)
         obj.put("result", resolved ?: JSONObject.NULL)

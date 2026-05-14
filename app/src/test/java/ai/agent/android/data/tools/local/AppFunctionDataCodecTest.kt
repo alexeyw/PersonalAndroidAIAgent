@@ -459,75 +459,78 @@ class AppFunctionDataCodecTest {
     }
 
     @Test
-    fun `renderSuccess emits the first non-null scalar in the string-long-double-boolean order`() {
-        val json = codec.renderSuccess(
-            qualifiedName = "com.example.Result",
-            containsKey = { true },
-            getString = { "ok" },
-            getLong = { null },
-            getDouble = { null },
-            getBoolean = { null },
-            key = "value",
-        )
+    fun `renderSuccess emits the first non-null scalar in the string-int-long-float-double-boolean order`() {
+        val json = renderResult(getString = { "ok" })
 
         assertEquals("ok", JSONObject(json).getString("result"))
     }
 
     @Test
-    fun `renderSuccess falls through to long when string getter returns null`() {
-        val json = codec.renderSuccess(
-            qualifiedName = "com.example.Result",
-            containsKey = { true },
-            getString = { null },
-            getLong = { 7L },
-            getDouble = { null },
-            getBoolean = { null },
-            key = "value",
-        )
+    fun `renderSuccess falls through to int when string getter returns null`() {
+        val json = renderResult(getInt = { 42 })
+
+        assertEquals(42, JSONObject(json).getInt("result"))
+    }
+
+    @Test
+    fun `renderSuccess falls through to long when string and int are null`() {
+        val json = renderResult(getLong = { 7L })
 
         assertEquals(7L, JSONObject(json).getLong("result"))
     }
 
     @Test
-    fun `renderSuccess falls through to double when string and long are null`() {
-        val json = codec.renderSuccess(
-            qualifiedName = "com.example.Result",
-            containsKey = { true },
-            getString = { null },
-            getLong = { null },
-            getDouble = { 1.5 },
-            getBoolean = { null },
-            key = "value",
-        )
+    fun `renderSuccess falls through to float when string int and long are null`() {
+        val json = renderResult(getFloat = { 0.25f })
+
+        assertEquals(0.25, JSONObject(json).getDouble("result"), 1e-6)
+    }
+
+    @Test
+    fun `renderSuccess falls through to double when string int long and float are null`() {
+        val json = renderResult(getDouble = { 1.5 })
 
         assertEquals(1.5, JSONObject(json).getDouble("result"), 1e-9)
     }
 
     @Test
-    fun `renderSuccess falls through to boolean when scalars before it are null`() {
-        val json = codec.renderSuccess(
-            qualifiedName = "com.example.Result",
-            containsKey = { true },
-            getString = { null },
-            getLong = { null },
-            getDouble = { null },
-            getBoolean = { true },
-            key = "value",
-        )
+    fun `renderSuccess falls through to boolean when every numeric scalar is null`() {
+        val json = renderResult(getBoolean = { true })
 
         assertTrue(JSONObject(json).getBoolean("result"))
     }
 
     @Test
+    fun `renderSuccess prefers int over long when both are available`() {
+        val json = renderResult(getInt = { 11 }, getLong = { 99L })
+
+        assertEquals(11, JSONObject(json).getInt("result"))
+    }
+
+    @Test
+    fun `renderSuccess prefers long over float when both are available`() {
+        val json = renderResult(getLong = { 5L }, getFloat = { 9.5f })
+
+        assertEquals(5L, JSONObject(json).getLong("result"))
+    }
+
+    @Test
+    fun `renderSuccess prefers float over double when both are available`() {
+        val json = renderResult(getFloat = { 1.25f }, getDouble = { 99.9 })
+
+        assertEquals(1.25, JSONObject(json).getDouble("result"), 1e-6)
+    }
+
+    @Test
     fun `renderSuccess yields null result for empty qualified name`() {
-        val json = codec.renderSuccess(
+        val json = renderResult(
             qualifiedName = "",
-            containsKey = { true },
             getString = { "ignored" },
+            getInt = { 1 },
             getLong = { 1L },
+            getFloat = { 1.0f },
             getDouble = { 1.0 },
             getBoolean = { true },
-            key = "value",
         )
 
         val parsed = JSONObject(json)
@@ -537,14 +540,14 @@ class AppFunctionDataCodecTest {
 
     @Test
     fun `renderSuccess yields null result when the response does not contain the key`() {
-        val json = codec.renderSuccess(
-            qualifiedName = "com.example.Result",
+        val json = renderResult(
             containsKey = { false },
             getString = { "ignored" },
+            getInt = { 1 },
             getLong = { 1L },
+            getFloat = { 1.0f },
             getDouble = { 1.0 },
             getBoolean = { true },
-            key = "value",
         )
 
         val parsed = JSONObject(json)
@@ -554,15 +557,7 @@ class AppFunctionDataCodecTest {
 
     @Test
     fun `renderSuccess yields null result when every getter returns null`() {
-        val json = codec.renderSuccess(
-            qualifiedName = "com.example.Result",
-            containsKey = { true },
-            getString = { null },
-            getLong = { null },
-            getDouble = { null },
-            getBoolean = { null },
-            key = "value",
-        )
+        val json = renderResult()
 
         val parsed = JSONObject(json)
         assertTrue(parsed.has("result"))
@@ -608,5 +603,32 @@ class AppFunctionDataCodecTest {
         name = name,
         isRequired = required,
         dataType = AppFunctionStringTypeMetadata(isNullable = false),
+    )
+
+    /**
+     * Test helper that exercises [AppFunctionDataCodec.renderSuccess] with all-null defaults,
+     * letting each test supply only the getters relevant to the scenario under test.
+     */
+    @Suppress("LongParameterList")
+    private fun renderResult(
+        qualifiedName: String = "com.example.Result",
+        containsKey: (String) -> Boolean = { true },
+        getString: (String) -> String? = { null },
+        getInt: (String) -> Int? = { null },
+        getLong: (String) -> Long? = { null },
+        getFloat: (String) -> Float? = { null },
+        getDouble: (String) -> Double? = { null },
+        getBoolean: (String) -> Boolean? = { null },
+        key: String = "value",
+    ): String = codec.renderSuccess(
+        qualifiedName = qualifiedName,
+        containsKey = containsKey,
+        getString = getString,
+        getInt = getInt,
+        getLong = getLong,
+        getFloat = getFloat,
+        getDouble = getDouble,
+        getBoolean = getBoolean,
+        key = key,
     )
 }
