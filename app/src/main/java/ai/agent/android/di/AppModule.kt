@@ -9,6 +9,7 @@ import ai.agent.android.data.local.dao.MemoryDao
 import ai.agent.android.data.local.dao.PipelineDao
 import ai.agent.android.data.local.dao.PromptTemplateDao
 import ai.agent.android.data.local.dao.TraceStepDao
+import ai.agent.android.data.tools.local.AppFunctionDataCodec
 import ai.agent.android.data.tools.local.LocalAppFunctionManager
 import ai.agent.android.domain.services.ApprovalNotifier
 import ai.agent.android.presentation.notifications.ApprovalNotificationManager
@@ -160,8 +161,10 @@ object AppModule {
      */
     @Provides
     @Singleton
-    fun provideLocalAppFunctionManager(@ApplicationContext appContext: Context): LocalAppFunctionManager =
-        LocalAppFunctionManager(appContext)
+    fun provideLocalAppFunctionManager(
+        @ApplicationContext appContext: Context,
+        codec: AppFunctionDataCodec,
+    ): LocalAppFunctionManager = LocalAppFunctionManager(appContext, codec)
 
     /**
      * Provides the singleton instance of WorkManager.

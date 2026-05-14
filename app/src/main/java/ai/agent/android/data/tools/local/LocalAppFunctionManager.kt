@@ -3,6 +3,7 @@ package ai.agent.android.data.tools.local
 import ai.agent.android.domain.models.AgentTool
 import ai.agent.android.domain.models.ToolRisk
 import android.content.Context
+import androidx.appfunctions.AppFunctionException
 import androidx.appfunctions.AppFunctionManager
 import androidx.appfunctions.AppFunctionSearchSpec
 import androidx.appfunctions.ExecuteAppFunctionRequest
@@ -28,11 +29,35 @@ import org.json.JSONObject
  * It provides a unified interface for the AI agent to discover and trigger
  * application functions securely through the Android 16 AppFunctionManager.
  */
-class LocalAppFunctionManager(private val context: Context) {
+class LocalAppFunctionManager(private val context: Context, private val codec: AppFunctionDataCodec) {
 
     private val appFunctionManager: AppFunctionManager? by lazy {
         AppFunctionManager.getInstance(context)
     }
+
+    /**
+     * In-memory snapshot of the most recent discovery pass, keyed by the **qualified**
+     * AppFunction name (`"${packageName}/${id}"` — see [qualify]). AppFunction ids are
+     * unique only within their declaring package; keying by the qualified name prevents
+     * a later package's entry from silently overwriting an earlier one when two
+     * providers expose the same identifier, which would otherwise let `invokeByName`
+     * route to the wrong target package or use mismatched parameter metadata.
+     *
+     * Holds the three facts the caller-side execution path needs but [AgentTool] cannot
+     * carry: the source package, the un-qualified system-side identifier that
+     * `ExecuteAppFunctionRequest.functionIdentifier` expects, and the typed parameter
+     * metadata required by `AppFunctionDataCodec.encode`.
+     *
+     * Stored as an immutable [Map] behind a `@Volatile` reference, swapped wholesale on
+     * every [getAvailableFunctions] call. The atomic reference replacement guarantees
+     * that concurrent readers (e.g. [invokeByName] / [isDiscovered]) always observe a
+     * fully consistent snapshot — they can never see a transient state where some valid
+     * entries have already been evicted and the replacements have not yet been
+     * published, which a two-step `retainAll` + `putAll` on a `ConcurrentHashMap` would
+     * allow.
+     */
+    @Volatile
+    private var discoveredCache: Map<String, DiscoveredAppFunction> = emptyMap()
 
     /**
      * Executes an AppFunction by its identifier using the system AppFunctionManager.
@@ -44,6 +69,46 @@ class LocalAppFunctionManager(private val context: Context) {
         val manager =
             appFunctionManager ?: throw IllegalStateException("AppFunctionManager is not available on this device.")
         return manager.executeAppFunction(request)
+    }
+
+    /**
+     * End-to-end invocation of a discovered AppFunction by name:
+     *  1. Looks up the cached parameter metadata and target package (re-discovers on cache
+     *     miss).
+     *  2. Encodes [arguments] via [AppFunctionDataCodec.encode] into a typed payload.
+     *  3. Builds [ExecuteAppFunctionRequest] and dispatches through the system
+     *     `AppFunctionManager`.
+     *  4. Renders the response through [AppFunctionDataCodec.decode] back into a flat JSON
+     *     string suitable for the agent's observation log.
+     *
+     * Any [AppFunctionException] thrown by the system is wrapped into an
+     * [IllegalStateException] with the original cause preserved, so the caller (typically
+     * `ToolRepositoryImpl`) does not have to depend on the `androidx.appfunctions` exception
+     * hierarchy. This is the single entry point that touches Android AppFunctions types on
+     * behalf of the caller path.
+     *
+     * @throws IllegalArgumentException if [name] is not a currently discovered AppFunction.
+     * @throws IllegalStateException if the system reports a failure or required metadata is
+     *   missing.
+     */
+    suspend fun invokeByName(name: String, arguments: String): String {
+        val discovered = lookup(name)
+            ?: throw IllegalArgumentException("AppFunction $name is not currently discovered")
+        return runCatching {
+            val data = codec.encode(arguments, discovered.parameters)
+            val request = ExecuteAppFunctionRequest(
+                discovered.packageName,
+                discovered.functionIdentifier,
+                data,
+            )
+            val response = executeFunction(request)
+            codec.decode(response)
+        }.getOrElse { e ->
+            if (e is AppFunctionException) {
+                throw IllegalStateException("AppFunction $name failed: ${e.message}", e)
+            }
+            throw e
+        }
     }
 
     /**
@@ -59,23 +124,99 @@ class LocalAppFunctionManager(private val context: Context) {
      * authoritative source consumed by `ToolRepository.getRisk`.
      */
     suspend fun getAvailableFunctions(): List<AgentTool> {
-        val manager = appFunctionManager ?: return emptyList()
+        val manager = appFunctionManager ?: run {
+            discoveredCache = emptyMap()
+            return emptyList()
+        }
         val searchSpec = AppFunctionSearchSpec()
 
-        // Observe app functions once and map them to our domain model
+        // Observe app functions once, build the fresh discovery snapshot, and publish it
+        // atomically: the new immutable map replaces the @Volatile reference in a single
+        // write, so concurrent readers cannot observe a partially-mutated cache.
         return manager.observeAppFunctions(searchSpec)
             .map { packages ->
-                packages.flatMap { pkg ->
+                val fresh = mutableMapOf<String, DiscoveredAppFunction>()
+                val tools = packages.flatMap { pkg ->
                     pkg.appFunctions.map { metadata ->
+                        val qualified = qualify(pkg.packageName, metadata.id)
+                        fresh[qualified] = DiscoveredAppFunction(
+                            packageName = pkg.packageName,
+                            functionIdentifier = metadata.id,
+                            parameters = metadata.parameters,
+                        )
                         AgentTool(
-                            name = metadata.id,
-                            description = metadata.description ?: "App function ${metadata.id}",
+                            name = qualified,
+                            description = metadata.description ?: "App function $qualified",
                             parameters = generateJsonSchema(metadata.parameters),
                             risk = ToolRisk.SENSITIVE,
                         )
                     }
                 }
+                discoveredCache = fresh.toMap()
+                tools
             }.first()
+    }
+
+    /**
+     * Cheap existence check for a discovered AppFunction by qualified name. Hits the
+     * volatile snapshot first; only when the entry is absent does it pay the cost of a
+     * fresh discovery pass. Lets callers (e.g. `ToolRepositoryImpl.executeTool`) decide
+     * whether to dispatch through [invokeByName] without an extra blanket
+     * [getAvailableFunctions] call per execution — the common cache-hit path is O(1)
+     * and IPC-free.
+     */
+    suspend fun isDiscovered(name: String): Boolean = lookup(name) != null
+
+    /**
+     * Returns the typed [AppFunctionParameterMetadata] tree for the qualified
+     * AppFunction [name] (`"${packageName}/${id}"`), required by
+     * `AppFunctionDataCodec.encode` to translate LLM-emitted JSON arguments into an
+     * [androidx.appfunctions.AppFunctionData] payload.
+     *
+     * Performs a transparent re-discovery pass through [getAvailableFunctions] when the
+     * cache misses, so callers that ask before any explicit discovery still get a
+     * correct answer. Returns `null` only when [name] is genuinely not a discovered
+     * AppFunction on this device.
+     */
+    suspend fun getParametersMetadata(name: String): List<AppFunctionParameterMetadata>? = lookup(name)?.parameters
+
+    /**
+     * Returns the source `packageName` reported by the system for the discovered
+     * AppFunction with qualified name [name]. Required to build
+     * [androidx.appfunctions.ExecuteAppFunctionRequest].
+     *
+     * Same cache-then-rediscover policy as [getParametersMetadata]; `null` means the
+     * function is not visible on this device.
+     */
+    suspend fun getTargetPackageName(name: String): String? = lookup(name)?.packageName
+
+    private suspend fun lookup(qualifiedName: String): DiscoveredAppFunction? {
+        discoveredCache[qualifiedName]?.let { return it }
+        getAvailableFunctions()
+        return discoveredCache[qualifiedName]
+    }
+
+    /**
+     * Snapshot of the per-AppFunction facts that [AgentTool] cannot carry — held in
+     * [discoveredCache] for the caller-side execution path. [functionIdentifier] is the
+     * un-qualified id reported by the system; it is what `ExecuteAppFunctionRequest`
+     * expects, while [discoveredCache] is keyed by the qualified
+     * `"${packageName}/${functionIdentifier}"` form.
+     */
+    private data class DiscoveredAppFunction(
+        val packageName: String,
+        val functionIdentifier: String,
+        val parameters: List<AppFunctionParameterMetadata>,
+    )
+
+    private companion object {
+        /**
+         * Builds the qualified AppFunction name used throughout the caller-side path
+         * (`AgentTool.name`, [discoveredCache] key, and the value the agent's LLM sees
+         * in `$TOOLS`). The qualified form disambiguates AppFunctions whose un-qualified
+         * `id` collides across packages.
+         */
+        fun qualify(packageName: String, id: String): String = "$packageName/$id"
     }
 
     private fun generateJsonSchema(parameters: List<AppFunctionParameterMetadata>): String {

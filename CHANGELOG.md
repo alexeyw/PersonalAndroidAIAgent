@@ -30,6 +30,18 @@ details.
   Advisories channel as `SECURITY.md`.
 - Public contributor-facing documentation under `docs/`:
   `docs/code-style.md`, `docs/testing.md`, `docs/api-conventions.md`.
+- Caller-side end-to-end execution of discovered AppFunctions. The local
+  tool catalogue now includes AppFunctions surfaced by
+  `LocalAppFunctionManager` alongside built-ins (built-ins still win on
+  name collisions, with a warning log). AppFunctions are addressed by
+  their qualified name (`"${packageName}/${id}"`) so identical ids exposed
+  by different packages can coexist without overwriting each other in the
+  caller-side cache. `ToolRepository.executeTool` routes AppFunction calls
+  through `LocalAppFunctionManager.invokeByName`, which encodes arguments
+  via `AppFunctionDataCodec`, dispatches through the system
+  `AppFunctionManager`, and renders the response back to a flat JSON
+  string. Disabling an AppFunction via
+  `SettingsRepository.disabledAppFunctions` now also gates execution.
 
 ### Changed
 

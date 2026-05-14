@@ -17,6 +17,7 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -43,6 +44,10 @@ class ToolRepositoryImplTest {
         every { settingsRepository.appFunctionRiskOverrides } returns flowOf(emptyMap())
         coEvery { localAppFunctionManager.getAvailableFunctions() } returns
             listOf(AgentTool("get_system_time", "desc", "{}"))
+        // mockk picks the most recent matching stub: default everything to "not discovered"
+        // and then override the specific names the tests rely on.
+        coEvery { localAppFunctionManager.isDiscovered(any()) } returns false
+        coEvery { localAppFunctionManager.isDiscovered("get_system_time") } returns true
         coEvery { mcpClient.connect(any()) } returns Unit
         coEvery { mcpClient.disconnect() } returns Unit
 
@@ -74,11 +79,10 @@ class ToolRepositoryImplTest {
     }
 
     @Test
-    fun `getAvailableTools returns built-in and mcp tools but excludes raw AppFunctions`() = runTest {
-        // AppFunctions discovered via LocalAppFunctionManager (e.g. `get_system_time`)
-        // are intentionally NOT advertised until end-to-end execution is wired up —
-        // see ToolRepositoryImpl.getAllLocalTools KDoc. Built-in tools (`schedule_task`,
-        // `search_tool`) and MCP tools must still come through.
+    fun `getAvailableTools includes discovered AppFunctions alongside built-in and mcp`() = runTest {
+        // Phase 20 — 3/7: discovered AppFunctions (e.g. `get_system_time`) are now part
+        // of the advertised catalogue, alongside built-in tools (`schedule_task`,
+        // `search_tool`) and MCP-side tools.
         val mcpTools = listOf(AgentTool("test_mcp", "desc", "params"))
         coEvery { mcpClient.getTools() } returns mcpTools
 
@@ -87,9 +91,32 @@ class ToolRepositoryImplTest {
         assertTrue(result.any { it.name == "schedule_task" })
         assertTrue(result.any { it.name == "search_tool" })
         assertTrue(result.any { it.name == "test_mcp" })
-        // The raw AppFunction must NOT leak into the advertised catalogue.
-        assertTrue(result.none { it.name == "get_system_time" })
+        assertTrue(result.any { it.name == "get_system_time" })
+        // Built-ins precede AppFunctions for prompt-engineering stability.
+        val builtinIndex = result.indexOfFirst { it.name == "search_tool" }
+        val appFunctionIndex = result.indexOfFirst { it.name == "get_system_time" }
+        assertTrue(builtinIndex < appFunctionIndex)
         coVerify(exactly = 1) { mcpClient.getTools() }
+    }
+
+    @Test
+    fun `getAvailableTools drops AppFunction that collides with built-in name`() = runTest {
+        // A discovered AppFunction whose id collides with a built-in must not leak in:
+        // the built-in version (with its registered executor and risk) keeps winning.
+        coEvery { localAppFunctionManager.getAvailableFunctions() } returns listOf(
+            AgentTool("schedule_task", "imposter description", "{}"),
+            AgentTool("get_system_time", "desc", "{}"),
+        )
+        coEvery { mcpClient.getTools() } returns emptyList()
+
+        val result = repository.getAvailableTools()
+
+        val scheduleEntries = result.filter { it.name == "schedule_task" }
+        assertEquals(1, scheduleEntries.size)
+        // The surviving entry is the built-in, not the discovered impostor.
+        assertFalse(scheduleEntries.single().description == "imposter description")
+        // Non-colliding AppFunctions still come through.
+        assertTrue(result.any { it.name == "get_system_time" })
     }
 
     @Test
@@ -147,6 +174,55 @@ class ToolRepositoryImplTest {
 
         assertEquals("scheduled", result)
         coVerify(exactly = 1) { scheduleTaskExecutor.execute("{\"prompt\":\"do X\"}") }
+    }
+
+    @Test
+    fun `executeTool dispatches AppFunction via LocalAppFunctionManager`() = runTest {
+        // Phase 20 — 3/7: the discovered-AppFunction branch delegates the entire
+        // codec + ExecuteAppFunctionRequest + system-call pipeline to the manager. The
+        // repository only forwards the verbatim arguments string and returns the rendered
+        // result. All Android AppFunctions types stay encapsulated behind invokeByName.
+        val toolName = "get_system_time"
+        val arguments = "{\"locale\":\"en\"}"
+        coEvery { localAppFunctionManager.invokeByName(toolName, arguments) } returns
+            "{\"result\":\"2026-05-14T10:00:00\"}"
+        coEvery { mcpClient.getTools() } returns emptyList()
+
+        val result = repository.executeTool(toolName, arguments)
+
+        assertEquals("{\"result\":\"2026-05-14T10:00:00\"}", result)
+        coVerify(exactly = 1) { localAppFunctionManager.invokeByName(toolName, arguments) }
+    }
+
+    @Test
+    fun `executeTool propagates IllegalStateException raised by the AppFunction pipeline`() = runTest {
+        // The manager wraps any AppFunctionException into IllegalStateException internally;
+        // the repository must surface that without further wrapping or swallowing.
+        val toolName = "get_system_time"
+        coEvery { localAppFunctionManager.invokeByName(toolName, any()) } throws
+            IllegalStateException("AppFunction $toolName failed: denied")
+        coEvery { mcpClient.getTools() } returns emptyList()
+
+        val exception = runCatching { repository.executeTool(toolName, "{}") }.exceptionOrNull()
+
+        assertTrue("Expected IllegalStateException, got $exception", exception is IllegalStateException)
+        assertTrue(exception!!.message!!.contains(toolName))
+        assertTrue(exception.message!!.contains("denied"))
+    }
+
+    @Test
+    fun `executeTool throws when AppFunction is disabled`() = runTest {
+        val toolName = "get_system_time"
+        every { settingsRepository.disabledAppFunctions } returns flowOf(setOf(toolName))
+        coEvery { mcpClient.getTools() } returns emptyList()
+
+        val exception = runCatching { repository.executeTool(toolName, "{}") }.exceptionOrNull()
+
+        assertTrue(exception is IllegalArgumentException)
+        assertTrue(exception!!.message!!.contains(toolName))
+        assertTrue(exception.message!!.contains("disabled"))
+        // Disabled AppFunctions must short-circuit before we hit the manager.
+        coVerify(exactly = 0) { localAppFunctionManager.invokeByName(any(), any()) }
     }
 
     @Test
