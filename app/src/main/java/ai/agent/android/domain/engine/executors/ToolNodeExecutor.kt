@@ -217,7 +217,22 @@ class ToolNodeExecutor @Inject constructor(
             }
         }
 
-        val risk = toolRepository.getRisk(resolvedToolName)
+        // `getRisk` throws `IllegalArgumentException` when the tool isn't in the
+        // catalogue — this is reachable in auto-select mode if the LLM
+        // hallucinates a tool name, or if a tool was unregistered between
+        // discovery and execution. Surface a structured `NodeExecutionResult`
+        // error instead of letting the exception terminate the pipeline.
+        val risk = try {
+            toolRepository.getRisk(resolvedToolName)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Timber.tag("PipelineDebug").e(e, "Risk lookup failed for tool '$resolvedToolName'")
+            val errorMsg = "Risk lookup failed for tool $resolvedToolName: ${e.message}"
+            emit(NodeOutput.State(AgentOrchestratorState.Error(errorMsg)))
+            emit(NodeOutput.Result(NodeExecutionResult(error = errorMsg, resolvedToolName = resolvedToolName)))
+            return@flow
+        }
         val globalConfirmationOverride = settingsRepository.requiresUserConfirmation.first()
         val needsApproval = when (risk) {
             ToolRisk.READ_ONLY -> globalConfirmationOverride
