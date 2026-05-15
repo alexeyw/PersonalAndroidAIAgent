@@ -174,12 +174,15 @@ class AppFunctionsEndToEndTest {
                             sawWaiting.compareAndSet(false, true)
                         ) {
                             // The executor registers its CompletableDeferred *after* this emit
-                            // resumes its producer (see `ToolNodeExecutor.execute`). The short
-                            // delay before resuming gives the producer time to record the
-                            // deferred — otherwise `resumeWithApproval` may run against an empty
-                            // map and be silently dropped, leaving the gate to time out.
+                            // resumes its producer (see `ToolNodeExecutor.execute`). Calling
+                            // `resumeWithApproval` before that write is observable on the test
+                            // thread would be a no-op — the map is empty, the deferred is
+                            // dropped, and the gate would time out. Instead of guessing a
+                            // delay that's "probably long enough" we poll the executor's
+                            // `hasPendingApproval` probe until the registration is visible;
+                            // this is deterministic regardless of emulator load.
                             launch {
-                                delay(RESUME_GRACE_PERIOD_MS)
+                                awaitPendingApproval(executor, sessionId)
                                 executor.resumeWithApproval(sessionId, true)
                             }
                         }
@@ -322,6 +325,24 @@ class AppFunctionsEndToEndTest {
     }
 
     /**
+     * Deterministic readiness wait for the HITL gate. The executor registers its
+     * `CompletableDeferred` for [sessionId] *after* emitting the
+     * [AgentOrchestratorState.WaitingForApproval] state but before suspending on the
+     * approval. The test must not call `resumeWithApproval` until that registration is
+     * observable — otherwise the resume is silently dropped and the gate runs to its
+     * configured timeout. Polling [ToolNodeExecutor.hasPendingApproval] removes the
+     * dependency on any fixed delay constant and keeps the test stable across slow
+     * emulators and overloaded CI runners.
+     */
+    private suspend fun awaitPendingApproval(executor: ToolNodeExecutor, sessionId: String) {
+        withTimeout(PENDING_APPROVAL_TIMEOUT_MS) {
+            while (!executor.hasPendingApproval(sessionId)) {
+                delay(PENDING_APPROVAL_POLL_INTERVAL_MS)
+            }
+        }
+    }
+
+    /**
      * Polls [LocalAppFunctionManager.getAvailableFunctions] (transitively via
      * [ToolRepository.getAvailableTools]) until a tool whose qualified name starts with
      * the probe's package shows up, or the poll budget expires. Returns the qualified
@@ -394,6 +415,7 @@ class AppFunctionsEndToEndTest {
         const val PROBE_DISCOVERY_TIMEOUT_MS = 15_000L
         const val PROBE_POLL_INTERVAL_MS = 500L
         const val EXECUTOR_TIMEOUT_MS = 30_000L
-        const val RESUME_GRACE_PERIOD_MS = 200L
+        const val PENDING_APPROVAL_TIMEOUT_MS = 5_000L
+        const val PENDING_APPROVAL_POLL_INTERVAL_MS = 20L
     }
 }

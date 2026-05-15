@@ -88,6 +88,22 @@ class ToolNodeExecutor @Inject constructor(
         deferred?.complete(isApproved)
     }
 
+    /**
+     * Test-only readiness probe: returns `true` once [execute] has registered a
+     * `CompletableDeferred` for [sessionId] and is suspended awaiting the user's
+     * decision. Instrumented tests use this to synchronise their `resumeWithApproval`
+     * call deterministically — without it the test would have to rely on a fixed
+     * `delay(...)`, which races the deferred registration on slow / overloaded
+     * emulators (the producer reaches the `WaitingForApproval` emit point before
+     * registering its deferred; a `resumeWithApproval` call observed by the map in
+     * that window would be silently dropped).
+     *
+     * Intentionally not part of the public surface: production callers reach the
+     * gate through state emissions, never through the executor's internal map.
+     */
+    @androidx.annotation.VisibleForTesting
+    internal fun hasPendingApproval(sessionId: String): Boolean = activeApprovalDeferreds.containsKey(sessionId)
+
     // Reason: typed tool dispatcher with explicit branches for
     // LocalToolExecutor, AppFunction, and MCP delegation, each with its own
     // pre-flight (risk → approval suspension) and post-flight (`Result.success`
