@@ -59,7 +59,7 @@ Each layer maps onto concrete packages:
 
 | Layer          | Packages                                                                                          |
 |----------------|---------------------------------------------------------------------------------------------------|
-| `presentation` | `presentation/ui/{chat,memory,models,monitoring,orchestrator,prompts,settings,splash,tools}`, `presentation/{components,state,theme,notifications,receivers}` |
+| `presentation` | `presentation/ui/{about,chat,memory,models,monitoring,more,onboarding,orchestrator,prompts,settings,splash,taskmonitor,tools}`, `presentation/ui/navigation`, `presentation/{components,state,theme,notifications,receivers}` |
 | `domain`       | `domain/{usecases,engine,models,repositories,prompt,constants,services,pipelineio}`               |
 | `data`         | `data/{engine,local,repositories,prompt,mcp,services,tools,network,mappers,logging}`              |
 
@@ -67,6 +67,40 @@ Cross-layer wiring is handled by **Hilt**. Modules in `di/` provide
 external dependencies (Room, Retrofit, LiteRT, prompt-variable providers,
 local-tool executors) and bind data-layer implementations to domain-layer
 interfaces.
+
+### 1.1. App shell and navigation
+
+The presentation layer is hosted by a single `NavHost` declared in
+`presentation/ui/navigation/AppNavGraph.kt`. The graph wires:
+
+- **Splash** → **Onboarding** (only when `SettingsRepository.isFirstLaunch`
+  is `true`) → **Chat tab**. After onboarding, the flag is persisted as
+  `false` so subsequent launches go straight to Chat.
+- Four top-level **tabs** rendered by `AppShellScaffold`'s Material3
+  `NavigationBar` (decisions.md §12): **Chat / Pipelines / Tools / More**.
+  Tab state — back-stack, scroll position, ViewModel state — is preserved
+  across switches and rotations using the canonical
+  `popUpTo(startDestination) { saveState = true } + restoreState = true`
+  pattern.
+- **Secondary destinations** live as additional `composable(...)` entries
+  reachable from inside a tab. The pipelines tab is a nested `navigation { }`
+  graph so the library and editor share a single `OrchestratorViewModel`
+  scoped to the graph entry. The More tab is the umbrella for Memory,
+  Models, Prompt library, Active tasks, Live metrics, Settings, and
+  About.
+- **Modal sheets** (`NodeConfigSheet`, `ConsolePane`, `AddMcpServerScreen`)
+  share a single `KnotworkModalRoute` wrapper that combines Material3
+  `ModalBottomSheet` with `PredictiveBackHandler` so Android 14+
+  predictive-back animates the sheet in lockstep with the user's drag.
+- Deep-links: `knotwork://chat/{threadId}` resolves to the parameterised
+  `chat/{threadId}` route, forwarding the thread id to `ChatViewModel.switchSession`.
+
+Bottom-nav visibility per route is decided by the pure
+`shouldShowBottomNav(route)` function (`BottomNavVisibility.kt`) — the
+bar is hidden on Splash, Onboarding, Pipeline editor (full-screen
+canvas), and any `sheet/...` route. While the user is on a tab's
+start-destination, `BackHandler` short-circuits the system Back gesture
+to `activity.finish()` so Back exits the app rather than switching tabs.
 
 ---
 

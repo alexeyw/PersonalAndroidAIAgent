@@ -30,12 +30,27 @@ pre-release ships with real captures.
 
 ## Getting started
 
+The first time you launch the app you go through a brief onboarding
+screen, then land on the Chat tab.
+
+The bottom of the screen always shows the four navigation tabs:
+
+- **Chat** — talk to the agent (the default tab the app opens on).
+- **Pipelines** — browse and edit the agent's reasoning pipelines.
+- **Tools** — manage AppFunctions and connected MCP servers.
+- **More** — secondary screens (Memory, Models, Prompt library,
+  Active tasks, Live metrics, Settings, About).
+
+The Back gesture returns you up the inner stack of the current tab.
+While you are on the start screen of a tab, Back closes the app — it
+does not switch between tabs.
+
 The first time you open the app, there is no model loaded yet — you
 need to download one before you can talk to the agent.
 
 ### 1. Open the Models screen
 
-From the main navigation, open **Models**. The screen has two areas:
+Open the **More** tab and tap **Models**. The screen has two areas:
 
 - A list of **presets** — curated LiteRT models that are known to work
   with the agent. Each preset shows the model name and a **Download**
@@ -404,7 +419,7 @@ the rolling context (described below).
 
 ### Browsing long-term memory
 
-Open the **Memory** screen. It has two tabs:
+Open the **More** tab, tap **Memory**. The screen has two tabs:
 
 - **Chat History** — every past session, grouped by chat. Expand a
   session to see its messages.
