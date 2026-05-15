@@ -115,6 +115,7 @@ After installing:
 | Language         | Kotlin                                                  |
 | UI               | Jetpack Compose + Material Design 3                     |
 | Design system    | Knotwork (in-tree `:catalog` library)                   |
+| Brand fonts      | Inter + JetBrains Mono (bundled TTF, SIL OFL 1.1)       |
 | LLM engine       | LiteRT-LM (Google Edge AI / ex-TensorFlow Lite)         |
 | Tool calling     | AppFunctions Jetpack                                    |
 | Agent framework  | Koog                                                    |

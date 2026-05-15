@@ -2,4 +2,18 @@
 <resources>
 
     <style name="Theme.AndroidAIAgent" parent="android:Theme.Material.Light.NoActionBar" />
+
+    <!--
+        Platform splash theme (Android 12+ splash screen API).
+
+        Phase 21 / Task 3/11: shows the brand mark on the Knotwork accent-500
+        background while the process boots and Compose installs its first
+        frame. `postSplashScreenTheme` swaps to the regular app theme as soon
+        as `installSplashScreen()` releases its keep-on-screen condition.
+    -->
+    <style name="Theme.App.Splash" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/knotwork_accent_500</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_launcher_foreground</item>
+        <item name="postSplashScreenTheme">@style/Theme.AndroidAIAgent</item>
+    </style>
 </resources>

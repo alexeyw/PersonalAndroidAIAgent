@@ -200,6 +200,7 @@ This file maps the contents of the main application package.
   - `theme/` - Compose theme definitions.
     - `Theme.kt` - App theme definition. Reads the static fallback palette from `res/values/colors.xml` via `colorResource(...)`; dynamic color (Android 12+) takes precedence on supported devices.
     - `Type.kt` - Typography settings.
+    - `KnotworkFontsBootstrap.kt` - Builds the bundled Inter / JetBrains Mono `FontFamily` instances from `R.font.*` and installs them into `:catalog`'s `KnotworkFonts`. Called once from `App.onCreate()` so the design-system typography renders against the brand fonts on the first frame.
   - `ui/` - UI screens and ViewModels.
     - `MainActivity.kt` - Main activity.
     - `navigation/` - Navigation routing constants.
