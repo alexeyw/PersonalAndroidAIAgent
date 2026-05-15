@@ -15,6 +15,16 @@ details.
 
 ### Added
 
+- Callee-side AppFunctions surface: `AgentAppFunctionService` now routes
+  incoming `ExecuteAppFunctionRequest`s through a pure-Kotlin
+  `AppFunctionRouter` that resolves Hilt-managed wrappers via an
+  application-scoped `AppFunctionDispatchEntryPoint`. The first wrapper,
+  `SearchAppFunction`, exposes the read-only `search_tool` built-in to
+  external callers using the same Wikipedia code path the agent invokes
+  internally. Side-effect built-ins (`schedule_task`, `delegate_task`)
+  remain intentionally excluded from the callee surface. Cancellation,
+  invalid-argument, function-not-found and unexpected-error paths are
+  translated into the matching `AppFunctionException` codes.
 - `ToolRisk` domain model (`READ_ONLY` / `SENSITIVE` / `DESTRUCTIVE`) with
   per-tool defaults: `search_tool` → `READ_ONLY`, `schedule_task` /
   `delegate_task` → `SENSITIVE`, discovered AppFunctions → `SENSITIVE` (with
