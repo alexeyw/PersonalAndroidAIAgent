@@ -15,6 +15,23 @@ details.
 
 ### Added
 
+- `:tools-probe` debug-only Android module shipping a single
+  `@AppFunction echo(message)` so the Phase 20 end-to-end instrumented test
+  (`AppFunctionsEndToEndTest` in `:app/src/androidTest`) has a deterministic
+  remote target. The probe is auto-installed alongside the test APK via
+  AGP's `androidTestUtil` configuration. Its `MainActivity` doubles as a
+  one-tap manual smoke for the agent's callee-side surface
+  (`search_tool` query "Knotwork") on the Phase 20 reference device.
+- `AppFunctionsEndToEndTest` covering four end-to-end scenarios on Android
+  16+: caller-side `ToolRepository.executeTool` round-trip, HITL gate
+  emission of `WaitingForApproval` for SENSITIVE-by-default AppFunctions
+  followed by `ToolNodeExecutor.resumeWithApproval`, callee-side invocation
+  of `search_tool` through the system `AppFunctionManager`, and risk
+  override resolution via `SettingsRepository.setAppFunctionRiskOverride`.
+- `AppFunctionsE2ETestEntryPoint` (Hilt `EntryPoint`) under
+  `data/testing/` exposing the singletons the new instrumented test
+  consumes (`ToolRepository`, `SettingsRepository`, `ChatRepository`),
+  avoiding a parallel Hilt test component.
 - Callee-side AppFunctions surface: `AgentAppFunctionService` now routes
   incoming `ExecuteAppFunctionRequest`s through a pure-Kotlin
   `AppFunctionRouter` that resolves Hilt-managed wrappers via an
@@ -82,6 +99,12 @@ details.
 ### Removed
 
 ### Fixed
+
+- `ApprovalBannerTest` and `ChatScreenTest` no longer fail to compile on the
+  current Compose / `UiText` surfaces. The fixes (a stale `assertDoesNotExist`
+  import and a raw `String` passed where a `UiText?` is expected) had drifted
+  silently because CI runs JVM-only `./gradlew check`; the new Phase 20-6
+  instrumented-test work made the breakage observable.
 
 ### Security
 

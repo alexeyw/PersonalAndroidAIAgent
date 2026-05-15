@@ -397,4 +397,10 @@ dependencies {
     debugImplementation(libs.androidx.compose.ui.tooling)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
     androidTestImplementation(libs.mockk.android)
+
+    // Phase 20 / Task 6/7: install the :tools-probe debug APK alongside the test APK so
+    // `AppFunctionsEndToEndTest` can discover the probe's `echo` AppFunction through the
+    // system AppFunctionManager. `androidTestUtil` is AGP's hook for additional APKs
+    // delivered to the device but kept out of the test classpath.
+    androidTestUtil(project(":tools-probe"))
 }

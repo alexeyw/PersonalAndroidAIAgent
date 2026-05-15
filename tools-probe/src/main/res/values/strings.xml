@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="probe_app_name">Agent Tools Probe</string>
+    <string name="probe_invoke_search_button">Invoke search_tool on Knotwork</string>
+    <string name="probe_header">Agent Tools Probe (debug)</string>
+    <string name="probe_idle_message">Tap the button below to invoke search_tool in the agent app.</string>
+    <string name="probe_in_flight_message">Calling search_tool…</string>
+    <string name="probe_result_label">Result:</string>
+    <string name="probe_error_label">Error:</string>
+</resources>

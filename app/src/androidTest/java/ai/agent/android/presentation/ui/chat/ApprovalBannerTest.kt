@@ -2,7 +2,6 @@ package ai.agent.android.presentation.ui.chat
 
 import ai.agent.android.domain.models.AgentOrchestratorState
 import ai.agent.android.domain.models.ToolRisk
-import androidx.compose.ui.test.assertDoesNotExist
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText

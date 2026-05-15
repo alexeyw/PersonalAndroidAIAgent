@@ -4,6 +4,7 @@ import ai.agent.android.domain.models.ChatMessage
 import ai.agent.android.domain.models.ConsoleEvent
 import ai.agent.android.domain.models.ConsoleEventType
 import ai.agent.android.domain.models.Role
+import ai.agent.android.presentation.ui.common.UiText
 import android.content.res.Configuration
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.platform.LocalConfiguration
@@ -61,7 +62,7 @@ class ChatScreenTest {
     @Test
     fun testChatScreen_displaysErrorState() {
         val viewModel = mockViewModel(
-            ChatUiState(errorMessage = "Network Error Occurred"),
+            ChatUiState(errorMessage = UiText.Dynamic("Network Error Occurred")),
         )
 
         composeTestRule.setContent {
