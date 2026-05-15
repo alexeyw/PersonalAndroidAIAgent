@@ -51,11 +51,14 @@ import ai.agent.android.domain.models.Result as DomainResult
  *
  * The four scenarios on this class exercise the agent's caller-side, HITL gate,
  * callee-side and risk-override paths against a second app installed alongside the test
- * APK (`:tools-probe`, applicationId `ai.agent.android.toolsprobe`, deployed via
- * AGP's `androidTestUtil` configuration). The probe declares a single `@AppFunction
- * echo(message)` whose response is the input verbatim — making it a deterministic
- * remote target that does not depend on network access or any non-trivial business
- * logic on the probe side.
+ * APK (`:tools-probe`, applicationId `ai.agent.android.toolsprobe`). The probe is
+ * deployed via a Gradle task hook in `:app/build.gradle.kts` that makes
+ * `:tools-probe:installDebug` a prerequisite of `installDebugAndroidTest`, so the
+ * probe APK is on the device before any test in this class runs — both from the CLI
+ * (`./gradlew :app:connectedDebugAndroidTest`) and from Android Studio's Run Test.
+ * The probe declares a single `@AppFunction echo(message)` whose response is the
+ * input verbatim — making it a deterministic remote target that does not depend on
+ * network access or any non-trivial business logic on the probe side.
  *
  * Why instrumented and not Robolectric: the Android 16 `AppFunctionManager` is a
  * system-process service. The test class therefore requires API 36+ and a real device
@@ -97,8 +100,9 @@ class AppFunctionsEndToEndTest {
         qualifiedEchoName = waitForProbeEchoDiscovery()
             ?: error(
                 "Probe AppFunction `echo` was not discovered within ${PROBE_DISCOVERY_TIMEOUT_MS}ms. " +
-                    "Check that `:tools-probe` was installed via androidTestUtil and the agent " +
-                    "package can see ${PROBE_PACKAGE} via <queries>.",
+                    "Check that `:tools-probe:installDebug` ran before the test (it is hooked off " +
+                    "`installDebugAndroidTest` in `:app/build.gradle.kts`) and that the agent " +
+                    "package can see $PROBE_PACKAGE via <queries>.",
             )
 
         // Each test owns its session id so HITL deferred state cannot leak between

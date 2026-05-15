@@ -397,10 +397,19 @@ dependencies {
     debugImplementation(libs.androidx.compose.ui.tooling)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
     androidTestImplementation(libs.mockk.android)
+}
 
-    // Phase 20 / Task 6/7: install the :tools-probe debug APK alongside the test APK so
-    // `AppFunctionsEndToEndTest` can discover the probe's `echo` AppFunction through the
-    // system AppFunctionManager. `androidTestUtil` is AGP's hook for additional APKs
-    // delivered to the device but kept out of the test classpath.
-    androidTestUtil(project(":tools-probe"))
+// Phase 20 / Task 6/7: install the :tools-probe debug APK alongside the agent's test
+// APK so `AppFunctionsEndToEndTest` can discover the probe's `echo` AppFunction
+// through the system AppFunctionManager. `androidTestUtil(project(":tools-probe"))`
+// would be the ergonomic choice, but AGP 9 publishes the probe as a multi-variant
+// application module without the disambiguating attributes Gradle needs to pick a
+// concrete APK from a configuration-less consumer — sync fails with "Cannot choose
+// between debugRuntimeElements / releaseRuntimeElements". Hooking on
+// `installDebugAndroidTest` instead is variant-free, sync-safe, and triggers in both
+// CLI (`./gradlew :app:connectedDebugAndroidTest`) and IDE (Android Studio's Run
+// Test) flows because both go through `installDebugAndroidTest` before launching
+// the instrumentation.
+tasks.matching { it.name == "installDebugAndroidTest" }.configureEach {
+    dependsOn(":tools-probe:installDebug")
 }

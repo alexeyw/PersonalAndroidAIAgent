@@ -18,10 +18,14 @@ details.
 - `:tools-probe` debug-only Android module shipping a single
   `@AppFunction echo(message)` so the Phase 20 end-to-end instrumented test
   (`AppFunctionsEndToEndTest` in `:app/src/androidTest`) has a deterministic
-  remote target. The probe is auto-installed alongside the test APK via
-  AGP's `androidTestUtil` configuration. Its `MainActivity` doubles as a
-  one-tap manual smoke for the agent's callee-side surface
-  (`search_tool` query "Knotwork") on the Phase 20 reference device.
+  remote target. The probe APK is installed on the device before the
+  agent's instrumented tests via a Gradle task hook that adds
+  `:tools-probe:installDebug` as a prerequisite of
+  `installDebugAndroidTest` — works for both CLI
+  (`./gradlew :app:connectedDebugAndroidTest`) and Android Studio's Run
+  Test flows. Its `MainActivity` doubles as a one-tap manual smoke for the
+  agent's callee-side surface (`search_tool` query "Knotwork") on the
+  Phase 20 reference device.
 - `AppFunctionsEndToEndTest` covering four end-to-end scenarios on Android
   16+: caller-side `ToolRepository.executeTool` round-trip, HITL gate
   emission of `WaitingForApproval` for SENSITIVE-by-default AppFunctions
