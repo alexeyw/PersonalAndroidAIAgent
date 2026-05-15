@@ -373,9 +373,17 @@ class AppFunctionsEndToEndTest {
      */
     private suspend fun buildDiscoveryFailureReport(applicationContext: android.content.Context): String {
         val automation = InstrumentationRegistry.getInstrumentation().uiAutomation
-        val agentAppOp = runShell(automation, "appops get $AGENT_PACKAGE EXECUTE_APP_FUNCTIONS")
-        val probeAppOp = runShell(automation, "appops get $PROBE_PACKAGE EXECUTE_APP_FUNCTIONS")
         val probeInstalled = runShell(automation, "pm list packages $PROBE_PACKAGE")
+        val agentPermLine = dumpPackagePermissionLine(automation, AGENT_PACKAGE, "EXECUTE_APP_FUNCTIONS")
+        val probePermLine = dumpPackagePermissionLine(automation, PROBE_PACKAGE, "EXECUTE_APP_FUNCTIONS")
+        val agentAppOp = runShell(
+            automation,
+            "appops get $AGENT_PACKAGE android:execute_app_functions",
+        ).ifBlank { runShell(automation, "appops get $AGENT_PACKAGE EXECUTE_APP_FUNCTIONS") }
+        val probeAppOp = runShell(
+            automation,
+            "appops get $PROBE_PACKAGE android:execute_app_functions",
+        ).ifBlank { runShell(automation, "appops get $PROBE_PACKAGE EXECUTE_APP_FUNCTIONS") }
         val rawPlatformResult = runCatching {
             val manager = AppFunctionManager.getInstance(applicationContext)
                 ?: return@runCatching "AppFunctionManager.getInstance returned null"
@@ -389,15 +397,30 @@ class AppFunctionsEndToEndTest {
             appendLine("  Last observed (agent) catalogue: $lastObservedTools")
             appendLine("  Raw AppFunctionManager.observeAppFunctions: [$rawPlatformResult]")
             appendLine("  pm list packages $PROBE_PACKAGE: '${probeInstalled.trim()}'")
-            appendLine("  appops get $AGENT_PACKAGE EXECUTE_APP_FUNCTIONS: '${agentAppOp.trim()}'")
-            appendLine("  appops get $PROBE_PACKAGE EXECUTE_APP_FUNCTIONS: '${probeAppOp.trim()}'")
+            appendLine("  $AGENT_PACKAGE EXECUTE_APP_FUNCTIONS (dumpsys package): '$agentPermLine'")
+            appendLine("  $PROBE_PACKAGE EXECUTE_APP_FUNCTIONS (dumpsys package): '$probePermLine'")
+            appendLine("  appops get $AGENT_PACKAGE …: '${agentAppOp.trim()}'")
+            appendLine("  appops get $PROBE_PACKAGE …: '${probeAppOp.trim()}'")
             appendLine(
-                "Check that the agent's <queries> covers $PROBE_PACKAGE (or " +
-                    "android.app.appfunctions.AppFunctionService) and that EXECUTE_APP_FUNCTIONS " +
-                    "is `allow` in both appops outputs above.",
+                "If `Raw AppFunctionManager.observeAppFunctions` is empty even though the " +
+                    "probe is installed and has app_functions_v2.xml, the missing piece is " +
+                    "almost certainly the EXECUTE_APP_FUNCTIONS permission grant on the agent.",
             )
         }
     }
+
+    /**
+     * Extracts the single `dumpsys package <pkg>` line that mentions [permissionFragment].
+     * Useful for confirming the install-time permission grant state without dumping the
+     * entire `dumpsys package` output (which is several pages and would drown the actual
+     * signal in noise).
+     */
+    private fun dumpPackagePermissionLine(automation: UiAutomation, pkg: String, permissionFragment: String): String =
+        runShell(automation, "dumpsys package $pkg")
+            .lineSequence()
+            .firstOrNull { it.contains(permissionFragment) }
+            ?.trim()
+            .orEmpty()
 
     /**
      * Deterministic readiness wait for the HITL gate. The executor registers its
@@ -445,27 +468,40 @@ class AppFunctionsEndToEndTest {
     }
 
     /**
-     * Allows the [android.permission.EXECUTE_APP_FUNCTIONS] appop for both the agent and
-     * the probe packages by issuing `appops set` shell commands through the
-     * [UiAutomation] privilege the instrumentation provides. The grant is per-device and
-     * persists until the package is uninstalled, so re-running the test class is fine —
-     * but a fresh emulator wipe drops it, which is why we re-issue every setUp.
+     * Enables the EXECUTE_APP_FUNCTIONS access for both the agent and the probe
+     * packages. The permission has protection level `appop|preinstalled|module` on
+     * Android 16, but the appop's wire identifier varies across platform images: the
+     * shell tool accepts both the all-caps Java constant (`EXECUTE_APP_FUNCTIONS`) and
+     * the canonical lowercase form (`android:execute_app_functions`), and `pm grant`
+     * works on some images where the permission is exposed as a runtime-style grant.
+     * Issuing all three is harmless — the first one the platform recognises wins, the
+     * others return an "Unknown operation" line that we deliberately drop on the
+     * floor (and log to Logcat for after-the-fact triage).
      *
-     * Failure is swallowed by design: on Android 16 the appop is already allowed by
-     * default for some emulator images, and `appops set` returns a non-zero exit with a
-     * harmless "Op flag <name> doesn't exist" message that we deliberately do not bubble
-     * up — if the appop is truly missing the discovery poll will time out and the
-     * resulting error message points the next reader at this exact code path.
+     * The grant persists for the package lifetime, so re-running the test class is
+     * fine, but a fresh emulator wipe drops it — which is why we re-issue every
+     * `setUp`.
      */
     private fun grantExecuteAppFunctionsAppOp() {
         val automation = InstrumentationRegistry.getInstrumentation().uiAutomation
         listOf(AGENT_PACKAGE, PROBE_PACKAGE).forEach { pkg ->
-            val setOutput = runShell(automation, "appops set $pkg EXECUTE_APP_FUNCTIONS allow")
-            val getOutput = runShell(automation, "appops get $pkg EXECUTE_APP_FUNCTIONS")
-            Log.d(LOG_TAG, "appops set $pkg EXECUTE_APP_FUNCTIONS allow → '$setOutput'")
-            Log.d(LOG_TAG, "appops get $pkg EXECUTE_APP_FUNCTIONS → '$getOutput'")
+            for (cmd in grantCommandsFor(pkg)) {
+                val output = runShell(automation, cmd)
+                Log.d(LOG_TAG, "$cmd → '$output'")
+            }
         }
     }
+
+    /**
+     * Shell commands tried (in order) to allow the EXECUTE_APP_FUNCTIONS permission for
+     * [pkg]. Different Android 16 builds expose different combinations; running all
+     * three is variant-tolerant.
+     */
+    private fun grantCommandsFor(pkg: String): List<String> = listOf(
+        "pm grant $pkg android.permission.EXECUTE_APP_FUNCTIONS",
+        "appops set $pkg android:execute_app_functions allow",
+        "appops set $pkg EXECUTE_APP_FUNCTIONS allow",
+    )
 
     /**
      * Cheap presence check for [packageName] on the device. Uses `pm list packages
