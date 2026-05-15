@@ -5,6 +5,7 @@ plugins {
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.detekt)
     alias(libs.plugins.ktlint)
+    alias(libs.plugins.roborazzi)
 }
 
 android {
@@ -34,6 +35,13 @@ android {
 
     buildFeatures {
         compose = true
+    }
+
+    // Roborazzi requires Robolectric to load real Android resources during
+    // unit tests so Compose can render against actual font / drawable
+    // pipelines instead of stubs.
+    testOptions {
+        unitTests.isIncludeAndroidResources = true
     }
 
     packaging {
@@ -106,4 +114,12 @@ dependencies {
     debugImplementation(libs.androidx.compose.ui.tooling)
 
     testImplementation(libs.junit)
+    testImplementation(platform(libs.androidx.compose.bom))
+    testImplementation(libs.androidx.compose.ui.test.junit4)
+    testImplementation(libs.androidx.compose.ui.test.manifest)
+    testImplementation(libs.robolectric)
+    testImplementation(libs.androidx.junit)
+    testImplementation(libs.roborazzi)
+    testImplementation(libs.roborazzi.compose)
+    testImplementation(libs.roborazzi.junit.rule)
 }
