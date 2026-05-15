@@ -84,6 +84,18 @@ class AgentAppFunctionService : AppFunctionService() {
             }
         } catch (e: AppFunctionException) {
             callback.onError(e)
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            // The system either tripped `cancellationSignal` or the dispatching coroutine
+            // was otherwise cancelled. The platform exposes a dedicated error code for
+            // this case so callers can distinguish "you asked us to stop" from a generic
+            // app crash; surface it here instead of falling through to ERROR_APP_UNKNOWN_ERROR.
+            Timber.d("AppFunction '%s' cancelled", request.functionIdentifier)
+            callback.onError(
+                AppFunctionException(
+                    AppFunctionException.ERROR_CANCELLED,
+                    e.message ?: "AppFunction execution cancelled",
+                ),
+            )
         } catch (
             @Suppress("TooGenericExceptionCaught") e: Exception,
         ) {

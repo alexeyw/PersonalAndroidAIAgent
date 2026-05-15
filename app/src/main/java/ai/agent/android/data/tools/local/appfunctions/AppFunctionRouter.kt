@@ -48,6 +48,12 @@ internal class AppFunctionRouter(private val searchAppFunction: SearchAppFunctio
         val lang = getArg(ARG_LANG)?.takeIf { it.isNotBlank() }.orEmpty()
         return try {
             DispatchOutcome.Success(searchAppFunction.invoke(query, lang))
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            // Cancellation is a control-flow signal from the caller (the platform's
+            // CancellationSignal was tripped, or the enclosing coroutine was cancelled).
+            // It must propagate so the service shim can return ERROR_CANCELLED instead of
+            // burying it in ERROR_APP_UNKNOWN_ERROR via the generic Exception branch.
+            throw e
         } catch (e: IllegalArgumentException) {
             DispatchOutcome.InvalidArgument(e.message ?: "Invalid argument")
         } catch (

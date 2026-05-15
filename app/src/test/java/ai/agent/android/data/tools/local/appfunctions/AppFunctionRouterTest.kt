@@ -4,8 +4,11 @@ import ai.agent.android.data.tools.local.SearchTool
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -97,5 +100,22 @@ class AppFunctionRouterTest {
 
         assertTrue(outcome is DispatchOutcome.InternalError)
         assertEquals(boom, (outcome as DispatchOutcome.InternalError).cause)
+    }
+
+    @Test
+    fun `given wrapper throws CancellationException when route then it propagates`() {
+        val cancellation = CancellationException("client cancelled")
+        coEvery { searchTool.executeSearch(any(), any()) } throws cancellation
+
+        // Use plain runBlocking — `runTest` swallows CancellationException as a normal
+        // structured-concurrency control signal, but our contract is that the cancellation
+        // must surface to the caller of `route` so the service shim can map it to
+        // ERROR_CANCELLED. runBlocking re-throws cancellations from its body verbatim.
+        val thrown = assertThrows(CancellationException::class.java) {
+            runBlocking {
+                router.route("search_tool") { name -> if (name == "query") "kotlin" else null }
+            }
+        }
+        assertEquals("client cancelled", thrown.message)
     }
 }
