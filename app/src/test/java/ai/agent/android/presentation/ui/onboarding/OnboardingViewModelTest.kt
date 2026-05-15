@@ -17,12 +17,14 @@ import org.junit.Test
 
 /**
  * Verifies [OnboardingViewModel.completeOnboarding] persists the
- * `isFirstLaunch = false` flag exactly once.
+ * `hasCompletedOnboarding = true` flag exactly once.
  *
  * The flag is read by `AppNavGraph` on the next cold start to decide
  * whether to route to onboarding — a regression where the flag is
  * never flipped would put the user into an onboarding loop, so this
- * test is the cheapest available guard.
+ * test is the cheapest available guard. It also pins down that the VM
+ * sets the **onboarding-completion** flag, not `isFirstLaunch` (which
+ * `InitializeAppUseCase` already clears during cold-start init).
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class OnboardingViewModelTest {
@@ -34,7 +36,7 @@ class OnboardingViewModelTest {
     fun setUp() {
         Dispatchers.setMain(testDispatcher)
         settingsRepository = mockk(relaxed = true)
-        coEvery { settingsRepository.setFirstLaunch(any()) } returns Unit
+        coEvery { settingsRepository.setHasCompletedOnboarding(any()) } returns Unit
     }
 
     @After
@@ -43,12 +45,16 @@ class OnboardingViewModelTest {
     }
 
     @Test
-    fun `given onboarding completion when invoked then flips first-launch flag to false`() = runTest {
+    fun `given onboarding completion when invoked then sets hasCompletedOnboarding to true`() = runTest {
         val viewModel = OnboardingViewModel(settingsRepository)
 
         viewModel.completeOnboarding()
         advanceUntilIdle()
 
-        coVerify(exactly = 1) { settingsRepository.setFirstLaunch(false) }
+        coVerify(exactly = 1) { settingsRepository.setHasCompletedOnboarding(true) }
+        // The VM must not also touch `isFirstLaunch` — that flag is owned
+        // by `InitializeAppUseCase` and resetting it would re-trigger
+        // one-shot seeding (default prompts, the seeded pipeline).
+        coVerify(exactly = 0) { settingsRepository.setFirstLaunch(any()) }
     }
 }

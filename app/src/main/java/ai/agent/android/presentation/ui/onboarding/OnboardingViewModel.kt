@@ -16,21 +16,28 @@ import javax.inject.Inject
  * "completion" sink.
  *
  * Responsibilities:
- *  - Flip `SettingsRepository.isFirstLaunch` to `false` exactly once when
- *    the user finishes (or skips) onboarding. The persisted flag is what
+ *  - Flip `SettingsRepository.hasCompletedOnboarding` to `true` exactly
+ *    once when the user finishes (or skips) onboarding. The persisted
+ *    flag is what
  *    [AppNavGraph][ai.agent.android.presentation.ui.navigation.AppNavGraph]
  *    reads on the next cold start to decide whether to show onboarding.
+ *
+ *    NB: this is a separate flag from `isFirstLaunch` — that one is
+ *    cleared by `InitializeAppUseCase` during cold-start init (before
+ *    the splash hands control to the nav-graph), so it cannot be the
+ *    gate for the onboarding UI. See `SettingsRepository.kt` for the
+ *    split rationale.
  */
 @HiltViewModel
 class OnboardingViewModel @Inject constructor(private val settingsRepository: SettingsRepository) : ViewModel() {
 
     /**
-     * Mark onboarding as completed. Persists `isFirstLaunch = false` so
-     * subsequent launches go straight to the Chat tab.
+     * Mark onboarding as completed. Persists `hasCompletedOnboarding = true`
+     * so subsequent launches go straight to the Chat tab.
      */
     fun completeOnboarding() {
         viewModelScope.launch {
-            settingsRepository.setFirstLaunch(false)
+            settingsRepository.setHasCompletedOnboarding(true)
         }
     }
 }

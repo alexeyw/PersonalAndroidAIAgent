@@ -30,6 +30,7 @@ class SettingsManager @Inject constructor(private val dataStore: DataStore<Prefe
 
     private object PreferencesKeys {
         val IS_FIRST_LAUNCH = booleanPreferencesKey("is_first_launch")
+        val HAS_COMPLETED_ONBOARDING = booleanPreferencesKey("has_completed_onboarding")
         val HUGGING_FACE_TOKEN = stringPreferencesKey("hugging_face_token")
         val MAX_CONTEXT_LENGTH = intPreferencesKey("max_context_length")
         val TEMPERATURE = androidx.datastore.preferences.core.floatPreferencesKey("temperature")
@@ -67,6 +68,25 @@ class SettingsManager @Inject constructor(private val dataStore: DataStore<Prefe
     override suspend fun setFirstLaunch(isFirstLaunch: Boolean) {
         dataStore.edit { preferences ->
             preferences[PreferencesKeys.IS_FIRST_LAUNCH] = isFirstLaunch
+        }
+    }
+
+    override val hasCompletedOnboarding: Flow<Boolean> = dataStore.data
+        .catch { exception ->
+            if (exception is IOException) {
+                Timber.e(exception, "Error reading preferences")
+                emit(emptyPreferences())
+            } else {
+                throw exception
+            }
+        }
+        .map { preferences ->
+            preferences[PreferencesKeys.HAS_COMPLETED_ONBOARDING] ?: false
+        }
+
+    override suspend fun setHasCompletedOnboarding(completed: Boolean) {
+        dataStore.edit { preferences ->
+            preferences[PreferencesKeys.HAS_COMPLETED_ONBOARDING] = completed
         }
     }
 

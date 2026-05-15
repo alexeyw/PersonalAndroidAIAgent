@@ -55,15 +55,16 @@ import androidx.navigation.navDeepLink
  *
  * @param navController Activity-owned controller observed by the parent
  *        [AppShellScaffold] for bottom-nav visibility / highlight.
- * @param isFirstLaunch Read once at composition. When `true`, the splash
+ * @param showOnboarding Read once at composition. When `true`, the splash
  *        completion handler routes to onboarding; otherwise it goes to
- *        Chat. The value is captured (not collected) because mid-session
- *        flips of the flag are out of scope here — the flag transitions
- *        from `true` to `false` exactly once, during onboarding.
+ *        Chat. Sourced from `SettingsRepository.hasCompletedOnboarding`
+ *        (inverted) — a flag that survives `InitializeAppUseCase` and so
+ *        is the right gate for the UI surface, unlike `isFirstLaunch`
+ *        which is cleared during cold-start init.
  * @param modifier Inset-padding passthrough from [AppShellScaffold].
  */
 @Composable
-fun AppNavGraph(navController: NavHostController, isFirstLaunch: Boolean, modifier: Modifier = Modifier) {
+fun AppNavGraph(navController: NavHostController, showOnboarding: Boolean, modifier: Modifier = Modifier) {
     NavHost(
         navController = navController,
         startDestination = NavRoutes.SPLASH,
@@ -72,7 +73,7 @@ fun AppNavGraph(navController: NavHostController, isFirstLaunch: Boolean, modifi
         composable(NavRoutes.SPLASH) {
             SplashScreen(
                 onInitialized = {
-                    val next = if (isFirstLaunch) NavRoutes.ONBOARDING else NavRoutes.CHAT_TAB
+                    val next = if (showOnboarding) NavRoutes.ONBOARDING else NavRoutes.CHAT_TAB
                     navController.navigate(next) {
                         popUpTo(NavRoutes.SPLASH) { inclusive = true }
                         launchSingleTop = true

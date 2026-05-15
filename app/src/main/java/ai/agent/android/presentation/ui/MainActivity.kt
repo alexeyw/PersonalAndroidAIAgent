@@ -79,21 +79,28 @@ class MainActivity : ComponentActivity() {
         setContent {
             AndroidAIAgentTheme {
                 val navController = rememberNavController()
-                // The `isFirstLaunch` flag is observed once at composition
-                // and re-emits if the user resets onboarding from Settings
-                // (wired in Task 10). The default `initial = false`
-                // matches the not-first-launch case so we don't flash the
-                // onboarding screen while DataStore is still loading on
-                // cold start — the splash screen blocks until init
-                // finishes, then SplashScreen.onInitialized re-reads the
-                // (now-cached) flag through the captured value.
-                val isFirstLaunch by settingsRepository.isFirstLaunch
-                    .collectAsState(initial = true)
+                // Onboarding gate: invert `hasCompletedOnboarding` instead
+                // of reusing `isFirstLaunch` — the latter is cleared by
+                // `InitializeAppUseCase` during cold-start init (which
+                // runs while the splash screen is still in front), so by
+                // the time `SplashScreen.onInitialized` fires it has
+                // already been flipped to `false`. The dedicated
+                // `hasCompletedOnboarding` flag survives initialization
+                // and is the right gate for the UI surface. Re-emits if
+                // the user resets onboarding from Settings (wired in
+                // Task 10). Default `initial = false` (i.e. "treat as
+                // returning user until DataStore confirms otherwise") so
+                // we never flash onboarding for a returning user during
+                // the brief read window; on a fresh install, the splash
+                // screen blocks long enough for DataStore to emit the
+                // real `false` value before the navigation decision.
+                val hasCompletedOnboarding by settingsRepository.hasCompletedOnboarding
+                    .collectAsState(initial = false)
 
                 AppShellScaffold(navController = navController) { innerPadding ->
                     AppNavGraph(
                         navController = navController,
-                        isFirstLaunch = isFirstLaunch,
+                        showOnboarding = !hasCompletedOnboarding,
                         modifier = Modifier.padding(innerPadding),
                     )
                 }

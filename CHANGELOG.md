@@ -37,11 +37,13 @@ details.
     sheet bodies arrive in Tasks 6/7/10.
   - Chat deep-link: `knotwork://chat/{threadId}` resolves to the Chat
     tab and forwards the thread id to `ChatViewModel.switchSession`.
-  - Onboarding stub: a single-screen welcome with a Get-started CTA
-    that flips `SettingsRepository.isFirstLaunch = false` and routes
-    forward to the Chat tab. The full 4-step `HorizontalPager`
-    (Welcome → Models → Permissions → Sample pipelines) is Task 10's
-    deliverable.
+  - Onboarding stub: a single-screen welcome with a Get-started CTA.
+    Gating is keyed off a new dedicated
+    `SettingsRepository.hasCompletedOnboarding` flag (separate from
+    `isFirstLaunch`, which `InitializeAppUseCase` clears during
+    cold-start seeding and therefore cannot drive the UI gate). The
+    full 4-step `HorizontalPager` (Welcome → Models → Permissions →
+    Sample pipelines) is Task 10's deliverable.
 - Bundled brand fonts in `:app/src/main/res/font/` (Phase 21 / Task 3/11):
   Inter Regular / Medium / SemiBold / Bold and JetBrains Mono Regular /
   Medium. Sources are the SIL OFL 1.1 upstreams (Inter v4.0,

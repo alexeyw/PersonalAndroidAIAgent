@@ -36,6 +36,7 @@ class SettingsManagerTest {
     private val pipelineMaxStepsKey = androidx.datastore.preferences.core.intPreferencesKey("pipeline_max_steps")
     private val crashReportingEnabledKey = booleanPreferencesKey("crash_reporting_enabled")
     private val appFunctionRiskOverridesKey = stringPreferencesKey("app_function_risk_overrides")
+    private val hasCompletedOnboardingKey = booleanPreferencesKey("has_completed_onboarding")
 
     @Test
     fun `isFirstLaunch returns true by default`() = runTest {
@@ -46,6 +47,22 @@ class SettingsManagerTest {
         val settingsManager = SettingsManager(dataStore)
         val result = settingsManager.isFirstLaunch.first()
         assertTrue(result)
+    }
+
+    @Test
+    fun `hasCompletedOnboarding returns false by default`() = runTest {
+        // The flag must default to `false` so the onboarding gate trips on
+        // fresh installs — the canonical "user has not seen onboarding yet"
+        // signal. Confusion with `isFirstLaunch` (which defaults to `true`
+        // and is cleared by `InitializeAppUseCase`) is exactly what this
+        // separate flag exists to prevent.
+        val prefs = mockk<Preferences>()
+        every { prefs[hasCompletedOnboardingKey] } returns null
+        every { dataStore.data } returns flowOf(prefs)
+
+        val settingsManager = SettingsManager(dataStore)
+        val result = settingsManager.hasCompletedOnboarding.first()
+        org.junit.Assert.assertFalse(result)
     }
 
     @Test
