@@ -15,6 +15,46 @@ details.
 
 ### Added
 
+- Bundled brand fonts in `:app/src/main/res/font/` (Phase 21 / Task 3/11):
+  Inter Regular / Medium / SemiBold / Bold and JetBrains Mono Regular /
+  Medium. Sources are the SIL OFL 1.1 upstreams (Inter v4.0,
+  JetBrains Mono v2.304) subset to Latin-1 plus a handful of typographic
+  punctuation glyphs. Total APK delta ≈ 152 KB (well under the 350 KB
+  ceiling). `App.onCreate()` calls
+  `KnotworkFontsBootstrap.install()` so `KnotworkTextStyles` resolves
+  against the bundled families on the first frame instead of system
+  fallbacks. License notices ship in `app/src/main/assets/THIRD_PARTY_LICENSES.txt`.
+- 17 custom `ImageVector` icons hand-ported from
+  `project_docs/design/icons-src/` into
+  `:catalog/.../icons/imagevector/` — brand mark + wordmark glyph, the
+  Pipelines-tab `Flow`, editor `AutoLayout`, memory `Brain`, and the 12
+  pipeline-node glyphs (`NodeInput`, `NodeIntentRouter`, `NodeBranch`,
+  `NodeClarify`, `NodeLite`, `NodeCloud`, `NodeTool`, `NodeDecompose`,
+  `NodeQueue`, `NodeEval`, `NodeSummary`, `NodeOutput`). The `AppIcons`
+  facade now resolves to real vectors instead of the prior `error(...)`
+  stubs; a JVM unit test (`AppIconsTest`) guards 24×24-dp/viewport and
+  non-empty path invariants for each entry.
+- `IconCatalogPage` composable in `:catalog` rendering every custom icon
+  plus a curated set of Material Icons Extended at 24/32/48 dp on light
+  and dark swatches. Light + dark Roborazzi baselines committed under
+  `:catalog/src/test/snapshots/icon_catalog_{light,dark}.png` so future
+  icon edits surface in code review as a snapshot diff.
+- Knotwork adaptive launcher icon in
+  `:app/src/main/res/drawable/ic_launcher_{background,foreground,monochrome}.xml`,
+  derived from `project_docs/design/compose/brand/ic_launcher_*.svg`.
+  Background = `knotwork_accent_500`, foreground = the three-vertex
+  Knotwork mark in `knotwork_surface_0`, monochrome = the mark in
+  pure black for the Android 13+ themed-icon mode. Adaptive XMLs in
+  `mipmap-anydpi-v26/` wire all three layers; no `mipmap-anydpi-v33/`
+  folder is created (dead path under `minSdk 36`, see `decisions.md §15`).
+- Platform splash window via `androidx.core.splashscreen.installSplashScreen()`.
+  `Theme.App.Splash` (parent `Theme.SplashScreen`) pins
+  `windowSplashScreenBackground = @color/knotwork_accent_500` and
+  `windowSplashScreenAnimatedIcon = @drawable/ic_launcher_foreground`;
+  `postSplashScreenTheme` swaps back to the regular app theme when the
+  platform splash dismisses on the first Compose frame, handing off to
+  the existing in-app `SplashScreen` composable without a blank-frame
+  flash.
 - Knotwork design tokens ported into `:catalog` under
   `app.knotwork.design.tokens` (Phase 21 / Task 2/11). Six token files —
   `Color.kt`, `ExtendedColors.kt`, `Type.kt`, `Spacing.kt`, `Shape.kt`,

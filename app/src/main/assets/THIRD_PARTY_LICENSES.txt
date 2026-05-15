@@ -1,0 +1,37 @@
+Third-party assets bundled in the Knotwork APK
+==============================================
+
+This file inventories third-party assets shipped inside the application
+binary along with the licenses that govern their redistribution. See the
+matching license texts in this same `assets/` directory for the full
+SIL Open Font License v1.1 wording.
+
+
+Inter font family
+-----------------
+
+Files: `res/font/inter_regular.ttf`, `res/font/inter_medium.ttf`,
+       `res/font/inter_semibold.ttf`, `res/font/inter_bold.ttf`
+Upstream: https://github.com/rsms/inter (v4.0)
+Copyright (c) 2016 The Inter Project Authors.
+License: SIL Open Font License, Version 1.1 — see `license_inter_ofl.txt`.
+
+Modifications: the upstream static TTFs have been subset to the Latin-1
+range plus a small set of typographic punctuation glyphs (en/em dash,
+curly quotes, bullet, ellipsis, trademark, euro). No glyph shapes were
+modified; the Inter reserved font name is preserved.
+
+
+JetBrains Mono font family
+--------------------------
+
+Files: `res/font/jetbrains_mono_regular.ttf`,
+       `res/font/jetbrains_mono_medium.ttf`
+Upstream: https://github.com/JetBrains/JetBrainsMono (v2.304)
+Copyright (c) 2020 The JetBrains Mono Project Authors.
+License: SIL Open Font License, Version 1.1 — see
+         `license_jetbrainsmono_ofl.txt`.
+
+Modifications: same Latin-1 + typographic punctuation subset as Inter.
+No glyph shapes were modified; the JetBrains Mono reserved font name is
+preserved.

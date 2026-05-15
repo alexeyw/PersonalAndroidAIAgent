@@ -47,6 +47,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -72,6 +73,15 @@ class MainActivity : ComponentActivity() {
     // declaration in a way that hides the route topology.
     @Suppress("LongMethod")
     override fun onCreate(savedInstanceState: Bundle?) {
+        // Platform splash (Android 12+) — must be installed BEFORE
+        // `super.onCreate` so the system swaps the activity-theme splash
+        // window for the SplashScreen-managed window before any content
+        // attempts to draw. `Theme.App.Splash` supplies the accent-500
+        // background and the brand-mark foreground; the post-splash theme
+        // declared there takes over as soon as the first Compose frame
+        // commits, so the platform splash hides exactly when the in-app
+        // [SplashScreen] composable becomes visible — no blank-frame flash.
+        installSplashScreen()
         super.onCreate(savedInstanceState)
 
         if (ContextCompat.checkSelfPermission(

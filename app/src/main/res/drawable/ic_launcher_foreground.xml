@@ -1,68 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
-    android:viewportWidth="512"
-    android:viewportHeight="512">
-  <group android:scaleX="0.6"
-      android:scaleY="0.6"
-      android:translateX="102.4"
-      android:translateY="102.4">
+    android:viewportWidth="108"
+    android:viewportHeight="108">
 
-      <path
-          android:pathData="M 256,90 L 150,260 M 256,90 L 362,260 M 190,195 L 322,195"
-          android:strokeColor="#073042"
-          android:strokeWidth="32"
-          android:strokeLineCap="round"
-          android:strokeLineJoin="round" />
-
-      <path
-          android:pathData="M 256,90 L 150,260 M 256,90 L 362,260 M 190,195 L 322,195"
-          android:strokeColor="#3DDC84"
-          android:strokeWidth="14"
-          android:strokeLineCap="round"
-          android:strokeLineJoin="round" />
-
-      <path
-          android:pathData="M 100,300 C 100,170 412,170 412,300 C 412,390 360,430 256,430 C 152,430 100,390 100,300 Z"
-          android:fillColor="#3DDC84"
-          android:strokeColor="#073042"
-          android:strokeWidth="24" />
-
-      <path
-          android:pathData="M 140,310 C 140,250 372,250 372,310 C 372,360 330,386 256,386 C 182,386 140,360 140,310 Z"
-          android:fillColor="#073042" />
-
-      <path
-          android:pathData="
-              M 175,285 h 10 v 20 h -10 Z M 178,288 v 14 h 4 v -14 Z
-              M 195,285 h 4 v 20 h -4 Z
-              M 205,285 h 10 v 20 h -10 Z M 208,288 v 14 h 4 v -14 Z
-              M 175,315 h 10 v 20 h -10 Z M 178,318 v 14 h 4 v -14 Z
-              M 190,315 h 10 v 20 h -10 Z M 193,318 v 14 h 4 v -14 Z
-              M 210,315 h 4 v 20 h -4 Z
-              M 290,285 h 10 v 20 h -10 Z M 293,288 v 14 h 4 v -14 Z
-              M 310,285 h 4 v 20 h -4 Z
-              M 320,285 h 10 v 20 h -10 Z M 323,288 v 14 h 4 v -14 Z
-              M 290,315 h 10 v 20 h -10 Z M 293,318 v 14 h 4 v -14 Z
-              M 305,315 h 10 v 20 h -10 Z M 308,318 v 14 h 4 v -14 Z
-              M 325,315 h 4 v 20 h -4 Z"
-          android:strokeColor="#403DDC84"
-          android:strokeWidth="4" />
-
-      <path
-          android:pathData="
-              M 175,285 h 10 v 20 h -10 Z M 178,288 v 14 h 4 v -14 Z
-              M 195,285 h 4 v 20 h -4 Z
-              M 205,285 h 10 v 20 h -10 Z M 208,288 v 14 h 4 v -14 Z
-              M 175,315 h 10 v 20 h -10 Z M 178,318 v 14 h 4 v -14 Z
-              M 190,315 h 10 v 20 h -10 Z M 193,318 v 14 h 4 v -14 Z
-              M 210,315 h 4 v 20 h -4 Z
-              M 290,285 h 10 v 20 h -10 Z M 293,288 v 14 h 4 v -14 Z
-              M 310,285 h 4 v 20 h -4 Z
-              M 320,285 h 10 v 20 h -10 Z M 323,288 v 14 h 4 v -14 Z
-              M 290,315 h 10 v 20 h -10 Z M 293,318 v 14 h 4 v -14 Z
-              M 305,315 h 10 v 20 h -10 Z M 308,318 v 14 h 4 v -14 Z
-              M 325,315 h 4 v 20 h -4 Z"
-          android:fillColor="#3DDC84" />
-  </group>
+    <!--
+      Adaptive launcher foreground — Knotwork mark in the warm-neutral surface
+      colour so it reads against the accent background.
+      Source: project_docs/design/compose/brand/ic_launcher_foreground.svg.
+      Translate +21,+21 from the SVG is baked into the path coordinates so the
+      glyph sits inside the 67×67 dp safe zone.
+    -->
+    <path
+        android:pathData="M37,37 L37,71 M37,71 L71,71 M37,37 L71,71"
+        android:strokeColor="#FEFCFA"
+        android:strokeWidth="7"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+    <path
+        android:pathData="M37,37 m-6,0 a6,6 0 1 0 12,0 a6,6 0 1 0 -12,0 Z"
+        android:fillColor="#FEFCFA" />
+    <path
+        android:pathData="M37,71 m-6,0 a6,6 0 1 0 12,0 a6,6 0 1 0 -12,0 Z"
+        android:fillColor="#FEFCFA" />
+    <path
+        android:pathData="M71,71 m-6,0 a6,6 0 1 0 12,0 a6,6 0 1 0 -12,0 Z"
+        android:fillColor="#FEFCFA" />
 </vector>

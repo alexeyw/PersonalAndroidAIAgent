@@ -4,6 +4,7 @@ import ai.agent.android.data.logging.CrashlyticsTimberTree
 import ai.agent.android.data.tools.local.appfunctions.SearchAppFunction
 import ai.agent.android.domain.repositories.CrashReportingRepository
 import ai.agent.android.domain.repositories.SettingsRepository
+import ai.agent.android.presentation.theme.KnotworkFontsBootstrap
 import android.app.Application
 import androidx.appfunctions.service.AppFunctionConfiguration
 import androidx.hilt.work.HiltWorkerFactory
@@ -88,6 +89,10 @@ class App :
 
     override fun onCreate() {
         super.onCreate()
+        // Install the bundled Inter / JetBrains Mono families into the
+        // design-system typography sheet before the first Compose composition
+        // so screens render against the brand fonts on the very first frame.
+        KnotworkFontsBootstrap.install()
         if (BuildConfig.DEBUG) {
             Timber.plant(Timber.DebugTree())
         } else {
