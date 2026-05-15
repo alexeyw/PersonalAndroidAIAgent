@@ -98,6 +98,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.colorResource
 import androidx.compose.ui.res.dimensionResource
 import androidx.compose.ui.res.integerResource
@@ -523,7 +524,8 @@ fun ChatScreen(viewModel: ChatViewModel, onBack: () -> Unit = {}) {
                 state = listState,
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(horizontal = 16.dp),
+                    .padding(horizontal = 16.dp)
+                    .testTag(ChatScreenTestTags.MESSAGE_LIST),
                 contentPadding = paddingValues,
                 horizontalAlignment = Alignment.CenterHorizontally,
                 // Stick chat content to the bottom of the viewport so a
@@ -1206,3 +1208,19 @@ private const val CONTEXT_WARNING_RATIO: Float = 0.7f
 
 /** Alpha applied to secondary labels (pipeline name, context-usage meter) in the chat TopAppBar. */
 private const val SECONDARY_LABEL_ALPHA: Float = 0.6f
+
+/**
+ * Stable Compose `testTag` identifiers exposed by [ChatScreen] for instrumented
+ * Compose UI tests. Kept as a top-level object so call sites do not depend on
+ * private composable-internal state, and so the tag values are visible to test
+ * code without any reflection or string duplication.
+ */
+object ChatScreenTestTags {
+    /**
+     * Marks the chat history `LazyColumn`. Instrumented tests use this tag with
+     * `performScrollToNode(...)` to bring a specific chat bubble into the viewport
+     * deterministically, independent of the in-screen `LaunchedEffect` auto-scroll
+     * timing.
+     */
+    const val MESSAGE_LIST: String = "ChatScreen.MessageList"
+}
