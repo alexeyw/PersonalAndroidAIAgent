@@ -606,7 +606,7 @@ class AppFunctionsEndToEndTest {
         const val PROBE_PACKAGE = "ai.agent.android.toolsprobe"
         const val SEARCH_TOOL_ID = "search_tool"
         const val LOG_TAG = "AppFunctionsE2E"
-        const val PROBE_DISCOVERY_TIMEOUT_MS = 45_000L
+        const val PROBE_DISCOVERY_TIMEOUT_MS = 5_000L
         const val PROBE_POLL_INTERVAL_MS = 500L
         const val EXECUTOR_TIMEOUT_MS = 30_000L
         const val PENDING_APPROVAL_TIMEOUT_MS = 5_000L
