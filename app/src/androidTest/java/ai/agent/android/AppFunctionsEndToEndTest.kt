@@ -135,13 +135,7 @@ class AppFunctionsEndToEndTest {
         // the indexer; poll briefly until the qualified name appears.
         qualifiedEchoName = waitForProbeEchoDiscovery()
             ?: error(
-                "Probe AppFunction `echo` was not discovered within ${PROBE_DISCOVERY_TIMEOUT_MS}ms. " +
-                    "Last observed catalogue: ${lastObservedTools.joinToString(prefix = "[", postfix = "]")}. " +
-                    "Check that `:tools-probe:installDebug` ran before the test (hooked off " +
-                    "`installDebugAndroidTest` in `:app/build.gradle.kts`), that the agent " +
-                    "package can see $PROBE_PACKAGE via <queries>, and that the agent has the " +
-                    "EXECUTE_APP_FUNCTIONS appop allowed (`appops set $AGENT_PACKAGE " +
-                    "EXECUTE_APP_FUNCTIONS allow`).",
+                buildDiscoveryFailureReport(context.applicationContext),
             )
 
         // Each test owns its session id so HITL deferred state cannot leak between
@@ -364,6 +358,44 @@ class AppFunctionsEndToEndTest {
             // starts from the production-default state regardless of prior failure
             // boundary.
             settings.setAppFunctionRiskOverride(qualifiedEchoName, ToolRisk.SENSITIVE)
+        }
+    }
+
+    /**
+     * Builds a multi-line diagnostic report dumped into the test's `IllegalStateException`
+     * message when discovery times out. Collecting every potentially-relevant piece of
+     * device state in one shot turns the failure from "echo not discovered" into a
+     * directly-actionable transcript — without forcing the next reader to dig through
+     * Logcat or re-run with a debugger. The report intentionally bypasses
+     * `PackageManager.canPackageQuery` for the probe-installed and queries-resolved
+     * checks (using `pm` / `dumpsys` shell commands) so a missing `<queries>` entry on
+     * the agent cannot mask any of the upstream causes.
+     */
+    private suspend fun buildDiscoveryFailureReport(applicationContext: android.content.Context): String {
+        val automation = InstrumentationRegistry.getInstrumentation().uiAutomation
+        val agentAppOp = runShell(automation, "appops get $AGENT_PACKAGE EXECUTE_APP_FUNCTIONS")
+        val probeAppOp = runShell(automation, "appops get $PROBE_PACKAGE EXECUTE_APP_FUNCTIONS")
+        val probeInstalled = runShell(automation, "pm list packages $PROBE_PACKAGE")
+        val rawPlatformResult = runCatching {
+            val manager = AppFunctionManager.getInstance(applicationContext)
+                ?: return@runCatching "AppFunctionManager.getInstance returned null"
+            val packages = manager.observeAppFunctions(AppFunctionSearchSpec()).first()
+            packages.joinToString { pkg ->
+                "${pkg.packageName}:${pkg.appFunctions.map { it.id }}"
+            }
+        }.getOrElse { "AppFunctionManager.observeAppFunctions threw: ${it::class.java.simpleName}: ${it.message}" }
+        return buildString {
+            appendLine("Probe AppFunction `echo` was not discovered within ${PROBE_DISCOVERY_TIMEOUT_MS}ms.")
+            appendLine("  Last observed (agent) catalogue: $lastObservedTools")
+            appendLine("  Raw AppFunctionManager.observeAppFunctions: [$rawPlatformResult]")
+            appendLine("  pm list packages $PROBE_PACKAGE: '${probeInstalled.trim()}'")
+            appendLine("  appops get $AGENT_PACKAGE EXECUTE_APP_FUNCTIONS: '${agentAppOp.trim()}'")
+            appendLine("  appops get $PROBE_PACKAGE EXECUTE_APP_FUNCTIONS: '${probeAppOp.trim()}'")
+            appendLine(
+                "Check that the agent's <queries> covers $PROBE_PACKAGE (or " +
+                    "android.app.appfunctions.AppFunctionService) and that EXECUTE_APP_FUNCTIONS " +
+                    "is `allow` in both appops outputs above.",
+            )
         }
     }
 

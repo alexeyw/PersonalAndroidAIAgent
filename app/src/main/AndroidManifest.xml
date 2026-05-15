@@ -21,15 +21,26 @@
 <!--    </queries>-->
 
     <!--
-        Phase 20 / Task 6/7: the agent must be able to see the :tools-probe package via
-        `PackageManager.canPackageQuery` so `AppFunctionManager.observeAppFunctions`
-        surfaces the probe's `echo` AppFunction during the e2e instrumented test.
-        Android 11+ ships with package visibility on by default; without an explicit
-        `<queries>` entry the system filters the probe out even though both APKs are
-        installed on the same device.
+        Phase 20 / Task 6/7: the agent must be able to see other AppFunction-providing
+        packages via `PackageManager.canPackageQuery` so
+        `AppFunctionManager.observeAppFunctions` surfaces their metadata. Android 11+
+        ships with package visibility on by default; without an explicit `<queries>`
+        entry the system filters cross-package metadata out.
+
+        Both shapes are declared:
+          - `<intent>` with the system AppFunctionService action makes the agent visible
+            to every package that publishes an `@AppFunction`, future-proofing the
+            visibility surface for production peers (the agent does not know their
+            applicationIds at compile time).
+          - The explicit `<package>` for `ai.agent.android.toolsprobe` is the e2e test's
+            target and is kept as a belt-and-suspenders fallback in case the system
+            indexer evaluates the explicit form before the intent-filter form.
     -->
     <queries>
         <package android:name="ai.agent.android.toolsprobe" />
+        <intent>
+            <action android:name="android.app.appfunctions.AppFunctionService" />
+        </intent>
     </queries>
 
     <application
