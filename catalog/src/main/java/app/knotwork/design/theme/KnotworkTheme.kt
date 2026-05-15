@@ -5,6 +5,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.ReadOnlyComposable
+import app.knotwork.design.a11y.DefaultKnotworkA11y
+import app.knotwork.design.a11y.KnotworkA11y
+import app.knotwork.design.a11y.LocalKnotworkA11y
 import app.knotwork.design.tokens.DefaultKnotworkElevation
 import app.knotwork.design.tokens.DefaultKnotworkMotion
 import app.knotwork.design.tokens.DefaultKnotworkShapes
@@ -60,6 +63,7 @@ fun KnotworkTheme(darkTheme: Boolean = isSystemInDarkTheme(), content: @Composab
         LocalKnotworkShapes provides DefaultKnotworkShapes,
         LocalKnotworkElevation provides DefaultKnotworkElevation,
         LocalKnotworkMotion provides DefaultKnotworkMotion,
+        LocalKnotworkA11y provides DefaultKnotworkA11y,
     ) {
         MaterialTheme(
             colorScheme = colorScheme,
@@ -114,4 +118,10 @@ object KnotworkTheme {
         @Composable
         @ReadOnlyComposable
         get() = LocalKnotworkMotion.current
+
+    /** Accessibility scaffolding (reduced motion, font scale) — see `decisions.md §14`. */
+    val a11y: KnotworkA11y
+        @Composable
+        @ReadOnlyComposable
+        get() = LocalKnotworkA11y.current
 }
