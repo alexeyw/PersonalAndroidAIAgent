@@ -15,7 +15,7 @@
         errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/AndroidManifest.xml"
-            line="67"
+            line="90"
             column="13"/>
     </issue>
 
@@ -43,7 +43,7 @@
 
     <issue
         id="AndroidGradlePluginVersion"
-        message="A newer version of Gradle than 9.4.1 is available: 9.5.0"
+        message="A newer version of Gradle than 9.4.1 is available: 9.5.1"
         errorLine1="distributionUrl=https\://services.gradle.org/distributions/gradle-9.4.1-bin.zip"
         errorLine2="                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
@@ -65,35 +65,13 @@
 
     <issue
         id="NewerVersionAvailable"
-        message="A newer version of org.jetbrains.kotlinx:kotlinx-coroutines-android than 1.10.2 is available: 1.11.0"
-        errorLine1="coroutines = &quot;1.10.2&quot;"
-        errorLine2="             ~~~~~~~~">
+        message="A newer version of net.zetetic:sqlcipher-android than 4.15.0 is available: 4.16.0"
+        errorLine1="sqlcipher = &quot;4.15.0&quot;"
+        errorLine2="            ~~~~~~~~">
         <location
             file="../gradle/libs.versions.toml"
-            line="13"
-            column="14"/>
-    </issue>
-
-    <issue
-        id="NewerVersionAvailable"
-        message="A newer version of org.jetbrains.kotlinx:kotlinx-coroutines-core than 1.10.2 is available: 1.11.0"
-        errorLine1="coroutines = &quot;1.10.2&quot;"
-        errorLine2="             ~~~~~~~~">
-        <location
-            file="../gradle/libs.versions.toml"
-            line="13"
-            column="14"/>
-    </issue>
-
-    <issue
-        id="NewerVersionAvailable"
-        message="A newer version of org.jetbrains.kotlinx:kotlinx-coroutines-test than 1.10.2 is available: 1.11.0"
-        errorLine1="coroutines = &quot;1.10.2&quot;"
-        errorLine2="             ~~~~~~~~">
-        <location
-            file="../gradle/libs.versions.toml"
-            line="13"
-            column="14"/>
+            line="31"
+            column="13"/>
     </issue>
 
     <issue
@@ -103,7 +81,7 @@
         errorLine2="                               ~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/ai/agent/android/presentation/ui/chat/ChatScreen.kt"
-            line="311"
+            line="312"
             column="32"/>
     </issue>
 
@@ -114,7 +92,7 @@
         errorLine2="    ~~~~~~~~">
         <location
             file="src/main/java/ai/agent/android/presentation/ui/chat/AgentThoughtIndicator.kt"
-            line="58"
+            line="66"
             column="5"/>
     </issue>
 
@@ -220,7 +198,7 @@
         errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/res/values/strings_chat.xml"
-            line="114"
+            line="124"
             column="13"/>
     </issue>
 
@@ -231,7 +209,7 @@
         errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/res/values/strings_chat.xml"
-            line="115"
+            line="125"
             column="13"/>
     </issue>
 
@@ -242,7 +220,7 @@
         errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/res/values/strings_chat.xml"
-            line="118"
+            line="128"
             column="13"/>
     </issue>
 
