@@ -78,6 +78,11 @@ object KnotworkLight {
     val PrimaryContainer = KnotworkPalette.Accent100
     val OnPrimaryContainer = KnotworkPalette.Accent800
 
+    // Tertiary container — lighter cool-blue tint of `NodeCloud` (#5F9DB0)
+    // paired with a near-black on-tone for AA contrast on the container.
+    val TertiaryContainer = Color(0xFFD6E5EB)
+    val OnTertiaryContainer = Color(0xFF173039)
+
     val RiskReadonly = Color(0xFF5F9DB0)
     val RiskSensitive = KnotworkPalette.SignalWarn
     val RiskDestructive = KnotworkPalette.SignalError
@@ -113,6 +118,11 @@ object KnotworkDark {
     val OnPrimary = Color(0xFF171008)
     val PrimaryContainer = Color(0xFF462D0B)
     val OnPrimaryContainer = KnotworkPalette.Accent200
+
+    // Tertiary container — dark cool-blue tone paired with a light cyan
+    // foreground; symmetric to the light-theme TertiaryContainer.
+    val TertiaryContainer = Color(0xFF1A3B47)
+    val OnTertiaryContainer = Color(0xFFC4DDE5)
 
     val RiskReadonly = Color(0xFF77B6CA)
     val RiskSensitive = Color(0xFFE9B452)
@@ -153,6 +163,8 @@ fun knotworkLightColorScheme(): ColorScheme = lightColorScheme(
     onSecondaryContainer = KnotworkLight.OnSurface,
     tertiary = KnotworkPalette.NodeCloud,
     onTertiary = KnotworkLight.OnPrimary,
+    tertiaryContainer = KnotworkLight.TertiaryContainer,
+    onTertiaryContainer = KnotworkLight.OnTertiaryContainer,
     error = KnotworkPalette.SignalError,
     onError = KnotworkLight.OnPrimary,
     errorContainer = Color(0xFFFADCDA),
@@ -170,6 +182,17 @@ fun knotworkLightColorScheme(): ColorScheme = lightColorScheme(
     outline = KnotworkLight.Outline,
     outlineVariant = KnotworkLight.Divider,
     scrim = Color(0x66000000),
+    // Material3 expanded surface ramp (M3 1.1+): bind every container step
+    // to the Knotwork Surface0..4 ramp so tonal containers in libraries
+    // that read these slots (NavigationBar, BottomSheet, FilledCard, …)
+    // stay on-brand instead of inheriting Material baseline tints.
+    surfaceBright = KnotworkLight.Surface0,
+    surfaceDim = KnotworkLight.Surface3,
+    surfaceContainerLowest = KnotworkLight.Surface0,
+    surfaceContainerLow = KnotworkLight.Surface1,
+    surfaceContainer = KnotworkLight.Surface2,
+    surfaceContainerHigh = KnotworkLight.Surface3,
+    surfaceContainerHighest = KnotworkLight.Surface4,
 )
 
 /**
@@ -192,6 +215,8 @@ fun knotworkDarkColorScheme(): ColorScheme = darkColorScheme(
     onSecondaryContainer = KnotworkDark.OnSurface,
     tertiary = KnotworkDark.RiskReadonly,
     onTertiary = KnotworkDark.OnPrimary,
+    tertiaryContainer = KnotworkDark.TertiaryContainer,
+    onTertiaryContainer = KnotworkDark.OnTertiaryContainer,
     error = KnotworkDark.RiskDestructive,
     onError = KnotworkDark.OnPrimary,
     errorContainer = Color(0xFF5A1B17),
@@ -209,4 +234,14 @@ fun knotworkDarkColorScheme(): ColorScheme = darkColorScheme(
     outline = KnotworkDark.Outline,
     outlineVariant = KnotworkDark.Divider,
     scrim = Color(0x99000000),
+    // Material3 expanded surface ramp (M3 1.1+): mirror the Knotwork dark
+    // Surface0..4 ramp so tonal containers stay on-brand. `surfaceBright`
+    // takes the lightest dark step (`Surface4`); `surfaceDim` the deepest.
+    surfaceBright = KnotworkDark.Surface4,
+    surfaceDim = KnotworkDark.Surface0,
+    surfaceContainerLowest = KnotworkDark.Surface0,
+    surfaceContainerLow = KnotworkDark.Surface1,
+    surfaceContainer = KnotworkDark.Surface2,
+    surfaceContainerHigh = KnotworkDark.Surface3,
+    surfaceContainerHighest = KnotworkDark.Surface4,
 )

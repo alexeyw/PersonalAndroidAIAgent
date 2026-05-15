@@ -66,6 +66,36 @@ class KnotworkThemeTest {
         assertEquals(Color(0xFF221E1A), captured)
     }
 
+    @Test
+    fun `given KnotworkTheme light when read MaterialTheme tertiaryContainer then equals light TertiaryContainer`() {
+        // Guards the M3 expanded slot wiring — a missing tertiaryContainer
+        // assignment falls back to Material baseline #FFD8E2 instead of the
+        // Knotwork cool-blue tint.
+        val captured = captureInTheme(darkTheme = false) { MaterialTheme.colorScheme.tertiaryContainer }
+        assertEquals(Color(0xFFD6E5EB), captured)
+    }
+
+    @Test
+    fun `given KnotworkTheme dark when read MaterialTheme tertiaryContainer then equals dark TertiaryContainer`() {
+        val captured = captureInTheme(darkTheme = true) { MaterialTheme.colorScheme.tertiaryContainer }
+        assertEquals(Color(0xFF1A3B47), captured)
+    }
+
+    @Test
+    fun `given KnotworkTheme light when read MaterialTheme surfaceContainer then equals light Surface2`() {
+        // Guards the expanded surface ramp wiring (M3 1.1+) — without an
+        // explicit assignment, surfaceContainer would inherit the Material
+        // baseline tint instead of Knotwork Surface2.
+        val captured = captureInTheme(darkTheme = false) { MaterialTheme.colorScheme.surfaceContainer }
+        assertEquals(Color(0xFFF6F2ED), captured)
+    }
+
+    @Test
+    fun `given KnotworkTheme dark when read MaterialTheme surfaceContainerHighest then equals dark Surface4`() {
+        val captured = captureInTheme(darkTheme = true) { MaterialTheme.colorScheme.surfaceContainerHighest }
+        assertEquals(Color(0xFF39342F), captured)
+    }
+
     /**
      * Renders a single composition wrapped in [KnotworkTheme] and returns the
      * value produced by [reader].

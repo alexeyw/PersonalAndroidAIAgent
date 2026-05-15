@@ -2,6 +2,7 @@ package app.knotwork.design.foundations
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -13,6 +14,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -147,7 +149,15 @@ private fun PaletteSection() {
     }
 }
 
-/** Labelled row of square colour swatches. */
+/**
+ * Labelled row of square colour swatches.
+ *
+ * The swatch row scrolls horizontally inside the surrounding `LazyColumn` so
+ * the whole token set stays reachable on narrow viewports — at the
+ * snapshot reference width (360 dp) only ~5 fixed-width swatches fit, and
+ * the longer rows (10-step accent ramp, 12 node hues) would otherwise be
+ * clipped off-screen and excluded from the snapshot baseline.
+ */
 @Composable
 private fun SwatchRow(label: String, swatches: List<Pair<String, Color>>) {
     Column(verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp2)) {
@@ -156,7 +166,12 @@ private fun SwatchRow(label: String, swatches: List<Pair<String, Color>>) {
             style = KnotworkTextStyles.LabelMd,
             color = KnotworkTheme.extended.onSurfaceMuted,
         )
-        Row(horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp2)) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp2),
+        ) {
             swatches.forEach { (name, color) -> Swatch(name = name, color = color) }
         }
     }
