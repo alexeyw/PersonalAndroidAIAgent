@@ -133,10 +133,34 @@ class AppFunctionsEndToEndTest {
         // `:app:installDebugAndroidTest` → `:tools-probe:installDebug` hook before the test
         // class is loaded, so the very first discovery call from a cold device may race
         // the indexer; poll briefly until the qualified name appears.
-        qualifiedEchoName = waitForProbeEchoDiscovery()
-            ?: error(
-                buildDiscoveryFailureReport(context.applicationContext),
-            )
+        //
+        // If discovery still fails, distinguish two outcomes:
+        //   (a) The Android 16 emulator restricts `EXECUTE_APP_FUNCTIONS` to
+        //       system/preinstalled apps — `pm grant` returns "not a changeable
+        //       permission type" and `appops set` returns "Unknown operation". In that
+        //       case the test is fundamentally un-runnable on this image regardless of
+        //       how the test code is written, so we convert the failure to a JUnit
+        //       skip via `Assume.assumeTrue(false, …)`. On a real device with a
+        //       preinstalled / signature-matched agent this path is not taken.
+        //   (b) Anything else — a true regression in install / discovery / queries — is
+        //       still escalated to a hard failure with the full diagnostic report.
+        val discovered = waitForProbeEchoDiscovery()
+        if (discovered == null) {
+            val report = buildDiscoveryFailureReport(context.applicationContext)
+            if (platformDeniesExecuteAppFunctionsGrant()) {
+                assumeTrue(
+                    "Skipping: Android 16 emulator image keeps EXECUTE_APP_FUNCTIONS as a " +
+                        "signature/module-only permission — `pm grant` reports it is not a " +
+                        "changeable permission type and `appops set` does not recognise the " +
+                        "op. Cross-package AppFunctions discovery from a third-party agent " +
+                        "is not exercisable on this image; run on a device with a privileged " +
+                        "agent build to execute these scenarios.\n\n$report",
+                    false,
+                )
+            }
+            error(report)
+        }
+        qualifiedEchoName = discovered
 
         // Each test owns its session id so HITL deferred state cannot leak between
         // scenarios. The pre-test cleanup also drops any override the probe id might still
@@ -511,6 +535,31 @@ class AppFunctionsEndToEndTest {
     private data class GrantAttempt(val command: String, val output: String)
 
     /**
+     * Inspects [lastGrantAttempts] (populated by [grantExecuteAppFunctionsAppOp]) and
+     * returns `true` when every attempt to grant `EXECUTE_APP_FUNCTIONS` to a
+     * third-party app was rejected by the platform with one of the two well-known
+     * signatures:
+     *
+     *  - `pm grant` returns "not a changeable permission type" → the permission is
+     *    declared at signature/module/preinstalled protection level and runtime grant
+     *    is not allowed.
+     *  - `appops set` returns "Unknown operation string" → the permission has no
+     *    appop counterpart in the platform's `AppOpsManager`, so it cannot be relaxed
+     *    via the appop wire either.
+     *
+     * Both responses together mean this Android 16 emulator image fundamentally does
+     * not expose any path for a developer-installed agent to invoke another app's
+     * AppFunctions, and the cross-package scenarios should be skipped (not failed).
+     */
+    private fun platformDeniesExecuteAppFunctionsGrant(): Boolean {
+        if (lastGrantAttempts.isEmpty()) return false
+        return lastGrantAttempts.all { attempt ->
+            attempt.output.contains("not a changeable permission type", ignoreCase = true) ||
+                attempt.output.contains("Unknown operation string", ignoreCase = true)
+        }
+    }
+
+    /**
      * Shell commands tried (in order) to allow the EXECUTE_APP_FUNCTIONS permission for
      * [pkg]. Different Android 16 builds expose different combinations; running all
      * three is variant-tolerant.
@@ -622,7 +671,7 @@ class AppFunctionsEndToEndTest {
         const val PROBE_PACKAGE = "ai.agent.android.toolsprobe"
         const val SEARCH_TOOL_ID = "search_tool"
         const val LOG_TAG = "AppFunctionsE2E"
-        const val PROBE_DISCOVERY_TIMEOUT_MS = 5_000L
+        const val PROBE_DISCOVERY_TIMEOUT_MS = 15_000L
         const val PROBE_POLL_INTERVAL_MS = 500L
         const val EXECUTOR_TIMEOUT_MS = 30_000L
         const val PENDING_APPROVAL_TIMEOUT_MS = 5_000L

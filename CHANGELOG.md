@@ -32,6 +32,16 @@ details.
   followed by `ToolNodeExecutor.resumeWithApproval`, callee-side invocation
   of `search_tool` through the system `AppFunctionManager`, and risk
   override resolution via `SettingsRepository.setAppFunctionRiskOverride`.
+  Note: on stock Android 16 emulator images
+  (`system-images;android-36;default;x86_64` and friends) the
+  `EXECUTE_APP_FUNCTIONS` permission is declared at signature / module /
+  preinstalled protection level — `pm grant` rejects it with "not a
+  changeable permission type" and `appops set` reports "Unknown operation".
+  Third-party agents can therefore neither observe nor invoke cross-package
+  AppFunctions on those images. The test detects that platform state from
+  the captured grant-attempt stderr and skips itself via `Assume.assumeTrue`
+  with a detailed transcript; on a real device with a privileged agent
+  build the four scenarios run end-to-end.
 - `AppFunctionsE2ETestEntryPoint` (Hilt `EntryPoint`) under
   `data/testing/` exposing the singletons the new instrumented test
   consumes (`ToolRepository`, `SettingsRepository`, `ChatRepository`),
