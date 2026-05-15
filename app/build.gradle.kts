@@ -12,6 +12,18 @@ plugins {
     alias(libs.plugins.firebase.crashlytics)
 }
 
+// The androidx.appfunctions KSP processor generates the per-class
+// `*_AppFunctionInventory.kt` / `*_AppFunctionInvoker.kt` artefacts unconditionally,
+// but the leaf-application `app_functions_v2.xml` (and the legacy `app_functions.xml`)
+// that the platform's AppSearch indexer actually reads at install time is only produced
+// when `appfunctions:aggregateAppFunctions=true`. Without this flag the agent APK ships
+// `app_functions_schema.xsd` but no inventory XML, so the system AppFunctionManager has
+// no `search_tool` entry to advertise to other apps and the callee-side scenario in
+// `AppFunctionsEndToEndTest` comes back empty.
+ksp {
+    arg("appfunctions:aggregateAppFunctions", "true")
+}
+
 android {
     namespace = "ai.agent.android"
     compileSdk {

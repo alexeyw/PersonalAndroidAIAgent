@@ -1,9 +1,11 @@
 package ai.agent.android
 
 import ai.agent.android.data.logging.CrashlyticsTimberTree
+import ai.agent.android.data.tools.local.appfunctions.SearchAppFunction
 import ai.agent.android.domain.repositories.CrashReportingRepository
 import ai.agent.android.domain.repositories.SettingsRepository
 import android.app.Application
+import androidx.appfunctions.service.AppFunctionConfiguration
 import androidx.hilt.work.HiltWorkerFactory
 import androidx.work.Configuration
 import dagger.hilt.android.HiltAndroidApp
@@ -15,6 +17,7 @@ import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import timber.log.Timber
 import javax.inject.Inject
+import javax.inject.Provider
 
 /**
  * Base Application class for the Android AI Agent project.
@@ -39,7 +42,8 @@ import javax.inject.Inject
 @HiltAndroidApp
 class App :
     Application(),
-    Configuration.Provider {
+    Configuration.Provider,
+    AppFunctionConfiguration.Provider {
 
     @Inject
     lateinit var workerFactory: HiltWorkerFactory
@@ -50,6 +54,16 @@ class App :
     @Inject
     lateinit var crashReportingRepository: CrashReportingRepository
 
+    /**
+     * Hilt-managed factory for the callee-side [SearchAppFunction] wrapper. A [Provider] is
+     * used (not a direct [Inject]) because the AppFunctions runtime asks for a fresh
+     * instance through [getAppFunctionConfiguration] on every dispatch — handing back the
+     * provider keeps the resolution lazy and lets the `@Singleton`-scoped binding control
+     * actual instance identity.
+     */
+    @Inject
+    lateinit var searchAppFunctionProvider: Provider<SearchAppFunction>
+
     private val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     private var crashlyticsTree: CrashlyticsTimberTree? = null
@@ -57,6 +71,19 @@ class App :
     override val workManagerConfiguration: Configuration
         get() = Configuration.Builder()
             .setWorkerFactory(workerFactory)
+            .build()
+
+    /**
+     * Supplies the AppFunctions framework with constructors for every `@AppFunction`-
+     * annotated class whose runtime instance the agent wants Hilt to own. Without this
+     * override the framework would fall back to a reflective no-arg constructor, which is
+     * incompatible with [SearchAppFunction]'s `@Inject constructor(searchTool: SearchTool)`.
+     */
+    override val appFunctionConfiguration: AppFunctionConfiguration
+        get() = AppFunctionConfiguration.Builder()
+            .addEnclosingClassFactory(SearchAppFunction::class.java) {
+                searchAppFunctionProvider.get()
+            }
             .build()
 
     override fun onCreate() {

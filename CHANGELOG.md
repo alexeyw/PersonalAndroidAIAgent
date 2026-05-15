@@ -13,6 +13,30 @@ details.
 
 ## [Unreleased]
 
+### Changed
+
+- Callee-side AppFunctions surface now relies on the auto-merged
+  `androidx.appfunctions.service.PlatformAppFunctionService` (from
+  `appfunctions-service`) for dispatch. `SearchAppFunction.invoke` is annotated with
+  `@AppFunction`, so its KSP-generated entry in `app_functions_v2.xml` advertises the
+  function to external callers. **The wire id contains literal backticks around the
+  `data` package segment** —
+  `` ai.agent.android.`data`.tools.local.appfunctions.SearchAppFunction#invoke `` —
+  because the AppFunctions compiler bakes Kotlin source-level escaping for soft
+  keywords into the id string. External callers must include the backticks verbatim,
+  exactly as `AppFunctionsEndToEndTest.SEARCH_TOOL_ID` and the `:tools-probe`
+  `MainActivity` constant do. The Hilt-managed instance is supplied to the
+  AppFunctions runtime through a new `AppFunctionConfiguration.Provider`
+  implementation on `App`.
+
+### Removed
+
+- Hand-rolled callee dispatch: `AgentAppFunctionService`, `AppFunctionRouter`,
+  `AppFunctionDispatchEntryPoint`, the matching manifest `<service>` entry, and
+  `AppFunctionRouterTest`. The merged platform service plus KSP-generated invokers cover
+  the same surface end-to-end and remove the parallel routing path that previously had to
+  be kept in sync with `SearchAppFunction`.
+
 ### Added
 
 - `:tools-probe` debug-only Android module shipping a single
