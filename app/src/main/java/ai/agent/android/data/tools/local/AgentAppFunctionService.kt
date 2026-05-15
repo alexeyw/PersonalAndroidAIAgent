@@ -12,10 +12,13 @@ import android.content.pm.SigningInfo
 import android.os.CancellationSignal
 import android.os.OutcomeReceiver
 import dagger.hilt.android.EntryPointAccessors
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.launch
 import timber.log.Timber
 
 /**
@@ -34,11 +37,14 @@ import timber.log.Timber
  *  - Discovered AppFunctions from other packages — these are inherently caller-side
  *    only (the agent calls them, not the other way round).
  *
- * Threading: the platform calls [onExecuteFunction] on its binder pool thread. The
- * underlying suspend wrappers may perform network I/O (`search_tool` hits Wikipedia), so
- * dispatch happens inside a [runBlocking] block tied to a [SupervisorJob] on
- * [Dispatchers.IO]. The platform's [CancellationSignal] is bridged to that job so cancels
- * propagate cleanly to the wrapper.
+ * Threading: [onExecuteFunction] is invoked on the platform's binder pool thread, which
+ * is a finite resource shared across every system service binding. The underlying
+ * wrappers may perform network I/O (`search_tool` hits Wikipedia), so we never block the
+ * caller thread — dispatch is `launch`-ed on a service-scoped [CoroutineScope] backed by
+ * a [SupervisorJob] on [Dispatchers.IO], and results are delivered through the supplied
+ * asynchronous [OutcomeReceiver]. The per-request child [Job] is bridged to the
+ * platform's [CancellationSignal] so cancels propagate cleanly to the suspending wrapper
+ * without blocking the binder thread for the duration of the call.
  *
  * Hilt integration: the service is constructed by the platform before Hilt can intercept
  * it, so dependencies are resolved on demand via [EntryPointAccessors] against the
@@ -47,6 +53,27 @@ import timber.log.Timber
  */
 class AgentAppFunctionService : AppFunctionService() {
 
+    /**
+     * Service-lifetime supervisor. A [SupervisorJob] isolates per-request child jobs from
+     * each other: a failure or cancellation of one in-flight request never tears down
+     * the scope or sibling requests. Cancelled in [onDestroy] so any still-running
+     * dispatch coroutines are torn down with the service.
+     */
+    private val supervisor = SupervisorJob()
+
+    /**
+     * Scope on which every [onExecuteFunction] dispatch coroutine runs. Pinned to
+     * [Dispatchers.IO] because the in-tree wrappers issue blocking network I/O; Hilt
+     * resolution and `EntryPointAccessors` are cheap reflection calls that also fit on
+     * the IO pool.
+     */
+    private val serviceScope = CoroutineScope(supervisor + Dispatchers.IO)
+
+    override fun onDestroy() {
+        serviceScope.cancel("AgentAppFunctionService destroyed")
+        super.onDestroy()
+    }
+
     override fun onExecuteFunction(
         request: ExecuteAppFunctionRequest,
         callingPackage: String,
@@ -54,14 +81,33 @@ class AgentAppFunctionService : AppFunctionService() {
         cancellationSignal: CancellationSignal,
         callback: OutcomeReceiver<ExecuteAppFunctionResponse, AppFunctionException>,
     ) {
-        val job = SupervisorJob()
+        // Allocate the per-request Job up-front so the cancellation listener can be wired
+        // before the coroutine starts. Setting the listener after `launch` returns leaves
+        // a small window where the system could trip the signal before we observe it; by
+        // creating the Job first we close that window.
+        val requestJob = Job(supervisor)
         cancellationSignal.setOnCancelListener {
             Timber.d("AppFunction '%s' cancelled by system", request.functionIdentifier)
-            job.cancel()
+            requestJob.cancel()
         }
+        serviceScope.launch(requestJob) { handleRequest(request, callback) }
+    }
+
+    /**
+     * Body of the dispatch coroutine. Lives on the service scope, so the platform's binder
+     * thread returns from [onExecuteFunction] immediately and the result is delivered
+     * asynchronously through [callback].
+     *
+     * Exception handling is intentionally fanned out inside the coroutine (not around
+     * `launch`) so that suspending failures, cancellations and synchronous setup crashes
+     * all funnel into the same translation table to a platform [AppFunctionException].
+     */
+    private suspend fun handleRequest(
+        request: ExecuteAppFunctionRequest,
+        callback: OutcomeReceiver<ExecuteAppFunctionResponse, AppFunctionException>,
+    ) {
         try {
-            val outcome = runBlocking(job + Dispatchers.IO) { dispatch(request) }
-            when (outcome) {
+            when (val outcome = dispatch(request)) {
                 is DispatchOutcome.Success -> callback.onResult(buildResponse(outcome.result))
                 is DispatchOutcome.FunctionNotFound -> callback.onError(
                     AppFunctionException(
@@ -84,11 +130,11 @@ class AgentAppFunctionService : AppFunctionService() {
             }
         } catch (e: AppFunctionException) {
             callback.onError(e)
-        } catch (e: kotlinx.coroutines.CancellationException) {
-            // The system either tripped `cancellationSignal` or the dispatching coroutine
-            // was otherwise cancelled. The platform exposes a dedicated error code for
-            // this case so callers can distinguish "you asked us to stop" from a generic
-            // app crash; surface it here instead of falling through to ERROR_APP_UNKNOWN_ERROR.
+        } catch (e: CancellationException) {
+            // The platform tripped `cancellationSignal` (or the parent scope was torn
+            // down). Report the platform-defined cancellation code so callers can
+            // distinguish "you asked us to stop" from a generic app crash, then rethrow
+            // to preserve structured-concurrency semantics for the parent supervisor.
             Timber.d("AppFunction '%s' cancelled", request.functionIdentifier)
             callback.onError(
                 AppFunctionException(
@@ -96,6 +142,7 @@ class AgentAppFunctionService : AppFunctionService() {
                     e.message ?: "AppFunction execution cancelled",
                 ),
             )
+            throw e
         } catch (
             @Suppress("TooGenericExceptionCaught") e: Exception,
         ) {
