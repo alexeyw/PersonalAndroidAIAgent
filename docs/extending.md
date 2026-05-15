@@ -15,7 +15,8 @@ see [`docs/user-guide.md`](user-guide.md).
 ## Table of contents
 
 1. [Add a new `NodeType`](#1-add-a-new-nodetype)
-2. [Add a new `Tool`](#2-add-a-new-tool)
+2. [Add a new `Tool`](#2-add-a-new-tool) (includes §2.5 — exposing a
+   built-in as a callee-side AppFunction)
 3. [Add a new cloud provider](#3-add-a-new-cloud-provider)
 4. [Add a new prompt variable](#4-add-a-new-prompt-variable)
 5. [Synchronization table — "if you change X, also touch Y"](#5-synchronization-table)
@@ -244,6 +245,17 @@ without modifying anything, set it to `SENSITIVE`. The
 human-in-the-loop gate in `ToolNodeExecutor` and the chat UI is
 non-optional — there is no code path that bypasses it.
 
+For **discovered AppFunctions** (tools surfaced by `LocalAppFunctionManager`
+from other packages), the default is `SENSITIVE` — the platform
+`AppFunctionManager` metadata gives no trustworthy signal about side
+effects. The user can downgrade a specific tool to `READ_ONLY` (or
+upgrade it to `DESTRUCTIVE`) via
+[`SettingsRepository.setAppFunctionRiskOverride(toolName, risk)`](../app/src/main/java/ai/agent/android/domain/repositories/SettingsRepository.kt),
+which writes into the `appFunctionRiskOverrides` flow persisted under
+DataStore key `app_function_risk_overrides`. `ToolRepository.getRisk(name)`
+consults the override map first and falls back to the conservative
+default.
+
 ### 2.4. Tests
 
 - Unit test the executor with mocked dependencies. Cover the happy
@@ -251,6 +263,96 @@ non-optional — there is no code path that bypasses it.
   (`runCatching` mapped to `ToolResult.Error`).
 - If the tool surfaces new UI (e.g. a custom confirmation dialog), add
   an instrumented Compose test under `androidTest/`.
+
+### 2.5. Expose a built-in to other apps (callee-side AppFunction)
+
+If you want a third-party app to be able to call your tool through the
+system [`AppFunctionManager`](https://developer.android.com/reference/android/app/appfunctions/AppFunctionManager),
+add an `@AppFunction`-annotated wrapper next to the existing
+[`SearchAppFunction`](../app/src/main/java/ai/agent/android/data/tools/local/appfunctions/SearchAppFunction.kt).
+The library's
+[`PlatformAppFunctionService`](https://developer.android.com/reference/androidx/appfunctions/service/PlatformAppFunctionService)
+is auto-merged from `appfunctions-service` and dispatches incoming
+requests through KSP-generated invokers — you do **not** subclass
+`AppFunctionService` or write a manual router.
+
+Only expose tools that are safe to run on behalf of an unknown caller —
+typically `READ_ONLY` operations. `schedule_task` and `delegate_task`
+are intentionally not exposed (scheduling background work or burning
+the user's cloud API quota at a third party's request would violate the
+user's expectation of agency).
+
+1. **Create the wrapper.** Add a `@Singleton` class under
+   `data/tools/local/appfunctions/`. The first parameter must be
+   `androidx.appfunctions.AppFunctionContext` — the KSP compiler
+   rejects `@AppFunction` declarations whose first parameter is
+   anything else. Kotlin defaults on subsequent parameters are not
+   honoured, so normalise blank inputs inside the body if you want a
+   fallback:
+   ```kotlin
+   @Singleton
+   class MyAppFunction @Inject constructor(
+       private val backingTool: BackingTool,
+   ) {
+       @AppFunction
+       @Suppress("UnusedParameter")
+       suspend fun invoke(context: AppFunctionContext, arg: String): String {
+           require(arg.isNotBlank()) { "arg must be non-blank" }
+           return backingTool.run(arg)
+       }
+   }
+   ```
+2. **Register the Hilt-managed factory.** The AppFunctions runtime
+   calls a reflective no-arg constructor by default, which is
+   incompatible with `@Inject constructor(...)`. Add an entry to
+   `App.appFunctionConfiguration` so the runtime asks Hilt for an
+   instance:
+   ```kotlin
+   @Inject
+   lateinit var myAppFunctionProvider: Provider<MyAppFunction>
+
+   override val appFunctionConfiguration: AppFunctionConfiguration
+       get() = AppFunctionConfiguration.Builder()
+           .addEnclosingClassFactory(SearchAppFunction::class.java) {
+               searchAppFunctionProvider.get()
+           }
+           .addEnclosingClassFactory(MyAppFunction::class.java) {
+               myAppFunctionProvider.get()
+           }
+           .build()
+   ```
+3. **KSP auto-generates the rest.** The
+   `androidx.appfunctions:appfunctions-compiler` KSP processor — already
+   wired up in `app/build.gradle.kts` with
+   `appfunctions:aggregateAppFunctions=true` — emits the per-class
+   `*_AppFunctionInventory.kt` / `*_AppFunctionInvoker.kt` Kotlin
+   artefacts plus the leaf-app `app_functions.xml` and
+   `app_functions_v2.xml` under `assets/`. The platform indexer reads
+   the XML to advertise the function to other apps.
+4. **Wire id is `<ClassFQN>#<methodName>`.** Reference the KSP-generated
+   `MyAppFunctionIds` object for the canonical wire string. Caveat:
+   when any package segment is a Kotlin soft keyword (`data`, `value`,
+   …) the compiler bakes Kotlin source-level escaping into the literal
+   — see `SearchAppFunctionIds.INVOKE_ID`, whose value embeds literal
+   backticks around `data`. External callers must include the
+   backticks verbatim. Pick a package without soft-keyword collisions
+   if you can.
+5. **Tests.**
+   - Unit-test the wrapper directly with a mocked `AppFunctionContext`
+     (`mockk(relaxed = true)`). Cover happy path, invalid arguments,
+     and the blank-fallback if applicable.
+   - Add a scenario to
+     [`AppFunctionsEndToEndTest`](../app/src/androidTest/java/ai/agent/android/AppFunctionsEndToEndTest.kt)
+     that resolves the metadata via `observeAppFunctions` and invokes
+     the function through `AppFunctionManager.executeAppFunction(...)`.
+     The test currently skips on stock Android 16 because
+     `EXECUTE_APP_FUNCTIONS` is signature-level; keep the
+     `Assume.assumeTrue` gate.
+
+The `:tools-probe` debug module is a deterministic peer for end-to-end
+checks: install it alongside the agent's instrumented tests and a
+single tap of its `MainActivity` button exercises the same callee path
+externally.
 
 ---
 
@@ -406,6 +508,7 @@ double-check it for every recipe in this guide.**
 |------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | A new `NodeType`             | `domain/models/NodeType.kt` · a new `NodeExecutor` implementation · `domain/engine/executors/NodeExecutorFactory.kt` · `domain/models/NodeContextConfig.kt` (`defaultForType`) · `domain/models/PipelineGraph.kt` (`validate`, if special invariants) · **`pipeline-editor.html`** (`NODE_TYPES`, `defaultContextConfig`, `NODE_TYPE_TOOLTIPS`, optional `DEFAULT_SYSTEM_PROMPTS`) · executor unit test · `GraphExecutionEngineTest` |
 | A new `Tool`                 | a new `LocalToolExecutor` implementation · `di/LocalToolsModule.kt` (`@Binds @IntoMap @StringKey`) · declare `ToolRisk` correctly · executor unit test · optional Compose test if new UI                                                                            |
+| A new callee-side AppFunction | a new `@AppFunction`-annotated wrapper under `data/tools/local/appfunctions/` (first param `AppFunctionContext`) · `App.appFunctionConfiguration` (`addEnclosingClassFactory(...)`) · wrapper unit test with a mocked `AppFunctionContext` · scenario in `AppFunctionsEndToEndTest` |
 | A new cloud provider         | `domain/models/CloudProvider.kt` · `data/engine/KoogClientFactory.kt` · `data/engine/KoogCloudLlmModelResolver.kt` · `data/local/ApiKeyManager.kt` · `presentation/ui/settings/SettingsScreen.kt` · factory / resolver unit tests                                    |
 | A new prompt variable        | a new `PromptVariableProvider` implementation · `di/PromptTemplateModule.kt` (`@Binds @IntoSet`) · **`pipeline-editor.html`** (`PROMPT_VARIABLES`) · `docs/user-guide.md` (variables table) · provider unit test · `PromptTemplateEngine` round-trip test           |
 
