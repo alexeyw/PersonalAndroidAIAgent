@@ -39,13 +39,38 @@ interface LiteRtRepository {
 
 ## AppFunctions (tool calling)
 
-- Declare every tool as an `@AppFunction`-annotated suspend function in
-  the `data/appfunctions` package.
-- Map AppFunction IDs to the domain `Tool` abstraction in
-  `ToolRepositoryImpl`.
-- **Human-in-the-loop gate** — before executing any `DESTRUCTIVE` or
-  `SENSITIVE` tool, emit a `PendingConfirmation` state to the UI and
-  suspend until the user responds.
+- **Caller-side** discovery and dispatch lives in
+  `data/tools/local/LocalAppFunctionManager`. AppFunctions are keyed by
+  their qualified name (`"${packageName}/${id}"`) so identical ids
+  from different packages can coexist. `ToolRepositoryImpl` merges the
+  discovered set into the visible tool catalogue.
+- **Callee-side** wrappers live in `data/tools/local/appfunctions/`
+  annotated with `androidx.appfunctions.service.AppFunction`. The
+  auto-merged `androidx.appfunctions.service.PlatformAppFunctionService`
+  (from `appfunctions-service`) dispatches incoming requests through
+  KSP-generated invokers. Do **not** subclass `AppFunctionService` or
+  write a manual router; the recipe for a new wrapper lives in
+  [`extending.md`](extending.md) §2.5.
+- **`AppFunctionDataCodec` is the single point of serialization.** Every
+  conversion between the LLM-emitted JSON argument string and the typed
+  `AppFunctionData` consumed by `AppFunctionManager.executeAppFunction(...)`
+  goes through
+  [`AppFunctionDataCodec`](../app/src/main/java/ai/agent/android/data/tools/local/AppFunctionDataCodec.kt).
+  Likewise for the response: `ExecuteAppFunctionResponse` → flat JSON
+  for the agent's observation log. Do not hand-roll `JSONObject`
+  walking in callers — the codec is the source of truth for type
+  coercion rules and `IllegalArgumentException` boundaries.
+- **`ToolRepository.getRisk(name)` is the single source of truth for
+  HITL.** The gate in `ToolNodeExecutor` consults it once per
+  invocation, never the legacy `SettingsRepository.requiresUserConfirmation`
+  flag in isolation. The risk resolves through three layers:
+  built-in defaults (`search_tool` → `READ_ONLY`,
+  `schedule_task` / `delegate_task` → `SENSITIVE`), per-tool overrides
+  for discovered AppFunctions
+  (`SettingsRepository.setAppFunctionRiskOverride`), then `SENSITIVE` as
+  the conservative fallback for anything else (MCP tools included).
+  `requiresUserConfirmation` is now an opt-in "ask on every single call"
+  override and never silences `SENSITIVE` / `DESTRUCTIVE`.
 
 ```kotlin
 enum class ToolRisk { READ_ONLY, SENSITIVE, DESTRUCTIVE }
