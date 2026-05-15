@@ -1,6 +1,7 @@
 package ai.agent.android.toolsprobe
 
 import android.os.Bundle
+import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.appfunctions.AppFunctionData
@@ -82,32 +83,40 @@ class MainActivity : ComponentActivity() {
             val outcome = runCatching { withContext(Dispatchers.IO) { executeSearchTool() } }
             state.value = outcome.fold(
                 onSuccess = { ProbeState.Success(it) },
-                onFailure = { ProbeState.Failure(it.message ?: it::class.java.simpleName) },
+                onFailure = { throwable ->
+                    Log.w(LOG_TAG, "search_tool probe failed", throwable)
+                    ProbeState.Failure(throwable.message ?: throwable::class.java.simpleName)
+                },
             )
         }
     }
 
     private suspend fun executeSearchTool(): String {
         val manager = AppFunctionManager.getInstance(applicationContext)
-            ?: error("AppFunctionManager is not available on this device (requires Android 16+).")
+            ?: error("AppFunctionManager unavailable (requires Android 16+).")
         val packages = manager
             .observeAppFunctions(AppFunctionSearchSpec(packageNames = setOf(AGENT_PACKAGE)))
             .first()
         val metadata = packages
             .flatMap { it.appFunctions }
             .firstOrNull { it.id == SEARCH_TOOL_ID }
-            ?: error(
-                "Agent did not return '$SEARCH_TOOL_ID' from `observeAppFunctions`. On " +
-                    "stock Android 16 this is the expected outcome: the platform reserves " +
-                    "`EXECUTE_APP_FUNCTIONS` for signature/module apps, so a third-party " +
-                    "probe cannot observe or invoke another package's AppFunctions even if " +
-                    "the agent publishes them — see PR #126's platform-limitation note for " +
-                    "the full grant-attempt transcript. The agent APK does ship the entry " +
-                    "(verify with `unzip -p <agent-apk> assets/app_functions_v2.xml`). If " +
-                    "the entry is missing entirely, also check that `SearchAppFunction.invoke` " +
-                    "is still annotated with `@AppFunction` so the KSP compiler regenerates " +
-                    "the inventory.",
-            )
+            ?: run {
+                // Long-form diagnostic goes to logcat so the UI can stay short. On stock
+                // Android 16 this branch is the expected outcome — EXECUTE_APP_FUNCTIONS is
+                // signature-level, so a third-party probe cannot observe another package's
+                // AppFunctions even if they are correctly published (PR #126).
+                Log.w(
+                    LOG_TAG,
+                    "observeAppFunctions returned no entries for package=$AGENT_PACKAGE. " +
+                        "Expected on stock Android 16: EXECUTE_APP_FUNCTIONS is " +
+                        "signature/module-level, so cross-package discovery is blocked. " +
+                        "Verify the agent APK still ships the inventory with: " +
+                        "`unzip -p <agent-apk> assets/app_functions_v2.xml`. If the entry " +
+                        "is missing, confirm SearchAppFunction.invoke is annotated with " +
+                        "@AppFunction so KSP regenerates it.",
+                )
+                error("Agent AppFunctions are not visible to this probe on this device.")
+            }
         val parameters = AppFunctionData.Builder(metadata.parameters, metadata.components)
             .setString("query", "Knotwork")
             .setString("lang", "en")
@@ -120,12 +129,15 @@ class MainActivity : ComponentActivity() {
         return when (val response = manager.executeAppFunction(request)) {
             is ExecuteAppFunctionResponse.Success ->
                 response.returnValue.getString(ExecuteAppFunctionResponse.Success.PROPERTY_RETURN_VALUE).orEmpty()
-            is ExecuteAppFunctionResponse.Error ->
+            is ExecuteAppFunctionResponse.Error -> {
+                Log.w(LOG_TAG, "executeAppFunction returned Error: ${response.error}")
                 error(response.error.message ?: response.error::class.java.simpleName)
+            }
         }
     }
 
     private companion object {
+        const val LOG_TAG = "ToolsProbe"
         const val AGENT_PACKAGE = "ai.agent.android"
 
         /**
