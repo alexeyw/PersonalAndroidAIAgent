@@ -108,6 +108,20 @@ class AppFunctionsEndToEndTest {
         // problem.
         grantExecuteAppFunctionsAppOp()
 
+        // Verify the probe APK is actually present on the device. AGP's
+        // `connectedDebugAndroidTest` does its own SUT/test APK install internally and
+        // does not run sibling `installDebug*` tasks — without the Gradle task hook
+        // attaching `:tools-probe:installDebug` directly to `connectedDebugAndroidTest`
+        // the probe would be missing and discovery would silently return zero entries.
+        // Failing fast here points the next reader at the right fix instead of letting
+        // them spend 45s watching the discovery poll spin.
+        check(isPackageInstalled(PROBE_PACKAGE)) {
+            "Probe package $PROBE_PACKAGE is not installed on the device. The Gradle " +
+                "hook in `:app/build.gradle.kts` must wire `:tools-probe:installDebug` " +
+                "into `connectedDebugAndroidTest` (and `installDebugAndroidTest` for IDE " +
+                "Run-Test flows). Re-run `./gradlew :app:connectedDebugAndroidTest`."
+        }
+
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         entryPoint = EntryPointAccessors.fromApplication(
             context.applicationContext,
@@ -414,9 +428,26 @@ class AppFunctionsEndToEndTest {
     private fun grantExecuteAppFunctionsAppOp() {
         val automation = InstrumentationRegistry.getInstrumentation().uiAutomation
         listOf(AGENT_PACKAGE, PROBE_PACKAGE).forEach { pkg ->
-            val output = runShell(automation, "appops set $pkg EXECUTE_APP_FUNCTIONS allow")
-            Log.d(LOG_TAG, "appops set $pkg EXECUTE_APP_FUNCTIONS allow → '$output'")
+            val setOutput = runShell(automation, "appops set $pkg EXECUTE_APP_FUNCTIONS allow")
+            val getOutput = runShell(automation, "appops get $pkg EXECUTE_APP_FUNCTIONS")
+            Log.d(LOG_TAG, "appops set $pkg EXECUTE_APP_FUNCTIONS allow → '$setOutput'")
+            Log.d(LOG_TAG, "appops get $pkg EXECUTE_APP_FUNCTIONS → '$getOutput'")
         }
+    }
+
+    /**
+     * Cheap presence check for [packageName] on the device. Uses `pm list packages
+     * <package>` rather than `PackageManager.getPackageInfo` because the latter is
+     * sensitive to the calling app's `<queries>` declaration, which is precisely what
+     * the test is supposed to verify is set up correctly — using a shell command gives
+     * a queries-independent ground truth so a missing `<queries>` entry never
+     * masquerades as a missing install.
+     */
+    private fun isPackageInstalled(packageName: String): Boolean {
+        val automation = InstrumentationRegistry.getInstrumentation().uiAutomation
+        val output = runShell(automation, "pm list packages $packageName")
+        Log.d(LOG_TAG, "pm list packages $packageName → '$output'")
+        return output.lineSequence().any { it.trim() == "package:$packageName" }
     }
 
     /**

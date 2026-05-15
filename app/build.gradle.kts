@@ -405,11 +405,17 @@ dependencies {
 // would be the ergonomic choice, but AGP 9 publishes the probe as a multi-variant
 // application module without the disambiguating attributes Gradle needs to pick a
 // concrete APK from a configuration-less consumer — sync fails with "Cannot choose
-// between debugRuntimeElements / releaseRuntimeElements". Hooking on
-// `installDebugAndroidTest` instead is variant-free, sync-safe, and triggers in both
-// CLI (`./gradlew :app:connectedDebugAndroidTest`) and IDE (Android Studio's Run
-// Test) flows because both go through `installDebugAndroidTest` before launching
-// the instrumentation.
-tasks.matching { it.name == "installDebugAndroidTest" }.configureEach {
-    dependsOn(":tools-probe:installDebug")
-}
+// between debugRuntimeElements / releaseRuntimeElements".
+//
+// Hooking on both `installDebugAndroidTest` and `connectedDebugAndroidTest`:
+//   - `installDebugAndroidTest` covers Android Studio's "Run test" workflow which
+//     ultimately goes through that task before invoking the instrumentation.
+//   - `connectedDebugAndroidTest` covers CLI runs (`./gradlew :app:connectedDebugAndroidTest`)
+//     where AGP installs the SUT/test APKs *inside* the connected-test task and does
+//     **not** depend on `installDebugAndroidTest` at all — verified via
+//     `./gradlew :app:connectedDebugAndroidTest --dry-run`. Without this branch the
+//     CLI run never installs the probe and the e2e test times out with an empty
+//     discovery list.
+val toolsProbeInstall = ":tools-probe:installDebug"
+tasks.matching { it.name == "installDebugAndroidTest" || it.name == "connectedDebugAndroidTest" }
+    .configureEach { dependsOn(toolsProbeInstall) }
