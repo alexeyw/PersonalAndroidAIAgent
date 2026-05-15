@@ -15,6 +15,35 @@ details.
 
 ### Added
 
+- App shell with bottom navigation, single unified nav-graph, and a
+  first-launch onboarding gate (Phase 21 / Task 4/11):
+  - Four-tab `NavigationBar` — **Chat** (start) / **Pipelines** /
+    **Tools** / **More** — replaces the legacy hub-style `HomeScreen`.
+    Tab state (back-stack, scroll position) is preserved across
+    switches and rotations via the canonical
+    `popUpTo(startDestination) { saveState = true } + restoreState = true`
+    pattern. While on a tab's start destination, the system Back
+    gesture finishes the activity (Back on root tabs exits the app,
+    not switches tab).
+  - `AppNavGraph` consolidates every route into one `NavHost`: splash,
+    onboarding, all four tabs, the pipelines nested-graph (library +
+    editor with the parameterised `pipeline/{id}/edit` alias), tools
+    detail + add-MCP placeholders, and the secondary screens under
+    More (Memory / Models / Prompts / Task monitor / Live metrics /
+    Settings / About). Modal bottom-sheet routes
+    (`sheet/node-config`, `sheet/console`) are registered as
+    placeholders backed by a shared `KnotworkModalRoute` wrapper
+    (Material3 `ModalBottomSheet` + `PredictiveBackHandler`); the
+    sheet bodies arrive in Tasks 6/7/10.
+  - Chat deep-link: `knotwork://chat/{threadId}` resolves to the Chat
+    tab and forwards the thread id to `ChatViewModel.switchSession`.
+  - Onboarding stub: a single-screen welcome with a Get-started CTA.
+    Gating is keyed off a new dedicated
+    `SettingsRepository.hasCompletedOnboarding` flag (separate from
+    `isFirstLaunch`, which `InitializeAppUseCase` clears during
+    cold-start seeding and therefore cannot drive the UI gate). The
+    full 4-step `HorizontalPager` (Welcome → Models → Permissions →
+    Sample pipelines) is Task 10's deliverable.
 - Bundled brand fonts in `:app/src/main/res/font/` (Phase 21 / Task 3/11):
   Inter Regular / Medium / SemiBold / Bold and JetBrains Mono Regular /
   Medium. Sources are the SIL OFL 1.1 upstreams (Inter v4.0,

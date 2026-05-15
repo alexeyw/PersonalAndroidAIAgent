@@ -202,9 +202,21 @@ This file maps the contents of the main application package.
     - `Type.kt` - Typography settings.
     - `KnotworkFontsBootstrap.kt` - Builds the bundled Inter / JetBrains Mono `FontFamily` instances from `R.font.*` and installs them into `:catalog`'s `KnotworkFonts`. Called once from `App.onCreate()` so the design-system typography renders against the brand fonts on the first frame.
   - `ui/` - UI screens and ViewModels.
-    - `MainActivity.kt` - Main activity.
-    - `navigation/` - Navigation routing constants.
-      - `NavRoutes.kt` - Canonical `const val` registry of every Jetpack Navigation Compose route string.
+    - `MainActivity.kt` - Main activity. Owns the platform splash, edge-to-edge insets, and the root Compose tree that wires `AppShellScaffold` + `AppNavGraph`.
+    - `navigation/` - App shell, bottom-nav scaffold, and the single nav-graph for the app.
+      - `NavRoutes.kt` - Canonical `const val` registry of every Jetpack Navigation Compose route string, including the chat deep-link template and modal-sheet placeholders.
+      - `TabDestination.kt` - `TabDestination` data class + `TAB_DESTINATIONS` for the four bottom-nav tabs (Chat / Pipelines / Tools / More).
+      - `BottomNavVisibility.kt` - Pure `shouldShowBottomNav(route)` function; unit-tested decision table for which routes hide the nav bar (splash, onboarding, editor, modal sheets).
+      - `KnotworkModalRoute.kt` - Generic `ModalBottomSheet` + `PredictiveBackHandler` wrapper reused by every modal-sheet route (`NodeConfigSheet`, `ConsolePane`, `AddMcpServerScreen` — bodies arrive in Tasks 6/7/10).
+      - `AppShellScaffold.kt` - Root scaffold: bottom-nav chrome, tab-switch state preservation, root-tab `BackHandler = activity.finish()`, theme-flip crossfade.
+      - `AppNavGraph.kt` - The single `NavHost` for the app, hosting splash → onboarding → tabs (Chat / Pipelines nested-graph / Tools / More) + secondary screens + modal-sheet placeholders. Reads `isFirstLaunch` to drive the onboarding gate.
+    - `onboarding/` - First-launch onboarding gate (Phase 21 / Task 4 stub; full pager in Task 10).
+      - `OnboardingScreen.kt` - Single-screen welcome + Get-started CTA; flips `SettingsRepository.isFirstLaunch` once on completion.
+      - `OnboardingViewModel.kt` - Hilt ViewModel; persists `isFirstLaunch = false`.
+    - `more/` - "More" tab landing screen.
+      - `MoreScreen.kt` - Material3 `ListItem` list with Memory / Models / Prompts / Task monitor / Live metrics / Settings / About rows.
+    - `about/` - About screen (Phase 21 / Task 4 stub; full body in Task 10).
+      - `AboutScreen.kt` - App name + version (`BuildConfig.VERSION_NAME`) + license name.
     - `chat/` - Chat screen components.
       - `AgentThoughtIndicator.kt` - Indicator for agent thinking.
       - `ApprovalBanner.kt` - Prominent inline approval prompt rendered above the chat input bar whenever the orchestrator is in `WaitingForApproval`; complements the compact console-line indicator with full-width Approve / Deny buttons and a risk-coloured badge.

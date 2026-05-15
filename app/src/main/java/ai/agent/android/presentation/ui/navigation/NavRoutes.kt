@@ -10,41 +10,40 @@ package ai.agent.android.presentation.ui.navigation
  * the wrapper noise a sealed hierarchy would require.
  *
  * Centralising the route literals here eliminates the typo class of bugs where a
- * `navigate("settngs")` would silently no-op at runtime: every reference now goes through
- * a named constant the compiler can verify.
+ * `navigate("settngs")` would silently no-op at runtime: every reference now goes
+ * through a named constant the compiler can verify.
  */
 object NavRoutes {
     /** Cold-start splash / loading screen. */
     const val SPLASH: String = "splash"
 
-    /** Main hub with buttons to every feature screen. */
-    const val HOME: String = "home"
+    /** Onboarding flow shown on first launch (Phase 21 / Task 4 stub; full pager in Task 10). */
+    const val ONBOARDING: String = "onboarding"
 
-    /** Chat with the agent. */
-    const val CHAT: String = "chat"
+    // ─── Top-level tab destinations ────────────────────────────────────────
+    // The four entries that the bottom nav switches between. Each tab's
+    // start-destination is the tab route itself; deeper screens live as
+    // additional `composable(...)` entries reachable from inside the tab.
 
-    /** Local model management. */
-    const val MODELS: String = "models"
+    /** Chat tab — entry route (without thread argument). */
+    const val CHAT_TAB: String = "chat-tab"
 
-    /** Long-term memory browser. */
-    const val MEMORY: String = "memory"
+    /** Parameterised chat route used for deep-links: `chat/{threadId}`. */
+    const val CHAT_WITH_THREAD: String = "chat/{threadId}"
 
-    /** Tools / AppFunctions catalog. */
-    const val TOOLS: String = "tools"
+    /** Path-argument key for [CHAT_WITH_THREAD]. */
+    const val CHAT_THREAD_ARG: String = "threadId"
 
-    /** Live metrics monitoring screen. */
-    const val MONITORING: String = "monitoring"
+    /** Scheme used by chat deep-links (e.g. `knotwork://chat/thread-42`). */
+    const val DEEP_LINK_SCHEME: String = "knotwork"
 
-    /** Background-task monitor. */
-    const val TASK_MONITOR: String = "taskmonitor"
+    /** Deep-link uri pattern matching [CHAT_WITH_THREAD]. */
+    const val CHAT_DEEP_LINK_PATTERN: String = "$DEEP_LINK_SCHEME://chat/{$CHAT_THREAD_ARG}"
 
-    /** App settings. */
-    const val SETTINGS: String = "settings"
+    /** Builds a concrete `chat/<id>` route for `navController.navigate`. */
+    fun chatRoute(threadId: String): String = "chat/$threadId"
 
-    /** Prompt-template library. */
-    const val PROMPTS: String = "prompts"
-
-    /** Nested navigation graph hosting the pipeline library and editor. */
+    /** Pipelines tab — nested-graph route hosting library and editor. */
     const val PIPELINES_GRAPH: String = "pipelines"
 
     /** Pipeline library list (inside [PIPELINES_GRAPH]). */
@@ -52,4 +51,63 @@ object NavRoutes {
 
     /** Visual pipeline editor (inside [PIPELINES_GRAPH]). */
     const val PIPELINE_EDITOR: String = "pipeline-editor"
+
+    /** Parameterised editor route alias: `pipeline/{id}/edit`. Path arg = [PIPELINE_EDIT_ID_ARG]. */
+    const val PIPELINE_EDIT_WITH_ID: String = "pipeline/{id}/edit"
+
+    /** Path-argument key for [PIPELINE_EDIT_WITH_ID]. */
+    const val PIPELINE_EDIT_ID_ARG: String = "id"
+
+    /** Tools tab. */
+    const val TOOLS: String = "tools"
+
+    /** Tool detail screen — `tools/{toolId}`. */
+    const val TOOL_DETAIL: String = "tools/{toolId}"
+
+    /** Path-argument key for [TOOL_DETAIL]. */
+    const val TOOL_DETAIL_ID_ARG: String = "toolId"
+
+    /** Add-MCP-server modal route. */
+    const val ADD_MCP_SERVER: String = "tools/add-mcp"
+
+    /** More tab — landing screen with secondary navigation. */
+    const val MORE: String = "more"
+
+    // ─── Secondary destinations under "More" ───────────────────────────────
+
+    /** Local model management (under More). */
+    const val MODELS: String = "models"
+
+    /** Long-term memory browser (under More). */
+    const val MEMORY: String = "memory"
+
+    /** Live metrics monitoring screen (under More). */
+    const val MONITORING: String = "monitoring"
+
+    /** Background-task monitor (under More). */
+    const val TASK_MONITOR: String = "taskmonitor"
+
+    /** App settings (under More). */
+    const val SETTINGS: String = "settings"
+
+    /** Prompt-template library (under More). */
+    const val PROMPTS: String = "prompts"
+
+    /** About screen (under More). Phase 21 / Task 4 stub; full body in Task 10. */
+    const val ABOUT: String = "about"
+
+    // ─── Modal bottom-sheet placeholder routes ─────────────────────────────
+    // Phase 21 / Task 4 introduces the [KnotworkModalRoute] wrapper used by
+    // every modal surface. The three sheets below are registered as empty
+    // placeholders so navigation wiring (and `BottomNavVisibility`) is
+    // testable from this task; their bodies arrive in Tasks 6 / 7 / 10.
+
+    /** Node config sheet — opened from the pipeline editor (filled in Task 7). */
+    const val SHEET_NODE_CONFIG: String = "sheet/node-config"
+
+    /** Console pane sheet — opened from chat (filled in Task 6). */
+    const val SHEET_CONSOLE: String = "sheet/console"
+
+    /** Add-MCP-server sheet alias — wired in Task 10 alongside `ToolsScreen`. */
+    const val SHEET_ADD_MCP: String = ADD_MCP_SERVER
 }
