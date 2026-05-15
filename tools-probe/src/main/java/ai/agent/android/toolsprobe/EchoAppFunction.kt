@@ -21,9 +21,9 @@ import androidx.appfunctions.service.AppFunction
  *
  * The probe deliberately avoids declaring its own custom `AppFunctionService`: the
  * platform-provided merged service is sufficient and keeps the probe a pure data-plane
- * peer for the e2e test. This is the opposite trade-off from the agent's own
- * [ai.agent.android.data.tools.local.AgentAppFunctionService], which routes manually
- * because it exposes hand-picked built-ins rather than annotation-discovered functions.
+ * peer for the e2e test. The agent itself takes the same route — it relies on the merged
+ * `PlatformAppFunctionService` plus `@AppFunction`-annotated wrappers (e.g.
+ * `SearchAppFunction`) instead of subclassing `AppFunctionService`.
  *
  * The class is instantiated by the AppFunction runtime on each invocation; it must
  * therefore have a no-arg public constructor (see `AppFunctionConfiguration` if

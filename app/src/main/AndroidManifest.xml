@@ -96,14 +96,13 @@
             </intent-filter>
         </activity>
 
-        <service
-            android:name=".data.tools.local.AgentAppFunctionService"
-            android:exported="true"
-            android:permission="android.permission.BIND_APP_FUNCTION_SERVICE">
-            <intent-filter>
-                <action android:name="android.app.appfunctions.AppFunctionService" />
-            </intent-filter>
-        </service>
+        <!--
+            Callee-side AppFunctions surface is served by the auto-merged
+            androidx.appfunctions.service.PlatformAppFunctionService (from
+            `appfunctions-service`), enabled on API 36+. Functions are discovered through
+            `@AppFunction`-annotated classes (see [SearchAppFunction]); the agent only
+            needs to publish them — no hand-rolled `AppFunctionService` subclass.
+        -->
 
         <service
             android:name=".data.services.AgentForegroundService"
