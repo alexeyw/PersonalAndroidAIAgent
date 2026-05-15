@@ -11,14 +11,14 @@ import androidx.compose.runtime.Composable
  * [MaterialTheme] so the `:catalog` module compiles and downstream callers
  * can already wrap their content in `KnotworkTheme { ... }`. Token-driven
  * `colorScheme` / `typography` / `shapes` land in Task 2/11 along with the
- * port of `project_docs/design/compose/tokens/` into Kotlin sources.
+ * port of the design-system tokens into Kotlin sources.
  *
  * The [darkTheme] parameter is exposed (and defaults to the system value)
  * for forward compatibility — once Task 2/11 wires the light / dark
  * `knotwork*ColorScheme()` factories, the signature stays unchanged.
  *
  * Material You / dynamic color is **not** exposed as a parameter: the
- * design system pins its own accent ramp per `decisions.md §8`.
+ * design system pins its own accent ramp.
  *
  * @param darkTheme `true` to use the dark palette; defaults to
  * [isSystemInDarkTheme]. Pinned to `false` / `true` in catalog previews to

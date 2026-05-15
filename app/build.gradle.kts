@@ -317,8 +317,8 @@ tasks.named("check") { dependsOn(checkNoInternalFqn) }
 
 dependencies {
     // Phase 21 / Task 1/11: design-system module — `KnotworkTheme` (currently
-    // a `MaterialTheme` pass-through) plus the foundations Task 2/11 will port
-    // from `project_docs/design/compose/tokens/`.
+    // a `MaterialTheme` pass-through) plus the foundations Task 2/11 will
+    // port into Kotlin sources.
     implementation(project(":catalog"))
 
     // Phase 21 / Task 1/11: `androidx.core.splashscreen` artefact — the
