@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- See values/colors.xml for the rationale behind `tools:ignore="UnusedResources"`. -->
+<resources xmlns:tools="http://schemas.android.com/tools" tools:ignore="UnusedResources">
+    <!--
+        Knotwork design tokens — dark-theme overrides (Phase 21 / Task 2/11).
+
+        Mirrors the Kotlin tokens in :catalog/.../tokens/Color.kt
+        (`KnotworkDark.*`). Accent / signal / node hues are intentionally
+        absent from this file: they are hue-locked and read from the light
+        defaults in values/colors.xml. Only the surface ramp, outline and
+        on-surface tokens flip per theme.
+    -->
+
+    <!-- Surface ramp (dark). -->
+    <color name="knotwork_surface_0">#FF0F0D0B</color>
+    <color name="knotwork_surface_1">#FF181512</color>
+    <color name="knotwork_surface_2">#FF221E1A</color>
+    <color name="knotwork_surface_3">#FF2C2823</color>
+    <color name="knotwork_surface_4">#FF39342F</color>
+    <color name="knotwork_surface_inverse">#FFF4F1ED</color>
+
+    <!-- Outline and divider (dark). -->
+    <color name="knotwork_outline">#FF413C36</color>
+    <color name="knotwork_outline_strong">#FF635C55</color>
+    <color name="knotwork_divider">#FF2C2824</color>
+
+    <!-- On-surface scale (dark). -->
+    <color name="knotwork_on_surface">#FFF4F1EE</color>
+    <color name="knotwork_on_surface_2">#FFC7C3BF</color>
+    <color name="knotwork_on_surface_muted">#FF96918C</color>
+    <color name="knotwork_on_surface_dim">#FF67625D</color>
+</resources>

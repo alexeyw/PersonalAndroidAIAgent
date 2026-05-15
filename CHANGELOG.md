@@ -15,13 +15,48 @@ details.
 
 ### Added
 
+- Knotwork design tokens ported into `:catalog` under
+  `app.knotwork.design.tokens` (Phase 21 / Task 2/11). Six token files —
+  `Color.kt`, `ExtendedColors.kt`, `Type.kt`, `Spacing.kt`, `Shape.kt`,
+  `Elevation.kt`, `Motion.kt` — establish the canonical Compose-side
+  source of truth for colour, typography, spacing, shape, elevation and
+  motion. Every token is exposed both via the upstream `KnotworkPalette`
+  / `KnotworkLight` / `KnotworkDark` objects and through a Material3
+  mapping (`knotworkLightColorScheme()` / `knotworkDarkColorScheme()` /
+  `knotworkTypography()` / `MaterialKnotworkShapes`).
+- `KnotworkTheme` composable in `:catalog` now wires the tokens into a
+  real `MaterialTheme` and installs `KnotworkExtendedColors`,
+  `KnotworkSpacing`, `KnotworkShapes`, `KnotworkElevation` and
+  `KnotworkMotion` into composition locals. A sibling `object KnotworkTheme`
+  exposes them through `KnotworkTheme.extended` / `.spacing` / `.shapes`
+  / `.elevation` / `.motion` accessors, mirroring the shape of
+  `MaterialTheme.colorScheme`. Material You / dynamic colour stays
+  intentionally unexposed.
+- `FoundationsCatalogPage` composable plus light + dark `@Preview`s
+  rendering the palette, type scale and spacing tokens as a single
+  scrollable surface for design review and snapshot baselines.
+- `knotwork_*` colour and `knotwork_sp_*` dimen mirrors in
+  `:app/src/main/res/values/colors.xml`,
+  `:app/src/main/res/values-night/colors.xml` and
+  `:app/src/main/res/values/dimens.xml` so non-Compose surfaces
+  (notifications, app widgets, splash window theme) can reach the
+  Knotwork tokens through the standard Android resource pipeline.
+  Compose code keeps reading from `:catalog` `KnotworkTheme.*`. Resources
+  are pre-published — `tools:ignore="UnusedResources"` is applied at the
+  file level until the consuming surfaces land in later Phase 21 tasks.
+- Snapshot-testing infrastructure: Roborazzi `1.60.0` + Robolectric
+  `4.16.1` wired into `:catalog`, with the first baseline (light + dark
+  PNGs of `FoundationsCatalogPage`) committed under
+  `:catalog/src/test/snapshots/`. `./gradlew :catalog:recordRoborazziDebug`
+  refreshes the baselines; `./gradlew :catalog:verifyRoborazziDebug`
+  is the CI gate. Aggregated `./gradlew check` already triggers
+  `verifyRoborazziDebug` via the `testDebugUnitTest` chain.
 - `:catalog` Android library module hosting the Knotwork design system.
-  Phase 21 / Task 1/11 ships only the project scaffold: namespace
+  Phase 21 / Task 1/11 shipped the project scaffold: namespace
   `app.knotwork.design`, `minSdk 36` / `compileSdk 37`, Compose BOM,
-  ktlint and detekt mirrored from `:app`, and a `KnotworkTheme` composable
-  that currently passes through to `MaterialTheme`. The token-driven
-  palettes, typography, and Foundations snapshot baseline land in Task
-  2/11.
+  ktlint and detekt mirrored from `:app`. Task 2/11 replaced the
+  pass-through `KnotworkTheme` with the real token-wired implementation
+  (see entries above).
 - `androidx.core.splashscreen 1.0.1` dependency wired into `:app`. The
   platform-side `installSplashScreen(...)` call lands in Task 3/11 once
   the brand mark and accent ramp are available; declaring the artefact
@@ -39,14 +74,15 @@ details.
   bars so the design system can paint to the device edges deterministically
   in both light and dark themes. Visible behaviour is unchanged on the
   current screens.
-
-### Deferred
-
-- Snapshot-testing framework (Paparazzi was the intended choice per the
-  Phase 21 plan). Paparazzi's latest release `2.0.0-alpha04` caps at AGP
-  8.13.2 and does not yet support this project's AGP 9.2.1; Task 2/11
-  picks Roborazzi or waits for Paparazzi to catch up when the first
-  Foundations snapshots are required.
+- `CONTRIBUTING.md` now lists JDK 21 as the required toolchain for
+  running unit tests (Phase 21 / Task 2/11). Roborazzi's Robolectric
+  backend requires JDK 21 to render against `minSdk 36`. Production
+  code still compiles to `JavaVersion.VERSION_17` / `JvmTarget.JVM_17`.
+  Note for repo owner: the Action runner in `.github/workflows/check.yml`
+  (gitignored — see `.gitignore`) must be bumped from `java-version: '17'`
+  to `'21'` for the gate to keep passing once this branch lands; the
+  bump cannot be made from this PR because the Git PAT lacks the
+  `workflow` scope.
 
 ### Changed
 

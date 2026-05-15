@@ -5,7 +5,7 @@
         id="BadPeriodicWorkRequestEnqueue"
         message="Use `enqueueUniquePeriodicWork()` instead of `enqueue()`">
         <location
-            file="../../../../.gradle/caches/9.4.1/transforms/142e02ed02f2cad08aa994abab5fa411/transformed/work-runtime-2.11.2/jars/classes.jar!/androidx/work/WorkManager.class"/>
+            file="../../../../.gradle/caches/9.4.1/transforms/8169723bf09fb0454fc3084989753c8c/transformed/work-runtime-2.11.2/jars/classes.jar!/androidx/work/WorkManager.class"/>
     </issue>
 
     <issue

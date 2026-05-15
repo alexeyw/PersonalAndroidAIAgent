@@ -1,5 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
-<resources>
+<!--
+    `tools:ignore="UnusedResources"` is scoped to the file because the
+    `knotwork_*` token mirror (added in Phase 21 / Task 2/11) is published
+    ahead of its consumers — non-Compose surfaces such as the foreground
+    service notification, widgets and adaptive icon backgrounds will
+    reference these tokens in later Phase 21 tasks. Compose code keeps
+    reading from `:catalog` `KnotworkTheme.*` instead.
+-->
+<resources xmlns:tools="http://schemas.android.com/tools" tools:ignore="UnusedResources">
     <!-- Theme colors (dark scheme, Material 3) -->
     <color name="theme_primary_dark">#FFD0BCFF</color>
     <color name="theme_secondary_dark">#FFCCC2DC</color>
@@ -32,4 +40,70 @@
 
     <!-- Task monitor: status indicator color for the "running" state -->
     <color name="task_status_running">#FF4CAF50</color>
+
+    <!--
+        Knotwork design tokens (Phase 21 / Task 2/11).
+
+        These are the static-fallback mirror of the :catalog token Kotlin
+        sources, exposed as Android XML resources for the surfaces that
+        cannot reach Compose state — notifications, app widgets, launcher
+        adaptive icon backgrounds, and the splash window theme. Compose
+        consumers must always read from `:catalog` tokens via
+        `KnotworkTheme.*` — these XML values are NOT the source of truth
+        and must stay byte-equal to the canonical Kotlin tokens.
+
+        Dark-mode overrides for surface-ramp, outline and on-surface tokens
+        live in `values-night/colors.xml`. Accent, signal and node hues are
+        hue-locked across themes and therefore declared here only.
+    -->
+
+    <!-- Accent ramp (hue 70, warm amber) — light/dark identical. -->
+    <color name="knotwork_accent_50">#FFFFEFDD</color>
+    <color name="knotwork_accent_100">#FFFBE0C1</color>
+    <color name="knotwork_accent_200">#FFF0C595</color>
+    <color name="knotwork_accent_300">#FFE1AC6E</color>
+    <color name="knotwork_accent_400">#FFD49648</color>
+    <color name="knotwork_accent_500">#FFC48225</color>
+    <color name="knotwork_accent_600">#FFA76C12</color>
+    <color name="knotwork_accent_700">#FF81520A</color>
+    <color name="knotwork_accent_800">#FF54360B</color>
+    <color name="knotwork_accent_900">#FF331F05</color>
+
+    <!-- Signal hues (locked across themes). -->
+    <color name="knotwork_signal_success">#FF43A96E</color>
+    <color name="knotwork_signal_warn">#FFD5A13C</color>
+    <color name="knotwork_signal_error">#FFD55753</color>
+
+    <!-- Per-NodeType hues (locked across themes). -->
+    <color name="knotwork_node_input">#FFC48225</color>
+    <color name="knotwork_node_intent_router">#FF9283DC</color>
+    <color name="knotwork_node_if_condition">#FF43A96E</color>
+    <color name="knotwork_node_clarification">#FFD49648</color>
+    <color name="knotwork_node_lite_rt">#FFA76C12</color>
+    <color name="knotwork_node_cloud">#FF5F9DB0</color>
+    <color name="knotwork_node_tool">#FFD5A13C</color>
+    <color name="knotwork_node_decomposition">#FF00A8A2</color>
+    <color name="knotwork_node_queue_processor">#FFC670AB</color>
+    <color name="knotwork_node_evaluation">#FFD5725A</color>
+    <color name="knotwork_node_summary">#FF359BD9</color>
+    <color name="knotwork_node_output">#FF81520A</color>
+
+    <!-- Surface ramp (light defaults; dark overrides in values-night/colors.xml). -->
+    <color name="knotwork_surface_0">#FFFEFCFA</color>
+    <color name="knotwork_surface_1">#FFFAF6F3</color>
+    <color name="knotwork_surface_2">#FFF6F2ED</color>
+    <color name="knotwork_surface_3">#FFF1ECE6</color>
+    <color name="knotwork_surface_4">#FFEDE6DF</color>
+    <color name="knotwork_surface_inverse">#FF1A1815</color>
+
+    <!-- Outline and divider (light defaults). -->
+    <color name="knotwork_outline">#FFD4D0CB</color>
+    <color name="knotwork_outline_strong">#FFAFAAA4</color>
+    <color name="knotwork_divider">#FFE7E4E0</color>
+
+    <!-- On-surface scale (light defaults). -->
+    <color name="knotwork_on_surface">#FF14110E</color>
+    <color name="knotwork_on_surface_2">#FF3B3732</color>
+    <color name="knotwork_on_surface_muted">#FF6D6863</color>
+    <color name="knotwork_on_surface_dim">#FF95918D</color>
 </resources>

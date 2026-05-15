@@ -23,9 +23,13 @@ By participating in this project you agree to abide by our
 
 Required toolchain:
 
-- **JDK 17** — the project compiles against `JavaVersion.VERSION_17` and
-  targets `JvmTarget.JVM_17`. Newer JDKs are not supported by AGP at the
-  pinned version.
+- **JDK 21** — required to run the unit-test suite. Roborazzi's
+  Robolectric backend in `:catalog` only renders against the project's
+  `minSdk 36` on JDK 21. Production code still compiles to
+  `JavaVersion.VERSION_17` / `JvmTarget.JVM_17` — building the APK works
+  on JDK 17 — but `./gradlew check` (the merge gate) needs JDK 21. The
+  Android Studio bundled JBR ships JDK 21 already, so installing
+  Android Studio satisfies the requirement out of the box.
 - **Android Studio** — current stable channel (or any IDE that supports
   AGP 9.2.x and Kotlin 2.3.x).
 - **Android SDK** — install platform **API 36** (compileSdk) and
