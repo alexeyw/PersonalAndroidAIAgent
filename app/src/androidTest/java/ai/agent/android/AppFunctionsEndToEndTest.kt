@@ -538,23 +538,39 @@ class AppFunctionsEndToEndTest {
 
     /**
      * Runs [command] through the [UiAutomation] shell channel and returns the combined
-     * stdout/stderr as a string. The command is wrapped in `sh -c '<cmd> 2>&1'` so any
-     * error written to stderr is captured — the raw `UiAutomation.executeShellCommand`
-     * channel only forwards stdout, which silently hides the "Unknown operation" /
-     * "Permission cannot be granted" lines that the appop and `pm grant` tools emit
-     * on the failure path. Drains the file descriptor synchronously — leaving it
-     * un-read can leak the underlying pipe on some platform builds.
+     * stdout/stderr as a string. `executeShellCommandRwe` returns three file
+     * descriptors — [stdout, stdin, stderr] — and we drain both stdout and stderr so
+     * the "Permission cannot be granted" / "Unknown operation" lines that `pm grant`
+     * and `appops set` emit on the failure path show up in the diagnostic report.
+     *
+     * Note: a previous version of this helper wrapped the command in
+     * `sh -c '<cmd> 2>&1'`, but `executeShellCommand` does not run through a shell —
+     * it splits on whitespace and execs the binary directly, so the single quotes
+     * become literal characters and the command never starts. The Rwe variant is
+     * the supported way to capture stderr.
      */
     private fun runShell(automation: UiAutomation, command: String): String {
-        val wrapped = "sh -c ${shellQuote("$command 2>&1")}"
-        val pfd = automation.executeShellCommand(wrapped)
-        return ParcelFileDescriptor.AutoCloseInputStream(pfd).use { stream ->
-            stream.bufferedReader().readText().trim()
+        val pfds = automation.executeShellCommandRwe(command)
+        // Layout: [stdout, stdin, stderr]
+        val stdout = pfds[0]
+        val stdin = pfds[1]
+        val stderr = pfds[2]
+        // Close stdin immediately — the commands we run don't read it and leaving the
+        // descriptor open can leak the pipe on some platform builds.
+        ParcelFileDescriptor.AutoCloseInputStream(stdin).close()
+        val out = ParcelFileDescriptor.AutoCloseInputStream(stdout).use {
+            it.bufferedReader().readText().trim()
+        }
+        val err = ParcelFileDescriptor.AutoCloseInputStream(stderr).use {
+            it.bufferedReader().readText().trim()
+        }
+        return when {
+            out.isBlank() && err.isBlank() -> ""
+            err.isBlank() -> out
+            out.isBlank() -> err
+            else -> "$out\n$err"
         }
     }
-
-    /** Single-quotes [text] for inclusion as an argument to `sh -c`. */
-    private fun shellQuote(text: String): String = "'" + text.replace("'", "'\"'\"'") + "'"
 
     /**
      * Builds a fresh [ToolNodeExecutor] with real `ToolRepository`, `SettingsRepository`
