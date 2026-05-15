@@ -11,7 +11,10 @@ import ai.agent.android.domain.models.NodeType
 import ai.agent.android.domain.models.ToolRisk
 import ai.agent.android.domain.services.ApprovalNotifier
 import ai.agent.android.domain.usecases.LoadModelUseCase
+import android.app.UiAutomation
 import android.os.Build
+import android.os.ParcelFileDescriptor
+import android.util.Log
 import androidx.appfunctions.AppFunctionData
 import androidx.appfunctions.AppFunctionManager
 import androidx.appfunctions.AppFunctionSearchSpec
@@ -78,12 +81,32 @@ class AppFunctionsEndToEndTest {
     private lateinit var entryPoint: AppFunctionsE2ETestEntryPoint
     private lateinit var qualifiedEchoName: String
 
+    /**
+     * Snapshot of the most recent tool catalogue seen by the discovery poll. Captured so
+     * a discovery timeout's error message can show what the agent *did* observe — that
+     * single line of context disambiguates "probe never installed" from "probe installed
+     * but not indexed" from "EXECUTE_APP_FUNCTIONS appop missing", which is the actual
+     * difference between very different fixes.
+     */
+    private var lastObservedTools: List<String> = emptyList()
+
     @Before
     fun setUp() = runBlocking {
         // The platform AppFunctions framework is only available on Android 16+. CI runners
         // and developer JVM-only check loops will reach this guard before any of the test
         // logic, so the file is a no-op there rather than a hard failure.
         assumeTrue("Requires Android 16+ for AppFunctionManager", Build.VERSION.SDK_INT >= 36)
+
+        // `EXECUTE_APP_FUNCTIONS` is an appop-protected permission (protectionLevel
+        // `appop|preinstalled|module` in the Android 16 framework manifest): declaring it
+        // in the agent's manifest is not enough — the platform also needs an `allow`
+        // appop entry for the calling package before `AppFunctionManager.observeAppFunctions`
+        // will return cross-package metadata. Granting the appop here is what unblocks
+        // discovery of `:tools-probe/echo`; without it the search returns only the agent's
+        // own (currently zero) `@AppFunction`-annotated declarations and `setUp` times out
+        // with a "not discovered within Nms" failure that is easy to misread as an install
+        // problem.
+        grantExecuteAppFunctionsAppOp()
 
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         entryPoint = EntryPointAccessors.fromApplication(
@@ -92,17 +115,19 @@ class AppFunctionsEndToEndTest {
         )
 
         // The platform indexer needs a moment after install before it surfaces a freshly
-        // deployed AppFunction. `androidTestUtil` installs the probe immediately before the
-        // test class is loaded, so the very first discovery call from a cold device may
-        // race the indexer; poll briefly until the qualified name appears. The total
-        // budget is intentionally short — we want a regression in discovery (no echo
-        // metadata at all) to fail loudly, not stretch the test to a minute-long timeout.
+        // deployed AppFunction. The probe is installed by the
+        // `:app:installDebugAndroidTest` → `:tools-probe:installDebug` hook before the test
+        // class is loaded, so the very first discovery call from a cold device may race
+        // the indexer; poll briefly until the qualified name appears.
         qualifiedEchoName = waitForProbeEchoDiscovery()
             ?: error(
                 "Probe AppFunction `echo` was not discovered within ${PROBE_DISCOVERY_TIMEOUT_MS}ms. " +
-                    "Check that `:tools-probe:installDebug` ran before the test (it is hooked off " +
-                    "`installDebugAndroidTest` in `:app/build.gradle.kts`) and that the agent " +
-                    "package can see $PROBE_PACKAGE via <queries>.",
+                    "Last observed catalogue: ${lastObservedTools.joinToString(prefix = "[", postfix = "]")}. " +
+                    "Check that `:tools-probe:installDebug` ran before the test (hooked off " +
+                    "`installDebugAndroidTest` in `:app/build.gradle.kts`), that the agent " +
+                    "package can see $PROBE_PACKAGE via <queries>, and that the agent has the " +
+                    "EXECUTE_APP_FUNCTIONS appop allowed (`appops set $AGENT_PACKAGE " +
+                    "EXECUTE_APP_FUNCTIONS allow`).",
             )
 
         // Each test owns its session id so HITL deferred state cannot leak between
@@ -352,12 +377,18 @@ class AppFunctionsEndToEndTest {
      * the probe's package shows up, or the poll budget expires. Returns the qualified
      * name on success and `null` on timeout — the latter is escalated to a hard failure
      * by [setUp].
+     *
+     * Each polled catalogue is also captured in [lastObservedTools] and emitted to
+     * Logcat under the [LOG_TAG] tag, so a discovery timeout can be diagnosed from the
+     * test output without re-running with a debugger attached.
      */
     private suspend fun waitForProbeEchoDiscovery(): String? {
         val deadline = System.currentTimeMillis() + PROBE_DISCOVERY_TIMEOUT_MS
         val toolRepo = entryPoint.toolRepository()
         while (System.currentTimeMillis() < deadline) {
             val tools = toolRepo.getAvailableTools()
+            lastObservedTools = tools.map { it.name }
+            Log.d(LOG_TAG, "Discovered tools: $lastObservedTools")
             val match = tools.firstOrNull { tool ->
                 tool.name.startsWith("$PROBE_PACKAGE/") && tool.name.endsWith("echo")
             }
@@ -365,6 +396,39 @@ class AppFunctionsEndToEndTest {
             delay(PROBE_POLL_INTERVAL_MS)
         }
         return null
+    }
+
+    /**
+     * Allows the [android.permission.EXECUTE_APP_FUNCTIONS] appop for both the agent and
+     * the probe packages by issuing `appops set` shell commands through the
+     * [UiAutomation] privilege the instrumentation provides. The grant is per-device and
+     * persists until the package is uninstalled, so re-running the test class is fine —
+     * but a fresh emulator wipe drops it, which is why we re-issue every setUp.
+     *
+     * Failure is swallowed by design: on Android 16 the appop is already allowed by
+     * default for some emulator images, and `appops set` returns a non-zero exit with a
+     * harmless "Op flag <name> doesn't exist" message that we deliberately do not bubble
+     * up — if the appop is truly missing the discovery poll will time out and the
+     * resulting error message points the next reader at this exact code path.
+     */
+    private fun grantExecuteAppFunctionsAppOp() {
+        val automation = InstrumentationRegistry.getInstrumentation().uiAutomation
+        listOf(AGENT_PACKAGE, PROBE_PACKAGE).forEach { pkg ->
+            val output = runShell(automation, "appops set $pkg EXECUTE_APP_FUNCTIONS allow")
+            Log.d(LOG_TAG, "appops set $pkg EXECUTE_APP_FUNCTIONS allow → '$output'")
+        }
+    }
+
+    /**
+     * Runs [command] through the [UiAutomation] shell channel and returns the combined
+     * stdout/stderr as a string. Drains the file descriptor synchronously — leaving it
+     * un-read can leak the underlying pipe on some platform builds.
+     */
+    private fun runShell(automation: UiAutomation, command: String): String {
+        val pfd = automation.executeShellCommand(command)
+        return ParcelFileDescriptor.AutoCloseInputStream(pfd).use { stream ->
+            stream.bufferedReader().readText().trim()
+        }
     }
 
     /**
@@ -416,7 +480,8 @@ class AppFunctionsEndToEndTest {
         const val AGENT_PACKAGE = "ai.agent.android"
         const val PROBE_PACKAGE = "ai.agent.android.toolsprobe"
         const val SEARCH_TOOL_ID = "search_tool"
-        const val PROBE_DISCOVERY_TIMEOUT_MS = 15_000L
+        const val LOG_TAG = "AppFunctionsE2E"
+        const val PROBE_DISCOVERY_TIMEOUT_MS = 45_000L
         const val PROBE_POLL_INTERVAL_MS = 500L
         const val EXECUTOR_TIMEOUT_MS = 30_000L
         const val PENDING_APPROVAL_TIMEOUT_MS = 5_000L
