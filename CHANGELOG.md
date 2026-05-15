@@ -32,16 +32,22 @@ details.
   followed by `ToolNodeExecutor.resumeWithApproval`, callee-side invocation
   of `search_tool` through the system `AppFunctionManager`, and risk
   override resolution via `SettingsRepository.setAppFunctionRiskOverride`.
-  Note: on stock Android 16 emulator images
-  (`system-images;android-36;default;x86_64` and friends) the
-  `EXECUTE_APP_FUNCTIONS` permission is declared at signature / module /
-  preinstalled protection level — `pm grant` rejects it with "not a
+  Note: on stock Android 16 builds the `EXECUTE_APP_FUNCTIONS` permission
+  is declared at signature / module / preinstalled protection level —
+  verified on both the Pixel 9 Pro emulator
+  (`system-images;android-36;default;x86_64`) and a Samsung Galaxy S25
+  Ultra (Android 16). `pm grant` rejects the permission with "not a
   changeable permission type" and `appops set` reports "Unknown operation".
   Third-party agents can therefore neither observe nor invoke cross-package
-  AppFunctions on those images. The test detects that platform state from
-  the captured grant-attempt stderr and skips itself via `Assume.assumeTrue`
-  with a detailed transcript; on a real device with a privileged agent
-  build the four scenarios run end-to-end.
+  AppFunctions on those builds, regardless of whether the host is an
+  emulator or real device. The test detects that platform state from the
+  captured grant-attempt stderr and skips itself via `Assume.assumeTrue`
+  with a detailed transcript. The probe's manual MainActivity button hits
+  the same platform restriction (plus a second pre-requisite: the agent's
+  `search_tool` will only show up in `app_functions_v2.xml` once it gains
+  an `@AppFunction` annotation in Phase 20-7). Both gates re-open
+  automatically on future Android builds that relax the permission's
+  protection level for debuggable apps.
 - `AppFunctionsE2ETestEntryPoint` (Hilt `EntryPoint`) under
   `data/testing/` exposing the singletons the new instrumented test
   consumes (`ToolRepository`, `SettingsRepository`, `ChatRepository`),

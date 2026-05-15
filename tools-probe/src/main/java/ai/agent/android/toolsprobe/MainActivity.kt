@@ -95,7 +95,15 @@ class MainActivity : ComponentActivity() {
         val metadata = packages
             .flatMap { it.appFunctions }
             .firstOrNull { it.id == SEARCH_TOOL_ID }
-            ?: error("Agent app does not expose '$SEARCH_TOOL_ID'. Is :app installed?")
+            ?: error(
+                "Agent does not publish '$SEARCH_TOOL_ID' in its `app_functions_v2.xml` " +
+                    "inventory. The agent currently routes `$SEARCH_TOOL_ID` through manual " +
+                    "`AgentAppFunctionService` dispatch only; the `@AppFunction`-annotated " +
+                    "discovery surface is pending Phase 20-7. Even after that, current " +
+                    "Android 16 builds reserve EXECUTE_APP_FUNCTIONS for signature/module " +
+                    "apps, so this button stays aspirational on stock devices — see PR " +
+                    "#126's platform-limitation note for the full transcript.",
+            )
         val parameters = AppFunctionData.Builder(metadata.parameters, metadata.components)
             .setString("query", "Knotwork")
             .setString("lang", "en")
