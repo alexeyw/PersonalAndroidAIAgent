@@ -24,9 +24,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
-import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavHostController
-import androidx.navigation.NavOptionsBuilder
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -261,7 +259,7 @@ fun AppNavGraph(navController: NavHostController, showOnboarding: Boolean, modif
                 viewModel = taskMonitorViewModel,
                 onNavigateToChat = { _ ->
                     navController.navigate(NavRoutes.CHAT_TAB) {
-                        applyTabSwitchOptions(navController)
+                        applyTabSwitchOptions()
                     }
                 },
                 onBack = { navController.popBackStack() },
@@ -291,13 +289,4 @@ fun AppNavGraph(navController: NavHostController, showOnboarding: Boolean, modif
             KnotworkModalRoute(onDismiss = { navController.popBackStack() }) { _ -> }
         }
     }
-}
-
-/** Mirrors [AppShellScaffold]'s private tab-switch options for cross-tab navigation. */
-private fun NavOptionsBuilder.applyTabSwitchOptions(navController: NavHostController) {
-    popUpTo(navController.graph.findStartDestination().id) {
-        saveState = true
-    }
-    launchSingleTop = true
-    restoreState = true
 }

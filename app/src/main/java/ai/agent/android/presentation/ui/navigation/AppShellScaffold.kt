@@ -21,7 +21,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
-import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavHostController
 import androidx.navigation.NavOptionsBuilder
 import androidx.navigation.compose.currentBackStackEntryAsState
@@ -84,7 +83,7 @@ fun AppShellScaffold(navController: NavHostController, content: @Composable (inn
                     currentRoute = currentRoute,
                     onTabSelected = { tab ->
                         navController.navigate(tab.route) {
-                            applyTabSwitchOptions(navController)
+                            applyTabSwitchOptions()
                         }
                     },
                 )
@@ -152,18 +151,39 @@ internal fun String.belongsToTab(tab: TabDestination): Boolean = when (tab.route
 }
 
 /**
+ * Anchor route used as the [popUpTo] target during tab switches.
+ *
+ * We intentionally do **not** use `navController.graph.findStartDestination()`
+ * here: this graph's start destination is [NavRoutes.SPLASH], and the
+ * splash handler removes itself from the back-stack with
+ * `popUpTo(SPLASH) { inclusive = true }` once initialization completes.
+ * After that, the splash id is no longer on the stack, so passing it as
+ * the `popUpTo` target makes the pop a silent no-op — root-tab entries
+ * accumulate and the documented `saveState` / `restoreState` behaviour
+ * stops working.
+ *
+ * Pinning the anchor to [NavRoutes.CHAT_TAB] (the first tab, navigated
+ * to right after splash) gives us a route that is guaranteed to be on
+ * the stack at the bottom whenever a tab-switch can happen. The Chat
+ * tab itself stays permanently anchored at the bottom; every other tab
+ * enters above it and is popped + saved on the next switch, which is
+ * exactly the Material 3 NavigationSuite back-stack contract.
+ */
+internal const val TAB_BACK_STACK_ANCHOR: String = NavRoutes.CHAT_TAB
+
+/**
  * Canonical nav-options for switching to a tab destination.
  *
- * - `popUpTo(startDestination) { saveState = true }` pops every entry above
- *   the graph's start-destination while preserving the popped tabs' state
- *   (back-stack, scroll position, ViewModel state) so re-selection restores
- *   the user where they left off.
- * - `launchSingleTop = true` avoids stacking duplicate copies of a tab when
- *   the user taps the same tab repeatedly.
+ * - `popUpTo(TAB_BACK_STACK_ANCHOR) { saveState = true }` pops every
+ *   entry above the anchor while preserving the popped tabs' state
+ *   (back-stack, scroll position, ViewModel state) so re-selection
+ *   restores the user where they left off.
+ * - `launchSingleTop = true` avoids stacking duplicate copies of a tab
+ *   when the user taps the same tab repeatedly.
  * - `restoreState = true` replays the saved state when revisiting a tab.
  */
-private fun NavOptionsBuilder.applyTabSwitchOptions(navController: NavHostController) {
-    popUpTo(navController.graph.findStartDestination().id) {
+internal fun NavOptionsBuilder.applyTabSwitchOptions() {
+    popUpTo(TAB_BACK_STACK_ANCHOR) {
         saveState = true
     }
     launchSingleTop = true
