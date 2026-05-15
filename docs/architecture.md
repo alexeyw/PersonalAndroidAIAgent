@@ -13,8 +13,16 @@ render natively in GitHub markdown — no external tooling required.
 
 ## 1. Clean Architecture overview
 
-The codebase is split into three layers under
-`app/src/main/java/ai/agent/android/`:
+The codebase is split into three Gradle modules:
+
+```
+:app        — Android application; hosts presentation / domain / data layers
+:catalog    — Knotwork design-system Android library (theme, tokens, components)
+:tools-probe — Debug-only companion app for the AppFunctions end-to-end test
+```
+
+Inside `:app`, the source tree is split into the three Clean Architecture
+layers under `app/src/main/java/ai/agent/android/`:
 
 ```
 app/
@@ -28,14 +36,23 @@ on `domain`, but `domain` depends on nothing else in the project. The
 `domain` layer contains zero Android-framework imports (`android.*`,
 `androidx.*`) and is pure Kotlin plus Coroutines.
 
+`:catalog` is a leaf module: it exports `KnotworkTheme` and design-system
+primitives, and depends on Compose only. `:app` consumes it as an
+`implementation` dependency from the presentation layer; no domain or
+data code is allowed to reference `:catalog`.
+
 ```mermaid
 flowchart LR
-    Presentation[presentation/<br/>Compose · ViewModels]
-    Domain[domain/<br/>UseCases · Engine · Models · Repositories - interfaces]
-    Data[data/<br/>Repositories - impl · LiteRT · Room · MCP · Services]
+    subgraph App[":app"]
+        Presentation[presentation/<br/>Compose · ViewModels]
+        Domain[domain/<br/>UseCases · Engine · Models · Repositories - interfaces]
+        Data[data/<br/>Repositories - impl · LiteRT · Room · MCP · Services]
+    end
+    Catalog[":catalog<br/>Knotwork theme · tokens · components"]
 
     Presentation -->|depends on| Domain
     Data -->|implements| Domain
+    Presentation -->|consumes| Catalog
 ```
 
 Each layer maps onto concrete packages:

@@ -24,4 +24,5 @@ dependencyResolutionManagement {
 
 rootProject.name = "Android AI Agent"
 include(":app")
+include(":catalog")
 include(":tools-probe")

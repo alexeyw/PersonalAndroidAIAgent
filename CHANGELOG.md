@@ -13,6 +13,41 @@ details.
 
 ## [Unreleased]
 
+### Added
+
+- `:catalog` Android library module hosting the Knotwork design system.
+  Phase 21 / Task 1/11 ships only the project scaffold: namespace
+  `app.knotwork.design`, `minSdk 36` / `compileSdk 37`, Compose BOM,
+  ktlint and detekt mirrored from `:app`, and a `KnotworkTheme` composable
+  that currently passes through to `MaterialTheme`. The token-driven
+  palettes, typography, and Foundations snapshot baseline land in Task
+  2/11.
+- `androidx.core.splashscreen 1.0.1` dependency wired into `:app`. The
+  platform-side `installSplashScreen(...)` call lands in Task 3/11 once
+  the brand mark and accent ramp are available; declaring the artefact
+  here unblocks downstream tasks without touching the existing Compose
+  `SplashScreen` route.
+- `android:enableOnBackInvokedCallback="true"` declared on the agent
+  `<application>` element to opt the app in to Android's predictive-back
+  gesture stack. Surface-level `PredictiveBackHandler` wiring on modal
+  sheets follows in Task 4/11.
+
+### Changed
+
+- `MainActivity.enableEdgeToEdge(...)` now passes explicit transparent
+  `SystemBarStyle.auto(...)` parameters for both status and navigation
+  bars so the design system can paint to the device edges deterministically
+  in both light and dark themes. Visible behaviour is unchanged on the
+  current screens.
+
+### Deferred
+
+- Snapshot-testing framework (Paparazzi was the intended choice per the
+  Phase 21 plan). Paparazzi's latest release `2.0.0-alpha04` caps at AGP
+  8.13.2 and does not yet support this project's AGP 9.2.1; Task 2/11
+  picks Roborazzi or waits for Paparazzi to catch up when the first
+  Foundations snapshots are required.
+
 ### Changed
 
 - Callee-side AppFunctions surface now relies on the auto-merged

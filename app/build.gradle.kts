@@ -316,6 +316,17 @@ val checkNoInternalFqn by tasks.registering {
 tasks.named("check") { dependsOn(checkNoInternalFqn) }
 
 dependencies {
+    // Phase 21 / Task 1/11: design-system module — `KnotworkTheme` (currently
+    // a `MaterialTheme` pass-through) plus the foundations Task 2/11 will
+    // port into Kotlin sources.
+    implementation(project(":catalog"))
+
+    // Phase 21 / Task 1/11: `androidx.core.splashscreen` artefact — the
+    // platform-side splash is wired in Task 3/11 once the brand mark and
+    // accent token land. Declaring the dependency here keeps the build green
+    // when downstream tasks reference `installSplashScreen(...)`.
+    implementation(libs.androidx.core.splashscreen)
+
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.activity.compose)

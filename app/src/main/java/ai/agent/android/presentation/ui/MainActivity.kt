@@ -22,8 +22,10 @@ import ai.agent.android.presentation.ui.tools.ToolsScreen
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.graphics.Color
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
@@ -86,7 +88,14 @@ class MainActivity : ComponentActivity() {
         val serviceIntent = Intent(this, AgentForegroundService::class.java)
         startForegroundService(serviceIntent)
 
-        enableEdgeToEdge()
+        // Phase 21 / Task 1/11: pin transparent status- and navigation-bar
+        // scrims so the Knotwork design system can paint surfaces all the way
+        // to the device edges. `SystemBarStyle.auto(...)` flips between the
+        // light- and dark-content variants based on the current theme.
+        enableEdgeToEdge(
+            statusBarStyle = SystemBarStyle.auto(Color.TRANSPARENT, Color.TRANSPARENT),
+            navigationBarStyle = SystemBarStyle.auto(Color.TRANSPARENT, Color.TRANSPARENT),
+        )
         setContent {
             AndroidAIAgentTheme {
                 val navController = rememberNavController()
