@@ -97,12 +97,16 @@ class MainActivity : ComponentActivity() {
             .flatMap { it.appFunctions }
             .firstOrNull { it.id == SEARCH_TOOL_ID }
             ?: error(
-                "Agent does not publish '$SEARCH_TOOL_ID' in its `app_functions_v2.xml` " +
-                    "inventory. Check that `SearchAppFunction.invoke` is still annotated " +
-                    "with `@AppFunction` so the KSP compiler generates the inventory entry. " +
-                    "Note: current Android 16 builds reserve EXECUTE_APP_FUNCTIONS for " +
-                    "signature/module apps, so this button stays aspirational on stock " +
-                    "devices — see PR #126's platform-limitation note for the full transcript.",
+                "Agent did not return '$SEARCH_TOOL_ID' from `observeAppFunctions`. On " +
+                    "stock Android 16 this is the expected outcome: the platform reserves " +
+                    "`EXECUTE_APP_FUNCTIONS` for signature/module apps, so a third-party " +
+                    "probe cannot observe or invoke another package's AppFunctions even if " +
+                    "the agent publishes them — see PR #126's platform-limitation note for " +
+                    "the full grant-attempt transcript. The agent APK does ship the entry " +
+                    "(verify with `unzip -p <agent-apk> assets/app_functions_v2.xml`). If " +
+                    "the entry is missing entirely, also check that `SearchAppFunction.invoke` " +
+                    "is still annotated with `@AppFunction` so the KSP compiler regenerates " +
+                    "the inventory.",
             )
         val parameters = AppFunctionData.Builder(metadata.parameters, metadata.components)
             .setString("query", "Knotwork")
