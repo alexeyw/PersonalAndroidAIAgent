@@ -70,6 +70,8 @@ This file maps the contents of the main application package.
     - `AgentIdleManager.kt` - Manager for device idle state.
     - `AgentPowerManager.kt` - Manager for power states.
     - `AgentWorker.kt` - WorkManager worker for agent tasks.
+  - `testing/` - Production-graph entry points used solely by instrumented tests.
+    - `AppFunctionsE2ETestEntryPoint.kt` - Hilt `EntryPoint` exposing `ToolRepository`, `SettingsRepository`, and `ChatRepository` to `AppFunctionsEndToEndTest` so the test can reach the production singletons without a Hilt test component.
   - `tools/` - Tool and action implementations.
     - `local/` - Local tools implementations.
       - `AgentAppFunctionService.kt` - Platform-bound `AppFunctionService` that translates incoming `ExecuteAppFunctionRequest`s into [AppFunctionRouter] calls and packages the typed outcome back into `ExecuteAppFunctionResponse` / `AppFunctionException` for the system AppFunctions framework.

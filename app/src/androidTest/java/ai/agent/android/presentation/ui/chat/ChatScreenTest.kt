@@ -4,12 +4,16 @@ import ai.agent.android.domain.models.ChatMessage
 import ai.agent.android.domain.models.ConsoleEvent
 import ai.agent.android.domain.models.ConsoleEventType
 import ai.agent.android.domain.models.Role
+import ai.agent.android.presentation.ui.common.UiText
 import android.content.res.Configuration
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performScrollToNode
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -61,7 +65,7 @@ class ChatScreenTest {
     @Test
     fun testChatScreen_displaysErrorState() {
         val viewModel = mockViewModel(
-            ChatUiState(errorMessage = "Network Error Occurred"),
+            ChatUiState(errorMessage = UiText.Dynamic("Network Error Occurred")),
         )
 
         composeTestRule.setContent {
@@ -122,6 +126,15 @@ class ChatScreenTest {
      * Phase 17.6: the LazyColumn body uses `paddingValues` from the Scaffold
      * as `contentPadding`, so the latest message must remain visible above
      * the bottomBar — i.e. it isn't clipped by the input + console stack.
+     *
+     * The list is scrolled explicitly via the [ChatScreenTestTags.MESSAGE_LIST]
+     * test tag instead of relying on the in-screen `LaunchedEffect` auto-scroll
+     * settling in time. The auto-scroll is functionally tested elsewhere; this
+     * test cares about *layout* — once the last bubble is in the viewport, is it
+     * still clipped by the bottomBar? Driving the scroll deterministically keeps
+     * the assertion focused on that question and avoids flakes on slower
+     * emulators (the auto-scroll's `coroutineScope.launch { scrollToItem(...) }`
+     * races composition idleness on a cold emulator).
      */
     @Test
     fun testChatScreen_lastMessageVisibleAboveBottomBar() {
@@ -138,6 +151,9 @@ class ChatScreenTest {
         composeTestRule.setContent {
             ChatScreen(viewModel = viewModel)
         }
+
+        composeTestRule.onNodeWithTag(ChatScreenTestTags.MESSAGE_LIST)
+            .performScrollToNode(hasText("agent-15"))
 
         // The very last bubble is what ends up just above the input bar; if
         // the bottomBar overlapped the body it would not register as

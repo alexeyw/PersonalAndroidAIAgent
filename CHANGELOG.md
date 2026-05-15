@@ -15,6 +15,43 @@ details.
 
 ### Added
 
+- `:tools-probe` debug-only Android module shipping a single
+  `@AppFunction echo(message)` so the Phase 20 end-to-end instrumented test
+  (`AppFunctionsEndToEndTest` in `:app/src/androidTest`) has a deterministic
+  remote target. The probe APK is installed on the device before the
+  agent's instrumented tests via a Gradle task hook that adds
+  `:tools-probe:installDebug` as a prerequisite of
+  `installDebugAndroidTest` — works for both CLI
+  (`./gradlew :app:connectedDebugAndroidTest`) and Android Studio's Run
+  Test flows. Its `MainActivity` doubles as a one-tap manual smoke for the
+  agent's callee-side surface (`search_tool` query "Knotwork") on the
+  Phase 20 reference device.
+- `AppFunctionsEndToEndTest` covering four end-to-end scenarios on Android
+  16+: caller-side `ToolRepository.executeTool` round-trip, HITL gate
+  emission of `WaitingForApproval` for SENSITIVE-by-default AppFunctions
+  followed by `ToolNodeExecutor.resumeWithApproval`, callee-side invocation
+  of `search_tool` through the system `AppFunctionManager`, and risk
+  override resolution via `SettingsRepository.setAppFunctionRiskOverride`.
+  Note: on stock Android 16 builds the `EXECUTE_APP_FUNCTIONS` permission
+  is declared at signature / module / preinstalled protection level —
+  verified on both the Pixel 9 Pro emulator
+  (`system-images;android-36;default;x86_64`) and a Samsung Galaxy S25
+  Ultra (Android 16). `pm grant` rejects the permission with "not a
+  changeable permission type" and `appops set` reports "Unknown operation".
+  Third-party agents can therefore neither observe nor invoke cross-package
+  AppFunctions on those builds, regardless of whether the host is an
+  emulator or real device. The test detects that platform state from the
+  captured grant-attempt stderr and skips itself via `Assume.assumeTrue`
+  with a detailed transcript. The probe's manual MainActivity button hits
+  the same platform restriction (plus a second pre-requisite: the agent's
+  `search_tool` will only show up in `app_functions_v2.xml` once it gains
+  an `@AppFunction` annotation in Phase 20-7). Both gates re-open
+  automatically on future Android builds that relax the permission's
+  protection level for debuggable apps.
+- `AppFunctionsE2ETestEntryPoint` (Hilt `EntryPoint`) under
+  `data/testing/` exposing the singletons the new instrumented test
+  consumes (`ToolRepository`, `SettingsRepository`, `ChatRepository`),
+  avoiding a parallel Hilt test component.
 - Callee-side AppFunctions surface: `AgentAppFunctionService` now routes
   incoming `ExecuteAppFunctionRequest`s through a pure-Kotlin
   `AppFunctionRouter` that resolves Hilt-managed wrappers via an
@@ -82,6 +119,12 @@ details.
 ### Removed
 
 ### Fixed
+
+- `ApprovalBannerTest` and `ChatScreenTest` no longer fail to compile on the
+  current Compose / `UiText` surfaces. The fixes (a stale `assertDoesNotExist`
+  import and a raw `String` passed where a `UiText?` is expected) had drifted
+  silently because CI runs JVM-only `./gradlew check`; the new Phase 20-6
+  instrumented-test work made the breakage observable.
 
 ### Security
 

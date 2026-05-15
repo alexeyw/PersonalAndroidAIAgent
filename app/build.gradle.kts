@@ -398,3 +398,24 @@ dependencies {
     debugImplementation(libs.androidx.compose.ui.test.manifest)
     androidTestImplementation(libs.mockk.android)
 }
+
+// Phase 20 / Task 6/7: install the :tools-probe debug APK alongside the agent's test
+// APK so `AppFunctionsEndToEndTest` can discover the probe's `echo` AppFunction
+// through the system AppFunctionManager. `androidTestUtil(project(":tools-probe"))`
+// would be the ergonomic choice, but AGP 9 publishes the probe as a multi-variant
+// application module without the disambiguating attributes Gradle needs to pick a
+// concrete APK from a configuration-less consumer — sync fails with "Cannot choose
+// between debugRuntimeElements / releaseRuntimeElements".
+//
+// Hooking on both `installDebugAndroidTest` and `connectedDebugAndroidTest`:
+//   - `installDebugAndroidTest` covers Android Studio's "Run test" workflow which
+//     ultimately goes through that task before invoking the instrumentation.
+//   - `connectedDebugAndroidTest` covers CLI runs (`./gradlew :app:connectedDebugAndroidTest`)
+//     where AGP installs the SUT/test APKs *inside* the connected-test task and does
+//     **not** depend on `installDebugAndroidTest` at all — verified via
+//     `./gradlew :app:connectedDebugAndroidTest --dry-run`. Without this branch the
+//     CLI run never installs the probe and the e2e test times out with an empty
+//     discovery list.
+val toolsProbeInstall = ":tools-probe:installDebug"
+tasks.matching { it.name == "installDebugAndroidTest" || it.name == "connectedDebugAndroidTest" }
+    .configureEach { dependsOn(toolsProbeInstall) }

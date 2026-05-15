@@ -1,0 +1,176 @@
+package ai.agent.android.toolsprobe
+
+import android.os.Bundle
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
+import androidx.appfunctions.AppFunctionData
+import androidx.appfunctions.AppFunctionManager
+import androidx.appfunctions.AppFunctionSearchSpec
+import androidx.appfunctions.ExecuteAppFunctionRequest
+import androidx.appfunctions.ExecuteAppFunctionResponse
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.Button
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.dp
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+
+/**
+ * Debug-only launcher activity for the `:tools-probe` module.
+ *
+ * Exposes a single button that builds an [ExecuteAppFunctionRequest] targeting the
+ * agent's `search_tool` AppFunction (package `ai.agent.android`, identifier
+ * `search_tool`) with the query "Knotwork" and dispatches it through
+ * [AppFunctionManager]. The result is rendered below the button so a human running the
+ * probe on a Samsung Galaxy S25 Ultra (the Phase 20 reference device) can confirm with
+ * a single tap that the agent's callee-side surface is reachable from another app.
+ *
+ * Construction of the parameter [AppFunctionData] is metadata-driven: the only public
+ * [AppFunctionData.Builder] constructors require an
+ * [androidx.appfunctions.metadata.AppFunctionParameterMetadata] list paired with the
+ * function's [androidx.appfunctions.metadata.AppFunctionComponentsMetadata]. The activity
+ * fetches both by snapshotting [AppFunctionManager.observeAppFunctions] for the agent
+ * package — the same discovery surface the agent itself uses for foreign AppFunctions.
+ *
+ * The Compose state is owned by the activity's lifecycle scope; the activity is
+ * intentionally not a `ViewModel`-backed screen because the probe has no need for
+ * configuration-change persistence, deep-linking or testing in isolation — its job is to
+ * be a thin, manually-driven trigger for the same code path that the instrumented test
+ * exercises automatically.
+ */
+class MainActivity : ComponentActivity() {
+
+    private val state = MutableStateFlow<ProbeState>(ProbeState.Idle)
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        setContent {
+            MaterialTheme {
+                Surface(modifier = Modifier.fillMaxSize()) {
+                    ProbeScreen(
+                        state = state.asStateFlow(),
+                        onInvokeSearch = { invokeSearch() },
+                    )
+                }
+            }
+        }
+    }
+
+    private fun invokeSearch() {
+        state.value = ProbeState.InFlight
+        lifecycleScope.launch {
+            val outcome = runCatching { withContext(Dispatchers.IO) { executeSearchTool() } }
+            state.value = outcome.fold(
+                onSuccess = { ProbeState.Success(it) },
+                onFailure = { ProbeState.Failure(it.message ?: it::class.java.simpleName) },
+            )
+        }
+    }
+
+    private suspend fun executeSearchTool(): String {
+        val manager = AppFunctionManager.getInstance(applicationContext)
+            ?: error("AppFunctionManager is not available on this device (requires Android 16+).")
+        val packages = manager
+            .observeAppFunctions(AppFunctionSearchSpec(packageNames = setOf(AGENT_PACKAGE)))
+            .first()
+        val metadata = packages
+            .flatMap { it.appFunctions }
+            .firstOrNull { it.id == SEARCH_TOOL_ID }
+            ?: error(
+                "Agent does not publish '$SEARCH_TOOL_ID' in its `app_functions_v2.xml` " +
+                    "inventory. The agent currently routes `$SEARCH_TOOL_ID` through manual " +
+                    "`AgentAppFunctionService` dispatch only; the `@AppFunction`-annotated " +
+                    "discovery surface is pending Phase 20-7. Even after that, current " +
+                    "Android 16 builds reserve EXECUTE_APP_FUNCTIONS for signature/module " +
+                    "apps, so this button stays aspirational on stock devices — see PR " +
+                    "#126's platform-limitation note for the full transcript.",
+            )
+        val parameters = AppFunctionData.Builder(metadata.parameters, metadata.components)
+            .setString("query", "Knotwork")
+            .setString("lang", "en")
+            .build()
+        val request = ExecuteAppFunctionRequest(
+            targetPackageName = AGENT_PACKAGE,
+            functionIdentifier = SEARCH_TOOL_ID,
+            functionParameters = parameters,
+        )
+        return when (val response = manager.executeAppFunction(request)) {
+            is ExecuteAppFunctionResponse.Success ->
+                response.returnValue.getString(ExecuteAppFunctionResponse.Success.PROPERTY_RETURN_VALUE).orEmpty()
+            is ExecuteAppFunctionResponse.Error ->
+                error(response.error.message ?: response.error::class.java.simpleName)
+        }
+    }
+
+    private companion object {
+        const val AGENT_PACKAGE = "ai.agent.android"
+        const val SEARCH_TOOL_ID = "search_tool"
+    }
+}
+
+private sealed interface ProbeState {
+    data object Idle : ProbeState
+    data object InFlight : ProbeState
+    data class Success(val payload: String) : ProbeState
+    data class Failure(val message: String) : ProbeState
+}
+
+@Composable
+private fun ProbeScreen(
+    state: StateFlow<ProbeState>,
+    onInvokeSearch: () -> Unit,
+) {
+    val current by state.collectAsState()
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(PaddingValues(horizontal = 24.dp, vertical = 32.dp)),
+        verticalArrangement = Arrangement.Top,
+    ) {
+        Text(text = stringResource(id = R.string.probe_header), style = MaterialTheme.typography.headlineSmall)
+        Spacer(modifier = Modifier.height(16.dp))
+        Button(onClick = onInvokeSearch, enabled = current !is ProbeState.InFlight) {
+            Text(text = stringResource(id = R.string.probe_invoke_search_button))
+        }
+        Spacer(modifier = Modifier.height(24.dp))
+        when (val snapshot = current) {
+            ProbeState.Idle -> Text(text = stringResource(id = R.string.probe_idle_message))
+            ProbeState.InFlight -> Text(text = stringResource(id = R.string.probe_in_flight_message))
+            is ProbeState.Success -> {
+                Text(
+                    text = stringResource(id = R.string.probe_result_label),
+                    style = MaterialTheme.typography.titleSmall,
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(text = snapshot.payload)
+            }
+            is ProbeState.Failure -> {
+                Text(
+                    text = stringResource(id = R.string.probe_error_label),
+                    style = MaterialTheme.typography.titleSmall,
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(text = snapshot.message, color = MaterialTheme.colorScheme.error)
+            }
+        }
+    }
+}
