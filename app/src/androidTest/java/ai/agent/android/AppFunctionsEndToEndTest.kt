@@ -392,6 +392,8 @@ class AppFunctionsEndToEndTest {
                 "${pkg.packageName}:${pkg.appFunctions.map { it.id }}"
             }
         }.getOrElse { "AppFunctionManager.observeAppFunctions threw: ${it::class.java.simpleName}: ${it.message}" }
+        val permissionDump = runShell(automation, "pm list permissions -g -f android.permission.EXECUTE_APP_FUNCTIONS")
+            .lineSequence().filter { it.isNotBlank() }.take(20).joinToString("\n      ")
         return buildString {
             appendLine("Probe AppFunction `echo` was not discovered within ${PROBE_DISCOVERY_TIMEOUT_MS}ms.")
             appendLine("  Last observed (agent) catalogue: $lastObservedTools")
@@ -401,11 +403,13 @@ class AppFunctionsEndToEndTest {
             appendLine("  $PROBE_PACKAGE EXECUTE_APP_FUNCTIONS (dumpsys package): '$probePermLine'")
             appendLine("  appops get $AGENT_PACKAGE …: '${agentAppOp.trim()}'")
             appendLine("  appops get $PROBE_PACKAGE …: '${probeAppOp.trim()}'")
-            appendLine(
-                "If `Raw AppFunctionManager.observeAppFunctions` is empty even though the " +
-                    "probe is installed and has app_functions_v2.xml, the missing piece is " +
-                    "almost certainly the EXECUTE_APP_FUNCTIONS permission grant on the agent.",
-            )
+            appendLine("  pm list permissions … EXECUTE_APP_FUNCTIONS:")
+            appendLine("      $permissionDump")
+            appendLine("  Grant attempts (stdout+stderr):")
+            lastGrantAttempts.forEach { attempt ->
+                appendLine("    - ${attempt.command}")
+                appendLine("      → ${attempt.output.ifBlank { "(no output)" }}")
+            }
         }
     }
 
@@ -484,13 +488,27 @@ class AppFunctionsEndToEndTest {
      */
     private fun grantExecuteAppFunctionsAppOp() {
         val automation = InstrumentationRegistry.getInstrumentation().uiAutomation
+        lastGrantAttempts.clear()
         listOf(AGENT_PACKAGE, PROBE_PACKAGE).forEach { pkg ->
             for (cmd in grantCommandsFor(pkg)) {
                 val output = runShell(automation, cmd)
+                lastGrantAttempts += GrantAttempt(cmd, output)
                 Log.d(LOG_TAG, "$cmd → '$output'")
             }
         }
     }
+
+    /**
+     * Captures every grant command issued during `setUp` together with its
+     * stdout+stderr response, so a discovery timeout's error message can show whether
+     * `pm grant` reported "permission cannot be granted" or `appops set` reported
+     * "Unknown operation" — that one detail discriminates between "we used the wrong op
+     * name" and "the platform reserves this permission for signature/preinstalled
+     * apps."
+     */
+    private val lastGrantAttempts: MutableList<GrantAttempt> = mutableListOf()
+
+    private data class GrantAttempt(val command: String, val output: String)
 
     /**
      * Shell commands tried (in order) to allow the EXECUTE_APP_FUNCTIONS permission for
@@ -520,15 +538,23 @@ class AppFunctionsEndToEndTest {
 
     /**
      * Runs [command] through the [UiAutomation] shell channel and returns the combined
-     * stdout/stderr as a string. Drains the file descriptor synchronously — leaving it
+     * stdout/stderr as a string. The command is wrapped in `sh -c '<cmd> 2>&1'` so any
+     * error written to stderr is captured — the raw `UiAutomation.executeShellCommand`
+     * channel only forwards stdout, which silently hides the "Unknown operation" /
+     * "Permission cannot be granted" lines that the appop and `pm grant` tools emit
+     * on the failure path. Drains the file descriptor synchronously — leaving it
      * un-read can leak the underlying pipe on some platform builds.
      */
     private fun runShell(automation: UiAutomation, command: String): String {
-        val pfd = automation.executeShellCommand(command)
+        val wrapped = "sh -c ${shellQuote("$command 2>&1")}"
+        val pfd = automation.executeShellCommand(wrapped)
         return ParcelFileDescriptor.AutoCloseInputStream(pfd).use { stream ->
             stream.bufferedReader().readText().trim()
         }
     }
+
+    /** Single-quotes [text] for inclusion as an argument to `sh -c`. */
+    private fun shellQuote(text: String): String = "'" + text.replace("'", "'\"'\"'") + "'"
 
     /**
      * Builds a fresh [ToolNodeExecutor] with real `ToolRepository`, `SettingsRepository`
