@@ -336,7 +336,12 @@ private fun TextBubble(role: ChatRole, text: String, onContextAction: ((ChatCont
     val (bubbleColor, textColor, shape) = when (role) {
         ChatRole.User -> Triple(
             KnotworkTheme.extended.chatUserBg,
-            MaterialTheme.colorScheme.onPrimary,
+            // chatUserBg is the Accent100 container shade, so the matching
+            // foreground is `onPrimaryContainer` (Accent800 in light,
+            // Accent200 in dark). Using `onPrimary` here would land almost-
+            // white text on almost-white background in light theme and
+            // almost-black text on almost-black background in dark theme.
+            MaterialTheme.colorScheme.onPrimaryContainer,
             ChatBubbleShapes.User,
         )
         else -> Triple(
