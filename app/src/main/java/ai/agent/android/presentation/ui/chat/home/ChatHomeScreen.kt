@@ -4,7 +4,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.windowInsetsPadding
@@ -85,21 +84,22 @@ fun ChatHomeScreen(viewModel: ChatHomeViewModel, modifier: Modifier = Modifier) 
         )
     }
 
-    // Inset wiring (Phase 21 / Task 8 review fix):
-    //  - `AppShellScaffold` already passes a `bottomBar`-aware inner padding
-    //    here, so adding `.navigationBarsPadding()` would double-count the
-    //    system nav-bar inset and leave a visible strip below the composer.
+    // Inset wiring (Phase 21 / Task 8 review fixes):
+    //  - `AppShellScaffold` already wraps its Scaffold in `.imePadding()`,
+    //    so the body + composer slide up with the keyboard in sync with
+    //    the bottom-nav. Adding `.imePadding()` here would double-count.
+    //  - `AppShellScaffold` also passes a bottom-bar-aware inner padding,
+    //    so `.navigationBarsPadding()` would leave a visible strip below
+    //    the composer.
     //  - `safeDrawing.horizontal` keeps the surface clear of the side
     //    system bars in landscape; the inner `Scaffold` inside
     //    `ChatHomeContent` already handles status-bar inset via its
     //    `TopAppBar` defaults.
-    //  - `imePadding` lifts the composer above the keyboard.
     Box(
         contentAlignment = Alignment.TopStart,
         modifier = modifier
             .fillMaxSize()
-            .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal))
-            .imePadding(),
+            .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal)),
     ) {
         ChatHomeContent(state = viewState, callbacks = callbacks)
         ChatHomeDebugStatePicker(

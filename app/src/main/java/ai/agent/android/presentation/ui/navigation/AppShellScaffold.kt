@@ -11,7 +11,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
@@ -21,7 +21,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.navigation.NavHostController
 import androidx.navigation.NavOptionsBuilder
@@ -64,14 +63,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 fun AppShellScaffold(navController: NavHostController, content: @Composable (innerPadding: PaddingValues) -> Unit) {
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute: String? = navBackStackEntry?.destination?.route
-    // Hide the bottom-nav whenever the IME is visible. Without this the
-    // nav-bar slot still reserves its layout height behind the keyboard,
-    // and any IME-padded composer above it lands above an empty strip
-    // (the reserved-but-now-IME-covered nav-bar area). Modern chat apps
-    // collapse the bottom nav on keyboard open for the same reason.
-    val imeBottomInsetPx = WindowInsets.ime.getBottom(LocalDensity.current)
-    val isImeVisible = imeBottomInsetPx > 0
-    val showBottomNav = shouldShowBottomNav(currentRoute) && !isImeVisible
+    val showBottomNav = shouldShowBottomNav(currentRoute)
     val activity = LocalActivity.current
 
     val isOnTabRoot = TAB_DESTINATIONS.any { it.route == currentRoute }
@@ -79,8 +71,17 @@ fun AppShellScaffold(navController: NavHostController, content: @Composable (inn
         activity?.finish()
     }
 
+    // Wrap the whole shell in `imePadding()` so the bottom-nav + body slide
+    // up in lockstep with the keyboard. Without this the bottom-nav slot
+    // keeps reserving layout space behind the IME and any IME-padded
+    // composer above it has to compete with that reserved-but-hidden area,
+    // which produces a visible gap + a jump when the IME animation
+    // finishes (the keyboard tween and an `AnimatedVisibility` hide-anim
+    // run on their own clocks). With the whole Scaffold tracking the IME
+    // inset directly, the keyboard, bottom-nav, and composer all move on
+    // the same frame.
     Scaffold(
-        modifier = Modifier.fillMaxSize(),
+        modifier = Modifier.fillMaxSize().imePadding(),
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         bottomBar = {
             AnimatedVisibility(

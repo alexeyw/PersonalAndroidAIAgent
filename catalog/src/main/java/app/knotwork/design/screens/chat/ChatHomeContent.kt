@@ -29,6 +29,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
@@ -84,9 +85,6 @@ private const val DRAWER_SCRIM_ALPHA = 0.32f
 
 /** Alpha of the scrim painted over the chat surface while the console pane is expanded. */
 private const val CONSOLE_SCRIM_ALPHA = 0.20f
-
-/** Approximate fill ratio of the loader bubble inside the body width (Generating state). */
-private const val LOADER_BUBBLE_WIDTH_FRACTION = 0.4f
 
 /**
  * Stateless Knotwork Chat home — the primary user-facing surface. Drives the
@@ -340,13 +338,20 @@ private fun ChatHomeMessageList(state: ChatHomeViewState, callbacks: ChatHomeCal
     }
 }
 
-/** Loader bubble shown while the assistant is producing tokens. */
+/**
+ * Loader bubble shown while the assistant is producing tokens.
+ *
+ * Sizes to its content (`wrapContentWidth`) so the "Generating…" label
+ * never wraps onto a second line. The earlier `fillMaxWidth(0.4f)`
+ * fraction was too tight on narrow phones — the label split into
+ * `Generatin` / `g…`.
+ */
 @Composable
 private fun GeneratingLoaderBubble() {
     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Start) {
         Box(
             modifier = Modifier
-                .fillMaxWidth(LOADER_BUBBLE_WIDTH_FRACTION)
+                .wrapContentWidth()
                 .clip(KnotworkTheme.shapes.md)
                 .background(color = KnotworkTheme.extended.chatBotBg)
                 .padding(horizontal = KnotworkTheme.spacing.sp3, vertical = KnotworkTheme.spacing.sp3),
@@ -360,6 +365,8 @@ private fun GeneratingLoaderBubble() {
                     text = stringResource(R.string.knotwork_chat_home_generating_label),
                     style = KnotworkTextStyles.BodySm,
                     color = KnotworkTheme.extended.onSurfaceMuted,
+                    maxLines = 1,
+                    softWrap = false,
                 )
             }
         }
