@@ -147,11 +147,66 @@ class NodeConfigValidationTest {
     @Test
     fun `given ToolConfig with blank argument key when validate then REQUIRED on mapping`() {
         val errors = NodeConfigValidation.validate(
-            config = ToolConfig(title = "tool", toolId = "fs.write", argumentMapping = mapOf("" to "x")),
+            config = ToolConfig(
+                title = "tool",
+                toolId = "fs.write",
+                argumentMapping = listOf(ToolArgument(name = "", expression = "x")),
+            ),
             peerTitles = noPeers,
         )
 
         assertEquals(ValidationFailure.REQUIRED, errors[FieldId.ARGUMENT_MAPPING])
+    }
+
+    @Test
+    fun `given ToolConfig with duplicate argument keys when validate then KEY_DUPLICATE`() {
+        val errors = NodeConfigValidation.validate(
+            config = ToolConfig(
+                title = "tool",
+                toolId = "fs.write",
+                argumentMapping = listOf(
+                    ToolArgument(name = "path", expression = "a"),
+                    ToolArgument(name = "path", expression = "b"),
+                ),
+            ),
+            peerTitles = noPeers,
+        )
+
+        assertEquals(ValidationFailure.KEY_DUPLICATE, errors[FieldId.ARGUMENT_MAPPING])
+    }
+
+    @Test
+    fun `given ToolConfig with unique keys when validate then no ARGUMENT_MAPPING error`() {
+        val errors = NodeConfigValidation.validate(
+            config = ToolConfig(
+                title = "tool",
+                toolId = "fs.write",
+                argumentMapping = listOf(
+                    ToolArgument(name = "path", expression = "a"),
+                    ToolArgument(name = "content", expression = "b"),
+                ),
+            ),
+            peerTitles = noPeers,
+        )
+
+        assertNull(errors[FieldId.ARGUMENT_MAPPING])
+    }
+
+    @Test
+    fun `given IntentRouterConfig with duplicate class names when validate then CLASS_NAME_DUPLICATE`() {
+        val errors = NodeConfigValidation.validate(
+            config = IntentRouterConfig(
+                title = "router",
+                classes = listOf(
+                    IntentClass(name = "simple"),
+                    IntentClass(name = "simple"),
+                ),
+                classifierPrompt = "x",
+            ),
+            peerTitles = noPeers,
+        )
+
+        assertEquals(ValidationFailure.CLASS_NAME_DUPLICATE, errors[FieldId.CLASSES])
     }
 
     @Test

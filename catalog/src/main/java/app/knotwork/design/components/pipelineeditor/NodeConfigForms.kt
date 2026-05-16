@@ -12,6 +12,11 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -486,16 +491,10 @@ private fun ClarificationFormBody(
         monospace = true,
         onChange = { next -> onChange(config.copy(questionTemplate = next)) },
     )
-    TextField(
-        label = stringResource(R.string.knotwork_node_field_quick_replies),
-        value = config.quickReplies.joinToString(", "),
+    QuickRepliesField(
+        replies = config.quickReplies,
         error = errors[FieldId.QUICK_REPLIES],
-        singleLine = true,
-        monospace = false,
-        onChange = { next ->
-            val parts = next.split(',').map { it.trim() }.filter { it.isNotEmpty() }
-            onChange(config.copy(quickReplies = parts))
-        },
+        onChange = { next -> onChange(config.copy(quickReplies = next)) },
     )
     TextField(
         label = stringResource(R.string.knotwork_node_field_timeout_optional),
@@ -506,6 +505,58 @@ private fun ClarificationFormBody(
         onChange = { next -> onChange(config.copy(timeoutMs = next.toIntOrNull())) },
     )
 }
+
+/**
+ * Comma-separated quick-reply editor.
+ *
+ * Holds the user's raw text in a `remember`-backed local state so a
+ * keystroke that adds a comma is not parsed-and-re-serialised on the
+ * way back through the model. The previous implementation called
+ * `text.split(',').map { it.trim() }.filter { it.isNotEmpty() }` on
+ * every keystroke and then re-rendered `joinToString(", ")` from the
+ * filtered list — so typing `yes,` produced `["yes"]`, which rendered
+ * as `yes` and dropped the user's pending comma. The field was
+ * effectively unable to accept more than one quick reply.
+ *
+ * The local-state approach is necessary because the model carries
+ * `List<String>`: the trailing empty token a user types ahead of a new
+ * reply has no canonical representation in the list. We sync the
+ * trimmed-and-empty-filtered list to the model so validation
+ * (`QUICK_REPLIES_RANGE`) still fires from the model, but the field
+ * always shows what the user actually typed.
+ *
+ * If the caller hands in a new `replies` value (e.g. config loaded
+ * from disk), the `LaunchedEffect` keyed on the serialised form
+ * re-syncs the raw text so the field stays in sync with the model.
+ */
+@Composable
+private fun QuickRepliesField(replies: List<String>, error: ValidationFailure?, onChange: (List<String>) -> Unit) {
+    val serialised = replies.joinToString(", ")
+    var rawText by remember { mutableStateOf(serialised) }
+    LaunchedEffect(serialised) {
+        if (serialised != rawText.parseQuickReplies().joinToString(", ")) {
+            rawText = serialised
+        }
+    }
+    Column(verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp1)) {
+        FieldLabel(text = stringResource(R.string.knotwork_node_field_quick_replies))
+        OutlinedTextField(
+            value = rawText,
+            onValueChange = { next ->
+                rawText = next
+                onChange(next.parseQuickReplies())
+            },
+            singleLine = true,
+            isError = error != null,
+            modifier = Modifier.fillMaxWidth(),
+        )
+        InlineError(failure = error)
+    }
+}
+
+/** Trims and drops empty tokens; the canonical model representation. */
+private fun String.parseQuickReplies(): List<String> =
+    if (isEmpty()) emptyList() else split(',').map { it.trim() }.filter { it.isNotEmpty() }
 
 @Composable
 private fun ToolFormBody(config: ToolConfig, errors: Map<FieldId, ValidationFailure>, onChange: (NodeConfig) -> Unit) {
@@ -519,35 +570,42 @@ private fun ToolFormBody(config: ToolConfig, errors: Map<FieldId, ValidationFail
     )
     Column(verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp1)) {
         FieldLabel(text = stringResource(R.string.knotwork_node_field_arg_mapping))
-        // Materialise the entries into an ordered list so a key rename can be
-        // applied positionally without colliding with a sibling key that the
-        // user is about to type on the way to a new value (LinkedHashMap +
-        // forEachIndexed gives stable iteration over the live snapshot).
-        val rows = config.argumentMapping.entries.toList()
-        rows.forEachIndexed { index, (key, expression) ->
+        config.argumentMapping.forEachIndexed { index, row ->
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp2),
             ) {
                 OutlinedTextField(
-                    value = key,
+                    value = row.name,
                     onValueChange = { nextKey ->
-                        onChange(config.copy(argumentMapping = rows.replaceKey(index, nextKey)))
+                        onChange(
+                            config.copy(
+                                argumentMapping = config.argumentMapping.toMutableList().apply {
+                                    this[index] = row.copy(name = nextKey)
+                                },
+                            ),
+                        )
                     },
                     singleLine = true,
                     textStyle = KnotworkTextStyles.MonoBase,
                     modifier = Modifier.fillMaxWidth().weight(1f),
-                    isError = key.isBlank(),
+                    isError = row.name.isBlank(),
                 )
                 OutlinedTextField(
-                    value = expression,
+                    value = row.expression,
                     onValueChange = { nextValue ->
-                        onChange(config.copy(argumentMapping = rows.replaceValue(index, nextValue)))
+                        onChange(
+                            config.copy(
+                                argumentMapping = config.argumentMapping.toMutableList().apply {
+                                    this[index] = row.copy(expression = nextValue)
+                                },
+                            ),
+                        )
                     },
                     singleLine = true,
                     textStyle = KnotworkTextStyles.MonoBase,
                     modifier = Modifier.fillMaxWidth().weight(1f),
-                    isError = expression.isBlank(),
+                    isError = row.expression.isBlank(),
                 )
             }
         }
@@ -696,27 +754,6 @@ private fun SummaryFormBody(
         onChange = { next -> onChange(config.copy(targetLengthChars = next)) },
     )
 }
-
-/**
- * Returns a new `argumentMapping` with the entry at [index] re-keyed to
- * [nextKey], preserving original entry order so the row the user is
- * editing does not jump under the caret. Used by [ToolFormBody] when the
- * user renames a tool-argument key inline.
- */
-private fun List<Map.Entry<String, String>>.replaceKey(index: Int, nextKey: String): Map<String, String> =
-    mapIndexed { i, entry ->
-        if (i == index) nextKey to entry.value else entry.key to entry.value
-    }.toMap()
-
-/**
- * Returns a new `argumentMapping` with the value at [index] replaced by
- * [nextValue], preserving entry order. Used by [ToolFormBody] when the
- * user edits the expression of an existing tool-argument row.
- */
-private fun List<Map.Entry<String, String>>.replaceValue(index: Int, nextValue: String): Map<String, String> =
-    mapIndexed { i, entry ->
-        if (i == index) entry.key to nextValue else entry.key to entry.value
-    }.toMap()
 
 /**
  * Returns a copy of [this] with [title] swapped in. Each sealed variant

@@ -190,13 +190,28 @@ data class ClarificationConfig(
 }
 
 /**
+ * One row of [ToolConfig.argumentMapping]. Modelled as an ordered list
+ * (not a `Map`) so the editor can preserve every row even while the
+ * user is mid-rename and two rows temporarily share the same key — a
+ * `Map<String, String>` would silently drop the older entry on
+ * deduplication. Validation catches the collision via
+ * `ValidationFailure.KEY_DUPLICATE` and disables Save until resolved.
+ *
+ * @property name argument key emitted to the tool's typed schema.
+ * @property expression upstream-node expression that resolves to the
+ * value passed to the tool.
+ */
+data class ToolArgument(val name: String, val expression: String)
+
+/**
  * Configuration for [NodeType.TOOL] — AppFunctions / MCP tool invocation.
  *
  * @property title display title.
  * @property description optional one-line note.
  * @property toolId fully-qualified tool identifier (e.g. `fs.write_file`).
- * @property argumentMapping `toolArg → upstream expression` map. Required
- * arguments missing here surface as validation errors.
+ * @property argumentMapping ordered list of `(name, expression)` rows
+ * mapped to the tool's typed argument schema. Required arguments not
+ * declared here surface as validation errors.
  * @property confirmOverride optional override of the tool's declared risk
  * policy; `null` inherits the tool's declared risk.
  */
@@ -204,7 +219,7 @@ data class ToolConfig(
     override val title: String,
     override val description: String? = null,
     val toolId: String = "",
-    val argumentMapping: Map<String, String> = emptyMap(),
+    val argumentMapping: List<ToolArgument> = emptyList(),
     val confirmOverride: ConfirmPolicy? = null,
 ) : NodeConfig {
     override val type: NodeType get() = NodeType.TOOL

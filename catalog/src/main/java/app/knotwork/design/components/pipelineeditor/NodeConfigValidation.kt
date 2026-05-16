@@ -87,6 +87,21 @@ enum class ValidationFailure(val stringRes: Int) {
      * pick another class or clear the selection.
      */
     FALLBACK_NOT_IN_CLASSES(app.knotwork.design.R.string.knotwork_node_validation_fallback_unknown),
+
+    /**
+     * Two IntentRouter classes share the same name. Duplicate names would
+     * collapse into a single canvas out-port and break unmatched-intent
+     * routing, so the rule fires on `FieldId.CLASSES`.
+     */
+    CLASS_NAME_DUPLICATE(app.knotwork.design.R.string.knotwork_node_validation_class_duplicate),
+
+    /**
+     * Two `ToolConfig.argumentMapping` rows share the same key. With an
+     * ordered `List<ToolArgument>` we preserve every keystroke, but the
+     * tool's typed schema cannot accept duplicate keys, so the rule
+     * fires on `FieldId.ARGUMENT_MAPPING`.
+     */
+    KEY_DUPLICATE(app.knotwork.design.R.string.knotwork_node_validation_arg_key_duplicate),
 }
 
 /** Allowed range for [LiteRtConfig.temperature]. */
@@ -219,15 +234,25 @@ object NodeConfigValidation {
 
     private fun validateIntentRouter(config: IntentRouterConfig): Map<FieldId, ValidationFailure> {
         val errors = mutableMapOf<FieldId, ValidationFailure>()
-        if (config.classes.size !in INTENT_CLASSES_RANGE) {
-            errors[FieldId.CLASSES] = ValidationFailure.INTENT_CLASS_COUNT
-        } else if (config.classes.any { it.name.isBlank() }) {
-            errors[FieldId.CLASSES] = ValidationFailure.REQUIRED
+        val names = config.classes.map { it.name }
+        when {
+            config.classes.size !in INTENT_CLASSES_RANGE -> {
+                errors[FieldId.CLASSES] = ValidationFailure.INTENT_CLASS_COUNT
+            }
+            names.any { it.isBlank() } -> {
+                errors[FieldId.CLASSES] = ValidationFailure.REQUIRED
+            }
+            // Surface CLASS_NAME_DUPLICATE last so it only fires once every
+            // class has a non-blank name — otherwise a row the user just
+            // started typing into would race REQUIRED and CLASS_NAME_DUPLICATE.
+            names.distinct().size != names.size -> {
+                errors[FieldId.CLASSES] = ValidationFailure.CLASS_NAME_DUPLICATE
+            }
         }
         if (config.classifierPrompt.isBlank()) errors[FieldId.CLASSIFIER_PROMPT] = ValidationFailure.REQUIRED
         val fallback = config.fallbackClass
         if (!fallback.isNullOrBlank()) {
-            val declared = config.classes.map { it.name }.toSet()
+            val declared = names.toSet()
             if (fallback !in declared) {
                 errors[FieldId.FALLBACK_CLASS] = ValidationFailure.FALLBACK_NOT_IN_CLASSES
             }
@@ -258,8 +283,16 @@ object NodeConfigValidation {
     private fun validateTool(config: ToolConfig): Map<FieldId, ValidationFailure> {
         val errors = mutableMapOf<FieldId, ValidationFailure>()
         if (config.toolId.isBlank()) errors[FieldId.TOOL_ID] = ValidationFailure.REQUIRED
-        if (config.argumentMapping.any { (k, v) -> k.isBlank() || v.isBlank() }) {
-            errors[FieldId.ARGUMENT_MAPPING] = ValidationFailure.REQUIRED
+        val names = config.argumentMapping.map { it.name }
+        when {
+            config.argumentMapping.any { it.name.isBlank() || it.expression.isBlank() } -> {
+                errors[FieldId.ARGUMENT_MAPPING] = ValidationFailure.REQUIRED
+            }
+            // Same ordering rationale as IntentRouter — duplicate-key check
+            // only fires once every row has a non-blank name.
+            names.distinct().size != names.size -> {
+                errors[FieldId.ARGUMENT_MAPPING] = ValidationFailure.KEY_DUPLICATE
+            }
         }
         return errors
     }

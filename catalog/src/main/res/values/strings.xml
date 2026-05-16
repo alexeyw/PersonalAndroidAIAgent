@@ -168,5 +168,7 @@
     <string name="knotwork_node_validation_invalid_json">Provided JSON is invalid</string>
     <string name="knotwork_node_validation_parallelism_range">Parallelism must be between 1 and 8</string>
     <string name="knotwork_node_validation_fallback_unknown">Fallback class is no longer declared above</string>
+    <string name="knotwork_node_validation_class_duplicate">Class names must be unique</string>
+    <string name="knotwork_node_validation_arg_key_duplicate">Argument keys must be unique</string>
 
 </resources>
