@@ -100,4 +100,72 @@
     <!-- ContentDescription for the Close header action. -->
     <string name="knotwork_console_action_close">Collapse console</string>
 
+    <!-- ============ Pipeline editor — EditorToolbar ============ -->
+
+    <!-- Placeholder when the inline pipeline-name field is empty. -->
+    <string name="knotwork_editor_name_placeholder">Untitled pipeline</string>
+    <!-- ContentDescription for the Undo icon button. -->
+    <string name="knotwork_editor_action_undo">Undo</string>
+    <!-- ContentDescription for the Redo icon button. -->
+    <string name="knotwork_editor_action_redo">Redo</string>
+    <!-- ContentDescription for the Delete icon button. -->
+    <string name="knotwork_editor_action_delete">Delete selection</string>
+    <!-- ContentDescription for the Auto-layout icon button. -->
+    <string name="knotwork_editor_action_auto_layout">Auto layout</string>
+    <!-- Primary Run button label. -->
+    <string name="knotwork_editor_action_run">Run</string>
+    <!-- ContentDescription for the overflow icon button. -->
+    <string name="knotwork_editor_action_overflow">More actions</string>
+
+    <!-- ============ Pipeline editor — NodeConfigSheet ============ -->
+
+    <!-- Sheet bottom-action row: cancel and save. -->
+    <string name="knotwork_node_config_action_cancel">Cancel</string>
+    <string name="knotwork_node_config_action_save">Save</string>
+
+    <!-- Generic field labels shared across multiple node types. -->
+    <string name="knotwork_node_field_title">Title</string>
+    <string name="knotwork_node_field_system_prompt">System prompt</string>
+    <string name="knotwork_node_field_model">Model</string>
+    <string name="knotwork_node_field_temperature">Temperature</string>
+    <string name="knotwork_node_field_top_p">Top-p</string>
+    <string name="knotwork_node_field_max_new_tokens">Max new tokens</string>
+    <string name="knotwork_node_field_max_tokens">Max tokens</string>
+    <string name="knotwork_node_field_provider">Provider</string>
+    <string name="knotwork_node_field_timeout_ms">Timeout (ms)</string>
+    <string name="knotwork_node_field_format">Format</string>
+    <string name="knotwork_node_field_input_name">Input variable name</string>
+    <string name="knotwork_node_field_schema_json">JSON Schema (optional)</string>
+    <string name="knotwork_node_field_expression">Expression</string>
+    <string name="knotwork_node_field_label_true">True label</string>
+    <string name="knotwork_node_field_label_false">False label</string>
+    <string name="knotwork_node_field_question">Question template</string>
+    <string name="knotwork_node_field_quick_replies">Quick replies</string>
+    <string name="knotwork_node_field_timeout_optional">Wait timeout (ms, optional)</string>
+    <string name="knotwork_node_field_tool">Tool</string>
+    <string name="knotwork_node_field_arg_mapping">Argument mapping</string>
+    <string name="knotwork_node_field_confirm_override">Confirm policy override</string>
+    <string name="knotwork_node_field_planning_prompt">Planning prompt</string>
+    <string name="knotwork_node_field_max_subtasks">Max subtasks</string>
+    <string name="knotwork_node_field_input_list">Input list expression</string>
+    <string name="knotwork_node_field_item_variable">Item variable name</string>
+    <string name="knotwork_node_field_parallelism">Parallelism</string>
+    <string name="knotwork_node_field_stop_on_error">Stop on error</string>
+    <string name="knotwork_node_field_criteria_prompt">Criteria prompt</string>
+    <string name="knotwork_node_field_max_retries">Max retries</string>
+    <string name="knotwork_node_field_custom_prompt">Custom prompt</string>
+    <string name="knotwork_node_field_target_length">Target length (chars)</string>
+    <string name="knotwork_node_field_classes">Classes</string>
+    <string name="knotwork_node_field_classifier_prompt">Classifier prompt</string>
+    <string name="knotwork_node_field_fallback_class">Fallback class</string>
+
+    <!-- Validation messages. -->
+    <string name="knotwork_node_validation_title_empty">Title must not be empty</string>
+    <string name="knotwork_node_validation_title_duplicate">Title must be unique within the pipeline</string>
+    <string name="knotwork_node_validation_field_required">This field is required</string>
+    <string name="knotwork_node_validation_out_of_range">Value must be within the allowed range</string>
+    <string name="knotwork_node_validation_intent_class_count">Provide between 2 and 6 classes</string>
+    <string name="knotwork_node_validation_invalid_json">Provided JSON is invalid</string>
+    <string name="knotwork_node_validation_parallelism_range">Parallelism must be between 1 and 8</string>
+
 </resources>

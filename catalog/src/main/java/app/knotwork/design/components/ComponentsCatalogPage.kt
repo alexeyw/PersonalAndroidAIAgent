@@ -15,6 +15,7 @@ import app.knotwork.design.components.chips.KnotworkChipsCatalogContent
 import app.knotwork.design.components.console.ConsoleCatalogContent
 import app.knotwork.design.components.lists.KnotworkListsCatalogContent
 import app.knotwork.design.components.misc.KnotworkMiscCatalogContent
+import app.knotwork.design.components.pipelineeditor.PipelineEditorCatalogContent
 import app.knotwork.design.theme.KnotworkTheme
 import app.knotwork.design.tokens.KnotworkTextStyles
 
@@ -56,6 +57,8 @@ fun ComponentsCatalogPage() {
             item { ChatCatalogContent() }
             item { SectionHeader(text = "Console") }
             item { ConsoleCatalogContent() }
+            item { SectionHeader(text = "Pipeline editor") }
+            item { PipelineEditorCatalogContent() }
         }
     }
 }
