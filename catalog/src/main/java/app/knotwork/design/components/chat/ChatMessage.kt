@@ -10,9 +10,12 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -468,6 +471,9 @@ private fun ToolCallTile(content: ChatContent.ToolCall) {
     Row(
         verticalAlignment = Alignment.Top,
         modifier = Modifier
+            // Match the strip to the content's intrinsic height so the leading accent
+            // stays visible without bleeding into unbounded parent containers.
+            .height(IntrinsicSize.Min)
             .clip(KnotworkTheme.shapes.sm)
             .background(color = KnotworkTheme.extended.surface2)
             .border(
@@ -478,6 +484,7 @@ private fun ToolCallTile(content: ChatContent.ToolCall) {
         Spacer(
             modifier = Modifier
                 .width(KnotworkTheme.spacing.sp1)
+                .fillMaxHeight()
                 .background(color = accent),
         )
         Column(

@@ -7,10 +7,13 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -104,6 +107,11 @@ fun HitlConfirmationCard(
     Row(
         modifier = modifier
             .fillMaxWidth()
+            // IntrinsicSize.Min sizes the Row to its content's intrinsic height before
+            // the accent-strip Spacer measures. Without this, `Spacer.fillMaxHeight()`
+            // would consume the parent's full available height and the card would
+            // balloon to fill any unbounded vertical container.
+            .height(IntrinsicSize.Min)
             .clip(KnotworkTheme.shapes.md)
             .background(color = KnotworkTheme.extended.surface1)
             .border(
@@ -241,7 +249,15 @@ private fun TypedConfirmRow(value: String, onChange: (String) -> Unit) {
     )
 }
 
-/** Bottom action row — Reject + Allow + (optional) Always allow. */
+/**
+ * Bottom action row — Reject + Allow + (optional) Always allow.
+ *
+ * Uses [FlowRow] so the Sensitive variant (which adds the "Always allow"
+ * text button) wraps onto a second line when the bubble's max-width
+ * (`screenWidth - 64 dp` for the assistant side) cannot fit all three CTAs
+ * side-by-side. Cross-axis alignment is `End` to keep the primary CTA
+ * pinned to the trailing edge regardless of wrap.
+ */
 @Composable
 private fun ButtonRow(
     risk: Risk,
@@ -250,12 +266,12 @@ private fun ButtonRow(
     onAllowAlways: (() -> Unit)?,
     onReject: () -> Unit,
 ) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
+    FlowRow(
         horizontalArrangement = Arrangement.spacedBy(
             space = KnotworkTheme.spacing.sp2,
             alignment = Alignment.End,
         ),
+        verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp1),
         modifier = Modifier.fillMaxWidth(),
     ) {
         KnotworkSecondaryButton(
