@@ -28,8 +28,19 @@ import app.knotwork.design.tokens.KnotworkTextStyles
 /** Diameter of one loader dot. */
 private val LoaderDotSize = 8.dp
 
-/** Total loop duration in milliseconds (matches `compose/components/README.md` §Misc). */
+/**
+ * Total visible loop duration (full alpha down-and-up cycle), in milliseconds.
+ * Matches `compose/components/README.md` §Misc.
+ *
+ * The per-direction tween is half of this — `RepeatMode.Reverse` plays the
+ * tween forward and then backward, so a 1200 ms full cycle needs a 600 ms
+ * tween. Computing the half here keeps the documented loop value as the
+ * single source of truth.
+ */
 private const val LOADER_LOOP_MS = 1200
+
+/** Duration of a single direction of the reverse loop (half of [LOADER_LOOP_MS]). */
+private const val LOADER_HALF_LOOP_MS = LOADER_LOOP_MS / 2
 
 /** Per-dot stagger inside the loop, in milliseconds. */
 private const val LOADER_STAGGER_MS = 200
@@ -83,7 +94,7 @@ private fun LoaderDot(transition: androidx.compose.animation.core.InfiniteTransi
         initialValue = LOADER_MIN_ALPHA,
         targetValue = LOADER_MAX_ALPHA,
         animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = LOADER_LOOP_MS, easing = LinearEasing, delayMillis = delayMs),
+            animation = tween(durationMillis = LOADER_HALF_LOOP_MS, easing = LinearEasing, delayMillis = delayMs),
             repeatMode = RepeatMode.Reverse,
         ),
         label = "knotwork_loader_dot",
