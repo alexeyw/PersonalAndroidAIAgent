@@ -15,6 +15,60 @@ details.
 
 ### Added
 
+- Knotwork base component library (Phase 21 / Task 5/11), shipped under
+  `:catalog/app.knotwork.design.components.*`:
+  - **Buttons** — `KnotworkPrimaryButton`, `KnotworkSecondaryButton`
+    (with `destructive` flag for HITL `Reject`), `KnotworkTextButton`,
+    `KnotworkIconButton` (optional `badge: Int?`, `9+` overflow). All
+    four follow the `KnotworkTheme.shapes.md` shape, expose a 48 dp
+    minimum touch target, and honour the spec'd `loading` /
+    `disabled` palettes (label fades to alpha 0.3, container shifts
+    to `extended.surface3` / `onSurfaceDim`).
+  - **Chips & pills** — `KnotworkChip` with `Default / Tonal /
+    Outline` styles + `selected` palette, decorative no-`onClick`
+    variant for tag rows; `RiskPill` (`Read-only / Sensitive /
+    Destructive`) paired with `Visibility / WarningAmber / GppMaybe`
+    glyphs from `icons/icon-mapping.md`; `StatusPill` (`Idle /
+    Running / Success / Warning / Error`). All three pills expose
+    `Risk level: …` / `Status: …` `contentDescription`s so colour is
+    never the only signal.
+  - **List rows** — `PipelineListRow` (72 dp, swipe-from-right reveals
+    `Duplicate / Archive / Delete` via `Modifier.draggable` +
+    `Animatable<Float>`; `revealed: Boolean?` parameter drives
+    deterministic snapshot rendering); `ToolListRow` (64 dp, trailing
+    connection-status pill via a `ConnectionStatus → Status`
+    mapping); `MemoryEntryRow` (variable height, 3-line `BodyBase`
+    clamp, tag chips + relevance score footer).
+  - **Misc** — `EmptyState` (centred illustration slot defaulting to
+    `StripedPlaceholder`, title + subtitle + optional CTA);
+    `KnotworkSnackbar` (`Default / Error / Success` variants);
+    `KnotworkLoader` (three pulsing dots `Accent300 → Accent400 →
+    Accent500`, 1.2 s loop, 200 ms stagger; collapses to a static
+    `•••` glyph under reduced motion); `StripedPlaceholder` (40 %
+    diagonal stripes, optional mono caption).
+  - **Catalog surface** — `ComponentsCatalogPage` mirrors
+    `FoundationsCatalogPage` / `IconCatalogPage`, surfacing every
+    base component under one scrollable column.
+  - **Roborazzi snapshot baselines** — eight new PNGs under
+    `:catalog/src/test/snapshots/`: `buttons_*.png`, `chips_*.png`,
+    `lists_*.png`, `misc_*.png`, `components_*.png` (one light + one
+    dark per category, plus the aggregated catalog page). Behavioural
+    coverage: `KnotworkA11yTest`, `RiskPillTest`, `StatusPillTest`,
+    `KnotworkChipTest`, `PipelineListRowTest`, `ConnectionStatusTest`.
+- Accessibility primitives in `:catalog/app.knotwork.design.a11y` —
+  `KnotworkA11y` interface (`reducedMotion()` backed by
+  `Settings.Global.TRANSITION_ANIMATION_SCALE` /
+  `ANIMATOR_DURATION_SCALE` with a `ContentObserver`-driven recompose;
+  `fontScale()` mirroring `LocalConfiguration`), the
+  `DefaultKnotworkA11y` production singleton, the test-friendly
+  `FixedKnotworkA11y(reducedMotion, fontScale)`, the
+  `LocalKnotworkA11y` composition local, and the
+  `respectReducedMotionTransitions(enter, exit)` helper that swaps any
+  enter/exit transitions for an 80 ms alpha-only crossfade when
+  reduced motion is enabled. Wired into `KnotworkTheme` via the new
+  `KnotworkTheme.a11y` accessor — components MUST consume the gate
+  through this accessor instead of touching `LocalConfiguration` /
+  `Settings.Global` directly.
 - App shell with bottom navigation, single unified nav-graph, and a
   first-launch onboarding gate (Phase 21 / Task 4/11):
   - Four-tab `NavigationBar` — **Chat** (start) / **Pipelines** /
