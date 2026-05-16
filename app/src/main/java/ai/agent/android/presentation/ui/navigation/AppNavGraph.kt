@@ -1,8 +1,8 @@
 package ai.agent.android.presentation.ui.navigation
 
 import ai.agent.android.presentation.ui.about.AboutScreen
-import ai.agent.android.presentation.ui.chat.ChatScreen
-import ai.agent.android.presentation.ui.chat.ChatViewModel
+import ai.agent.android.presentation.ui.chat.home.ChatHomeScreen
+import ai.agent.android.presentation.ui.chat.home.ChatHomeViewModel
 import ai.agent.android.presentation.ui.memory.MemoryScreen
 import ai.agent.android.presentation.ui.models.ModelsScreen
 import ai.agent.android.presentation.ui.monitoring.MonitoringScreen
@@ -93,12 +93,15 @@ fun AppNavGraph(navController: NavHostController, showOnboarding: Boolean, modif
         }
 
         // ─── Chat tab ──────────────────────────────────────────────────────
+        // Phase 21 / Task 8: the user-facing surface is now `ChatHomeScreen`
+        // backed by a stub `ChatHomeViewModel` driving the 9-state matrix
+        // from `compose/screens/README.md §C1`. The orchestrator/runtime
+        // wiring (real chat backend) is captured in the legacy
+        // `chat.legacy.*` files and re-attaches to this screen in a
+        // follow-up task after v0.1.
         composable(NavRoutes.CHAT_TAB) {
-            val chatViewModel: ChatViewModel = hiltViewModel()
-            ChatScreen(
-                viewModel = chatViewModel,
-                onBack = { navController.popBackStack() },
-            )
+            val chatHomeViewModel: ChatHomeViewModel = hiltViewModel()
+            ChatHomeScreen(viewModel = chatHomeViewModel)
         }
         composable(
             route = NavRoutes.CHAT_WITH_THREAD,
@@ -113,20 +116,13 @@ fun AppNavGraph(navController: NavHostController, showOnboarding: Boolean, modif
             ),
         ) { entry ->
             val threadId = entry.arguments?.getString(NavRoutes.CHAT_THREAD_ARG)
-            val chatViewModel: ChatViewModel = hiltViewModel()
-            // Forward the thread id to the existing session-switch entry
-            // point. Task 8 will replace this with a full `ChatHomeScreen`
-            // that consumes the argument through its own UiState; until
-            // then we wire the deep-link into the current ChatViewModel.
+            val chatHomeViewModel: ChatHomeViewModel = hiltViewModel()
             LaunchedEffect(threadId) {
                 if (!threadId.isNullOrBlank()) {
-                    chatViewModel.switchSession(threadId)
+                    chatHomeViewModel.selectThread(threadId)
                 }
             }
-            ChatScreen(
-                viewModel = chatViewModel,
-                onBack = { navController.popBackStack() },
-            )
+            ChatHomeScreen(viewModel = chatHomeViewModel)
         }
 
         // ─── Pipelines tab (nested graph) ──────────────────────────────────

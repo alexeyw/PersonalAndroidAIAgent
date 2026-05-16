@@ -106,7 +106,7 @@ class OrchestratorViewModel @Inject constructor(
     /**
      * Marks [pipelineId] as the application-wide default pipeline. Used by
      * the library's "Set as default" menu item. The setting is observed by
-     * [ChatViewModel] which uses it in the TopAppBar subtitle and the
+     * the chat ViewModel which uses it in the TopAppBar subtitle and the
      * "Use default pipeline (…)" label, so chat surfaces stay in sync.
      */
     fun setDefaultPipeline(pipelineId: String) {

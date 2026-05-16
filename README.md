@@ -59,7 +59,10 @@ configured it.
   rendered fresh on every execution.
 - Agent-initiated clarifications: the agent can ask the user a question
   mid-pipeline and wait for the reply (human-in-the-loop).
-- Multi-session chats with a priority task queue.
+- Multi-session chats with a priority task queue and a redesigned chat
+  home built on the Knotwork design system, covering the documented
+  Empty / Idle / Generating / HITL / Clarification / Error / Drawer /
+  Console-expanded states deterministically.
 - Background execution as an Android Foreground Service with explicit idle
   and power-state management.
 - Long-term memory with semantic retrieval (RAG) over past conversations.

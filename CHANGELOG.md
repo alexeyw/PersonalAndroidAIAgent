@@ -15,6 +15,36 @@ details.
 
 ### Added
 
+- Redesigned **Chat home screen** (Phase 21 / Task 8/11) — the new primary
+  surface of the app, built on the Knotwork design system. `ChatHomeScreen`
+  covers the eight documented visual states from `compose/screens/README.md
+  §C1` (Empty, Idle, Generating, HITL Confirm, Clarification, Error, Drawer
+  open, Console expanded) plus the cross-cutting dark theme. Highlights:
+  - Stateless `ChatHomeContent` lives in `:catalog` under
+    `app.knotwork.design.screens.chat.*` and is exercised by Roborazzi
+    snapshots (8 states × 2 themes = 16 PNG baselines).
+  - Stub `ChatHomeViewModel` in `:app` exposes a deterministic
+    `StateFlow<ChatHomeUiState>`; the real orchestrator wiring (legacy
+    `chat.legacy.ChatViewModel`) will reattach in a follow-up task after
+    v0.1 — until then `sendMessage` simulates a 1.2 s
+    `Idle → Generating → Idle` round-trip so the composer morph is
+    testable.
+  - **Debug state picker** (`ChatHomeDebugStatePicker`) reachable by
+    triple-tapping the TopAppBar title in debug builds — flips through
+    all 12 picker rows (8 visual states + 3 HITL risk tiers).
+  - Reduced-motion + a11y rules go through `KnotworkTheme.a11y` per
+    `decisions.md §14`; loader dots collapse to a steady `"•••"` glyph.
+
+### Changed
+
+- The legacy chat surface (`ChatScreen`, `ChatViewModel`,
+  `ConsolePanelCollapsed`, `ConsoleFullLogSheet`, `ApprovalBanner`,
+  `ClarificationCard`, `PipelineSummary`, `PipelineTraceCard`, and the
+  paired tests) moved to `presentation.ui.chat.legacy/*` and is no longer
+  wired into the navigation graph. It remains in the source tree as the
+  reference implementation for the post-v0.1 orchestrator integration
+  task that will reattach the real backend to `ChatHomeScreen`.
+
 - Knotwork pipeline-editor base components (Phase 21 / Task 7/11), shipped
   under `:catalog/app.knotwork.design.components.pipelineeditor.*`:
   - **NodeCard** — 168 dp × 64..96 dp card covering idle / selected /

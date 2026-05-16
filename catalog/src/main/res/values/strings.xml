@@ -171,4 +171,31 @@
     <string name="knotwork_node_validation_class_duplicate">Class names must be unique</string>
     <string name="knotwork_node_validation_arg_key_duplicate">Argument keys must be unique</string>
 
+    <!-- ============ ChatHomeScreen (Phase 21 / Task 8) ============ -->
+
+    <!-- TopAppBar action contentDescription: opens the thread drawer. -->
+    <string name="knotwork_chat_home_action_threads">Open threads</string>
+    <!-- TopAppBar action contentDescription: opens the model picker. -->
+    <string name="knotwork_chat_home_action_model_picker">Choose model</string>
+    <!-- TopAppBar overflow contentDescription. -->
+    <string name="knotwork_chat_home_action_overflow">More chat options</string>
+    <!-- TopAppBar accessibility hint for the title row triple-tap state picker (debug builds only). -->
+    <string name="knotwork_chat_home_title_debug_hint">Triple-tap to open debug state picker</string>
+    <!-- Empty-state title shown when a thread has no messages yet. -->
+    <string name="knotwork_chat_home_empty_title">Start a conversation</string>
+    <!-- Empty-state subtitle. -->
+    <string name="knotwork_chat_home_empty_subtitle">Try a sample prompt or type your own.</string>
+    <!-- Drawer header label. -->
+    <string name="knotwork_chat_home_drawer_threads_header">Threads</string>
+    <!-- Drawer action: start a new thread. -->
+    <string name="knotwork_chat_home_drawer_new_thread">New thread</string>
+    <!-- Generating-state placeholder bubble label. -->
+    <string name="knotwork_chat_home_generating_label">Generating…</string>
+    <!-- Error-state inline tile title. -->
+    <string name="knotwork_chat_home_error_title">Something went wrong</string>
+    <!-- Error-state retry button. -->
+    <string name="knotwork_chat_home_error_retry">Retry</string>
+    <!-- Debug state picker label (visible only in debug builds). -->
+    <string name="knotwork_chat_home_debug_picker_title">Debug state</string>
+
 </resources>
