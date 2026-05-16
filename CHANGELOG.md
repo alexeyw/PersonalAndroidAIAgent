@@ -15,6 +15,42 @@ details.
 
 ### Added
 
+- Knotwork pipeline-editor base components (Phase 21 / Task 7/11), shipped
+  under `:catalog/app.knotwork.design.components.pipelineeditor.*`:
+  - **NodeCard** — 168 dp × 64..96 dp card covering idle / selected /
+    multi-selected / running / runtime-error / validation-error states in
+    one stateless composable. Header strip tinted from
+    `KnotworkTheme.extended.node*` (12 hues), foreground tone resolved by
+    a luminance-band rule (white / `onPrimary` / `onSurface`), and a 1.2 s
+    running pulse gated through `KnotworkTheme.a11y.reducedMotion()`.
+    Ports rendered with 12 dp visual / 24 dp hit-target dots; the inbound
+    dot is pulled 6 dp into the header strip per spec.
+  - **NodePorts.forType** — single source for the canonical port layout
+    per node type (`IfCondition` → `True/False`, `QueueProcessor` →
+    `Item/Done`, `Evaluation` → `Pass/(Retry)/Fail`, `IntentRouter` → one
+    `Custom` per class, others → 1 in / 1 unlabelled out).
+  - **EdgeLabel** — floating chip on `surface1` with 1 dp `outline`
+    border, `LabelSm` text, plus an overload that derives the label from
+    an `OutboundPort`.
+  - **EditorToolbar** — inline-editable pipeline name on the left,
+    Undo / Redo / Delete / Auto-layout cluster in the centre,
+    `Run` (`KnotworkPrimaryButton`) + overflow on the right.
+  - **NodeConfigSheet** + **NodeConfigForms** — `ModalBottomSheet` shell
+    with a fixed type-pill header and sticky Cancel / Save row, plus a
+    per-type form body for each of the 12 `NodeConfig` variants
+    (`Input`, `Output`, `LiteRt`, `Cloud`, `IntentRouter`, `IfCondition`,
+    `Clarification`, `Tool`, `Decomposition`, `QueueProcessor`,
+    `Evaluation`, `Summary`). Save is gated on
+    `NodeConfigValidation.validate(...)`, which enumerates every rule
+    from `node-specs.md` §Validation rules.
+  - **PipelineEditorCatalogContent** — scrollable harness rendering all
+    12 NodeCard hues + the state matrix (selected / runtime-error /
+    validation-error) + every EdgeLabel kind + the EditorToolbar + an
+    idle LiteRT NodeConfigSheet body + an invalid IntentRouter body
+    (surfacing inline `TITLE_DUPLICATE` / `INTENT_CLASS_COUNT` /
+    `REQUIRED` errors). Wired into `ComponentsCatalogPage` under
+    "Pipeline editor" and snapshot-tested via Roborazzi in both themes
+    with `FixedKnotworkA11y(reducedMotion = true)` for determinism.
 - Knotwork chat-surface components (Phase 21 / Task 6/11), shipped under
   `:catalog/app.knotwork.design.components.chat.*` and
   `:catalog/app.knotwork.design.components.console.*`:
