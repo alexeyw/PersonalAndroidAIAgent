@@ -9,6 +9,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -16,6 +17,8 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.calculateEndPadding
+import androidx.compose.foundation.layout.calculateStartPadding
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -40,11 +43,13 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -283,14 +288,23 @@ private fun ChatHomeEmptyBody(state: ChatHomeViewState, callbacks: ChatHomeCallb
  */
 @Composable
 private fun ChatHomeMessageList(state: ChatHomeViewState, callbacks: ChatHomeCallbacks, padding: PaddingValues) {
+    // Compose the Scaffold-provided insets with the surface's own 16dp
+    // horizontal padding into a single `contentPadding` value. Applying
+    // them via `Modifier.padding` would shrink the LazyColumn's
+    // touch/scroll area and push the scrollbar inset away from the screen
+    // edge — passing them through `contentPadding` keeps the full-width
+    // scroll surface and only pads the rendered items.
+    val mergedContentPadding = PaddingValues(
+        start = padding.calculateStartPadding(LocalLayoutDirection.current) + ChatHorizontalPadding,
+        end = padding.calculateEndPadding(LocalLayoutDirection.current) + ChatHorizontalPadding,
+        top = padding.calculateTopPadding() + KnotworkTheme.spacing.sp2,
+        bottom = padding.calculateBottomPadding() + KnotworkTheme.spacing.sp2,
+    )
     LazyColumn(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(padding)
-            .padding(horizontal = ChatHorizontalPadding),
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = mergedContentPadding,
         verticalArrangement = Arrangement.spacedBy(ChatRowGap),
     ) {
-        item { Spacer(modifier = Modifier.height(KnotworkTheme.spacing.sp2)) }
         items(items = state.messages, key = { it.id }) { row ->
             ChatMessage(
                 role = row.role,
@@ -312,7 +326,6 @@ private fun ChatHomeMessageList(state: ChatHomeViewState, callbacks: ChatHomeCal
         if (state.visualState == ChatHomeVisualState.Error && state.errorMessage != null) {
             item { ChatHomeErrorTile(message = state.errorMessage, onRetry = callbacks.onErrorRetry) }
         }
-        item { Spacer(modifier = Modifier.height(KnotworkTheme.spacing.sp2)) }
     }
 }
 
@@ -382,7 +395,11 @@ private fun ChatHomeDrawerOverlay(state: ChatHomeViewState, callbacks: ChatHomeC
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(color = Color.Black.copy(alpha = DRAWER_SCRIM_ALPHA)),
+            .background(color = Color.Black.copy(alpha = DRAWER_SCRIM_ALPHA))
+            // The scrim itself is the dismiss surface — tapping anywhere
+            // outside the drawer panel collapses the overlay. `indication =
+            // null` keeps it visually inert (no ripple on the scrim).
+            .scrimClickable(onClick = callbacks.onCloseDrawer),
         contentAlignment = Alignment.CenterStart,
     ) {
         Surface(
@@ -390,7 +407,11 @@ private fun ChatHomeDrawerOverlay(state: ChatHomeViewState, callbacks: ChatHomeC
             tonalElevation = KnotworkTheme.elevation.el2,
             modifier = Modifier
                 .width(DrawerWidth)
-                .fillMaxHeight(),
+                .fillMaxHeight()
+                // Absorb pointer events inside the panel so a tap on the
+                // drawer surface does not bubble up to the scrim's dismiss
+                // handler.
+                .absorbClicks(),
         ) {
             Column(modifier = Modifier.fillMaxSize()) {
                 Text(
@@ -473,22 +494,31 @@ private fun ChatHomeConsoleOverlay(state: ChatHomeViewState, callbacks: ChatHome
             modifier = Modifier
                 .weight(1f)
                 .fillMaxWidth()
-                .background(color = Color.Black.copy(alpha = CONSOLE_SCRIM_ALPHA)),
+                .background(color = Color.Black.copy(alpha = CONSOLE_SCRIM_ALPHA))
+                // Tapping the scrim above the console pane collapses it
+                // back to the underlying chat surface. Without this the
+                // tap would fall through to the chat list and could
+                // trigger long-press menus on hidden bubbles.
+                .scrimClickable(onClick = callbacks.onCloseConsole),
         )
-        ConsolePane(
-            snap = state.console.snap,
-            onSnapChange = callbacks.onConsoleSnapChange,
-            tab = state.console.tab,
-            onTabChange = callbacks.onConsoleTabChange,
-            logs = state.console.logs,
-            vars = state.console.vars,
-            traces = state.console.traces,
-            filter = state.console.filter,
-            onFilterChange = callbacks.onConsoleFilterChange,
-            onSearch = callbacks.onConsoleSearch,
-            onCopyAll = callbacks.onConsoleCopyAll,
-            onClear = callbacks.onConsoleClear,
-        )
+        // Absorb taps inside the console pane so they don't reach the
+        // scrim above; the pane has its own header / drag-handle actions.
+        Box(modifier = Modifier.absorbClicks()) {
+            ConsolePane(
+                snap = state.console.snap,
+                onSnapChange = callbacks.onConsoleSnapChange,
+                tab = state.console.tab,
+                onTabChange = callbacks.onConsoleTabChange,
+                logs = state.console.logs,
+                vars = state.console.vars,
+                traces = state.console.traces,
+                filter = state.console.filter,
+                onFilterChange = callbacks.onConsoleFilterChange,
+                onSearch = callbacks.onConsoleSearch,
+                onCopyAll = callbacks.onConsoleCopyAll,
+                onClear = callbacks.onConsoleClear,
+            )
+        }
     }
 }
 
@@ -521,6 +551,40 @@ private const val TRIPLE_TAP_COUNT = 3
 
 /** Maximum gap between two consecutive taps to keep them in the same triple-tap sequence. */
 private const val TRIPLE_TAP_TIMEOUT_MS = 400L
+
+/**
+ * Marks a scrim layer as the dismiss surface for the overlay it covers.
+ * Wraps `Modifier.clickable` with a discarded `MutableInteractionSource`
+ * and `indication = null` so the scrim swallows the tap silently — no
+ * ripple, no touch feedback, and the click never falls through to the
+ * surface underneath.
+ */
+@Composable
+private fun Modifier.scrimClickable(onClick: () -> Unit): Modifier {
+    val interactionSource = remember { MutableInteractionSource() }
+    return this.clickable(
+        interactionSource = interactionSource,
+        indication = null,
+        onClick = onClick,
+    )
+}
+
+/**
+ * Marks a panel as a click-absorbing surface — taps on the panel are
+ * consumed locally so they don't reach the surrounding scrim and trigger
+ * its dismiss handler. Used inside [ChatHomeDrawerOverlay] and
+ * [ChatHomeConsoleOverlay] so panel-internal controls (chips, drag
+ * handles, tab strips) keep working without dismissing the overlay.
+ */
+@Composable
+private fun Modifier.absorbClicks(): Modifier {
+    val interactionSource = remember { MutableInteractionSource() }
+    return this.clickable(
+        interactionSource = interactionSource,
+        indication = null,
+        onClick = { /* no-op: just absorb the tap */ },
+    )
+}
 
 /**
  * Per-row resolution of the `allowOnceEnabled` flag passed into

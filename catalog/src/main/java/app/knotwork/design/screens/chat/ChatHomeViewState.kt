@@ -164,6 +164,7 @@ class ChatHomeCallbacks(
     val onConsoleSearch: () -> Unit = {},
     val onConsoleCopyAll: () -> Unit = {},
     val onConsoleClear: () -> Unit = {},
+    val onCloseConsole: () -> Unit = {},
     val onHitlAllowOnce: () -> Unit = {},
     val onHitlAllowAlways: (() -> Unit)? = null,
     val onHitlReject: () -> Unit = {},

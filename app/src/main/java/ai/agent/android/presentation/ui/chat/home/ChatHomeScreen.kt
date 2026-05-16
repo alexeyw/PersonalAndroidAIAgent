@@ -74,6 +74,7 @@ fun ChatHomeScreen(viewModel: ChatHomeViewModel, modifier: Modifier = Modifier) 
             onConsoleSearch = { /* stub: console search ships with the orchestrator integration */ },
             onConsoleCopyAll = { /* stub: clipboard wiring ships with the orchestrator integration */ },
             onConsoleClear = { /* stub: clear-confirmation ships with the orchestrator integration */ },
+            onCloseConsole = viewModel::closeConsole,
             onHitlAllowOnce = { viewModel.forceState(ChatHomeUiState.Idle) },
             onHitlReject = { viewModel.forceState(ChatHomeUiState.Idle) },
             onHitlTypedConfirmChange = viewModel::onTypedConfirmChange,
