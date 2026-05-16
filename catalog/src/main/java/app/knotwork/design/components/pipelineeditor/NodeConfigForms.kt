@@ -417,13 +417,27 @@ private fun IntentRouterFormBody(
         monospace = true,
         onChange = { next -> onChange(config.copy(classifierPrompt = next)) },
     )
-    SegmentedChipRow(
-        label = stringResource(R.string.knotwork_node_field_fallback_class),
-        values = listOf<Pair<String?, String>>(null to "<none>") +
-            config.classes.map { it.name to it.name },
-        selected = config.fallbackClass,
-        onSelect = { next -> onChange(config.copy(fallbackClass = next)) },
-    )
+    Column(verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp1)) {
+        SegmentedChipRow(
+            label = stringResource(R.string.knotwork_node_field_fallback_class),
+            // Stale fallback values (a class that was renamed or removed) are
+            // still listed as the trailing option so the chip row reflects
+            // the saved state — the inline error below tells the user the
+            // value no longer resolves, and selecting <none> or another
+            // class clears it. Without surfacing the stale value the user
+            // would not see what they are about to fix.
+            values = listOf<Pair<String?, String>>(null to "<none>") +
+                config.classes.map { it.name to it.name } +
+                listOfNotNull(
+                    config.fallbackClass
+                        ?.takeIf { it.isNotBlank() && it !in config.classes.map { c -> c.name } }
+                        ?.let { it to it },
+                ),
+            selected = config.fallbackClass,
+            onSelect = { next -> onChange(config.copy(fallbackClass = next)) },
+        )
+        InlineError(failure = errors[FieldId.FALLBACK_CLASS])
+    }
 }
 
 @Composable
@@ -505,14 +519,21 @@ private fun ToolFormBody(config: ToolConfig, errors: Map<FieldId, ValidationFail
     )
     Column(verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp1)) {
         FieldLabel(text = stringResource(R.string.knotwork_node_field_arg_mapping))
-        config.argumentMapping.entries.forEachIndexed { _, (key, expression) ->
+        // Materialise the entries into an ordered list so a key rename can be
+        // applied positionally without colliding with a sibling key that the
+        // user is about to type on the way to a new value (LinkedHashMap +
+        // forEachIndexed gives stable iteration over the live snapshot).
+        val rows = config.argumentMapping.entries.toList()
+        rows.forEachIndexed { index, (key, expression) ->
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp2),
             ) {
                 OutlinedTextField(
                     value = key,
-                    onValueChange = { /* renaming keys handled by the canvas in Task 9 */ },
+                    onValueChange = { nextKey ->
+                        onChange(config.copy(argumentMapping = rows.replaceKey(index, nextKey)))
+                    },
                     singleLine = true,
                     textStyle = KnotworkTextStyles.MonoBase,
                     modifier = Modifier.fillMaxWidth().weight(1f),
@@ -520,8 +541,8 @@ private fun ToolFormBody(config: ToolConfig, errors: Map<FieldId, ValidationFail
                 )
                 OutlinedTextField(
                     value = expression,
-                    onValueChange = { next ->
-                        onChange(config.copy(argumentMapping = config.argumentMapping + (key to next)))
+                    onValueChange = { nextValue ->
+                        onChange(config.copy(argumentMapping = rows.replaceValue(index, nextValue)))
                     },
                     singleLine = true,
                     textStyle = KnotworkTextStyles.MonoBase,
@@ -675,6 +696,27 @@ private fun SummaryFormBody(
         onChange = { next -> onChange(config.copy(targetLengthChars = next)) },
     )
 }
+
+/**
+ * Returns a new `argumentMapping` with the entry at [index] re-keyed to
+ * [nextKey], preserving original entry order so the row the user is
+ * editing does not jump under the caret. Used by [ToolFormBody] when the
+ * user renames a tool-argument key inline.
+ */
+private fun List<Map.Entry<String, String>>.replaceKey(index: Int, nextKey: String): Map<String, String> =
+    mapIndexed { i, entry ->
+        if (i == index) nextKey to entry.value else entry.key to entry.value
+    }.toMap()
+
+/**
+ * Returns a new `argumentMapping` with the value at [index] replaced by
+ * [nextValue], preserving entry order. Used by [ToolFormBody] when the
+ * user edits the expression of an existing tool-argument row.
+ */
+private fun List<Map.Entry<String, String>>.replaceValue(index: Int, nextValue: String): Map<String, String> =
+    mapIndexed { i, entry ->
+        if (i == index) entry.key to nextValue else entry.key to entry.value
+    }.toMap()
 
 /**
  * Returns a copy of [this] with [title] swapped in. Each sealed variant

@@ -78,6 +78,15 @@ enum class ValidationFailure(val stringRes: Int) {
 
     /** QueueProcessor parallelism outside `1..8`. */
     PARALLELISM_RANGE(app.knotwork.design.R.string.knotwork_node_validation_parallelism_range),
+
+    /**
+     * IntentRouter `fallbackClass` references a name that is no longer in
+     * the declared `classes` list — typically after the user renamed /
+     * removed a class but forgot to update the fallback selection.
+     * Surfaced inline under the fallback dropdown so the user can either
+     * pick another class or clear the selection.
+     */
+    FALLBACK_NOT_IN_CLASSES(app.knotwork.design.R.string.knotwork_node_validation_fallback_unknown),
 }
 
 /** Allowed range for [LiteRtConfig.temperature]. */
@@ -216,6 +225,13 @@ object NodeConfigValidation {
             errors[FieldId.CLASSES] = ValidationFailure.REQUIRED
         }
         if (config.classifierPrompt.isBlank()) errors[FieldId.CLASSIFIER_PROMPT] = ValidationFailure.REQUIRED
+        val fallback = config.fallbackClass
+        if (!fallback.isNullOrBlank()) {
+            val declared = config.classes.map { it.name }.toSet()
+            if (fallback !in declared) {
+                errors[FieldId.FALLBACK_CLASS] = ValidationFailure.FALLBACK_NOT_IN_CLASSES
+            }
+        }
         return errors
     }
 

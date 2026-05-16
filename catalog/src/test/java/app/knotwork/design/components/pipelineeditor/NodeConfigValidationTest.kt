@@ -232,6 +232,60 @@ class NodeConfigValidationTest {
     }
 
     @Test
+    fun `given IntentRouterConfig with stale fallback class when validate then FALLBACK_NOT_IN_CLASSES`() {
+        val errors = NodeConfigValidation.validate(
+            config = IntentRouterConfig(
+                title = "router",
+                classes = listOf(
+                    IntentClass(name = "simple"),
+                    IntentClass(name = "complex"),
+                ),
+                classifierPrompt = "x",
+                fallbackClass = "removed",
+            ),
+            peerTitles = noPeers,
+        )
+
+        assertEquals(ValidationFailure.FALLBACK_NOT_IN_CLASSES, errors[FieldId.FALLBACK_CLASS])
+    }
+
+    @Test
+    fun `given IntentRouterConfig with resolved fallback class when validate then no fallback error`() {
+        val errors = NodeConfigValidation.validate(
+            config = IntentRouterConfig(
+                title = "router",
+                classes = listOf(
+                    IntentClass(name = "simple"),
+                    IntentClass(name = "complex"),
+                ),
+                classifierPrompt = "x",
+                fallbackClass = "simple",
+            ),
+            peerTitles = noPeers,
+        )
+
+        assertNull(errors[FieldId.FALLBACK_CLASS])
+    }
+
+    @Test
+    fun `given IntentRouterConfig with null fallback class when validate then no fallback error`() {
+        val errors = NodeConfigValidation.validate(
+            config = IntentRouterConfig(
+                title = "router",
+                classes = listOf(
+                    IntentClass(name = "simple"),
+                    IntentClass(name = "complex"),
+                ),
+                classifierPrompt = "x",
+                fallbackClass = null,
+            ),
+            peerTitles = noPeers,
+        )
+
+        assertNull(errors[FieldId.FALLBACK_CLASS])
+    }
+
+    @Test
     fun `given InputConfig with invalid schemaJson when validate then INVALID_JSON`() {
         val errors = NodeConfigValidation.validate(
             config = InputConfig(title = "in", schemaJson = "not json"),

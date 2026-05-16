@@ -167,5 +167,6 @@
     <string name="knotwork_node_validation_intent_class_count">Provide between 2 and 6 classes</string>
     <string name="knotwork_node_validation_invalid_json">Provided JSON is invalid</string>
     <string name="knotwork_node_validation_parallelism_range">Parallelism must be between 1 and 8</string>
+    <string name="knotwork_node_validation_fallback_unknown">Fallback class is no longer declared above</string>
 
 </resources>
