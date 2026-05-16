@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.calculateEndPadding
 import androidx.compose.foundation.layout.calculateStartPadding
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -25,7 +26,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
@@ -123,6 +126,14 @@ fun ChatHomeContent(
             containerColor = MaterialTheme.colorScheme.surface,
             topBar = { ChatHomeTopBar(state = state, callbacks = callbacks) },
             bottomBar = { ChatHomeBottomBar(state = state, callbacks = callbacks) },
+            // The outer `AppShellScaffold` already accounts for the system
+            // navigation bar and the in-app bottom nav via its own inner
+            // padding. Letting this Scaffold default to `safeDrawing` would
+            // add a second nav-bar-height of padding to the composer slot
+            // and leave a visible strip beneath the input. The TopAppBar
+            // here still handles status-bar inset via its own Material3
+            // default `windowInsets`.
+            contentWindowInsets = WindowInsets(0, 0, 0, 0),
             modifier = Modifier.fillMaxSize(),
         ) { padding ->
             ChatHomeBody(state = state, callbacks = callbacks, padding = padding)
@@ -408,6 +419,10 @@ private fun ChatHomeDrawerOverlay(state: ChatHomeViewState, callbacks: ChatHomeC
             modifier = Modifier
                 .width(DrawerWidth)
                 .fillMaxHeight()
+                // Reserve the system status-bar inset inside the panel so
+                // the "Threads" header doesn't collide with the device's
+                // clock / status icons.
+                .windowInsetsPadding(WindowInsets.systemBars)
                 // Absorb pointer events inside the panel so a tap on the
                 // drawer surface does not bubble up to the scrim's dismiss
                 // handler.

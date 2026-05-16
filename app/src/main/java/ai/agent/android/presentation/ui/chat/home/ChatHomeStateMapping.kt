@@ -46,6 +46,7 @@ import app.knotwork.design.screens.chat.ChatHomeVisualState
 fun ChatHomeUiState.toViewState(
     threadTitle: String,
     modelName: String,
+    messages: List<ChatHomeMessageRow> = emptyList(),
     composerValue: String = "",
     pendingTypedConfirm: String = "",
 ): ChatHomeViewState = when (this) {
@@ -61,7 +62,7 @@ fun ChatHomeUiState.toViewState(
         visualState = ChatHomeVisualState.Idle,
         threadTitle = threadTitle,
         modelName = modelName,
-        messages = baselineMessages(modelName),
+        messages = messages,
         composerValue = composerValue,
     )
 
@@ -69,7 +70,7 @@ fun ChatHomeUiState.toViewState(
         visualState = ChatHomeVisualState.Generating,
         threadTitle = threadTitle,
         modelName = modelName,
-        messages = baselineMessages(modelName),
+        messages = messages,
         composerValue = composerValue,
         composerState = ComposerState.Generating,
     )
@@ -78,7 +79,7 @@ fun ChatHomeUiState.toViewState(
         visualState = ChatHomeVisualState.HitlConfirm,
         threadTitle = threadTitle,
         modelName = modelName,
-        messages = baselineMessages(modelName) + hitlRow(modelName, risk),
+        messages = messages + hitlRow(modelName, risk),
         composerValue = composerValue,
         pendingTypedConfirm = pendingTypedConfirm,
     )
@@ -87,7 +88,7 @@ fun ChatHomeUiState.toViewState(
         visualState = ChatHomeVisualState.Clarification,
         threadTitle = threadTitle,
         modelName = modelName,
-        messages = baselineMessages(modelName) + clarificationRow(modelName),
+        messages = messages + clarificationRow(modelName),
         composerValue = composerValue,
     )
 
@@ -95,7 +96,7 @@ fun ChatHomeUiState.toViewState(
         visualState = ChatHomeVisualState.Error,
         threadTitle = threadTitle,
         modelName = modelName,
-        messages = baselineMessages(modelName),
+        messages = messages,
         composerValue = composerValue,
         composerState = ComposerState.Error(message = message),
         errorMessage = message,
@@ -105,7 +106,7 @@ fun ChatHomeUiState.toViewState(
         visualState = ChatHomeVisualState.DrawerOpen,
         threadTitle = threadTitle,
         modelName = modelName,
-        messages = baselineMessages(modelName),
+        messages = messages,
         composerValue = composerValue,
         threads = sampleThreads(),
     )
@@ -114,7 +115,7 @@ fun ChatHomeUiState.toViewState(
         visualState = ChatHomeVisualState.ConsoleExpanded,
         threadTitle = threadTitle,
         modelName = modelName,
-        messages = baselineMessages(modelName),
+        messages = messages,
         composerValue = composerValue,
         console = ChatHomeConsoleState(
             snap = snap,

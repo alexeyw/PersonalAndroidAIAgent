@@ -37,11 +37,19 @@ class ChatHomeStateMappingTest {
     }
 
     @Test
-    fun `Idle maps to ChatHomeVisualState_Idle with baseline messages`() {
+    fun `Idle maps to ChatHomeVisualState_Idle and threads supplied messages`() {
+        val supplied = baselineMessages(model)
+        val view = ChatHomeUiState.Idle.toViewState(title, model, messages = supplied)
+        assertEquals(ChatHomeVisualState.Idle, view.visualState)
+        assertEquals(supplied, view.messages)
+        assertEquals(ComposerState.Idle, view.composerState)
+    }
+
+    @Test
+    fun `Idle with no supplied messages renders an empty list`() {
         val view = ChatHomeUiState.Idle.toViewState(title, model)
         assertEquals(ChatHomeVisualState.Idle, view.visualState)
-        assertEquals(baselineMessages(model), view.messages)
-        assertEquals(ComposerState.Idle, view.composerState)
+        assertTrue(view.messages.isEmpty())
     }
 
     @Test
