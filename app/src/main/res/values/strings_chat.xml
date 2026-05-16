@@ -126,4 +126,18 @@
 
     <!-- Stop-generation suffix appended to the partial agent message persisted on cancel -->
     <string name="chat_message_stopped_suffix">[stopped]</string>
+
+    <!-- ============ ChatHomeScreen debug state picker (debug builds only) ============ -->
+    <string name="chat_home_debug_state_empty">Empty</string>
+    <string name="chat_home_debug_state_idle">Idle</string>
+    <string name="chat_home_debug_state_generating">Generating</string>
+    <string name="chat_home_debug_state_hitl_readonly">HITL — Read-only</string>
+    <string name="chat_home_debug_state_hitl_sensitive">HITL — Sensitive</string>
+    <string name="chat_home_debug_state_hitl_destructive">HITL — Destructive</string>
+    <string name="chat_home_debug_state_clarification">Clarification</string>
+    <string name="chat_home_debug_state_error">Error</string>
+    <string name="chat_home_debug_state_drawer_open">Drawer open</string>
+    <string name="chat_home_debug_state_console_peek">Console — Peek</string>
+    <string name="chat_home_debug_state_console_partial">Console — Partial</string>
+    <string name="chat_home_debug_state_console_full">Console — Full</string>
 </resources>

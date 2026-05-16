@@ -20,7 +20,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import app.knotwork.design.theme.KnotworkTheme
-import app.knotwork.design.tokens.KnotworkPalette
 import app.knotwork.design.tokens.KnotworkTextStyles
 
 /** Visual height of a Knotwork chip; touch target floors at 48 dp via Material's interactive minimum. */
@@ -173,10 +172,15 @@ fun KnotworkChip(
 @Composable
 private fun chipContainerColor(style: ChipStyle, selected: Boolean, enabled: Boolean): Color {
     if (!enabled) return KnotworkTheme.extended.surface2
-    if (selected) return KnotworkPalette.Accent100
+    // `primaryContainer` is theme-aware: Accent100 in light, a dark brown in
+    // dark — exactly the container shade `onPrimaryContainer` (used as the
+    // chip label colour) is meant to land on. Hardcoding the palette
+    // `Accent100` here makes the dark-theme Tonal chip render light-on-light
+    // text. Mirrors `compose/components/README.md §Chips`.
+    if (selected) return MaterialTheme.colorScheme.primaryContainer
     return when (style) {
         ChipStyle.Default -> KnotworkTheme.extended.surface2
-        ChipStyle.Tonal -> KnotworkPalette.Accent100
+        ChipStyle.Tonal -> MaterialTheme.colorScheme.primaryContainer
         ChipStyle.Outline -> Color.Transparent
     }
 }

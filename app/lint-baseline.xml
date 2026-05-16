@@ -80,7 +80,7 @@
         errorLine1="        val isCompactConsole = configuration.screenHeightDp &lt;= compactConsoleThresholdDp"
         errorLine2="                               ~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
-            file="src/main/java/ai/agent/android/presentation/ui/chat/ChatScreen.kt"
+            file="src/main/java/ai/agent/android/presentation/ui/chat/legacy/ChatScreen.kt"
             line="312"
             column="32"/>
     </issue>
@@ -91,7 +91,7 @@
         errorLine1="    modifier: Modifier = Modifier,"
         errorLine2="    ~~~~~~~~">
         <location
-            file="src/main/java/ai/agent/android/presentation/ui/chat/AgentThoughtIndicator.kt"
+            file="src/main/java/ai/agent/android/presentation/ui/chat/legacy/AgentThoughtIndicator.kt"
             line="66"
             column="5"/>
     </issue>
@@ -102,7 +102,7 @@
         errorLine1="    modifier: Modifier = Modifier,"
         errorLine2="    ~~~~~~~~">
         <location
-            file="src/main/java/ai/agent/android/presentation/ui/chat/ConsolePanelCollapsed.kt"
+            file="src/main/java/ai/agent/android/presentation/ui/chat/legacy/ConsolePanelCollapsed.kt"
             line="105"
             column="5"/>
     </issue>

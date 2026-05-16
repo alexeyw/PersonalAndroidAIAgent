@@ -200,11 +200,22 @@ kover {
                     "ai.agent.android.presentation.ui.*Screen",
                     "ai.agent.android.presentation.ui.*ScreenKt",
                     "ai.agent.android.presentation.ui.*Screen$*",
-                    "ai.agent.android.presentation.ui.chat.ConsoleFullLogSheet*",
-                    "ai.agent.android.presentation.ui.chat.ConsolePanelCollapsed*",
-                    "ai.agent.android.presentation.ui.chat.AgentThoughtIndicator*",
-                    "ai.agent.android.presentation.ui.chat.ClarificationCard*",
-                    "ai.agent.android.presentation.ui.chat.PipelineTraceCard*",
+                    // Legacy chat surface (Phase 21 / Task 8: moved under chat/legacy/
+                    // pending the post-v0.1 orchestrator-rewiring task).
+                    "ai.agent.android.presentation.ui.chat.legacy.ConsoleFullLogSheet*",
+                    "ai.agent.android.presentation.ui.chat.legacy.ConsolePanelCollapsed*",
+                    "ai.agent.android.presentation.ui.chat.legacy.AgentThoughtIndicator*",
+                    "ai.agent.android.presentation.ui.chat.legacy.ClarificationCard*",
+                    "ai.agent.android.presentation.ui.chat.legacy.PipelineTraceCard*",
+                    "ai.agent.android.presentation.ui.chat.legacy.ApprovalBanner*",
+                    "ai.agent.android.presentation.ui.chat.legacy.ChatScreen*",
+                    // Redesigned chat-home Composables (Phase 21 / Task 8) — Compose
+                    // surfaces are covered by `:catalog` Roborazzi snapshots; the
+                    // testable VM / state-mapping live next to them and are
+                    // included in coverage.
+                    "ai.agent.android.presentation.ui.chat.home.ChatHomeScreen*",
+                    "ai.agent.android.presentation.ui.chat.home.ChatHomeDebugStatePicker*",
+                    "ai.agent.android.presentation.ui.chat.home.DebugStateRows*",
                     "ai.agent.android.presentation.ui.components.*",
                     "ai.agent.android.presentation.ui.orchestrator.components.*",
                     "ai.agent.android.presentation.ui.splash.SplashScreen*",

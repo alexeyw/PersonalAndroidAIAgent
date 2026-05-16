@@ -95,6 +95,42 @@ Every conversation lives in its own chat session. You can keep many
 sessions in parallel — each one has its own message history and can
 be bound to its own pipeline.
 
+### The chat home screen
+
+The chat home is the first surface that opens after onboarding. It is
+now built on the Knotwork design system and shows, top to bottom:
+
+- A **top app bar** with the current thread title, the active model
+  name beneath it (e.g. *Gemma 2 · 2B*), a menu icon on the left that
+  opens the thread drawer, and a model picker plus overflow menu on
+  the right.
+- A **message list** with user and assistant bubbles, inline tool
+  invocations, and any clarification or HITL confirmation card the
+  agent surfaced for the current run.
+- A pinned **composer** at the bottom — type a message, attach a file
+  with the paperclip, or dictate with the microphone. The send button
+  morphs into a stop button while the agent is generating.
+
+The surface adapts to nine deterministic visual states, all reachable
+from the same screen:
+
+| State            | When it appears                                                 |
+|------------------|-----------------------------------------------------------------|
+| Empty            | A brand-new thread with no messages — shows sample prompts.     |
+| Idle             | History present, no in-flight request. The default.             |
+| Generating       | The assistant is producing tokens.                              |
+| HITL Confirm     | A tool call awaits your approval (read-only / sensitive /       |
+|                  | destructive — each tier surfaces a different confirmation UI).  |
+| Clarification    | The assistant asks you for more details before continuing.      |
+| Error            | The model or network failed; an inline tile + retry appears.    |
+| Drawer Open      | The thread list slides in as an alt-nav drawer over the chat.   |
+| Console Expanded | The agent console rises from the bottom over the chat surface.  |
+| Dark             | A cross-cutting variant — every state respects the system theme. |
+
+**Debug builds** expose a state picker reachable by triple-tapping the
+title row, which flips between every documented state for visual QA.
+The picker is not present in release builds.
+
 ### Switching, creating, and renaming chats
 
 Open the side drawer from the chat screen (tap the menu icon, or

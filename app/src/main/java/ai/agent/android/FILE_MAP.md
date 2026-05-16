@@ -217,20 +217,27 @@ This file maps the contents of the main application package.
       - `MoreScreen.kt` - Material3 `ListItem` list with Memory / Models / Prompts / Task monitor / Live metrics / Settings / About rows.
     - `about/` - About screen (Phase 21 / Task 4 stub; full body in Task 10).
       - `AboutScreen.kt` - App name + version (`BuildConfig.VERSION_NAME`) + license name.
-    - `chat/` - Chat screen components.
-      - `AgentThoughtIndicator.kt` - Indicator for agent thinking.
-      - `ApprovalBanner.kt` - Prominent inline approval prompt rendered above the chat input bar whenever the orchestrator is in `WaitingForApproval`; complements the compact console-line indicator with full-width Approve / Deny buttons and a risk-coloured badge.
-      - `ChatExportPayload.kt` - Payload carrying exported chat JSON to the share sheet.
-      - `ChatScreen.kt` - Chat UI screen.
-      - `ChatUiState.kt` - Chat UI state.
-      - `ChatViewModel.kt` - Chat ViewModel.
-      - `ClarificationCard.kt` - Inline chat card rendering an `AwaitingClarification` request (pending/answered/timed-out states with countdown).
-      - `ClarificationCardUiModel.kt` - UI projection of a clarification request held in `ChatUiState.clarificationCards`.
-      - `ConsoleFullLogSheet.kt` - Expanded-console `ModalBottomSheet` (Phase 17.5): renders the full chronological log of the active session with millisecond timestamps, filter chips, `Clear` / `Copy all` actions, auto-scroll, and a `↓ New events` FAB.
-      - `ConsoleLogFilter.kt` - Pure-Kotlin enum (`All / Nodes / Tools / Memory / Errors`) backing the filter-chip row in the expanded console, plus the `matches(event)` predicate.
-      - `ConsolePanelCollapsed.kt` - Stateless 56dp mini-console rendered above the chat input; shows the last 3 `ConsoleEvent`s in monospace with type-coded colors and `HH:mm:ss [TAG] message` formatting.
-      - `PipelineSummary.kt` - Lightweight UI projection of a pipeline (id + name) used by the chat-screen pipeline selectors and TopAppBar subtitle.
-      - `PipelineTraceCard.kt` - Pipeline trace UI component.
+    - `chat/` - Chat surface (Phase 21 / Task 8: the redesigned `home/` package is the production surface; `legacy/` keeps the original implementation while orchestrator integration is pending).
+      - `home/` - Redesigned Knotwork chat home (Phase 21 / Task 8). Wired to `CHAT_TAB` via `AppNavGraph`.
+        - `ChatHomeScreen.kt` - Stateful entry composable: subscribes to `ChatHomeViewModel`, maps `ChatHomeUiState → ChatHomeViewState`, threads the debug state picker, owns IME / navigation-bar insets.
+        - `ChatHomeUiState.kt` - Sealed UI state for the 9-state matrix (Empty / Idle / Generating / HitlConfirm(Risk) / Clarification / Error(message) / DrawerOpen / ConsoleExpanded(snap); dark theme is cross-cutting).
+        - `ChatHomeViewModel.kt` - Stub Hilt ViewModel exposing `state: StateFlow<ChatHomeUiState>`. Drives `Idle → Generating → Idle` round-trip on `sendMessage`; debug-only `forceState` for the picker. Orchestrator wiring lands post-v0.1.
+        - `ChatHomeStateMapping.kt` - Pure-Kotlin mapper from `ChatHomeUiState` to the catalog `ChatHomeViewState`, plus debug-picker fixtures and the `DebugStateIds` constants.
+        - `ChatHomeDebugStatePicker.kt` - Triple-tap state picker (`DropdownMenu`) — visible only in debug builds via `BuildConfig.DEBUG` guard.
+      - `legacy/` - Original chat surface preserved for post-v0.1 orchestrator integration. Not wired into navigation today.
+        - `AgentThoughtIndicator.kt` - Indicator for agent thinking.
+        - `ApprovalBanner.kt` - Prominent inline approval prompt rendered above the chat input bar whenever the orchestrator is in `WaitingForApproval`; complements the compact console-line indicator with full-width Approve / Deny buttons and a risk-coloured badge.
+        - `ChatExportPayload.kt` - Payload carrying exported chat JSON to the share sheet.
+        - `ChatScreen.kt` - Legacy chat UI screen (rebound to `CHAT_TAB` once the orchestrator-wiring task lands).
+        - `ChatUiState.kt` - Legacy chat UI state.
+        - `ChatViewModel.kt` - Legacy chat ViewModel — still wires `AgentOrchestratorUseCase`, `ChatRepository`, etc.
+        - `ClarificationCard.kt` - Inline chat card rendering an `AwaitingClarification` request (pending/answered/timed-out states with countdown).
+        - `ClarificationCardUiModel.kt` - UI projection of a clarification request held in `ChatUiState.clarificationCards`.
+        - `ConsoleFullLogSheet.kt` - Expanded-console `ModalBottomSheet` (Phase 17.5): renders the full chronological log of the active session with millisecond timestamps, filter chips, `Clear` / `Copy all` actions, auto-scroll, and a `↓ New events` FAB.
+        - `ConsoleLogFilter.kt` - Pure-Kotlin enum (`All / Nodes / Tools / Memory / Errors`) backing the filter-chip row in the expanded console, plus the `matches(event)` predicate.
+        - `ConsolePanelCollapsed.kt` - Stateless 56dp mini-console rendered above the chat input; shows the last 3 `ConsoleEvent`s in monospace with type-coded colors and `HH:mm:ss [TAG] message` formatting.
+        - `PipelineSummary.kt` - Lightweight UI projection of a pipeline (id + name) used by the chat-screen pipeline selectors and TopAppBar subtitle.
+        - `PipelineTraceCard.kt` - Pipeline trace UI component.
     - `memory/` - Memory screen components.
       - `MemoryScreen.kt` - Memory UI screen.
       - `MemoryUiState.kt` - Memory UI state.

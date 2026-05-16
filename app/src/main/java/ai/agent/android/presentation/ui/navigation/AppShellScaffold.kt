@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
@@ -70,8 +71,17 @@ fun AppShellScaffold(navController: NavHostController, content: @Composable (inn
         activity?.finish()
     }
 
+    // Wrap the whole shell in `imePadding()` so the bottom-nav + body slide
+    // up in lockstep with the keyboard. Without this the bottom-nav slot
+    // keeps reserving layout space behind the IME and any IME-padded
+    // composer above it has to compete with that reserved-but-hidden area,
+    // which produces a visible gap + a jump when the IME animation
+    // finishes (the keyboard tween and an `AnimatedVisibility` hide-anim
+    // run on their own clocks). With the whole Scaffold tracking the IME
+    // inset directly, the keyboard, bottom-nav, and composer all move on
+    // the same frame.
     Scaffold(
-        modifier = Modifier.fillMaxSize(),
+        modifier = Modifier.fillMaxSize().imePadding(),
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         bottomBar = {
             AnimatedVisibility(
