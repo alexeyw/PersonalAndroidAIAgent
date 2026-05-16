@@ -11,12 +11,10 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -70,8 +68,8 @@ private val MultiSelectChevronSize = 8.dp
 /** Visual port-dot diameter (spec §NodeCard). */
 private val PortDotVisualDiameter = 12.dp
 
-/** Touch-target diameter for ports (spec §NodeCard). */
-private val PortHitDiameter = 24.dp
+/** Half the visual port-dot — equals how far each dot protrudes past the card edge. */
+private val PortDotRadius = 6.dp
 
 /** Stroke width applied to the port-dot border. */
 private val PortDotBorderWidth = 1.dp
@@ -79,8 +77,11 @@ private val PortDotBorderWidth = 1.dp
 /** Header glyph diameter. */
 private val HeaderGlyphSize = 16.dp
 
-/** Vertical inset that pulls the inbound dot up into the header strip. */
-private val InboundDotInset = 6.dp
+/** Vertical gap between an outbound dot and its label (spec §NodeCard). */
+private val PortLabelGap = 4.dp
+
+/** Approximate height of the `LabelSm` row used for outbound port labels. */
+private val PortLabelLineHeight = 14.dp
 
 /** Header strip pulse range under [running] (lower bound). */
 private const val PULSE_LOW = 0.85f
@@ -158,15 +159,30 @@ fun NodeCard(
         else -> KnotworkTheme.elevation.el1
     }
     val headerAlpha = headerStripAlpha(running = running)
-    Surface(
-        modifier = modifier.width(NodeCardWidth),
-        color = MaterialTheme.colorScheme.surface,
-        shape = KnotworkTheme.shapes.md,
-        tonalElevation = elevation,
-        shadowElevation = elevation,
-        border = BorderStroke(width = borderWidth, color = borderColor),
-    ) {
-        Box {
+    val showOutboundLabels = ports.outbound.size > 1
+    val topInset = if (ports.inbound > 0) PortDotRadius else 0.dp
+    val bottomInset = when {
+        ports.outbound.isEmpty() -> 0.dp
+        showOutboundLabels -> PortDotRadius + PortLabelGap + PortLabelLineHeight
+        else -> PortDotRadius
+    }
+    // The outer Box hosts the Surface AND the port dots as siblings. Surface
+    // clips its content to its rounded shape; placing dots at the Box level
+    // (outside Surface) is what lets them protrude past the card edge per
+    // spec ("baseline -6 dp into the header"). The Box pads the Surface
+    // inward by exactly the protruding extent so dot centres land on the
+    // Surface edges.
+    Box(modifier = modifier.width(NodeCardWidth)) {
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = topInset, bottom = bottomInset),
+            color = MaterialTheme.colorScheme.surface,
+            shape = KnotworkTheme.shapes.md,
+            tonalElevation = elevation,
+            shadowElevation = elevation,
+            border = BorderStroke(width = borderWidth, color = borderColor),
+        ) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -181,15 +197,19 @@ fun NodeCard(
                 )
                 NodeBody(title = title, subtitle = subtitle, error = error)
             }
-            if (ports.inbound > 0) {
-                InboundDot(color = headerColor)
-            }
-            if (ports.outbound.isNotEmpty()) {
-                OutboundPortRow(ports = ports.outbound, color = headerColor)
-            }
-            if (multiSelected) {
-                MultiSelectChevron()
-            }
+        }
+        if (ports.inbound > 0) {
+            InboundDot(color = headerColor)
+        }
+        if (ports.outbound.isNotEmpty()) {
+            OutboundPortRow(
+                ports = ports.outbound,
+                color = headerColor,
+                showLabels = showOutboundLabels,
+            )
+        }
+        if (multiSelected) {
+            MultiSelectChevron()
         }
     }
 }
@@ -271,44 +291,61 @@ private fun NodeBody(title: String, subtitle: String?, error: NodeError?) {
     }
 }
 
-/** Inbound dot at the top-center, baseline pulled 6 dp up into the header. */
+/**
+ * Inbound dot — 12 dp visual circle centred on the Surface top edge.
+ *
+ * The dot is placed at the outer Box's `TopCenter`, so its top sits at
+ * the Box top and its bottom 6 dp below. The Surface above is inset by
+ * the same 6 dp, which means the dot's vertical centre lands exactly on
+ * the Surface top edge (half above the card, half inside the header
+ * strip — per spec "baseline -6 dp into the header").
+ *
+ * Hit-target wrapping (drag-from-port) is the canvas's responsibility in
+ * Task 9; the catalog renders the visual only.
+ */
 @Composable
 private fun androidx.compose.foundation.layout.BoxScope.InboundDot(color: Color) {
     PortDot(
         color = color,
-        modifier = Modifier
-            .align(Alignment.TopCenter)
-            .offset(y = -InboundDotInset),
+        modifier = Modifier.align(Alignment.TopCenter),
     )
 }
 
 /**
- * Outbound port row pinned to the bottom edge. Single ports render the dot
- * only; multi-port nodes render each dot with a `LabelSm` underneath so the
- * canvas can identify each branch without consulting the edge labels.
+ * Outbound port row pinned to the bottom edge of the outer Box. Single
+ * ports render the dot only; multi-port nodes render each dot with a
+ * `LabelSm` underneath so the canvas can identify each branch without
+ * consulting the edge labels.
+ *
+ * Vertical alignment is computed by the outer card layout — the Surface
+ * is inset by `PortDotRadius` (single-port) or `PortDotRadius + gap +
+ * label height` (multi-port), so the dot centres always land on the
+ * Surface bottom edge regardless of whether labels are present.
  */
 @Composable
-private fun androidx.compose.foundation.layout.BoxScope.OutboundPortRow(ports: List<OutboundPort>, color: Color) {
-    val showLabels = ports.size > 1
+private fun androidx.compose.foundation.layout.BoxScope.OutboundPortRow(
+    ports: List<OutboundPort>,
+    color: Color,
+    showLabels: Boolean,
+) {
     Row(
         modifier = Modifier
             .align(Alignment.BottomCenter)
             .fillMaxWidth()
-            .offset(y = InboundDotInset)
             .padding(horizontal = KnotworkTheme.spacing.sp3),
         horizontalArrangement = Arrangement.spacedBy(
             space = KnotworkTheme.spacing.sp2,
             alignment = Alignment.CenterHorizontally,
         ),
-        verticalAlignment = Alignment.Top,
+        verticalAlignment = Alignment.Bottom,
     ) {
         ports.forEach { port ->
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp1),
             ) {
                 PortDot(color = color, modifier = Modifier)
                 if (showLabels) {
+                    Spacer(modifier = Modifier.size(PortLabelGap))
                     Text(
                         text = port.label,
                         style = KnotworkTextStyles.LabelSm,
@@ -323,23 +360,16 @@ private fun androidx.compose.foundation.layout.BoxScope.OutboundPortRow(ports: L
     }
 }
 
-/** Single port dot — 12 dp visual inside a 24 dp invisible touch target. */
+/** Single port dot — 12 dp filled circle with a 1 dp surface-coloured ring. */
 @Composable
 private fun PortDot(color: Color, modifier: Modifier = Modifier) {
     Box(
         modifier = modifier
-            .size(PortHitDiameter)
-            .padding(PaddingValues(all = (PortHitDiameter - PortDotVisualDiameter) / 2)),
-        contentAlignment = Alignment.Center,
-    ) {
-        Box(
-            modifier = Modifier
-                .size(PortDotVisualDiameter)
-                .clip(CircleShape)
-                .background(color = color)
-                .border(width = PortDotBorderWidth, color = MaterialTheme.colorScheme.surface, shape = CircleShape),
-        )
-    }
+            .size(PortDotVisualDiameter)
+            .clip(CircleShape)
+            .background(color = color)
+            .border(width = PortDotBorderWidth, color = MaterialTheme.colorScheme.surface, shape = CircleShape),
+    )
 }
 
 /** 4 dp accent-300 chevron rendered in the top-right when [multiSelected]. */
