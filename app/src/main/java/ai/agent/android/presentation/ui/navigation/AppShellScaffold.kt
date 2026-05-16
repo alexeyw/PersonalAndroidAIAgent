@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
@@ -20,6 +21,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.navigation.NavHostController
 import androidx.navigation.NavOptionsBuilder
@@ -62,7 +64,14 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 fun AppShellScaffold(navController: NavHostController, content: @Composable (innerPadding: PaddingValues) -> Unit) {
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute: String? = navBackStackEntry?.destination?.route
-    val showBottomNav = shouldShowBottomNav(currentRoute)
+    // Hide the bottom-nav whenever the IME is visible. Without this the
+    // nav-bar slot still reserves its layout height behind the keyboard,
+    // and any IME-padded composer above it lands above an empty strip
+    // (the reserved-but-now-IME-covered nav-bar area). Modern chat apps
+    // collapse the bottom nav on keyboard open for the same reason.
+    val imeBottomInsetPx = WindowInsets.ime.getBottom(LocalDensity.current)
+    val isImeVisible = imeBottomInsetPx > 0
+    val showBottomNav = shouldShowBottomNav(currentRoute) && !isImeVisible
     val activity = LocalActivity.current
 
     val isOnTabRoot = TAB_DESTINATIONS.any { it.route == currentRoute }

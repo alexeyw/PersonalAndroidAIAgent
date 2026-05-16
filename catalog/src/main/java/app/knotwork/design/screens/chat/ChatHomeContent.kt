@@ -26,7 +26,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.systemBars
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
@@ -421,8 +421,10 @@ private fun ChatHomeDrawerOverlay(state: ChatHomeViewState, callbacks: ChatHomeC
                 .fillMaxHeight()
                 // Reserve the system status-bar inset inside the panel so
                 // the "Threads" header doesn't collide with the device's
-                // clock / status icons.
-                .windowInsetsPadding(WindowInsets.systemBars)
+                // clock / status icons. Only the top inset — the bottom
+                // is already handled by the outer `AppShellScaffold`
+                // (which positions the body above the system nav bar).
+                .windowInsetsPadding(WindowInsets.statusBars)
                 // Absorb pointer events inside the panel so a tap on the
                 // drawer surface does not bubble up to the scrim's dismiss
                 // handler.
