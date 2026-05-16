@@ -30,8 +30,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import app.knotwork.design.R
 import app.knotwork.design.components.buttons.KnotworkPrimaryButton
 import app.knotwork.design.components.buttons.KnotworkSecondaryButton
 import app.knotwork.design.components.buttons.KnotworkTextButton
@@ -207,7 +209,9 @@ private fun JsonArgsBlock(arguments: Map<String, String>) {
             )
             Icon(
                 imageVector = if (expanded) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore,
-                contentDescription = if (expanded) "Collapse arguments" else "Expand arguments",
+                contentDescription = stringResource(
+                    if (expanded) R.string.knotwork_hitl_args_collapse else R.string.knotwork_hitl_args_expand,
+                ),
                 tint = KnotworkPalette.Accent500,
                 modifier = Modifier.size(KnotworkTheme.spacing.sp4),
             )
@@ -223,7 +227,10 @@ private fun TypedConfirmRow(value: String, onChange: (String) -> Unit) {
         onValueChange = onChange,
         placeholder = {
             Text(
-                text = "Type \"${HitlConfirmationState.DESTRUCTIVE_CONFIRM_WORD}\" to confirm",
+                text = stringResource(
+                    R.string.knotwork_hitl_typed_confirm_placeholder,
+                    HitlConfirmationState.DESTRUCTIVE_CONFIRM_WORD,
+                ),
                 style = KnotworkTextStyles.MonoBase,
                 color = KnotworkTheme.extended.onSurfaceDim,
             )
@@ -251,11 +258,22 @@ private fun ButtonRow(
         ),
         modifier = Modifier.fillMaxWidth(),
     ) {
-        KnotworkSecondaryButton(text = "Reject", onClick = onReject, destructive = true)
+        KnotworkSecondaryButton(
+            text = stringResource(R.string.knotwork_hitl_action_reject),
+            onClick = onReject,
+            destructive = true,
+        )
         if (HitlConfirmationState.showAlwaysAllow(risk) && onAllowAlways != null) {
-            KnotworkTextButton(text = "Always allow", onClick = onAllowAlways)
+            KnotworkTextButton(
+                text = stringResource(R.string.knotwork_hitl_action_always_allow),
+                onClick = onAllowAlways,
+            )
         }
-        KnotworkPrimaryButton(text = "Allow once", onClick = onAllowOnce, enabled = allowOnceEnabled)
+        KnotworkPrimaryButton(
+            text = stringResource(R.string.knotwork_hitl_action_allow_once),
+            onClick = onAllowOnce,
+            enabled = allowOnceEnabled,
+        )
     }
 }
 

@@ -43,8 +43,10 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalWindowInfo
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import app.knotwork.design.R
 import app.knotwork.design.components.buttons.KnotworkSecondaryButton
 import app.knotwork.design.theme.KnotworkTheme
 import app.knotwork.design.tokens.KnotworkTextStyles
@@ -240,7 +242,7 @@ private fun BubbleFooter(role: ChatRole, metadata: ChatMetadata) {
         }
         if (metadata.tokens != null) {
             Text(
-                text = "${metadata.tokens} tok",
+                text = stringResource(R.string.knotwork_chat_message_token_count, metadata.tokens),
                 style = KnotworkTextStyles.MonoSm,
                 color = KnotworkTheme.extended.onSurfaceMuted,
             )
@@ -252,22 +254,26 @@ private fun BubbleFooter(role: ChatRole, metadata: ChatMetadata) {
 /** Trailing micro-glyph reflecting [ChatMessageStatus]. */
 @Composable
 private fun StatusGlyph(status: ChatMessageStatus) {
-    val (icon, tint, description) = when (status) {
+    val (icon, tint, descriptionRes) = when (status) {
         ChatMessageStatus.Pending -> Triple(
             Icons.Outlined.HourglassEmpty,
             KnotworkTheme.extended.onSurfaceMuted,
-            "Sending",
+            R.string.knotwork_chat_message_status_pending,
         )
-        ChatMessageStatus.Sent -> Triple(Icons.Outlined.Check, KnotworkTheme.extended.onSurfaceMuted, "Sent")
+        ChatMessageStatus.Sent -> Triple(
+            Icons.Outlined.Check,
+            KnotworkTheme.extended.onSurfaceMuted,
+            R.string.knotwork_chat_message_status_sent,
+        )
         ChatMessageStatus.Failed -> Triple(
             Icons.Outlined.ErrorOutline,
             KnotworkTheme.extended.signalError,
-            "Failed to send",
+            R.string.knotwork_chat_message_status_failed,
         )
     }
     Icon(
         imageVector = icon,
-        contentDescription = description,
+        contentDescription = stringResource(descriptionRes),
         tint = tint,
         modifier = Modifier.size(KnotworkTheme.spacing.sp3),
     )
@@ -384,7 +390,7 @@ private fun TextBubble(role: ChatRole, text: String, onContextAction: ((ChatCont
                 onDismissRequest = { menuExpanded = false },
             ) {
                 DropdownMenuItem(
-                    text = { Text("Copy") },
+                    text = { Text(stringResource(R.string.knotwork_chat_message_action_copy)) },
                     leadingIcon = { Icon(Icons.Outlined.ContentCopy, contentDescription = null) },
                     onClick = {
                         menuExpanded = false
@@ -392,7 +398,7 @@ private fun TextBubble(role: ChatRole, text: String, onContextAction: ((ChatCont
                     },
                 )
                 DropdownMenuItem(
-                    text = { Text("Re-run") },
+                    text = { Text(stringResource(R.string.knotwork_chat_message_action_rerun)) },
                     leadingIcon = { Icon(Icons.Outlined.Refresh, contentDescription = null) },
                     onClick = {
                         menuExpanded = false
@@ -400,7 +406,7 @@ private fun TextBubble(role: ChatRole, text: String, onContextAction: ((ChatCont
                     },
                 )
                 DropdownMenuItem(
-                    text = { Text("Rate") },
+                    text = { Text(stringResource(R.string.knotwork_chat_message_action_rate)) },
                     leadingIcon = { Icon(Icons.Outlined.Star, contentDescription = null) },
                     onClick = {
                         menuExpanded = false
@@ -443,7 +449,10 @@ private fun ErrorTile(message: String, onRetry: (() -> Unit)?) {
             )
         }
         if (onRetry != null) {
-            KnotworkSecondaryButton(text = "Retry", onClick = onRetry)
+            KnotworkSecondaryButton(
+                text = stringResource(R.string.knotwork_chat_message_error_retry),
+                onClick = onRetry,
+            )
         }
     }
 }
@@ -481,9 +490,15 @@ private fun ToolCallTile(content: ChatContent.ToolCall) {
                 color = MaterialTheme.colorScheme.onSurface,
             )
             val resultLine = when (content.status) {
-                ToolCallStatus.Running -> "→ running…"
-                ToolCallStatus.Failed -> "→ ${content.result ?: "error"}"
-                ToolCallStatus.Success -> "→ ${content.result ?: "ok"}"
+                ToolCallStatus.Running -> stringResource(R.string.knotwork_chat_message_tool_running)
+                ToolCallStatus.Failed -> stringResource(
+                    R.string.knotwork_chat_message_tool_arrow,
+                    content.result ?: stringResource(R.string.knotwork_chat_message_tool_error),
+                )
+                ToolCallStatus.Success -> stringResource(
+                    R.string.knotwork_chat_message_tool_arrow,
+                    content.result ?: stringResource(R.string.knotwork_chat_message_tool_ok),
+                )
             }
             Text(
                 text = resultLine,
@@ -503,7 +518,7 @@ private fun SystemMessage(content: ChatContent, metadata: ChatMetadata, modifier
         is ChatContent.Text -> content.text
         is ChatContent.Markdown -> content.source
         is ChatContent.Error -> content.message
-        else -> "System update"
+        else -> stringResource(R.string.knotwork_chat_message_system_default)
     }
     Box(
         contentAlignment = Alignment.Center,

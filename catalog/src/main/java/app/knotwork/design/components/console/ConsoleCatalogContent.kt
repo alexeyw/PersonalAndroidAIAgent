@@ -94,6 +94,9 @@ fun ConsoleCatalogContent() {
                 traces = DemoTraces,
                 filter = ConsoleFilter.allOn,
                 onFilterChange = {},
+                onSearch = {},
+                onCopyAll = {},
+                onClear = {},
             )
 
             SectionLabel(text = "ConsolePane — Partial · Logs")
@@ -108,6 +111,9 @@ fun ConsoleCatalogContent() {
                 traces = DemoTraces,
                 filter = filter,
                 onFilterChange = { filter = it },
+                onSearch = {},
+                onCopyAll = {},
+                onClear = {},
             )
 
             SectionLabel(text = "ConsolePane — Partial · Vars")
@@ -121,6 +127,9 @@ fun ConsoleCatalogContent() {
                 traces = DemoTraces,
                 filter = ConsoleFilter.allOn,
                 onFilterChange = {},
+                onSearch = {},
+                onCopyAll = {},
+                onClear = {},
             )
 
             SectionLabel(text = "ConsolePane — Partial · Traces")
@@ -134,6 +143,9 @@ fun ConsoleCatalogContent() {
                 traces = DemoTraces,
                 filter = ConsoleFilter.allOn,
                 onFilterChange = {},
+                onSearch = {},
+                onCopyAll = {},
+                onClear = {},
             )
         }
     }

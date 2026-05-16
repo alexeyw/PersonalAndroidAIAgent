@@ -29,7 +29,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
+import app.knotwork.design.R
 import app.knotwork.design.components.buttons.KnotworkIconButton
 import app.knotwork.design.theme.KnotworkTheme
 import app.knotwork.design.tokens.KnotworkTextStyles
@@ -112,7 +114,7 @@ fun ChatComposer(
         ) {
             KnotworkIconButton(
                 onClick = onAttach,
-                contentDescription = "Attach file",
+                contentDescription = stringResource(R.string.knotwork_composer_attach),
                 icon = Icons.Outlined.AttachFile,
             )
             OutlinedTextField(
@@ -120,7 +122,7 @@ fun ChatComposer(
                 onValueChange = onValueChange,
                 placeholder = {
                     Text(
-                        text = "Message…",
+                        text = stringResource(R.string.knotwork_composer_placeholder),
                         style = KnotworkTextStyles.BodyBase,
                         color = KnotworkTheme.extended.onSurfaceDim,
                     )
@@ -132,7 +134,7 @@ fun ChatComposer(
             )
             KnotworkIconButton(
                 onClick = onVoice,
-                contentDescription = "Start voice input",
+                contentDescription = stringResource(R.string.knotwork_composer_voice),
                 icon = Icons.Outlined.Mic,
             )
             SendOrStopButton(state = state, onSend = onSend, onStop = onStop)
@@ -157,18 +159,22 @@ private fun SendOrStopButton(state: ComposerState, onSend: () -> Unit, onStop: (
         label = "composer_send_stop_morph",
     ) { isGenerating ->
         val icon: ImageVector
-        val description: String
+        val descriptionRes: Int
         val onClick: () -> Unit
         if (isGenerating) {
             icon = Icons.Outlined.Stop
-            description = "Stop generating"
+            descriptionRes = R.string.knotwork_composer_stop
             onClick = onStop
         } else {
             icon = Icons.Filled.ArrowUpward
-            description = "Send message"
+            descriptionRes = R.string.knotwork_composer_send
             onClick = onSend
         }
-        KnotworkIconButton(onClick = onClick, contentDescription = description, icon = icon)
+        KnotworkIconButton(
+            onClick = onClick,
+            contentDescription = stringResource(descriptionRes),
+            icon = icon,
+        )
     }
 }
 

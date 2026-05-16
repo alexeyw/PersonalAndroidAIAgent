@@ -29,33 +29,62 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import app.knotwork.design.R
 import app.knotwork.design.theme.KnotworkTheme
 import app.knotwork.design.tokens.KnotworkPalette
 import app.knotwork.design.tokens.KnotworkTextStyles
 
-/** Height of the sticky drag-handle + tab-strip + actions header. */
-private val ConsoleHeaderHeight = 56.dp
+/** Height of the full (Partial / Full) header — drag handle + tab strip + actions row. */
+private val FullHeaderHeight = 56.dp
 
-/** Drag handle bar — `32 × 4 dp` centred. */
+/** Drag handle bar — `32 × 4 dp` centred at the top of every header. */
 private val DragHandleWidth = 32.dp
 private val DragHandleHeight = 4.dp
+
+/** Vertical area reserved for the drag handle bar (handle + padding above/below). */
+private val DragHandleAreaHeight = 8.dp
+
+/** Compact tab-strip height used by the Peek header. */
+private val PeekTabStripHeight = 18.dp
+
+/** Single-line ticker height used by the Peek header. */
+private val PeekTickerHeight = 16.dp
+
+/** Combined Peek-header vertical budget (`8 + 18 + 16 = 42`); leaves `2 dp` slack inside the 44 dp snap. */
+@Suppress("UnusedPrivateProperty") // Documented sum of the three Peek rows — kept as an explicit invariant marker.
+private val PeekHeaderBudget: Dp = DragHandleAreaHeight + PeekTabStripHeight + PeekTickerHeight
 
 /** Opacity of the drag handle relative to `consoleFg`. */
 private const val DRAG_HANDLE_ALPHA = 0.30f
 
-/** Selected-tab underline thickness. */
+/** Selected-tab underline thickness (used by Partial / Full headers only — Peek tabs are label-only). */
 private val TabIndicatorHeight = 2.dp
 
-/** Width of one tab in the tab strip. */
-private val TabWidth = 72.dp
+/** Width of one tab in the full (Partial / Full) tab strip. */
+private val FullTabWidth = 72.dp
 
 /** Width of the leading accent strip on every log row. */
 private val LogAccentStripWidth = 2.dp
 
 /** Maximum length of the bar in a trace row, used to derive the per-row width. */
 private val TraceBarMaxWidth = 160.dp
+
+/** Opacity of inactive tab labels relative to `consoleFg`. */
+private const val INACTIVE_TAB_ALPHA = 0.55f
+
+/** Alpha applied to the source-filter chip when active. */
+private const val SOURCE_CHIP_ON_ALPHA = 0.45f
+
+/** Alpha applied to the source-filter chip when inactive. */
+private const val SOURCE_CHIP_OFF_ALPHA = 0.10f
+
+/** Height of one trace bar — thin sub-row beneath the row text. */
+private val TraceBarHeight = 4.dp
 
 /**
  * Knotwork agent console — bottom-sheet container with three snap points
@@ -72,7 +101,21 @@ private val TraceBarMaxWidth = 160.dp
  *
  * Visual contract: `compose/components/README.md` §Chat surface §ConsolePane.
  *
- * @param snap current snap point. Drives the pane height.
+ * **Peek layout (44 dp budget).** The full Partial/Full header is 56 dp,
+ * so Peek renders a *separate* compact header (8 dp drag handle + 18 dp
+ * label-only tab strip + 16 dp ticker = 42 dp) that fits the 44 dp snap
+ * and preserves the spec's "drag handle + tab strip + last-line ticker"
+ * promise. The Search / Copy all / Clear / Close actions only appear in
+ * Partial / Full where there is room for 48 dp icon buttons.
+ *
+ * **Header actions.** Every action button in the Partial/Full header
+ * fires the matching caller-supplied callback ([onSearch], [onCopyAll],
+ * [onClear], plus the close affordance which calls [onSnapChange] with
+ * `ConsoleSnap.Peek`). Pass a no-op lambda if a host explicitly wants
+ * to hide functionality, but every button is always wired — no dead UI.
+ *
+ * @param snap current snap point. Drives the pane height and the
+ * Peek-vs-full header switch.
  * @param onSnapChange invoked when the user requests a new snap (drag
  * handle tap cycles through snaps, Close header action collapses to Peek).
  * @param tab currently-selected tab.
@@ -82,6 +125,11 @@ private val TraceBarMaxWidth = 160.dp
  * @param traces Traces-tab data.
  * @param filter source filter applied to [logs].
  * @param onFilterChange invoked when the user toggles a source filter.
+ * @param onSearch invoked when the user taps the header Search action
+ * (Partial / Full only). Screens typically toggle an inline search bar.
+ * @param onCopyAll invoked when the user taps the header Copy-all action.
+ * @param onClear invoked when the user taps the header Clear action.
+ * Screens typically confirm via a dialog before clearing the log.
  * @param modifier optional layout modifier applied to the pane root.
  */
 @Composable
@@ -96,6 +144,9 @@ fun ConsolePane(
     traces: List<ConsoleTraceSpan>,
     filter: ConsoleFilter,
     onFilterChange: (ConsoleFilter) -> Unit,
+    onSearch: () -> Unit,
+    onCopyAll: () -> Unit,
+    onClear: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -104,13 +155,18 @@ fun ConsolePane(
             .height(snap.height)
             .background(color = KnotworkTheme.extended.consoleBg),
     ) {
-        ConsoleHeader(
-            snap = snap,
-            onSnapChange = onSnapChange,
-            tab = tab,
-            onTabChange = onTabChange,
-        )
-        if (snap != ConsoleSnap.Peek) {
+        if (snap == ConsoleSnap.Peek) {
+            PeekHeader(tab = tab, onTabChange = onTabChange, logs = logs, onSnapChange = onSnapChange)
+        } else {
+            FullHeader(
+                snap = snap,
+                onSnapChange = onSnapChange,
+                tab = tab,
+                onTabChange = onTabChange,
+                onSearch = onSearch,
+                onCopyAll = onCopyAll,
+                onClear = onClear,
+            )
             when (tab) {
                 ConsoleTab.Logs -> ConsoleLogsBody(
                     logs = logs,
@@ -120,60 +176,121 @@ fun ConsolePane(
                 ConsoleTab.Vars -> ConsoleVarsBody(rows = vars)
                 ConsoleTab.Traces -> ConsoleTracesBody(spans = traces)
             }
-        } else {
-            PeekTickerRow(logs = logs)
         }
     }
 }
 
-/** Sticky header: drag handle + tab strip + trailing actions. */
+/**
+ * Compact header used in the 44 dp Peek snap. Renders drag handle, a
+ * label-only tab strip, and a single-line ticker — totalling 42 dp inside
+ * the 44 dp budget.
+ */
 @Composable
-private fun ConsoleHeader(
+private fun PeekHeader(
+    tab: ConsoleTab,
+    onTabChange: (ConsoleTab) -> Unit,
+    logs: List<ConsoleLine>,
+    onSnapChange: (ConsoleSnap) -> Unit,
+) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        DragHandleStrip(onClick = { onSnapChange(ConsoleSnap.Partial) })
+        PeekTabStrip(tab = tab, onTabChange = onTabChange)
+        PeekTickerRow(logs = logs)
+    }
+}
+
+/** Drag handle area — 8 dp tall, the 4 dp bar centred horizontally. */
+@Composable
+private fun DragHandleStrip(onClick: () -> Unit) {
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(DragHandleAreaHeight)
+            .clickable(onClick = onClick),
+    ) {
+        Box(
+            modifier = Modifier
+                .size(width = DragHandleWidth, height = DragHandleHeight)
+                .clip(RoundedCornerShape(percent = 50))
+                .background(color = KnotworkTheme.extended.consoleFg.copy(alpha = DRAG_HANDLE_ALPHA)),
+        )
+    }
+}
+
+/** Label-only tab strip used in the Peek header — selected tab is bold-bright, others dim. */
+@Composable
+private fun PeekTabStrip(tab: ConsoleTab, onTabChange: (ConsoleTab) -> Unit) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp3),
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(PeekTabStripHeight)
+            .padding(horizontal = KnotworkTheme.spacing.sp3),
+    ) {
+        ConsoleTab.entries.forEach { entry ->
+            val selected = entry == tab
+            Text(
+                text = entry.name,
+                style = KnotworkTextStyles.LabelSm,
+                color = if (selected) {
+                    KnotworkTheme.extended.consoleFg
+                } else {
+                    KnotworkTheme.extended.consoleFg.copy(alpha = INACTIVE_TAB_ALPHA)
+                },
+                modifier = Modifier.clickable { onTabChange(entry) },
+            )
+        }
+    }
+}
+
+/** Full Partial/Full header: drag handle + tab strip + trailing actions. */
+@Composable
+@Suppress("LongParameterList") // Internal header — split-out further would just shuffle the params.
+private fun FullHeader(
     snap: ConsoleSnap,
     onSnapChange: (ConsoleSnap) -> Unit,
     tab: ConsoleTab,
     onTabChange: (ConsoleTab) -> Unit,
+    onSearch: () -> Unit,
+    onCopyAll: () -> Unit,
+    onClear: () -> Unit,
 ) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .height(ConsoleHeaderHeight)
+            .height(FullHeaderHeight)
             .background(color = KnotworkTheme.extended.consoleBg),
     ) {
-        Box(
-            contentAlignment = Alignment.Center,
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(KnotworkTheme.spacing.sp3)
-                .clickable {
-                    val next = when (snap) {
-                        ConsoleSnap.Peek -> ConsoleSnap.Partial
-                        ConsoleSnap.Partial -> ConsoleSnap.Full
-                        ConsoleSnap.Full -> ConsoleSnap.Peek
-                    }
-                    onSnapChange(next)
-                },
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(width = DragHandleWidth, height = DragHandleHeight)
-                    .clip(RoundedCornerShape(percent = 50))
-                    .background(color = KnotworkTheme.extended.consoleFg.copy(alpha = DRAG_HANDLE_ALPHA)),
-            )
-        }
+        DragHandleStrip(
+            onClick = {
+                val next = when (snap) {
+                    ConsoleSnap.Peek -> ConsoleSnap.Partial
+                    ConsoleSnap.Partial -> ConsoleSnap.Full
+                    ConsoleSnap.Full -> ConsoleSnap.Peek
+                }
+                onSnapChange(next)
+            },
+        )
         Row(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier.fillMaxWidth().weight(1f),
         ) {
-            ConsoleTabStrip(tab = tab, onTabChange = onTabChange, modifier = Modifier.weight(1f))
-            ConsoleActions(onClose = { onSnapChange(ConsoleSnap.Peek) })
+            FullTabStrip(tab = tab, onTabChange = onTabChange, modifier = Modifier.weight(1f))
+            ConsoleActions(
+                onSearch = onSearch,
+                onCopyAll = onCopyAll,
+                onClear = onClear,
+                onClose = { onSnapChange(ConsoleSnap.Peek) },
+            )
         }
     }
 }
 
 /** Three-tab strip with a 2 dp accent underline on the selected tab. */
 @Composable
-private fun ConsoleTabStrip(tab: ConsoleTab, onTabChange: (ConsoleTab) -> Unit, modifier: Modifier = Modifier) {
+private fun FullTabStrip(tab: ConsoleTab, onTabChange: (ConsoleTab) -> Unit, modifier: Modifier = Modifier) {
     Row(modifier = modifier.fillMaxHeight()) {
         ConsoleTab.entries.forEach { entry ->
             val selected = entry == tab
@@ -181,7 +298,7 @@ private fun ConsoleTabStrip(tab: ConsoleTab, onTabChange: (ConsoleTab) -> Unit, 
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center,
                 modifier = Modifier
-                    .width(TabWidth)
+                    .width(FullTabWidth)
                     .fillMaxHeight()
                     .clickable { onTabChange(entry) },
             ) {
@@ -197,7 +314,7 @@ private fun ConsoleTabStrip(tab: ConsoleTab, onTabChange: (ConsoleTab) -> Unit, 
                 Spacer(modifier = Modifier.height(KnotworkTheme.spacing.sp1))
                 Box(
                     modifier = Modifier
-                        .size(width = TabWidth, height = TabIndicatorHeight)
+                        .size(width = FullTabWidth, height = TabIndicatorHeight)
                         .background(
                             color = if (selected) KnotworkPalette.Accent400 else Color.Transparent,
                         ),
@@ -207,27 +324,36 @@ private fun ConsoleTabStrip(tab: ConsoleTab, onTabChange: (ConsoleTab) -> Unit, 
     }
 }
 
-/** Opacity of inactive tab labels relative to `consoleFg`. */
-private const val INACTIVE_TAB_ALPHA = 0.55f
-
 /** Trailing action row: Search / Copy all / Clear / Close. */
 @Composable
-private fun ConsoleActions(onClose: () -> Unit) {
+private fun ConsoleActions(onSearch: () -> Unit, onCopyAll: () -> Unit, onClear: () -> Unit, onClose: () -> Unit) {
     Row(verticalAlignment = Alignment.CenterVertically) {
-        ConsoleHeaderIcon(icon = Icons.Outlined.Search, contentDescription = "Search log") {}
-        ConsoleHeaderIcon(icon = Icons.Outlined.ContentCopy, contentDescription = "Copy all") {}
-        ConsoleHeaderIcon(icon = Icons.Outlined.DeleteSweep, contentDescription = "Clear log") {}
-        ConsoleHeaderIcon(icon = Icons.Outlined.Close, contentDescription = "Collapse console", onClick = onClose)
+        ConsoleHeaderIcon(
+            icon = Icons.Outlined.Search,
+            contentDescription = stringResource(R.string.knotwork_console_action_search),
+            onClick = onSearch,
+        )
+        ConsoleHeaderIcon(
+            icon = Icons.Outlined.ContentCopy,
+            contentDescription = stringResource(R.string.knotwork_console_action_copy_all),
+            onClick = onCopyAll,
+        )
+        ConsoleHeaderIcon(
+            icon = Icons.Outlined.DeleteSweep,
+            contentDescription = stringResource(R.string.knotwork_console_action_clear),
+            onClick = onClear,
+        )
+        ConsoleHeaderIcon(
+            icon = Icons.Outlined.Close,
+            contentDescription = stringResource(R.string.knotwork_console_action_close),
+            onClick = onClose,
+        )
     }
 }
 
 /** One header trailing icon — uses console-foreground tint. */
 @Composable
-private fun ConsoleHeaderIcon(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    contentDescription: String,
-    onClick: () -> Unit,
-) {
+private fun ConsoleHeaderIcon(icon: ImageVector, contentDescription: String, onClick: () -> Unit) {
     IconButton(onClick = onClick) {
         Icon(
             imageVector = icon,
@@ -237,19 +363,21 @@ private fun ConsoleHeaderIcon(
     }
 }
 
-/** Peek-snap body — single ticker row showing the last log line. */
+/** Peek-snap ticker — single line showing the last log entry. */
 @Composable
 private fun PeekTickerRow(logs: List<ConsoleLine>) {
-    val last = logs.lastOrNull() ?: return
+    val last = logs.lastOrNull()
+    val tickerText = if (last != null) "${last.timestamp} [${last.source}] ${last.text}" else ""
     Text(
-        text = "${last.timestamp} [${last.source}] ${last.text}",
+        text = tickerText,
         style = KnotworkTextStyles.MonoSm,
         color = KnotworkTheme.extended.consoleFg.copy(alpha = INACTIVE_TAB_ALPHA),
         maxLines = 1,
         overflow = TextOverflow.Ellipsis,
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = KnotworkTheme.spacing.sp3, vertical = KnotworkTheme.spacing.sp1),
+            .height(PeekTickerHeight)
+            .padding(horizontal = KnotworkTheme.spacing.sp3),
     )
 }
 
@@ -266,7 +394,7 @@ private fun ConsoleLogsBody(logs: List<ConsoleLine>, filter: ConsoleFilter, onFi
     }
 }
 
-/** One filterable source chip. Toggles inclusion of [source] in [ConsoleFilter.sources]. */
+/** One filterable source chip. Toggles inclusion of `source` in [ConsoleFilter.sources]. */
 @Composable
 private fun ConsoleSourceFilterRow(filter: ConsoleFilter, onFilterChange: (ConsoleFilter) -> Unit) {
     Row(
@@ -304,12 +432,6 @@ private fun ConsoleSourceFilterRow(filter: ConsoleFilter, onFilterChange: (Conso
         }
     }
 }
-
-/** Alpha applied to the source-filter chip when active. */
-private const val SOURCE_CHIP_ON_ALPHA = 0.45f
-
-/** Alpha applied to the source-filter chip when inactive. */
-private const val SOURCE_CHIP_OFF_ALPHA = 0.10f
 
 /** Single log row: leading accent strip + timestamp + source + text. */
 @Composable
@@ -454,9 +576,6 @@ private fun ConsoleTracesBody(spans: List<ConsoleTraceSpan>) {
         }
     }
 }
-
-/** Height of one trace bar — thin sub-row beneath the row text. */
-private val TraceBarHeight = 4.dp
 
 /** Maps a [SpanStatus] to a colour used by both the bar and the duration label. */
 @Composable

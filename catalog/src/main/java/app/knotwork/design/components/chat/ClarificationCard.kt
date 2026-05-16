@@ -24,7 +24,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
+import app.knotwork.design.R
 import app.knotwork.design.components.chips.ChipStyle
 import app.knotwork.design.components.chips.KnotworkChip
 import app.knotwork.design.theme.KnotworkTheme
@@ -81,7 +83,9 @@ fun ClarificationCard(model: ClarificationCardModel, onReply: (String) -> Unit, 
                 }
             }
         }
-        FreeformRow(placeholder = model.freeformPlaceholder, onSubmit = onReply)
+        val placeholder = model.freeformPlaceholder
+            ?: stringResource(R.string.knotwork_clarification_freeform_default)
+        FreeformRow(placeholder = placeholder, onSubmit = onReply)
     }
 }
 
@@ -121,7 +125,7 @@ private fun FreeformRow(placeholder: String, onSubmit: (String) -> Unit) {
         ) {
             Icon(
                 imageVector = Icons.Filled.ArrowUpward,
-                contentDescription = "Send reply",
+                contentDescription = stringResource(R.string.knotwork_clarification_send),
                 tint = if (canSubmit) {
                     MaterialTheme.colorScheme.primary
                 } else {
@@ -147,7 +151,7 @@ private fun RepliedSummary(text: String, modifier: Modifier = Modifier) {
             modifier = Modifier.size(KnotworkTheme.spacing.sp4),
         )
         Text(
-            text = "Replied: $text",
+            text = stringResource(R.string.knotwork_clarification_replied, text),
             style = KnotworkTextStyles.BodySm,
             color = KnotworkTheme.extended.onSurfaceMuted,
         )
