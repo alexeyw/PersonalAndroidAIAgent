@@ -10,7 +10,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import app.knotwork.design.components.buttons.KnotworkButtonsCatalogContent
+import app.knotwork.design.components.chat.ChatCatalogContent
 import app.knotwork.design.components.chips.KnotworkChipsCatalogContent
+import app.knotwork.design.components.console.ConsoleCatalogContent
 import app.knotwork.design.components.lists.KnotworkListsCatalogContent
 import app.knotwork.design.components.misc.KnotworkMiscCatalogContent
 import app.knotwork.design.theme.KnotworkTheme
@@ -50,6 +52,10 @@ fun ComponentsCatalogPage() {
             item { KnotworkListsCatalogContent() }
             item { SectionHeader(text = "Misc") }
             item { KnotworkMiscCatalogContent() }
+            item { SectionHeader(text = "Chat") }
+            item { ChatCatalogContent() }
+            item { SectionHeader(text = "Console") }
+            item { ConsoleCatalogContent() }
         }
     }
 }

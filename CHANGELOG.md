@@ -15,6 +15,45 @@ details.
 
 ### Added
 
+- Knotwork chat-surface components (Phase 21 / Task 6/11), shipped under
+  `:catalog/app.knotwork.design.components.chat.*` and
+  `:catalog/app.knotwork.design.components.console.*`:
+  - **ChatMessage** with sealed `ChatContent` (`Text`, `Markdown`,
+    `Confirmation`, `Clarification`, `Error`, `ToolCall`) — dispatches
+    per content type, applies asymmetric bubble shapes (`ChatBubbleShapes`,
+    16/16/4/16 mirrored for user vs assistant), and surfaces a long-press
+    context menu (Copy / Rerun / Rate) with haptic feedback and a 60 ms
+    scale-to-0.98 press animation. Reduced motion (per `decisions.md §14`)
+    skips the scale.
+  - **HitlConfirmationCard** — full HITL prompt with risk pill, tool
+    name, summary, collapsible JSON args block, destructive "type yes"
+    typed-confirm row, and a `Reject / Always allow / Allow once` action
+    row gated by `HitlConfirmationState.isAllowOnceEnabled(...)`
+    (pure-Kotlin helper, JVM-tested).
+  - **ClarificationCard** — quick-reply chips (`KnotworkChip(Tonal)`) +
+    free-form `OutlinedTextField` with `ImeAction.Send`; collapses to a
+    `Replied: …` summary when the model carries a `replied` value.
+  - **ChatComposer** — multiline 1..6 line composer with leading
+    attach / voice icons, trailing send button that morphs to a stop
+    button via `AnimatedContent` (200 ms crossfade; reduced motion
+    swaps instantly), and an inline `signalError` banner for the
+    `Error(message)` state.
+  - **ConsolePane** — bottom-sheet container with three snap heights
+    (`Peek` 44 dp / `Partial` 360 dp / `Full` 720 dp) and three tabs
+    (`Logs` / `Vars` / `Traces`). Always-dark surface
+    (`extended.consoleBg` / `consoleFg`) regardless of system theme.
+    Source-filter chips drive the `ConsoleFilter.matches` predicate
+    (JVM-tested); traces tab renders a thin per-row duration bar
+    relative to the longest span.
+  - **Catalog surface** — `ChatCatalogContent` and
+    `ConsoleCatalogContent` harnesses, wired into `ComponentsCatalogPage`
+    under new `Chat` and `Console` sections.
+  - **Roborazzi snapshot baselines** — five new PNGs under
+    `:catalog/src/test/snapshots/`: `chat_light.png`, `chat_dark.png`,
+    `chat_reduced_motion.png` (pinned through `FixedKnotworkA11y`),
+    `console_light.png`, `console_dark.png`. Behavioural coverage:
+    `HitlConfirmationStateTest`, `ChatBubbleShapesTest`,
+    `ConsoleFilterTest`, `ConsoleSnapTest`.
 - Knotwork base component library (Phase 21 / Task 5/11), shipped under
   `:catalog/app.knotwork.design.components.*`:
   - **Buttons** — `KnotworkPrimaryButton`, `KnotworkSecondaryButton`
