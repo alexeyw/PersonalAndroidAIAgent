@@ -2,11 +2,14 @@ package app.knotwork.design.components.pipelineeditor
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -56,10 +59,15 @@ fun NodeConfigSheet(
     onCancel: () -> Unit,
     onSave: (NodeConfig) -> Unit,
 ) {
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = false)
+    // `skipPartiallyExpanded = true` opens the sheet at its full height immediately
+    // (no half-expanded state). Tall configs — IntentRouter with several classes, LiteRt
+    // with stop-tokens + prompt + sliders, Tool with many argument rows — would
+    // otherwise hide the Save row at the bottom in the partial state, requiring an
+    // extra drag-up before the user could see it.
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val errors = NodeConfigValidation.validate(config = config, peerTitles = peerTitles)
     ModalBottomSheet(onDismissRequest = onCancel, sheetState = sheetState) {
-        NodeConfigSheetBody(
+        ScrollableNodeConfigSheetBody(
             config = config,
             errors = errors,
             onChange = onChange,
@@ -67,6 +75,66 @@ fun NodeConfigSheet(
             onSave = onSave,
         )
     }
+}
+
+/**
+ * Variant of [NodeConfigSheetBody] that splits the body into a scrollable middle
+ * section + a pinned action row, so tall configs (e.g., IntentRouter after adding a
+ * few classes) can scroll to reach Save instead of having the action row pushed off
+ * the bottom of the sheet.
+ *
+ * Lives inside the [NodeConfigSheet] wrapper rather than replacing
+ * [NodeConfigSheetBody] because the catalog harness ([PipelineEditorCatalogContent])
+ * embeds the body inside an unbounded Column — `Modifier.verticalScroll` requires
+ * bounded height and would crash at measure time in that context. The modal sheet
+ * provides bounded height (~the screen size), so scrolling works.
+ *
+ * Receiver is `ColumnScope` because `Modifier.weight(...)` needs it; Material3's
+ * `ModalBottomSheet` content slot is itself `ColumnScope.() -> Unit`, so this is the
+ * natural shape for code that runs inside it.
+ */
+@Composable
+private fun ColumnScope.ScrollableNodeConfigSheetBody(
+    config: NodeConfig,
+    errors: Map<FieldId, ValidationFailure>,
+    onChange: (NodeConfig) -> Unit,
+    onCancel: () -> Unit,
+    onSave: (NodeConfig) -> Unit,
+) {
+    val scrollState = rememberScrollState()
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            // weight(1f, fill = false): grow up to the available space inside the sheet,
+            // but never further than the children need. Combined with verticalScroll,
+            // this lets short configs render compactly while tall ones become scrollable.
+            .weight(1f, fill = false)
+            .verticalScroll(scrollState)
+            .padding(
+                start = KnotworkTheme.spacing.sp4,
+                end = KnotworkTheme.spacing.sp4,
+                top = KnotworkTheme.spacing.sp3,
+            ),
+        verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp3),
+    ) {
+        SheetHeader(type = config.type)
+        NodeConfigForms.Body(config = config, errors = errors, onChange = onChange)
+    }
+    // Action row is OUTSIDE the scrollable Column → it stays pinned to the bottom of
+    // the sheet regardless of how long the form is.
+    SheetActionRow(
+        saveEnabled = errors.isEmpty(),
+        onCancel = onCancel,
+        onSave = { onSave(config) },
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(
+                start = KnotworkTheme.spacing.sp4,
+                end = KnotworkTheme.spacing.sp4,
+                top = KnotworkTheme.spacing.sp2,
+                bottom = KnotworkTheme.spacing.sp3,
+            ),
+    )
 }
 
 /**
@@ -112,9 +180,14 @@ private fun SheetHeader(type: NodeType) {
 
 /** Bottom sticky row — Cancel + Save (Save gated on validation). */
 @Composable
-private fun SheetActionRow(saveEnabled: Boolean, onCancel: () -> Unit, onSave: () -> Unit) {
+private fun SheetActionRow(
+    saveEnabled: Boolean,
+    onCancel: () -> Unit,
+    onSave: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
     Row(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(
             space = KnotworkTheme.spacing.sp2,
             alignment = Alignment.End,
