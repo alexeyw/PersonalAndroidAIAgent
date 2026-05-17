@@ -198,7 +198,7 @@
         errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="../catalog/src/main/res/values/strings.xml"
-            line="177"
+            line="205"
             column="13"/>
     </issue>
 
@@ -209,7 +209,7 @@
         errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="../catalog/src/main/res/values/strings.xml"
-            line="178"
+            line="206"
             column="13"/>
     </issue>
 
@@ -220,7 +220,7 @@
         errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="../catalog/src/main/res/values/strings.xml"
-            line="179"
+            line="207"
             column="13"/>
     </issue>
 
@@ -231,7 +231,7 @@
         errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="../catalog/src/main/res/values/strings.xml"
-            line="185"
+            line="213"
             column="13"/>
     </issue>
 
@@ -242,7 +242,7 @@
         errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="../catalog/src/main/res/values/strings.xml"
-            line="201"
+            line="229"
             column="13"/>
     </issue>
 
@@ -253,117 +253,7 @@
         errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="../catalog/src/main/res/values/strings.xml"
-            line="204"
-            column="13"/>
-    </issue>
-
-    <issue
-        id="UnusedResources"
-        message="The resource `R.string.knotwork_onboarding_permissions_notifications_title` appears to be unused"
-        errorLine1="    &lt;string name=&quot;knotwork_onboarding_permissions_notifications_title&quot;>Notifications&lt;/string>"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="../catalog/src/main/res/values/strings.xml"
-            line="278"
-            column="13"/>
-    </issue>
-
-    <issue
-        id="UnusedResources"
-        message="The resource `R.string.knotwork_onboarding_permissions_notifications_body` appears to be unused"
-        errorLine1="    &lt;string name=&quot;knotwork_onboarding_permissions_notifications_body&quot;>Tell you when long pipelines finish.&lt;/string>"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="../catalog/src/main/res/values/strings.xml"
-            line="279"
-            column="13"/>
-    </issue>
-
-    <issue
-        id="UnusedResources"
-        message="The resource `R.string.knotwork_onboarding_permissions_microphone_title` appears to be unused"
-        errorLine1="    &lt;string name=&quot;knotwork_onboarding_permissions_microphone_title&quot;>Microphone (optional)&lt;/string>"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="../catalog/src/main/res/values/strings.xml"
-            line="281"
-            column="13"/>
-    </issue>
-
-    <issue
-        id="UnusedResources"
-        message="The resource `R.string.knotwork_onboarding_permissions_microphone_body` appears to be unused"
-        errorLine1="    &lt;string name=&quot;knotwork_onboarding_permissions_microphone_body&quot;>Voice input in Chat.&lt;/string>"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="../catalog/src/main/res/values/strings.xml"
-            line="282"
-            column="13"/>
-    </issue>
-
-    <issue
-        id="UnusedResources"
-        message="The resource `R.string.knotwork_onboarding_permissions_foreground_title` appears to be unused"
-        errorLine1="    &lt;string name=&quot;knotwork_onboarding_permissions_foreground_title&quot;>Foreground service&lt;/string>"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="../catalog/src/main/res/values/strings.xml"
-            line="284"
-            column="13"/>
-    </issue>
-
-    <issue
-        id="UnusedResources"
-        message="The resource `R.string.knotwork_onboarding_permissions_foreground_body` appears to be unused"
-        errorLine1="    &lt;string name=&quot;knotwork_onboarding_permissions_foreground_body&quot;>Keep the agent running while you switch apps.&lt;/string>"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="../catalog/src/main/res/values/strings.xml"
-            line="285"
-            column="13"/>
-    </issue>
-
-    <issue
-        id="UnusedResources"
-        message="The resource `R.string.knotwork_onboarding_permissions_storage_title` appears to be unused"
-        errorLine1="    &lt;string name=&quot;knotwork_onboarding_permissions_storage_title&quot;>Storage (scoped)&lt;/string>"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="../catalog/src/main/res/values/strings.xml"
-            line="287"
-            column="13"/>
-    </issue>
-
-    <issue
-        id="UnusedResources"
-        message="The resource `R.string.knotwork_onboarding_permissions_storage_body` appears to be unused"
-        errorLine1="    &lt;string name=&quot;knotwork_onboarding_permissions_storage_body&quot;>Save and import pipelines.&lt;/string>"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="../catalog/src/main/res/values/strings.xml"
-            line="288"
-            column="13"/>
-    </issue>
-
-    <issue
-        id="UnusedResources"
-        message="The resource `R.string.knotwork_onboarding_permissions_granted` appears to be unused"
-        errorLine1="    &lt;string name=&quot;knotwork_onboarding_permissions_granted&quot;>Granted&lt;/string>"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="../catalog/src/main/res/values/strings.xml"
-            line="292"
-            column="13"/>
-    </issue>
-
-    <issue
-        id="UnusedResources"
-        message="The resource `R.string.knotwork_onboarding_permissions_auto` appears to be unused"
-        errorLine1="    &lt;string name=&quot;knotwork_onboarding_permissions_auto&quot;>Auto&lt;/string>"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="../catalog/src/main/res/values/strings.xml"
-            line="294"
+            line="232"
             column="13"/>
     </issue>
 

@@ -2,115 +2,108 @@ package app.knotwork.design.screens.onboarding
 
 /**
  * Four-step pager state for the catalog `OnboardingContent` composable.
- * Mirrors `compose/screens/README.md §C5 · Onboarding` step ordering.
+ * Mirrors the redesigned mockups (Phase 21 / Task 10, second pass).
  */
-enum class OnboardingStep(val pageIndex: Int) {
+enum class OnboardingStep(val pageIndex: Int, val indicatorLabel: String) {
     /** Welcome / brand pitch. Step 1. */
-    Welcome(pageIndex = 0),
+    Welcome(pageIndex = 0, indicatorLabel = "Welcome"),
 
-    /** Pick a model source — local / cloud / skip. Step 2. */
-    ModelSource(pageIndex = 1),
+    /** Pick a LiteRT model to download — Gemma / Phi / Custom URL. Step 2. */
+    LiteRtModel(pageIndex = 1, indicatorLabel = "Pick a model"),
 
-    /** Permissions advance-notice (lazy grants). Step 3. */
-    Permissions(pageIndex = 2),
+    /** Optional cloud provider keys. Step 3. */
+    CloudKeys(pageIndex = 2, indicatorLabel = "Optional cloud keys"),
 
-    /** Pick a sample pipeline. Step 4. */
-    SamplePipelines(pageIndex = 3),
-}
-
-/** Model-source choice driven by step 2. */
-enum class OnboardingModelSource {
-    /** On-device LiteRT model. Default choice when no key is supplied. */
-    LocalOnly,
-
-    /** Cloud BYO-key — the user provides an API key. */
-    Cloud,
-
-    /** Defer the decision; user configures later in Settings → Models. */
-    Skip,
+    /** "You're ready" recap with the default pipeline preview. Step 4. */
+    Ready(pageIndex = 3, indicatorLabel = "You're ready"),
 }
 
 /**
- * Permission grant state surfaced in step 3 rows. The platform request
- * itself is screen-layer responsibility — the catalog only owns the visual
- * state per row.
+ * LiteRT model offered on step 2. The id is the stable key the
+ * `:app/OnboardingViewModel` persists to settings; the human-facing
+ * label, size, and recommended flag come from the catalog so the row
+ * presentation stays self-contained.
  */
-enum class OnboardingPermissionState {
-    /** No request has been made yet; row renders the `Grant now` CTA. */
-    NotRequested,
-
-    /** Platform granted the permission; row renders the `Granted` pill. */
-    Granted,
-
-    /** Platform always grants this permission on the target SDK floor. */
-    Auto,
-}
-
-/**
- * Per-row state surfaced in step 3. Kept inside the catalog so previews
- * can build deterministic fixtures.
- */
-data class OnboardingPermissionRow(
+enum class OnboardingLiteRtModel(
     val id: String,
-    val title: String,
-    val body: String,
-    val state: OnboardingPermissionState,
+    val displayName: String,
+    val sizeLabel: String,
+    val recommended: Boolean,
+) {
+    /** Quantised Gemma 2B (Q4) — bundled default. */
+    Gemma2B(
+        id = "gemma_2b_q4",
+        displayName = "Gemma 2B (Q4)",
+        sizeLabel = "1.4 GB",
+        recommended = true,
+    ),
+
+    /** Quantised Phi-3 mini (Q4). */
+    Phi3Mini(
+        id = "phi_3_mini_q4",
+        displayName = "Phi-3 mini (Q4)",
+        sizeLabel = "2.1 GB",
+        recommended = false,
+    ),
+
+    /** User-supplied URL pointing at a `.litert` model bundle. */
+    CustomUrl(
+        id = "custom_url",
+        displayName = "Custom URL…",
+        sizeLabel = "paste",
+        recommended = false,
+    ),
+}
+
+/**
+ * Cloud provider surfaced on step 3. The id matches
+ * `domain.models.CloudProvider.wireKey` so the onboarding pick flows
+ * straight into the settings-repository slot.
+ */
+enum class OnboardingCloudProvider(val id: String, val displayName: String) {
+    OpenAI(id = "openai", displayName = "OpenAI"),
+    Anthropic(id = "anthropic", displayName = "Anthropic"),
+    Google(id = "google", displayName = "Google"),
+    DeepSeek(id = "deepseek", displayName = "DeepSeek"),
+    Ollama(id = "ollama", displayName = "Ollama (local network)"),
+}
+
+/**
+ * Compact projection of the default pipeline rendered on step 4. The
+ * names render as monospace chips; [accentNodeName] gets the
+ * `NodeIfCondition`-green outline to distinguish the routing node from
+ * the rest of the flow.
+ */
+data class OnboardingDefaultPipelinePreview(
+    val nodes: List<String>,
+    val nodeCount: Int,
+    val edgeCount: Int,
+    val accentNodeName: String? = null,
 )
 
 /**
- * Per-card state for the step 4 sample-pipeline picker. Three samples land
- * in v0.1 — `LocalQa` is installable today; `WebResearch` and `CodeHelper`
- * stay disabled until the orchestrator integration ships the required
- * node executors.
- */
-enum class OnboardingSample(val id: String, val unlocked: Boolean) {
-    /** INPUT → LITE_RT → OUTPUT. Always installable. */
-    LocalQa(id = "local_qa", unlocked = true),
-
-    /** Requires the search tool node — disabled in v0.1. */
-    WebResearch(id = "web_research", unlocked = false),
-
-    /** Requires the shell tool node — disabled in v0.1. */
-    CodeHelper(id = "code_helper", unlocked = false),
-}
-
-/**
- * Top-level immutable input to `OnboardingContent`. Mirrors
- * `compose/screens/README.md §C5`.
+ * Top-level immutable input to `OnboardingContent`.
  *
  * @property step current page index (0..3).
- * @property modelSource currently-selected option in step 2; `null` until
- * the user picks one.
- * @property apiKey raw value of the inline API-key field shown when [modelSource]
- * is [OnboardingModelSource.Cloud]. Empty string = field present but no
- * input yet.
- * @property apiKeyError optional inline error rendered beneath the API-key
- * field. `null` while the field is valid or empty.
- * @property permissions ordered list of permission rows.
- * @property selectedSamples currently-installed sample ids; the chip on
- * each card flips between `Install` / `Installed` / `Coming soon`.
+ * @property liteRtModel currently-selected model on step 2.
+ * @property configuredCloudProviders ids of providers the user has
+ * already configured (renders the "Configured" affordance instead of
+ * "Configure").
+ * @property defaultPipelinePreview compact recap of the bundled default
+ * pipeline rendered on step 4. `null` is permitted for snapshot tests
+ * that drive earlier steps.
  */
 data class OnboardingViewState(
     val step: OnboardingStep = OnboardingStep.Welcome,
-    val modelSource: OnboardingModelSource? = null,
-    val apiKey: String = "",
-    val apiKeyError: String? = null,
-    val permissions: List<OnboardingPermissionRow> = emptyList(),
-    val selectedSamples: Set<String> = emptySet(),
+    val liteRtModel: OnboardingLiteRtModel = OnboardingLiteRtModel.Gemma2B,
+    val configuredCloudProviders: Set<String> = emptySet(),
+    val defaultPipelinePreview: OnboardingDefaultPipelinePreview? = null,
 ) {
-    /** Whether the primary CTA should be enabled in the current step. */
-    val isPrimaryCtaEnabled: Boolean
-        get() = when (step) {
-            OnboardingStep.Welcome -> true
-            OnboardingStep.ModelSource ->
-                modelSource != null &&
-                    !(modelSource == OnboardingModelSource.Cloud && apiKey.isNotBlank() && apiKeyError != null)
-            OnboardingStep.Permissions -> true
-            OnboardingStep.SamplePipelines -> true
-        }
+    /** The primary CTA is always enabled — every step has a meaningful action. */
+    val isPrimaryCtaEnabled: Boolean get() = true
 
-    /** Convenience: are we on the final step (Finish CTA visible)? */
-    val isFinalStep: Boolean get() = step == OnboardingStep.SamplePipelines
+    /** Convenience: are we on the final step? */
+    val isFinalStep: Boolean get() = step == OnboardingStep.Ready
 }
 
 /**
@@ -122,10 +115,8 @@ class OnboardingCallbacks(
     val onBack: () -> Unit = {},
     val onSkip: () -> Unit = {},
     val onFinish: () -> Unit = {},
-    val onModelSourcePick: (OnboardingModelSource) -> Unit = {},
-    val onApiKeyChange: (String) -> Unit = {},
-    val onPermissionGrant: (String) -> Unit = {},
-    val onSampleToggle: (String) -> Unit = {},
+    val onLiteRtModelPick: (OnboardingLiteRtModel) -> Unit = {},
+    val onConfigureCloudProvider: (OnboardingCloudProvider) -> Unit = {},
 )
 
 /** Convenience factory returning a callbacks bundle that ignores every event. */

@@ -17,8 +17,7 @@ import org.robolectric.annotation.GraphicsMode
 
 /**
  * Roborazzi snapshot baseline for `OnboardingContent` across the 4 steps in
- * both themes. The cloud-card variant (`step2_cloud_invalid`) covers the
- * inline-error branch of step 2.
+ * both themes.
  */
 @RunWith(AndroidJUnit4::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -38,38 +37,33 @@ class OnboardingContentSnapshotTest {
     }
 
     @Test
-    fun onboarding_step2_model_source_light() = snapshot(name = "step2_model_source", dark = false) {
-        OnboardingContent(state = OnboardingPreview.modelSource())
+    fun onboarding_step2_lite_rt_light() = snapshot(name = "step2_lite_rt", dark = false) {
+        OnboardingContent(state = OnboardingPreview.liteRtModel())
     }
 
     @Test
-    fun onboarding_step2_model_source_dark() = snapshot(name = "step2_model_source", dark = true) {
-        OnboardingContent(state = OnboardingPreview.modelSource())
+    fun onboarding_step2_lite_rt_dark() = snapshot(name = "step2_lite_rt", dark = true) {
+        OnboardingContent(state = OnboardingPreview.liteRtModel())
     }
 
     @Test
-    fun onboarding_step2_cloud_invalid_light() = snapshot(name = "step2_cloud_invalid", dark = false) {
-        OnboardingContent(state = OnboardingPreview.cloudInvalid())
+    fun onboarding_step3_cloud_keys_light() = snapshot(name = "step3_cloud_keys", dark = false) {
+        OnboardingContent(state = OnboardingPreview.cloudKeys())
     }
 
     @Test
-    fun onboarding_step3_permissions_light() = snapshot(name = "step3_permissions", dark = false) {
-        OnboardingContent(state = OnboardingPreview.permissions())
+    fun onboarding_step3_cloud_keys_dark() = snapshot(name = "step3_cloud_keys", dark = true) {
+        OnboardingContent(state = OnboardingPreview.cloudKeys())
     }
 
     @Test
-    fun onboarding_step3_permissions_dark() = snapshot(name = "step3_permissions", dark = true) {
-        OnboardingContent(state = OnboardingPreview.permissions())
+    fun onboarding_step4_ready_light() = snapshot(name = "step4_ready", dark = false) {
+        OnboardingContent(state = OnboardingPreview.ready())
     }
 
     @Test
-    fun onboarding_step4_samples_light() = snapshot(name = "step4_samples", dark = false) {
-        OnboardingContent(state = OnboardingPreview.samples())
-    }
-
-    @Test
-    fun onboarding_step4_samples_dark() = snapshot(name = "step4_samples", dark = true) {
-        OnboardingContent(state = OnboardingPreview.samples())
+    fun onboarding_step4_ready_dark() = snapshot(name = "step4_ready", dark = true) {
+        OnboardingContent(state = OnboardingPreview.ready())
     }
 
     private fun snapshot(name: String, dark: Boolean, content: @Composable () -> Unit) {
@@ -88,52 +82,31 @@ class OnboardingContentSnapshotTest {
 /** Internal preview fixtures backing the onboarding snapshot suite. */
 internal object OnboardingPreview {
 
-    fun welcome(): OnboardingViewState = OnboardingViewState(step = OnboardingStep.Welcome)
-
-    fun modelSource(): OnboardingViewState = OnboardingViewState(
-        step = OnboardingStep.ModelSource,
-        modelSource = OnboardingModelSource.LocalOnly,
+    fun welcome(): OnboardingViewState = OnboardingViewState(
+        step = OnboardingStep.Welcome,
+        defaultPipelinePreview = defaultPipelinePreview(),
     )
 
-    fun cloudInvalid(): OnboardingViewState = OnboardingViewState(
-        step = OnboardingStep.ModelSource,
-        modelSource = OnboardingModelSource.Cloud,
-        apiKey = "garbage",
-        apiKeyError = "Key doesn't look like a known provider format.",
+    fun liteRtModel(): OnboardingViewState = OnboardingViewState(
+        step = OnboardingStep.LiteRtModel,
+        liteRtModel = OnboardingLiteRtModel.Gemma2B,
+        defaultPipelinePreview = defaultPipelinePreview(),
     )
 
-    fun permissions(): OnboardingViewState = OnboardingViewState(
-        step = OnboardingStep.Permissions,
-        permissions = listOf(
-            OnboardingPermissionRow(
-                id = PermissionIds.NOTIFICATIONS,
-                title = "Notifications",
-                body = "Tell you when long pipelines finish.",
-                state = OnboardingPermissionState.NotRequested,
-            ),
-            OnboardingPermissionRow(
-                id = PermissionIds.MICROPHONE,
-                title = "Microphone (optional)",
-                body = "Voice input in Chat.",
-                state = OnboardingPermissionState.NotRequested,
-            ),
-            OnboardingPermissionRow(
-                id = PermissionIds.FOREGROUND,
-                title = "Foreground service",
-                body = "Keep the agent running while you switch apps.",
-                state = OnboardingPermissionState.Auto,
-            ),
-            OnboardingPermissionRow(
-                id = PermissionIds.STORAGE,
-                title = "Storage (scoped)",
-                body = "Save and import pipelines.",
-                state = OnboardingPermissionState.Granted,
-            ),
-        ),
+    fun cloudKeys(): OnboardingViewState = OnboardingViewState(
+        step = OnboardingStep.CloudKeys,
+        defaultPipelinePreview = defaultPipelinePreview(),
     )
 
-    fun samples(): OnboardingViewState = OnboardingViewState(
-        step = OnboardingStep.SamplePipelines,
-        selectedSamples = setOf(OnboardingSample.LocalQa.id),
+    fun ready(): OnboardingViewState = OnboardingViewState(
+        step = OnboardingStep.Ready,
+        defaultPipelinePreview = defaultPipelinePreview(),
+    )
+
+    private fun defaultPipelinePreview(): OnboardingDefaultPipelinePreview = OnboardingDefaultPipelinePreview(
+        nodes = listOf("INPUT", "LITE_RT", "IF", "TOOL", "LITE_RT", "OUTPUT"),
+        nodeCount = 6,
+        edgeCount = 7,
+        accentNodeName = "IF",
     )
 }

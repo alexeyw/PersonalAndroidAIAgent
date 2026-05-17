@@ -3,12 +3,11 @@ package ai.agent.android.presentation.ui.onboarding
 import ai.agent.android.domain.repositories.SettingsRepository
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import app.knotwork.design.screens.onboarding.OnboardingModelSource
-import app.knotwork.design.screens.onboarding.OnboardingPermissionRow
-import app.knotwork.design.screens.onboarding.OnboardingPermissionState
+import app.knotwork.design.screens.onboarding.OnboardingCloudProvider
+import app.knotwork.design.screens.onboarding.OnboardingDefaultPipelinePreview
+import app.knotwork.design.screens.onboarding.OnboardingLiteRtModel
 import app.knotwork.design.screens.onboarding.OnboardingStep
 import app.knotwork.design.screens.onboarding.OnboardingViewState
-import app.knotwork.design.screens.onboarding.PermissionIds
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -18,16 +17,20 @@ import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 /**
- * ViewModel for the onboarding flow.
+ * ViewModel for the redesigned onboarding flow (Phase 21 / Task 10, second
+ * mockup pass).
  *
- * Phase 21 / Task 10 rewrites the screen as a 4-step `HorizontalPager`
- * (`Welcome → ModelSource → Permissions → SamplePipelines`) and threads
- * every per-step input through this ViewModel. The persisted result is the
- * `hasCompletedOnboarding` flag plus a thin pile of preferences captured
- * along the way (model-source choice, sample-pipeline picks); the heavy
- * downstream work (LiteRT model download, sample-pipeline materialisation)
- * is deliberately deferred to Settings / DefaultPipelineFactory so this
- * surface stays cheap and reversible.
+ * Drives the 4-step pager:
+ *  - Step 1 / Welcome — pure presentation.
+ *  - Step 2 / LiteRT model — user picks a model id; the screen-level CTA
+ *    triggers the download via the host (`onFinishModel` is the same as
+ *    `onNext` for now — the actual download is wired post-v0.1).
+ *  - Step 3 / Cloud keys — list of providers with `Configure` links; the
+ *    real key-entry sheet lives in Settings, so this surface only records
+ *    which providers the user opened (handy for analytics later).
+ *  - Step 4 / Ready — recap screen with the default pipeline preview.
+ *    Committing flips `hasCompletedOnboarding` and lets the host
+ *    navigate to Chat.
  *
  * @property settingsRepository persists the `hasCompletedOnboarding` flag.
  */
@@ -35,7 +38,7 @@ import javax.inject.Inject
 class OnboardingViewModel @Inject constructor(private val settingsRepository: SettingsRepository) : ViewModel() {
 
     private val _state: MutableStateFlow<OnboardingViewState> = MutableStateFlow(
-        OnboardingViewState(permissions = initialPermissionRows()),
+        OnboardingViewState(defaultPipelinePreview = DEFAULT_PIPELINE_PREVIEW),
     )
 
     /** Externally-observable view state passed to `OnboardingContent`. */
@@ -44,8 +47,7 @@ class OnboardingViewModel @Inject constructor(private val settingsRepository: Se
     /** Advances to the next step. Idempotent at the final step. */
     fun next() {
         _state.update { current ->
-            val nextStep = OnboardingStep.entries.getOrNull(current.step.pageIndex + 1)
-                ?: current.step
+            val nextStep = OnboardingStep.entries.getOrNull(current.step.pageIndex + 1) ?: current.step
             current.copy(step = nextStep)
         }
     }
@@ -53,66 +55,29 @@ class OnboardingViewModel @Inject constructor(private val settingsRepository: Se
     /** Steps back; idempotent on step 1. */
     fun back() {
         _state.update { current ->
-            val previousStep = OnboardingStep.entries.getOrNull(current.step.pageIndex - 1)
-                ?: current.step
+            val previousStep = OnboardingStep.entries.getOrNull(current.step.pageIndex - 1) ?: current.step
             current.copy(step = previousStep)
         }
     }
 
-    /** Records the user's model-source pick in step 2. */
-    fun pickModelSource(source: OnboardingModelSource) {
-        _state.update { it.copy(modelSource = source, apiKeyError = null) }
+    /** Records the user's LiteRT model pick on step 2. */
+    fun pickLiteRtModel(model: OnboardingLiteRtModel) {
+        _state.update { it.copy(liteRtModel = model) }
     }
 
     /**
-     * Updates the inline API-key field on step 2 and runs the cheapest
-     * validation possible — non-empty values must start with `sk-` (OpenAI),
-     * `anthropic` (Anthropic), or `goog` (Google). Anything else flags the
-     * row but leaves the CTA enabled if the field is empty (the user hasn't
-     * committed yet).
+     * Records that the user opened the configure flow for a cloud
+     * provider on step 3. The actual key entry happens in Settings.
      */
-    fun updateApiKey(value: String) {
+    fun markCloudProviderConfigured(provider: OnboardingCloudProvider) {
         _state.update { current ->
-            val error = when {
-                value.isEmpty() -> null
-                value.startsWith(prefix = "sk-") -> null
-                value.startsWith(prefix = "anthropic") -> null
-                value.startsWith(prefix = "goog") -> null
-                else -> "Key doesn't look like a known provider format."
-            }
-            current.copy(apiKey = value, apiKeyError = error)
-        }
-    }
-
-    /** Records that the user tapped `Grant now` on a permission row. */
-    fun markPermissionRequested(id: String) {
-        _state.update { current ->
-            current.copy(
-                permissions = current.permissions.map { row ->
-                    if (row.id == id) row.copy(state = OnboardingPermissionState.Granted) else row
-                },
-            )
-        }
-    }
-
-    /** Toggles a sample-pipeline pick in step 4. */
-    fun toggleSample(id: String) {
-        _state.update { current ->
-            val nextSet = if (id in current.selectedSamples) {
-                current.selectedSamples - id
-            } else {
-                current.selectedSamples + id
-            }
-            current.copy(selectedSamples = nextSet)
+            current.copy(configuredCloudProviders = current.configuredCloudProviders + provider.id)
         }
     }
 
     /**
-     * Final-step "Finish" action: persists the `hasCompletedOnboarding` flag
-     * and lets the host navigate to Chat. The selected samples are surfaced
-     * through [state] so a future hook in `InitializeAppUseCase` can read
-     * them; v0.1 simply ignores extra picks because only the
-     * `Local Q&A` sample is installable.
+     * Final-step action — persists the `hasCompletedOnboarding` flag and
+     * lets the host navigate to Chat.
      */
     fun finishOnboarding() {
         viewModelScope.launch {
@@ -121,62 +86,31 @@ class OnboardingViewModel @Inject constructor(private val settingsRepository: Se
     }
 
     /**
-     * Skip button on steps 2-4. Persists `hasCompletedOnboarding = true`
-     * exactly like [finishOnboarding] so the user is not prompted again on
-     * the next launch.
+     * Skip button (visible on steps 1-3). Persists `hasCompletedOnboarding
+     * = true` exactly like [finishOnboarding] so the user isn't prompted
+     * again next launch.
      */
     fun skipOnboarding() {
         finishOnboarding()
     }
 
-    /** Initial permission rows. Foreground and Storage are auto-granted on Android 16. */
-    private fun initialPermissionRows(): List<OnboardingPermissionRow> = listOf(
-        OnboardingPermissionRow(
-            id = PermissionIds.NOTIFICATIONS,
-            title = NOTIFICATIONS_TITLE,
-            body = NOTIFICATIONS_BODY,
-            state = OnboardingPermissionState.NotRequested,
-        ),
-        OnboardingPermissionRow(
-            id = PermissionIds.MICROPHONE,
-            title = MICROPHONE_TITLE,
-            body = MICROPHONE_BODY,
-            state = OnboardingPermissionState.NotRequested,
-        ),
-        OnboardingPermissionRow(
-            id = PermissionIds.FOREGROUND,
-            title = FOREGROUND_TITLE,
-            body = FOREGROUND_BODY,
-            state = OnboardingPermissionState.Auto,
-        ),
-        OnboardingPermissionRow(
-            id = PermissionIds.STORAGE,
-            title = STORAGE_TITLE,
-            body = STORAGE_BODY,
-            state = OnboardingPermissionState.Granted,
-        ),
-    )
-
-    /**
-     * Legacy compatibility alias for the previous single-screen onboarding
-     * stub. Some test code referenced this name; keep the function pointing
-     * at [finishOnboarding] so the public surface stays stable.
-     */
+    /** Legacy alias preserved so existing call sites keep compiling. */
     fun completeOnboarding() {
         finishOnboarding()
     }
 
     companion object {
-        // Localisable strings live in the catalog (used by the
-        // PermissionsStep composable) — these baseline titles are stored on
-        // the VM side to keep the data class self-contained for unit tests.
-        private const val NOTIFICATIONS_TITLE = "Notifications"
-        private const val NOTIFICATIONS_BODY = "Tell you when long pipelines finish."
-        private const val MICROPHONE_TITLE = "Microphone (optional)"
-        private const val MICROPHONE_BODY = "Voice input in Chat."
-        private const val FOREGROUND_TITLE = "Foreground service"
-        private const val FOREGROUND_BODY = "Keep the agent running while you switch apps."
-        private const val STORAGE_TITLE = "Storage (scoped)"
-        private const val STORAGE_BODY = "Save and import pipelines."
+        /**
+         * Hardcoded default-pipeline recap rendered on step 4. The catalog
+         * draws the chips from this projection; the actual default
+         * pipeline lives in `DefaultPipelineFactory`. Keep the labels in
+         * sync — six nodes, seven edges, IF picks up the green accent.
+         */
+        private val DEFAULT_PIPELINE_PREVIEW = OnboardingDefaultPipelinePreview(
+            nodes = listOf("INPUT", "LITE_RT", "IF", "TOOL", "LITE_RT", "OUTPUT"),
+            nodeCount = 6,
+            edgeCount = 7,
+            accentNodeName = "IF",
+        )
     }
 }

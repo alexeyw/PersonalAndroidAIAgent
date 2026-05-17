@@ -263,8 +263,6 @@
     <string name="knotwork_onboarding_skip">Skip</string>
     <!-- Primary CTA on steps 1-3. -->
     <string name="knotwork_onboarding_continue">Continue</string>
-    <!-- Final-step "Finish" button label. -->
-    <string name="knotwork_onboarding_finish">Open Chat</string>
 
     <!-- Step 1 headline. -->
     <string name="knotwork_onboarding_welcome_headline">A private AI agent that runs on your phone.</string>
@@ -278,61 +276,42 @@
     <string name="knotwork_onboarding_welcome_tile_storage">Encrypted storage (SQLCipher · Keystore)</string>
 
     <!-- Step 2 headline. -->
-    <string name="knotwork_onboarding_models_headline">Pick a model source.</string>
+    <string name="knotwork_onboarding_models_headline">Choose a LiteRT model to start.</string>
     <!-- Step 2 body copy. -->
-    <string name="knotwork_onboarding_models_body">Local models are private but slower. Cloud APIs are faster and need your key.</string>
-    <!-- Step 2 on-device card title. -->
-    <string name="knotwork_onboarding_models_local_title">On-device only · Recommended</string>
-    <!-- Step 2 on-device card subtitle. -->
-    <string name="knotwork_onboarding_models_local_subtitle">Downloads a 2 GB LiteRT model on first use.</string>
-    <!-- Step 2 cloud card title. -->
-    <string name="knotwork_onboarding_models_cloud_title">Cloud (BYO key)</string>
-    <!-- Step 2 cloud card subtitle. -->
-    <string name="knotwork_onboarding_models_cloud_subtitle">OpenAI, Anthropic, Google, or compatible.</string>
-    <!-- Step 2 skip card title. -->
-    <string name="knotwork_onboarding_models_skip_title">Skip for now</string>
-    <!-- Step 2 skip card subtitle. -->
-    <string name="knotwork_onboarding_models_skip_subtitle">Configure later in Settings → Models.</string>
+    <string name="knotwork_onboarding_models_body">A small instruction-tuned model (1–2 B parameters) is the fastest place to start. You can switch later from Settings → Models.</string>
+    <!-- Step 2 RECOMMENDED outline pill rendered next to the suggested model row. -->
+    <string name="knotwork_onboarding_models_recommended">RECOMMENDED</string>
+    <!-- Step 2 CTA template: "Download {model name}". -->
+    <string name="knotwork_onboarding_models_download_cta">Download %1$s</string>
 
     <!-- Step 3 headline. -->
-    <string name="knotwork_onboarding_permissions_headline">What Knotwork needs access to.</string>
+    <string name="knotwork_onboarding_cloud_headline">Add cloud keys later, or skip.</string>
     <!-- Step 3 body copy. -->
-    <string name="knotwork_onboarding_permissions_body">We\'ll ask only when a feature needs it. You can revoke any time in System Settings.</string>
-    <!-- Step 3 row: notifications. -->
-    <string name="knotwork_onboarding_permissions_notifications_title">Notifications</string>
-    <string name="knotwork_onboarding_permissions_notifications_body">Tell you when long pipelines finish.</string>
-    <!-- Step 3 row: microphone. -->
-    <string name="knotwork_onboarding_permissions_microphone_title">Microphone (optional)</string>
-    <string name="knotwork_onboarding_permissions_microphone_body">Voice input in Chat.</string>
-    <!-- Step 3 row: foreground service. -->
-    <string name="knotwork_onboarding_permissions_foreground_title">Foreground service</string>
-    <string name="knotwork_onboarding_permissions_foreground_body">Keep the agent running while you switch apps.</string>
-    <!-- Step 3 row: storage. -->
-    <string name="knotwork_onboarding_permissions_storage_title">Storage (scoped)</string>
-    <string name="knotwork_onboarding_permissions_storage_body">Save and import pipelines.</string>
-    <!-- Step 3 grant CTA label. -->
-    <string name="knotwork_onboarding_permissions_grant">Grant now</string>
-    <!-- Step 3 already-granted pill. -->
-    <string name="knotwork_onboarding_permissions_granted">Granted</string>
-    <!-- Step 3 auto-granted pill. -->
-    <string name="knotwork_onboarding_permissions_auto">Auto</string>
+    <string name="knotwork_onboarding_cloud_body">Cloud providers are off by default. Keys are stored in Encrypted Shared Preferences backed by the Android Keystore.</string>
+    <!-- Step 3 trailing link label for an un-configured provider row. -->
+    <string name="knotwork_onboarding_cloud_configure">Configure</string>
+    <!-- Step 3 trailing label for a provider that's already configured. -->
+    <string name="knotwork_onboarding_cloud_configured">Configured</string>
+    <!-- Step 3 primary CTA label. -->
+    <string name="knotwork_onboarding_cloud_skip_cta">Skip for now</string>
 
     <!-- Step 4 headline. -->
-    <string name="knotwork_onboarding_samples_headline">Start with a sample.</string>
+    <string name="knotwork_onboarding_ready_headline">One default pipeline is bound to your first chat.</string>
     <!-- Step 4 body copy. -->
-    <string name="knotwork_onboarding_samples_body">Each one is a small graph you can edit on the spot.</string>
-    <!-- Step 4 sample 1 title. -->
-    <string name="knotwork_onboarding_samples_local_qa">Local Q&amp;A</string>
-    <!-- Step 4 sample 2 title. -->
-    <string name="knotwork_onboarding_samples_web_research">Web research</string>
-    <!-- Step 4 sample 3 title. -->
-    <string name="knotwork_onboarding_samples_code_helper">Code helper</string>
-    <!-- Step 4 chip: install sample. -->
-    <string name="knotwork_onboarding_samples_install">Install</string>
-    <!-- Step 4 chip: already installed sample. -->
-    <string name="knotwork_onboarding_samples_installed">Installed</string>
-    <!-- Step 4 chip: unavailable sample. -->
-    <string name="knotwork_onboarding_samples_coming_soon">Coming soon</string>
+    <string name="knotwork_onboarding_ready_body">Pipelines are graphs of typed nodes. The default one is INPUT → PLANNER → TOOLS? → OUTPUT — edit it any time from Pipelines.</string>
+    <!--
+        Step 4 footer line under the pipeline preview:
+        "// default · N nodes · M edges". Quantity tracks the node count; the
+        edge count interpolates as-is regardless of quantity class.
+        suppress PluralsCandidate: the catalog can't pluralise both counts
+        independently, so the wording stays uniform across plural classes.
+    -->
+    <plurals name="knotwork_onboarding_ready_preview_caption">
+        <item quantity="one">// default · %1$d nodes · %2$d edges</item>
+        <item quantity="other">// default · %1$d nodes · %2$d edges</item>
+    </plurals>
+    <!-- Step 4 CTA label. -->
+    <string name="knotwork_onboarding_ready_cta">Open chat</string>
 
     <!-- ============ Pipeline editor — EditorToolbar ============ -->
 

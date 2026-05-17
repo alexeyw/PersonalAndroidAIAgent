@@ -13,16 +13,16 @@ import app.knotwork.design.screens.onboarding.OnboardingCallbacks
 import app.knotwork.design.screens.onboarding.OnboardingContent
 
 /**
- * Onboarding entry point — 4-step pager (`Welcome → ModelSource →
- * Permissions → SamplePipelines`) backed by [OnboardingViewModel].
+ * Onboarding entry point — 4-step pager (`Welcome → LiteRtModel →
+ * CloudKeys → Ready`) backed by [OnboardingViewModel].
  *
- * Phase 21 / Task 10 rewrites the previous single-screen stub. The visual
- * surface lives in `:catalog` (`OnboardingContent`); this screen just
- * threads the ViewModel state and forwards finish/skip into the nav-graph.
+ * The visual surface lives in `:catalog` (`OnboardingContent`); this
+ * screen threads the ViewModel state and forwards finish/skip into the
+ * nav-graph.
  *
  * @param onCompleted Pop onboarding off the back-stack and navigate to the
- * Chat tab. Invoked exactly once when the user taps `Finish` on step 4 or
- * `Skip` on steps 2-4.
+ * Chat tab. Invoked exactly once when the user taps `Open chat` on step 4
+ * or `Skip` on steps 1-3.
  * @param viewModel Hilt-injected ViewModel; defaults to [hiltViewModel] so
  * tests can supply a fake.
  */
@@ -41,10 +41,8 @@ fun OnboardingScreen(onCompleted: () -> Unit, viewModel: OnboardingViewModel = h
                 viewModel.finishOnboarding()
                 onCompleted()
             },
-            onModelSourcePick = viewModel::pickModelSource,
-            onApiKeyChange = viewModel::updateApiKey,
-            onPermissionGrant = viewModel::markPermissionRequested,
-            onSampleToggle = viewModel::toggleSample,
+            onLiteRtModelPick = viewModel::pickLiteRtModel,
+            onConfigureCloudProvider = viewModel::markCloudProviderConfigured,
         )
     }
     OnboardingContent(
