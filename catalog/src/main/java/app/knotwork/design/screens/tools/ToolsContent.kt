@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -25,7 +26,6 @@ import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.DeleteOutline
 import androidx.compose.material.icons.outlined.Edit
-import androidx.compose.material.icons.outlined.Menu
 import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.outlined.WarningAmber
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -75,7 +75,7 @@ private const val LOADING_ROWS_PER_SECTION = 3
  * (Phase 21 / Task 10):
  *
  *  - TopAppBar with title + monospace "N built-in · M MCP" subtitle;
- *    leading hamburger; trailing overflow.
+ *    trailing overflow icon.
  *  - Section 1 (`BUILT-IN (APPFUNCTIONS)`): per-tool row with leading
  *    edit-glyph tile, monospace title, an outline risk pill
  *    (Read only / Sensitive / Destructive) next to the title, a wrapping
@@ -99,6 +99,12 @@ fun ToolsContent(
         modifier = modifier.fillMaxSize(),
         containerColor = MaterialTheme.colorScheme.surface,
         topBar = { ToolsTopBar(state = state, callbacks = callbacks) },
+        // The outer `AppShellScaffold` already absorbs both the system
+        // navigation bar and the in-app bottom-nav strip via its own
+        // inner padding. Letting this Scaffold default to `safeDrawing`
+        // would double-count the bottom inset and leave a visible gap
+        // between the list and the bottom-nav strip.
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
     ) { padding ->
         when (state.visualState) {
             ToolsVisualState.Empty -> ToolsEmpty(callbacks = callbacks, padding = padding)
@@ -129,15 +135,6 @@ private fun ToolsTopBar(state: ToolsViewState, callbacks: ToolsCallbacks) {
                     ),
                     style = KnotworkTextStyles.MonoSm,
                     color = KnotworkTheme.extended.onSurfaceMuted,
-                )
-            }
-        },
-        navigationIcon = {
-            IconButton(onClick = callbacks.onOpenDrawer) {
-                Icon(
-                    imageVector = Icons.Outlined.Menu,
-                    contentDescription = stringResource(R.string.knotwork_tools_drawer_cd),
-                    tint = MaterialTheme.colorScheme.onSurface,
                 )
             }
         },
@@ -211,7 +208,7 @@ private fun ToolsError(state: ToolsViewState, callbacks: ToolsCallbacks, padding
 private fun ToolsList(state: ToolsViewState, callbacks: ToolsCallbacks, padding: PaddingValues) {
     LazyColumn(
         modifier = Modifier.fillMaxSize().padding(padding),
-        contentPadding = PaddingValues(bottom = KnotworkTheme.spacing.sp16),
+        contentPadding = PaddingValues(bottom = KnotworkTheme.spacing.sp2),
     ) {
         item(key = "built-in-header") {
             SimpleSectionHeader(

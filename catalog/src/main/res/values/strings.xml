@@ -211,8 +211,6 @@
         <item quantity="one">%1$d built-in · %2$d MCP</item>
         <item quantity="other">%1$d built-in · %2$d MCP</item>
     </plurals>
-    <!-- ContentDescription for the leading hamburger / drawer icon. -->
-    <string name="knotwork_tools_drawer_cd">Open navigation drawer</string>
     <!-- ContentDescription for the trailing overflow icon. -->
     <string name="knotwork_tools_top_overflow_cd">Tools actions</string>
     <!-- BUILT-IN section header. -->
