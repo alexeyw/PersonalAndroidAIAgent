@@ -67,11 +67,25 @@ enum class PipelineLibraryFilter {
  * `PipelineGraph` directly.
  *
  * @property id stable identity used as the `LazyColumn` key.
- * @property title pipeline display name; rendered with `TitleMd` ellipsis.
- * @property subtitle pre-formatted secondary line (e.g. "Run 12 min ago · 3 nodes").
- * @property status status pill displayed next to the subtitle.
+ * @property title pipeline display name; rendered in monospace per the
+ * Knotwork brand. The brand uses mono for any identifier-shaped string
+ * (pipeline names, node ids, etc.).
+ * @property subtitle pre-formatted "N nodes · {flavour}" line — e.g.
+ * "8 nodes · INPUT→PLANNER→TOOLS→OUTPUT".
+ * @property secondaryLine extra status line beneath [subtitle]: "Active
+ * default" / "N chats" / "unbound" — null hides the line entirely.
+ * @property secondaryLineKind drives the colour of [secondaryLine]
+ * (`Default` = muted, `Unbound` = `signalError`).
+ * @property status status pill rendered next to the leading icon (only used
+ * by the swipe-rendered list-row variant; the rich row drops it in favour
+ * of the badge + secondaryLine).
  * @property leadingTint hue used for the 40 dp leading mark.
  * @property leadingIcon vector rendered inside the leading mark.
+ * @property isActive `true` when this is the pipeline currently loaded in
+ * the editor. Renders the full-row warm-cream tint shown in the spec
+ * mockup.
+ * @property isDefault `true` when this pipeline is the user's default;
+ * renders a brown `DEFAULT` pill next to the title.
  * @property selected `true` when this row is part of the active multi-select
  * selection (renders the 4 dp accent on the leading edge).
  * @property revealed `true` when this row is currently in its swipe-revealed
@@ -85,9 +99,25 @@ data class PipelineLibraryRow(
     val status: Status,
     val leadingTint: Color,
     val leadingIcon: ImageVector,
+    val secondaryLine: String? = null,
+    val secondaryLineKind: PipelineSecondaryLineKind = PipelineSecondaryLineKind.Default,
+    val isActive: Boolean = false,
+    val isDefault: Boolean = false,
     val selected: Boolean = false,
     val revealed: Boolean = false,
 )
+
+/**
+ * Visual variant of [PipelineLibraryRow.secondaryLine]. Controls colour
+ * only — the underlying text is owned by the host.
+ */
+enum class PipelineSecondaryLineKind {
+    /** Default muted secondary text ("Active default", "N chats"). */
+    Default,
+
+    /** Renders the line in `signalError` (used for "unbound" pipelines). */
+    Unbound,
+}
 
 /**
  * Top-level immutable input to `PipelineLibraryContent`. Mirrors
@@ -112,10 +142,13 @@ data class PipelineLibraryViewState(
     val visualState: PipelineLibraryVisualState,
     val pipelines: List<PipelineLibraryRow> = emptyList(),
     val totalCount: Int = pipelines.size,
+    val defaultCount: Int = pipelines.count { it.isDefault },
     val searchQuery: String = "",
     val activeFilter: PipelineLibraryFilter = PipelineLibraryFilter.All,
     val errorMessage: String? = null,
     val selectedCount: Int = 0,
+    /** Id of the row whose overflow menu is currently open; `null` = closed. */
+    val openOverflowRowId: String? = null,
 ) {
     init {
         require((visualState == PipelineLibraryVisualState.Error) == (errorMessage != null)) {
@@ -137,9 +170,18 @@ class PipelineLibraryCallbacks(
     val onPipelineClick: (String) -> Unit = {},
     val onPipelineLongPress: (String) -> Unit = {},
     val onPipelineOverflow: (String) -> Unit = {},
+    val onOverflowDismiss: () -> Unit = {},
     val onDuplicate: (String) -> Unit = {},
     val onArchive: (String) -> Unit = {},
     val onDelete: (String) -> Unit = {},
+    val onLoadInEditor: (String) -> Unit = {},
+    val onSetAsDefault: (String) -> Unit = {},
+    val onRename: (String) -> Unit = {},
+    val onExportJson: (String) -> Unit = {},
+    val onImportJson: () -> Unit = {},
+    val onOpenDrawer: () -> Unit = {},
+    val onOpenSearch: () -> Unit = {},
+    val onTopOverflow: () -> Unit = {},
     val onNewPipeline: () -> Unit = {},
     val onBrowseTemplates: () -> Unit = {},
     val onClearSearch: () -> Unit = {},

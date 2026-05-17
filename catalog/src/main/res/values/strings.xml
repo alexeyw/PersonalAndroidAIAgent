@@ -167,6 +167,36 @@
     <string name="knotwork_library_multi_select_archive">Archive</string>
     <!-- Multi-select bar action: delete the selected pipelines. -->
     <string name="knotwork_library_multi_select_delete">Delete</string>
+    <!-- Subtitle under the TopAppBar title: "N saved · M default". Quantity = saved count; the default count interpolates as-is regardless of quantity class. -->
+    <plurals name="knotwork_library_topbar_subtitle">
+        <item quantity="one">%1$d saved · %2$d default</item>
+        <item quantity="other">%1$d saved · %2$d default</item>
+    </plurals>
+    <!-- ContentDescription for the leading hamburger / drawer icon. -->
+    <string name="knotwork_library_drawer_cd">Open navigation drawer</string>
+    <!-- ContentDescription for the trailing search icon. -->
+    <string name="knotwork_library_search_icon_cd">Search pipelines</string>
+    <!-- ContentDescription for the trailing overflow icon. -->
+    <string name="knotwork_library_top_overflow_cd">Library actions</string>
+    <!-- LIBRARY section header inside the list. -->
+    <string name="knotwork_library_section_library">LIBRARY</string>
+    <!-- "DEFAULT" pill on the row that's marked as the user's default pipeline. -->
+    <string name="knotwork_library_badge_default">DEFAULT</string>
+    <!-- Footer label introducing the Import JSON affordance. -->
+    <string name="knotwork_library_footer_header">FROM BROWSER EDITOR</string>
+    <!-- Import-JSON button label. -->
+    <string name="knotwork_library_footer_import">Import JSON</string>
+    <!-- Footer description body. -->
+    <string name="knotwork_library_footer_body">Export from pipeline-editor.html and import here — same JSON schema, no manual conversion.</string>
+    <!-- Per-row overflow menu items. -->
+    <string name="knotwork_library_menu_load">Load in editor</string>
+    <string name="knotwork_library_menu_set_default">Set as default</string>
+    <string name="knotwork_library_menu_set_default_active">Default</string>
+    <string name="knotwork_library_menu_rename">Rename</string>
+    <string name="knotwork_library_menu_duplicate">Duplicate</string>
+    <string name="knotwork_library_menu_export">Export JSON</string>
+    <string name="knotwork_library_menu_delete">Delete</string>
+    <string name="knotwork_library_row_overflow_cd">More actions for %1$s</string>
 
     <!-- ============ Tools screen ============ -->
 
