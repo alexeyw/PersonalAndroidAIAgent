@@ -31,6 +31,15 @@ class EditorState(undoCapacity: Int = EditorUndoRedo.DEFAULT_CAPACITY) {
     /** Currently selected node ids (single- or multi-select). */
     var selection: Set<String> by mutableStateOf(emptySet())
 
+    /**
+     * Currently selected connection (edge) id, or `null` when no edge is selected.
+     *
+     * Node selection and edge selection are mutually exclusive — selecting an edge clears
+     * `selection`, and selecting a node clears this. The editor toolbar's Delete button
+     * removes whichever one is non-empty.
+     */
+    var selectedEdgeId: String? by mutableStateOf(null)
+
     /** `true` when the user is in multi-select mode (long-press entry). */
     var multiSelectMode: Boolean by mutableStateOf(false)
 
@@ -61,6 +70,7 @@ class EditorState(undoCapacity: Int = EditorUndoRedo.DEFAULT_CAPACITY) {
      */
     fun clearTransient() {
         selection = emptySet()
+        selectedEdgeId = null
         multiSelectMode = false
         connectionInProgress = null
         quickAddAnchor = null
@@ -68,14 +78,25 @@ class EditorState(undoCapacity: Int = EditorUndoRedo.DEFAULT_CAPACITY) {
 
     /**
      * Toggles [nodeId] in [selection]. In single-select mode, replaces the entire
-     * selection; in multi-select mode, toggles membership.
+     * selection; in multi-select mode, toggles membership. Selecting a node always
+     * clears any edge selection (the two are mutually exclusive).
      */
     fun toggleSelection(nodeId: String) {
+        selectedEdgeId = null
         selection = if (multiSelectMode) {
             if (nodeId in selection) selection - nodeId else selection + nodeId
         } else {
             setOf(nodeId)
         }
+    }
+
+    /**
+     * Selects a single connection (edge). Clears node selection; multi-select mode is left
+     * alone — exiting multi-select via long-press cancel still works.
+     */
+    fun selectEdge(edgeId: String?) {
+        selectedEdgeId = edgeId
+        if (edgeId != null) selection = emptySet()
     }
 }
 

@@ -4,7 +4,6 @@ import ai.agent.android.R
 import ai.agent.android.domain.models.NodeModel
 import ai.agent.android.domain.models.NodeType
 import ai.agent.android.domain.models.PipelineGraph
-import ai.agent.android.presentation.ui.pipeline.editor.config.NodeTypeMapper
 import ai.agent.android.presentation.ui.pipeline.editor.core.CanvasTransform
 import ai.agent.android.presentation.ui.pipeline.editor.core.ConnectionDraft
 import ai.agent.android.presentation.ui.pipeline.editor.core.EditorState
@@ -25,6 +24,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
@@ -33,7 +33,6 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import app.knotwork.design.components.pipelineeditor.NodeError
-import app.knotwork.design.components.pipelineeditor.NodePorts
 import app.knotwork.design.theme.KnotworkTheme
 import app.knotwork.design.tokens.KnotworkTextStyles
 
@@ -73,7 +72,8 @@ internal fun EditorCanvas(
     reducedMotion: Boolean,
     onMoveNode: (nodeId: String, dxCanvas: Float, dyCanvas: Float) -> Unit,
     onAddNode: (type: NodeType, canvasX: Float, canvasY: Float) -> Unit,
-    onAddConnection: (sourceNodeId: String, targetNodeId: String) -> Unit,
+    onAddConnection: (sourceNodeId: String, targetNodeId: String, label: String?) -> Unit,
+    onOpenNodeConfig: (nodeId: String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val density = LocalDensity.current
@@ -107,14 +107,38 @@ internal fun EditorCanvas(
     Box(
         modifier = modifier
             .fillMaxSize()
+            .clipToBounds() // Prevent node graphics from spilling outside the canvas surface
+            // into the EditorToolbar / bottom bars when nodes sit near the viewport edge.
             .background(KnotworkTheme.extended.surface1)
             .onSizeChanged { size -> viewportSize = IntPair(size.width, size.height) }
             .transformable(state = transformableState)
             .pointerInput(graph.id) {
                 detectTapGestures(
-                    onTap = {
-                        editor.selection = emptySet()
-                        editor.multiSelectMode = false
+                    onTap = { tapScreen ->
+                        // Hit-test edges in canvas-space before falling through to "clear selection".
+                        // Bezier edges are pure draw output (no per-edge pointerInput consumer), so
+                        // the tap reaches the canvas; we project to canvas-space and ask the helper
+                        // in EditorEdges which connection — if any — sits within the screen-space
+                        // tolerance. Tap-on-edge selects it (toolbar Delete then removes it);
+                        // tap-elsewhere clears selection.
+                        val canvasX = editor.transform.screenToCanvasX(tapScreen.x)
+                        val canvasY = editor.transform.screenToCanvasY(tapScreen.y)
+                        val edgeId = hitTestEdge(
+                            pointerCanvasX = canvasX,
+                            pointerCanvasY = canvasY,
+                            connections = graph.connections,
+                            nodesById = nodesByIdLive,
+                            transform = editor.transform,
+                            density = density,
+                        )
+                        if (edgeId != null) {
+                            editor.selectEdge(edgeId)
+                            editor.multiSelectMode = false
+                        } else {
+                            editor.selection = emptySet()
+                            editor.selectedEdgeId = null
+                            editor.multiSelectMode = false
+                        }
                     },
                     onLongPress = { offset ->
                         editor.quickAddAnchor = offset.x to offset.y
@@ -136,14 +160,14 @@ internal fun EditorCanvas(
     ) {
         val draftDraw = editor.connectionInProgress?.let { draft ->
             val source = nodesByIdLive[draft.sourceNodeId] ?: return@let null
-            val anchors = nodeAnchors(source, density)
+            val anchor = outboundPortAnchor(source, portsFor(source), draft.sourcePortLabel, density)
             // The draft is stored in canvas-space (see ConnectionDraft KDoc); project both
             // anchor and live pointer through `transform` here so the draw layer stays in
             // screen-space and doesn't need to know about CanvasTransform.
             ConnectionDraftDrawData(
                 sourceScreen = Offset(
-                    editor.transform.canvasToScreenX(anchors.outX),
-                    editor.transform.canvasToScreenY(anchors.outY),
+                    editor.transform.canvasToScreenX(anchor.xCanvas),
+                    editor.transform.canvasToScreenY(anchor.yCanvas),
                 ),
                 pointerScreen = Offset(
                     editor.transform.canvasToScreenX(draft.pointerCanvasX),
@@ -157,12 +181,13 @@ internal fun EditorCanvas(
             transform = editor.transform,
             connectionDraft = draftDraw,
             runningEdgeIds = activeRunningEdgeIds,
+            selectedEdgeId = editor.selectedEdgeId,
             reducedMotion = reducedMotion,
         )
 
         nodesWithDrag.forEach { node ->
             val originalNode = nodesById[node.id] ?: node
-            val ports = NodePorts.forType(type = NodeTypeMapper.toCatalog(node.type))
+            val ports = portsFor(node)
             EditorNode(
                 node = node,
                 transform = editor.transform,
@@ -173,6 +198,7 @@ internal fun EditorCanvas(
                 ports = ports,
                 reducedMotion = reducedMotion,
                 onSelect = { editor.toggleSelection(node.id) },
+                onOpenConfig = { onOpenNodeConfig(node.id) },
                 onLongPress = {
                     editor.multiSelectMode = true
                     editor.toggleSelection(node.id)
@@ -202,15 +228,18 @@ internal fun EditorCanvas(
                         }
                     }
                 },
-                onConnectionStart = {
-                    val anchors = nodeAnchors(node, density)
-                    // Pointer starts at the source port's canvas anchor; subsequent
+                onConnectionStart = { portLabel ->
+                    val anchor = outboundPortAnchor(node, ports, portLabel, density)
+                    // Pointer starts at the source port's canvas anchor (per-port, so the
+                    // preview edge originates exactly at the dot the user grabbed); subsequent
                     // `onConnectionMove` deltas accumulate against this seed in canvas-space.
+                    // sourcePortLabel is later forwarded to addConnection so the persisted
+                    // ConnectionModel.label identifies which outbound port the user picked.
                     editor.connectionInProgress = ConnectionDraft(
                         sourceNodeId = node.id,
-                        sourcePortLabel = "",
-                        pointerCanvasX = anchors.outX,
-                        pointerCanvasY = anchors.outY,
+                        sourcePortLabel = portLabel,
+                        pointerCanvasX = anchor.xCanvas,
+                        pointerCanvasY = anchor.yCanvas,
                     )
                 },
                 onConnectionMove = { dxCanvas, dyCanvas ->
@@ -232,7 +261,13 @@ internal fun EditorCanvas(
                             density = density,
                         )
                         if (target != null && target.id != draft.sourceNodeId) {
-                            onAddConnection(draft.sourceNodeId, target.id)
+                            // Forward the source-port label so multi-out nodes (IF / Queue /
+                            // Eval / IntentRouter) persist which port the user dragged from.
+                            onAddConnection(
+                                draft.sourceNodeId,
+                                target.id,
+                                draft.sourcePortLabel.ifBlank { null },
+                            )
                         }
                     }
                 },
@@ -295,9 +330,9 @@ private fun hitTestInputPort(
     var best: NodeModel? = null
     var bestDist = Float.MAX_VALUE
     nodes.forEach { node ->
-        val anchors = nodeAnchors(node, density)
-        val dx = anchors.inX - pointerCanvasX
-        val dy = anchors.inY - pointerCanvasY
+        val anchor = inboundPortAnchor(node, density)
+        val dx = anchor.xCanvas - pointerCanvasX
+        val dy = anchor.yCanvas - pointerCanvasY
         val dist = kotlin.math.hypot(dx, dy)
         if (dist < toleranceCanvas && dist < bestDist) {
             best = node

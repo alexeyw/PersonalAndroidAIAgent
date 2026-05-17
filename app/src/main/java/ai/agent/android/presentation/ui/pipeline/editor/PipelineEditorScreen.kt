@@ -101,6 +101,9 @@ fun PipelineEditorScreen(viewModel: OrchestratorViewModel, onBack: () -> Unit) {
             editor.quickAddAnchor != null -> {
                 editor.quickAddAnchor = null
             }
+            editor.selectedEdgeId != null -> {
+                editor.selectedEdgeId = null
+            }
             else -> onBack()
         }
     }
@@ -134,11 +137,23 @@ fun PipelineEditorScreen(viewModel: OrchestratorViewModel, onBack: () -> Unit) {
                 viewModel.replaceCurrentPipeline(next)
             },
             onDeleteSelection = {
-                if (editor.selection.isEmpty()) return@PipelineEditorContent
-                editor.undoRedo.push(uiState.currentPipeline)
-                editor.selection.forEach { id -> viewModel.removeNode(id) }
-                editor.selection = emptySet()
-                editor.multiSelectMode = false
+                // The toolbar Delete handles edge OR node selection — edge first, then nodes.
+                // Edge selection is exclusive with node selection (`EditorState.selectEdge`
+                // clears `selection`), so this resolves unambiguously.
+                val edgeId = editor.selectedEdgeId
+                when {
+                    edgeId != null -> {
+                        editor.undoRedo.push(uiState.currentPipeline)
+                        viewModel.removeConnection(edgeId)
+                        editor.selectedEdgeId = null
+                    }
+                    editor.selection.isNotEmpty() -> {
+                        editor.undoRedo.push(uiState.currentPipeline)
+                        editor.selection.forEach { id -> viewModel.removeNode(id) }
+                        editor.selection = emptySet()
+                        editor.multiSelectMode = false
+                    }
+                }
             },
             onAutoLayout = {
                 editor.undoRedo.push(uiState.currentPipeline)
@@ -162,19 +177,24 @@ fun PipelineEditorScreen(viewModel: OrchestratorViewModel, onBack: () -> Unit) {
             },
             onAddNode = { type, canvasX, canvasY ->
                 editor.undoRedo.push(uiState.currentPipeline)
-                viewModel.addNode(type, canvasX, canvasY)
-                val justAdded = uiState.currentPipeline.nodes.lastOrNull()
-                if (justAdded != null) {
-                    editor.configuringNodeId = justAdded.id
-                    editor.workingConfig = NodeConfigCodec.defaultFor(
-                        type = NodeTypeMapper.toCatalog(type),
-                        title = justAdded.label.ifBlank { type.name },
-                    )
-                }
+                // `addNode` now returns the new id synchronously — reading
+                // `uiState.currentPipeline.nodes.lastOrNull()` here would observe the
+                // pre-update snapshot since the StateFlow hasn't propagated yet.
+                val newId = viewModel.addNode(type, canvasX, canvasY)
+                editor.configuringNodeId = newId
+                editor.workingConfig = NodeConfigCodec.defaultFor(
+                    type = NodeTypeMapper.toCatalog(type),
+                    title = type.name,
+                )
             },
-            onAddConnection = { sourceId, targetId ->
+            onAddConnection = { sourceId, targetId, label ->
                 editor.undoRedo.push(uiState.currentPipeline)
-                viewModel.addConnection(sourceId, targetId)
+                viewModel.addConnection(sourceId, targetId, label)
+            },
+            onOpenNodeConfig = { nodeId ->
+                val target = uiState.currentPipeline.nodes.find { it.id == nodeId } ?: return@PipelineEditorContent
+                editor.configuringNodeId = nodeId
+                editor.workingConfig = NodeConfigCodec.decode(target)
             },
             onFocusNode = viewModel::requestFocusNode,
             onMultiSelectCancel = {

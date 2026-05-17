@@ -65,7 +65,8 @@ internal fun PipelineEditorContent(
     onOverflow: () -> Unit,
     onMoveNode: (nodeId: String, dxCanvas: Float, dyCanvas: Float) -> Unit,
     onAddNode: (type: NodeType, canvasX: Float, canvasY: Float) -> Unit,
-    onAddConnection: (sourceNodeId: String, targetNodeId: String) -> Unit,
+    onAddConnection: (sourceNodeId: String, targetNodeId: String, label: String?) -> Unit,
+    onOpenNodeConfig: (nodeId: String) -> Unit,
     onFocusNode: (String) -> Unit,
     onMultiSelectCancel: () -> Unit,
     onMultiSelectDelete: () -> Unit,
@@ -92,7 +93,9 @@ internal fun PipelineEditorContent(
                 onOverflow = onOverflow,
                 undoEnabled = editor.undoRedo.canUndo,
                 redoEnabled = editor.undoRedo.canRedo,
-                deleteEnabled = editor.selection.isNotEmpty(),
+                // Delete is now enabled for either a node selection OR a selected edge —
+                // tap an edge → press the Delete icon → connection removed.
+                deleteEnabled = editor.selection.isNotEmpty() || editor.selectedEdgeId != null,
                 runEnabled = validationErrors.isEmpty(),
             )
         }
@@ -106,6 +109,7 @@ internal fun PipelineEditorContent(
             onMoveNode = onMoveNode,
             onAddNode = onAddNode,
             onAddConnection = onAddConnection,
+            onOpenNodeConfig = onOpenNodeConfig,
             modifier = Modifier.weight(1f),
         )
 

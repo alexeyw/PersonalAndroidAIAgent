@@ -285,17 +285,28 @@ is an infinite pan / zoom canvas with the following gestures:
 - **Two-finger pinch** — zoom (`0.4×–2.0×`).
 - **Drag a node card** — move the node; it snaps to a 24 dp grid on
   release with a soft spring settle.
-- **Drag from an output port** — start a connection; release on a
-  target node's inbound port to draw the edge.
-- **Tap a node** — select it.
+- **Add a connection** — press and hold one of the node's **bottom
+  port dots**, then drag toward another node and release when the
+  finger is over its **top port dot**. For multi-output nodes
+  (`If` → True / False, `Queue` → Item / Done, `Eval` → Pass / Retry /
+  Fail, `Router` → one port per declared class) the dot you grabbed
+  determines which branch the edge represents.
+- **Delete a connection** — single-tap the edge to select it (the
+  edge highlights in accent colour); press the toolbar 🗑 Delete
+  button. The action is undoable.
+- **Tap a node** — select it (single-select mode).
+- **Tap a selected node** — opens its **configuration sheet**
+  (`NodeConfigSheet`) so you can edit the per-type properties.
+  Equivalent to "double-tap the node".
 - **Long-press a node** — enter multi-select. Subsequent taps toggle
   membership; the top bar swaps for a count + Cancel / Delete cluster.
-- **Long-press the empty canvas** — opens a radial quick-add menu with
-  one tile per node type. Picking a tile spawns the node at the
-  long-press point and opens its configuration sheet.
+- **Long-press the empty canvas** — opens a **radial quick-add menu**
+  with one labelled tile per node type. Picking a tile spawns the node
+  at the long-press point and immediately opens its configuration sheet.
 - **Toolbar** — inline-editable pipeline name on the left; Undo /
-  Redo / Delete (selection) / Auto-layout / Run / overflow on the
-  right. Auto-layout re-arranges nodes via a Sugiyama-style hierarchy
+  Redo / Delete (selection-aware: edge if one is selected, otherwise
+  selected nodes) / Auto-layout / Run / overflow on the right.
+  Auto-layout re-arranges nodes via a Sugiyama-style hierarchy
   (longest-path layering + median crossing reduction) so the graph
   reads top-to-bottom.
 
@@ -315,12 +326,18 @@ pipeline exported from the standalone browser editor (see
 
 ### Node configuration sheets
 
-Tapping the configuration affordance on any node opens a modal sheet
-with the per-type form set documented in `node-specs.md`. Every node
-type — Input, Output, LiteRt, Cloud, IntentRouter, IfCondition,
-Clarification, Tool, Decomposition, QueueProcessor, Evaluation,
-Summary — has its own form, with inline validation that disables Save
-until every required field is filled.
+Reach a node's per-type configuration by either:
+
+- **Tapping a node you've already selected** (single-tap → select,
+  tap again → open the sheet); or
+- **Picking the node from the radial quick-add menu** — newly added
+  nodes open the sheet immediately.
+
+The sheet is a modal bottom-sheet whose body is documented in
+`node-specs.md`. Every node type — Input, Output, LiteRt, Cloud,
+IntentRouter, IfCondition, Clarification, Tool, Decomposition,
+QueueProcessor, Evaluation, Summary — has its own form, with inline
+validation that disables Save until every required field is filled.
 
 ### Variables in system prompts
 

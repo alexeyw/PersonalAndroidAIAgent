@@ -239,11 +239,18 @@ class OrchestratorViewModel @Inject constructor(
     /**
      * Adds a new node to the canvas at the specified coordinates.
      *
+     * Returns the freshly-generated node id so the caller (typically the editor's quick-add
+     * flow) can immediately reference the new node — for example to open its `NodeConfigSheet`
+     * before the [uiState] StateFlow has propagated the update. Reading
+     * `uiState.currentPipeline.nodes.lastOrNull()` right after this call observes the
+     * pre-update value, so the returned id is the only reliable handle.
+     *
      * @param type The type of node to add.
      * @param x The x-coordinate for the node's position.
      * @param y The y-coordinate for the node's position.
+     * @return The unique identifier assigned to the newly-added node.
      */
-    fun addNode(type: NodeType, x: Float, y: Float) {
+    fun addNode(type: NodeType, x: Float, y: Float): String {
         val newNode = NodeModel(
             id = UUID.randomUUID().toString(),
             type = type,
@@ -258,6 +265,7 @@ class OrchestratorViewModel @Inject constructor(
             )
             state.copy(currentPipeline = updatedPipeline)
         }
+        return newNode.id
     }
 
     /**

@@ -927,6 +927,13 @@ class OrchestratorViewModelTest {
     // ─── Phase 21 / Task 9 — Pipeline editor hooks ───────────────────────────
 
     @Test
+    fun `addNode returns the id of the just-added node`() {
+        val id = viewModel.addNode(NodeType.LITE_RT, 10f, 20f)
+        val newNode = viewModel.uiState.value.currentPipeline.nodes.last()
+        assertEquals(id, newNode.id)
+    }
+
+    @Test
     fun `updateNodeFromEditor replaces the matching node`() {
         viewModel.addNode(NodeType.LITE_RT, 0f, 0f)
         val node = viewModel.uiState.value.currentPipeline.nodes.first()

@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Close
@@ -32,7 +33,6 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import app.knotwork.design.components.pipelineeditor.displayLabel
 import app.knotwork.design.components.pipelineeditor.glyph
 import app.knotwork.design.components.pipelineeditor.headerOnColor
 import app.knotwork.design.components.pipelineeditor.headerTint
@@ -43,8 +43,10 @@ import kotlin.math.cos
 import kotlin.math.sin
 import app.knotwork.design.components.pipelineeditor.NodeType as CatalogNodeType
 
-private const val MENU_RADIUS_DP = 96f
-private const val TILE_SIZE_DP = 56f
+private const val MENU_RADIUS_DP = 144f
+private const val TILE_SIZE_DP = 48f
+private const val TILE_LABEL_GAP_DP = 4f
+private const val TILE_LABEL_WIDTH_DP = 72f
 
 /**
  * 12-tile radial quick-add menu. Triggered by long-press on empty canvas space; tiles
@@ -94,21 +96,24 @@ internal fun QuickAddRadialMenu(
         )
         val types = CatalogNodeType.entries
         val count = types.size
+        val labelWidthPx = with(density) { TILE_LABEL_WIDTH_DP.dp.toPx() }
         types.forEachIndexed { index, type ->
             val theta = (TWO_PI * index / count) - HALF_PI
-            val tileScreenX = screenAnchorX + radius * cos(theta).toFloat() - tilePx / 2f
+            // Each tile is rendered as a Column (circle + label) so the placed origin sits
+            // at the column's top-left. Centre the column horizontally on the radial-anchor
+            // by subtracting half the wider of (tile, label) — labels otherwise drift off
+            // the radial path. Vertically anchor the circle's centre on the radius so the
+            // label hangs below the circle without offsetting the perceived ring.
+            val tileScreenX = screenAnchorX + radius * cos(theta).toFloat() - labelWidthPx / 2f
             val tileScreenY = screenAnchorY + radius * sin(theta).toFloat() - tilePx / 2f
             QuickAddTile(
                 type = type,
-                onPick = {
-                    onPick(NodeTypeMapper.toDomain(type))
-                },
+                onPick = { onPick(NodeTypeMapper.toDomain(type)) },
                 modifier = Modifier
                     .graphicsLayer {
                         translationX = tileScreenX
                         translationY = tileScreenY
-                    }
-                    .size(TILE_SIZE_DP.dp),
+                    },
             )
         }
         IconButton(
@@ -131,28 +136,62 @@ internal fun QuickAddRadialMenu(
 private fun QuickAddTile(type: CatalogNodeType, onPick: () -> Unit, modifier: Modifier) {
     val tint = type.headerTint()
     val onTint = headerOnColor(tint)
-    Surface(
+    Column(
         modifier = modifier
-            .clip(CircleShape)
+            .width(TILE_LABEL_WIDTH_DP.dp)
             .clickable(onClick = onPick),
-        color = tint,
-        shape = CircleShape,
-        tonalElevation = KnotworkTheme.elevation.el2,
-        shadowElevation = KnotworkTheme.elevation.el2,
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(TILE_LABEL_GAP_DP.dp),
     ) {
-        Column(
-            modifier = Modifier.fillMaxSize(),
-            verticalArrangement = Arrangement.Center,
-            horizontalAlignment = Alignment.CenterHorizontally,
+        Surface(
+            modifier = Modifier.size(TILE_SIZE_DP.dp).clip(CircleShape),
+            color = tint,
+            shape = CircleShape,
+            tonalElevation = KnotworkTheme.elevation.el2,
+            shadowElevation = KnotworkTheme.elevation.el2,
         ) {
-            Icon(
-                imageVector = type.glyph(),
-                contentDescription = type.displayLabel(),
-                tint = onTint,
-                modifier = Modifier.size(GLYPH_SIZE_DP.dp),
-            )
+            Column(
+                modifier = Modifier.fillMaxSize(),
+                verticalArrangement = Arrangement.Center,
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Icon(
+                    imageVector = type.glyph(),
+                    contentDescription = quickAddShortLabel(type),
+                    tint = onTint,
+                    modifier = Modifier.size(GLYPH_SIZE_DP.dp),
+                )
+            }
         }
+        Text(
+            text = quickAddShortLabel(type),
+            style = KnotworkTextStyles.LabelSm,
+            color = MaterialTheme.colorScheme.surface,
+            textAlign = TextAlign.Center,
+            maxLines = 1,
+            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+        )
     }
+}
+
+/**
+ * Short, mixed-case labels for the radial-menu tiles. Distinct from
+ * [CatalogNodeType.displayLabel] (which is UPPERCASE and used for the on-card header
+ * strip) — radial tiles need a human-readable word that fits in ~72 dp at LabelSm.
+ */
+private fun quickAddShortLabel(type: CatalogNodeType): String = when (type) {
+    CatalogNodeType.INPUT -> "Input"
+    CatalogNodeType.OUTPUT -> "Output"
+    CatalogNodeType.LITE_RT -> "Local LLM"
+    CatalogNodeType.CLOUD -> "Cloud"
+    CatalogNodeType.INTENT_ROUTER -> "Router"
+    CatalogNodeType.IF_CONDITION -> "If"
+    CatalogNodeType.CLARIFICATION -> "Ask user"
+    CatalogNodeType.TOOL -> "Tool"
+    CatalogNodeType.DECOMPOSITION -> "Decompose"
+    CatalogNodeType.QUEUE_PROCESSOR -> "Queue"
+    CatalogNodeType.EVALUATION -> "Evaluate"
+    CatalogNodeType.SUMMARY -> "Summary"
 }
 
 private const val SCRIM_ALPHA = 0.5f
