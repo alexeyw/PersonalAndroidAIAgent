@@ -5,6 +5,7 @@ import ai.agent.android.domain.models.NodeType
 import ai.agent.android.domain.models.PipelineGraph
 import ai.agent.android.presentation.ui.common.resolve
 import ai.agent.android.presentation.ui.orchestrator.OrchestratorViewModel
+import ai.agent.android.presentation.ui.orchestrator.components.PromptLibraryDialog
 import ai.agent.android.presentation.ui.pipeline.editor.config.NodeConfigCodec
 import ai.agent.android.presentation.ui.pipeline.editor.config.NodeTypeMapper
 import ai.agent.android.presentation.ui.pipeline.editor.core.AutoLayout
@@ -68,6 +69,12 @@ fun PipelineEditorScreen(viewModel: OrchestratorViewModel, onBack: () -> Unit) {
     // Edge to confirm-and-delete on long-press, paired with the toolbar's tap-select-then-Delete
     // path. Two routes to the same action so users find at least one of them.
     var pendingEdgeDelete by remember { mutableStateOf<String?>(null) }
+    // When the user taps the 📚 button on a prompt-bearing field inside NodeConfigSheet, the
+    // catalog form invokes onPickFromLibrary(category, apply). We stash both here, render the
+    // existing PromptLibraryDialog filtered by category, and on selection call back `apply`
+    // (the form's "set this field" lambda). Stays as a single state because only one library
+    // request can be pending at a time (the sheet is modal and the dialog stacks on top).
+    var pendingLibrary by remember { mutableStateOf<PendingPromptLibrary?>(null) }
 
     LaunchedEffect(runState) {
         editor.isRunning = runState.isRunning
@@ -252,6 +259,10 @@ fun PipelineEditorScreen(viewModel: OrchestratorViewModel, onBack: () -> Unit) {
                         editor.configuringNodeId = null
                         editor.workingConfig = null
                     },
+                    availableToolIds = uiState.availableTools.map { it.name },
+                    onPickFromLibrary = { category, apply ->
+                        pendingLibrary = PendingPromptLibrary(category = category, apply = apply)
+                    },
                 )
             }
         }
@@ -260,6 +271,18 @@ fun PipelineEditorScreen(viewModel: OrchestratorViewModel, onBack: () -> Unit) {
             hostState = snackbarHostState,
             modifier = Modifier.align(Alignment.BottomCenter),
         )
+
+        val libraryRequest = pendingLibrary
+        if (libraryRequest != null) {
+            PromptLibraryDialog(
+                prompts = uiState.promptTemplates.filter { it.category == libraryRequest.category },
+                onPromptSelected = { picked ->
+                    libraryRequest.apply(picked)
+                    pendingLibrary = null
+                },
+                onDismissRequest = { pendingLibrary = null },
+            )
+        }
 
         val edgeToDelete = pendingEdgeDelete
         if (edgeToDelete != null) {
@@ -295,6 +318,13 @@ fun PipelineEditorScreen(viewModel: OrchestratorViewModel, onBack: () -> Unit) {
         }
     }
 }
+
+/**
+ * Pending prompt-library request raised by the catalog sheet's 📚 button. [category]
+ * scopes which `PromptTemplate`s show up in the picker; [apply] is the form's "set this
+ * field" lambda, invoked when the user picks a prompt.
+ */
+private data class PendingPromptLibrary(val category: String, val apply: (String) -> Unit)
 
 /** Identifies the set of edge ids that should animate in run-trace mode. */
 private fun activeRunningEdges(activeNodeId: String?, graph: PipelineGraph): Set<String> {

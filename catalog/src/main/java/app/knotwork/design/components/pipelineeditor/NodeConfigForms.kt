@@ -6,10 +6,17 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AddCircleOutline
+import androidx.compose.material.icons.outlined.AutoStories
+import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.RemoveCircleOutline
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedTextField
@@ -57,9 +64,24 @@ object NodeConfigForms {
      * matching inline error under the field via [InlineError].
      * @param onChange emit the next [NodeConfig] when the user edits any
      * field. Forms perform pure copy()-style updates — no internal state.
+     * @param availableToolIds canonical tool ids exposed to [ToolFormBody] for its
+     * dropdown. Empty list (the default) falls back to a free-text input — useful for
+     * the catalog harness which has no app-level [ai.agent.android.domain.repositories.ToolRepository].
+     * @param onPickFromLibrary optional hook to open the prompt-library picker from
+     * any prompt-bearing field. The catalog form invokes it with
+     * `(category, applySelected)` where `category` matches a `PromptTemplate.category`
+     * and `applySelected` is the lambda the form wants run when the user picks a
+     * prompt; the screen renders its own picker dialog and calls `applySelected`.
+     * `null` (the default) hides the library button entirely.
      */
     @Composable
-    fun Body(config: NodeConfig, errors: Map<FieldId, ValidationFailure>, onChange: (NodeConfig) -> Unit) {
+    fun Body(
+        config: NodeConfig,
+        errors: Map<FieldId, ValidationFailure>,
+        onChange: (NodeConfig) -> Unit,
+        availableToolIds: List<String> = emptyList(),
+        onPickFromLibrary: ((category: String, apply: (String) -> Unit) -> Unit)? = null,
+    ) {
         Column(
             modifier = Modifier.fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp3),
@@ -72,20 +94,27 @@ object NodeConfigForms {
             when (config) {
                 is InputConfig -> InputFormBody(config, errors, onChange)
                 is OutputConfig -> OutputFormBody(config, onChange)
-                is LiteRtConfig -> LiteRtFormBody(config, errors, onChange)
-                is CloudConfig -> CloudFormBody(config, errors, onChange)
-                is IntentRouterConfig -> IntentRouterFormBody(config, errors, onChange)
+                is LiteRtConfig -> LiteRtFormBody(config, errors, onChange, onPickFromLibrary)
+                is CloudConfig -> CloudFormBody(config, errors, onChange, onPickFromLibrary)
+                is IntentRouterConfig -> IntentRouterFormBody(config, errors, onChange, onPickFromLibrary)
                 is IfConditionConfig -> IfConditionFormBody(config, errors, onChange)
-                is ClarificationConfig -> ClarificationFormBody(config, errors, onChange)
-                is ToolConfig -> ToolFormBody(config, errors, onChange)
-                is DecompositionConfig -> DecompositionFormBody(config, errors, onChange)
+                is ClarificationConfig -> ClarificationFormBody(config, errors, onChange, onPickFromLibrary)
+                is ToolConfig -> ToolFormBody(config, errors, onChange, availableToolIds)
+                is DecompositionConfig -> DecompositionFormBody(config, errors, onChange, onPickFromLibrary)
                 is QueueProcessorConfig -> QueueProcessorFormBody(config, errors, onChange)
-                is EvaluationConfig -> EvaluationFormBody(config, errors, onChange)
-                is SummaryConfig -> SummaryFormBody(config, errors, onChange)
+                is EvaluationConfig -> EvaluationFormBody(config, errors, onChange, onPickFromLibrary)
+                is SummaryConfig -> SummaryFormBody(config, errors, onChange, onPickFromLibrary)
             }
         }
     }
 }
+
+/**
+ * Typed shorthand for the optional prompt-library callback the screen passes down to
+ * forms. The form invokes it as `hook(category) { picked -> onChange(...) }`; the
+ * screen surfaces its own dialog and calls the inner lambda with the chosen prompt.
+ */
+private typealias PromptLibraryHook = (category: String, apply: (String) -> Unit) -> Unit
 
 // ─────────────────────────────────────────────────────────────────────────
 // Shared helpers
@@ -155,6 +184,7 @@ private fun TitleField(title: String, error: ValidationFailure?, onChange: (Stri
 
 /** Stringly-typed text field used for most per-type rows. */
 @Composable
+@Suppress("LongParameterList") // Adding the optional library hook here keeps every prompt field DRY.
 private fun TextField(
     label: String,
     value: String,
@@ -162,9 +192,32 @@ private fun TextField(
     singleLine: Boolean,
     monospace: Boolean,
     onChange: (String) -> Unit,
+    libraryCategory: String? = null,
+    onPickFromLibrary: PromptLibraryHook? = null,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp1)) {
-        FieldLabel(text = label)
+        // When the field is prompt-bearing and the screen provided a library hook,
+        // render a small icon button next to the label so users can replace the field
+        // contents with a saved prompt. Other (non-prompt) fields just show the label.
+        if (libraryCategory != null && onPickFromLibrary != null) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                FieldLabel(text = label)
+                Spacer(modifier = Modifier.weight(1f))
+                IconButton(
+                    onClick = { onPickFromLibrary(libraryCategory) { picked -> onChange(picked) } },
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.AutoStories,
+                        contentDescription = stringResource(R.string.knotwork_node_action_load_from_library),
+                    )
+                }
+            }
+        } else {
+            FieldLabel(text = label)
+        }
         OutlinedTextField(
             value = value,
             onValueChange = onChange,
@@ -242,11 +295,18 @@ private fun <T> SegmentedChipRow(label: String, values: List<Pair<T, String>>, s
             verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp1),
         ) {
             values.forEach { (value, label) ->
+                val isSelected = value == selected
                 KnotworkChip(
                     label = label,
-                    selected = value == selected,
+                    selected = isSelected,
                     onClick = { onSelect(value) },
                     style = ChipStyle.Tonal,
+                    // Compose Tonal chips at the project's primaryContainer tint are visibly
+                    // similar to the unselected tonal surface in some Knotwork palettes,
+                    // which made the Summary format (and other segmented-chip groups) look
+                    // unmarked. A leading check unambiguously surfaces the active state
+                    // regardless of theme contrast.
+                    leadingIcon = if (isSelected) Icons.Outlined.Check else null,
                 )
             }
         }
@@ -300,6 +360,7 @@ private fun LiteRtFormBody(
     config: LiteRtConfig,
     errors: Map<FieldId, ValidationFailure>,
     onChange: (NodeConfig) -> Unit,
+    onPickFromLibrary: PromptLibraryHook?,
 ) {
     TextField(
         label = stringResource(R.string.knotwork_node_field_model),
@@ -316,6 +377,8 @@ private fun LiteRtFormBody(
         singleLine = false,
         monospace = true,
         onChange = { next -> onChange(config.copy(systemPrompt = next)) },
+        libraryCategory = "LITE_RT",
+        onPickFromLibrary = onPickFromLibrary,
     )
     VariableChipsRow(onInsert = { variable ->
         onChange(config.copy(systemPrompt = config.systemPrompt + variable))
@@ -348,6 +411,7 @@ private fun CloudFormBody(
     config: CloudConfig,
     errors: Map<FieldId, ValidationFailure>,
     onChange: (NodeConfig) -> Unit,
+    onPickFromLibrary: PromptLibraryHook?,
 ) {
     SegmentedChipRow(
         label = stringResource(R.string.knotwork_node_field_provider),
@@ -375,6 +439,8 @@ private fun CloudFormBody(
         singleLine = false,
         monospace = true,
         onChange = { next -> onChange(config.copy(systemPrompt = next)) },
+        libraryCategory = "CLOUD",
+        onPickFromLibrary = onPickFromLibrary,
     )
     VariableChipsRow(onInsert = { variable ->
         onChange(config.copy(systemPrompt = config.systemPrompt + variable))
@@ -407,6 +473,7 @@ private fun IntentRouterFormBody(
     config: IntentRouterConfig,
     errors: Map<FieldId, ValidationFailure>,
     onChange: (NodeConfig) -> Unit,
+    onPickFromLibrary: PromptLibraryHook?,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp1)) {
         FieldLabel(text = stringResource(R.string.knotwork_node_field_classes))
@@ -472,6 +539,8 @@ private fun IntentRouterFormBody(
         singleLine = false,
         monospace = true,
         onChange = { next -> onChange(config.copy(classifierPrompt = next)) },
+        libraryCategory = "INTENT_ROUTER",
+        onPickFromLibrary = onPickFromLibrary,
     )
     Column(verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp1)) {
         SegmentedChipRow(
@@ -533,6 +602,7 @@ private fun ClarificationFormBody(
     config: ClarificationConfig,
     errors: Map<FieldId, ValidationFailure>,
     onChange: (NodeConfig) -> Unit,
+    onPickFromLibrary: PromptLibraryHook?,
 ) {
     TextField(
         label = stringResource(R.string.knotwork_node_field_question),
@@ -541,6 +611,8 @@ private fun ClarificationFormBody(
         singleLine = false,
         monospace = true,
         onChange = { next -> onChange(config.copy(questionTemplate = next)) },
+        libraryCategory = "CLARIFICATION",
+        onPickFromLibrary = onPickFromLibrary,
     )
     QuickRepliesField(
         replies = config.quickReplies,
@@ -609,15 +681,120 @@ private fun QuickRepliesField(replies: List<String>, error: ValidationFailure?, 
 private fun String.parseQuickReplies(): List<String> =
     if (isEmpty()) emptyList() else split(',').map { it.trim() }.filter { it.isNotEmpty() }
 
+/**
+ * Tool selector for [ToolFormBody]. When [availableToolIds] is non-empty, surfaces an
+ * `ExposedDropdownMenu` with an "Auto" entry plus every registered tool — selecting one
+ * commits the id straight into [ToolConfig.toolId]. The trailing "Custom tool id…"
+ * option (and the empty-tools fallback) reveals a free-text input so the user can wire
+ * an MCP tool that isn't yet enabled locally.
+ *
+ * Auto is modelled as `toolId = ""` (empty) — the runtime treats that as
+ * "let the agent pick the tool"; the validator's `REQUIRED` check still surfaces a
+ * Snackbar if the user saves without choosing, so blank stays a meaningful state.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun ToolFormBody(config: ToolConfig, errors: Map<FieldId, ValidationFailure>, onChange: (NodeConfig) -> Unit) {
-    TextField(
-        label = stringResource(R.string.knotwork_node_field_tool),
-        value = config.toolId,
+private fun ToolPicker(
+    config: ToolConfig,
+    error: ValidationFailure?,
+    availableToolIds: List<String>,
+    onChange: (NodeConfig) -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp1)) {
+        FieldLabel(text = stringResource(R.string.knotwork_node_field_tool))
+        var menuExpanded by remember { mutableStateOf(false) }
+        val autoLabel = stringResource(R.string.knotwork_node_field_tool_auto)
+        val customLabel = stringResource(R.string.knotwork_node_field_tool_custom)
+        // "Custom" mode lets the user enter a tool id not in `availableToolIds` (e.g., an
+        // MCP tool that's still being plumbed). Tracked locally because the catalog
+        // NodeConfig schema only has `toolId: String` — there's no separate "auto" /
+        // "custom" sentinel to derive this from on read.
+        var customMode by remember(config.toolId, availableToolIds) {
+            mutableStateOf(config.toolId.isNotBlank() && config.toolId !in availableToolIds)
+        }
+        val selectedLabel = when {
+            customMode || (config.toolId.isNotBlank() && config.toolId !in availableToolIds) ->
+                config.toolId.ifBlank { customLabel }
+            config.toolId.isBlank() -> autoLabel
+            else -> config.toolId
+        }
+        if (availableToolIds.isNotEmpty()) {
+            ExposedDropdownMenuBox(
+                expanded = menuExpanded,
+                onExpandedChange = { menuExpanded = it },
+            ) {
+                OutlinedTextField(
+                    value = selectedLabel,
+                    onValueChange = {},
+                    readOnly = true,
+                    singleLine = true,
+                    isError = error != null,
+                    textStyle = KnotworkTextStyles.MonoBase,
+                    trailingIcon = {
+                        ExposedDropdownMenuDefaults.TrailingIcon(expanded = menuExpanded)
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .menuAnchor(),
+                )
+                ExposedDropdownMenu(
+                    expanded = menuExpanded,
+                    onDismissRequest = { menuExpanded = false },
+                ) {
+                    DropdownMenuItem(
+                        text = { Text(text = autoLabel) },
+                        onClick = {
+                            customMode = false
+                            onChange(config.copy(toolId = ""))
+                            menuExpanded = false
+                        },
+                    )
+                    availableToolIds.forEach { id ->
+                        DropdownMenuItem(
+                            text = { Text(text = id, style = KnotworkTextStyles.MonoBase) },
+                            onClick = {
+                                customMode = false
+                                onChange(config.copy(toolId = id))
+                                menuExpanded = false
+                            },
+                        )
+                    }
+                    DropdownMenuItem(
+                        text = { Text(text = customLabel) },
+                        onClick = {
+                            customMode = true
+                            menuExpanded = false
+                        },
+                    )
+                }
+            }
+        }
+        if (customMode || availableToolIds.isEmpty()) {
+            OutlinedTextField(
+                value = config.toolId,
+                onValueChange = { next -> onChange(config.copy(toolId = next)) },
+                singleLine = true,
+                isError = error != null,
+                textStyle = KnotworkTextStyles.MonoBase,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+        InlineError(failure = error)
+    }
+}
+
+@Composable
+private fun ToolFormBody(
+    config: ToolConfig,
+    errors: Map<FieldId, ValidationFailure>,
+    onChange: (NodeConfig) -> Unit,
+    availableToolIds: List<String>,
+) {
+    ToolPicker(
+        config = config,
         error = errors[FieldId.TOOL_ID],
-        singleLine = true,
-        monospace = true,
-        onChange = { next -> onChange(config.copy(toolId = next)) },
+        availableToolIds = availableToolIds,
+        onChange = onChange,
     )
     Column(verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp1)) {
         FieldLabel(text = stringResource(R.string.knotwork_node_field_arg_mapping))
@@ -680,6 +857,7 @@ private fun DecompositionFormBody(
     config: DecompositionConfig,
     errors: Map<FieldId, ValidationFailure>,
     onChange: (NodeConfig) -> Unit,
+    onPickFromLibrary: PromptLibraryHook?,
 ) {
     TextField(
         label = stringResource(R.string.knotwork_node_field_planning_prompt),
@@ -688,6 +866,8 @@ private fun DecompositionFormBody(
         singleLine = false,
         monospace = true,
         onChange = { next -> onChange(config.copy(planningPrompt = next)) },
+        libraryCategory = "DECOMPOSITION",
+        onPickFromLibrary = onPickFromLibrary,
     )
     IntSliderField(
         label = stringResource(R.string.knotwork_node_field_max_subtasks),
@@ -753,6 +933,7 @@ private fun EvaluationFormBody(
     config: EvaluationConfig,
     errors: Map<FieldId, ValidationFailure>,
     onChange: (NodeConfig) -> Unit,
+    onPickFromLibrary: PromptLibraryHook?,
 ) {
     TextField(
         label = stringResource(R.string.knotwork_node_field_criteria_prompt),
@@ -761,6 +942,8 @@ private fun EvaluationFormBody(
         singleLine = false,
         monospace = true,
         onChange = { next -> onChange(config.copy(criteriaPrompt = next)) },
+        libraryCategory = "EVALUATION",
+        onPickFromLibrary = onPickFromLibrary,
     )
     IntSliderField(
         label = stringResource(R.string.knotwork_node_field_max_retries),
@@ -776,6 +959,7 @@ private fun SummaryFormBody(
     config: SummaryConfig,
     errors: Map<FieldId, ValidationFailure>,
     onChange: (NodeConfig) -> Unit,
+    onPickFromLibrary: PromptLibraryHook?,
 ) {
     SegmentedChipRow(
         label = stringResource(R.string.knotwork_node_field_format),
@@ -795,6 +979,8 @@ private fun SummaryFormBody(
             singleLine = false,
             monospace = true,
             onChange = { next -> onChange(config.copy(customPrompt = next.takeIf { it.isNotBlank() })) },
+            libraryCategory = "SUMMARY",
+            onPickFromLibrary = onPickFromLibrary,
         )
     }
     IntSliderField(

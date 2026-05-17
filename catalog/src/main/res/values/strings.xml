@@ -160,6 +160,9 @@
     <string name="knotwork_node_field_fallback_class">Fallback class</string>
     <string name="knotwork_node_action_add_class">Add class</string>
     <string name="knotwork_node_action_remove_class">Remove class</string>
+    <string name="knotwork_node_action_load_from_library">Load from library</string>
+    <string name="knotwork_node_field_tool_auto">Auto (let the agent pick)</string>
+    <string name="knotwork_node_field_tool_custom">Custom tool id…</string>
 
     <!-- Validation messages. -->
     <string name="knotwork_node_validation_title_empty">Title must not be empty</string>

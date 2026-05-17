@@ -57,6 +57,8 @@ fun NodeConfigSheet(
     onChange: (NodeConfig) -> Unit,
     onCancel: () -> Unit,
     onSave: (NodeConfig) -> Unit,
+    availableToolIds: List<String> = emptyList(),
+    onPickFromLibrary: ((category: String, apply: (String) -> Unit) -> Unit)? = null,
 ) {
     // `skipPartiallyExpanded = true` opens the sheet at its full height immediately
     // (no half-expanded state). Tall configs — IntentRouter with several classes, LiteRt
@@ -72,6 +74,8 @@ fun NodeConfigSheet(
             onChange = onChange,
             onCancel = onCancel,
             onSave = onSave,
+            availableToolIds = availableToolIds,
+            onPickFromLibrary = onPickFromLibrary,
         )
     }
 }
@@ -94,12 +98,15 @@ fun NodeConfigSheet(
  * crash at measure time there.
  */
 @Composable
+@Suppress("LongParameterList") // Sheet body stays in lockstep with NodeConfigSheet's params.
 private fun ScrollableNodeConfigSheetBody(
     config: NodeConfig,
     errors: Map<FieldId, ValidationFailure>,
     onChange: (NodeConfig) -> Unit,
     onCancel: () -> Unit,
     onSave: (NodeConfig) -> Unit,
+    availableToolIds: List<String>,
+    onPickFromLibrary: ((category: String, apply: (String) -> Unit) -> Unit)?,
 ) {
     val scrollState = rememberScrollState()
     Column(
@@ -110,7 +117,13 @@ private fun ScrollableNodeConfigSheetBody(
         verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp3),
     ) {
         SheetHeader(type = config.type)
-        NodeConfigForms.Body(config = config, errors = errors, onChange = onChange)
+        NodeConfigForms.Body(
+            config = config,
+            errors = errors,
+            onChange = onChange,
+            availableToolIds = availableToolIds,
+            onPickFromLibrary = onPickFromLibrary,
+        )
         Spacer(modifier = Modifier.size(KnotworkTheme.spacing.sp2))
         SheetActionRow(
             saveEnabled = errors.isEmpty(),
@@ -139,6 +152,8 @@ fun NodeConfigSheetBody(
     onChange: (NodeConfig) -> Unit,
     onCancel: () -> Unit,
     onSave: (NodeConfig) -> Unit,
+    availableToolIds: List<String> = emptyList(),
+    onPickFromLibrary: ((category: String, apply: (String) -> Unit) -> Unit)? = null,
 ) {
     Column(
         modifier = Modifier
@@ -147,7 +162,13 @@ fun NodeConfigSheetBody(
         verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp3),
     ) {
         SheetHeader(type = config.type)
-        NodeConfigForms.Body(config = config, errors = errors, onChange = onChange)
+        NodeConfigForms.Body(
+            config = config,
+            errors = errors,
+            onChange = onChange,
+            availableToolIds = availableToolIds,
+            onPickFromLibrary = onPickFromLibrary,
+        )
         Spacer(modifier = Modifier.size(KnotworkTheme.spacing.sp2))
         SheetActionRow(saveEnabled = errors.isEmpty(), onCancel = onCancel, onSave = { onSave(config) })
     }

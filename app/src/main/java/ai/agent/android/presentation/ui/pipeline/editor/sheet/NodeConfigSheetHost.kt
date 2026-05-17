@@ -30,6 +30,8 @@ internal fun NodeConfigSheetHost(
     onChange: (NodeConfig) -> Unit,
     onCancel: () -> Unit,
     onSave: (NodeConfig) -> Unit,
+    availableToolIds: List<String>,
+    onPickFromLibrary: (category: String, apply: (String) -> Unit) -> Unit,
 ) {
     NodeConfigSheet(
         config = config,
@@ -37,5 +39,7 @@ internal fun NodeConfigSheetHost(
         onChange = onChange,
         onCancel = onCancel,
         onSave = onSave,
+        availableToolIds = availableToolIds,
+        onPickFromLibrary = onPickFromLibrary,
     )
 }
