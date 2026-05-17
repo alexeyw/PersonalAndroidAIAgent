@@ -29,7 +29,6 @@ import androidx.compose.material.icons.outlined.DeleteOutline
 import androidx.compose.material.icons.outlined.DriveFileRenameOutline
 import androidx.compose.material.icons.outlined.FileDownload
 import androidx.compose.material.icons.outlined.FileUpload
-import androidx.compose.material.icons.outlined.Menu
 import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.WarningAmber
@@ -182,15 +181,6 @@ private fun LibraryTopBar(state: PipelineLibraryViewState, callbacks: PipelineLi
                     ),
                     style = KnotworkTextStyles.MonoSm,
                     color = KnotworkTheme.extended.onSurfaceMuted,
-                )
-            }
-        },
-        navigationIcon = {
-            IconButton(onClick = callbacks.onOpenDrawer) {
-                Icon(
-                    imageVector = Icons.Outlined.Menu,
-                    contentDescription = stringResource(R.string.knotwork_library_drawer_cd),
-                    tint = MaterialTheme.colorScheme.onSurface,
                 )
             }
         },

@@ -5,7 +5,6 @@ import ai.agent.android.domain.models.PipelineGraph
 import ai.agent.android.presentation.ui.common.asString
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AccountTree
@@ -203,18 +202,12 @@ fun PipelineLibraryScreen(
 
     Box(modifier = Modifier.fillMaxSize().testTag(tag = LIBRARY_ROOT_TEST_TAG)) {
         PipelineLibraryContent(state = viewState, callbacks = callbacks)
-        // Mockup places the pill FAB so its bottom half overlaps the
-        // bottom-nav strip (~64 dp tall). The catalog FAB does the brand
-        // styling; this overlay owns positioning. `offset(y = …)` shifts
-        // the pill down past the AppShellScaffold's content box so it
-        // sits on top of the nav bar.
         if (!viewState.isFabHidden) {
             PipelineLibraryFab(
                 onClick = callbacks.onNewPipeline,
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
-                    .padding(end = FAB_END_PADDING)
-                    .offset(y = FAB_BOTTOM_OVERLAP_OFFSET),
+                    .padding(end = FAB_END_PADDING, bottom = FAB_BOTTOM_PADDING),
             )
         }
         SnackbarHost(hostState = snackbarHostState)
@@ -369,9 +362,5 @@ private const val IMPORT_HINT_MESSAGE = "Use the import dialog in the editor for
 /** Inset from the right edge for the floating "+ New pipeline" FAB. */
 private val FAB_END_PADDING = 16.dp
 
-/**
- * Vertical offset applied to the FAB so it overlaps the bottom navigation
- * strip by roughly half its height — matches the mockup pose where the
- * pill's bottom edge tucks under the nav-bar baseline.
- */
-private val FAB_BOTTOM_OVERLAP_OFFSET = 24.dp
+/** Bottom inset for the FAB so it sits above the bottom-navigation strip. */
+private val FAB_BOTTOM_PADDING = 16.dp

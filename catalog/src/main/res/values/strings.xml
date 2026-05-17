@@ -172,8 +172,6 @@
         <item quantity="one">%1$d saved · %2$d default</item>
         <item quantity="other">%1$d saved · %2$d default</item>
     </plurals>
-    <!-- ContentDescription for the leading hamburger / drawer icon. -->
-    <string name="knotwork_library_drawer_cd">Open navigation drawer</string>
     <!-- ContentDescription for the trailing search icon. -->
     <string name="knotwork_library_search_icon_cd">Search pipelines</string>
     <!-- ContentDescription for the trailing overflow icon. -->
