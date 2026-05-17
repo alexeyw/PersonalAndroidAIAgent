@@ -16,6 +16,7 @@ import ai.agent.android.domain.pipelineio.PipelineJsonSerializer
 import ai.agent.android.domain.prompt.PromptTemplateEngine
 import ai.agent.android.domain.prompt.PromptVariableProvider
 import ai.agent.android.domain.repositories.ApiKeyRepository
+import ai.agent.android.domain.repositories.LocalModelRepository
 import ai.agent.android.domain.repositories.SettingsRepository
 import ai.agent.android.domain.repositories.ToolRepository
 import ai.agent.android.domain.usecases.CreatePipelineUseCase
@@ -71,6 +72,7 @@ class OrchestratorViewModel @Inject constructor(
     private val savePromptTemplateUseCase: SavePromptTemplateUseCase,
     private val apiKeyRepository: ApiKeyRepository,
     private val toolRepository: ToolRepository,
+    private val localModelRepository: LocalModelRepository,
     private val settingsRepository: SettingsRepository,
     private val promptTemplateEngine: PromptTemplateEngine,
     private val promptVariableProviders: Set<@JvmSuppressWildcards PromptVariableProvider>,
@@ -110,8 +112,28 @@ class OrchestratorViewModel @Inject constructor(
         observeSavedPipelines()
         observeProviderKeys()
         loadAvailableTools()
+        observeLocalModels()
         observePromptTemplates()
         observeDefaultPipelineId()
+    }
+
+    /**
+     * Mirrors `LocalModelRepository.getAllModels()` into [OrchestratorUiState.availableLocalModels]
+     * so the editor's `NodeConfigSheet` can feed the LITE_RT model dropdown straight from the
+     * installed-models registry (with the active model badged). Errors collapse into the same
+     * `errorMessage` channel the rest of the VM uses, so a model-list load failure doesn't fail
+     * the whole editor screen.
+     */
+    private fun observeLocalModels() {
+        viewModelScope.launch {
+            localModelRepository.getAllModels()
+                .catch { e ->
+                    _uiState.update { it.copy(errorMessage = throwableAsUiText(e)) }
+                }
+                .collect { models ->
+                    _uiState.update { it.copy(availableLocalModels = models) }
+                }
+        }
     }
 
     /**

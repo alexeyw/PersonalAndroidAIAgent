@@ -13,6 +13,7 @@ import ai.agent.android.domain.prompt.PromptSegment
 import ai.agent.android.domain.prompt.PromptTemplateEngine
 import ai.agent.android.domain.prompt.PromptVariableProvider
 import ai.agent.android.domain.repositories.ApiKeyRepository
+import ai.agent.android.domain.repositories.LocalModelRepository
 import ai.agent.android.domain.repositories.SettingsRepository
 import ai.agent.android.domain.repositories.ToolRepository
 import ai.agent.android.domain.usecases.CreatePipelineUseCase
@@ -57,6 +58,7 @@ class OrchestratorViewModelTest {
     private lateinit var savePromptTemplateUseCase: SavePromptTemplateUseCase
     private lateinit var apiKeyRepository: ApiKeyRepository
     private lateinit var toolRepository: ToolRepository
+    private lateinit var localModelRepository: LocalModelRepository
     private lateinit var settingsRepository: SettingsRepository
     private lateinit var promptTemplateEngine: PromptTemplateEngine
     private lateinit var providerDate: PromptVariableProvider
@@ -84,12 +86,14 @@ class OrchestratorViewModelTest {
         savePromptTemplateUseCase = mockk()
         apiKeyRepository = mockk()
         toolRepository = mockk()
+        localModelRepository = mockk()
         settingsRepository = mockk(relaxed = true) {
             every { defaultPipelineId } returns flowOf(null)
         }
 
         every { loadPipelineUseCase.observeAllPipelines() } returns flowOf(emptyList())
         every { getPromptTemplatesUseCase() } returns flowOf(emptyList())
+        every { localModelRepository.getAllModels() } returns flowOf(emptyList())
 
         every { apiKeyRepository.getOpenAIKey() } returns flowOf(null)
         every { apiKeyRepository.getAnthropicKey() } returns flowOf("key")
@@ -120,6 +124,7 @@ class OrchestratorViewModelTest {
             savePromptTemplateUseCase,
             apiKeyRepository,
             toolRepository,
+            localModelRepository,
             settingsRepository,
             promptTemplateEngine,
             setOf(providerDate, providerTime),

@@ -213,9 +213,17 @@ internal fun EditorCanvas(
             reducedMotion = reducedMotion,
         )
 
+        // Per-node ports are derived from the decoded NodeConfig (for IntentRouter
+        // classes + Evaluation retry visibility), which would otherwise re-decode the
+        // config JSON for every recomposition × every node × every connection during
+        // a hot drag. Memoise once per `graph.nodes` change so the canvas stays fluid.
+        val portsByNodeId = remember(graph.nodes) {
+            graph.nodes.associate { it.id to portsFor(it) }
+        }
+
         nodesWithDrag.forEach { node ->
             val originalNode = nodesById[node.id] ?: node
-            val ports = portsFor(node)
+            val ports = portsByNodeId[node.id] ?: portsFor(node)
             EditorNode(
                 node = node,
                 transform = editor.transform,

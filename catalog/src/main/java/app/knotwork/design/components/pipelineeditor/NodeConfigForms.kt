@@ -67,6 +67,8 @@ object NodeConfigForms {
      * @param availableToolIds canonical tool ids exposed to [ToolFormBody] for its
      * dropdown. Empty list (the default) falls back to a free-text input — useful for
      * the catalog harness which has no app-level [ai.agent.android.domain.repositories.ToolRepository].
+     * @param availableModels installed local models exposed to [LiteRtFormBody] for
+     * its dropdown. Empty list (the default) falls back to a free-text input.
      * @param onPickFromLibrary optional hook to open the prompt-library picker from
      * any prompt-bearing field. The catalog form invokes it with
      * `(category, applySelected)` where `category` matches a `PromptTemplate.category`
@@ -80,6 +82,7 @@ object NodeConfigForms {
         errors: Map<FieldId, ValidationFailure>,
         onChange: (NodeConfig) -> Unit,
         availableToolIds: List<String> = emptyList(),
+        availableModels: List<LocalModelOption> = emptyList(),
         onPickFromLibrary: ((category: String, apply: (String) -> Unit) -> Unit)? = null,
     ) {
         Column(
@@ -94,7 +97,7 @@ object NodeConfigForms {
             when (config) {
                 is InputConfig -> InputFormBody(config, errors, onChange)
                 is OutputConfig -> OutputFormBody(config, onChange)
-                is LiteRtConfig -> LiteRtFormBody(config, errors, onChange, onPickFromLibrary)
+                is LiteRtConfig -> LiteRtFormBody(config, errors, onChange, availableModels, onPickFromLibrary)
                 is CloudConfig -> CloudFormBody(config, errors, onChange, onPickFromLibrary)
                 is IntentRouterConfig -> IntentRouterFormBody(config, errors, onChange, onPickFromLibrary)
                 is IfConditionConfig -> IfConditionFormBody(config, errors, onChange)
@@ -274,11 +277,18 @@ private fun IntSliderField(
                 color = KnotworkTheme.extended.onSurfaceMuted,
             )
         }
+        // Use a continuous slider (`steps = 0`) and round on change. Naïve
+        // `steps = range.last - range.first - 1` would request one tick PER integer:
+        // Cloud's `timeoutMs` range `1_000..600_000` then asks Material3 Slider to
+        // allocate ~600 000 tick composables, freezing the main thread and ANRing the
+        // app when the CLOUD config sheet opens. Continuous + round-on-change gives
+        // identical integer increments at user-perceptible drag resolution without
+        // the tick-mark blow-up.
         Slider(
             value = value.toFloat(),
             onValueChange = { next -> onChange(next.toInt()) },
             valueRange = range.first.toFloat()..range.last.toFloat(),
-            steps = (range.last - range.first - 1).coerceAtLeast(0),
+            steps = 0,
         )
         InlineError(failure = error)
     }
@@ -360,15 +370,14 @@ private fun LiteRtFormBody(
     config: LiteRtConfig,
     errors: Map<FieldId, ValidationFailure>,
     onChange: (NodeConfig) -> Unit,
+    availableModels: List<LocalModelOption>,
     onPickFromLibrary: PromptLibraryHook?,
 ) {
-    TextField(
-        label = stringResource(R.string.knotwork_node_field_model),
-        value = config.modelId,
+    ModelPicker(
+        config = config,
         error = errors[FieldId.MODEL_ID],
-        singleLine = true,
-        monospace = true,
-        onChange = { next -> onChange(config.copy(modelId = next)) },
+        availableModels = availableModels,
+        onChange = onChange,
     )
     TextField(
         label = stringResource(R.string.knotwork_node_field_system_prompt),
@@ -773,6 +782,132 @@ private fun ToolPicker(
             OutlinedTextField(
                 value = config.toolId,
                 onValueChange = { next -> onChange(config.copy(toolId = next)) },
+                singleLine = true,
+                isError = error != null,
+                textStyle = KnotworkTextStyles.MonoBase,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+        InlineError(failure = error)
+    }
+}
+
+/**
+ * Local model selector for [LiteRtFormBody]. Mirrors [ToolPicker] but feeds off the
+ * installed-models registry instead of the tool registry: when [availableModels] is
+ * non-empty, surfaces an `ExposedDropdownMenu` with the currently-active model badged
+ * `· active` at the top, every other model below, and a trailing "Custom path…" entry
+ * that reveals a free-text input for paths not in the registry (e.g., a sideloaded
+ * `.tflite` the user hasn't added to the LocalModelRepository yet).
+ *
+ * Default selection rule when the user opens a fresh LiteRt node: if [LiteRtConfig.modelId]
+ * is blank and an active model is registered, the picker pre-fills the field with the
+ * active model's id on first open via [LaunchedEffect]. This satisfies the validator's
+ * REQUIRED check immediately and makes the "use the active model" path one tap to Save.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ModelPicker(
+    config: LiteRtConfig,
+    error: ValidationFailure?,
+    availableModels: List<LocalModelOption>,
+    onChange: (NodeConfig) -> Unit,
+) {
+    val activeModelId = remember(availableModels) { availableModels.firstOrNull { it.isActive }?.id }
+    // Auto-pick the active model on first open if the field is blank. This is a render-
+    // time write but it's idempotent (once modelId is non-blank the condition stops
+    // firing) and guarded against the no-active-model case.
+    LaunchedEffect(config.modelId, activeModelId) {
+        if (config.modelId.isBlank() && !activeModelId.isNullOrBlank()) {
+            onChange(config.copy(modelId = activeModelId))
+        }
+    }
+
+    Column(verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp1)) {
+        FieldLabel(text = stringResource(R.string.knotwork_node_field_model))
+        var menuExpanded by remember { mutableStateOf(false) }
+        val customLabel = stringResource(R.string.knotwork_node_field_model_custom)
+        val placeholder = stringResource(R.string.knotwork_node_field_model_placeholder)
+        val activeSuffixFmt = stringResource(R.string.knotwork_node_field_model_active_suffix)
+        // Custom mode mirrors ToolPicker: tracks whether the user is editing a path that
+        // isn't in `availableModels`. The catalog NodeConfig schema only has
+        // `modelId: String`, so we derive the mode locally rather than storing a sentinel.
+        var customMode by remember(config.modelId, availableModels) {
+            mutableStateOf(
+                config.modelId.isNotBlank() && availableModels.none { it.id == config.modelId },
+            )
+        }
+        // Render the registered model in the dropdown anchor; fall back to the raw id
+        // for custom paths; fall back to the placeholder for a blank field.
+        val matchedModel = availableModels.firstOrNull { it.id == config.modelId }
+        val selectedLabel = when {
+            matchedModel != null -> {
+                if (matchedModel.isActive) {
+                    activeSuffixFmt.format(matchedModel.displayName)
+                } else {
+                    matchedModel.displayName
+                }
+            }
+            customMode || config.modelId.isNotBlank() -> config.modelId.ifBlank { customLabel }
+            else -> placeholder
+        }
+
+        if (availableModels.isNotEmpty()) {
+            ExposedDropdownMenuBox(
+                expanded = menuExpanded,
+                onExpandedChange = { menuExpanded = it },
+            ) {
+                OutlinedTextField(
+                    value = selectedLabel,
+                    onValueChange = {},
+                    readOnly = true,
+                    singleLine = true,
+                    isError = error != null,
+                    textStyle = KnotworkTextStyles.MonoBase,
+                    trailingIcon = {
+                        ExposedDropdownMenuDefaults.TrailingIcon(expanded = menuExpanded)
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .menuAnchor(),
+                )
+                ExposedDropdownMenu(
+                    expanded = menuExpanded,
+                    onDismissRequest = { menuExpanded = false },
+                ) {
+                    // Active model surfaces at the top with a badge so the canonical
+                    // "just use the model you already have loaded" path is one tap.
+                    availableModels.sortedByDescending { it.isActive }.forEach { option ->
+                        DropdownMenuItem(
+                            text = {
+                                val label = if (option.isActive) {
+                                    activeSuffixFmt.format(option.displayName)
+                                } else {
+                                    option.displayName
+                                }
+                                Text(text = label, style = KnotworkTextStyles.MonoBase)
+                            },
+                            onClick = {
+                                customMode = false
+                                onChange(config.copy(modelId = option.id))
+                                menuExpanded = false
+                            },
+                        )
+                    }
+                    DropdownMenuItem(
+                        text = { Text(text = customLabel) },
+                        onClick = {
+                            customMode = true
+                            menuExpanded = false
+                        },
+                    )
+                }
+            }
+        }
+        if (customMode || availableModels.isEmpty()) {
+            OutlinedTextField(
+                value = config.modelId,
+                onValueChange = { next -> onChange(config.copy(modelId = next)) },
                 singleLine = true,
                 isError = error != null,
                 textStyle = KnotworkTextStyles.MonoBase,

@@ -58,6 +58,7 @@ fun NodeConfigSheet(
     onCancel: () -> Unit,
     onSave: (NodeConfig) -> Unit,
     availableToolIds: List<String> = emptyList(),
+    availableModels: List<LocalModelOption> = emptyList(),
     onPickFromLibrary: ((category: String, apply: (String) -> Unit) -> Unit)? = null,
 ) {
     // `skipPartiallyExpanded = true` opens the sheet at its full height immediately
@@ -75,6 +76,7 @@ fun NodeConfigSheet(
             onCancel = onCancel,
             onSave = onSave,
             availableToolIds = availableToolIds,
+            availableModels = availableModels,
             onPickFromLibrary = onPickFromLibrary,
         )
     }
@@ -106,6 +108,7 @@ private fun ScrollableNodeConfigSheetBody(
     onCancel: () -> Unit,
     onSave: (NodeConfig) -> Unit,
     availableToolIds: List<String>,
+    availableModels: List<LocalModelOption>,
     onPickFromLibrary: ((category: String, apply: (String) -> Unit) -> Unit)?,
 ) {
     val scrollState = rememberScrollState()
@@ -122,6 +125,7 @@ private fun ScrollableNodeConfigSheetBody(
             errors = errors,
             onChange = onChange,
             availableToolIds = availableToolIds,
+            availableModels = availableModels,
             onPickFromLibrary = onPickFromLibrary,
         )
         Spacer(modifier = Modifier.size(KnotworkTheme.spacing.sp2))
@@ -153,6 +157,7 @@ fun NodeConfigSheetBody(
     onCancel: () -> Unit,
     onSave: (NodeConfig) -> Unit,
     availableToolIds: List<String> = emptyList(),
+    availableModels: List<LocalModelOption> = emptyList(),
     onPickFromLibrary: ((category: String, apply: (String) -> Unit) -> Unit)? = null,
 ) {
     Column(
@@ -167,6 +172,7 @@ fun NodeConfigSheetBody(
             errors = errors,
             onChange = onChange,
             availableToolIds = availableToolIds,
+            availableModels = availableModels,
             onPickFromLibrary = onPickFromLibrary,
         )
         Spacer(modifier = Modifier.size(KnotworkTheme.spacing.sp2))

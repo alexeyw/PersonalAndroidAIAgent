@@ -1,6 +1,7 @@
 package ai.agent.android.presentation.ui.pipeline.editor.sheet
 
 import androidx.compose.runtime.Composable
+import app.knotwork.design.components.pipelineeditor.LocalModelOption
 import app.knotwork.design.components.pipelineeditor.NodeConfig
 import app.knotwork.design.components.pipelineeditor.NodeConfigSheet
 
@@ -31,6 +32,7 @@ internal fun NodeConfigSheetHost(
     onCancel: () -> Unit,
     onSave: (NodeConfig) -> Unit,
     availableToolIds: List<String>,
+    availableModels: List<LocalModelOption>,
     onPickFromLibrary: (category: String, apply: (String) -> Unit) -> Unit,
 ) {
     NodeConfigSheet(
@@ -40,6 +42,7 @@ internal fun NodeConfigSheetHost(
         onCancel = onCancel,
         onSave = onSave,
         availableToolIds = availableToolIds,
+        availableModels = availableModels,
         onPickFromLibrary = onPickFromLibrary,
     )
 }

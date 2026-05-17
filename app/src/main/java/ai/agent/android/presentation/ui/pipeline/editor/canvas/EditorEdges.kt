@@ -2,6 +2,7 @@ package ai.agent.android.presentation.ui.pipeline.editor.canvas
 
 import ai.agent.android.domain.models.ConnectionModel
 import ai.agent.android.domain.models.NodeModel
+import ai.agent.android.presentation.ui.pipeline.editor.config.NodeConfigCodec
 import ai.agent.android.presentation.ui.pipeline.editor.config.NodeTypeMapper
 import ai.agent.android.presentation.ui.pipeline.editor.core.BezierEdge
 import ai.agent.android.presentation.ui.pipeline.editor.core.CanvasTransform
@@ -21,6 +22,8 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
+import app.knotwork.design.components.pipelineeditor.EvaluationConfig
+import app.knotwork.design.components.pipelineeditor.IntentRouterConfig
 import app.knotwork.design.components.pipelineeditor.NodePorts
 import app.knotwork.design.components.pipelineeditor.OutboundPort
 import app.knotwork.design.theme.KnotworkTheme
@@ -103,7 +106,30 @@ private fun matchesPort(port: OutboundPort, label: String?): Boolean = when {
 }
 
 /** Convenience: builds the catalog `NodePorts` for a domain node (no per-type overrides). */
-internal fun portsFor(node: NodeModel): NodePorts = NodePorts.forType(type = NodeTypeMapper.toCatalog(node.type))
+/**
+ * Builds the catalog `NodePorts` for a domain node, threading through the per-type
+ * overrides that depend on the decoded `NodeConfig`:
+ *
+ *  - `INTENT_ROUTER` → one [OutboundPort.Custom] per declared class. Without this the
+ *    routes the user just typed into the config sheet would never appear as outbound
+ *    ports on the node card.
+ *  - `EVALUATION` → the `Retry` port is only surfaced when `maxRetries > 0`.
+ *
+ *  All other types ignore the extra parameters. Decoding is cheap (small JSON
+ *  documents, fast fallback to legacy flat fields), and EditorCanvas memoises the
+ *  result per node so port lookup during a hot drag doesn't re-decode.
+ */
+internal fun portsFor(node: NodeModel): NodePorts {
+    val catalogType = NodeTypeMapper.toCatalog(node.type)
+    val decoded = NodeConfigCodec.decode(node)
+    val intentClasses = (decoded as? IntentRouterConfig)?.classes?.map { it.name }.orEmpty()
+    val maxRetries = (decoded as? EvaluationConfig)?.maxRetries ?: 0
+    return NodePorts.forType(
+        type = catalogType,
+        intentClasses = intentClasses,
+        maxRetries = maxRetries,
+    )
+}
 
 /**
  * Draws every edge in [connections] as a cubic Bezier between the source's outbound

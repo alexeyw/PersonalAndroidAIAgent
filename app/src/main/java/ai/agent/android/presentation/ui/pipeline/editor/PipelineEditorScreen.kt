@@ -36,6 +36,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import app.knotwork.design.components.pipelineeditor.LocalModelOption
 import app.knotwork.design.theme.KnotworkTheme
 import kotlinx.coroutines.launch
 
@@ -260,6 +261,19 @@ fun PipelineEditorScreen(viewModel: OrchestratorViewModel, onBack: () -> Unit) {
                         editor.workingConfig = null
                     },
                     availableToolIds = uiState.availableTools.map { it.name },
+                    availableModels = uiState.availableLocalModels.map { model ->
+                        // The catalog `LocalModelOption.id` is the canonical identifier
+                        // written into `LiteRtConfig.modelId`. We use the model's `path`
+                        // because the runtime path is what the LiteRT engine actually
+                        // loads — and `NodeConfigCodec.deriveFromLegacy` already maps
+                        // legacy `node.modelPath` into `LiteRtConfig.modelId`, so the
+                        // catalog identifier stays consistent across read / write.
+                        LocalModelOption(
+                            id = model.path,
+                            displayName = model.name,
+                            isActive = model.isActive,
+                        )
+                    },
                     onPickFromLibrary = { category, apply ->
                         pendingLibrary = PendingPromptLibrary(category = category, apply = apply)
                     },
