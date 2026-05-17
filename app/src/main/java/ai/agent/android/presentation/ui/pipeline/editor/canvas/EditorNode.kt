@@ -12,7 +12,7 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
@@ -157,15 +157,21 @@ internal fun EditorNode(
             multiSelected = multiSelected,
             ports = ports,
         )
-        // Output-port hit target — invisible 24 dp circle overlaid on the bottom-centre dot.
+        // Output-port hit target — invisible 24 dp circle straddling the node's bottom edge
+        // so it lines up with the catalog NodeCard's port dot (which protrudes 6 dp past
+        // the card). `Modifier.padding` rejects negative values, so we shift the sized box
+        // down by half its diameter via `Modifier.offset` (which accepts negative offsets);
+        // BoxScope.align places the box's bottom edge at the parent's bottom, then offset
+        // pushes it down 12 dp so half the hit-target overflows the node.
+        //
         // Routed to its own pointerInput so the gesture arbitration is unambiguous:
         // dragging from inside this Box always means "start a connection", never "move the node".
         if (ports.outbound.isNotEmpty()) {
             Box(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
-                    .padding(bottom = (-PORT_HIT_TARGET_DP / 2).dp)
                     .size(PORT_HIT_TARGET_DP.dp)
+                    .offset(y = (PORT_HIT_TARGET_DP / 2).dp)
                     .clip(CircleShape)
                     .background(Color.Transparent)
                     .pointerInput(node.id) {
