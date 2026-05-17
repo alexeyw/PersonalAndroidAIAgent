@@ -4,16 +4,14 @@ import ai.agent.android.domain.models.ConnectionModel
 import ai.agent.android.domain.models.NodeModel
 import ai.agent.android.presentation.ui.pipeline.editor.core.BezierEdge
 import ai.agent.android.presentation.ui.pipeline.editor.core.CanvasTransform
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
@@ -94,18 +92,24 @@ internal fun EditorEdges(
     val dotRadius = with(density) { 4.dp.toPx() }
     val dotTravelSpeedPx = with(density) { DOT_TRAVEL_SPEED_DP_PER_SEC.dp.toPx() }
 
-    // One shared infinite transition drives every traveling dot; per-edge phase shifts come
-    // from arc-length-derived durations so a longer edge takes proportionally longer.
-    val transition = rememberInfiniteTransition(label = "edge-traveling-dot")
-    val travelProgress: Float by transition.animateFloat(
-        initialValue = 0f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = TRAVEL_BASE_DURATION_MS, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart,
-        ),
-        label = "edge-traveling-dot-progress",
-    )
+    // Continuous elapsed-time tick (in milliseconds since first frame) drives every running
+    // edge's traveling dot. Storing a monotonically increasing scalar — rather than the prior
+    // shared `0..1` infinite transition — lets each edge compute its own phase as
+    // `(timeMs / 1000f / cycleSec) % 1f` regardless of how long the edge is: a 4-second
+    // cycle no longer races a 2-second reset window and teleports back to the source.
+    //
+    // `withFrameNanos` runs only when the host has running edges (this composable is only in
+    // the tree while the editor is mounted and edges are drawn); when none are running we
+    // still tick, but the per-edge branch below short-circuits before computing positions.
+    val animateRunning = runningEdgeIds.isNotEmpty() && !reducedMotion
+    var timeMs by remember { mutableLongStateOf(0L) }
+    LaunchedEffect(animateRunning) {
+        if (!animateRunning) return@LaunchedEffect
+        val startNanos = withFrameNanosCompat { it }
+        while (true) {
+            withFrameNanosCompat { now -> timeMs = (now - startNanos) / NS_PER_MS }
+        }
+    }
 
     Canvas(modifier = modifier.fillMaxSize()) {
         connections.forEach { c ->
@@ -142,9 +146,13 @@ internal fun EditorEdges(
                 val phase = if (reducedMotion) {
                     MIDPOINT_T
                 } else {
+                    // Each edge cycles independently in (arcLength / dotTravelSpeedPx) seconds,
+                    // floored at MIN_CYCLE_SECONDS so very short edges don't spin so fast they
+                    // strobe. `timeMs` is the continuous elapsed-time tick — no shared base
+                    // duration that could clip long edges.
                     val cycleSec = (arcLength / dotTravelSpeedPx).coerceAtLeast(MIN_CYCLE_SECONDS)
-                    val baseCycleSec = TRAVEL_BASE_DURATION_MS / MS_PER_SEC.toFloat()
-                    (travelProgress * baseCycleSec / cycleSec) % 1f
+                    val timeSec = timeMs / MS_PER_SEC.toFloat()
+                    (timeSec / cycleSec) % 1f
                 }
                 val (dx, dy) = BezierEdge.pointAt(
                     phase,
@@ -198,9 +206,17 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawPreviewEdge(
     )
 }
 
-private const val TRAVEL_BASE_DURATION_MS = 2_000
 private const val MS_PER_SEC = 1_000
+private const val NS_PER_MS = 1_000_000L
 private const val MIN_CYCLE_SECONDS = 0.5f
 private const val MIDPOINT_T = 0.5f
 private const val EDGE_STROKE_RUNNING_FACTOR = 1.5f
 private const val EDGE_PREVIEW_STROKE_FACTOR = 1.5f
+
+/**
+ * Thin wrapper over [androidx.compose.runtime.withFrameNanos] so the public
+ * surface signature stays one line and the import block does not gain a noisy
+ * `kotlin.coroutines` re-export. Exists purely to keep [EditorEdges] readable.
+ */
+private suspend inline fun <R> withFrameNanosCompat(crossinline block: (Long) -> R): R =
+    androidx.compose.runtime.withFrameNanos { nanos -> block(nanos) }

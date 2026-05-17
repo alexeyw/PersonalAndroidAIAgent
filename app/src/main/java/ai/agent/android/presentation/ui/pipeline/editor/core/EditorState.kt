@@ -80,19 +80,26 @@ class EditorState(undoCapacity: Int = EditorUndoRedo.DEFAULT_CAPACITY) {
 }
 
 /**
- * Description of a connection being drawn from an output port. The canvas tracks the
- * pointer in screen space and unprojects on demand for hit-testing.
+ * Description of a connection being drawn from an output port. The pointer is tracked in
+ * **canvas-space** (not screen space): both the source-port anchor and the pointer live in
+ * the same un-projected coordinate system used by `NodeModel.x / y`. The edge layer projects
+ * through [CanvasTransform] at draw time; hit-testing for the connection's drop target also
+ * runs in canvas-space.
+ *
+ * Keeping the draft in canvas-space avoids mixing coordinate systems while the user pans /
+ * zooms the canvas mid-drag and removes a class of double-scaling bugs that crept in when
+ * the draft used screen-space.
  *
  * @property sourceNodeId id of the originating node.
  * @property sourcePortLabel label of the originating outbound port (empty for single-out nodes).
- * @property pointerScreenX live screen-X of the pointer (drawing the preview edge).
- * @property pointerScreenY live screen-Y of the pointer.
+ * @property pointerCanvasX live canvas-X of the pointer.
+ * @property pointerCanvasY live canvas-Y of the pointer.
  */
 data class ConnectionDraft(
     val sourceNodeId: String,
     val sourcePortLabel: String,
-    val pointerScreenX: Float,
-    val pointerScreenY: Float,
+    val pointerCanvasX: Float,
+    val pointerCanvasY: Float,
 )
 
 /**

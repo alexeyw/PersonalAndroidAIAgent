@@ -121,7 +121,12 @@ internal fun EditorCanvas(
                     },
                 )
             }
-            .pointerInput(graph.id, editor.transform) {
+            // CRITICAL: `editor.transform` is intentionally NOT in the key list. It mutates
+            // on every drag frame; including it here would cancel + restart `detectDragGestures`
+            // every tick and stutter the pan to death. `editor` is a stable state holder, so
+            // reading `editor.transform` inside the lambda gives the current value without
+            // ever re-keying the modifier.
+            .pointerInput(graph.id) {
                 detectDragGestures(
                     onDrag = { _, drag ->
                         editor.transform = editor.transform.panBy(drag.x, drag.y)
@@ -132,12 +137,18 @@ internal fun EditorCanvas(
         val draftDraw = editor.connectionInProgress?.let { draft ->
             val source = nodesByIdLive[draft.sourceNodeId] ?: return@let null
             val anchors = nodeAnchors(source, density)
+            // The draft is stored in canvas-space (see ConnectionDraft KDoc); project both
+            // anchor and live pointer through `transform` here so the draw layer stays in
+            // screen-space and doesn't need to know about CanvasTransform.
             ConnectionDraftDrawData(
                 sourceScreen = Offset(
                     editor.transform.canvasToScreenX(anchors.outX),
                     editor.transform.canvasToScreenY(anchors.outY),
                 ),
-                pointerScreen = Offset(draft.pointerScreenX, draft.pointerScreenY),
+                pointerScreen = Offset(
+                    editor.transform.canvasToScreenX(draft.pointerCanvasX),
+                    editor.transform.canvasToScreenY(draft.pointerCanvasY),
+                ),
             )
         }
         EditorEdges(
@@ -166,11 +177,16 @@ internal fun EditorCanvas(
                     editor.multiSelectMode = true
                     editor.toggleSelection(node.id)
                 },
-                onDrag = { dxScreen, dyScreen ->
-                    val dxCanvas = dxScreen / editor.transform.scale
-                    val dyCanvas = dyScreen / editor.transform.scale
+                onDrag = { dxCanvas, dyCanvas ->
+                    // EditorNode emits canvas-space deltas (its pointerInput is wrapped by a
+                    // `graphicsLayer` whose scale already includes `transform.scale`, so the
+                    // dragAmount Compose delivers is in the node's un-scaled layout space —
+                    // i.e. canvas pixels). Dividing by `transform.scale` again here would
+                    // double-scale the delta and make the node lag behind the finger when
+                    // zoomed in. Accumulate the canvas-space delta directly.
                     val prev = dragDeltas.value[node.id] ?: (0f to 0f)
-                    dragDeltas.value = dragDeltas.value + (node.id to (prev.first + dxCanvas to prev.second + dyCanvas))
+                    dragDeltas.value = dragDeltas.value +
+                        (node.id to (prev.first + dxCanvas to prev.second + dyCanvas))
                 },
                 onDragEnd = {
                     val delta = dragDeltas.value[node.id]
@@ -188,27 +204,29 @@ internal fun EditorCanvas(
                 },
                 onConnectionStart = {
                     val anchors = nodeAnchors(node, density)
+                    // Pointer starts at the source port's canvas anchor; subsequent
+                    // `onConnectionMove` deltas accumulate against this seed in canvas-space.
                     editor.connectionInProgress = ConnectionDraft(
                         sourceNodeId = node.id,
                         sourcePortLabel = "",
-                        pointerScreenX = editor.transform.canvasToScreenX(anchors.outX),
-                        pointerScreenY = editor.transform.canvasToScreenY(anchors.outY),
+                        pointerCanvasX = anchors.outX,
+                        pointerCanvasY = anchors.outY,
                     )
                 },
-                onConnectionMove = { screenX, screenY ->
+                onConnectionMove = { dxCanvas, dyCanvas ->
                     val draft = editor.connectionInProgress ?: return@EditorNode
                     editor.connectionInProgress = draft.copy(
-                        pointerScreenX = screenX,
-                        pointerScreenY = screenY,
+                        pointerCanvasX = draft.pointerCanvasX + dxCanvas,
+                        pointerCanvasY = draft.pointerCanvasY + dyCanvas,
                     )
                 },
-                onConnectionEnd = { _, _ ->
+                onConnectionEnd = {
                     val draft = editor.connectionInProgress
                     editor.connectionInProgress = null
                     if (draft != null) {
                         val target = hitTestInputPort(
-                            screenX = draft.pointerScreenX,
-                            screenY = draft.pointerScreenY,
+                            pointerCanvasX = draft.pointerCanvasX,
+                            pointerCanvasY = draft.pointerCanvasY,
                             nodes = nodesByIdLive.values.toList(),
                             transform = editor.transform,
                             density = density,
@@ -258,28 +276,30 @@ internal fun EditorCanvas(
 private typealias IntPair = Pair<Int, Int>
 
 /**
- * Returns the node whose inbound port is closest to the screen-space point — used to
- * decide which node a release-from-port gesture lands on. Returns `null` when no node
- * is within the hit tolerance of [INBOUND_HIT_DP].
+ * Returns the node whose inbound port is closest to a **canvas-space** point — used to
+ * decide which node a release-from-port gesture lands on. Returns `null` when no node is
+ * within the hit tolerance of [INBOUND_HIT_DP].
+ *
+ * The tolerance is supplied in dp (a screen-space measure) and is divided by the current
+ * canvas scale so that the user always gets the same visual tolerance regardless of zoom.
  */
 private fun hitTestInputPort(
-    screenX: Float,
-    screenY: Float,
+    pointerCanvasX: Float,
+    pointerCanvasY: Float,
     nodes: List<NodeModel>,
     transform: CanvasTransform,
     density: androidx.compose.ui.unit.Density,
 ): NodeModel? {
-    val tolerancePx = with(density) { INBOUND_HIT_DP.dp.toPx() }
+    val toleranceScreenPx = with(density) { INBOUND_HIT_DP.dp.toPx() }
+    val toleranceCanvas = toleranceScreenPx / transform.scale
     var best: NodeModel? = null
     var bestDist = Float.MAX_VALUE
     nodes.forEach { node ->
         val anchors = nodeAnchors(node, density)
-        val sx = transform.canvasToScreenX(anchors.inX)
-        val sy = transform.canvasToScreenY(anchors.inY)
-        val dx = sx - screenX
-        val dy = sy - screenY
+        val dx = anchors.inX - pointerCanvasX
+        val dy = anchors.inY - pointerCanvasY
         val dist = kotlin.math.hypot(dx, dy)
-        if (dist < tolerancePx && dist < bestDist) {
+        if (dist < toleranceCanvas && dist < bestDist) {
             best = node
             bestDist = dist
         }

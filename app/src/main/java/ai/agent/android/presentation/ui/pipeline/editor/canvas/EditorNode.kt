@@ -20,7 +20,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -28,7 +27,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import app.knotwork.design.components.pipelineeditor.NodeCard
 import app.knotwork.design.components.pipelineeditor.NodeError
@@ -60,16 +58,21 @@ private const val DRAG_PICKUP_DURATION_MS = 100
  * @param reducedMotion reduced-motion flag — pickup / release animations collapse to instant.
  * @param onSelect invoked on tap.
  * @param onLongPress invoked on long-press (multi-select entry).
- * @param onDrag invoked while the user is dragging the node; receives screen-space
- * deltas which the caller un-projects through [transform] before committing.
+ * @param onDrag invoked while the user is dragging the node; receives **canvas-space**
+ * deltas (the per-event `dragAmount` from `detectDragGestures`, which Compose delivers in
+ * the pointerInput modifier's local layout space — that already accounts for the
+ * `graphicsLayer` scale wrapping this composable, so the deltas line up with canvas
+ * coordinates without a second division by `transform.scale`).
  * @param onDragEnd invoked once the pickup-release animation has settled; caller commits
  * the final canvas-space position to the ViewModel.
  * @param onConnectionStart invoked when the user starts dragging from the outbound port.
  * The caller switches into connection-draft mode.
- * @param onConnectionMove receives subsequent pointer positions while the connection
- * draft is active.
- * @param onConnectionEnd invoked on release — passes the final screen-space pointer
- * position; caller hit-tests target ports.
+ * @param onConnectionMove receives per-event **canvas-space** deltas for the connection
+ * pointer (same coordinate-space rationale as [onDrag]). The caller accumulates them into
+ * `EditorState.connectionInProgress.pointerCanvas{X,Y}`.
+ * @param onConnectionEnd invoked on release. The caller hit-tests the accumulated
+ * canvas-space pointer position from `EditorState.connectionInProgress` directly — no
+ * coordinate parameters are needed here.
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -85,15 +88,12 @@ internal fun EditorNode(
     reducedMotion: Boolean,
     onSelect: () -> Unit,
     onLongPress: () -> Unit,
-    onDrag: (dxScreen: Float, dyScreen: Float) -> Unit,
+    onDrag: (dxCanvas: Float, dyCanvas: Float) -> Unit,
     onDragEnd: () -> Unit,
     onConnectionStart: () -> Unit,
-    onConnectionMove: (pointerScreenX: Float, pointerScreenY: Float) -> Unit,
-    onConnectionEnd: (pointerScreenX: Float, pointerScreenY: Float) -> Unit,
+    onConnectionMove: (dxCanvas: Float, dyCanvas: Float) -> Unit,
+    onConnectionEnd: () -> Unit,
 ) {
-    val density = LocalDensity.current
-    val portHitPx = with(density) { PORT_HIT_TARGET_DP.dp.toPx() }
-    val scope = rememberCoroutineScope()
     val scale = remember { AnimFloat(1f) }
     var isDragging by remember { mutableStateOf(false) }
     LaunchedEffect(isDragging) {
@@ -171,21 +171,15 @@ internal fun EditorNode(
                     .pointerInput(node.id) {
                         detectDragGestures(
                             onDragStart = { onConnectionStart() },
-                            onDrag = { change, _ ->
-                                onConnectionMove(
-                                    screenX + change.position.x,
-                                    screenY + change.position.y + portHitPx,
-                                )
-                            },
-                            onDragEnd = {
-                                // Final pointer is at the last reported position; the canvas
-                                // tracks pointer continuously via onConnectionMove and the
-                                // ViewModel reads it from EditorState.
-                                onConnectionEnd(0f, 0f)
-                            },
-                            onDragCancel = {
-                                onConnectionEnd(0f, 0f)
-                            },
+                            // Emit canvas-space deltas only. Using `change.position` (absolute
+                            // pointer in the port-Box's local coords) and adding it to the
+                            // node's screen-space anchor would mix coordinate systems and
+                            // make the preview edge snap to the node's top-left on drag start;
+                            // accumulating `dragAmount` keeps the pointer in canvas-space and
+                            // the canvas projects it back to screen for drawing.
+                            onDrag = { _, dragAmount -> onConnectionMove(dragAmount.x, dragAmount.y) },
+                            onDragEnd = { onConnectionEnd() },
+                            onDragCancel = { onConnectionEnd() },
                         )
                     },
             )
