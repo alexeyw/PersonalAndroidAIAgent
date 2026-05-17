@@ -257,29 +257,25 @@
 
     <!-- ============ Onboarding pager ============ -->
 
-    <!-- Skip button shown on steps 2-4. -->
+    <!-- Brand title rendered in the onboarding top app bar next to the logo glyph. -->
+    <string name="knotwork_onboarding_brand_title">Android AI Agent</string>
+    <!-- Skip button — visible on every step except the final one. -->
     <string name="knotwork_onboarding_skip">Skip</string>
-    <!-- Back button on the page-control row. -->
-    <string name="knotwork_onboarding_back">Back</string>
-    <!-- Next button on the page-control row. -->
-    <string name="knotwork_onboarding_next">Next</string>
+    <!-- Primary CTA on steps 1-3. -->
+    <string name="knotwork_onboarding_continue">Continue</string>
     <!-- Final-step "Finish" button label. -->
-    <string name="knotwork_onboarding_finish">Finish &amp; open Chat</string>
+    <string name="knotwork_onboarding_finish">Open Chat</string>
 
-    <!-- Step 1 hero placeholder caption. -->
-    <string name="knotwork_onboarding_welcome_caption">product hero</string>
     <!-- Step 1 headline. -->
-    <string name="knotwork_onboarding_welcome_headline">Knotwork runs on your device.</string>
+    <string name="knotwork_onboarding_welcome_headline">A private AI agent that runs on your phone.</string>
     <!-- Step 1 body copy. -->
-    <string name="knotwork_onboarding_welcome_body">An agent for Android that talks to local LLMs, calls tools, and remembers what matters — without sending your data to anyone unless you ask it to.</string>
-    <!-- Step 1 feature chip 1. -->
-    <string name="knotwork_onboarding_welcome_chip_private">Private by default</string>
-    <!-- Step 1 feature chip 2. -->
-    <string name="knotwork_onboarding_welcome_chip_editable">Pipelines you can edit</string>
-    <!-- Step 1 feature chip 3. -->
-    <string name="knotwork_onboarding_welcome_chip_byo">BYO models &amp; tools</string>
-    <!-- Step 1 primary CTA. -->
-    <string name="knotwork_onboarding_welcome_cta">Get started</string>
+    <string name="knotwork_onboarding_welcome_body">No cloud round-trip. No telemetry. Your conversations stay on the device. Cloud providers are optional — bring your own key if you want them.</string>
+    <!-- Step 1 capability tile 1. -->
+    <string name="knotwork_onboarding_welcome_tile_litert">On-device LiteRT inference</string>
+    <!-- Step 1 capability tile 2. -->
+    <string name="knotwork_onboarding_welcome_tile_appfunctions">Local AppFunctions tools</string>
+    <!-- Step 1 capability tile 3. -->
+    <string name="knotwork_onboarding_welcome_tile_storage">Encrypted storage (SQLCipher · Keystore)</string>
 
     <!-- Step 2 headline. -->
     <string name="knotwork_onboarding_models_headline">Pick a model source.</string>

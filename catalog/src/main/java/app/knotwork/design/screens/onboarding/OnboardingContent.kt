@@ -8,7 +8,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -26,6 +25,7 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowForward
 import androidx.compose.material.icons.outlined.Cloud
+import androidx.compose.material.icons.outlined.Hub
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.Mic
 import androidx.compose.material.icons.outlined.Notifications
@@ -43,13 +43,10 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import app.knotwork.design.R
 import app.knotwork.design.components.buttons.KnotworkPrimaryButton
-import app.knotwork.design.components.buttons.KnotworkSecondaryButton
 import app.knotwork.design.components.buttons.KnotworkTextButton
-import app.knotwork.design.components.chips.ChipStyle
 import app.knotwork.design.components.chips.KnotworkChip
 import app.knotwork.design.components.chips.Status
 import app.knotwork.design.components.chips.StatusPill
@@ -57,11 +54,14 @@ import app.knotwork.design.components.misc.StripedPlaceholder
 import app.knotwork.design.theme.KnotworkTheme
 import app.knotwork.design.tokens.KnotworkTextStyles
 
-/** Visual size of the inactive progress dot. */
-private val ProgressDotSize = 8.dp
+/** Height of the segmented progress bar shown above the bottom CTA. */
+private val ProgressSegmentHeight = 4.dp
 
-/** Length of the active progress dot (rendered as a 24 dp pill). */
-private val ProgressDotPillLength = 24.dp
+/** Width of the brand logo glyph rendered in the topbar. */
+private val LogoIconSize = 24.dp
+
+/** Diameter of the amber bullet rendered before each feature tile label. */
+private val FeatureBulletSize = 8.dp
 
 /** Minimum height of the model-source radio card; the card grows to fit when subtitles wrap. */
 private val ModelCardMinHeight = 96.dp
@@ -102,142 +102,201 @@ fun OnboardingContent(
             .fillMaxSize()
             .background(color = MaterialTheme.colorScheme.surface),
     ) {
-        Column(modifier = Modifier.fillMaxSize().padding(KnotworkTheme.spacing.sp4)) {
-            OnboardingChrome(state = state, callbacks = callbacks)
-            Spacer(modifier = Modifier.height(KnotworkTheme.spacing.sp4))
-            Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+        Column(modifier = Modifier.fillMaxSize()) {
+            OnboardingTopBar(state = state, callbacks = callbacks)
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+                    .padding(horizontal = KnotworkTheme.spacing.sp4),
+            ) {
                 when (state.step) {
-                    OnboardingStep.Welcome -> WelcomeStep()
+                    OnboardingStep.Welcome -> WelcomeStep(state = state)
                     OnboardingStep.ModelSource -> ModelSourceStep(state = state, callbacks = callbacks)
                     OnboardingStep.Permissions -> PermissionsStep(state = state, callbacks = callbacks)
                     OnboardingStep.SamplePipelines -> SamplePipelinesStep(state = state, callbacks = callbacks)
                 }
             }
-            OnboardingPageControls(state = state, callbacks = callbacks)
+            OnboardingFooter(state = state, callbacks = callbacks)
         }
     }
 }
 
+/**
+ * Top bar with the brand glyph + product title on the left and a `Skip`
+ * link on the right. Skip is visible on every step per the spec mockup —
+ * the user can opt out of the flow at any time, including step 1.
+ */
 @Composable
-private fun OnboardingChrome(state: OnboardingViewState, callbacks: OnboardingCallbacks) {
+private fun OnboardingTopBar(state: OnboardingViewState, callbacks: OnboardingCallbacks) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp2),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(
+                start = KnotworkTheme.spacing.sp4,
+                end = KnotworkTheme.spacing.sp4,
+                top = KnotworkTheme.spacing.sp3,
+                bottom = KnotworkTheme.spacing.sp3,
+            ),
     ) {
-        if (state.step != OnboardingStep.Welcome) {
+        androidx.compose.material3.Icon(
+            imageVector = Icons.Outlined.Hub,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.size(LogoIconSize),
+        )
+        Text(
+            text = stringResource(R.string.knotwork_onboarding_brand_title),
+            style = KnotworkTextStyles.TitleMd.copy(
+                fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
+            ),
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.weight(1f),
+        )
+        // We disable, but still render, the Skip on the final step — the
+        // user is then committing via the primary CTA, not skipping.
+        if (state.step != OnboardingStep.SamplePipelines) {
             KnotworkTextButton(
                 text = stringResource(R.string.knotwork_onboarding_skip),
                 onClick = callbacks.onSkip,
             )
-        } else {
-            Spacer(modifier = Modifier.height(KnotworkTheme.spacing.sp10))
-        }
-        Spacer(modifier = Modifier.weight(1f))
-        Row(horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp2)) {
-            OnboardingStep.entries.forEach { entry ->
-                ProgressDot(
-                    active = entry == state.step,
-                    past = entry.pageIndex < state.step.pageIndex,
-                )
-            }
         }
     }
 }
 
+/**
+ * Footer block beneath the body content: 4-segment progress bar followed
+ * by a single full-width primary CTA. The Back affordance from the
+ * earlier dual-button layout is dropped per the new spec mockup — system
+ * back / `onBack()` is still handled by the host, but the surface is no
+ * longer cluttered with a secondary button.
+ */
 @Composable
-private fun ProgressDot(active: Boolean, past: Boolean) {
-    val color = when {
-        active -> MaterialTheme.colorScheme.primary
-        past -> KnotworkTheme.extended.signalSuccess
-        else -> KnotworkTheme.extended.outlineStrong
-    }
-    if (active) {
-        Box(
-            modifier = Modifier
-                .width(ProgressDotPillLength)
-                .height(ProgressDotSize)
-                .clip(KnotworkTheme.shapes.full)
-                .background(color = color),
-        )
-    } else {
-        Box(
-            modifier = Modifier
-                .size(ProgressDotSize)
-                .background(color = color, shape = CircleShape),
-        )
-    }
-}
-
-@Composable
-private fun OnboardingPageControls(state: OnboardingViewState, callbacks: OnboardingCallbacks) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp3),
-        modifier = Modifier.fillMaxWidth().padding(top = KnotworkTheme.spacing.sp4),
+private fun OnboardingFooter(state: OnboardingViewState, callbacks: OnboardingCallbacks) {
+    Column(
+        verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp4),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(
+                horizontal = KnotworkTheme.spacing.sp4,
+                vertical = KnotworkTheme.spacing.sp4,
+            ),
     ) {
-        if (state.step != OnboardingStep.Welcome) {
-            KnotworkSecondaryButton(
-                text = stringResource(R.string.knotwork_onboarding_back),
-                onClick = callbacks.onBack,
-            )
-        }
-        Spacer(modifier = Modifier.weight(1f))
+        ProgressSegments(currentStepIndex = state.step.pageIndex)
         val ctaLabel = when (state.step) {
-            OnboardingStep.Welcome -> stringResource(R.string.knotwork_onboarding_welcome_cta)
             OnboardingStep.SamplePipelines -> stringResource(R.string.knotwork_onboarding_finish)
-            else -> stringResource(R.string.knotwork_onboarding_next)
+            else -> stringResource(R.string.knotwork_onboarding_continue)
         }
         KnotworkPrimaryButton(
             text = ctaLabel,
             onClick = if (state.isFinalStep) callbacks.onFinish else callbacks.onNext,
             enabled = state.isPrimaryCtaEnabled,
+            modifier = Modifier.fillMaxWidth(),
         )
     }
 }
 
+/**
+ * 4-segment horizontal progress bar rendered above the bottom CTA. The
+ * segment at [currentStepIndex] (and every prior segment) is filled with
+ * the brand primary; remaining segments use the muted divider tone.
+ */
 @Composable
-private fun WelcomeStep() {
+private fun ProgressSegments(currentStepIndex: Int) {
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp2),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        OnboardingStep.entries.forEach { entry ->
+            val filled = entry.pageIndex <= currentStepIndex
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .height(ProgressSegmentHeight)
+                    .clip(KnotworkTheme.shapes.full)
+                    .background(
+                        color = if (filled) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            KnotworkTheme.extended.divider
+                        },
+                    ),
+            )
+        }
+    }
+}
+
+@Composable
+private fun WelcomeStep(state: OnboardingViewState) {
     Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp3),
         modifier = Modifier.fillMaxSize(),
     ) {
-        StripedPlaceholder(
-            caption = stringResource(R.string.knotwork_onboarding_welcome_caption),
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(HeroHeight),
-        )
+        StepIndicator(stepIndex = state.step.pageIndex, stepLabel = "Welcome")
         Text(
             text = stringResource(R.string.knotwork_onboarding_welcome_headline),
-            style = KnotworkTextStyles.TitleLg,
+            style = KnotworkTextStyles.Display2xl,
             color = MaterialTheme.colorScheme.onSurface,
-            textAlign = TextAlign.Center,
         )
         Text(
             text = stringResource(R.string.knotwork_onboarding_welcome_body),
-            style = KnotworkTextStyles.BodyBase,
+            style = KnotworkTextStyles.BodyLg,
             color = KnotworkTheme.extended.onSurfaceMuted,
-            textAlign = TextAlign.Center,
         )
-        FlowRow(
-            horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp2),
-            verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp2),
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            KnotworkChip(
-                label = stringResource(R.string.knotwork_onboarding_welcome_chip_private),
-                style = ChipStyle.Outline,
-            )
-            KnotworkChip(
-                label = stringResource(R.string.knotwork_onboarding_welcome_chip_editable),
-                style = ChipStyle.Outline,
-            )
-            KnotworkChip(
-                label = stringResource(R.string.knotwork_onboarding_welcome_chip_byo),
-                style = ChipStyle.Outline,
-            )
-        }
+        Spacer(modifier = Modifier.height(KnotworkTheme.spacing.sp2))
+        FeatureTile(label = stringResource(R.string.knotwork_onboarding_welcome_tile_litert))
+        FeatureTile(label = stringResource(R.string.knotwork_onboarding_welcome_tile_appfunctions))
+        FeatureTile(label = stringResource(R.string.knotwork_onboarding_welcome_tile_storage))
+    }
+}
+
+/**
+ * Monospace step indicator rendered as "0N · Label" above each step body.
+ */
+@Composable
+private fun StepIndicator(stepIndex: Int, stepLabel: String) {
+    val padded = "%02d".format(stepIndex + 1)
+    Text(
+        text = "$padded · $stepLabel",
+        style = KnotworkTextStyles.MonoSm,
+        color = KnotworkTheme.extended.onSurfaceMuted,
+    )
+}
+
+/**
+ * Full-width feature tile with an amber bullet on the left and a body
+ * label. Used by the welcome step in place of outline chips so the
+ * three privacy / capability statements read as distinct claims.
+ */
+@Composable
+private fun FeatureTile(label: String) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp3),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(KnotworkTheme.shapes.md)
+            .background(color = KnotworkTheme.extended.surface1)
+            .padding(
+                horizontal = KnotworkTheme.spacing.sp4,
+                vertical = KnotworkTheme.spacing.sp3,
+            ),
+    ) {
+        Box(
+            modifier = Modifier
+                .size(FeatureBulletSize)
+                .background(
+                    color = MaterialTheme.colorScheme.primary,
+                    shape = CircleShape,
+                ),
+        )
+        Text(
+            text = label,
+            style = KnotworkTextStyles.BodyBase,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
     }
 }
 
@@ -247,9 +306,10 @@ private fun ModelSourceStep(state: OnboardingViewState, callbacks: OnboardingCal
         verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp3),
         modifier = Modifier.fillMaxSize(),
     ) {
+        StepIndicator(stepIndex = state.step.pageIndex, stepLabel = "Models")
         Text(
             text = stringResource(R.string.knotwork_onboarding_models_headline),
-            style = KnotworkTextStyles.TitleLg,
+            style = KnotworkTextStyles.TitleXl,
             color = MaterialTheme.colorScheme.onSurface,
         )
         Text(
@@ -392,9 +452,10 @@ private fun PermissionsStep(state: OnboardingViewState, callbacks: OnboardingCal
         verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp3),
         modifier = Modifier.fillMaxSize(),
     ) {
+        StepIndicator(stepIndex = state.step.pageIndex, stepLabel = "Permissions")
         Text(
             text = stringResource(R.string.knotwork_onboarding_permissions_headline),
-            style = KnotworkTextStyles.TitleLg,
+            style = KnotworkTextStyles.TitleXl,
             color = MaterialTheme.colorScheme.onSurface,
         )
         Text(
@@ -470,9 +531,10 @@ private fun SamplePipelinesStep(state: OnboardingViewState, callbacks: Onboardin
         verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp3),
         modifier = Modifier.fillMaxSize(),
     ) {
+        StepIndicator(stepIndex = state.step.pageIndex, stepLabel = "Samples")
         Text(
             text = stringResource(R.string.knotwork_onboarding_samples_headline),
-            style = KnotworkTextStyles.TitleLg,
+            style = KnotworkTextStyles.TitleXl,
             color = MaterialTheme.colorScheme.onSurface,
         )
         Text(
