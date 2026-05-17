@@ -15,6 +15,51 @@ details.
 
 ### Added
 
+- Redesigned **remaining screens C3 – C8** (Phase 21 / Task 10/11) — six
+  user-facing surfaces now driven by stateless catalog content
+  composables, each backed by a sealed `*ViewState` matrix mirroring
+  `compose/screens/README.md`:
+  - **C3 Pipeline library** (`PipelineLibraryContent`) — search field,
+    `All / Recent / Shared / Mine` filter chips (Shared rendered
+    disabled until the sync backend lands), swipe Duplicate / Archive /
+    Delete reusing the catalog `PipelineListRow`, FAB → "+ New
+    pipeline" dialog, multi-select chrome, Empty / Loading / Filtering
+    (no-matches) / SwipeOpen / MultiSelect / Error states. App-side
+    `PipelineLibraryScreen` rewritten as a thin VM ↔ catalog adapter.
+  - **C4 Tools / MCP** (`ToolsContent`, `ToolDetailContent`,
+    `AddMcpServerContent`) — collapsible sections per MCP server with
+    `StatusPill`s; per-tool enable toggle; URL validation in
+    `AddMcpServerScreen`; new `ToolDetailScreen` shows the JSON-Schema
+    preview + enable/disable toggle. Routes `TOOL_DETAIL` and
+    `ADD_MCP_SERVER` now resolve to real screens.
+  - **C5 Onboarding pager** (`OnboardingContent`) — replaces the
+    single-screen Task 4 stub with a 4-step flow (Welcome → Model
+    source → Permissions → Sample pipelines) plus a custom
+    `OnboardingScaffold` (progress dots, skip, back / next, finish).
+    `OnboardingViewModel` records the user's model-source pick, API-key
+    field with inline format validation, permission grants, and
+    sample-pipeline selections.
+  - **C6 Memory** (`MemoryContent`) — single recall list driven by the
+    catalog `MemoryEntryRow`; 200 ms-debounced search; sort chips
+    (Recent / Relevance / A→Z); detail bottom sheet with Edit / Pin /
+    Delete; FLIP rank-shuffle animation on every `LazyColumn` row
+    (`animateItem` with `tween(320 ms, emphasized)`). The legacy
+    "Chat history" tab is dropped.
+  - **C7 Settings** (`SettingsContent`) — sectioned LazyColumn
+    (Appearance / Models / Privacy / Memory / MCP / About) with the
+    documented state matrix (Loading / Default / PendingChange /
+    ValidationError / RestartRequired / DestructiveAction / Error). The
+    legacy app-side `SettingsScreen.kt` keeps its rich provider /
+    sampling forms until a follow-up ports them row by row.
+  - **C8 Console pane** (extension of `ConsolePane`) — inline
+    search-by-text field above the Logs body, long-press menu on every
+    log row (`Copy line` / `Only show this source`), localised "no
+    matches" placeholder. Wired through `ChatHomeViewModel` so the
+    affordance survives state transitions.
+- **Roborazzi snapshot suites** for every new catalog screen (light +
+  dark across the documented state matrix): pipeline library,
+  onboarding, memory, settings, tools / tool detail / add-MCP-server.
+
 - Redesigned **Pipeline editor screen** (Phase 21 / Task 9/11) —
   `PipelineEditorScreen` under `presentation/ui/pipeline/editor/*`
   becomes the production canvas surface, replacing the legacy

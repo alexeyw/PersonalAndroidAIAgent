@@ -1,78 +1,67 @@
 package ai.agent.android.presentation.ui.onboarding
 
-import ai.agent.android.R
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
-import androidx.compose.material3.Button
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.knotwork.design.screens.onboarding.OnboardingCallbacks
+import app.knotwork.design.screens.onboarding.OnboardingContent
 
 /**
- * Onboarding entry point.
+ * Onboarding entry point — 4-step pager (`Welcome → LiteRtModel →
+ * CloudKeys → Ready`) backed by [OnboardingViewModel].
  *
- * Phase 21 / Task 4 ships a deliberately minimal stub: a single screen with
- * the project's name, a one-line value-proposition, and a "Get started"
- * button that flips the `isFirstLaunch` DataStore flag and lets
- * [AppNavGraph][ai.agent.android.presentation.ui.navigation.AppNavGraph]
- * route forward to the Chat tab. The full 4-step `HorizontalPager` flow
- * (`screens/README.md §C5`: Welcome → Models → Permissions → Sample
- * pipelines) is Task 10's deliverable.
+ * The visual surface lives in `:catalog` (`OnboardingContent`); this
+ * screen threads the ViewModel state and forwards finish/skip into the
+ * nav-graph.
  *
- * Keeping the gate composable wired with the eventual final-screen shape
- * means Task 10 only replaces the body — no caller-side changes.
- *
- * @param onCompleted Pop onboarding off the back-stack and navigate to
- *        the Chat tab. Invoked exactly once per gate session.
- * @param viewModel Hilt-injected ViewModel; defaults to [hiltViewModel]
- *        so tests can supply a fake.
+ * @param onCompleted Pop onboarding off the back-stack and navigate to the
+ * Chat tab. Invoked exactly once when the user taps `Open chat` on step 4
+ * or `Skip` on steps 1-3.
+ * @param viewModel Hilt-injected ViewModel; defaults to [hiltViewModel] so
+ * tests can supply a fake.
  */
 @Composable
 fun OnboardingScreen(onCompleted: () -> Unit, viewModel: OnboardingViewModel = hiltViewModel()) {
-    Column(
+    val state by viewModel.state.collectAsStateWithLifecycle()
+    val callbacks = remember(viewModel) {
+        OnboardingCallbacks(
+            onNext = viewModel::next,
+            onBack = viewModel::back,
+            onSkip = {
+                viewModel.skipOnboarding()
+                onCompleted()
+            },
+            onFinish = {
+                viewModel.finishOnboarding()
+                onCompleted()
+            },
+            onLiteRtModelPick = viewModel::pickLiteRtModel,
+            onConfigureCloudProvider = viewModel::markCloudProviderConfigured,
+        )
+    }
+    OnboardingContent(
+        state = state,
+        callbacks = callbacks,
         modifier = Modifier
             .fillMaxSize()
             .safeDrawingPadding()
-            .padding(24.dp)
-            .testTag(ONBOARDING_ROOT_TEST_TAG),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Text(
-            text = stringResource(R.string.onboarding_headline),
-            style = MaterialTheme.typography.headlineMedium,
-        )
-        Spacer(modifier = Modifier.height(12.dp))
-        Text(
-            text = stringResource(R.string.onboarding_subtitle),
-            style = MaterialTheme.typography.bodyMedium,
-        )
-        Spacer(modifier = Modifier.height(24.dp))
-        Button(
-            onClick = {
-                viewModel.completeOnboarding()
-                onCompleted()
-            },
-            modifier = Modifier.testTag(ONBOARDING_CTA_TEST_TAG),
-        ) {
-            Text(stringResource(R.string.onboarding_get_started))
-        }
-    }
+            .testTag(tag = ONBOARDING_ROOT_TEST_TAG),
+    )
 }
 
 /** Stable test tag for the onboarding screen root — used by instrumented tests. */
 const val ONBOARDING_ROOT_TEST_TAG: String = "onboarding_root"
 
-/** Stable test tag for the "Get started" CTA — used by instrumented tests. */
+/**
+ * Stable test tag for the "Get started" CTA — kept for backwards compatibility
+ * with existing instrumented tests; the new pager wraps the CTA in
+ * [OnboardingContent], so tests should now target the primary button via
+ * its accessibility text rather than this tag.
+ */
 const val ONBOARDING_CTA_TEST_TAG: String = "onboarding_get_started_cta"

@@ -6,7 +6,9 @@ import app.knotwork.design.components.chat.ChatContent
 import app.knotwork.design.components.chat.ChatMessageStatus
 import app.knotwork.design.components.chat.ChatMetadata
 import app.knotwork.design.components.chat.ChatRole
+import app.knotwork.design.components.console.ConsoleFilter
 import app.knotwork.design.components.console.ConsoleSnap
+import app.knotwork.design.components.console.ConsoleSource
 import app.knotwork.design.screens.chat.ChatHomeMessageRow
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.delay
@@ -66,6 +68,17 @@ class ChatHomeViewModel @Inject constructor() : ViewModel() {
     private val _state: MutableStateFlow<ChatHomeUiState> = MutableStateFlow(ChatHomeUiState.Empty)
     val state: StateFlow<ChatHomeUiState> = _state.asStateFlow()
 
+    /**
+     * Inline-search query for the console Logs tab. `null` means the search
+     * field is hidden; `""` means visible but matching every line. Hoisted
+     * to the VM so the value survives state-picker round-trips and tab
+     * switches.
+     */
+    private val _consoleSearchQuery: MutableStateFlow<String?> = MutableStateFlow(null)
+
+    /** Active source-set filter applied to the console Logs tab. */
+    private val _consoleFilter: MutableStateFlow<ConsoleFilter> = MutableStateFlow(ConsoleFilter.allOn)
+
     /** Externally-observable thread title used by the screen-level composable. */
     val threadTitle: StateFlow<String> = _threadTitle.asStateFlow()
 
@@ -77,6 +90,12 @@ class ChatHomeViewModel @Inject constructor() : ViewModel() {
 
     /** Externally-observable typed-confirm input. */
     val pendingTypedConfirm: StateFlow<String> = _pendingTypedConfirm.asStateFlow()
+
+    /** Externally-observable console search query (null = hidden, "" = visible but unfiltered). */
+    val consoleSearchQuery: StateFlow<String?> = _consoleSearchQuery.asStateFlow()
+
+    /** Externally-observable console source-set filter. */
+    val consoleFilter: StateFlow<ConsoleFilter> = _consoleFilter.asStateFlow()
 
     /**
      * Updates the composer input value. Hoisted to the VM so screen
@@ -166,6 +185,32 @@ class ChatHomeViewModel @Inject constructor() : ViewModel() {
         if (_state.value is ChatHomeUiState.ConsoleExpanded) {
             _state.value = restingState()
         }
+    }
+
+    /**
+     * Toggles the console inline-search field. Calling this twice cycles
+     * `null → "" → null`. The host wires this to the header `Search` button.
+     */
+    fun toggleConsoleSearch() {
+        _consoleSearchQuery.update { current -> if (current == null) "" else null }
+    }
+
+    /** Updates the console inline-search query while the field is visible. */
+    fun onConsoleSearchQueryChange(query: String) {
+        _consoleSearchQuery.value = query
+    }
+
+    /** Replaces the active console source-set filter. */
+    fun onConsoleFilterChange(filter: ConsoleFilter) {
+        _consoleFilter.value = filter
+    }
+
+    /**
+     * Reacts to the long-press "Only show this source" menu item by
+     * narrowing [consoleFilter] to a single-source set.
+     */
+    fun filterConsoleByLineSource(source: ConsoleSource) {
+        _consoleFilter.value = ConsoleFilter(sources = setOf(source))
     }
 
     /**

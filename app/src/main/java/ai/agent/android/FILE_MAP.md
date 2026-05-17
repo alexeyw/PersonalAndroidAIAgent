@@ -292,7 +292,9 @@ This file maps the contents of the main application package.
       - `TaskMonitorState.kt` - Task monitor UI state.
       - `TaskMonitorViewModel.kt` - Task monitor ViewModel.
     - `tools/` - Tools screen components.
-      - `ToolsScreen.kt` - Tools UI screen.
+      - `ToolsScreen.kt` - Tools UI screen — Phase 21 / Task 10 rewrite, drives catalog `ToolsContent`.
       - `ToolsUiState.kt` - Tools UI state.
       - `ToolsViewModel.kt` - Tools ViewModel.
+      - `ToolDetailScreen.kt` - Per-tool detail screen (Phase 21 / Task 10) showing schema preview + enable toggle.
+      - `AddMcpServerScreen.kt` - Add-MCP-server screen with URL validation (Phase 21 / Task 10).
 - `FILE_MAP.md` - This file mapping the current directory structure.

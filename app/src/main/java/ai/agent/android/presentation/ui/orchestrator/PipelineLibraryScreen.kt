@@ -3,76 +3,64 @@ package ai.agent.android.presentation.ui.orchestrator
 import ai.agent.android.R
 import ai.agent.android.domain.models.PipelineGraph
 import ai.agent.android.presentation.ui.common.asString
-import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.background
-import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.outlined.AccountTree
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FloatingActionButton
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
+import app.knotwork.design.components.chips.Status
+import app.knotwork.design.screens.pipelines.PipelineLibraryCallbacks
+import app.knotwork.design.screens.pipelines.PipelineLibraryContent
+import app.knotwork.design.screens.pipelines.PipelineLibraryFab
+import app.knotwork.design.screens.pipelines.PipelineLibraryFilter
+import app.knotwork.design.screens.pipelines.PipelineLibraryRow
+import app.knotwork.design.screens.pipelines.PipelineLibraryViewState
+import app.knotwork.design.screens.pipelines.PipelineLibraryVisualState
+import app.knotwork.design.screens.pipelines.PipelineSecondaryLineKind
+import app.knotwork.design.screens.pipelines.isFabHidden
+import kotlinx.coroutines.launch
 
 /**
  * Library screen listing every saved pipeline. Acts as the entry point for
- * the orchestrator feature: tapping a pipeline loads it as the active one
- * and opens the visual editor; the FAB creates a new pipeline; the per-row
- * `⋮` menu offers Load / Rename / Duplicate / Delete actions.
+ * the orchestrator feature.
  *
- * Shares [OrchestratorViewModel] with the Phase-21 `PipelineEditorScreen` via a parent
- * nav-graph scope so creating, renaming, or duplicating a pipeline here is
- * immediately reflected when the editor opens.
+ * Phase 21 / Task 10 rewrite (mockup-driven): the catalog
+ * [PipelineLibraryContent] composable owns the visual surface; this screen
+ * subscribes to [OrchestratorViewModel], projects `OrchestratorUiState` to
+ * the catalog [PipelineLibraryViewState], and dispatches user-triggered
+ * events back to the VM through a [PipelineLibraryCallbacks] bundle.
  *
  * @param viewModel Shared orchestrator view-model (parent-graph scoped).
  * @param onOpenEditor Navigation callback invoked after the active pipeline
- * has been switched (load / duplicate / create) so the caller can transition
- * to the canvas editor.
- * @param onBack Navigation callback for the TopAppBar back arrow.
+ * has been switched (load / duplicate / create).
+ * @param onBack Reserved for future use; kept in the signature so the
+ * nav-graph wiring needs no changes when the back arrow lands inside the
+ * catalog surface.
  */
+@Suppress("UnusedParameter", "LongMethod") // onBack kept for nav-graph stability; body is a flat switch.
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PipelineLibraryScreen(
@@ -82,7 +70,11 @@ fun PipelineLibraryScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
 
+    var searchQuery by remember { mutableStateOf("") }
+    var activeFilter by remember { mutableStateOf(PipelineLibraryFilter.All) }
+    var openOverflowRowId by remember { mutableStateOf<String?>(null) }
     var showCreateDialog by remember { mutableStateOf(false) }
     var renameTarget by remember { mutableStateOf<PipelineGraph?>(null) }
     var deleteTarget by remember { mutableStateOf<PipelineGraph?>(null) }
@@ -101,9 +93,6 @@ fun PipelineLibraryScreen(
             viewModel.clearFeedback()
         }
     }
-    // Navigate to the editor only when the ViewModel signals a successful
-    // create. A failed create (validation, persistence error) keeps the flag
-    // false, so the user stays on the library and can retry.
     LaunchedEffect(uiState.pendingEditorNavigation) {
         if (uiState.pendingEditorNavigation) {
             viewModel.consumePendingEditorNavigation()
@@ -111,69 +100,117 @@ fun PipelineLibraryScreen(
         }
     }
 
-    Scaffold(
-        snackbarHost = { SnackbarHost(snackbarHostState) },
-        topBar = {
-            TopAppBar(
-                title = { Text(stringResource(R.string.orchestrator_library_title)) },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = stringResource(R.string.common_back),
-                        )
-                    }
-                },
-            )
-        },
-        floatingActionButton = {
-            FloatingActionButton(
-                onClick = { showCreateDialog = true },
-                modifier = Modifier.testTag("library_new_pipeline_fab"),
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Add,
-                    contentDescription = stringResource(R.string.orchestrator_library_new_pipeline_cd),
+    val rows by remember(uiState.savedPipelines, uiState.activePipelineId, uiState.defaultPipelineId) {
+        derivedStateOf {
+            uiState.savedPipelines.map { pipeline ->
+                pipeline.toLibraryRow(
+                    isActive = pipeline.id == uiState.activePipelineId,
+                    isDefault = pipeline.id == uiState.defaultPipelineId,
                 )
             }
-        },
-    ) { paddingValues ->
-        if (uiState.savedPipelines.isEmpty()) {
-            EmptyLibraryState(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(paddingValues),
-            )
-        } else {
-            LazyColumn(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(paddingValues),
-                contentPadding = androidx.compose.foundation.layout.PaddingValues(
-                    horizontal = 16.dp,
-                    vertical = 12.dp,
-                ),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                items(uiState.savedPipelines, key = { it.id }) { pipeline ->
-                    val isDefault = pipeline.id == uiState.defaultPipelineId
-                    PipelineRow(
-                        pipeline = pipeline,
-                        isActive = pipeline.id == uiState.activePipelineId,
-                        isDefault = isDefault,
-                        onLoad = {
-                            viewModel.loadPipeline(pipeline.id)
-                            onOpenEditor()
-                        },
-                        onRename = { renameTarget = pipeline },
-                        onDuplicate = { viewModel.duplicatePipeline(pipeline.id) },
-                        onSetAsDefault = { viewModel.setDefaultPipeline(pipeline.id) }
-                            .takeUnless { isDefault },
-                        onDelete = { deleteTarget = pipeline },
-                    )
-                }
-            }
         }
+    }
+
+    val filteredRows by remember(rows, searchQuery, activeFilter) {
+        derivedStateOf {
+            val byFilter = when (activeFilter) {
+                PipelineLibraryFilter.All, PipelineLibraryFilter.Mine -> rows
+                // Recent: top-N by last-modified order — repository already
+                // returns pipelines newest-first.
+                PipelineLibraryFilter.Recent -> rows.take(n = RECENT_TAKE_COUNT)
+                // Shared is rendered disabled in the chip row; the screen
+                // never sets `activeFilter = Shared`, but if it ever did
+                // we'd surface the empty result deterministically.
+                PipelineLibraryFilter.Shared -> emptyList()
+            }
+            val q = searchQuery.trim()
+            if (q.isEmpty()) byFilter else byFilter.filter { it.title.contains(q, ignoreCase = true) }
+        }
+    }
+
+    val visualState = when {
+        uiState.errorMessage != null && rows.isEmpty() -> PipelineLibraryVisualState.Error
+        uiState.isLoading && rows.isEmpty() -> PipelineLibraryVisualState.Loading
+        rows.isEmpty() -> PipelineLibraryVisualState.Empty
+        searchQuery.isNotBlank() || activeFilter != PipelineLibraryFilter.All ->
+            PipelineLibraryVisualState.Filtering
+        else -> PipelineLibraryVisualState.Populated
+    }
+
+    val viewState = PipelineLibraryViewState(
+        visualState = visualState,
+        pipelines = if (visualState == PipelineLibraryVisualState.Filtering) filteredRows else rows,
+        totalCount = rows.size,
+        defaultCount = if (uiState.defaultPipelineId != null) 1 else 0,
+        searchQuery = searchQuery,
+        activeFilter = activeFilter,
+        errorMessage = if (visualState == PipelineLibraryVisualState.Error) errorText.orEmpty() else null,
+        openOverflowRowId = openOverflowRowId,
+    )
+
+    val callbacks = PipelineLibraryCallbacks(
+        onSearchQueryChange = { searchQuery = it },
+        onFilterChange = { activeFilter = it },
+        onPipelineClick = { id ->
+            viewModel.loadPipeline(pipelineId = id)
+            onOpenEditor()
+        },
+        onPipelineOverflow = { id -> openOverflowRowId = id },
+        onOverflowDismiss = { openOverflowRowId = null },
+        onLoadInEditor = { id ->
+            viewModel.loadPipeline(pipelineId = id)
+            onOpenEditor()
+        },
+        onSetAsDefault = { id -> viewModel.setDefaultPipeline(pipelineId = id) },
+        onRename = { id ->
+            uiState.savedPipelines.firstOrNull { it.id == id }?.let { renameTarget = it }
+        },
+        onDuplicate = { id -> viewModel.duplicatePipeline(pipelineId = id) },
+        onExportJson = {
+            // Per-id export needs a domain hook that streams a specific
+            // pipeline through `PipelineJsonSerializer`. Until that lands,
+            // surface a snackbar so the affordance is visible.
+            scope.launch { snackbarHostState.showSnackbar(message = EXPORT_COMING_SOON_MESSAGE) }
+        },
+        onImportJson = {
+            scope.launch { snackbarHostState.showSnackbar(message = IMPORT_HINT_MESSAGE) }
+        },
+        // Archive: phase-21 has no archival table yet — treat as delete so
+        // the affordance is exercised.
+        onArchive = { id ->
+            uiState.savedPipelines.firstOrNull { it.id == id }?.let { deleteTarget = it }
+        },
+        onDelete = { id ->
+            uiState.savedPipelines.firstOrNull { it.id == id }?.let { deleteTarget = it }
+        },
+        onOpenDrawer = { /* drawer ships post-v0.1. */ },
+        onOpenSearch = {
+            // Reveal the inline chrome by seeding the query with an empty
+            // string so the show-search-chrome predicate fires.
+            if (searchQuery.isEmpty()) searchQuery = "" // no-op, but explicit
+            activeFilter = PipelineLibraryFilter.All
+            searchQuery = " " // single-space sentinel that disappears as the user types
+        },
+        onTopOverflow = { /* top overflow ships post-v0.1. */ },
+        onNewPipeline = { showCreateDialog = true },
+        onBrowseTemplates = {
+            scope.launch { snackbarHostState.showSnackbar(message = TEMPLATES_COMING_SOON_MESSAGE) }
+        },
+        onClearSearch = { searchQuery = "" },
+        onErrorRetry = { viewModel.clearError() },
+    )
+
+    Box(modifier = Modifier.fillMaxSize().testTag(tag = LIBRARY_ROOT_TEST_TAG)) {
+        PipelineLibraryContent(state = viewState, callbacks = callbacks)
+        if (!viewState.isFabHidden) {
+            PipelineLibraryFab(
+                onClick = callbacks.onNewPipeline,
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(end = FAB_END_PADDING, bottom = FAB_BOTTOM_PADDING),
+            )
+        }
+        SnackbarHost(hostState = snackbarHostState)
     }
 
     if (showCreateDialog) {
@@ -183,17 +220,11 @@ fun PipelineLibraryScreen(
             initialName = "",
             onDismiss = { showCreateDialog = false },
             onConfirm = { name ->
-                // Navigation to the editor is intentionally deferred: it fires
-                // from the `pendingEditorNavigation` LaunchedEffect above only
-                // after the ViewModel reports a successful create. A failed
-                // create (e.g. >60-char name slipped past the dialog, or an
-                // I/O error) leaves the user on the library to retry.
-                viewModel.createNewPipeline(name)
+                viewModel.createNewPipeline(name = name)
                 showCreateDialog = false
             },
         )
     }
-
     renameTarget?.let { target ->
         PipelineNameDialog(
             title = stringResource(R.string.orchestrator_library_rename_pipeline_title),
@@ -201,30 +232,23 @@ fun PipelineLibraryScreen(
             initialName = target.name,
             onDismiss = { renameTarget = null },
             onConfirm = { name ->
-                viewModel.renamePipeline(target.id, name)
+                viewModel.renamePipeline(pipelineId = target.id, newName = name)
                 renameTarget = null
             },
         )
     }
-
     deleteTarget?.let { target ->
         AlertDialog(
             onDismissRequest = { deleteTarget = null },
             title = { Text(stringResource(R.string.orchestrator_library_delete_pipeline_title)) },
             text = {
-                Text(
-                    stringResource(R.string.orchestrator_library_delete_confirm, target.name),
-                )
+                Text(stringResource(R.string.orchestrator_library_delete_confirm, target.name))
             },
             confirmButton = {
-                TextButton(
-                    onClick = {
-                        viewModel.deletePipeline(target.id)
-                        deleteTarget = null
-                    },
-                ) {
-                    Text(stringResource(R.string.common_delete))
-                }
+                TextButton(onClick = {
+                    viewModel.deletePipeline(pipelineId = target.id)
+                    deleteTarget = null
+                }) { Text(stringResource(R.string.common_delete)) }
             },
             dismissButton = {
                 TextButton(onClick = { deleteTarget = null }) {
@@ -236,166 +260,9 @@ fun PipelineLibraryScreen(
 }
 
 /**
- * Single row in the library list. Long-press or the `⋮` icon expands the
- * context menu; a simple tap loads the pipeline and exits to the editor.
- *
- * The leading 4dp accent stripe + the "Active" subtitle communicate which
- * pipeline is currently loaded into the editor; comparison is by id, not
- * by name, so duplicates with the same name remain distinguishable.
- */
-@OptIn(ExperimentalFoundationApi::class)
-@Composable
-private fun PipelineRow(
-    pipeline: PipelineGraph,
-    isActive: Boolean,
-    isDefault: Boolean,
-    onLoad: () -> Unit,
-    onRename: () -> Unit,
-    onDuplicate: () -> Unit,
-    onSetAsDefault: (() -> Unit)?,
-    onDelete: () -> Unit,
-) {
-    var menuExpanded by remember { mutableStateOf(false) }
-
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .testTag("pipeline_row_${pipeline.id}")
-            .combinedClickable(
-                onClick = onLoad,
-                onLongClick = { menuExpanded = true },
-            ),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant,
-        ),
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(width = 4.dp, height = 64.dp)
-                    .clip(RoundedCornerShape(topStart = 12.dp, bottomStart = 12.dp))
-                    .background(
-                        if (isActive) {
-                            MaterialTheme.colorScheme.primary
-                        } else {
-                            MaterialTheme.colorScheme.surfaceVariant
-                        },
-                    ),
-            )
-            Column(
-                modifier = Modifier
-                    .weight(1f)
-                    .padding(horizontal = 12.dp, vertical = 12.dp),
-            ) {
-                Text(
-                    text = pipeline.name.ifBlank {
-                        stringResource(
-                            R.string.orchestrator_library_pipeline_unnamed,
-                            pipeline.id.take(UNNAMED_PIPELINE_ID_SUFFIX_LENGTH),
-                        )
-                    },
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
-                )
-                if (isActive) {
-                    Text(
-                        text = stringResource(R.string.orchestrator_library_badge_active),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.primary,
-                    )
-                }
-                if (isDefault) {
-                    Text(
-                        text = stringResource(R.string.orchestrator_library_badge_default),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.tertiary,
-                    )
-                }
-                Text(
-                    text = stringResource(
-                        R.string.orchestrator_library_pipeline_subtitle,
-                        formatTimestamp(pipeline.updatedAt),
-                        pipeline.nodes.size,
-                    ),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            Box {
-                IconButton(
-                    onClick = { menuExpanded = true },
-                    modifier = Modifier.testTag("pipeline_row_menu_${pipeline.id}"),
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.MoreVert,
-                        contentDescription = stringResource(R.string.orchestrator_library_pipeline_actions_cd),
-                    )
-                }
-                DropdownMenu(
-                    expanded = menuExpanded,
-                    onDismissRequest = { menuExpanded = false },
-                ) {
-                    DropdownMenuItem(
-                        text = { Text(stringResource(R.string.common_load)) },
-                        onClick = {
-                            menuExpanded = false
-                            onLoad()
-                        },
-                    )
-                    DropdownMenuItem(
-                        text = { Text(stringResource(R.string.common_rename)) },
-                        onClick = {
-                            menuExpanded = false
-                            onRename()
-                        },
-                    )
-                    DropdownMenuItem(
-                        text = { Text(stringResource(R.string.common_duplicate)) },
-                        onClick = {
-                            menuExpanded = false
-                            onDuplicate()
-                        },
-                    )
-                    DropdownMenuItem(
-                        text = {
-                            Text(
-                                stringResource(
-                                    if (isDefault) {
-                                        R.string.orchestrator_library_menu_default_pipeline
-                                    } else {
-                                        R.string.orchestrator_library_menu_set_as_default
-                                    },
-                                ),
-                            )
-                        },
-                        enabled = onSetAsDefault != null,
-                        onClick = {
-                            menuExpanded = false
-                            onSetAsDefault?.invoke()
-                        },
-                    )
-                    DropdownMenuItem(
-                        text = { Text(stringResource(R.string.common_delete)) },
-                        enabled = !isActive,
-                        onClick = {
-                            menuExpanded = false
-                            onDelete()
-                        },
-                    )
-                }
-            }
-        }
-    }
-}
-
-/**
  * Reusable name-input dialog for both "New pipeline" and "Rename pipeline"
  * flows. The Save / Create button is disabled when the trimmed text is
- * empty so the user cannot submit blank names — defence-in-depth, since
- * the use cases also reject them.
+ * empty so the user cannot submit blank names.
  */
 @Composable
 private fun PipelineNameDialog(
@@ -407,7 +274,6 @@ private fun PipelineNameDialog(
 ) {
     var name by remember { mutableStateOf(initialName) }
     val canConfirm = name.trim().isNotEmpty()
-
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(title) },
@@ -417,16 +283,11 @@ private fun PipelineNameDialog(
                 onValueChange = { name = it },
                 label = { Text(stringResource(R.string.orchestrator_library_name_field_label)) },
                 singleLine = true,
-                modifier = Modifier.testTag("pipeline_name_field"),
+                modifier = Modifier.testTag(tag = "pipeline_name_field"),
             )
         },
         confirmButton = {
-            TextButton(
-                onClick = { onConfirm(name) },
-                enabled = canConfirm,
-            ) {
-                Text(confirmLabel)
-            }
+            TextButton(onClick = { onConfirm(name) }, enabled = canConfirm) { Text(confirmLabel) }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) { Text(stringResource(R.string.common_cancel)) }
@@ -435,40 +296,71 @@ private fun PipelineNameDialog(
 }
 
 /**
- * Empty-list placeholder displayed when no pipelines have been saved yet.
- * The FAB stays the canonical "create" entry point so this view is purely
- * informational.
+ * Projects a domain [PipelineGraph] onto a catalog [PipelineLibraryRow].
+ * Builds the "N nodes · {flavour}" subtitle from the first few node types
+ * and derives the secondary status line ("Active default" / "Idle" /
+ * "unbound").
  */
-@Composable
-private fun EmptyLibraryState(modifier: Modifier = Modifier) {
-    Box(modifier = modifier, contentAlignment = Alignment.Center) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(
-                text = stringResource(R.string.orchestrator_library_empty_title),
-                style = MaterialTheme.typography.titleMedium,
-            )
-            Text(
-                text = stringResource(R.string.orchestrator_library_empty_subtitle),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
+private fun PipelineGraph.toLibraryRow(isActive: Boolean, isDefault: Boolean): PipelineLibraryRow {
+    val flavour = nodes
+        .asSequence()
+        .map { it.type.name }
+        .take(n = NODE_FLOW_PREVIEW_COUNT)
+        .joinToString(separator = "→")
+        .ifBlank { "empty pipeline" }
+    val subtitle = "$nodeCountText · $flavour"
+    val secondaryLine = when {
+        isActive && isDefault -> "Active default"
+        isActive -> "Active"
+        nodes.isEmpty() -> "unbound"
+        else -> null
     }
+    val secondaryKind = if (nodes.isEmpty() && !isActive) {
+        PipelineSecondaryLineKind.Unbound
+    } else {
+        PipelineSecondaryLineKind.Default
+    }
+    return PipelineLibraryRow(
+        id = id,
+        title = name.ifBlank { "untitled" },
+        subtitle = subtitle,
+        secondaryLine = secondaryLine,
+        secondaryLineKind = secondaryKind,
+        status = if (isActive) Status.Running else Status.Idle,
+        leadingTint = Color(color = LEADING_TINT_PACKED),
+        leadingIcon = Icons.Outlined.AccountTree,
+        isActive = isActive,
+        isDefault = isDefault,
+    )
 }
 
-/**
- * Formats a Unix-millis timestamp as `dd MMM yyyy HH:mm` in the device locale.
- * Kept alongside the screen because the format is library-specific (a
- * compact one-liner that fits a single row); other screens use longer
- * variants.
- */
-private fun formatTimestamp(timestamp: Long): String {
-    val formatter = SimpleDateFormat("dd MMM yyyy HH:mm", Locale.getDefault())
-    return formatter.format(Date(timestamp))
-}
+/** Pre-formatted "n nodes" segment used in the row subtitle. */
+private val PipelineGraph.nodeCountText: String
+    get() = if (nodes.size == 1) "1 node" else "${nodes.size} nodes"
 
-/**
- * Number of leading characters of a pipeline UUID embedded into the placeholder
- * label shown for pipelines that have no user-assigned name yet.
- */
-private const val UNNAMED_PIPELINE_ID_SUFFIX_LENGTH: Int = 4
+/** Number of rows considered "recent" by the Recent filter chip. */
+private const val RECENT_TAKE_COUNT = 3
+
+/** Number of node types listed in the "8 nodes · INPUT→PLANNER→TOOLS→OUTPUT" subtitle. */
+private const val NODE_FLOW_PREVIEW_COUNT = 4
+
+/** Packed ARGB of the leading-mark tint used by every library row (brand orange). */
+private const val LEADING_TINT_PACKED: Long = 0xFFC48225
+
+/** TestTag applied to the screen root so Espresso / Compose tests can anchor. */
+internal const val LIBRARY_ROOT_TEST_TAG = "pipeline_library_root"
+
+/** Snackbar message shown when the user taps "Browse templates" before the gallery lands. */
+private const val TEMPLATES_COMING_SOON_MESSAGE = "Template gallery ships after v0.1."
+
+/** Snackbar message shown when the user taps "Export JSON" — per-id export lands post-v0.1. */
+private const val EXPORT_COMING_SOON_MESSAGE = "Per-pipeline export ships in a follow-up."
+
+/** Snackbar message shown when the user taps the footer "Import JSON" link. */
+private const val IMPORT_HINT_MESSAGE = "Use the import dialog in the editor for now."
+
+/** Inset from the right edge for the floating "+ New pipeline" FAB. */
+private val FAB_END_PADDING = 16.dp
+
+/** Bottom inset for the FAB so it sits above the bottom-navigation strip. */
+private val FAB_BOTTOM_PADDING = 16.dp

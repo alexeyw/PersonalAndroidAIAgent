@@ -1,21 +1,25 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="settings_screen_title">Agent Settings</string>
+    <string name="settings_screen_title">Settings</string>
     <string name="settings_section_system_instructions">System Instructions</string>
-    <string name="settings_field_system_prompt_prefix">System Prompt Prefix</string>
+    <string name="settings_field_system_prompt_prefix">Be concise. Prefer bullet points. Use $DATE for any date reference.</string>
+    <string name="settings_system_prompt_helper">Prepended to every system prompt the agent sends.</string>
     <string name="settings_section_restrictions">Restrictions</string>
     <string name="settings_human_in_loop_label">Human-in-the-loop</string>
-    <string name="settings_human_in_loop_hint">Always ask, even for read-only tools. Sensitive and destructive tools are always confirmed.</string>
+    <string name="settings_human_in_loop_hint">Require approval for every tool call, not only sensitive ones.</string>
     <string name="settings_section_llm_parameters">LLM Parameters</string>
-    <string name="settings_param_temperature">Temperature: %1$s</string>
-    <string name="settings_param_top_k">Top-K: %1$d</string>
-    <string name="settings_param_top_p">Top-P: %1$s</string>
-    <string name="settings_param_max_context">Max Context Tokens: %1$d</string>
+    <string name="settings_param_temperature_label">Temperature</string>
+    <string name="settings_param_top_k_label">Top-K</string>
+    <string name="settings_param_top_p_label">Top-P</string>
+    <string name="settings_param_max_context_label">Max context</string>
+    <plurals name="settings_param_max_context_value">
+        <item quantity="one">%1$d tok</item>
+        <item quantity="other">%1$d tok</item>
+    </plurals>
     <string name="settings_pipeline_max_steps_label">Pipeline Max Steps (5–100)</string>
     <string name="settings_pipeline_max_steps_helper">Enter a value between 5 and 100</string>
     <string name="settings_section_local_model">Local Model Settings</string>
     <string name="settings_inference_backend">Inference Backend</string>
-    <string name="settings_select_backend">Select Backend</string>
     <string name="settings_test_backend_button">Test Local Model with %1$s</string>
     <string name="settings_section_external_providers">External Providers (API Keys &amp; Models)</string>
     <string name="settings_section_ollama">Local Network Models (Ollama)</string>

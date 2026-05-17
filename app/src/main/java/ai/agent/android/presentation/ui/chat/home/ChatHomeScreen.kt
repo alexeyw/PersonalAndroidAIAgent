@@ -45,6 +45,8 @@ fun ChatHomeScreen(viewModel: ChatHomeViewModel, modifier: Modifier = Modifier) 
     val composerValue by viewModel.composerValue.collectAsStateWithLifecycle()
     val pendingTypedConfirm by viewModel.pendingTypedConfirm.collectAsStateWithLifecycle()
     val messages by viewModel.messages.collectAsStateWithLifecycle()
+    val consoleSearchQuery by viewModel.consoleSearchQuery.collectAsStateWithLifecycle()
+    val consoleFilter by viewModel.consoleFilter.collectAsStateWithLifecycle()
 
     var debugPickerExpanded by remember { mutableStateOf(false) }
 
@@ -54,6 +56,8 @@ fun ChatHomeScreen(viewModel: ChatHomeViewModel, modifier: Modifier = Modifier) 
         messages = messages,
         composerValue = composerValue,
         pendingTypedConfirm = pendingTypedConfirm,
+        consoleSearchQuery = consoleSearchQuery,
+        consoleFilter = consoleFilter,
     )
 
     val callbacks = remember(viewModel) {
@@ -70,8 +74,11 @@ fun ChatHomeScreen(viewModel: ChatHomeViewModel, modifier: Modifier = Modifier) 
             onSamplePrompt = viewModel::onComposerValueChange,
             onConsoleSnapChange = viewModel::setConsoleSnap,
             onConsoleTabChange = { /* stub: tab persistence ships with the orchestrator integration */ },
-            onConsoleFilterChange = { /* stub: filter persistence ships with the orchestrator integration */ },
-            onConsoleSearch = { /* stub: console search ships with the orchestrator integration */ },
+            onConsoleFilterChange = viewModel::onConsoleFilterChange,
+            onConsoleSearch = viewModel::toggleConsoleSearch,
+            onConsoleSearchQueryChange = viewModel::onConsoleSearchQueryChange,
+            onConsoleCopyLine = { /* stub: clipboard wiring ships with the orchestrator integration */ },
+            onConsoleFilterByLineSource = viewModel::filterConsoleByLineSource,
             onConsoleCopyAll = { /* stub: clipboard wiring ships with the orchestrator integration */ },
             onConsoleClear = { /* stub: clear-confirmation ships with the orchestrator integration */ },
             onCloseConsole = viewModel::closeConsole,

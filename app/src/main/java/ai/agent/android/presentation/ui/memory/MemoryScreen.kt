@@ -1,385 +1,197 @@
 package ai.agent.android.presentation.ui.memory
 
-import ai.agent.android.R
-import ai.agent.android.domain.models.ChatMessage
 import ai.agent.android.domain.models.MemoryChunk
-import androidx.compose.animation.animateContentSize
-import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Tab
-import androidx.compose.material3.TabRow
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalClipboardManager
-import androidx.compose.ui.platform.LocalConfiguration
-import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.AnnotatedString
-import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.dp
+import androidx.compose.ui.platform.testTag
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.knotwork.design.screens.memory.MemoryCallbacks
+import app.knotwork.design.screens.memory.MemoryContent
+import app.knotwork.design.screens.memory.MemoryEntryDetail
+import app.knotwork.design.screens.memory.MemoryRow
+import app.knotwork.design.screens.memory.MemorySortMode
+import app.knotwork.design.screens.memory.MemoryViewState
+import app.knotwork.design.screens.memory.MemoryVisualState
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
+import java.util.Locale
 
 /**
- * The main screen for viewing and managing the agent's short-term and long-term memory.
+ * Memory management screen — Phase 21 / Task 10 rewrite.
+ *
+ * The catalog `MemoryContent` composable owns the visual surface; this
+ * screen subscribes to [MemoryViewModel], projects [MemoryUiState] to the
+ * catalog [MemoryViewState], and forwards events back to the VM. The
+ * legacy `Chat history` tab is dropped per Task 10 scope.
  */
-@OptIn(ExperimentalMaterial3Api::class)
+@Suppress("UnusedParameter") // onBack kept for nav-graph compatibility until the catalog surface lands its back arrow.
 @Composable
-fun MemoryScreen(viewModel: MemoryViewModel = hiltViewModel(), onBack: () -> Unit = {}) {
-    val uiState by viewModel.uiState.collectAsState()
+fun MemoryScreen(
+    viewModel: MemoryViewModel = hiltViewModel(),
+    onOpenChat: () -> Unit = {},
+    onBack: () -> Unit = {},
+) {
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text(stringResource(R.string.memory_screen_title)) },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = stringResource(R.string.common_back),
-                        )
-                    }
-                },
-            )
+    var searchQuery by remember { mutableStateOf("") }
+    val debouncedQuery = rememberDebouncedString(input = searchQuery, debounceMs = MEMORY_SEARCH_DEBOUNCE_MS)
+    var sortMode by remember { mutableStateOf(MemorySortMode.Recent) }
+    var expandedEntryId by remember { mutableStateOf<Long?>(null) }
+    var editingEntryId by remember { mutableStateOf<Long?>(null) }
+
+    val allRows by remember(uiState.vectorMemories) {
+        derivedStateOf { uiState.vectorMemories.map { it.toMemoryRow() } }
+    }
+    val filteredRows by remember(allRows, debouncedQuery, sortMode) {
+        derivedStateOf {
+            val byFilter = if (debouncedQuery.isBlank()) {
+                allRows
+            } else {
+                allRows.filter { it.body.contains(debouncedQuery, ignoreCase = true) }
+            }
+            when (sortMode) {
+                // Higher id == newer entry. Sorting descending by id approximates
+                // "newest first" without paying for a per-row timestamp parse.
+                MemorySortMode.Recent -> byFilter.sortedByDescending { it.id.toLongOrNull() ?: 0L }
+                // Relevance ordering is owned by the repository (vector store
+                // returns rows in similarity order already); preserve the
+                // upstream order untouched.
+                MemorySortMode.Relevance -> byFilter
+                // Locale-aware case-insensitive title sort.
+                MemorySortMode.Alphabetical -> byFilter.sortedWith(
+                    compareBy(String.CASE_INSENSITIVE_ORDER) { it.title },
+                )
+            }
+        }
+    }
+
+    val expandedDetail = remember(expandedEntryId, uiState.vectorMemories) {
+        uiState.vectorMemories.firstOrNull { it.id == expandedEntryId }?.toEntryDetail()
+    }
+
+    val visualState = when {
+        allRows.isEmpty() -> MemoryVisualState.Empty
+        editingEntryId != null && expandedDetail != null -> MemoryVisualState.Editing
+        expandedDetail != null -> MemoryVisualState.EntryExpanded
+        debouncedQuery.isNotBlank() -> MemoryVisualState.Searching
+        else -> MemoryVisualState.Populated
+    }
+
+    val viewState = MemoryViewState(
+        visualState = visualState,
+        entries = if (visualState == MemoryVisualState.Searching) filteredRows else allRows,
+        searchQuery = searchQuery,
+        sortMode = sortMode,
+        expandedEntry = expandedDetail,
+    )
+
+    val callbacks = MemoryCallbacks(
+        onSearchQueryChange = { searchQuery = it },
+        onSortChange = { sortMode = it },
+        onEntryClick = { id -> expandedEntryId = id.toLongOrNull() },
+        onEntryDelete = { id ->
+            id.toLongOrNull()?.let { entryId ->
+                viewModel.deleteVectorMemory(memoryId = entryId)
+                expandedEntryId = null
+                editingEntryId = null
+            }
         },
-    ) { paddingValues ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues),
-        ) {
-            TabRow(selectedTabIndex = uiState.currentTab) {
-                Tab(
-                    selected = uiState.currentTab == 0,
-                    onClick = { viewModel.setTab(0) },
-                    text = { Text(stringResource(R.string.memory_tab_chat_history)) },
-                )
-                Tab(
-                    selected = uiState.currentTab == 1,
-                    onClick = { viewModel.setTab(1) },
-                    text = { Text(stringResource(R.string.memory_tab_vector_base)) },
-                )
-            }
+        onEntryEditRequest = { id -> editingEntryId = id.toLongOrNull() },
+        // Editing persistence is parked: MemoryRepository has no `update`
+        // API in v0.1. Surface a snackbar so the affordance is visible.
+        onEntryEditCommit = { _, _ ->
+            scope.launch { snackbarHostState.showSnackbar(message = EDIT_COMING_SOON_MESSAGE) }
+            editingEntryId = null
+        },
+        onEntryEditCancel = { editingEntryId = null },
+        onEntryPin = {
+            scope.launch { snackbarHostState.showSnackbar(message = PIN_COMING_SOON_MESSAGE) }
+        },
+        onCloseDetail = {
+            expandedEntryId = null
+            editingEntryId = null
+        },
+        onErrorRetry = { viewModel.loadAllData() },
+        onEmptyCta = onOpenChat,
+        onClearSearch = { searchQuery = "" },
+    )
 
-            Box(modifier = Modifier.fillMaxSize()) {
-                if (uiState.isLoading) {
-                    CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
-                } else {
-                    when (uiState.currentTab) {
-                        0 -> ChatHistoryTab(
-                            sessions = uiState.chatSessions,
-                            onDeleteSession = viewModel::deleteChatSession,
-                            onDeleteMessage = viewModel::deleteChatMessage,
-                        )
-
-                        1 -> VectorDatabaseTab(
-                            memories = uiState.vectorMemories,
-                            onDeleteMemory = viewModel::deleteVectorMemory,
-                            onCompactMemory = viewModel::compactMemory,
-                        )
-                    }
-                }
-            }
-        }
+    Box(modifier = Modifier.fillMaxSize().testTag(tag = MEMORY_ROOT_TEST_TAG)) {
+        MemoryContent(state = viewState, callbacks = callbacks)
+        SnackbarHost(hostState = snackbarHostState)
     }
 }
 
-@OptIn(ExperimentalFoundationApi::class)
+/**
+ * Debounces a string input so the heavy filtering work only re-runs after
+ * the user pauses typing. The 200 ms floor matches
+ * `compose/screens/README.md §C6`.
+ */
 @Composable
-private fun ChatHistoryTab(
-    sessions: Map<String, List<ChatMessage>>,
-    onDeleteSession: (String) -> Unit,
-    onDeleteMessage: (Long) -> Unit,
-) {
-    if (sessions.isEmpty()) {
-        EmptyStateMessage(stringResource(R.string.memory_empty_chat_history))
-        return
+private fun rememberDebouncedString(input: String, debounceMs: Long): String {
+    val emitter = remember { MutableStateFlow(value = input) }
+    var debounced by remember { mutableStateOf(input) }
+    LaunchedEffect(input) {
+        emitter.value = input
     }
-
-    LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
-    ) {
-        sessions.forEach { (sessionId, messages) ->
-            stickyHeader {
-                SessionHeader(
-                    sessionId = sessionId,
-                    messageCount = messages.size,
-                    onDelete = { onDeleteSession(sessionId) },
-                )
-            }
-            items(messages, key = { it.id ?: it.hashCode() }) { message ->
-                ChatMessageItem(
-                    message = message,
-                    onDelete = { message.id?.let { onDeleteMessage(it) } },
-                )
-            }
+    LaunchedEffect(emitter, debounceMs) {
+        emitter.collectLatest { value ->
+            delay(timeMillis = debounceMs)
+            debounced = value
         }
     }
+    return debounced
 }
 
-@Composable
-private fun VectorDatabaseTab(
-    memories: List<MemoryChunk>,
-    onDeleteMemory: (Long) -> Unit,
-    onCompactMemory: () -> Unit,
-) {
-    Column(modifier = Modifier.fillMaxSize()) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 8.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                text = stringResource(R.string.memory_chunks_stored, memories.size),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            androidx.compose.material3.OutlinedButton(onClick = onCompactMemory) {
-                Text(stringResource(R.string.memory_compact_button))
-            }
-        }
+private fun MemoryChunk.toMemoryRow(): MemoryRow = MemoryRow(
+    id = id.toString(),
+    title = text.lineSequence().firstOrNull()?.take(n = MEMORY_TITLE_MAX_CHARS).orEmpty(),
+    body = text,
+    tags = emptyList(),
+    relevanceScore = null,
+    lastAccessed = formatMemoryTimestamp(timestamp = timestamp),
+)
 
-        if (memories.isEmpty()) {
-            Box(modifier = Modifier.weight(1f)) {
-                EmptyStateMessage(stringResource(R.string.memory_empty_vector))
-            }
-            return
-        }
+private fun MemoryChunk.toEntryDetail(): MemoryEntryDetail = MemoryEntryDetail(
+    id = id.toString(),
+    title = text.lineSequence().firstOrNull()?.take(n = MEMORY_TITLE_MAX_CHARS).orEmpty(),
+    body = text,
+    tags = emptyList(),
+    lastAccessed = formatMemoryTimestamp(timestamp = timestamp),
+)
 
-        LazyColumn(
-            modifier = Modifier.weight(1f),
-            contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            items(memories, key = { it.id }) { memory ->
-                MemoryChunkItem(
-                    memory = memory,
-                    onDelete = { onDeleteMemory(memory.id) },
-                )
-            }
-        }
-    }
+private fun formatMemoryTimestamp(timestamp: Long): String {
+    val formatter = SimpleDateFormat("dd MMM yyyy HH:mm", Locale.getDefault())
+    return formatter.format(Date(timestamp))
 }
 
-@Composable
-private fun SessionHeader(sessionId: String, messageCount: Int, onDelete: () -> Unit) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(MaterialTheme.colorScheme.surfaceVariant)
-            .padding(vertical = 8.dp, horizontal = 4.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween,
-    ) {
-        Column {
-            Text(
-                text = stringResource(R.string.memory_session_header, sessionId.take(SESSION_ID_DISPLAY_LENGTH)),
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Text(
-                text = stringResource(R.string.memory_session_messages, messageCount),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-        IconButton(onClick = onDelete) {
-            Icon(
-                imageVector = Icons.Default.Delete,
-                contentDescription = stringResource(R.string.memory_delete_session_cd),
-                tint = MaterialTheme.colorScheme.error,
-            )
-        }
-    }
-}
+/** Snackbar message when the user requests Edit / Pin before persistence lands. */
+private const val EDIT_COMING_SOON_MESSAGE = "Editing memories ships in a follow-up."
+private const val PIN_COMING_SOON_MESSAGE = "Pinning memories ships in a follow-up."
 
-@Composable
-private fun ChatMessageItem(message: ChatMessage, onDelete: () -> Unit) {
-    val locale = LocalConfiguration.current.locales[0]
-    val dateFormat = remember(locale) { SimpleDateFormat("MMM dd, HH:mm", locale) }
-    val dateString = dateFormat.format(Date(message.timestamp))
-    var expanded by remember { mutableStateOf(false) }
-    val clipboardManager = LocalClipboardManager.current
+/** TestTag applied to the screen root. */
+internal const val MEMORY_ROOT_TEST_TAG = "memory_screen_root"
 
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable { expanded = !expanded }
-            .animateContentSize(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface,
-        ),
-    ) {
-        Row(
-            modifier = Modifier.padding(12.dp),
-            verticalAlignment = Alignment.Top,
-            horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Row(
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Text(
-                        text = message.role.name,
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.primary,
-                    )
-                    Text(
-                        text = dateString,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = message.content,
-                    style = MaterialTheme.typography.bodyMedium,
-                    maxLines = if (expanded) Int.MAX_VALUE else 3,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                IconButton(onClick = onDelete) {
-                    Icon(
-                        imageVector = Icons.Default.Delete,
-                        contentDescription = stringResource(R.string.memory_delete_message_cd),
-                        tint = MaterialTheme.colorScheme.error,
-                        modifier = Modifier.padding(start = 8.dp),
-                    )
-                }
-                TextButton(onClick = { clipboardManager.setText(AnnotatedString(message.content)) }) {
-                    Text(stringResource(R.string.common_copy), style = MaterialTheme.typography.labelMedium)
-                }
-            }
-        }
-    }
-}
+/** Search debounce duration per `compose/screens/README.md §C6`. */
+private const val MEMORY_SEARCH_DEBOUNCE_MS = 200L
 
-@Composable
-private fun MemoryChunkItem(memory: MemoryChunk, onDelete: () -> Unit) {
-    val locale = LocalConfiguration.current.locales[0]
-    val dateFormat = remember(locale) { SimpleDateFormat("MMM dd, yyyy HH:mm", locale) }
-    val dateString = dateFormat.format(Date(memory.timestamp))
-    var expanded by remember { mutableStateOf(false) }
-    val clipboardManager = LocalClipboardManager.current
-
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable { expanded = !expanded }
-            .animateContentSize(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.secondaryContainer,
-        ),
-    ) {
-        Row(
-            modifier = Modifier.padding(12.dp),
-            verticalAlignment = Alignment.Top,
-            horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = dateString,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSecondaryContainer,
-                )
-                Spacer(modifier = Modifier.height(4.dp))
-                if (expanded) {
-                    com.mikepenz.markdown.m3.Markdown(
-                        content = memory.text,
-                        modifier = Modifier.fillMaxWidth(),
-                        typography = com.mikepenz.markdown.m3.markdownTypography(
-                            h1 = MaterialTheme.typography.titleLarge,
-                            h2 = MaterialTheme.typography.titleMedium,
-                            h3 = MaterialTheme.typography.titleSmall,
-                            h4 = MaterialTheme.typography.bodyLarge,
-                            h5 = MaterialTheme.typography.bodyMedium,
-                            h6 = MaterialTheme.typography.bodySmall,
-                            text = MaterialTheme.typography.bodyMedium,
-                        ),
-                    )
-                } else {
-                    Text(
-                        text = memory.text.trim(),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSecondaryContainer,
-                        maxLines = 4,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(
-                    text = stringResource(R.string.memory_embedding_size, memory.embedding.size),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f),
-                )
-            }
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                IconButton(onClick = onDelete) {
-                    Icon(
-                        imageVector = Icons.Default.Delete,
-                        contentDescription = stringResource(R.string.memory_delete_memory_cd),
-                        tint = MaterialTheme.colorScheme.error,
-                    )
-                }
-                TextButton(onClick = { clipboardManager.setText(AnnotatedString(memory.text)) }) {
-                    Text(stringResource(R.string.common_copy), style = MaterialTheme.typography.labelMedium)
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun EmptyStateMessage(message: String) {
-    Box(
-        modifier = Modifier.fillMaxSize(),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(
-            text = message,
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-    }
-}
-
-/** Number of leading characters of a session UUID embedded into the memory-screen session header. */
-private const val SESSION_ID_DISPLAY_LENGTH: Int = 8
+/** Maximum characters preserved from the entry body when synthesising the row title. */
+private const val MEMORY_TITLE_MAX_CHARS = 60

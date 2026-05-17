@@ -1,7 +1,9 @@
 package app.knotwork.design.components.console
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -16,21 +18,32 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.DeleteSweep
+import androidx.compose.material.icons.outlined.FilterAlt
 import androidx.compose.material.icons.outlined.Search
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -126,10 +139,24 @@ private val TraceBarHeight = 4.dp
  * @param filter source filter applied to [logs].
  * @param onFilterChange invoked when the user toggles a source filter.
  * @param onSearch invoked when the user taps the header Search action
- * (Partial / Full only). Screens typically toggle an inline search bar.
+ * (Partial / Full only). Screens typically toggle an inline search bar via
+ * [searchQuery]; the catalog also wires this callback so a host can keep
+ * legacy "open search overlay" semantics if it wants.
  * @param onCopyAll invoked when the user taps the header Copy-all action.
  * @param onClear invoked when the user taps the header Clear action.
  * Screens typically confirm via a dialog before clearing the log.
+ * @param searchQuery when non-null, an inline search field is rendered
+ * above the Logs list and the query is applied as a case-insensitive
+ * substring match on [ConsoleLine.text] (in addition to [filter]). `null`
+ * hides the search bar entirely. Passing the empty string keeps the bar
+ * visible but matches every line.
+ * @param onSearchQueryChange invoked when the user edits the search query;
+ * the host owns the value so it can persist across rotations and tabs.
+ * @param onCopyLine invoked when the user picks `Copy line` from the
+ * long-press menu on a [ConsoleLine] row.
+ * @param onFilterByLineSource invoked when the user picks `Only show this
+ * source` from the long-press menu — the host should narrow [filter] to a
+ * single-source set.
  * @param modifier optional layout modifier applied to the pane root.
  */
 @Composable
@@ -148,6 +175,10 @@ fun ConsolePane(
     onCopyAll: () -> Unit,
     onClear: () -> Unit,
     modifier: Modifier = Modifier,
+    searchQuery: String? = null,
+    onSearchQueryChange: (String) -> Unit = {},
+    onCopyLine: (ConsoleLine) -> Unit = {},
+    onFilterByLineSource: (ConsoleSource) -> Unit = {},
 ) {
     Column(
         modifier = modifier
@@ -172,6 +203,10 @@ fun ConsolePane(
                     logs = logs,
                     filter = filter,
                     onFilterChange = onFilterChange,
+                    searchQuery = searchQuery,
+                    onSearchQueryChange = onSearchQueryChange,
+                    onCopyLine = onCopyLine,
+                    onFilterByLineSource = onFilterByLineSource,
                 )
                 ConsoleTab.Vars -> ConsoleVarsBody(rows = vars)
                 ConsoleTab.Traces -> ConsoleTracesBody(spans = traces)
@@ -381,18 +416,138 @@ private fun PeekTickerRow(logs: List<ConsoleLine>) {
     )
 }
 
-/** Logs-tab body — filter chips + LazyColumn of [ConsoleLineRow]. */
+/**
+ * Logs-tab body — optional inline search bar + filter chips + LazyColumn of
+ * [ConsoleLineRow]s. The list is filtered first by [filter] (source set)
+ * and then by [searchQuery] as a case-insensitive substring match on
+ * [ConsoleLine.text]. An empty filtered result inside an active search
+ * renders the localised "no matches" empty-state row.
+ */
 @Composable
-private fun ConsoleLogsBody(logs: List<ConsoleLine>, filter: ConsoleFilter, onFilterChange: (ConsoleFilter) -> Unit) {
+@Suppress("LongParameterList") // Six knobs — collapsing into a config object would just shuffle the params.
+private fun ConsoleLogsBody(
+    logs: List<ConsoleLine>,
+    filter: ConsoleFilter,
+    onFilterChange: (ConsoleFilter) -> Unit,
+    searchQuery: String?,
+    onSearchQueryChange: (String) -> Unit,
+    onCopyLine: (ConsoleLine) -> Unit,
+    onFilterByLineSource: (ConsoleSource) -> Unit,
+) {
     Column(modifier = Modifier.fillMaxWidth().fillMaxHeight()) {
+        if (searchQuery != null) {
+            ConsoleSearchField(query = searchQuery, onQueryChange = onSearchQueryChange)
+        }
         ConsoleSourceFilterRow(filter = filter, onFilterChange = onFilterChange)
-        LazyColumn(modifier = Modifier.fillMaxWidth().weight(1f)) {
-            items(items = logs.filter(filter::matches)) { line ->
-                ConsoleLineRow(line = line)
+        val needle = searchQuery?.trim().orEmpty()
+        val visible = logs
+            .asSequence()
+            .filter(filter::matches)
+            .filter { needle.isEmpty() || it.text.contains(needle, ignoreCase = true) }
+            .toList()
+        if (visible.isEmpty() && needle.isNotEmpty()) {
+            ConsoleLogsEmptySearchRow()
+        } else {
+            LazyColumn(modifier = Modifier.fillMaxWidth().weight(1f)) {
+                items(items = visible) { line ->
+                    ConsoleLineRow(
+                        line = line,
+                        onCopyLine = { onCopyLine(line) },
+                        onFilterByLineSource = { onFilterByLineSource(line.source) },
+                    )
+                }
             }
         }
     }
 }
+
+/**
+ * Single-line "no matches" placeholder shown when the search query filters
+ * every otherwise-visible row out of the Logs list. Rendered with monospace
+ * type so it sits comfortably amongst the log lines.
+ */
+@Composable
+private fun ConsoleLogsEmptySearchRow() {
+    Box(
+        contentAlignment = Alignment.CenterStart,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = KnotworkTheme.spacing.sp3, vertical = KnotworkTheme.spacing.sp2),
+    ) {
+        Text(
+            text = stringResource(R.string.knotwork_console_empty_search),
+            style = KnotworkTextStyles.MonoSm,
+            color = KnotworkTheme.extended.consoleFg.copy(alpha = INACTIVE_TAB_ALPHA),
+        )
+    }
+}
+
+/**
+ * Inline search field rendered above the source-filter row in
+ * Partial / Full snaps. Uses [BasicTextField] so we can paint the text and
+ * cursor directly with the console palette — the standard Material
+ * `TextField` styling clashes with the always-dark surface.
+ */
+@Composable
+private fun ConsoleSearchField(query: String, onQueryChange: (String) -> Unit) {
+    val fieldCd = stringResource(R.string.knotwork_console_search_field_cd)
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp2),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = KnotworkTheme.spacing.sp3, vertical = KnotworkTheme.spacing.sp1)
+            .clip(KnotworkTheme.shapes.sm)
+            .background(color = KnotworkTheme.extended.consoleFg.copy(alpha = SOURCE_CHIP_OFF_ALPHA))
+            .padding(horizontal = KnotworkTheme.spacing.sp2, vertical = KnotworkTheme.spacing.sp1),
+    ) {
+        Icon(
+            imageVector = Icons.Outlined.Search,
+            contentDescription = null,
+            tint = KnotworkTheme.extended.consoleFg.copy(alpha = INACTIVE_TAB_ALPHA),
+            modifier = Modifier.size(SEARCH_ICON_SIZE),
+        )
+        Box(modifier = Modifier.weight(1f)) {
+            BasicTextField(
+                value = query,
+                onValueChange = onQueryChange,
+                singleLine = true,
+                textStyle = KnotworkTextStyles.MonoBase.copy(color = KnotworkTheme.extended.consoleFg),
+                cursorBrush = SolidColor(KnotworkPalette.Accent400),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .semantics { contentDescription = fieldCd },
+            )
+            if (query.isEmpty()) {
+                Text(
+                    text = stringResource(R.string.knotwork_console_search_placeholder),
+                    style = KnotworkTextStyles.MonoBase,
+                    color = KnotworkTheme.extended.consoleFg.copy(alpha = INACTIVE_TAB_ALPHA),
+                    maxLines = 1,
+                )
+            }
+        }
+        if (query.isNotEmpty()) {
+            IconButton(
+                onClick = { onQueryChange("") },
+                modifier = Modifier.size(SEARCH_CLEAR_SIZE),
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.Close,
+                    contentDescription = stringResource(R.string.knotwork_console_search_clear_cd),
+                    tint = KnotworkTheme.extended.consoleFg.copy(alpha = INACTIVE_TAB_ALPHA),
+                    modifier = Modifier.size(SEARCH_ICON_SIZE),
+                )
+            }
+        }
+    }
+}
+
+/** Leading / trailing search-field icon size. */
+private val SEARCH_ICON_SIZE = 16.dp
+
+/** Touch target for the trailing clear-search button. */
+private val SEARCH_CLEAR_SIZE = 24.dp
 
 /** One filterable source chip. Toggles inclusion of `source` in [ConsoleFilter.sources]. */
 @Composable
@@ -433,39 +588,90 @@ private fun ConsoleSourceFilterRow(filter: ConsoleFilter, onFilterChange: (Conso
     }
 }
 
-/** Single log row: leading accent strip + timestamp + source + text. */
+/**
+ * Single log row: leading accent strip + timestamp + source + text.
+ *
+ * Long-press opens an anchored [DropdownMenu] with two items — "Copy line"
+ * and "Only show this source" — that delegate to the host via the supplied
+ * callbacks (the catalog never touches the clipboard or mutates [ConsoleFilter]
+ * directly). A short tap is a no-op so a stray tap doesn't accidentally
+ * fire the menu; the host can layer click-to-pin on top via a wrapping
+ * composable if needed in a future iteration.
+ */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun ConsoleLineRow(line: ConsoleLine) {
-    Row(modifier = Modifier.fillMaxWidth()) {
-        Spacer(
-            modifier = Modifier
-                .width(LogAccentStripWidth)
-                .height(KnotworkTheme.spacing.sp6)
-                .background(color = levelAccent(line.level)),
-        )
+private fun ConsoleLineRow(line: ConsoleLine, onCopyLine: () -> Unit, onFilterByLineSource: () -> Unit) {
+    var menuExpanded by remember { mutableStateOf(false) }
+    Box(modifier = Modifier.fillMaxWidth()) {
         Row(
-            verticalAlignment = Alignment.Top,
-            horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp2),
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = KnotworkTheme.spacing.sp3, vertical = KnotworkTheme.spacing.sp1),
+                .combinedClickable(
+                    onClick = { /* No short-tap action on log rows. */ },
+                    onLongClick = { menuExpanded = true },
+                ),
         ) {
-            Text(
-                text = line.timestamp,
-                style = KnotworkTextStyles.MonoSm,
-                color = KnotworkTheme.extended.consoleFg.copy(alpha = INACTIVE_TAB_ALPHA),
+            Spacer(
+                modifier = Modifier
+                    .width(LogAccentStripWidth)
+                    .height(KnotworkTheme.spacing.sp6)
+                    .background(color = levelAccent(line.level)),
             )
-            Text(
-                text = "[${line.source}]",
-                style = KnotworkTextStyles.MonoSm,
-                color = KnotworkPalette.Accent300,
+            Row(
+                verticalAlignment = Alignment.Top,
+                horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp2),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = KnotworkTheme.spacing.sp3, vertical = KnotworkTheme.spacing.sp1),
+            ) {
+                Text(
+                    text = line.timestamp,
+                    style = KnotworkTextStyles.MonoSm,
+                    color = KnotworkTheme.extended.consoleFg.copy(alpha = INACTIVE_TAB_ALPHA),
+                )
+                Text(
+                    text = "[${line.source}]",
+                    style = KnotworkTextStyles.MonoSm,
+                    color = KnotworkPalette.Accent300,
+                )
+                Text(
+                    text = line.text,
+                    style = KnotworkTextStyles.MonoBase,
+                    color = KnotworkTheme.extended.consoleFg,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+        DropdownMenu(
+            expanded = menuExpanded,
+            onDismissRequest = { menuExpanded = false },
+        ) {
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.knotwork_console_line_copy)) },
+                leadingIcon = {
+                    Icon(
+                        imageVector = Icons.Outlined.ContentCopy,
+                        contentDescription = null,
+                    )
+                },
+                onClick = {
+                    menuExpanded = false
+                    onCopyLine()
+                },
             )
-            Text(
-                text = line.text,
-                style = KnotworkTextStyles.MonoBase,
-                color = KnotworkTheme.extended.consoleFg,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.knotwork_console_line_filter_only)) },
+                leadingIcon = {
+                    Icon(
+                        imageVector = Icons.Outlined.FilterAlt,
+                        contentDescription = null,
+                    )
+                },
+                onClick = {
+                    menuExpanded = false
+                    onFilterByLineSource()
+                },
             )
         }
     }

@@ -17,6 +17,8 @@ import ai.agent.android.presentation.ui.settings.SettingsScreen
 import ai.agent.android.presentation.ui.splash.SplashScreen
 import ai.agent.android.presentation.ui.taskmonitor.TaskMonitorScreen
 import ai.agent.android.presentation.ui.taskmonitor.TaskMonitorViewModel
+import ai.agent.android.presentation.ui.tools.AddMcpServerScreen
+import ai.agent.android.presentation.ui.tools.ToolDetailScreen
 import ai.agent.android.presentation.ui.tools.ToolsScreen
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
@@ -184,12 +186,18 @@ fun AppNavGraph(navController: NavHostController, showOnboarding: Boolean, modif
             ToolsScreen(
                 modifier = Modifier.fillMaxSize(),
                 onBack = { navController.popBackStack() },
+                onOpenAddMcpServer = { navController.navigate(NavRoutes.ADD_MCP_SERVER) },
+                onOpenToolDetail = { toolId ->
+                    // AppFunction-shaped tool ids embed `/` and `#` (e.g.
+                    // `<pkg>/<FQN>#invoke`). Percent-encode them via
+                    // `Uri.encode` so they fit a single `{toolId}`
+                    // segment; Navigation's internal `Uri.decode` is the
+                    // inverse, so the receiver gets the raw id back.
+                    val encoded = android.net.Uri.encode(toolId)
+                    navController.navigate(NavRoutes.TOOL_DETAIL.replace(oldValue = "{toolId}", newValue = encoded))
+                },
             )
         }
-        // `tools/{toolId}` and `tools/add-mcp` arrive with Task 10; we
-        // register them as not-yet-implemented so deep-link / nav-arg
-        // contracts are stable from Task 4. The body is a placeholder
-        // ToolsScreen view so any accidental link does not crash the app.
         composable(
             route = NavRoutes.TOOL_DETAIL,
             arguments = listOf(
@@ -198,16 +206,19 @@ fun AppNavGraph(navController: NavHostController, showOnboarding: Boolean, modif
                     nullable = false
                 },
             ),
-        ) {
-            ToolsScreen(
-                modifier = Modifier.fillMaxSize(),
+        ) { backStackEntry ->
+            val toolId = backStackEntry.arguments?.getString(NavRoutes.TOOL_DETAIL_ID_ARG).orEmpty()
+            ToolDetailScreen(
+                toolId = toolId,
                 onBack = { navController.popBackStack() },
+                modifier = Modifier.fillMaxSize(),
             )
         }
         composable(NavRoutes.ADD_MCP_SERVER) {
-            ToolsScreen(
+            AddMcpServerScreen(
+                onCancel = { navController.popBackStack() },
+                onSubmitted = { navController.popBackStack() },
                 modifier = Modifier.fillMaxSize(),
-                onBack = { navController.popBackStack() },
             )
         }
 
