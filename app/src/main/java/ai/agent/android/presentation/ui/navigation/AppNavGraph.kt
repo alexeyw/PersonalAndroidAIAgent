@@ -188,7 +188,13 @@ fun AppNavGraph(navController: NavHostController, showOnboarding: Boolean, modif
                 onBack = { navController.popBackStack() },
                 onOpenAddMcpServer = { navController.navigate(NavRoutes.ADD_MCP_SERVER) },
                 onOpenToolDetail = { toolId ->
-                    navController.navigate(NavRoutes.TOOL_DETAIL.replace(oldValue = "{toolId}", newValue = toolId))
+                    // AppFunction-shaped tool ids embed `/` and `#` (e.g.
+                    // `<pkg>/<FQN>#invoke`). Percent-encode them via
+                    // `Uri.encode` so they fit a single `{toolId}`
+                    // segment; Navigation's internal `Uri.decode` is the
+                    // inverse, so the receiver gets the raw id back.
+                    val encoded = android.net.Uri.encode(toolId)
+                    navController.navigate(NavRoutes.TOOL_DETAIL.replace(oldValue = "{toolId}", newValue = encoded))
                 },
             )
         }
