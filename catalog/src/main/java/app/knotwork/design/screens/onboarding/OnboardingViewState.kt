@@ -30,19 +30,19 @@ enum class OnboardingLiteRtModel(
     val sizeLabel: String,
     val recommended: Boolean,
 ) {
-    /** Quantised Gemma 2B (Q4) — bundled default. */
-    Gemma2B(
-        id = "gemma_2b_q4",
-        displayName = "Gemma 2B (Q4)",
-        sizeLabel = "1.4 GB",
+    /** Gemma 4 E2B — bundled starter, smallest footprint. */
+    Gemma4E2B(
+        id = "gemma_4_e2b",
+        displayName = "Gemma 4 E2B",
+        sizeLabel = "2.59 GB",
         recommended = true,
     ),
 
-    /** Quantised Phi-3 mini (Q4). */
-    Phi3Mini(
-        id = "phi_3_mini_q4",
-        displayName = "Phi-3 mini (Q4)",
-        sizeLabel = "2.1 GB",
+    /** Gemma 4 E4B — larger model with more headroom. */
+    Gemma4E4B(
+        id = "gemma_4_e4b",
+        displayName = "Gemma 4 E4B",
+        sizeLabel = "3.66 GB",
         recommended = false,
     ),
 
@@ -95,7 +95,7 @@ data class OnboardingDefaultPipelinePreview(
  */
 data class OnboardingViewState(
     val step: OnboardingStep = OnboardingStep.Welcome,
-    val liteRtModel: OnboardingLiteRtModel = OnboardingLiteRtModel.Gemma2B,
+    val liteRtModel: OnboardingLiteRtModel = OnboardingLiteRtModel.Gemma4E2B,
     val configuredCloudProviders: Set<String> = emptySet(),
     val defaultPipelinePreview: OnboardingDefaultPipelinePreview? = null,
 ) {

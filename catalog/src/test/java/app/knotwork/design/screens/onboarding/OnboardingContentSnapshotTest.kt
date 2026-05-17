@@ -89,7 +89,7 @@ internal object OnboardingPreview {
 
     fun liteRtModel(): OnboardingViewState = OnboardingViewState(
         step = OnboardingStep.LiteRtModel,
-        liteRtModel = OnboardingLiteRtModel.Gemma2B,
+        liteRtModel = OnboardingLiteRtModel.Gemma4E2B,
         defaultPipelinePreview = defaultPipelinePreview(),
     )
 
