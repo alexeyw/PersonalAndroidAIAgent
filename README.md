@@ -53,7 +53,10 @@ configured it.
   Ollama — all opt-in, bring-your-own-key.
 - Model Context Protocol (MCP) client for connecting external tool servers.
 - AppFunctions Jetpack integration for on-device tool calls.
-- Visual pipeline orchestrator inside the app for editing node graphs.
+- Knotwork **pipeline editor** with pan / pinch-zoom canvas, snap-to-grid
+  drag-and-drop, long-press radial node picker, Sugiyama auto-layout,
+  inline validation bar with focus-on-error, run-trace bar, undo / redo,
+  and per-type configuration sheets for all 12 node types.
 - Pipeline library with per-chat binding, plus rename / duplicate / delete.
 - Prompt variables (`$DATE`, `$TIME`, `$TOOLS`, `$MODEL`, `$MEMORY_SUMMARY`)
   rendered fresh on every execution.
@@ -78,9 +81,9 @@ configured it.
 > Placeholder images — real screenshots will land alongside the first
 > tagged pre-release.
 
-| Chat screen | Visual orchestrator |
+| Chat screen | Pipeline editor |
 |---|---|
-| ![Screenshot TODO — chat](docs/screenshots/TODO.png) | ![Screenshot TODO — orchestrator](docs/screenshots/TODO.png) |
+| ![Screenshot TODO — chat](docs/screenshots/TODO.png) | ![Screenshot TODO — pipeline editor](docs/screenshots/TODO.png) |
 
 | Pipeline library | Browser pipeline editor |
 |---|---|

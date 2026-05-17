@@ -3,6 +3,7 @@ package ai.agent.android.presentation.ui.orchestrator
 import ai.agent.android.domain.models.AgentTool
 import ai.agent.android.domain.models.CloudProvider
 import ai.agent.android.domain.models.ConnectionModel
+import ai.agent.android.domain.models.LocalModel
 import ai.agent.android.domain.models.NodeModel
 import ai.agent.android.domain.models.PipelineGraph
 import ai.agent.android.domain.models.PipelineImportOutcome
@@ -51,6 +52,7 @@ data class OrchestratorUiState(
     val isLoading: Boolean = false,
     val errorMessage: UiText? = null,
     val availableTools: List<AgentTool> = emptyList(),
+    val availableLocalModels: List<LocalModel> = emptyList(),
     val providerKeys: Map<CloudProvider, Boolean> = emptyMap(),
     val promptTemplates: List<PromptTemplate> = emptyList(),
     val availableVariables: List<String> = emptyList(),
@@ -121,3 +123,16 @@ sealed interface PromptPreviewState {
      */
     data class Ready(val segments: List<PromptSegment>) : PromptPreviewState
 }
+
+/**
+ * Live pipeline-run state surfaced by the editor's run-trace bar and node-running pulse.
+ *
+ * Phase-21 placeholder while the orchestrator-runtime wiring is finalised: the editor
+ * exercises both fields through a debug toggle so the bar can be reviewed end-to-end
+ * before the agent loop wires them up post-v0.1.
+ *
+ * @property isRunning whether a pipeline run is currently in progress.
+ * @property activeNodeId id of the node the run is currently executing, or `null` when
+ * the run has not yet emitted a step (or after the run completes).
+ */
+data class PipelineRunState(val isRunning: Boolean = false, val activeNodeId: String? = null)

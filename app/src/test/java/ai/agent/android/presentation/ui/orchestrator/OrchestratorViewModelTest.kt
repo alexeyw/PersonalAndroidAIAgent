@@ -13,6 +13,7 @@ import ai.agent.android.domain.prompt.PromptSegment
 import ai.agent.android.domain.prompt.PromptTemplateEngine
 import ai.agent.android.domain.prompt.PromptVariableProvider
 import ai.agent.android.domain.repositories.ApiKeyRepository
+import ai.agent.android.domain.repositories.LocalModelRepository
 import ai.agent.android.domain.repositories.SettingsRepository
 import ai.agent.android.domain.repositories.ToolRepository
 import ai.agent.android.domain.usecases.CreatePipelineUseCase
@@ -57,6 +58,7 @@ class OrchestratorViewModelTest {
     private lateinit var savePromptTemplateUseCase: SavePromptTemplateUseCase
     private lateinit var apiKeyRepository: ApiKeyRepository
     private lateinit var toolRepository: ToolRepository
+    private lateinit var localModelRepository: LocalModelRepository
     private lateinit var settingsRepository: SettingsRepository
     private lateinit var promptTemplateEngine: PromptTemplateEngine
     private lateinit var providerDate: PromptVariableProvider
@@ -84,12 +86,14 @@ class OrchestratorViewModelTest {
         savePromptTemplateUseCase = mockk()
         apiKeyRepository = mockk()
         toolRepository = mockk()
+        localModelRepository = mockk()
         settingsRepository = mockk(relaxed = true) {
             every { defaultPipelineId } returns flowOf(null)
         }
 
         every { loadPipelineUseCase.observeAllPipelines() } returns flowOf(emptyList())
         every { getPromptTemplatesUseCase() } returns flowOf(emptyList())
+        every { localModelRepository.getAllModels() } returns flowOf(emptyList())
 
         every { apiKeyRepository.getOpenAIKey() } returns flowOf(null)
         every { apiKeyRepository.getAnthropicKey() } returns flowOf("key")
@@ -120,6 +124,7 @@ class OrchestratorViewModelTest {
             savePromptTemplateUseCase,
             apiKeyRepository,
             toolRepository,
+            localModelRepository,
             settingsRepository,
             promptTemplateEngine,
             setOf(providerDate, providerTime),
@@ -922,5 +927,70 @@ class OrchestratorViewModelTest {
         viewModel.consumePendingEditorNavigation()
 
         assertEquals(false, viewModel.uiState.value.pendingEditorNavigation)
+    }
+
+    // ─── Phase 21 / Task 9 — Pipeline editor hooks ───────────────────────────
+
+    @Test
+    fun `addNode returns the id of the just-added node`() {
+        val id = viewModel.addNode(NodeType.LITE_RT, 10f, 20f)
+        val newNode = viewModel.uiState.value.currentPipeline.nodes.last()
+        assertEquals(id, newNode.id)
+    }
+
+    @Test
+    fun `updateNodeFromEditor replaces the matching node`() {
+        viewModel.addNode(NodeType.LITE_RT, 0f, 0f)
+        val node = viewModel.uiState.value.currentPipeline.nodes.first()
+        val mutated = node.copy(label = "Renamed", systemPrompt = "new")
+
+        viewModel.updateNodeFromEditor(node.id, mutated)
+
+        val refreshed = viewModel.uiState.value.currentPipeline.nodes.first()
+        assertEquals("Renamed", refreshed.label)
+        assertEquals("new", refreshed.systemPrompt)
+    }
+
+    @Test
+    fun `replaceCurrentPipeline swaps the active pipeline`() {
+        val replacement = PipelineGraph(id = "x", name = "X")
+        viewModel.replaceCurrentPipeline(replacement)
+        assertEquals(replacement, viewModel.uiState.value.currentPipeline)
+    }
+
+    @Test
+    fun `setRunning and setActiveRunningNode update the runState flow`() {
+        assertEquals(false, viewModel.runState.value.isRunning)
+        viewModel.setRunning(true)
+        viewModel.setActiveRunningNode("node-42")
+        assertEquals(true, viewModel.runState.value.isRunning)
+        assertEquals("node-42", viewModel.runState.value.activeNodeId)
+    }
+
+    @Test
+    fun `requestFocusNode does not throw and the SharedFlow exists`() {
+        // The SharedFlow is wired with `extraBufferCapacity = 1` so `tryEmit` always
+        // succeeds even when no collector is active. Asserting that exposed flow is
+        // non-null and the emit is silent is enough behaviour-coverage at the VM seam;
+        // end-to-end emission timing is covered by the editor's instrumentation tests.
+        assertNotNull(viewModel.focusNodeRequest)
+        viewModel.requestFocusNode("node-7")
+    }
+
+    @Test
+    fun `labelFor returns a non-null UiText for every validation error`() {
+        val errors: List<PipelineValidationError> = listOf(
+            PipelineValidationError.MissingInput,
+            PipelineValidationError.MissingOutput,
+            PipelineValidationError.MultipleInputs,
+            PipelineValidationError.MultipleOutputs,
+            PipelineValidationError.HasCycles,
+            PipelineValidationError.DisconnectedInput,
+            PipelineValidationError.DisconnectedOutput,
+            PipelineValidationError.UnreachableNode,
+            PipelineValidationError.DeadEndNode,
+            PipelineValidationError.NodeEmptyContext(nodeId = "missing"),
+        )
+        errors.forEach { err -> assertNotNull(viewModel.labelFor(err)) }
     }
 }

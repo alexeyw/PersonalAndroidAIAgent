@@ -7,6 +7,8 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -55,16 +57,82 @@ fun NodeConfigSheet(
     onChange: (NodeConfig) -> Unit,
     onCancel: () -> Unit,
     onSave: (NodeConfig) -> Unit,
+    availableToolIds: List<String> = emptyList(),
+    availableModels: List<LocalModelOption> = emptyList(),
+    onPickFromLibrary: ((category: String, apply: (String) -> Unit) -> Unit)? = null,
 ) {
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = false)
+    // `skipPartiallyExpanded = true` opens the sheet at its full height immediately
+    // (no half-expanded state). Tall configs — IntentRouter with several classes, LiteRt
+    // with stop-tokens + prompt + sliders, Tool with many argument rows — would
+    // otherwise hide the Save row at the bottom in the partial state, requiring an
+    // extra drag-up before the user could see it.
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val errors = NodeConfigValidation.validate(config = config, peerTitles = peerTitles)
     ModalBottomSheet(onDismissRequest = onCancel, sheetState = sheetState) {
-        NodeConfigSheetBody(
+        ScrollableNodeConfigSheetBody(
             config = config,
             errors = errors,
             onChange = onChange,
             onCancel = onCancel,
             onSave = onSave,
+            availableToolIds = availableToolIds,
+            availableModels = availableModels,
+            onPickFromLibrary = onPickFromLibrary,
+        )
+    }
+}
+
+/**
+ * Variant of [NodeConfigSheetBody] for the modal sheet — wraps the entire body in a
+ * single scrollable Column so tall configs (e.g., IntentRouter after adding several
+ * classes) can reach the Save action by scrolling down to it.
+ *
+ * The action row scrolls with the content instead of being pinned. The earlier
+ * "weight(1f, fill = false) + verticalScroll on the body + action row pinned outside"
+ * arrangement is correct in principle but can drive Compose into a measurement /
+ * layout loop on real devices (LayoutCoordinates from `onGloballyPositioned` re-fires
+ * every layout pass, the weighted child re-measures, etc.), which manifested as an
+ * input-dispatch ANR. A single scrolling Column avoids the combo entirely.
+ *
+ * Lives inside the [NodeConfigSheet] wrapper rather than replacing [NodeConfigSheetBody]
+ * because the catalog harness ([PipelineEditorCatalogContent]) embeds the body inside
+ * an unbounded Column — `Modifier.verticalScroll` requires bounded height and would
+ * crash at measure time there.
+ */
+@Composable
+@Suppress("LongParameterList") // Sheet body stays in lockstep with NodeConfigSheet's params.
+private fun ScrollableNodeConfigSheetBody(
+    config: NodeConfig,
+    errors: Map<FieldId, ValidationFailure>,
+    onChange: (NodeConfig) -> Unit,
+    onCancel: () -> Unit,
+    onSave: (NodeConfig) -> Unit,
+    availableToolIds: List<String>,
+    availableModels: List<LocalModelOption>,
+    onPickFromLibrary: ((category: String, apply: (String) -> Unit) -> Unit)?,
+) {
+    val scrollState = rememberScrollState()
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .verticalScroll(scrollState)
+            .padding(horizontal = KnotworkTheme.spacing.sp4, vertical = KnotworkTheme.spacing.sp3),
+        verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp3),
+    ) {
+        SheetHeader(type = config.type)
+        NodeConfigForms.Body(
+            config = config,
+            errors = errors,
+            onChange = onChange,
+            availableToolIds = availableToolIds,
+            availableModels = availableModels,
+            onPickFromLibrary = onPickFromLibrary,
+        )
+        Spacer(modifier = Modifier.size(KnotworkTheme.spacing.sp2))
+        SheetActionRow(
+            saveEnabled = errors.isEmpty(),
+            onCancel = onCancel,
+            onSave = { onSave(config) },
         )
     }
 }
@@ -88,6 +156,9 @@ fun NodeConfigSheetBody(
     onChange: (NodeConfig) -> Unit,
     onCancel: () -> Unit,
     onSave: (NodeConfig) -> Unit,
+    availableToolIds: List<String> = emptyList(),
+    availableModels: List<LocalModelOption> = emptyList(),
+    onPickFromLibrary: ((category: String, apply: (String) -> Unit) -> Unit)? = null,
 ) {
     Column(
         modifier = Modifier
@@ -96,7 +167,14 @@ fun NodeConfigSheetBody(
         verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp3),
     ) {
         SheetHeader(type = config.type)
-        NodeConfigForms.Body(config = config, errors = errors, onChange = onChange)
+        NodeConfigForms.Body(
+            config = config,
+            errors = errors,
+            onChange = onChange,
+            availableToolIds = availableToolIds,
+            availableModels = availableModels,
+            onPickFromLibrary = onPickFromLibrary,
+        )
         Spacer(modifier = Modifier.size(KnotworkTheme.spacing.sp2))
         SheetActionRow(saveEnabled = errors.isEmpty(), onCancel = onCancel, onSave = { onSave(config) })
     }
@@ -112,9 +190,14 @@ private fun SheetHeader(type: NodeType) {
 
 /** Bottom sticky row — Cancel + Save (Save gated on validation). */
 @Composable
-private fun SheetActionRow(saveEnabled: Boolean, onCancel: () -> Unit, onSave: () -> Unit) {
+private fun SheetActionRow(
+    saveEnabled: Boolean,
+    onCancel: () -> Unit,
+    onSave: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
     Row(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(
             space = KnotworkTheme.spacing.sp2,
             alignment = Alignment.End,

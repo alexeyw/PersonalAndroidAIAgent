@@ -25,6 +25,20 @@ sealed interface NodeConfig {
 /** Output text format for [OutputConfig]. */
 enum class OutputFormat { PLAIN_TEXT, MARKDOWN, JSON }
 
+/**
+ * One installed local model the user can pick in the LiteRt config sheet. Defined here
+ * (catalog side) as a plain pair of id / display name plus an `isActive` flag so the
+ * design module does not depend on the `:app` `LocalModel` Room entity. The screen
+ * maps `ai.agent.android.domain.models.LocalModel` to this type at the sheet boundary.
+ *
+ * @property id canonical model identifier — typically the model file path. This is the
+ * value written back into [LiteRtConfig.modelId] when the user picks the model.
+ * @property displayName human-readable name shown in the dropdown row.
+ * @property isActive whether this is the model that the runtime currently loads. The
+ * picker badges this row with an "active" suffix.
+ */
+data class LocalModelOption(val id: String, val displayName: String, val isActive: Boolean)
+
 /** Cloud LLM provider for [CloudConfig]. */
 enum class CloudProvider { OPEN_AI, ANTHROPIC, GOOGLE, COMPATIBLE }
 

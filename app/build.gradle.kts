@@ -218,6 +218,18 @@ kover {
                     "ai.agent.android.presentation.ui.chat.home.DebugStateRows*",
                     "ai.agent.android.presentation.ui.components.*",
                     "ai.agent.android.presentation.ui.orchestrator.components.*",
+                    // Phase 21 / Task 9 — pipeline editor Compose layer. Gestures,
+                    // animations, and Bezier draw paths are intentionally outside the
+                    // JVM Kover scope; the pure-Kotlin core (CanvasTransform,
+                    // AutoLayout, EditorUndoRedo, BezierEdge, NodeConfigCodec) plus
+                    // the VM hooks ARE covered. Screen-level visual coverage rides
+                    // on the catalog's PipelineEditorCatalogPageSnapshotTest (Task 7)
+                    // and the Phase 21 / Task 11 a11y + release-candidate gate.
+                    "ai.agent.android.presentation.ui.pipeline.editor.canvas.*",
+                    "ai.agent.android.presentation.ui.pipeline.editor.bars.*",
+                    "ai.agent.android.presentation.ui.pipeline.editor.sheet.*",
+                    "ai.agent.android.presentation.ui.pipeline.editor.PipelineEditorContent*",
+                    "ai.agent.android.presentation.ui.pipeline.editor.PipelineEditorScreen*",
                     "ai.agent.android.presentation.ui.splash.SplashScreen*",
                     "ai.agent.android.presentation.theme.*",
                     "ai.agent.android.presentation.notifications.*",

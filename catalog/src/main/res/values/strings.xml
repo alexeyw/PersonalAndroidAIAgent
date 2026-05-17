@@ -158,6 +158,14 @@
     <string name="knotwork_node_field_classes">Classes</string>
     <string name="knotwork_node_field_classifier_prompt">Classifier prompt</string>
     <string name="knotwork_node_field_fallback_class">Fallback class</string>
+    <string name="knotwork_node_action_add_class">Add class</string>
+    <string name="knotwork_node_action_remove_class">Remove class</string>
+    <string name="knotwork_node_action_load_from_library">Load from library</string>
+    <string name="knotwork_node_field_tool_auto">Auto (let the agent pick)</string>
+    <string name="knotwork_node_field_tool_custom">Custom tool id…</string>
+    <string name="knotwork_node_field_model_active_suffix">%1$s · active</string>
+    <string name="knotwork_node_field_model_placeholder">Select a model</string>
+    <string name="knotwork_node_field_model_custom">Custom path…</string>
 
     <!-- Validation messages. -->
     <string name="knotwork_node_validation_title_empty">Title must not be empty</string>

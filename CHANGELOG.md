@@ -15,6 +15,77 @@ details.
 
 ### Added
 
+- Redesigned **Pipeline editor screen** (Phase 21 / Task 9/11) —
+  `PipelineEditorScreen` under `presentation/ui/pipeline/editor/*`
+  becomes the production canvas surface, replacing the legacy
+  `VisualOrchestratorScreen`. Composes the catalog atoms from Task 7
+  (`NodeCard`, `EditorToolbar`, `NodeConfigSheet` + all 12 per-type
+  `NodeConfigForms`) into a working editor:
+  - **Infinite canvas** with pan + 2-finger pinch zoom clamped to
+    `0.4×–2.0×`; node positions in canvas-space px, projected through a
+    pure-Kotlin `CanvasTransform` so the gesture stream never mutates
+    `OrchestratorViewModel`.
+  - **Drag-and-drop** of nodes with the spec'd pickup
+    (1.0 → 1.04 over 100 ms `easeOut`) and release-settle
+    (`spring(.7f, 15f)`) animations, snapping to a 24 dp canvas grid on
+    commit.
+  - **Connection mode** — drag from an output port renders a preview
+    Bezier; release on a target's inbound hit-zone routes through
+    `OrchestratorViewModel.addConnection` (which keeps the DAG invariants).
+  - **Long-press radial quick-add menu** with one tile per node type;
+    selecting a tile spawns the node and opens its `NodeConfigSheet`
+    pre-filled with sensible defaults from `NodeConfigCodec.defaultFor`.
+  - **Multi-select** via long-press on a node card; the editor toolbar
+    swaps for `MultiSelectToolbar` with bulk Cancel / Delete actions.
+  - **Sugiyama-style auto-layout** — longest-path layering + median
+    crossing reduction + grid-aligned coordinates (`AutoLayout.compute`)
+    triggered from `EditorToolbar.onAutoLayout`.
+  - **Validation bar** lists every `PipelineValidationError` returned by
+    `PipelineGraph.validate()`; tapping a row drives `requestFocusNode`
+    on the VM, which the screen consumes via a `SharedFlow` to centre
+    the canvas on the offending node.
+  - **Run-trace bar** + per-node run pulse (catalog `NodeCard.running`)
+    + traveling-dot accent on active edges (arc-length-derived cycle so
+    motion stays at the spec's 40 dp/s).
+  - **Undo / redo** stack (`EditorUndoRedo`, capacity 50) wired to every
+    graph mutation; clears the redo branch on a new push.
+  - Full per-type **`NodeConfigSheet`** integration — all 12 forms from
+    `node-specs.md` (Input / Output / LiteRt / Cloud / IntentRouter /
+    IfCondition / Clarification / Tool / Decomposition / QueueProcessor /
+    Evaluation / Summary) shipped by the catalog and now editable from
+    the production editor; configs persisted as a JSON blob via
+    `NodeConfigCodec` into the new nullable `pipeline_nodes.config_json`
+    column (Room migration `MIGRATION_20_21`, DB version 21).
+- Phase-21 hooks on `OrchestratorViewModel`: `updateNodeFromEditor`,
+  `replaceCurrentPipeline`, `requestFocusNode` /
+  `focusNodeRequest: SharedFlow<String>`, `setRunning`,
+  `setActiveRunningNode`, `runState: StateFlow<PipelineRunState>`,
+  `labelFor(error)` — exposed so the editor screen can drive validation
+  focus, undo / redo replays, and the run-trace bar without
+  re-implementing the wording or the VM state map.
+- Pure-Kotlin editor core (JVM-testable, no Compose dependency):
+  `CanvasTransform` (pan / zoom / grid snap), `BezierEdge`
+  (control-point math + hit-test + arc length), `AutoLayout`
+  (Sugiyama-style), `EditorUndoRedo` (bounded snapshot stack),
+  `EditorState` (`@Stable` selection / drafts / sheet holder).
+- Unit-test additions for the editor core
+  (`CanvasTransformTest`, `BezierEdgeTest`, `AutoLayoutTest`,
+  `EditorUndoRedoTest`, `NodeConfigCodecTest`, `NodeTypeMapperTest`) and
+  five `OrchestratorViewModelTest` cases covering the Phase-21 hook
+  surface.
+
+### Changed
+
+- The legacy `VisualOrchestratorScreen` and its `DraggableNode` helper
+  are deleted; `AppNavGraph` routes `NavRoutes.PIPELINE_EDITOR` and
+  `PIPELINE_EDIT_WITH_ID` to the new `PipelineEditorScreen` instead.
+  The parameterised alias now loads the requested pipeline through
+  `OrchestratorViewModel.loadPipeline(id)` instead of being a stub.
+- `NodeModel` / `NodeEntity` gain a nullable `configJson: String?` field
+  (Room DB v20 → v21, `MIGRATION_20_21`) — additive, defaulted to
+  `NULL`, derived from the legacy flat fields on first edit so
+  pre-Phase-21 rows open in the new editor without a data migration.
+
 - Redesigned **Chat home screen** (Phase 21 / Task 8/11) — the new primary
   surface of the app, built on the Knotwork design system. `ChatHomeScreen`
   covers the eight documented visual states from `compose/screens/README.md

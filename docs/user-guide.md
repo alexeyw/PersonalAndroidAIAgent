@@ -278,13 +278,76 @@ default pipeline marked in the library.
 
 ### Visual editor
 
-Loading a pipeline opens the **Visual Orchestrator**. You can drag
-nodes around the canvas, draw connections between them, and tap a
-node to open its configuration dialog.
+Loading a pipeline opens the **Pipeline editor**. The editor surface
+is an infinite pan / zoom canvas with the following gestures:
+
+- **One-finger drag on empty canvas** — pan the viewport.
+- **Two-finger pinch** — zoom (`0.4×–2.0×`).
+- **Drag a node card** — move the node; it snaps to a 24 dp grid on
+  release with a soft spring settle.
+- **Add a connection** — press and hold one of the node's **bottom
+  port dots**, then drag toward another node and release when the
+  finger is over its **top port dot**. For multi-output nodes
+  (`If` → True / False, `Queue` → Item / Done, `Eval` → Pass / Retry /
+  Fail, `Router` → one port per declared class) the dot you grabbed
+  determines which branch the edge represents.
+- **Delete a connection** — two paths:
+  1. **Single-tap** the edge → it highlights in accent colour and the
+     toolbar 🗑 Delete becomes active. Press 🗑 to remove. Or
+  2. **Long-press** the edge → confirmation dialog "Remove
+     connection?" opens; tap Remove.
+  Both paths are undoable from the toolbar Undo button.
+- **Tap a node** — select it (single-select mode).
+- **Tap a selected node** — opens its **configuration sheet**
+  (`NodeConfigSheet`) so you can edit the per-type properties.
+  Equivalent to "double-tap the node".
+- **Long-press a node** — enter multi-select. Subsequent taps toggle
+  membership; the top bar swaps for a count + Cancel / Delete cluster.
+- **Long-press the empty canvas** — opens a **radial quick-add menu**
+  with one labelled tile per node type. Picking a tile spawns the node
+  at the long-press point and immediately opens its configuration sheet.
+- **Toolbar** — inline-editable pipeline name on the left; Undo /
+  Redo / Delete (selection-aware: edge if one is selected, otherwise
+  selected nodes) / Auto-layout / Run / overflow on the right.
+  Auto-layout re-arranges nodes via a Sugiyama-style hierarchy
+  (longest-path layering + median crossing reduction) so the graph
+  reads top-to-bottom.
+
+The bottom of the screen alternates between two bars:
+
+- **Validation bar** — lists pipeline errors (missing input, dangling
+  output, cycles, empty context, …). Tapping a row centres the canvas
+  on the offending node and selects it. The bar collapses to a
+  single-line "Pipeline is valid" when there are no errors.
+- **Run-trace bar** — replaces the validation bar while a pipeline run
+  is in progress; the active node header pulses and the connecting
+  edges show a traveling-dot animation. Reduced-motion is respected.
 
 The editor also has an **Import JSON** button that lets you load a
 pipeline exported from the standalone browser editor (see
 [Browser pipeline editor](#browser-pipeline-editor)).
+
+### Node configuration sheets
+
+Reach a node's per-type configuration by either:
+
+- **Tapping a node you've already selected** (single-tap → select,
+  tap again → open the sheet); or
+- **Picking the node from the radial quick-add menu** — newly added
+  nodes open the sheet immediately.
+
+The sheet is a modal bottom-sheet whose body is documented in
+`node-specs.md`. Every node type — Input, Output, LiteRt, Cloud,
+IntentRouter, IfCondition, Clarification, Tool, Decomposition,
+QueueProcessor, Evaluation, Summary — has its own form, with inline
+validation that disables Save until every required field is filled.
+
+For the **IntentRouter** node, the Classes section in its config
+sheet lets you grow / shrink the class list: each row has a small
+**−** button to remove it (disabled below the 2-class minimum), and a
+**+ Add class** button under the list creates a new empty class row
+(disabled above the 6-class maximum). The new class shows up as an
+additional outbound port on the node card immediately on Save.
 
 ### Variables in system prompts
 

@@ -250,15 +250,31 @@ This file maps the contents of the main application package.
       - `MonitoringScreen.kt` - Monitoring UI screen.
       - `MonitoringUiState.kt` - Monitoring UI state.
       - `MonitoringViewModel.kt` - Monitoring ViewModel.
-    - `orchestrator/` - Orchestrator screen components.
-      - `OrchestratorUiState.kt` - Orchestrator UI state.
-      - `OrchestratorViewModel.kt` - Orchestrator ViewModel.
+    - `orchestrator/` - Pipeline library + shared orchestrator ViewModel (the canvas surface moved to `pipeline/editor/` in Phase 21 / Task 9).
+      - `OrchestratorUiState.kt` - Orchestrator UI state and `PromptPreviewState` / `PipelineRunState`.
+      - `OrchestratorViewModel.kt` - Orchestrator ViewModel. Owns graph mutation, persistence, validation, run-state placeholder, and the editor `focusNodeRequest` SharedFlow.
       - `PipelineLibraryScreen.kt` - Library screen listing every saved pipeline (active highlight, long-press / `⋮` menu for Load / Rename / Duplicate / Delete, FAB for new pipeline). Shares `OrchestratorViewModel` with the editor via the `pipelines` nested nav graph.
-      - `VisualOrchestratorScreen.kt` - Visual orchestrator UI screen.
       - `components/` - Orchestrator UI components.
-        - `DraggableNode.kt` - Draggable node UI component.
         - `NodeContextConfigSection.kt` - "Input Data" section of the node configuration dialog: five checkboxes mapped to `NodeContextConfig` flags (with `nodeInput` rendered locked-on) plus a hint banner.
         - `PromptLibraryDialog.kt` - Prompt library dialog UI component.
+    - `pipeline/editor/` - Phase 21 / Task 9 — production pipeline editor.
+      - `PipelineEditorScreen.kt` - Stateful entry composable: subscribes to `OrchestratorViewModel` + `runState`, owns the screen-local `EditorState`, hosts the catalog `NodeConfigSheet`, dispatches graph mutations.
+      - `PipelineEditorContent.kt` - Pure-layout content. Vertical stack of `EditorToolbar` (or `MultiSelectToolbar`) + `EditorCanvas` + `ValidationBar` (or `RunTraceBar`).
+      - `config/NodeConfigCodec.kt` - JSON ↔ catalog `NodeConfig` codec + legacy-field derivation for pre-Phase-21 rows + `defaultFor(type, title)` factory.
+      - `config/NodeTypeMapper.kt` - Bridges between domain `NodeType` / `CloudProvider` and the catalog enums (`pipelineeditor.NodeType` / `CloudProvider`).
+      - `core/CanvasTransform.kt` - Pan / pinch-zoom math + `snapToGrid(value)` helper; pure Kotlin.
+      - `core/BezierEdge.kt` - Cubic-Bezier control-point math, point-evaluation, arc-length approximation, hit-test; pure Kotlin.
+      - `core/AutoLayout.kt` - Sugiyama-style hierarchical layout (longest-path layering + median crossing reduction + grid-snapped coordinates); pure Kotlin.
+      - `core/EditorUndoRedo.kt` - Bounded undo / redo snapshot stack (capacity = 50); pure Kotlin.
+      - `core/EditorState.kt` - `@Stable` screen-local state holder (`transform`, `selection`, `multiSelectMode`, `connectionInProgress`, `quickAddAnchor`, `activeRunningNodeId`, `isRunning`, `configuringNodeId`, `workingConfig`, `undoRedo`). `rememberEditorState()` factory.
+      - `canvas/EditorCanvas.kt` - Pinch-zoom + pan + tap / long-press gesture host; composes `EditorEdges` underneath every `EditorNode`; overlays the `QuickAddRadialMenu` when active.
+      - `canvas/EditorNode.kt` - Per-node Compose wrapper around the catalog `NodeCard`. Owns the drag pickup + spring-release animations and routes outbound-port drags to connection mode.
+      - `canvas/EditorEdges.kt` - Single `Canvas` drawing every edge as a cubic Bezier, the preview-edge while a connection is being drawn, and the traveling-dot run-trace animation.
+      - `canvas/QuickAddRadialMenu.kt` - 12-tile radial menu (one per node type) anchored at the long-press point; dispatches `onPick(type)`.
+      - `bars/ValidationBar.kt` - Bottom bar listing `PipelineValidationError`s; tap → `requestFocusNode(nodeId)`.
+      - `bars/RunTraceBar.kt` - Bottom bar shown while a run is active; displays the running node label and a steady indicator dot.
+      - `bars/MultiSelectToolbar.kt` - Top bar that replaces `EditorToolbar` while multi-select is active; surfaces count + Cancel / Delete.
+      - `sheet/NodeConfigSheetHost.kt` - Thin adapter exposing the catalog `NodeConfigSheet` (with all 12 per-type forms + validator) to the editor screen.
     - `prompts/` - Prompt Library screen components.
       - `PromptLibraryScreen.kt` - Prompt library UI screen.
       - `PromptLibraryUiState.kt` - Prompt library UI state.
