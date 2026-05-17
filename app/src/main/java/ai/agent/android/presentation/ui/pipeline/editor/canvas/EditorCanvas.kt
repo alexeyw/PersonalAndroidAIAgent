@@ -19,6 +19,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -90,6 +91,17 @@ internal fun EditorCanvas(
     }
     val nodesByIdLive = remember(nodesWithDrag) { nodesWithDrag.associateBy { it.id } }
 
+    // The tap / long-press lambdas inside `detectTapGestures` capture `graph` and
+    // `nodesByIdLive` at the moment their pointerInput block first runs. Since the
+    // pointerInput block is keyed on `graph.id` (stable for the lifetime of one
+    // pipeline), the block never re-runs after we add a connection — the lambda's
+    // captured `graph.connections` stays stuck at the value seen on first composition,
+    // so `hitTestEdge` can't find the brand-new edge and tap-to-select silently fails.
+    // `rememberUpdatedState` parks the latest values in a State that the lambdas read
+    // each invocation, refreshing the snapshot without re-keying the pointerInput.
+    val currentGraph by rememberUpdatedState(graph)
+    val currentNodesById by rememberUpdatedState(nodesByIdLive)
+
     Box(
         modifier = modifier
             .fillMaxSize()
@@ -117,8 +129,8 @@ internal fun EditorCanvas(
                         val edgeId = hitTestEdge(
                             pointerCanvasX = canvasX,
                             pointerCanvasY = canvasY,
-                            connections = graph.connections,
-                            nodesById = nodesByIdLive,
+                            connections = currentGraph.connections,
+                            nodesById = currentNodesById,
                             transform = editor.transform,
                             density = density,
                         )
@@ -143,8 +155,8 @@ internal fun EditorCanvas(
                         val edgeId = hitTestEdge(
                             pointerCanvasX = canvasX,
                             pointerCanvasY = canvasY,
-                            connections = graph.connections,
-                            nodesById = nodesByIdLive,
+                            connections = currentGraph.connections,
+                            nodesById = currentNodesById,
                             transform = editor.transform,
                             density = density,
                         )
