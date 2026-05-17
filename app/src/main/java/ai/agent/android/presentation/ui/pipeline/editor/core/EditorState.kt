@@ -66,17 +66,19 @@ class EditorState(undoCapacity: Int = EditorUndoRedo.DEFAULT_CAPACITY) {
     val undoRedo: EditorUndoRedo = EditorUndoRedo(capacity = undoCapacity)
 
     /**
-     * `LayoutCoordinates` of the canvas Box, captured via `Modifier.onGloballyPositioned`.
+     * Holds the canvas Box's `LayoutCoordinates`, captured via
+     * `Modifier.onGloballyPositioned`. Intentionally a **plain non-state ref**
+     * (not a `mutableStateOf`): `LayoutCoordinates` doesn't override `equals`, so every
+     * layout-pass callback produces a fresh-identity instance that would mark the state
+     * as changed even when the position is the same. With every `EditorNode` reading
+     * the state by parameter, that propagates a re-layout pump and the main thread
+     * loops itself into an ANR.
      *
-     * Used by port-drag handlers in `EditorNode` to convert pointer positions from the
-     * port-box's local space all the way to canvas-Box-local space via
-     * `canvasLayoutCoordinates.localPositionOf(portCoords, change.position)`. Going
-     * through `LayoutCoordinates` is more robust than accumulating per-event deltas
-     * because it respects every transform between the port and the canvas (including
-     * the per-node `graphicsLayer` scaling driven by `transform.scale`), and works for
-     * absolute pointer position rather than fragile delta sums.
+     * Reads happen just-in-time inside port-drag handlers via [CoordinatesRef.value];
+     * writes from `onGloballyPositioned` don't notify Compose. The same instance always
+     * reflects the current layout, so just-in-time reads are always correct.
      */
-    var canvasLayoutCoordinates: LayoutCoordinates? by mutableStateOf(null)
+    val canvasLayoutCoordinatesRef: CoordinatesRef = CoordinatesRef()
 
     /**
      * Clears selection + connection draft + radial-menu anchor. Used by Escape / back-press
@@ -143,3 +145,13 @@ data class ConnectionDraft(
  */
 @Composable
 fun rememberEditorState(): EditorState = remember { EditorState() }
+
+/**
+ * Mutable non-state container for a [LayoutCoordinates] reference. Writes don't notify
+ * Compose; reads don't subscribe. Used by [EditorState.canvasLayoutCoordinatesRef] —
+ * see that property's KDoc for why a plain ref beats `mutableStateOf` for this value.
+ */
+class CoordinatesRef {
+    /** Current canvas `LayoutCoordinates`. `null` before the first layout pass. */
+    var value: LayoutCoordinates? = null
+}

@@ -3,6 +3,7 @@ package ai.agent.android.presentation.ui.pipeline.editor.canvas
 import ai.agent.android.domain.models.NodeModel
 import ai.agent.android.presentation.ui.pipeline.editor.config.NodeTypeMapper
 import ai.agent.android.presentation.ui.pipeline.editor.core.CanvasTransform
+import ai.agent.android.presentation.ui.pipeline.editor.core.CoordinatesRef
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
@@ -27,7 +28,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.unit.dp
 import app.knotwork.design.components.pipelineeditor.NodeCard
@@ -109,7 +109,7 @@ internal fun EditorNode(
     onConnectionStart: (portLabel: String, pointerCanvasBoxX: Float, pointerCanvasBoxY: Float) -> Unit,
     onConnectionMove: (pointerCanvasBoxX: Float, pointerCanvasBoxY: Float) -> Unit,
     onConnectionEnd: () -> Unit,
-    canvasLayoutCoordinates: LayoutCoordinates?,
+    canvasLayoutCoordinatesRef: CoordinatesRef,
 ) {
     val scale = remember { AnimFloat(1f) }
     var isDragging by remember { mutableStateOf(false) }
@@ -189,11 +189,14 @@ internal fun EditorNode(
         // dragging from this Box always means "start a connection", never "move the node".
         ports.outbound.forEachIndexed { index, port ->
             val portOffsetDp = outboundPortOffsetDp(index, ports.outbound.size)
-            // Capture the port-box's LayoutCoordinates so we can convert pointer events
-            // straight to canvas-Box-local space via `localPositionOf`. This sidesteps the
-            // delta-accumulation path entirely and stays correct under every transform in
-            // between (graphicsLayer scale on the node, canvas transform, etc.).
-            var portCoords by remember(node.id, port.label) { mutableStateOf<LayoutCoordinates?>(null) }
+            // Capture the port-box's LayoutCoordinates into a NON-state CoordinatesRef.
+            // Holding it in `mutableStateOf` would trigger a re-layout pump for the same
+            // reason canvasLayoutCoordinatesRef does (LayoutCoordinates has identity-only
+            // equality, so every layout pass would mark state as changed). The pointer
+            // handler reads `.value` just-in-time inside its drag callbacks; the same
+            // instance always reflects the current layout, so just-in-time reads stay
+            // correct without notifying Compose.
+            val portCoordsRef = remember(node.id, port.label) { CoordinatesRef() }
             Box(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
@@ -201,18 +204,18 @@ internal fun EditorNode(
                     .offset(x = portOffsetDp.dp, y = (PORT_HIT_TARGET_DP / 2).dp)
                     .clip(CircleShape)
                     .background(Color.Transparent)
-                    .onGloballyPositioned { portCoords = it }
+                    .onGloballyPositioned { portCoordsRef.value = it }
                     .pointerInput(node.id, port.label) {
                         detectDragGestures(
                             onDragStart = { localStart ->
-                                val pc = portCoords ?: return@detectDragGestures
-                                val canvas = canvasLayoutCoordinates ?: return@detectDragGestures
+                                val pc = portCoordsRef.value ?: return@detectDragGestures
+                                val canvas = canvasLayoutCoordinatesRef.value ?: return@detectDragGestures
                                 val pos = canvas.localPositionOf(pc, localStart)
                                 onConnectionStart(port.label, pos.x, pos.y)
                             },
                             onDrag = { change, _ ->
-                                val pc = portCoords ?: return@detectDragGestures
-                                val canvas = canvasLayoutCoordinates ?: return@detectDragGestures
+                                val pc = portCoordsRef.value ?: return@detectDragGestures
+                                val canvas = canvasLayoutCoordinatesRef.value ?: return@detectDragGestures
                                 val pos = canvas.localPositionOf(pc, change.position)
                                 onConnectionMove(pos.x, pos.y)
                             },

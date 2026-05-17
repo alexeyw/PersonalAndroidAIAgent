@@ -2,7 +2,6 @@ package app.knotwork.design.components.pipelineeditor
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -78,23 +77,24 @@ fun NodeConfigSheet(
 }
 
 /**
- * Variant of [NodeConfigSheetBody] that splits the body into a scrollable middle
- * section + a pinned action row, so tall configs (e.g., IntentRouter after adding a
- * few classes) can scroll to reach Save instead of having the action row pushed off
- * the bottom of the sheet.
+ * Variant of [NodeConfigSheetBody] for the modal sheet — wraps the entire body in a
+ * single scrollable Column so tall configs (e.g., IntentRouter after adding several
+ * classes) can reach the Save action by scrolling down to it.
  *
- * Lives inside the [NodeConfigSheet] wrapper rather than replacing
- * [NodeConfigSheetBody] because the catalog harness ([PipelineEditorCatalogContent])
- * embeds the body inside an unbounded Column — `Modifier.verticalScroll` requires
- * bounded height and would crash at measure time in that context. The modal sheet
- * provides bounded height (~the screen size), so scrolling works.
+ * The action row scrolls with the content instead of being pinned. The earlier
+ * "weight(1f, fill = false) + verticalScroll on the body + action row pinned outside"
+ * arrangement is correct in principle but can drive Compose into a measurement /
+ * layout loop on real devices (LayoutCoordinates from `onGloballyPositioned` re-fires
+ * every layout pass, the weighted child re-measures, etc.), which manifested as an
+ * input-dispatch ANR. A single scrolling Column avoids the combo entirely.
  *
- * Receiver is `ColumnScope` because `Modifier.weight(...)` needs it; Material3's
- * `ModalBottomSheet` content slot is itself `ColumnScope.() -> Unit`, so this is the
- * natural shape for code that runs inside it.
+ * Lives inside the [NodeConfigSheet] wrapper rather than replacing [NodeConfigSheetBody]
+ * because the catalog harness ([PipelineEditorCatalogContent]) embeds the body inside
+ * an unbounded Column — `Modifier.verticalScroll` requires bounded height and would
+ * crash at measure time there.
  */
 @Composable
-private fun ColumnScope.ScrollableNodeConfigSheetBody(
+private fun ScrollableNodeConfigSheetBody(
     config: NodeConfig,
     errors: Map<FieldId, ValidationFailure>,
     onChange: (NodeConfig) -> Unit,
@@ -105,36 +105,19 @@ private fun ColumnScope.ScrollableNodeConfigSheetBody(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            // weight(1f, fill = false): grow up to the available space inside the sheet,
-            // but never further than the children need. Combined with verticalScroll,
-            // this lets short configs render compactly while tall ones become scrollable.
-            .weight(1f, fill = false)
             .verticalScroll(scrollState)
-            .padding(
-                start = KnotworkTheme.spacing.sp4,
-                end = KnotworkTheme.spacing.sp4,
-                top = KnotworkTheme.spacing.sp3,
-            ),
+            .padding(horizontal = KnotworkTheme.spacing.sp4, vertical = KnotworkTheme.spacing.sp3),
         verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp3),
     ) {
         SheetHeader(type = config.type)
         NodeConfigForms.Body(config = config, errors = errors, onChange = onChange)
+        Spacer(modifier = Modifier.size(KnotworkTheme.spacing.sp2))
+        SheetActionRow(
+            saveEnabled = errors.isEmpty(),
+            onCancel = onCancel,
+            onSave = { onSave(config) },
+        )
     }
-    // Action row is OUTSIDE the scrollable Column → it stays pinned to the bottom of
-    // the sheet regardless of how long the form is.
-    SheetActionRow(
-        saveEnabled = errors.isEmpty(),
-        onCancel = onCancel,
-        onSave = { onSave(config) },
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(
-                start = KnotworkTheme.spacing.sp4,
-                end = KnotworkTheme.spacing.sp4,
-                top = KnotworkTheme.spacing.sp2,
-                bottom = KnotworkTheme.spacing.sp3,
-            ),
-    )
 }
 
 /**
