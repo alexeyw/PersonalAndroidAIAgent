@@ -7,6 +7,11 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.AddCircleOutline
+import androidx.compose.material.icons.outlined.RemoveCircleOutline
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
@@ -21,10 +26,17 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import app.knotwork.design.R
+import app.knotwork.design.components.buttons.KnotworkTextButton
 import app.knotwork.design.components.chips.ChipStyle
 import app.knotwork.design.components.chips.KnotworkChip
 import app.knotwork.design.theme.KnotworkTheme
 import app.knotwork.design.tokens.KnotworkTextStyles
+
+/** Lower bound on IntentRouter class count, mirrors `NodeConfigValidation.INTENT_CLASSES_RANGE.first`. */
+private const val INTENT_ROUTER_MIN_CLASSES = 2
+
+/** Upper bound on IntentRouter class count, mirrors `NodeConfigValidation.INTENT_CLASSES_RANGE.last`. */
+private const val INTENT_ROUTER_MAX_CLASSES = 6
 
 /**
  * Per-type form bodies for [NodeConfigSheet].
@@ -399,19 +411,58 @@ private fun IntentRouterFormBody(
     Column(verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp1)) {
         FieldLabel(text = stringResource(R.string.knotwork_node_field_classes))
         config.classes.forEachIndexed { index, intentClass ->
-            OutlinedTextField(
-                value = intentClass.name,
-                onValueChange = { next ->
-                    val updated = config.classes.toMutableList()
-                    updated[index] = intentClass.copy(name = next)
-                    onChange(config.copy(classes = updated))
-                },
-                singleLine = true,
-                textStyle = KnotworkTextStyles.MonoBase,
+            Row(
                 modifier = Modifier.fillMaxWidth(),
-                isError = intentClass.name.isBlank(),
-            )
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp2),
+            ) {
+                OutlinedTextField(
+                    value = intentClass.name,
+                    onValueChange = { next ->
+                        val updated = config.classes.toMutableList()
+                        updated[index] = intentClass.copy(name = next)
+                        onChange(config.copy(classes = updated))
+                    },
+                    singleLine = true,
+                    textStyle = KnotworkTextStyles.MonoBase,
+                    modifier = Modifier.weight(1f),
+                    isError = intentClass.name.isBlank(),
+                )
+                // The remove control is disabled when removing would drop below the
+                // 2-class minimum that `NodeConfigValidation` enforces — keeps the form
+                // self-consistent without surfacing a "you cannot remove the last class"
+                // error after the fact. The fallback selection is auto-cleared when its
+                // class disappears so the now-stale dropdown does not silently survive.
+                val canRemove = config.classes.size > INTENT_ROUTER_MIN_CLASSES
+                IconButton(
+                    onClick = {
+                        val removedName = config.classes[index].name
+                        val updated = config.classes.toMutableList().apply { removeAt(index) }
+                        val nextFallback = config.fallbackClass?.takeIf { it != removedName }
+                        onChange(config.copy(classes = updated, fallbackClass = nextFallback))
+                    },
+                    enabled = canRemove,
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.RemoveCircleOutline,
+                        contentDescription = stringResource(R.string.knotwork_node_action_remove_class),
+                    )
+                }
+            }
         }
+        // Add-class is gated on the same 6-class ceiling the validator enforces; together
+        // with the per-row remove gate this means the form never lets the user push the
+        // config into an invalid state — `Save` stays enabled for every reachable edit.
+        val canAdd = config.classes.size < INTENT_ROUTER_MAX_CLASSES
+        KnotworkTextButton(
+            text = stringResource(R.string.knotwork_node_action_add_class),
+            onClick = {
+                val updated = config.classes + IntentClass(name = "")
+                onChange(config.copy(classes = updated))
+            },
+            enabled = canAdd,
+            leadingIcon = Icons.Outlined.AddCircleOutline,
+        )
         InlineError(failure = errors[FieldId.CLASSES])
     }
     TextField(

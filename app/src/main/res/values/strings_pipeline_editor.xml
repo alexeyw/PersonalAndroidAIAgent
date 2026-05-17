@@ -28,4 +28,11 @@
 
     <!-- Empty state -->
     <string name="pipeline_editor_empty_subtitle">Long-press anywhere to add your first node.</string>
+
+    <!-- Edge selection / removal -->
+    <string name="pipeline_editor_edge_selected_hint">Connection selected. Press 🗑 to remove.</string>
+    <string name="pipeline_editor_remove_connection_title">Remove connection?</string>
+    <string name="pipeline_editor_remove_connection_text">This will delete the link between the two nodes. The change is undoable from the editor toolbar.</string>
+    <string name="pipeline_editor_remove_connection_confirm">Remove</string>
+    <string name="pipeline_editor_remove_connection_cancel">Cancel</string>
 </resources>

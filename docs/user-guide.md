@@ -291,9 +291,12 @@ is an infinite pan / zoom canvas with the following gestures:
   (`If` → True / False, `Queue` → Item / Done, `Eval` → Pass / Retry /
   Fail, `Router` → one port per declared class) the dot you grabbed
   determines which branch the edge represents.
-- **Delete a connection** — single-tap the edge to select it (the
-  edge highlights in accent colour); press the toolbar 🗑 Delete
-  button. The action is undoable.
+- **Delete a connection** — two paths:
+  1. **Single-tap** the edge → it highlights in accent colour and the
+     toolbar 🗑 Delete becomes active. Press 🗑 to remove. Or
+  2. **Long-press** the edge → confirmation dialog "Remove
+     connection?" opens; tap Remove.
+  Both paths are undoable from the toolbar Undo button.
 - **Tap a node** — select it (single-select mode).
 - **Tap a selected node** — opens its **configuration sheet**
   (`NodeConfigSheet`) so you can edit the per-type properties.
@@ -338,6 +341,13 @@ The sheet is a modal bottom-sheet whose body is documented in
 IntentRouter, IfCondition, Clarification, Tool, Decomposition,
 QueueProcessor, Evaluation, Summary — has its own form, with inline
 validation that disables Save until every required field is filled.
+
+For the **IntentRouter** node, the Classes section in its config
+sheet lets you grow / shrink the class list: each row has a small
+**−** button to remove it (disabled below the 2-class minimum), and a
+**+ Add class** button under the list creates a new empty class row
+(disabled above the 6-class maximum). The new class shows up as an
+additional outbound port on the node card immediately on Save.
 
 ### Variables in system prompts
 

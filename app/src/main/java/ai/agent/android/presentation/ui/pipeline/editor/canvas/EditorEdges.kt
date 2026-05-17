@@ -40,11 +40,14 @@ private const val DOT_TRAVEL_SPEED_DP_PER_SEC = 40f
 
 /**
  * Per-port horizontal spacing in dp. Picked to match the catalog NodeCard's outbound
- * port row visually (`Arrangement.spacedBy(sp2)` + label widths around 30–40 dp). Used
- * BOTH by [outboundPortAnchor] for edge rendering AND by EditorNode to position the
- * per-port hit targets, so the two stay in lockstep.
+ * port row visually: each column has the 12 dp port dot plus an optional `LabelSm`
+ * label that measures ~28–32 dp wide for the canonical labels (`True`, `False`,
+ * `Item`, `Done`, `Pass`, `Retry`, `Fail`); the row arrangement adds an 8 dp gap, so
+ * the visible centre-to-centre distance lands around 40 dp. Used by both
+ * [outboundPortAnchor] (for edge rendering) AND `EditorNode` (for per-port hit
+ * targets), so the two stay in lockstep.
  */
-internal const val PORT_SPACING_DP = 48f
+internal const val PORT_SPACING_DP = 40f
 
 /** Inner card width available for the outbound port row (NodeCard width − 2 × sp3 padding). */
 private const val NODE_INNER_WIDTH_DP = NODE_WIDTH_DP - 24f
@@ -178,11 +181,15 @@ internal fun EditorEdges(
                 moveTo(sx, sy)
                 cubicTo(c0.first, c0.second, c1.first, c1.second, tx, ty)
             }
-            val highlight = isRunning || isSelected
+            val strokeMultiplier = when {
+                isSelected -> EDGE_STROKE_SELECTED_FACTOR
+                isRunning -> EDGE_STROKE_RUNNING_FACTOR
+                else -> 1f
+            }
             drawPath(
                 path = path,
-                color = if (highlight) accentColor else edgeColor,
-                style = Stroke(width = if (highlight) strokeWidth * EDGE_STROKE_RUNNING_FACTOR else strokeWidth),
+                color = if (isRunning || isSelected) accentColor else edgeColor,
+                style = Stroke(width = strokeWidth * strokeMultiplier),
             )
             if (isRunning) {
                 val arcLength = BezierEdge.approximateArcLength(
@@ -292,7 +299,12 @@ internal fun hitTestEdge(
     return bestId
 }
 
-private const val EDGE_HIT_TOLERANCE_DP = 12f
+/**
+ * Tap-on-edge tolerance in screen-space dp. Generous because edges are thin (2 dp stroke)
+ * and pure paint output — the user must be able to land within a finger's-width to select
+ * an edge for the toolbar Delete action.
+ */
+private const val EDGE_HIT_TOLERANCE_DP = 24f
 
 private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawPreviewEdge(
     src: Offset,
@@ -300,15 +312,17 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawPreviewEdge(
     accentColor: Color,
     strokeWidth: Float,
 ) {
-    val (c0, c1) = BezierEdge.controlPoints(src.x, src.y, pointer.x, pointer.y)
-    val path = Path().apply {
-        moveTo(src.x, src.y)
-        cubicTo(c0.first, c0.second, c1.first, c1.second, pointer.x, pointer.y)
-    }
-    drawPath(
-        path = path,
+    // Draw a straight line for the in-flight connection rather than the cubic Bezier the
+    // committed edges use. `BezierEdge.controlPoints` always pushes the source handle
+    // DOWNWARD (matching the outbound port at the card's bottom) and the target handle
+    // UPWARD; that produces a loop-de-loop when the user drags upward / sideways past the
+    // source port, with the preview rendering far from the finger. A straight line tracks
+    // the finger predictably and the curve appears once the connection lands on a target.
+    drawLine(
         color = accentColor,
-        style = Stroke(width = strokeWidth * EDGE_PREVIEW_STROKE_FACTOR),
+        start = src,
+        end = pointer,
+        strokeWidth = strokeWidth * EDGE_PREVIEW_STROKE_FACTOR,
     )
 }
 
@@ -317,6 +331,7 @@ private const val NS_PER_MS = 1_000_000L
 private const val MIN_CYCLE_SECONDS = 0.5f
 private const val MIDPOINT_T = 0.5f
 private const val EDGE_STROKE_RUNNING_FACTOR = 1.5f
+private const val EDGE_STROKE_SELECTED_FACTOR = 2f
 private const val EDGE_PREVIEW_STROKE_FACTOR = 1.5f
 
 /**

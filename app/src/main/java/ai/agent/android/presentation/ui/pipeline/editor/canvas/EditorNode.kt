@@ -27,6 +27,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.unit.dp
 import app.knotwork.design.components.pipelineeditor.NodeCard
 import app.knotwork.design.components.pipelineeditor.NodeError
@@ -76,11 +78,15 @@ private const val DRAG_PICKUP_DURATION_MS = 100
  * "Item" / "Done" / "Pass" / "Retry" / "Fail" / IntentRouter class names for multi-out
  * nodes). The caller stores the label on `ConnectionDraft.sourcePortLabel` so the eventual
  * `addConnection` carries it through to the persisted `ConnectionModel.label`.
- * @param onConnectionMove receives per-event **canvas-space** deltas for the connection
- * pointer (same coordinate-space rationale as [onDrag]). The caller accumulates them into
- * `EditorState.connectionInProgress.pointerCanvas{X,Y}`.
- * @param onConnectionEnd invoked on release. The caller hit-tests the accumulated
- * canvas-space pointer position from `EditorState.connectionInProgress` directly — no
+ * @param onConnectionMove receives the **absolute pointer position in canvas-Box-local
+ * space**, computed via
+ * `canvasLayoutCoordinates.localPositionOf(portCoords, change.position)`. Absolute
+ * positions are more robust than per-event deltas: they pass through every transform
+ * (including the per-node `graphicsLayer` scale that bakes `transform.scale` into the
+ * node's local coords) without accumulating rounding error or losing the touch-slop
+ * distance Compose hides between `awaitDownEvent` and the first drag event.
+ * @param onConnectionEnd invoked on release. The caller hit-tests the pointer position
+ * from `EditorState.connectionInProgress` (already in canvas-space) directly — no
  * coordinate parameters are needed here.
  */
 @OptIn(ExperimentalFoundationApi::class)
@@ -100,9 +106,10 @@ internal fun EditorNode(
     onLongPress: () -> Unit,
     onDrag: (dxCanvas: Float, dyCanvas: Float) -> Unit,
     onDragEnd: () -> Unit,
-    onConnectionStart: (portLabel: String) -> Unit,
-    onConnectionMove: (dxCanvas: Float, dyCanvas: Float) -> Unit,
+    onConnectionStart: (portLabel: String, pointerCanvasBoxX: Float, pointerCanvasBoxY: Float) -> Unit,
+    onConnectionMove: (pointerCanvasBoxX: Float, pointerCanvasBoxY: Float) -> Unit,
     onConnectionEnd: () -> Unit,
+    canvasLayoutCoordinates: LayoutCoordinates?,
 ) {
     val scale = remember { AnimFloat(1f) }
     var isDragging by remember { mutableStateOf(false) }
@@ -182,6 +189,11 @@ internal fun EditorNode(
         // dragging from this Box always means "start a connection", never "move the node".
         ports.outbound.forEachIndexed { index, port ->
             val portOffsetDp = outboundPortOffsetDp(index, ports.outbound.size)
+            // Capture the port-box's LayoutCoordinates so we can convert pointer events
+            // straight to canvas-Box-local space via `localPositionOf`. This sidesteps the
+            // delta-accumulation path entirely and stays correct under every transform in
+            // between (graphicsLayer scale on the node, canvas transform, etc.).
+            var portCoords by remember(node.id, port.label) { mutableStateOf<LayoutCoordinates?>(null) }
             Box(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
@@ -189,16 +201,21 @@ internal fun EditorNode(
                     .offset(x = portOffsetDp.dp, y = (PORT_HIT_TARGET_DP / 2).dp)
                     .clip(CircleShape)
                     .background(Color.Transparent)
+                    .onGloballyPositioned { portCoords = it }
                     .pointerInput(node.id, port.label) {
                         detectDragGestures(
-                            onDragStart = { onConnectionStart(port.label) },
-                            // Emit canvas-space deltas only. Using `change.position` (absolute
-                            // pointer in the port-Box's local coords) and adding it to the
-                            // node's screen-space anchor would mix coordinate systems and
-                            // make the preview edge snap to the node's top-left on drag start;
-                            // accumulating `dragAmount` keeps the pointer in canvas-space and
-                            // the canvas projects it back to screen for drawing.
-                            onDrag = { _, dragAmount -> onConnectionMove(dragAmount.x, dragAmount.y) },
+                            onDragStart = { localStart ->
+                                val pc = portCoords ?: return@detectDragGestures
+                                val canvas = canvasLayoutCoordinates ?: return@detectDragGestures
+                                val pos = canvas.localPositionOf(pc, localStart)
+                                onConnectionStart(port.label, pos.x, pos.y)
+                            },
+                            onDrag = { change, _ ->
+                                val pc = portCoords ?: return@detectDragGestures
+                                val canvas = canvasLayoutCoordinates ?: return@detectDragGestures
+                                val pos = canvas.localPositionOf(pc, change.position)
+                                onConnectionMove(pos.x, pos.y)
+                            },
                             onDragEnd = { onConnectionEnd() },
                             onDragCancel = { onConnectionEnd() },
                         )

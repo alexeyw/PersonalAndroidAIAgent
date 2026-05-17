@@ -67,6 +67,7 @@ internal fun PipelineEditorContent(
     onAddNode: (type: NodeType, canvasX: Float, canvasY: Float) -> Unit,
     onAddConnection: (sourceNodeId: String, targetNodeId: String, label: String?) -> Unit,
     onOpenNodeConfig: (nodeId: String) -> Unit,
+    onLongPressEdge: (connectionId: String) -> Unit,
     onFocusNode: (String) -> Unit,
     onMultiSelectCancel: () -> Unit,
     onMultiSelectDelete: () -> Unit,
@@ -110,6 +111,7 @@ internal fun PipelineEditorContent(
             onAddNode = onAddNode,
             onAddConnection = onAddConnection,
             onOpenNodeConfig = onOpenNodeConfig,
+            onLongPressEdge = onLongPressEdge,
             modifier = Modifier.weight(1f),
         )
 

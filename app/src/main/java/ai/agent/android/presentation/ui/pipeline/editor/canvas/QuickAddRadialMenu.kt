@@ -22,16 +22,22 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import app.knotwork.design.components.pipelineeditor.glyph
 import app.knotwork.design.components.pipelineeditor.headerOnColor
@@ -43,10 +49,17 @@ import kotlin.math.cos
 import kotlin.math.sin
 import app.knotwork.design.components.pipelineeditor.NodeType as CatalogNodeType
 
-private const val MENU_RADIUS_DP = 144f
-private const val TILE_SIZE_DP = 48f
-private const val TILE_LABEL_GAP_DP = 4f
-private const val TILE_LABEL_WIDTH_DP = 72f
+private const val MENU_RADIUS_DP = 104f
+private const val TILE_SIZE_DP = 44f
+private const val TILE_LABEL_GAP_DP = 2f
+private const val TILE_LABEL_WIDTH_DP = 60f
+
+/**
+ * Margin reserved around the menu when clamping the long-press anchor to the viewport
+ * (radius + half-tile-width + a small visual breathing pad). Keeps the menu fully on
+ * screen even when the user long-presses near the canvas edge.
+ */
+private const val MENU_EDGE_MARGIN_DP = MENU_RADIUS_DP + TILE_LABEL_WIDTH_DP / 2f + 8f
 
 /**
  * 12-tile radial quick-add menu. Triggered by long-press on empty canvas space; tiles
@@ -78,9 +91,24 @@ internal fun QuickAddRadialMenu(
     val density = LocalDensity.current
     val radius = with(density) { MENU_RADIUS_DP.dp.toPx() }
     val tilePx = with(density) { TILE_SIZE_DP.dp.toPx() }
+    val marginPx = with(density) { MENU_EDGE_MARGIN_DP.dp.toPx() }
+    // Track scrim size so we can clamp the anchor when the user long-presses near an edge,
+    // keeping the entire 12-tile ring on screen instead of letting half of it overflow.
+    var scrimSize by remember { mutableStateOf(IntSize.Zero) }
+    val clampedAnchorX = if (scrimSize.width > 0) {
+        screenAnchorX.coerceIn(marginPx, (scrimSize.width - marginPx).coerceAtLeast(marginPx))
+    } else {
+        screenAnchorX
+    }
+    val clampedAnchorY = if (scrimSize.height > 0) {
+        screenAnchorY.coerceIn(marginPx, (scrimSize.height - marginPx).coerceAtLeast(marginPx))
+    } else {
+        screenAnchorY
+    }
     Box(
         modifier = modifier
             .fillMaxSize()
+            .onSizeChanged { scrimSize = it }
             .background(Color.Black.copy(alpha = SCRIM_ALPHA))
             .clickable(onClick = onDismiss),
     ) {
@@ -104,8 +132,8 @@ internal fun QuickAddRadialMenu(
             // by subtracting half the wider of (tile, label) — labels otherwise drift off
             // the radial path. Vertically anchor the circle's centre on the radius so the
             // label hangs below the circle without offsetting the perceived ring.
-            val tileScreenX = screenAnchorX + radius * cos(theta).toFloat() - labelWidthPx / 2f
-            val tileScreenY = screenAnchorY + radius * sin(theta).toFloat() - tilePx / 2f
+            val tileScreenX = clampedAnchorX + radius * cos(theta).toFloat() - labelWidthPx / 2f
+            val tileScreenY = clampedAnchorY + radius * sin(theta).toFloat() - tilePx / 2f
             QuickAddTile(
                 type = type,
                 onPick = { onPick(NodeTypeMapper.toDomain(type)) },

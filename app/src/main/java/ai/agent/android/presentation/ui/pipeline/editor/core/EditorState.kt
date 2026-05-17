@@ -6,6 +6,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.layout.LayoutCoordinates
 import app.knotwork.design.components.pipelineeditor.NodeConfig
 
 /**
@@ -63,6 +64,19 @@ class EditorState(undoCapacity: Int = EditorUndoRedo.DEFAULT_CAPACITY) {
 
     /** Editor's undo/redo stack — bounded to the screen lifetime, never persisted. */
     val undoRedo: EditorUndoRedo = EditorUndoRedo(capacity = undoCapacity)
+
+    /**
+     * `LayoutCoordinates` of the canvas Box, captured via `Modifier.onGloballyPositioned`.
+     *
+     * Used by port-drag handlers in `EditorNode` to convert pointer positions from the
+     * port-box's local space all the way to canvas-Box-local space via
+     * `canvasLayoutCoordinates.localPositionOf(portCoords, change.position)`. Going
+     * through `LayoutCoordinates` is more robust than accumulating per-event deltas
+     * because it respects every transform between the port and the canvas (including
+     * the per-node `graphicsLayer` scaling driven by `transform.scale`), and works for
+     * absolute pointer position rather than fragile delta sums.
+     */
+    var canvasLayoutCoordinates: LayoutCoordinates? by mutableStateOf(null)
 
     /**
      * Clears selection + connection draft + radial-menu anchor. Used by Escape / back-press

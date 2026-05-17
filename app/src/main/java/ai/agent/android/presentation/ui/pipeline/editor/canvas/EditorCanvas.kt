@@ -8,10 +8,8 @@ import ai.agent.android.presentation.ui.pipeline.editor.core.CanvasTransform
 import ai.agent.android.presentation.ui.pipeline.editor.core.ConnectionDraft
 import ai.agent.android.presentation.ui.pipeline.editor.core.EditorState
 import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.gestures.rememberTransformableState
-import androidx.compose.foundation.gestures.transformable
+import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -28,6 +26,7 @@ import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
@@ -74,24 +73,11 @@ internal fun EditorCanvas(
     onAddNode: (type: NodeType, canvasX: Float, canvasY: Float) -> Unit,
     onAddConnection: (sourceNodeId: String, targetNodeId: String, label: String?) -> Unit,
     onOpenNodeConfig: (nodeId: String) -> Unit,
+    onLongPressEdge: (connectionId: String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val density = LocalDensity.current
     var viewportSize by remember { mutableStateOf(IntPair(0, 0)) }
-
-    val transformableState = rememberTransformableState { zoom, panChange, _ ->
-        // Pinch: centred on the viewport mid by default; precise pinch midpoint
-        // would require lower-level pointer reading. Acceptable trade-off for
-        // a two-finger gesture per `node-specs.md`.
-        if (zoom != 1f) {
-            val anchorX = viewportSize.first / 2f
-            val anchorY = viewportSize.second / 2f
-            editor.transform = editor.transform.zoomedBy(zoom, anchorX, anchorY)
-        }
-        if (panChange != Offset.Zero) {
-            editor.transform = editor.transform.panBy(panChange.x, panChange.y)
-        }
-    }
 
     // Per-node session deltas keep drag fluid without thrashing the VM each frame.
     val dragDeltas = remember { mutableStateOf<Map<String, Pair<Float, Float>>>(emptyMap()) }
@@ -111,7 +97,10 @@ internal fun EditorCanvas(
             // into the EditorToolbar / bottom bars when nodes sit near the viewport edge.
             .background(KnotworkTheme.extended.surface1)
             .onSizeChanged { size -> viewportSize = IntPair(size.width, size.height) }
-            .transformable(state = transformableState)
+            // Capture canvas LayoutCoordinates so EditorNode's port-drag handlers can
+            // convert pointer positions straight to canvas-Box-local space via
+            // `LayoutCoordinates.localPositionOf` — see EditorState.canvasLayoutCoordinates.
+            .onGloballyPositioned { editor.canvasLayoutCoordinates = it }
             .pointerInput(graph.id) {
                 detectTapGestures(
                     onTap = { tapScreen ->
@@ -140,22 +129,47 @@ internal fun EditorCanvas(
                             editor.multiSelectMode = false
                         }
                     },
-                    onLongPress = { offset ->
-                        editor.quickAddAnchor = offset.x to offset.y
+                    onLongPress = { tapScreen ->
+                        // Long-press hit-tests edges first — if the press lands on an edge,
+                        // forward to `onLongPressEdge` (screen shows a "Remove connection?"
+                        // confirmation). Otherwise open the radial quick-add menu at the
+                        // long-press point. Two discoverable paths to delete a connection
+                        // (tap-select + toolbar 🗑, OR long-press + confirm) so users find at
+                        // least one of them.
+                        val canvasX = editor.transform.screenToCanvasX(tapScreen.x)
+                        val canvasY = editor.transform.screenToCanvasY(tapScreen.y)
+                        val edgeId = hitTestEdge(
+                            pointerCanvasX = canvasX,
+                            pointerCanvasY = canvasY,
+                            connections = graph.connections,
+                            nodesById = nodesByIdLive,
+                            transform = editor.transform,
+                            density = density,
+                        )
+                        if (edgeId != null) {
+                            onLongPressEdge(edgeId)
+                        } else {
+                            editor.quickAddAnchor = tapScreen.x to tapScreen.y
+                        }
                     },
                 )
             }
-            // CRITICAL: `editor.transform` is intentionally NOT in the key list. It mutates
-            // on every drag frame; including it here would cancel + restart `detectDragGestures`
-            // every tick and stutter the pan to death. `editor` is a stable state holder, so
-            // reading `editor.transform` inside the lambda gives the current value without
-            // ever re-keying the modifier.
+            // Single transform-gesture handler covers 1-finger pan AND 2-finger pinch in
+            // one detector — replaces the prior `transformable` + standalone
+            // `detectDragGestures` pair, where the drag detector consumed the first
+            // pointer before `transformable` could see the second finger and route to
+            // zoom. `panZoomLock = false` lets pan and zoom compose freely on the same
+            // gesture. We also get the true pinch `centroid` (vs. the prior
+            // viewport-centre approximation) so zoom anchors precisely under the fingers.
             .pointerInput(graph.id) {
-                detectDragGestures(
-                    onDrag = { _, drag ->
-                        editor.transform = editor.transform.panBy(drag.x, drag.y)
-                    },
-                )
+                detectTransformGestures(panZoomLock = false) { centroid, pan, zoom, _ ->
+                    if (zoom != 1f) {
+                        editor.transform = editor.transform.zoomedBy(zoom, centroid.x, centroid.y)
+                    }
+                    if (pan != Offset.Zero) {
+                        editor.transform = editor.transform.panBy(pan.x, pan.y)
+                    }
+                }
             },
     ) {
         val draftDraw = editor.connectionInProgress?.let { draft ->
@@ -228,25 +242,22 @@ internal fun EditorCanvas(
                         }
                     }
                 },
-                onConnectionStart = { portLabel ->
-                    val anchor = outboundPortAnchor(node, ports, portLabel, density)
-                    // Pointer starts at the source port's canvas anchor (per-port, so the
-                    // preview edge originates exactly at the dot the user grabbed); subsequent
-                    // `onConnectionMove` deltas accumulate against this seed in canvas-space.
-                    // sourcePortLabel is later forwarded to addConnection so the persisted
-                    // ConnectionModel.label identifies which outbound port the user picked.
+                onConnectionStart = { portLabel, pointerBoxX, pointerBoxY ->
+                    // pointerBoxX/Y arrive as the absolute pointer position in canvas-Box-local
+                    // coords (from `LayoutCoordinates.localPositionOf`), so project once through
+                    // the inverse canvas transform to land in canvas-space.
                     editor.connectionInProgress = ConnectionDraft(
                         sourceNodeId = node.id,
                         sourcePortLabel = portLabel,
-                        pointerCanvasX = anchor.xCanvas,
-                        pointerCanvasY = anchor.yCanvas,
+                        pointerCanvasX = editor.transform.screenToCanvasX(pointerBoxX),
+                        pointerCanvasY = editor.transform.screenToCanvasY(pointerBoxY),
                     )
                 },
-                onConnectionMove = { dxCanvas, dyCanvas ->
+                onConnectionMove = { pointerBoxX, pointerBoxY ->
                     val draft = editor.connectionInProgress ?: return@EditorNode
                     editor.connectionInProgress = draft.copy(
-                        pointerCanvasX = draft.pointerCanvasX + dxCanvas,
-                        pointerCanvasY = draft.pointerCanvasY + dyCanvas,
+                        pointerCanvasX = editor.transform.screenToCanvasX(pointerBoxX),
+                        pointerCanvasY = editor.transform.screenToCanvasY(pointerBoxY),
                     )
                 },
                 onConnectionEnd = {
@@ -271,6 +282,7 @@ internal fun EditorCanvas(
                         }
                     }
                 },
+                canvasLayoutCoordinates = editor.canvasLayoutCoordinates,
             )
         }
 

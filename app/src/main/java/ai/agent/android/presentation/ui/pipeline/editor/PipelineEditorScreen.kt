@@ -1,5 +1,6 @@
 package ai.agent.android.presentation.ui.pipeline.editor
 
+import ai.agent.android.R
 import ai.agent.android.domain.models.NodeType
 import ai.agent.android.domain.models.PipelineGraph
 import ai.agent.android.presentation.ui.common.resolve
@@ -17,17 +18,23 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import app.knotwork.design.theme.KnotworkTheme
 import kotlinx.coroutines.launch
 
@@ -58,6 +65,9 @@ fun PipelineEditorScreen(viewModel: OrchestratorViewModel, onBack: () -> Unit) {
     val snackbarHostState = remember { SnackbarHostState() }
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    // Edge to confirm-and-delete on long-press, paired with the toolbar's tap-select-then-Delete
+    // path. Two routes to the same action so users find at least one of them.
+    var pendingEdgeDelete by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(runState) {
         editor.isRunning = runState.isRunning
@@ -196,6 +206,7 @@ fun PipelineEditorScreen(viewModel: OrchestratorViewModel, onBack: () -> Unit) {
                 editor.configuringNodeId = nodeId
                 editor.workingConfig = NodeConfigCodec.decode(target)
             },
+            onLongPressEdge = { connectionId -> pendingEdgeDelete = connectionId },
             onFocusNode = viewModel::requestFocusNode,
             onMultiSelectCancel = {
                 editor.multiSelectMode = false
@@ -249,6 +260,39 @@ fun PipelineEditorScreen(viewModel: OrchestratorViewModel, onBack: () -> Unit) {
             hostState = snackbarHostState,
             modifier = Modifier.align(Alignment.BottomCenter),
         )
+
+        val edgeToDelete = pendingEdgeDelete
+        if (edgeToDelete != null) {
+            AlertDialog(
+                onDismissRequest = { pendingEdgeDelete = null },
+                title = { Text(text = stringResource(R.string.pipeline_editor_remove_connection_title)) },
+                text = { Text(text = stringResource(R.string.pipeline_editor_remove_connection_text)) },
+                confirmButton = {
+                    TextButton(onClick = {
+                        editor.undoRedo.push(uiState.currentPipeline)
+                        viewModel.removeConnection(edgeToDelete)
+                        editor.selectedEdgeId = null
+                        pendingEdgeDelete = null
+                    }) { Text(text = stringResource(R.string.pipeline_editor_remove_connection_confirm)) }
+                },
+                dismissButton = {
+                    TextButton(onClick = { pendingEdgeDelete = null }) {
+                        Text(text = stringResource(R.string.pipeline_editor_remove_connection_cancel))
+                    }
+                },
+            )
+        }
+    }
+
+    // Surface a one-shot hint the first time the user selects an edge, so the toolbar
+    // Delete path becomes discoverable. `LaunchedEffect(editor.selectedEdgeId)` fires
+    // each time the selected edge changes — including from `null` to an id (tap-select).
+    val selectedEdge = editor.selectedEdgeId
+    val edgeSelectedHint = stringResource(R.string.pipeline_editor_edge_selected_hint)
+    LaunchedEffect(selectedEdge) {
+        if (selectedEdge != null) {
+            snackbarHostState.showSnackbar(message = edgeSelectedHint)
+        }
     }
 }
 
