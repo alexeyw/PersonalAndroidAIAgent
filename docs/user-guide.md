@@ -278,13 +278,49 @@ default pipeline marked in the library.
 
 ### Visual editor
 
-Loading a pipeline opens the **Visual Orchestrator**. You can drag
-nodes around the canvas, draw connections between them, and tap a
-node to open its configuration dialog.
+Loading a pipeline opens the **Pipeline editor**. The editor surface
+is an infinite pan / zoom canvas with the following gestures:
+
+- **One-finger drag on empty canvas** — pan the viewport.
+- **Two-finger pinch** — zoom (`0.4×–2.0×`).
+- **Drag a node card** — move the node; it snaps to a 24 dp grid on
+  release with a soft spring settle.
+- **Drag from an output port** — start a connection; release on a
+  target node's inbound port to draw the edge.
+- **Tap a node** — select it.
+- **Long-press a node** — enter multi-select. Subsequent taps toggle
+  membership; the top bar swaps for a count + Cancel / Delete cluster.
+- **Long-press the empty canvas** — opens a radial quick-add menu with
+  one tile per node type. Picking a tile spawns the node at the
+  long-press point and opens its configuration sheet.
+- **Toolbar** — inline-editable pipeline name on the left; Undo /
+  Redo / Delete (selection) / Auto-layout / Run / overflow on the
+  right. Auto-layout re-arranges nodes via a Sugiyama-style hierarchy
+  (longest-path layering + median crossing reduction) so the graph
+  reads top-to-bottom.
+
+The bottom of the screen alternates between two bars:
+
+- **Validation bar** — lists pipeline errors (missing input, dangling
+  output, cycles, empty context, …). Tapping a row centres the canvas
+  on the offending node and selects it. The bar collapses to a
+  single-line "Pipeline is valid" when there are no errors.
+- **Run-trace bar** — replaces the validation bar while a pipeline run
+  is in progress; the active node header pulses and the connecting
+  edges show a traveling-dot animation. Reduced-motion is respected.
 
 The editor also has an **Import JSON** button that lets you load a
 pipeline exported from the standalone browser editor (see
 [Browser pipeline editor](#browser-pipeline-editor)).
+
+### Node configuration sheets
+
+Tapping the configuration affordance on any node opens a modal sheet
+with the per-type form set documented in `node-specs.md`. Every node
+type — Input, Output, LiteRt, Cloud, IntentRouter, IfCondition,
+Clarification, Tool, Decomposition, QueueProcessor, Evaluation,
+Summary — has its own form, with inline validation that disables Save
+until every required field is filled.
 
 ### Variables in system prompts
 

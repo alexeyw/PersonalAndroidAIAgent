@@ -30,6 +30,10 @@ import androidx.room.PrimaryKey
  * tool results) injected on every execution. Stored as JSON via the
  * `NodeContextConfig` Room TypeConverter; defaults to all flags `true`
  * for backward compatibility with rows created before Phase 15.
+ * @property configJson Optional Phase-21 per-type `NodeConfig` payload as
+ * a JSON blob (schema in `node-specs.md`). `null` for legacy rows; the
+ * editor lazily derives a default from the flat fields above on first
+ * edit and writes the encoded payload back here on save.
  */
 @Entity(
     tableName = "pipeline_nodes",
@@ -61,4 +65,6 @@ data class NodeEntity(
     val clarificationTimeoutMs: Long? = null,
     @ColumnInfo(name = "context_config")
     val contextConfig: NodeContextConfig = NodeContextConfig.ALL_ENABLED,
+    @ColumnInfo(name = "config_json")
+    val configJson: String? = null,
 )

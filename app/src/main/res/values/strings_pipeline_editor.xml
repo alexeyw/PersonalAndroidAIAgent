@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Pipeline editor — Phase 21 / Task 9 strings. Visual contract: project_docs/design/compose/screens/README.md §C2. -->
+
+    <!-- Quick-add radial menu (long-press on canvas) -->
+    <string name="pipeline_editor_quick_add_title">Add node</string>
+    <string name="pipeline_editor_quick_add_close">Close add-node menu</string>
+
+    <!-- Validation bar -->
+    <string name="pipeline_editor_validation_clean">Pipeline is valid</string>
+    <plurals name="pipeline_editor_validation_count">
+        <item quantity="one">%1$d issue</item>
+        <item quantity="other">%1$d issues</item>
+    </plurals>
+    <string name="pipeline_editor_validation_focus">Tap an issue to centre the canvas on the affected node</string>
+
+    <!-- Run trace bar -->
+    <string name="pipeline_editor_run_trace_idle">Idle</string>
+    <string name="pipeline_editor_run_trace_active">Active node: %1$s</string>
+
+    <!-- Multi-select toolbar -->
+    <plurals name="pipeline_editor_multi_select_count">
+        <item quantity="one">%1$d selected</item>
+        <item quantity="other">%1$d selected</item>
+    </plurals>
+    <string name="pipeline_editor_multi_select_cancel">Cancel selection</string>
+    <string name="pipeline_editor_multi_select_delete">Delete selected nodes</string>
+
+    <!-- Empty state -->
+    <string name="pipeline_editor_empty_subtitle">Long-press anywhere to add your first node.</string>
+</resources>

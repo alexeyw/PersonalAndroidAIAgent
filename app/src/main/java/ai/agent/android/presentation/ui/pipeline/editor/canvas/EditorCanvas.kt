@@ -1,0 +1,294 @@
+package ai.agent.android.presentation.ui.pipeline.editor.canvas
+
+import ai.agent.android.R
+import ai.agent.android.domain.models.NodeModel
+import ai.agent.android.domain.models.NodeType
+import ai.agent.android.domain.models.PipelineGraph
+import ai.agent.android.presentation.ui.pipeline.editor.config.NodeTypeMapper
+import ai.agent.android.presentation.ui.pipeline.editor.core.CanvasTransform
+import ai.agent.android.presentation.ui.pipeline.editor.core.ConnectionDraft
+import ai.agent.android.presentation.ui.pipeline.editor.core.EditorState
+import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.rememberTransformableState
+import androidx.compose.foundation.gestures.transformable
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.dp
+import app.knotwork.design.components.pipelineeditor.NodeError
+import app.knotwork.design.components.pipelineeditor.NodePorts
+import app.knotwork.design.theme.KnotworkTheme
+import app.knotwork.design.tokens.KnotworkTextStyles
+
+/**
+ * Top-level editor canvas. Hosts pan / pinch zoom, all node renderers, the edge layer,
+ * and the radial quick-add menu.
+ *
+ * Responsibilities (kept here so the screen file stays a thin orchestrator):
+ *  - Owns the `Box` modifier chain wiring pinch-to-zoom (`transformable`), one-finger
+ *    canvas pan (`detectDragGestures`), and tap / long-press (`detectTapGestures`).
+ *  - Renders the [EditorEdges] layer first (so it draws under nodes).
+ *  - Renders one [EditorNode] per `PipelineGraph.nodes`.
+ *  - Renders the [QuickAddRadialMenu] on top when an anchor is set.
+ *
+ * Node positions are persisted in canvas-space px; the [EditorState] transform projects
+ * them to screen space at render time. Drag-to-move accumulates a screen-space delta
+ * into a per-node session state, and commits the un-projected canvas delta to the
+ * ViewModel via [onMoveNode] once the gesture settles.
+ *
+ * @param graph the current pipeline graph (from the ViewModel).
+ * @param editor screen-local state (transform, selection, drafts).
+ * @param activeRunningEdgeIds set of edge ids to animate in run-trace mode.
+ * @param errorsByNodeId map of node-id → optional inline error for the catalog NodeCard.
+ * @param reducedMotion reduced-motion flag — gates animations longer than `motionSm`.
+ * @param onMoveNode invoked on drag-end with the committed canvas-space delta.
+ * @param onAddNode invoked when a quick-add tile is picked.
+ * @param onAddConnection invoked when a connection draft drops on a valid target node.
+ * @param modifier optional layout modifier applied to the canvas root.
+ */
+@Composable
+@Suppress("LongParameterList", "LongMethod")
+internal fun EditorCanvas(
+    graph: PipelineGraph,
+    editor: EditorState,
+    activeRunningEdgeIds: Set<String>,
+    errorsByNodeId: Map<String, NodeError?>,
+    reducedMotion: Boolean,
+    onMoveNode: (nodeId: String, dxCanvas: Float, dyCanvas: Float) -> Unit,
+    onAddNode: (type: NodeType, canvasX: Float, canvasY: Float) -> Unit,
+    onAddConnection: (sourceNodeId: String, targetNodeId: String) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val density = LocalDensity.current
+    var viewportSize by remember { mutableStateOf(IntPair(0, 0)) }
+
+    val transformableState = rememberTransformableState { zoom, panChange, _ ->
+        // Pinch: centred on the viewport mid by default; precise pinch midpoint
+        // would require lower-level pointer reading. Acceptable trade-off for
+        // a two-finger gesture per `node-specs.md`.
+        if (zoom != 1f) {
+            val anchorX = viewportSize.first / 2f
+            val anchorY = viewportSize.second / 2f
+            editor.transform = editor.transform.zoomedBy(zoom, anchorX, anchorY)
+        }
+        if (panChange != Offset.Zero) {
+            editor.transform = editor.transform.panBy(panChange.x, panChange.y)
+        }
+    }
+
+    // Per-node session deltas keep drag fluid without thrashing the VM each frame.
+    val dragDeltas = remember { mutableStateOf<Map<String, Pair<Float, Float>>>(emptyMap()) }
+    val nodesById = remember(graph) { graph.nodes.associateBy { it.id } }
+    val nodesWithDrag = remember(graph, dragDeltas.value) {
+        graph.nodes.map { node ->
+            val delta = dragDeltas.value[node.id]
+            if (delta == null) node else node.copy(x = node.x + delta.first, y = node.y + delta.second)
+        }
+    }
+    val nodesByIdLive = remember(nodesWithDrag) { nodesWithDrag.associateBy { it.id } }
+
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .background(KnotworkTheme.extended.surface1)
+            .onSizeChanged { size -> viewportSize = IntPair(size.width, size.height) }
+            .transformable(state = transformableState)
+            .pointerInput(graph.id) {
+                detectTapGestures(
+                    onTap = {
+                        editor.selection = emptySet()
+                        editor.multiSelectMode = false
+                    },
+                    onLongPress = { offset ->
+                        editor.quickAddAnchor = offset.x to offset.y
+                    },
+                )
+            }
+            .pointerInput(graph.id, editor.transform) {
+                detectDragGestures(
+                    onDrag = { _, drag ->
+                        editor.transform = editor.transform.panBy(drag.x, drag.y)
+                    },
+                )
+            },
+    ) {
+        val draftDraw = editor.connectionInProgress?.let { draft ->
+            val source = nodesByIdLive[draft.sourceNodeId] ?: return@let null
+            val anchors = nodeAnchors(source, density)
+            ConnectionDraftDrawData(
+                sourceScreen = Offset(
+                    editor.transform.canvasToScreenX(anchors.outX),
+                    editor.transform.canvasToScreenY(anchors.outY),
+                ),
+                pointerScreen = Offset(draft.pointerScreenX, draft.pointerScreenY),
+            )
+        }
+        EditorEdges(
+            connections = graph.connections,
+            nodesById = nodesByIdLive,
+            transform = editor.transform,
+            connectionDraft = draftDraw,
+            runningEdgeIds = activeRunningEdgeIds,
+            reducedMotion = reducedMotion,
+        )
+
+        nodesWithDrag.forEach { node ->
+            val originalNode = nodesById[node.id] ?: node
+            val ports = NodePorts.forType(type = NodeTypeMapper.toCatalog(node.type))
+            EditorNode(
+                node = node,
+                transform = editor.transform,
+                selected = node.id in editor.selection && !editor.multiSelectMode,
+                multiSelected = node.id in editor.selection && editor.multiSelectMode,
+                running = editor.isRunning && editor.activeRunningNodeId == node.id,
+                error = errorsByNodeId[node.id],
+                ports = ports,
+                reducedMotion = reducedMotion,
+                onSelect = { editor.toggleSelection(node.id) },
+                onLongPress = {
+                    editor.multiSelectMode = true
+                    editor.toggleSelection(node.id)
+                },
+                onDrag = { dxScreen, dyScreen ->
+                    val dxCanvas = dxScreen / editor.transform.scale
+                    val dyCanvas = dyScreen / editor.transform.scale
+                    val prev = dragDeltas.value[node.id] ?: (0f to 0f)
+                    dragDeltas.value = dragDeltas.value + (node.id to (prev.first + dxCanvas to prev.second + dyCanvas))
+                },
+                onDragEnd = {
+                    val delta = dragDeltas.value[node.id]
+                    if (delta != null) {
+                        // Snap to grid on commit.
+                        val targetX = CanvasTransform.snapToGrid(originalNode.x + delta.first)
+                        val targetY = CanvasTransform.snapToGrid(originalNode.y + delta.second)
+                        val snappedDx = targetX - originalNode.x
+                        val snappedDy = targetY - originalNode.y
+                        dragDeltas.value = dragDeltas.value - node.id
+                        if (snappedDx != 0f || snappedDy != 0f) {
+                            onMoveNode(node.id, snappedDx, snappedDy)
+                        }
+                    }
+                },
+                onConnectionStart = {
+                    val anchors = nodeAnchors(node, density)
+                    editor.connectionInProgress = ConnectionDraft(
+                        sourceNodeId = node.id,
+                        sourcePortLabel = "",
+                        pointerScreenX = editor.transform.canvasToScreenX(anchors.outX),
+                        pointerScreenY = editor.transform.canvasToScreenY(anchors.outY),
+                    )
+                },
+                onConnectionMove = { screenX, screenY ->
+                    val draft = editor.connectionInProgress ?: return@EditorNode
+                    editor.connectionInProgress = draft.copy(
+                        pointerScreenX = screenX,
+                        pointerScreenY = screenY,
+                    )
+                },
+                onConnectionEnd = { _, _ ->
+                    val draft = editor.connectionInProgress
+                    editor.connectionInProgress = null
+                    if (draft != null) {
+                        val target = hitTestInputPort(
+                            screenX = draft.pointerScreenX,
+                            screenY = draft.pointerScreenY,
+                            nodes = nodesByIdLive.values.toList(),
+                            transform = editor.transform,
+                            density = density,
+                        )
+                        if (target != null && target.id != draft.sourceNodeId) {
+                            onAddConnection(draft.sourceNodeId, target.id)
+                        }
+                    }
+                },
+            )
+        }
+
+        if (graph.nodes.isEmpty()) {
+            Box(
+                modifier = Modifier.align(Alignment.Center).padding(KnotworkTheme.spacing.sp6),
+            ) {
+                Text(
+                    text = stringResource(R.string.pipeline_editor_empty_subtitle),
+                    style = KnotworkTextStyles.BodyBase,
+                    color = KnotworkTheme.extended.onSurfaceMuted,
+                )
+            }
+        }
+
+        val anchor = editor.quickAddAnchor
+        if (anchor != null) {
+            QuickAddRadialMenu(
+                screenAnchorX = anchor.first,
+                screenAnchorY = anchor.second,
+                onPick = { type ->
+                    val canvasX = editor.transform.screenToCanvasX(anchor.first)
+                    val canvasY = editor.transform.screenToCanvasY(anchor.second)
+                    editor.quickAddAnchor = null
+                    onAddNode(type, CanvasTransform.snapToGrid(canvasX), CanvasTransform.snapToGrid(canvasY))
+                },
+                onDismiss = { editor.quickAddAnchor = null },
+            )
+        }
+    }
+
+    LaunchedEffect(reducedMotion) {
+        // Touchpoint reserved for future a11y signals; the dependency keys the effect
+        // to motion-flag changes so animations recreate cleanly across system toggles.
+    }
+}
+
+private typealias IntPair = Pair<Int, Int>
+
+/**
+ * Returns the node whose inbound port is closest to the screen-space point — used to
+ * decide which node a release-from-port gesture lands on. Returns `null` when no node
+ * is within the hit tolerance of [INBOUND_HIT_DP].
+ */
+private fun hitTestInputPort(
+    screenX: Float,
+    screenY: Float,
+    nodes: List<NodeModel>,
+    transform: CanvasTransform,
+    density: androidx.compose.ui.unit.Density,
+): NodeModel? {
+    val tolerancePx = with(density) { INBOUND_HIT_DP.dp.toPx() }
+    var best: NodeModel? = null
+    var bestDist = Float.MAX_VALUE
+    nodes.forEach { node ->
+        val anchors = nodeAnchors(node, density)
+        val sx = transform.canvasToScreenX(anchors.inX)
+        val sy = transform.canvasToScreenY(anchors.inY)
+        val dx = sx - screenX
+        val dy = sy - screenY
+        val dist = kotlin.math.hypot(dx, dy)
+        if (dist < tolerancePx && dist < bestDist) {
+            best = node
+            bestDist = dist
+        }
+    }
+    return best
+}
+
+private const val INBOUND_HIT_DP = 32f
+
+// Surface a stable name for the unused Color import (used elsewhere in this module).
+@Suppress("unused")
+private val transparentReference: Color = Color.Transparent

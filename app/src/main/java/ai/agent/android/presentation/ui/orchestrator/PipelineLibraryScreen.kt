@@ -63,7 +63,7 @@ import java.util.Locale
  * and opens the visual editor; the FAB creates a new pipeline; the per-row
  * `⋮` menu offers Load / Rename / Duplicate / Delete actions.
  *
- * Shares [OrchestratorViewModel] with [VisualOrchestratorScreen] via a parent
+ * Shares [OrchestratorViewModel] with the Phase-21 `PipelineEditorScreen` via a parent
  * nav-graph scope so creating, renaming, or duplicating a pipeline here is
  * immediately reflected when the editor opens.
  *

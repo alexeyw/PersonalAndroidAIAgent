@@ -59,7 +59,7 @@ Each layer maps onto concrete packages:
 
 | Layer          | Packages                                                                                          |
 |----------------|---------------------------------------------------------------------------------------------------|
-| `presentation` | `presentation/ui/{about,chat,memory,models,monitoring,more,onboarding,orchestrator,prompts,settings,splash,taskmonitor,tools}`, `presentation/ui/navigation`, `presentation/{components,state,theme,notifications,receivers}` |
+| `presentation` | `presentation/ui/{about,chat,memory,models,monitoring,more,onboarding,orchestrator,pipeline/editor,prompts,settings,splash,taskmonitor,tools}`, `presentation/ui/navigation`, `presentation/{components,state,theme,notifications,receivers}` |
 | `domain`       | `domain/{usecases,engine,models,repositories,prompt,constants,services,pipelineio}`               |
 | `data`         | `data/{engine,local,repositories,prompt,mcp,services,tools,network,mappers,logging}`              |
 

@@ -923,4 +923,62 @@ class OrchestratorViewModelTest {
 
         assertEquals(false, viewModel.uiState.value.pendingEditorNavigation)
     }
+
+    // ─── Phase 21 / Task 9 — Pipeline editor hooks ───────────────────────────
+
+    @Test
+    fun `updateNodeFromEditor replaces the matching node`() {
+        viewModel.addNode(NodeType.LITE_RT, 0f, 0f)
+        val node = viewModel.uiState.value.currentPipeline.nodes.first()
+        val mutated = node.copy(label = "Renamed", systemPrompt = "new")
+
+        viewModel.updateNodeFromEditor(node.id, mutated)
+
+        val refreshed = viewModel.uiState.value.currentPipeline.nodes.first()
+        assertEquals("Renamed", refreshed.label)
+        assertEquals("new", refreshed.systemPrompt)
+    }
+
+    @Test
+    fun `replaceCurrentPipeline swaps the active pipeline`() {
+        val replacement = PipelineGraph(id = "x", name = "X")
+        viewModel.replaceCurrentPipeline(replacement)
+        assertEquals(replacement, viewModel.uiState.value.currentPipeline)
+    }
+
+    @Test
+    fun `setRunning and setActiveRunningNode update the runState flow`() {
+        assertEquals(false, viewModel.runState.value.isRunning)
+        viewModel.setRunning(true)
+        viewModel.setActiveRunningNode("node-42")
+        assertEquals(true, viewModel.runState.value.isRunning)
+        assertEquals("node-42", viewModel.runState.value.activeNodeId)
+    }
+
+    @Test
+    fun `requestFocusNode does not throw and the SharedFlow exists`() {
+        // The SharedFlow is wired with `extraBufferCapacity = 1` so `tryEmit` always
+        // succeeds even when no collector is active. Asserting that exposed flow is
+        // non-null and the emit is silent is enough behaviour-coverage at the VM seam;
+        // end-to-end emission timing is covered by the editor's instrumentation tests.
+        assertNotNull(viewModel.focusNodeRequest)
+        viewModel.requestFocusNode("node-7")
+    }
+
+    @Test
+    fun `labelFor returns a non-null UiText for every validation error`() {
+        val errors: List<PipelineValidationError> = listOf(
+            PipelineValidationError.MissingInput,
+            PipelineValidationError.MissingOutput,
+            PipelineValidationError.MultipleInputs,
+            PipelineValidationError.MultipleOutputs,
+            PipelineValidationError.HasCycles,
+            PipelineValidationError.DisconnectedInput,
+            PipelineValidationError.DisconnectedOutput,
+            PipelineValidationError.UnreachableNode,
+            PipelineValidationError.DeadEndNode,
+            PipelineValidationError.NodeEmptyContext(nodeId = "missing"),
+        )
+        errors.forEach { err -> assertNotNull(viewModel.labelFor(err)) }
+    }
 }

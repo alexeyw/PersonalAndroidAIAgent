@@ -121,3 +121,16 @@ sealed interface PromptPreviewState {
      */
     data class Ready(val segments: List<PromptSegment>) : PromptPreviewState
 }
+
+/**
+ * Live pipeline-run state surfaced by the editor's run-trace bar and node-running pulse.
+ *
+ * Phase-21 placeholder while the orchestrator-runtime wiring is finalised: the editor
+ * exercises both fields through a debug toggle so the bar can be reviewed end-to-end
+ * before the agent loop wires them up post-v0.1.
+ *
+ * @property isRunning whether a pipeline run is currently in progress.
+ * @property activeNodeId id of the node the run is currently executing, or `null` when
+ * the run has not yet emitted a step (or after the run completes).
+ */
+data class PipelineRunState(val isRunning: Boolean = false, val activeNodeId: String? = null)

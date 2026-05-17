@@ -31,8 +31,11 @@ import ai.agent.android.presentation.ui.common.UiText
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.update
@@ -81,6 +84,27 @@ class OrchestratorViewModel @Inject constructor(
      * The current UI state of the Orchestrator screen.
      */
     val uiState: StateFlow<OrchestratorUiState> = _uiState.asStateFlow()
+
+    private val _focusNodeRequest = MutableSharedFlow<String>(extraBufferCapacity = 1)
+
+    /**
+     * One-shot stream of node ids that the editor should centre the canvas on.
+     * Emitted by the Phase 21 [requestFocusNode] hook used by `ValidationBar` taps.
+     * Replays are intentionally not retained — every emission represents a fresh tap.
+     */
+    val focusNodeRequest: SharedFlow<String> = _focusNodeRequest.asSharedFlow()
+
+    private val _runState = MutableStateFlow(PipelineRunState())
+
+    /**
+     * Phase-21 placeholder for the live run state surfaced by the editor's
+     * [ai.agent.android.presentation.ui.pipeline.editor.bars.RunTraceBar].
+     *
+     * Wired by [setRunning] / [setActiveRunningNode] today; the real orchestrator
+     * integration that drives these fields end-to-end lands post-v0.1 alongside the
+     * chat home → agent backend wiring.
+     */
+    val runState: StateFlow<PipelineRunState> = _runState.asStateFlow()
 
     init {
         observeSavedPipelines()
@@ -884,6 +908,67 @@ class OrchestratorViewModel @Inject constructor(
     fun dismissPromptPreview() {
         _uiState.update { it.copy(previewState = PromptPreviewState.Hidden) }
     }
+
+    // ─── Phase 21 / Task 9 — Pipeline editor hooks ───────────────────────────
+
+    /**
+     * Replaces the persisted [NodeModel] for [nodeId] with [updated]. Used by the new
+     * `NodeConfigSheet` flow once the user taps Save and the catalog validation passes.
+     *
+     * The caller is expected to have already projected its catalog `NodeConfig` onto a
+     * [NodeModel] via `NodeConfigCodec.apply(source, config)`. This entry point is
+     * intentionally generic so future per-type updates do not require dedicated VM
+     * methods.
+     */
+    fun updateNodeFromEditor(nodeId: String, updated: NodeModel) {
+        _uiState.update { state ->
+            val nextNodes = state.currentPipeline.nodes.map { if (it.id == nodeId) updated else it }
+            state.copy(currentPipeline = state.currentPipeline.copy(nodes = nextNodes))
+        }
+    }
+
+    /**
+     * Replaces the entire `currentPipeline` graph in one shot. Used by the Phase-21
+     * editor for undo / redo (which restores a previously captured snapshot) and the
+     * auto-layout commit (which writes the recomputed node positions in bulk).
+     */
+    fun replaceCurrentPipeline(graph: PipelineGraph) {
+        _uiState.update { it.copy(currentPipeline = graph) }
+    }
+
+    /**
+     * Requests that the editor centre its canvas on [nodeId] and select it. Fired by the
+     * `ValidationBar` so tapping an error focuses the offending node without forcing
+     * the validation logic to know anything about the canvas viewport.
+     */
+    fun requestFocusNode(nodeId: String) {
+        _focusNodeRequest.tryEmit(nodeId)
+    }
+
+    /**
+     * Flips the editor's run-trace bar between idle and active. Phase-21 placeholder —
+     * the real run loop lands post-v0.1; until then the editor exposes a debug toggle
+     * so the bar can be exercised end-to-end.
+     */
+    fun setRunning(running: Boolean) {
+        _runState.update { it.copy(isRunning = running) }
+    }
+
+    /**
+     * Sets (or clears with `null`) the currently-running node id during a pipeline run.
+     * Drives both the [app.knotwork.design.components.pipelineeditor.NodeCard]
+     * `running` parameter and the [RunTraceBar] label.
+     */
+    fun setActiveRunningNode(nodeId: String?) {
+        _runState.update { it.copy(activeNodeId = nodeId) }
+    }
+
+    /**
+     * Resolves a single [PipelineValidationError] to its user-visible label using the
+     * same wording the save-time toast emits. Exposed so the editor's `ValidationBar`
+     * can render the same copy without re-implementing the mapping.
+     */
+    fun labelFor(error: PipelineValidationError): UiText = validationErrorAsUiText(error)
 
     private companion object {
         /**

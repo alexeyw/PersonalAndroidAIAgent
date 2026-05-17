@@ -11,7 +11,7 @@ import ai.agent.android.presentation.ui.more.MoreScreen
 import ai.agent.android.presentation.ui.onboarding.OnboardingScreen
 import ai.agent.android.presentation.ui.orchestrator.OrchestratorViewModel
 import ai.agent.android.presentation.ui.orchestrator.PipelineLibraryScreen
-import ai.agent.android.presentation.ui.orchestrator.VisualOrchestratorScreen
+import ai.agent.android.presentation.ui.pipeline.editor.PipelineEditorScreen
 import ai.agent.android.presentation.ui.prompts.PromptLibraryScreen
 import ai.agent.android.presentation.ui.settings.SettingsScreen
 import ai.agent.android.presentation.ui.splash.SplashScreen
@@ -150,13 +150,8 @@ fun AppNavGraph(navController: NavHostController, showOnboarding: Boolean, modif
                     navController.getBackStackEntry(NavRoutes.PIPELINES_GRAPH)
                 }
                 val orchestratorViewModel: OrchestratorViewModel = hiltViewModel(parentEntry)
-                VisualOrchestratorScreen(
+                PipelineEditorScreen(
                     viewModel = orchestratorViewModel,
-                    onNavigateToPrompts = {
-                        navController.navigate(NavRoutes.PROMPTS) {
-                            launchSingleTop = true
-                        }
-                    },
                     onBack = { navController.popBackStack() },
                 )
             }
@@ -169,21 +164,16 @@ fun AppNavGraph(navController: NavHostController, showOnboarding: Boolean, modif
                     },
                 ),
             ) { entry ->
-                // Phase 21 / Task 4 stub: the parameterised alias routes to
-                // the editor with the same ViewModel scope; consumption of
-                // the `id` argument (loading the pipeline by id) is wired
-                // in Task 9 alongside the canvas spike.
                 val parentEntry = remember(entry) {
                     navController.getBackStackEntry(NavRoutes.PIPELINES_GRAPH)
                 }
                 val orchestratorViewModel: OrchestratorViewModel = hiltViewModel(parentEntry)
-                VisualOrchestratorScreen(
+                val pipelineId = entry.arguments?.getString(NavRoutes.PIPELINE_EDIT_ID_ARG)
+                LaunchedEffect(pipelineId) {
+                    if (!pipelineId.isNullOrBlank()) orchestratorViewModel.loadPipeline(pipelineId)
+                }
+                PipelineEditorScreen(
                     viewModel = orchestratorViewModel,
-                    onNavigateToPrompts = {
-                        navController.navigate(NavRoutes.PROMPTS) {
-                            launchSingleTop = true
-                        }
-                    },
                     onBack = { navController.popBackStack() },
                 )
             }

@@ -1,66 +1,19 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-    User-facing strings for the visual orchestrator + pipeline library
-    (`presentation/ui/orchestrator/`).
+    User-facing strings for the pipeline library + shared orchestrator
+    (`presentation/ui/orchestrator/`). The legacy `VisualOrchestratorScreen`
+    ids were removed in Phase 21 / Task 9 together with that file; the new
+    `PipelineEditorScreen` carries its own strings in
+    `strings_pipeline_editor.xml`.
 
-    Keys follow `orchestrator_<context>_<purpose>`; library-screen strings
-    that share semantics with the editor are reused where possible.
+    Keys follow `orchestrator_<context>_<purpose>`.
 -->
 <resources>
     <!-- Screen titles -->
-    <string name="orchestrator_screen_title">Visual Orchestrator</string>
     <string name="orchestrator_library_title">Pipelines</string>
-
-    <!-- TopAppBar action affordances -->
-    <string name="orchestrator_prompt_library_cd">Prompt Library</string>
-    <string name="orchestrator_add_node">Add Node</string>
-    <string name="orchestrator_add_node_cd">Add Node</string>
-    <string name="orchestrator_base_preset">Base Preset</string>
-    <string name="orchestrator_save_pipeline">Save</string>
-    <string name="orchestrator_save_pipeline_cd">Save Pipeline</string>
-    <string name="orchestrator_export_json">Export JSON</string>
-    <string name="orchestrator_import_json">Import JSON</string>
-    <string name="orchestrator_clear">Clear</string>
-    <string name="orchestrator_clear_cd">Clear Pipeline</string>
 
     <!-- Default pipeline name -->
     <string name="orchestrator_default_pipeline_name">New Pipeline</string>
-
-    <!-- Schema-mismatch import dialog -->
-    <string name="orchestrator_dialog_schema_mismatch_title">Schema version mismatch</string>
-    <string name="orchestrator_dialog_schema_mismatch_text">This pipeline file was created in a different editor version and may not round-trip cleanly. Import anyway?</string>
-    <string name="orchestrator_dialog_import_anyway">Import anyway</string>
-
-    <!-- Clear-pipeline confirmation -->
-    <string name="orchestrator_dialog_clear_title">Clear Pipeline</string>
-    <string name="orchestrator_dialog_clear_text">Are you sure you want to clear the entire pipeline? This action cannot be undone.</string>
-
-    <!-- Connection-properties dialog -->
-    <string name="orchestrator_dialog_connection_props_title">Connection Properties</string>
-    <string name="orchestrator_dialog_connection_label">Label (e.g., Intent Name)</string>
-    <string name="orchestrator_dialog_connection_delete">Delete Connection</string>
-
-    <!-- Node configuration dialog -->
-    <string name="orchestrator_dialog_configure_if">Configure IF Condition</string>
-    <string name="orchestrator_dialog_configure_clarification">Configure Clarification</string>
-    <string name="orchestrator_dialog_configure_node">Configure Node</string>
-    <string name="orchestrator_dialog_clarification_instruction">Clarification instruction (LLM)</string>
-    <string name="orchestrator_dialog_system_prompt">System Prompt</string>
-    <string name="orchestrator_dialog_complexity_threshold">Complexity Threshold (Int)</string>
-    <string name="orchestrator_dialog_keywords">Keywords (comma separated)</string>
-    <string name="orchestrator_dialog_llm_condition_prompt">LLM Condition Prompt</string>
-    <string name="orchestrator_dialog_reply_timeout">Reply timeout (seconds)</string>
-    <string name="orchestrator_dialog_preview">Preview</string>
-
-    <!-- Draggable node affordances -->
-    <string name="orchestrator_node_select_tool">Select Tool</string>
-    <string name="orchestrator_node_provider_auto">Auto</string>
-    <string name="orchestrator_node_configure">Configure</string>
-    <string name="orchestrator_node_delete_cd">Delete</string>
-    <string name="orchestrator_node_branch_true">True</string>
-    <string name="orchestrator_node_branch_false">False</string>
-    <string name="orchestrator_node_queue_item">Task Input (Item)</string>
-    <string name="orchestrator_node_queue_done">Return (Done)</string>
 
     <!-- Library screen -->
     <string name="orchestrator_library_new_pipeline_cd">New pipeline</string>
