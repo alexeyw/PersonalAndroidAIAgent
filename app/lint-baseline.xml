@@ -204,45 +204,12 @@
 
     <issue
         id="UnusedResources"
-        message="The resource `R.string.knotwork_tools_section_local` appears to be unused"
-        errorLine1="    &lt;string name=&quot;knotwork_tools_section_local&quot;>Local tools&lt;/string>"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="../catalog/src/main/res/values/strings.xml"
-            line="206"
-            column="13"/>
-    </issue>
-
-    <issue
-        id="UnusedResources"
-        message="The resource `R.string.knotwork_tools_local_subtitle` appears to be unused"
-        errorLine1="    &lt;string name=&quot;knotwork_tools_local_subtitle&quot;>Built-in AppFunctions running on this device.&lt;/string>"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="../catalog/src/main/res/values/strings.xml"
-            line="207"
-            column="13"/>
-    </issue>
-
-    <issue
-        id="UnusedResources"
-        message="The resource `R.string.knotwork_tools_add_server_url_invalid` appears to be unused"
-        errorLine1="    &lt;string name=&quot;knotwork_tools_add_server_url_invalid&quot;>Enter a fully-formed http(s) URL.&lt;/string>"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="../catalog/src/main/res/values/strings.xml"
-            line="213"
-            column="13"/>
-    </issue>
-
-    <issue
-        id="UnusedResources"
         message="The resource `R.string.knotwork_settings_restart_required` appears to be unused"
         errorLine1="    &lt;string name=&quot;knotwork_settings_restart_required&quot;>Changes take effect on restart.&lt;/string>"
         errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="../catalog/src/main/res/values/strings.xml"
-            line="229"
+            line="253"
             column="13"/>
     </issue>
 
@@ -253,7 +220,7 @@
         errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="../catalog/src/main/res/values/strings.xml"
-            line="232"
+            line="256"
             column="13"/>
     </issue>
 

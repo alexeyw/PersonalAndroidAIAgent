@@ -38,6 +38,11 @@ class ToolsContentSnapshotTest {
     }
 
     @Test
+    fun tools_default_with_form_light() = snapshot(name = "default_with_form", dark = false) {
+        ToolsContent(state = ToolsPreview.defaultWithForm())
+    }
+
+    @Test
     fun tools_loading_light() = snapshot(name = "loading", dark = false) {
         ToolsContent(state = ToolsPreview.loading())
     }
@@ -82,55 +87,69 @@ class ToolsContentSnapshotTest {
 
 internal object ToolsPreview {
 
-    fun localBlock(): ToolsSectionBlock = ToolsSectionBlock(
-        serverId = ToolsSectionBlock.LOCAL_SERVER_ID,
-        displayName = "Local tools",
-        subtitle = "Built-in AppFunctions running on this device.",
-        connectionState = McpConnectionState.Connected,
-        tools = listOf(
-            ToolRowState(
-                id = "search_tool",
-                name = "search_tool",
-                description = "Search the web for the given query.",
-                serverId = ToolsSectionBlock.LOCAL_SERVER_ID,
-                enabled = true,
-            ),
-            ToolRowState(
-                id = "schedule_task",
-                name = "schedule_task",
-                description = "Schedule a future task to run via WorkManager.",
-                serverId = ToolsSectionBlock.LOCAL_SERVER_ID,
-                enabled = false,
-            ),
+    private fun builtIns(): List<BuiltInToolRow> = listOf(
+        BuiltInToolRow(
+            id = "search_tool",
+            name = "search_tool",
+            description = "Wikipedia lookup · returns concise summary",
+            risk = BuiltInToolRisk.ReadOnly,
+            enabled = true,
+        ),
+        BuiltInToolRow(
+            id = "schedule_task",
+            name = "schedule_task",
+            description = "Run a task later · WorkManager · one-off or recurring",
+            risk = BuiltInToolRisk.Sensitive,
+            enabled = true,
+        ),
+        BuiltInToolRow(
+            id = "delegate_task",
+            name = "delegate_task",
+            description = "Hand subtask to cloud LLM · stores result in memory",
+            risk = BuiltInToolRisk.Destructive,
+            enabled = false,
         ),
     )
 
-    fun mcpBlock(): ToolsSectionBlock = ToolsSectionBlock(
-        serverId = "https://example.com/mcp",
-        displayName = "example.com",
-        subtitle = "https://example.com/mcp",
-        connectionState = McpConnectionState.Connected,
-        tools = listOf(
-            ToolRowState(
-                id = "shell.run",
-                name = "shell.run",
-                description = "Run a shell command on the MCP server.",
-                serverId = "https://example.com/mcp",
-                enabled = true,
-            ),
+    private fun servers(): List<McpServerRow> = listOf(
+        McpServerRow(
+            id = "mcp://arxiv-search.local:7411",
+            url = "mcp://arxiv-search.local:7411",
+            toolCount = 3,
+            latencyLabel = "42 ms",
+            state = McpConnectionState.Connected,
+        ),
+        McpServerRow(
+            id = "https://mcp.example.com/agents",
+            url = "https://mcp.example.com/agents",
+            toolCount = 8,
+            latencyLabel = "318 ms",
+            state = McpConnectionState.Connected,
+        ),
+        McpServerRow(
+            id = "mcp://files.local:7410",
+            url = "mcp://files.local:7410",
+            toolCount = 2,
+            latencyLabel = "disabled",
+            state = McpConnectionState.Disabled,
         ),
     )
 
-    fun empty(): ToolsViewState = ToolsViewState(
-        visualState = ToolsVisualState.Empty,
-        sections = listOf(localBlock().copy(tools = emptyList())),
-    )
+    fun empty(): ToolsViewState = ToolsViewState(visualState = ToolsVisualState.Empty)
 
     fun loading(): ToolsViewState = ToolsViewState(visualState = ToolsVisualState.Loading)
 
     fun default(): ToolsViewState = ToolsViewState(
         visualState = ToolsVisualState.Default,
-        sections = listOf(localBlock(), mcpBlock()),
+        builtInTools = builtIns(),
+        mcpServers = servers(),
+    )
+
+    fun defaultWithForm(): ToolsViewState = ToolsViewState(
+        visualState = ToolsVisualState.Default,
+        builtInTools = builtIns(),
+        mcpServers = servers(),
+        addServerForm = AddMcpServerForm(url = ""),
     )
 
     fun error(): ToolsViewState = ToolsViewState(

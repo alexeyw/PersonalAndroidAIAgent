@@ -203,16 +203,40 @@
     <string name="knotwork_tools_empty_subtitle">Connect an MCP server to give the agent capabilities like web search, file access, or shell.</string>
     <string name="knotwork_tools_empty_cta">+ Connect server</string>
     <string name="knotwork_tools_empty_learn">Learn about MCP</string>
-    <string name="knotwork_tools_section_local">Local tools</string>
-    <string name="knotwork_tools_local_subtitle">Built-in AppFunctions running on this device.</string>
-    <string name="knotwork_tools_reconnect">Reconnect</string>
-    <string name="knotwork_tools_remove_server_cd">Remove server</string>
-    <string name="knotwork_tools_add_server_title">Add MCP server</string>
-    <string name="knotwork_tools_add_server_url_label">Server URL</string>
-    <string name="knotwork_tools_add_server_url_placeholder">https://server.example.com/mcp</string>
-    <string name="knotwork_tools_add_server_url_invalid">Enter a fully-formed http(s) URL.</string>
-    <string name="knotwork_tools_add_server_submit">Connect</string>
-    <string name="knotwork_tools_add_server_cancel">Cancel</string>
+    <!--
+        Top-bar subtitle: "N built-in · M MCP". Quantity tracks the built-in count;
+        the MCP count interpolates as-is regardless of quantity class.
+    -->
+    <plurals name="knotwork_tools_topbar_subtitle">
+        <item quantity="one">%1$d built-in · %2$d MCP</item>
+        <item quantity="other">%1$d built-in · %2$d MCP</item>
+    </plurals>
+    <!-- ContentDescription for the leading hamburger / drawer icon. -->
+    <string name="knotwork_tools_drawer_cd">Open navigation drawer</string>
+    <!-- ContentDescription for the trailing overflow icon. -->
+    <string name="knotwork_tools_top_overflow_cd">Tools actions</string>
+    <!-- BUILT-IN section header. -->
+    <string name="knotwork_tools_section_built_in">BUILT-IN (APPFUNCTIONS)</string>
+    <!-- MCP SERVERS section header. -->
+    <string name="knotwork_tools_section_mcp">MCP SERVERS</string>
+    <!-- Trailing "+ Add MCP" link in the MCP section header. -->
+    <string name="knotwork_tools_add_mcp_link">Add MCP</string>
+    <!-- ContentDescription for the trailing trash icon on an MCP server row. -->
+    <string name="knotwork_tools_remove_server_cd">Remove MCP server</string>
+    <!-- Outline pill label for a Read-only tool. -->
+    <string name="knotwork_tools_pill_readonly">Read only</string>
+    <!-- Outline pill label for a Sensitive tool. -->
+    <string name="knotwork_tools_pill_sensitive">Sensitive</string>
+    <!-- Outline pill label for a Destructive tool. -->
+    <string name="knotwork_tools_pill_destructive">Destructive</string>
+    <!-- Add-server form header. -->
+    <string name="knotwork_tools_add_form_header">ADD NEW MCP SERVER URL</string>
+    <!-- Add-server form placeholder. -->
+    <string name="knotwork_tools_add_form_placeholder">https://… or mcp://host:port</string>
+    <!-- Add-server cancel button label. -->
+    <string name="knotwork_tools_add_form_cancel">Cancel</string>
+    <!-- Add-server submit button label. -->
+    <string name="knotwork_tools_add_form_submit">Add server</string>
     <string name="knotwork_tools_detail_back">Back to tools</string>
     <string name="knotwork_tools_detail_schema">JSON Schema</string>
     <string name="knotwork_tools_detail_schema_error">Schema unavailable — the server returned malformed JSON.</string>

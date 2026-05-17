@@ -1,32 +1,35 @@
 package ai.agent.android.presentation.ui.tools
 
+import ai.agent.android.domain.models.ToolRisk
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.knotwork.design.screens.tools.AddMcpServerForm
+import app.knotwork.design.screens.tools.BuiltInToolRisk
+import app.knotwork.design.screens.tools.BuiltInToolRow
 import app.knotwork.design.screens.tools.McpConnectionState
-import app.knotwork.design.screens.tools.ToolRowState
+import app.knotwork.design.screens.tools.McpServerRow
 import app.knotwork.design.screens.tools.ToolsCallbacks
 import app.knotwork.design.screens.tools.ToolsContent
-import app.knotwork.design.screens.tools.ToolsSectionBlock
 import app.knotwork.design.screens.tools.ToolsViewState
 import app.knotwork.design.screens.tools.ToolsVisualState
 
 /**
- * Tools screen — Phase 21 / Task 10 rewrite.
+ * Tools screen — Phase 21 / Task 10 rewrite #2 (mockup-driven).
  *
- * Renders the catalog `ToolsContent` driven by [ToolsViewModel]. Local
- * AppFunctions live under a synthetic "Local tools" section; each MCP
- * server URL surfaces as its own collapsible section. Per-server tool
- * discovery is not wired yet (MCP tool list fetching ships post-v0.1) —
- * rows under an MCP section are empty in v0.1, but the section chrome
- * already renders status + reconnect / remove affordances.
+ * Two-section list: built-in AppFunctions on top with risk pills + Switch
+ * toggles, MCP servers below with status dots + delete affordance. The
+ * "Add new MCP server URL" form is embedded inline at the bottom of the
+ * list, opened via the `+ Add MCP` link in the MCP section header.
  */
-@Suppress("UnusedParameter") // onBack retained for nav-graph stability.
+@Suppress("UnusedParameter") // onBack kept for nav-graph compatibility.
 @Composable
 fun ToolsScreen(
     modifier: Modifier = Modifier,
@@ -36,66 +39,91 @@ fun ToolsScreen(
     onOpenToolDetail: (String) -> Unit = {},
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    var addFormOpen by remember { mutableStateOf(false) }
+    var addFormUrl by remember { mutableStateOf("") }
+    var addFormError by remember { mutableStateOf<String?>(null) }
 
-    val sections by remember(uiState) {
+    val builtInTools by remember(uiState) {
         derivedStateOf {
-            buildList {
-                add(
-                    ToolsSectionBlock(
-                        serverId = ToolsSectionBlock.LOCAL_SERVER_ID,
-                        displayName = LOCAL_SECTION_TITLE,
-                        subtitle = LOCAL_SECTION_SUBTITLE,
-                        connectionState = McpConnectionState.Connected,
-                        tools = uiState.localTools.map { tool ->
-                            ToolRowState(
-                                id = tool.name,
-                                // AppFunction-shaped ids look like
-                                // `<pkg>/<FQN>#invoke`. Keep the id intact
-                                // for routing but show the human-friendly
-                                // suffix as the display name.
-                                name = tool.name.toFriendlyToolName(),
-                                description = tool.description,
-                                serverId = ToolsSectionBlock.LOCAL_SERVER_ID,
-                                enabled = tool.name !in uiState.disabledAppFunctions,
-                            )
-                        },
-                    ),
+            uiState.localTools.map { tool ->
+                BuiltInToolRow(
+                    id = tool.name,
+                    name = tool.name.toFriendlyToolName(),
+                    description = tool.description,
+                    risk = (tool.risk ?: ToolRisk.READ_ONLY).toBuiltInToolRisk(),
+                    enabled = tool.name !in uiState.disabledAppFunctions,
                 )
-                uiState.mcpServers.forEach { url ->
-                    add(
-                        ToolsSectionBlock(
-                            serverId = url,
-                            displayName = url.substringAfter(delimiter = "://").substringBefore(delimiter = "/")
-                                .ifBlank { url },
-                            subtitle = url,
-                            connectionState = McpConnectionState.Connected,
-                            tools = emptyList(),
-                        ),
-                    )
-                }
+            }
+        }
+    }
+    val mcpServers by remember(uiState) {
+        derivedStateOf {
+            uiState.mcpServers.map { url ->
+                McpServerRow(
+                    id = url,
+                    url = url,
+                    toolCount = 0,
+                    // The repository currently surfaces only the URL set;
+                    // latency + per-server tool-count fetching lands once
+                    // the MCP client wires its handshake.
+                    latencyLabel = "—",
+                    state = McpConnectionState.Connected,
+                )
             }
         }
     }
 
-    val visualState = if (sections.size == 1 && sections.first().tools.isEmpty()) {
+    val visualState = if (builtInTools.isEmpty() && mcpServers.isEmpty()) {
         ToolsVisualState.Empty
     } else {
         ToolsVisualState.Default
     }
 
-    val viewState = ToolsViewState(visualState = visualState, sections = sections)
+    val viewState = ToolsViewState(
+        visualState = visualState,
+        builtInTools = builtInTools,
+        mcpServers = mcpServers,
+        addServerForm = if (addFormOpen) {
+            AddMcpServerForm(url = addFormUrl, urlError = addFormError)
+        } else {
+            null
+        },
+    )
 
     val callbacks = ToolsCallbacks(
-        onToolToggle = { toolId, enabled -> viewModel.toggleLocalTool(toolName = toolId, isEnabled = enabled) },
+        onToolToggle = { id, enabled -> viewModel.toggleLocalTool(toolName = id, isEnabled = enabled) },
         onToolClick = onOpenToolDetail,
-        onServerRemove = { serverId ->
-            if (serverId != ToolsSectionBlock.LOCAL_SERVER_ID) {
-                viewModel.removeMcpServer(url = serverId)
+        onServerRemove = { serverId -> viewModel.removeMcpServer(url = serverId) },
+        onAddServerOpen = {
+            addFormOpen = true
+            addFormUrl = ""
+            addFormError = null
+        },
+        onAddServerUrlChange = { value ->
+            addFormUrl = value
+            addFormError = validateMcpUrl(input = value, requireNonEmpty = false)
+            viewModel.onMcpUrlInputChanged(url = value)
+        },
+        onAddServerSubmit = {
+            val error = validateMcpUrl(input = addFormUrl, requireNonEmpty = true)
+            if (error == null) {
+                viewModel.onMcpUrlInputChanged(url = addFormUrl)
+                viewModel.addMcpServer()
+                addFormOpen = false
+                addFormUrl = ""
+                addFormError = null
+            } else {
+                addFormError = error
             }
         },
-        onServerReconnect = { /* reconnect handshake lands with MCP-tool-list fetching */ },
-        onAddMcpServer = onOpenAddMcpServer,
-        onLearnAboutMcp = { /* opens external docs once the URL lands */ },
+        onAddServerCancel = {
+            addFormOpen = false
+            addFormUrl = ""
+            addFormError = null
+        },
+        onErrorRetry = { /* no-op until ToolRepository surfaces a discovery error. */ },
+        onOpenDrawer = { /* drawer ships post-v0.1. */ },
+        onTopOverflow = { /* top overflow ships post-v0.1. */ },
     )
 
     ToolsContent(
@@ -105,16 +133,16 @@ fun ToolsScreen(
     )
 }
 
-/** Synthetic section title for the local AppFunctions. */
-private const val LOCAL_SECTION_TITLE = "Local tools"
-
-/** Synthetic section subtitle for the local AppFunctions. */
-private const val LOCAL_SECTION_SUBTITLE = "Built-in AppFunctions running on this device."
+private fun ToolRisk.toBuiltInToolRisk(): BuiltInToolRisk = when (this) {
+    ToolRisk.READ_ONLY -> BuiltInToolRisk.ReadOnly
+    ToolRisk.SENSITIVE -> BuiltInToolRisk.Sensitive
+    ToolRisk.DESTRUCTIVE -> BuiltInToolRisk.Destructive
+}
 
 /**
  * Trims AppFunction-shaped tool ids (`<pkg>/<FQN>#invoke`) down to the
- * simple class name so the list row reads at a glance. Plain ids (no `/`
- * or `#`) pass through unchanged.
+ * simple class name so the list row reads at a glance. Plain ids
+ * (no `/` or `#`) pass through unchanged.
  */
 private fun String.toFriendlyToolName(): String {
     val afterSlash = substringAfterLast(delimiter = "/")
@@ -122,6 +150,31 @@ private fun String.toFriendlyToolName(): String {
     val simple = beforeHash.substringAfterLast(delimiter = ".")
     return simple.ifBlank { this }
 }
+
+/**
+ * Cheap URL validation matching the legacy AddMcpServerScreen rules:
+ * the URL must be non-empty (when [requireNonEmpty] is true) and start
+ * with `http://`, `https://`, or `mcp://` followed by a host.
+ */
+private fun validateMcpUrl(input: String, requireNonEmpty: Boolean): String? {
+    val trimmed = input.trim()
+    if (trimmed.isEmpty()) {
+        return if (requireNonEmpty) URL_REQUIRED_MESSAGE else null
+    }
+    val lower = trimmed.lowercase()
+    val schemes = listOf("http://", "https://", "mcp://")
+    val matchedScheme = schemes.firstOrNull { lower.startsWith(prefix = it) }
+        ?: return URL_SCHEME_REQUIRED_MESSAGE
+    val afterScheme = trimmed.substring(startIndex = matchedScheme.length)
+    if (afterScheme.isEmpty() || afterScheme.startsWith(prefix = "/")) {
+        return URL_HOST_REQUIRED_MESSAGE
+    }
+    return null
+}
+
+private const val URL_REQUIRED_MESSAGE = "Enter a server URL."
+private const val URL_SCHEME_REQUIRED_MESSAGE = "URL must start with http://, https:// or mcp://."
+private const val URL_HOST_REQUIRED_MESSAGE = "URL needs a host name."
 
 /** TestTag applied to the tools screen root. */
 internal const val TOOLS_ROOT_TEST_TAG = "tools_screen_root"

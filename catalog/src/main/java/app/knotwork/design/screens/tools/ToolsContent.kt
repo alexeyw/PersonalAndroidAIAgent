@@ -3,6 +3,7 @@
 package app.knotwork.design.screens.tools
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -17,22 +18,25 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
-import androidx.compose.material.icons.outlined.Cable
-import androidx.compose.material.icons.outlined.Cloud
-import androidx.compose.material.icons.outlined.Computer
+import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.DeleteOutline
-import androidx.compose.material.icons.outlined.Refresh
+import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material.icons.outlined.Menu
+import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.outlined.WarningAmber
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
@@ -40,33 +44,49 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import app.knotwork.design.R
 import app.knotwork.design.components.buttons.KnotworkPrimaryButton
-import app.knotwork.design.components.buttons.KnotworkSecondaryButton
 import app.knotwork.design.components.buttons.KnotworkTextButton
-import app.knotwork.design.components.chips.StatusPill
 import app.knotwork.design.components.misc.EmptyState
 import app.knotwork.design.components.misc.StripedPlaceholder
 import app.knotwork.design.theme.KnotworkTheme
 import app.knotwork.design.tokens.KnotworkTextStyles
 
-private val SectionHeaderHeight = 48.dp
-private val ToolRowHeight = 64.dp
+private val LeadingTileSize = 40.dp
+private val LeadingIconSize = 18.dp
+private val RiskPillHeight = 22.dp
+private val StatusDotSize = 10.dp
 private val SchemaPreviewHeight = 240.dp
 
-/** Number of section skeletons drawn in the Loading state. */
-private const val LOADING_SECTION_COUNT = 3
-
-/** Number of tool-row skeletons drawn beneath each section header in the Loading state. */
-private const val LOADING_ROWS_PER_SECTION = 2
+/** Number of section / row skeletons rendered while the surface is loading. */
+private const val LOADING_SECTION_COUNT = 2
+private const val LOADING_ROWS_PER_SECTION = 3
 
 /**
- * Stateless Knotwork tools surface. Mirrors
- * `compose/screens/README.md §C4 · Tools / MCP`.
+ * Stateless Knotwork tools surface. Mirrors the second-pass mockup
+ * (Phase 21 / Task 10):
+ *
+ *  - TopAppBar with title + monospace "N built-in · M MCP" subtitle;
+ *    leading hamburger; trailing overflow.
+ *  - Section 1 (`BUILT-IN (APPFUNCTIONS)`): per-tool row with leading
+ *    edit-glyph tile, monospace title, an outline risk pill
+ *    (Read only / Sensitive / Destructive) next to the title, a wrapping
+ *    body subtitle, and a trailing Switch.
+ *  - Section 2 (`MCP SERVERS` + `+ Add MCP` link): one row per server
+ *    with a leading status dot, monospace URL, monospace
+ *    "N tools · X ms" / "N tools · disabled" subtitle, trailing trash
+ *    icon.
+ *  - Inline add-server form rendered at the bottom of the list when
+ *    [ToolsViewState.addServerForm] is non-null. The catalog ships the
+ *    visuals; the host owns persistence + URL validation.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -78,21 +98,7 @@ fun ToolsContent(
     Scaffold(
         modifier = modifier.fillMaxSize(),
         containerColor = MaterialTheme.colorScheme.surface,
-        topBar = {
-            TopAppBar(
-                title = {
-                    Text(
-                        text = stringResource(R.string.knotwork_tools_title),
-                        style = KnotworkTextStyles.TitleLg,
-                        color = MaterialTheme.colorScheme.onSurface,
-                    )
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface,
-                    titleContentColor = MaterialTheme.colorScheme.onSurface,
-                ),
-            )
-        },
+        topBar = { ToolsTopBar(state = state, callbacks = callbacks) },
     ) { padding ->
         when (state.visualState) {
             ToolsVisualState.Empty -> ToolsEmpty(callbacks = callbacks, padding = padding)
@@ -103,6 +109,54 @@ fun ToolsContent(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ToolsTopBar(state: ToolsViewState, callbacks: ToolsCallbacks) {
+    TopAppBar(
+        title = {
+            Column {
+                Text(
+                    text = stringResource(R.string.knotwork_tools_title),
+                    style = KnotworkTextStyles.TitleLg,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                Text(
+                    text = androidx.compose.ui.res.pluralStringResource(
+                        R.plurals.knotwork_tools_topbar_subtitle,
+                        state.builtInTools.size,
+                        state.builtInTools.size,
+                        state.mcpServers.size,
+                    ),
+                    style = KnotworkTextStyles.MonoSm,
+                    color = KnotworkTheme.extended.onSurfaceMuted,
+                )
+            }
+        },
+        navigationIcon = {
+            IconButton(onClick = callbacks.onOpenDrawer) {
+                Icon(
+                    imageVector = Icons.Outlined.Menu,
+                    contentDescription = stringResource(R.string.knotwork_tools_drawer_cd),
+                    tint = MaterialTheme.colorScheme.onSurface,
+                )
+            }
+        },
+        actions = {
+            IconButton(onClick = callbacks.onTopOverflow) {
+                Icon(
+                    imageVector = Icons.Outlined.MoreVert,
+                    contentDescription = stringResource(R.string.knotwork_tools_top_overflow_cd),
+                    tint = MaterialTheme.colorScheme.onSurface,
+                )
+            }
+        },
+        colors = TopAppBarDefaults.topAppBarColors(
+            containerColor = MaterialTheme.colorScheme.surface,
+            titleContentColor = MaterialTheme.colorScheme.onSurface,
+        ),
+    )
+}
+
 @Composable
 private fun ToolsEmpty(callbacks: ToolsCallbacks, padding: PaddingValues) {
     Box(modifier = Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
@@ -110,7 +164,7 @@ private fun ToolsEmpty(callbacks: ToolsCallbacks, padding: PaddingValues) {
             title = stringResource(R.string.knotwork_tools_empty_title),
             subtitle = stringResource(R.string.knotwork_tools_empty_subtitle),
             ctaLabel = stringResource(R.string.knotwork_tools_empty_cta),
-            onCtaClick = callbacks.onAddMcpServer,
+            onCtaClick = callbacks.onAddServerOpen,
         )
     }
 }
@@ -122,9 +176,9 @@ private fun ToolsLoading(padding: PaddingValues) {
         modifier = Modifier.fillMaxSize().padding(padding).padding(KnotworkTheme.spacing.sp4),
     ) {
         repeat(LOADING_SECTION_COUNT) {
-            StripedPlaceholder(modifier = Modifier.fillMaxWidth().height(SectionHeaderHeight))
+            StripedPlaceholder(modifier = Modifier.fillMaxWidth().height(LeadingTileSize))
             repeat(LOADING_ROWS_PER_SECTION) {
-                StripedPlaceholder(modifier = Modifier.fillMaxWidth().height(ToolRowHeight))
+                StripedPlaceholder(modifier = Modifier.fillMaxWidth().height(LeadingTileSize + LeadingTileSize))
             }
         }
     }
@@ -157,141 +211,300 @@ private fun ToolsError(state: ToolsViewState, callbacks: ToolsCallbacks, padding
 private fun ToolsList(state: ToolsViewState, callbacks: ToolsCallbacks, padding: PaddingValues) {
     LazyColumn(
         modifier = Modifier.fillMaxSize().padding(padding),
-        contentPadding = PaddingValues(vertical = KnotworkTheme.spacing.sp2),
-        verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp1),
+        contentPadding = PaddingValues(bottom = KnotworkTheme.spacing.sp16),
     ) {
-        state.sections.forEach { block ->
-            item(key = "section-header-${block.serverId}") {
-                ToolsSectionHeader(block = block, callbacks = callbacks)
-            }
-            items(items = block.tools, key = { "${block.serverId}-${it.id}" }) { tool ->
-                ToolRow(tool = tool, callbacks = callbacks)
-            }
-            if (block.errorMessage != null) {
-                item(key = "section-error-${block.serverId}") {
-                    ToolsSectionErrorTile(message = block.errorMessage, onRemove = {
-                        callbacks.onServerRemove(block.serverId)
-                    })
-                }
+        item(key = "built-in-header") {
+            SimpleSectionHeader(
+                title = stringResource(R.string.knotwork_tools_section_built_in),
+                trailing = null,
+            )
+        }
+        items(items = state.builtInTools, key = { "builtin-${it.id}" }) { tool ->
+            BuiltInToolRowView(tool = tool, callbacks = callbacks)
+            HorizontalDivider(color = KnotworkTheme.extended.divider)
+        }
+        item(key = "mcp-header") {
+            SimpleSectionHeader(
+                title = stringResource(R.string.knotwork_tools_section_mcp),
+                trailing = {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp1),
+                        modifier = Modifier.clickable(onClick = callbacks.onAddServerOpen),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.Add,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                        )
+                        Text(
+                            text = stringResource(R.string.knotwork_tools_add_mcp_link),
+                            style = KnotworkTextStyles.LabelLg.copy(fontWeight = FontWeight.SemiBold),
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                    }
+                },
+            )
+        }
+        items(items = state.mcpServers, key = { "mcp-${it.id}" }) { server ->
+            McpServerRowView(server = server, callbacks = callbacks)
+            HorizontalDivider(color = KnotworkTheme.extended.divider)
+        }
+        if (state.addServerForm != null) {
+            item(key = "add-server-form") {
+                AddServerForm(form = state.addServerForm, callbacks = callbacks)
             }
         }
     }
 }
 
 @Composable
-private fun ToolsSectionHeader(block: ToolsSectionBlock, callbacks: ToolsCallbacks) {
-    val isLocal = block.serverId == ToolsSectionBlock.LOCAL_SERVER_ID
-    val icon = if (isLocal) Icons.Outlined.Computer else Icons.Outlined.Cloud
+private fun SimpleSectionHeader(title: String, trailing: (@Composable () -> Unit)?) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp2),
         modifier = Modifier
             .fillMaxWidth()
-            .height(SectionHeaderHeight)
-            .padding(horizontal = KnotworkTheme.spacing.sp4),
+            .padding(
+                horizontal = KnotworkTheme.spacing.sp4,
+                vertical = KnotworkTheme.spacing.sp3,
+            ),
     ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = null,
-            tint = KnotworkTheme.extended.onSurfaceMuted,
-            modifier = Modifier.size(KnotworkTheme.spacing.sp5),
+        Text(
+            text = title,
+            style = KnotworkTextStyles.MonoSm,
+            color = KnotworkTheme.extended.onSurfaceMuted,
+            modifier = Modifier.weight(1f),
         )
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = block.displayName,
-                style = KnotworkTextStyles.TitleMd,
-                color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            if (block.subtitle != null) {
-                Text(
-                    text = block.subtitle,
-                    style = KnotworkTextStyles.BodySm,
-                    color = KnotworkTheme.extended.onSurfaceMuted,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-        }
-        StatusPill(status = block.statusPill)
-        if (!isLocal && block.connectionState == McpConnectionState.Disconnected) {
-            KnotworkTextButton(
-                text = stringResource(R.string.knotwork_tools_reconnect),
-                onClick = { callbacks.onServerReconnect(block.serverId) },
-            )
-        }
-        if (!isLocal) {
-            IconButton(onClick = { callbacks.onServerRemove(block.serverId) }) {
-                Icon(
-                    imageVector = Icons.Outlined.DeleteOutline,
-                    contentDescription = stringResource(R.string.knotwork_tools_remove_server_cd),
-                    tint = KnotworkTheme.extended.onSurfaceMuted,
-                )
-            }
-        }
+        if (trailing != null) trailing()
     }
+    HorizontalDivider(color = KnotworkTheme.extended.divider)
 }
 
 @Composable
-private fun ToolRow(tool: ToolRowState, callbacks: ToolsCallbacks) {
+private fun BuiltInToolRowView(tool: BuiltInToolRow, callbacks: ToolsCallbacks) {
     Row(
-        verticalAlignment = Alignment.CenterVertically,
+        verticalAlignment = Alignment.Top,
         horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp3),
         modifier = Modifier
             .fillMaxWidth()
-            .height(ToolRowHeight)
             .clickable { callbacks.onToolClick(tool.id) }
-            .padding(horizontal = KnotworkTheme.spacing.sp4),
+            .padding(
+                horizontal = KnotworkTheme.spacing.sp4,
+                vertical = KnotworkTheme.spacing.sp3,
+            ),
     ) {
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = tool.name,
-                style = KnotworkTextStyles.TitleMd,
-                color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
+        Box(
+            contentAlignment = Alignment.Center,
+            modifier = Modifier
+                .size(LeadingTileSize)
+                .clip(KnotworkTheme.shapes.sm)
+                .background(color = KnotworkTheme.extended.surface2),
+        ) {
+            Icon(
+                imageVector = Icons.Outlined.Edit,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.size(LeadingIconSize),
             )
+        }
+        Column(
+            verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp1),
+            modifier = Modifier.weight(1f),
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp2),
+            ) {
+                Text(
+                    text = tool.name,
+                    style = KnotworkTextStyles.MonoBase.copy(fontWeight = FontWeight.SemiBold),
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false),
+                )
+                RiskOutlinePill(risk = tool.risk)
+            }
             if (tool.description.isNotBlank()) {
                 Text(
                     text = tool.description,
-                    style = KnotworkTextStyles.BodySm,
+                    style = KnotworkTextStyles.BodyBase,
                     color = KnotworkTheme.extended.onSurfaceMuted,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
                 )
             }
         }
         Switch(
             checked = tool.enabled,
             onCheckedChange = { callbacks.onToolToggle(tool.id, it) },
+            colors = SwitchDefaults.colors(
+                checkedThumbColor = MaterialTheme.colorScheme.onPrimary,
+                checkedTrackColor = MaterialTheme.colorScheme.primary,
+                checkedBorderColor = MaterialTheme.colorScheme.primary,
+            ),
         )
     }
 }
 
 @Composable
-private fun ToolsSectionErrorTile(message: String, onRemove: () -> Unit) {
-    Surface(
-        shape = KnotworkTheme.shapes.md,
-        color = KnotworkTheme.extended.surface1,
-        modifier = Modifier.fillMaxWidth().padding(KnotworkTheme.spacing.sp4),
+private fun RiskOutlinePill(risk: BuiltInToolRisk) {
+    val accent = riskAccent(risk)
+    val label = stringResource(
+        when (risk) {
+            BuiltInToolRisk.ReadOnly -> R.string.knotwork_tools_pill_readonly
+            BuiltInToolRisk.Sensitive -> R.string.knotwork_tools_pill_sensitive
+            BuiltInToolRisk.Destructive -> R.string.knotwork_tools_pill_destructive
+        },
+    )
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp1),
+        modifier = Modifier
+            .height(RiskPillHeight)
+            .clip(KnotworkTheme.shapes.full)
+            .border(width = 1.dp, color = accent, shape = KnotworkTheme.shapes.full)
+            .padding(horizontal = KnotworkTheme.spacing.sp2)
+            .semantics { contentDescription = "Risk level: $label" },
     ) {
-        Column(modifier = Modifier.padding(KnotworkTheme.spacing.sp3)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    imageVector = Icons.Outlined.WarningAmber,
-                    contentDescription = null,
-                    tint = KnotworkTheme.extended.signalError,
+        Box(
+            modifier = Modifier
+                .size(KnotworkTheme.spacing.sp2)
+                .background(color = accent, shape = CircleShape),
+        )
+        Text(
+            text = label,
+            style = KnotworkTextStyles.LabelSm,
+            color = accent,
+        )
+    }
+}
+
+@Composable
+private fun riskAccent(risk: BuiltInToolRisk): Color = when (risk) {
+    BuiltInToolRisk.ReadOnly -> KnotworkTheme.extended.riskReadonly
+    BuiltInToolRisk.Sensitive -> KnotworkTheme.extended.riskSensitive
+    BuiltInToolRisk.Destructive -> KnotworkTheme.extended.riskDestructive
+}
+
+@Composable
+private fun McpServerRowView(server: McpServerRow, callbacks: ToolsCallbacks) {
+    val dotColor = when (server.state) {
+        McpConnectionState.Connected -> KnotworkTheme.extended.signalSuccess
+        McpConnectionState.Disconnected -> KnotworkTheme.extended.signalWarn
+        McpConnectionState.Syncing -> MaterialTheme.colorScheme.primary
+        McpConnectionState.Error -> KnotworkTheme.extended.signalError
+        McpConnectionState.Disabled -> KnotworkTheme.extended.onSurfaceMuted
+    }
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp3),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(
+                horizontal = KnotworkTheme.spacing.sp4,
+                vertical = KnotworkTheme.spacing.sp3,
+            ),
+    ) {
+        Box(
+            modifier = Modifier
+                .size(StatusDotSize)
+                .background(color = dotColor, shape = CircleShape),
+        )
+        Column(
+            verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp1),
+            modifier = Modifier.weight(1f),
+        ) {
+            Text(
+                text = server.url,
+                style = KnotworkTextStyles.MonoBase.copy(fontWeight = FontWeight.SemiBold),
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                text = "${server.toolCount} tools · ${server.latencyLabel}",
+                style = KnotworkTextStyles.MonoSm,
+                color = KnotworkTheme.extended.onSurfaceMuted,
+            )
+        }
+        IconButton(onClick = { callbacks.onServerRemove(server.id) }) {
+            Icon(
+                imageVector = Icons.Outlined.DeleteOutline,
+                contentDescription = stringResource(R.string.knotwork_tools_remove_server_cd),
+                tint = KnotworkTheme.extended.onSurfaceMuted,
+            )
+        }
+    }
+}
+
+@Composable
+private fun AddServerForm(form: AddMcpServerForm, callbacks: ToolsCallbacks) {
+    Column(
+        verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp3),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(KnotworkTheme.spacing.sp4)
+            .clip(KnotworkTheme.shapes.md)
+            .border(width = 1.dp, color = KnotworkTheme.extended.divider, shape = KnotworkTheme.shapes.md)
+            .padding(KnotworkTheme.spacing.sp4),
+    ) {
+        Text(
+            text = stringResource(R.string.knotwork_tools_add_form_header),
+            style = KnotworkTextStyles.MonoSm,
+            color = KnotworkTheme.extended.onSurfaceMuted,
+        )
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(KnotworkTheme.shapes.sm)
+                .border(
+                    width = 1.dp,
+                    color = if (form.urlError != null) {
+                        KnotworkTheme.extended.signalError
+                    } else {
+                        KnotworkTheme.extended.outlineStrong
+                    },
+                    shape = KnotworkTheme.shapes.sm,
                 )
-                Spacer(modifier = Modifier.size(KnotworkTheme.spacing.sp2))
+                .padding(KnotworkTheme.spacing.sp3),
+        ) {
+            BasicTextField(
+                value = form.url,
+                onValueChange = callbacks.onAddServerUrlChange,
+                singleLine = true,
+                textStyle = KnotworkTextStyles.MonoBase.copy(color = MaterialTheme.colorScheme.onSurface),
+                cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                modifier = Modifier.fillMaxWidth(),
+            )
+            if (form.url.isEmpty()) {
                 Text(
-                    text = message,
-                    style = KnotworkTextStyles.BodyBase,
-                    color = KnotworkTheme.extended.signalError,
+                    text = stringResource(R.string.knotwork_tools_add_form_placeholder),
+                    style = KnotworkTextStyles.MonoBase,
+                    color = KnotworkTheme.extended.onSurfaceMuted,
                 )
             }
+        }
+        if (form.urlError != null) {
+            Text(
+                text = form.urlError,
+                style = KnotworkTextStyles.BodySm,
+                color = KnotworkTheme.extended.signalError,
+            )
+        }
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Spacer(modifier = Modifier.weight(1f))
+            KnotworkTextButton(
+                text = stringResource(R.string.knotwork_tools_add_form_cancel),
+                onClick = callbacks.onAddServerCancel,
+            )
             Spacer(modifier = Modifier.size(KnotworkTheme.spacing.sp2))
-            KnotworkSecondaryButton(text = "Remove server", onClick = onRemove)
+            KnotworkPrimaryButton(
+                text = stringResource(R.string.knotwork_tools_add_form_submit),
+                onClick = callbacks.onAddServerSubmit,
+                enabled = form.canSubmit,
+            )
         }
     }
 }
@@ -406,10 +619,12 @@ fun ToolDetailContent(
     }
 }
 
-// ------------------------- AddMcpServerContent -------------------------
+// ------------------------- AddMcpServerContent (legacy modal route) -------------------------
 
 /**
- * Stateless add-MCP-server surface. URL validation lives in the host.
+ * Stateless add-MCP-server surface. The redesigned tools screen embeds
+ * the form inline; this composable is preserved so the
+ * `tools/add-mcp` deep-link route keeps rendering until it is retired.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -425,7 +640,7 @@ fun AddMcpServerContent(
             TopAppBar(
                 title = {
                     Text(
-                        text = stringResource(R.string.knotwork_tools_add_server_title),
+                        text = "Add MCP server",
                         style = KnotworkTextStyles.TitleLg,
                         color = MaterialTheme.colorScheme.onSurface,
                     )
@@ -434,7 +649,7 @@ fun AddMcpServerContent(
                     IconButton(onClick = callbacks.onCancel) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Outlined.ArrowBack,
-                            contentDescription = stringResource(R.string.knotwork_tools_add_server_cancel),
+                            contentDescription = stringResource(R.string.knotwork_tools_add_form_cancel),
                             tint = MaterialTheme.colorScheme.onSurface,
                         )
                     }
@@ -450,62 +665,18 @@ fun AddMcpServerContent(
             verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp3),
             modifier = Modifier.fillMaxSize().padding(padding).padding(KnotworkTheme.spacing.sp4),
         ) {
-            Text(
-                text = stringResource(R.string.knotwork_tools_add_server_url_label),
-                style = KnotworkTextStyles.TitleMd,
-                color = MaterialTheme.colorScheme.onSurface,
+            AddServerForm(
+                form = AddMcpServerForm(
+                    url = state.url,
+                    urlError = state.urlError,
+                    submitting = state.submitting,
+                ),
+                callbacks = ToolsCallbacks(
+                    onAddServerUrlChange = callbacks.onUrlChange,
+                    onAddServerSubmit = callbacks.onSubmit,
+                    onAddServerCancel = callbacks.onCancel,
+                ),
             )
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(KnotworkTheme.shapes.md)
-                    .background(color = KnotworkTheme.extended.surface2)
-                    .padding(KnotworkTheme.spacing.sp3),
-            ) {
-                BasicTextField(
-                    value = state.url,
-                    onValueChange = callbacks.onUrlChange,
-                    singleLine = true,
-                    textStyle = KnotworkTextStyles.MonoBase.copy(color = MaterialTheme.colorScheme.onSurface),
-                    cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                if (state.url.isEmpty()) {
-                    Text(
-                        text = stringResource(R.string.knotwork_tools_add_server_url_placeholder),
-                        style = KnotworkTextStyles.MonoBase,
-                        color = KnotworkTheme.extended.onSurfaceMuted,
-                    )
-                }
-            }
-            if (state.urlError != null) {
-                Text(
-                    text = state.urlError,
-                    style = KnotworkTextStyles.BodySm,
-                    color = KnotworkTheme.extended.signalError,
-                )
-            }
-            Spacer(modifier = Modifier.weight(1f))
-            Row(modifier = Modifier.fillMaxWidth()) {
-                KnotworkSecondaryButton(
-                    text = stringResource(R.string.knotwork_tools_add_server_cancel),
-                    onClick = callbacks.onCancel,
-                )
-                Spacer(modifier = Modifier.weight(1f))
-                KnotworkPrimaryButton(
-                    text = stringResource(R.string.knotwork_tools_add_server_submit),
-                    onClick = callbacks.onSubmit,
-                    enabled = state.canSubmit,
-                )
-            }
         }
     }
 }
-
-// Suppress lint about unused import — Cable icon is referenced by the
-// onboarding empty-state spec; keep for forward compat.
-@Suppress("UnusedSymbol")
-private val Reserved = Icons.Outlined.Cable
-
-@Suppress("UnusedSymbol")
-private val ReservedRefresh = Icons.Outlined.Refresh
