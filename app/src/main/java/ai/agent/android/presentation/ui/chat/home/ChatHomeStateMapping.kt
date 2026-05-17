@@ -42,13 +42,16 @@ import app.knotwork.design.screens.chat.ChatHomeVisualState
  * @param pendingTypedConfirm typed-confirm input for Destructive HITL.
  * @return the immutable view-state passed directly to `ChatHomeContent`.
  */
-@Suppress("LongMethod") // Single switch over 8 variants; splitting would just shuffle the fixtures.
+// Single switch over 8 variants; splitting would just shuffle the fixtures.
+@Suppress("LongMethod", "LongParameterList")
 fun ChatHomeUiState.toViewState(
     threadTitle: String,
     modelName: String,
     messages: List<ChatHomeMessageRow> = emptyList(),
     composerValue: String = "",
     pendingTypedConfirm: String = "",
+    consoleSearchQuery: String? = null,
+    consoleFilter: ConsoleFilter = ConsoleFilter.allOn,
 ): ChatHomeViewState = when (this) {
     is ChatHomeUiState.Empty -> ChatHomeViewState(
         visualState = ChatHomeVisualState.Empty,
@@ -123,7 +126,8 @@ fun ChatHomeUiState.toViewState(
             logs = sampleConsoleLines(),
             vars = sampleConsoleVars(),
             traces = sampleConsoleTraces(),
-            filter = ConsoleFilter.allOn,
+            filter = consoleFilter,
+            searchQuery = consoleSearchQuery,
         ),
     )
 }

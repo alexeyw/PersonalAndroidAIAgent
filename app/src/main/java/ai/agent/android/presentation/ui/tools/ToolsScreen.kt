@@ -1,176 +1,111 @@
 package ai.agent.android.presentation.ui.tools
 
-import ai.agent.android.R
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Switch
-import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
-import androidx.compose.ui.Alignment
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.unit.dp
+import androidx.compose.ui.platform.testTag
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.knotwork.design.screens.tools.McpConnectionState
+import app.knotwork.design.screens.tools.ToolRowState
+import app.knotwork.design.screens.tools.ToolsCallbacks
+import app.knotwork.design.screens.tools.ToolsContent
+import app.knotwork.design.screens.tools.ToolsSectionBlock
+import app.knotwork.design.screens.tools.ToolsViewState
+import app.knotwork.design.screens.tools.ToolsVisualState
 
 /**
- * Composable screen for managing tools and integrations.
+ * Tools screen — Phase 21 / Task 10 rewrite.
  *
- * @param modifier The modifier to be applied to the layout.
- * @param viewModel The view model managing the state for this screen.
- * @param onBack Callback when the back button is pressed.
+ * Renders the catalog `ToolsContent` driven by [ToolsViewModel]. Local
+ * AppFunctions live under a synthetic "Local tools" section; each MCP
+ * server URL surfaces as its own collapsible section. Per-server tool
+ * discovery is not wired yet (MCP tool list fetching ships post-v0.1) —
+ * rows under an MCP section are empty in v0.1, but the section chrome
+ * already renders status + reconnect / remove affordances.
  */
-@OptIn(ExperimentalMaterial3Api::class)
+@Suppress("UnusedParameter") // onBack retained for nav-graph stability.
 @Composable
-fun ToolsScreen(modifier: Modifier = Modifier, viewModel: ToolsViewModel = hiltViewModel(), onBack: () -> Unit = {}) {
-    val uiState by viewModel.uiState.collectAsState()
+fun ToolsScreen(
+    modifier: Modifier = Modifier,
+    viewModel: ToolsViewModel = hiltViewModel(),
+    onBack: () -> Unit = {},
+    onOpenAddMcpServer: () -> Unit = {},
+    onOpenToolDetail: (String) -> Unit = {},
+) {
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text(stringResource(R.string.tools_screen_title)) },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = stringResource(R.string.common_back),
-                        )
-                    }
-                },
-            )
-        },
-    ) { paddingValues ->
-        Column(
-            modifier = modifier
-                .fillMaxSize()
-                .padding(paddingValues)
-                .padding(horizontal = 16.dp),
-        ) {
-            Spacer(modifier = Modifier.height(16.dp))
-
-            Text(
-                text = stringResource(R.string.tools_section_local_app_functions),
-                style = MaterialTheme.typography.titleMedium,
-                modifier = Modifier.padding(bottom = 8.dp),
-            )
-
-            LazyColumn(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                items(uiState.localTools) { tool ->
-                    val isEnabled = !uiState.disabledAppFunctions.contains(tool.name)
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-                    ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(16.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(text = tool.name, style = MaterialTheme.typography.bodyLarge)
-                                if (tool.description.isNotBlank()) {
-                                    Text(
-                                        text = tool.description,
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    )
-                                }
-                            }
-                            Switch(
-                                checked = isEnabled,
-                                onCheckedChange = { checked ->
-                                    viewModel.toggleLocalTool(tool.name, checked)
-                                },
-                                modifier = Modifier.padding(start = 16.dp),
+    val sections by remember(uiState) {
+        derivedStateOf {
+            buildList {
+                add(
+                    ToolsSectionBlock(
+                        serverId = ToolsSectionBlock.LOCAL_SERVER_ID,
+                        displayName = LOCAL_SECTION_TITLE,
+                        subtitle = LOCAL_SECTION_SUBTITLE,
+                        connectionState = McpConnectionState.Connected,
+                        tools = uiState.localTools.map { tool ->
+                            ToolRowState(
+                                id = tool.name,
+                                name = tool.name,
+                                description = tool.description,
+                                serverId = ToolsSectionBlock.LOCAL_SERVER_ID,
+                                enabled = tool.name !in uiState.disabledAppFunctions,
                             )
-                        }
-                    }
-                }
-
-                item {
-                    Spacer(modifier = Modifier.height(24.dp))
-                    Text(
-                        text = stringResource(R.string.tools_section_mcp_servers),
-                        style = MaterialTheme.typography.titleMedium,
-                        modifier = Modifier.padding(bottom = 8.dp),
+                        },
+                    ),
+                )
+                uiState.mcpServers.forEach { url ->
+                    add(
+                        ToolsSectionBlock(
+                            serverId = url,
+                            displayName = url.substringAfter(delimiter = "://").substringBefore(delimiter = "/")
+                                .ifBlank { url },
+                            subtitle = url,
+                            connectionState = McpConnectionState.Connected,
+                            tools = emptyList(),
+                        ),
                     )
                 }
-
-                items(uiState.mcpServers) { url ->
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-                    ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(16.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Text(
-                                text = url,
-                                style = MaterialTheme.typography.bodyLarge,
-                                modifier = Modifier.weight(1f),
-                            )
-                            IconButton(onClick = { viewModel.removeMcpServer(url) }) {
-                                Icon(
-                                    Icons.Default.Delete,
-                                    contentDescription = stringResource(R.string.tools_remove_server_cd),
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            OutlinedTextField(
-                value = uiState.newMcpUrlInput,
-                onValueChange = viewModel::onMcpUrlInputChanged,
-                label = { Text(stringResource(R.string.tools_new_mcp_label)) },
-                modifier = Modifier.fillMaxWidth(),
-            )
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            Button(
-                onClick = viewModel::addMcpServer,
-                enabled = uiState.newMcpUrlInput.isNotBlank(),
-                modifier = Modifier.align(Alignment.End),
-            ) {
-                Text(stringResource(R.string.tools_add_server))
             }
         }
     }
+
+    val visualState = if (sections.size == 1 && sections.first().tools.isEmpty()) {
+        ToolsVisualState.Empty
+    } else {
+        ToolsVisualState.Default
+    }
+
+    val viewState = ToolsViewState(visualState = visualState, sections = sections)
+
+    val callbacks = ToolsCallbacks(
+        onToolToggle = { toolId, enabled -> viewModel.toggleLocalTool(toolName = toolId, isEnabled = enabled) },
+        onToolClick = onOpenToolDetail,
+        onServerRemove = { serverId ->
+            if (serverId != ToolsSectionBlock.LOCAL_SERVER_ID) {
+                viewModel.removeMcpServer(url = serverId)
+            }
+        },
+        onServerReconnect = { /* reconnect handshake lands with MCP-tool-list fetching */ },
+        onAddMcpServer = onOpenAddMcpServer,
+        onLearnAboutMcp = { /* opens external docs once the URL lands */ },
+    )
+
+    ToolsContent(
+        state = viewState,
+        callbacks = callbacks,
+        modifier = modifier.testTag(tag = TOOLS_ROOT_TEST_TAG),
+    )
 }
+
+/** Synthetic section title for the local AppFunctions. */
+private const val LOCAL_SECTION_TITLE = "Local tools"
+
+/** Synthetic section subtitle for the local AppFunctions. */
+private const val LOCAL_SECTION_SUBTITLE = "Built-in AppFunctions running on this device."
+
+/** TestTag applied to the tools screen root. */
+internal const val TOOLS_ROOT_TEST_TAG = "tools_screen_root"

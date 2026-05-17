@@ -8,6 +8,7 @@ import app.knotwork.design.components.chat.ComposerState
 import app.knotwork.design.components.console.ConsoleFilter
 import app.knotwork.design.components.console.ConsoleLine
 import app.knotwork.design.components.console.ConsoleSnap
+import app.knotwork.design.components.console.ConsoleSource
 import app.knotwork.design.components.console.ConsoleTab
 import app.knotwork.design.components.console.ConsoleTraceSpan
 import app.knotwork.design.components.console.ConsoleVarRow
@@ -91,6 +92,14 @@ data class ChatHomeConsoleState(
     val vars: List<ConsoleVarRow> = emptyList(),
     val traces: List<ConsoleTraceSpan> = emptyList(),
     val filter: ConsoleFilter = ConsoleFilter.allOn,
+    /**
+     * When non-null, the inline search field above the Logs list is rendered
+     * and the query is substring-matched against each log line. `null`
+     * means the search bar is hidden; `""` means visible but matching every
+     * line. The host (chat ViewModel) toggles between these via the
+     * `onConsoleSearchToggle` callback.
+     */
+    val searchQuery: String? = null,
 )
 
 /**
@@ -162,6 +171,9 @@ class ChatHomeCallbacks(
     val onConsoleTabChange: (ConsoleTab) -> Unit = {},
     val onConsoleFilterChange: (ConsoleFilter) -> Unit = {},
     val onConsoleSearch: () -> Unit = {},
+    val onConsoleSearchQueryChange: (String) -> Unit = {},
+    val onConsoleCopyLine: (ConsoleLine) -> Unit = {},
+    val onConsoleFilterByLineSource: (ConsoleSource) -> Unit = {},
     val onConsoleCopyAll: () -> Unit = {},
     val onConsoleClear: () -> Unit = {},
     val onCloseConsole: () -> Unit = {},
