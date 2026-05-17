@@ -8,13 +8,11 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.BasicTextField
@@ -98,22 +96,29 @@ fun PipelineLibraryContent(
             }
         },
         floatingActionButton = {
+            // Use the `text/icon` overload (instead of the trailing-lambda
+            // form) so the FAB renders in its final size on first frame —
+            // the trailing-lambda variant first measures the content and
+            // then animates the expansion, which produced the "FAB starts
+            // mid-screen and slides to its slot" jank reported in QA.
             if (!state.isFabHidden) {
                 ExtendedFloatingActionButton(
                     onClick = callbacks.onNewPipeline,
                     containerColor = MaterialTheme.colorScheme.primary,
                     contentColor = MaterialTheme.colorScheme.onPrimary,
-                ) {
-                    Icon(
-                        imageVector = Icons.Outlined.Add,
-                        contentDescription = stringResource(R.string.knotwork_library_new_pipeline_cd),
-                    )
-                    Spacer(modifier = Modifier.width(KnotworkTheme.spacing.sp2))
-                    Text(
-                        text = stringResource(R.string.knotwork_library_new_pipeline_label),
-                        style = KnotworkTextStyles.LabelLg,
-                    )
-                }
+                    icon = {
+                        Icon(
+                            imageVector = Icons.Outlined.Add,
+                            contentDescription = stringResource(R.string.knotwork_library_new_pipeline_cd),
+                        )
+                    },
+                    text = {
+                        Text(
+                            text = stringResource(R.string.knotwork_library_new_pipeline_label),
+                            style = KnotworkTextStyles.LabelLg,
+                        )
+                    },
+                )
             }
         },
     ) { padding ->

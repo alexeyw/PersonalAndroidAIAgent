@@ -14,8 +14,10 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -25,6 +27,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.navigation.NavHostController
 import androidx.navigation.NavOptionsBuilder
 import androidx.navigation.compose.currentBackStackEntryAsState
+import app.knotwork.design.theme.KnotworkTheme
 
 /**
  * Root scaffold for the post-splash, post-onboarding app surface.
@@ -108,7 +111,19 @@ fun AppShellScaffold(navController: NavHostController, content: @Composable (inn
 
 @Composable
 private fun AppBottomNavigationBar(currentRoute: String?, onTabSelected: (TabDestination) -> Unit) {
-    NavigationBar {
+    // Lower the default Material 3 highlight to a softer tonal pill matching
+    // the Knotwork design tokens: surface1 as the container, primaryContainer
+    // as the indicator tint, onPrimaryContainer for the selected glyph. The
+    // unselected icon and label stay on `onSurfaceMuted` so they read as
+    // secondary affordances rather than competing with the active tab.
+    NavigationBar(containerColor = KnotworkTheme.extended.surface1) {
+        val itemColors = NavigationBarItemDefaults.colors(
+            selectedIconColor = MaterialTheme.colorScheme.onPrimaryContainer,
+            selectedTextColor = MaterialTheme.colorScheme.onSurface,
+            indicatorColor = MaterialTheme.colorScheme.primaryContainer,
+            unselectedIconColor = KnotworkTheme.extended.onSurfaceMuted,
+            unselectedTextColor = KnotworkTheme.extended.onSurfaceMuted,
+        )
         TAB_DESTINATIONS.forEach { tab ->
             val selected = currentRoute?.belongsToTab(tab) == true
             NavigationBarItem(
@@ -121,6 +136,7 @@ private fun AppBottomNavigationBar(currentRoute: String?, onTabSelected: (TabDes
                     )
                 },
                 label = { Text(stringResource(tab.labelRes)) },
+                colors = itemColors,
             )
         }
     }

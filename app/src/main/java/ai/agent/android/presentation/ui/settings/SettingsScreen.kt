@@ -162,7 +162,7 @@ fun SettingsScreen(
             Text(
                 text = stringResource(R.string.settings_section_system_instructions),
                 style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.primary,
+                color = MaterialTheme.colorScheme.onSurface,
             )
             Spacer(modifier = Modifier.height(8.dp))
             OutlinedTextField(
@@ -183,7 +183,7 @@ fun SettingsScreen(
             Text(
                 text = stringResource(R.string.settings_section_restrictions),
                 style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.primary,
+                color = MaterialTheme.colorScheme.onSurface,
             )
             Spacer(modifier = Modifier.height(8.dp))
             Row(
@@ -215,7 +215,7 @@ fun SettingsScreen(
             Text(
                 text = stringResource(R.string.settings_section_llm_parameters),
                 style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.primary,
+                color = MaterialTheme.colorScheme.onSurface,
             )
             Spacer(modifier = Modifier.height(16.dp))
 
@@ -309,7 +309,7 @@ fun SettingsScreen(
             Text(
                 text = stringResource(R.string.settings_section_local_model),
                 style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.primary,
+                color = MaterialTheme.colorScheme.onSurface,
             )
             Spacer(modifier = Modifier.height(16.dp))
 
@@ -384,7 +384,7 @@ fun SettingsScreen(
             Text(
                 text = stringResource(R.string.settings_section_external_providers),
                 style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.primary,
+                color = MaterialTheme.colorScheme.onSurface,
             )
             Spacer(modifier = Modifier.height(16.dp))
 
@@ -432,7 +432,7 @@ fun SettingsScreen(
             Text(
                 text = stringResource(R.string.settings_section_ollama),
                 style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.primary,
+                color = MaterialTheme.colorScheme.onSurface,
             )
             Spacer(modifier = Modifier.height(8.dp))
             OutlinedTextField(
@@ -485,7 +485,7 @@ private fun PrivacySection(crashReportingEnabled: Boolean, onCrashReportingChang
     Text(
         text = stringResource(R.string.settings_section_privacy),
         style = MaterialTheme.typography.titleMedium,
-        color = MaterialTheme.colorScheme.primary,
+        color = MaterialTheme.colorScheme.onSurface,
     )
     Spacer(modifier = Modifier.height(8.dp))
     // The whole row toggles the switch so the tap target matches the rest of the

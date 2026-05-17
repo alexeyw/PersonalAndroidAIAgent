@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -62,11 +63,11 @@ private val ProgressDotSize = 8.dp
 /** Length of the active progress dot (rendered as a 24 dp pill). */
 private val ProgressDotPillLength = 24.dp
 
-/** Height of the model-source radio card. */
-private val ModelCardHeight = 96.dp
+/** Minimum height of the model-source radio card; the card grows to fit when subtitles wrap. */
+private val ModelCardMinHeight = 96.dp
 
-/** Height of one permission row. */
-private val PermissionRowHeight = 72.dp
+/** Minimum height of one permission row. */
+private val PermissionRowMinHeight = 72.dp
 
 /** Height of one sample-pipeline card. */
 private val SampleCardHeight = 160.dp
@@ -315,7 +316,9 @@ private fun ModelSourceCard(
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp3),
-                modifier = Modifier.fillMaxWidth().height(ModelCardHeight - KnotworkTheme.spacing.sp6),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .defaultMinSize(minHeight = ModelCardMinHeight - KnotworkTheme.spacing.sp6),
             ) {
                 androidx.compose.material3.Icon(
                     imageVector = icon,
@@ -422,7 +425,9 @@ private fun PermissionRow(row: OnboardingPermissionRow, onGrant: () -> Unit) {
     Surface(
         shape = KnotworkTheme.shapes.md,
         color = KnotworkTheme.extended.surface1,
-        modifier = Modifier.fillMaxWidth().height(PermissionRowHeight),
+        modifier = Modifier
+            .fillMaxWidth()
+            .defaultMinSize(minHeight = PermissionRowMinHeight),
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,

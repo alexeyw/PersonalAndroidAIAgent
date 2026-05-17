@@ -49,7 +49,11 @@ fun ToolsScreen(
                         tools = uiState.localTools.map { tool ->
                             ToolRowState(
                                 id = tool.name,
-                                name = tool.name,
+                                // AppFunction-shaped ids look like
+                                // `<pkg>/<FQN>#invoke`. Keep the id intact
+                                // for routing but show the human-friendly
+                                // suffix as the display name.
+                                name = tool.name.toFriendlyToolName(),
                                 description = tool.description,
                                 serverId = ToolsSectionBlock.LOCAL_SERVER_ID,
                                 enabled = tool.name !in uiState.disabledAppFunctions,
@@ -106,6 +110,18 @@ private const val LOCAL_SECTION_TITLE = "Local tools"
 
 /** Synthetic section subtitle for the local AppFunctions. */
 private const val LOCAL_SECTION_SUBTITLE = "Built-in AppFunctions running on this device."
+
+/**
+ * Trims AppFunction-shaped tool ids (`<pkg>/<FQN>#invoke`) down to the
+ * simple class name so the list row reads at a glance. Plain ids (no `/`
+ * or `#`) pass through unchanged.
+ */
+private fun String.toFriendlyToolName(): String {
+    val afterSlash = substringAfterLast(delimiter = "/")
+    val beforeHash = afterSlash.substringBefore(delimiter = "#")
+    val simple = beforeHash.substringAfterLast(delimiter = ".")
+    return simple.ifBlank { this }
+}
 
 /** TestTag applied to the tools screen root. */
 internal const val TOOLS_ROOT_TEST_TAG = "tools_screen_root"
