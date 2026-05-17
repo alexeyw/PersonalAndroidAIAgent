@@ -67,12 +67,18 @@ fun MemoryScreen(
             } else {
                 allRows.filter { it.body.contains(debouncedQuery, ignoreCase = true) }
             }
-            byFilter.sortedBy { row ->
-                when (sortMode) {
-                    MemorySortMode.Recent -> -(row.id.toLongOrNull() ?: 0L)
-                    MemorySortMode.Relevance -> 0L
-                    MemorySortMode.Alphabetical -> row.title.lowercase().hashCode().toLong()
-                }
+            when (sortMode) {
+                // Higher id == newer entry. Sorting descending by id approximates
+                // "newest first" without paying for a per-row timestamp parse.
+                MemorySortMode.Recent -> byFilter.sortedByDescending { it.id.toLongOrNull() ?: 0L }
+                // Relevance ordering is owned by the repository (vector store
+                // returns rows in similarity order already); preserve the
+                // upstream order untouched.
+                MemorySortMode.Relevance -> byFilter
+                // Locale-aware case-insensitive title sort.
+                MemorySortMode.Alphabetical -> byFilter.sortedWith(
+                    compareBy(String.CASE_INSENSITIVE_ORDER) { it.title },
+                )
             }
         }
     }
