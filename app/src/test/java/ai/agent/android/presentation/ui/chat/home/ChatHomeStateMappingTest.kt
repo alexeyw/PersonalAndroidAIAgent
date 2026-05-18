@@ -28,11 +28,14 @@ class ChatHomeStateMappingTest {
     private val model = "Gemma 2 · 2B"
 
     @Test
-    fun `Empty maps to ChatHomeVisualState_Empty with sample prompts and no messages`() {
+    fun `Empty maps to ChatHomeVisualState_Empty with sample prompt cards and no messages`() {
         val view = ChatHomeUiState.Empty.toViewState(title, model)
         assertEquals(ChatHomeVisualState.Empty, view.visualState)
         assertTrue(view.messages.isEmpty())
-        assertTrue(view.samplePrompts.isNotEmpty())
+        // The empty-state body now renders rich suggestion cards
+        // (mockup, Phase 21 / Task 10 follow-up) instead of the legacy
+        // single-line chip row.
+        assertTrue(view.samplePromptCards.isNotEmpty())
         assertNull(view.errorMessage)
     }
 

@@ -19,7 +19,6 @@ import app.knotwork.design.components.console.ConsoleVarRow
 import app.knotwork.design.components.console.SpanStatus
 import app.knotwork.design.screens.chat.ChatHomeConsoleState
 import app.knotwork.design.screens.chat.ChatHomeMessageRow
-import app.knotwork.design.screens.chat.ChatHomeThreadRow
 import app.knotwork.design.screens.chat.ChatHomeViewState
 import app.knotwork.design.screens.chat.ChatHomeVisualState
 
@@ -47,18 +46,28 @@ import app.knotwork.design.screens.chat.ChatHomeVisualState
 fun ChatHomeUiState.toViewState(
     threadTitle: String,
     modelName: String,
+    fixtures: ChatHomeFixtures = ChatHomeFixtures.forTesting(),
     messages: List<ChatHomeMessageRow> = emptyList(),
     composerValue: String = "",
     pendingTypedConfirm: String = "",
     consoleSearchQuery: String? = null,
     consoleFilter: ConsoleFilter = ConsoleFilter.allOn,
+    pipelineName: String = "default",
+    tokensUsed: Int = 0,
+    tokensMax: Int = 0,
+    favorite: Boolean = false,
 ): ChatHomeViewState = when (this) {
     is ChatHomeUiState.Empty -> ChatHomeViewState(
         visualState = ChatHomeVisualState.Empty,
         threadTitle = threadTitle,
         modelName = modelName,
         composerValue = composerValue,
-        samplePrompts = SAMPLE_PROMPTS,
+        samplePromptCards = fixtures.suggestionCards,
+        pipelineName = pipelineName,
+        tokensUsed = tokensUsed,
+        tokensMax = tokensMax,
+        favorite = favorite,
+        agentStatusLine = fixtures.statusIdle,
     )
 
     is ChatHomeUiState.Idle -> ChatHomeViewState(
@@ -67,6 +76,11 @@ fun ChatHomeUiState.toViewState(
         modelName = modelName,
         messages = messages,
         composerValue = composerValue,
+        pipelineName = pipelineName,
+        tokensUsed = tokensUsed,
+        tokensMax = tokensMax,
+        favorite = favorite,
+        agentStatusLine = fixtures.statusIdle,
     )
 
     is ChatHomeUiState.Generating -> ChatHomeViewState(
@@ -76,6 +90,11 @@ fun ChatHomeUiState.toViewState(
         messages = messages,
         composerValue = composerValue,
         composerState = ComposerState.Generating,
+        pipelineName = pipelineName,
+        tokensUsed = tokensUsed,
+        tokensMax = tokensMax,
+        favorite = favorite,
+        agentStatusLine = fixtures.statusGenerating,
     )
 
     is ChatHomeUiState.HitlConfirm -> ChatHomeViewState(
@@ -85,6 +104,11 @@ fun ChatHomeUiState.toViewState(
         messages = messages + hitlRow(modelName, risk),
         composerValue = composerValue,
         pendingTypedConfirm = pendingTypedConfirm,
+        pipelineName = pipelineName,
+        tokensUsed = tokensUsed,
+        tokensMax = tokensMax,
+        favorite = favorite,
+        agentStatusLine = fixtures.statusHitl,
     )
 
     is ChatHomeUiState.Clarification -> ChatHomeViewState(
@@ -93,6 +117,11 @@ fun ChatHomeUiState.toViewState(
         modelName = modelName,
         messages = messages + clarificationRow(modelName),
         composerValue = composerValue,
+        pipelineName = pipelineName,
+        tokensUsed = tokensUsed,
+        tokensMax = tokensMax,
+        favorite = favorite,
+        agentStatusLine = fixtures.statusClarification,
     )
 
     is ChatHomeUiState.Error -> ChatHomeViewState(
@@ -103,6 +132,11 @@ fun ChatHomeUiState.toViewState(
         composerValue = composerValue,
         composerState = ComposerState.Error(message = message),
         errorMessage = message,
+        pipelineName = pipelineName,
+        tokensUsed = tokensUsed,
+        tokensMax = tokensMax,
+        favorite = favorite,
+        agentStatusLine = fixtures.statusError,
     )
 
     is ChatHomeUiState.DrawerOpen -> ChatHomeViewState(
@@ -111,7 +145,12 @@ fun ChatHomeUiState.toViewState(
         modelName = modelName,
         messages = messages,
         composerValue = composerValue,
-        threads = sampleThreads(),
+        threads = fixtures.sessionRows,
+        pipelineName = pipelineName,
+        tokensUsed = tokensUsed,
+        tokensMax = tokensMax,
+        favorite = favorite,
+        agentStatusLine = fixtures.statusIdle,
     )
 
     is ChatHomeUiState.ConsoleExpanded -> ChatHomeViewState(
@@ -120,6 +159,11 @@ fun ChatHomeUiState.toViewState(
         modelName = modelName,
         messages = messages,
         composerValue = composerValue,
+        pipelineName = pipelineName,
+        tokensUsed = tokensUsed,
+        tokensMax = tokensMax,
+        favorite = favorite,
+        agentStatusLine = fixtures.statusIdle,
         console = ChatHomeConsoleState(
             snap = snap,
             tab = ConsoleTab.Logs,
@@ -131,13 +175,6 @@ fun ChatHomeUiState.toViewState(
         ),
     )
 }
-
-/** Chips surfaced in the empty state — these are the same strings the spec calls out. */
-private val SAMPLE_PROMPTS: List<String> = listOf(
-    "Summarise the last meeting notes",
-    "Plan my afternoon",
-    "Search recent emails about \"deploy\"",
-)
 
 /** Pre-canned baseline conversation used by every non-Empty state. */
 internal fun baselineMessages(modelName: String): List<ChatHomeMessageRow> = listOf(
@@ -220,26 +257,6 @@ internal fun clarificationRow(modelName: String): ChatHomeMessageRow = ChatHomeM
         ),
     ),
     metadata = ChatMetadata(timestamp = "09:16", model = modelName),
-)
-
-/** Sample threads shown inside the drawer overlay. */
-internal fun sampleThreads(): List<ChatHomeThreadRow> = listOf(
-    ChatHomeThreadRow(
-        id = "t1",
-        title = "Yesterday's deploy",
-        subtitle = "Today · 14 messages",
-        selected = true,
-    ),
-    ChatHomeThreadRow(
-        id = "t2",
-        title = "Plan the weekend trip",
-        subtitle = "Yesterday · 22 messages",
-    ),
-    ChatHomeThreadRow(
-        id = "t3",
-        title = "Memory cleanup",
-        subtitle = "2 days ago · 4 messages",
-    ),
 )
 
 /** Sample console log lines surfaced when the console pane is expanded. */

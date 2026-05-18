@@ -71,7 +71,31 @@ data class ChatHomeMessageRow(val id: String, val role: ChatRole, val content: C
  * @property subtitle pre-formatted secondary line (timestamp + counts).
  * @property selected `true` when this thread is currently loaded.
  */
-data class ChatHomeThreadRow(val id: String, val title: String, val subtitle: String, val selected: Boolean = false)
+data class ChatHomeThreadRow(
+    val id: String,
+    val title: String,
+    val subtitle: String,
+    val selected: Boolean = false,
+    /**
+     * `true` when the thread is currently active (used as the leading
+     * status-dot color in the drawer). Distinct from [selected] which
+     * only flags multi-select; an active thread is also visually
+     * highlighted with a cream row background.
+     */
+    val active: Boolean = false,
+)
+
+/**
+ * Suggestion card rendered in the empty-state body. Composes a title
+ * (`"Summarise this week's emails"`) with a monospace `uses · {tools}`
+ * subtitle so the user knows which tools the prompt will reach for.
+ *
+ * @property id stable identity for `LazyColumn`-style snapshot pinning.
+ * @property title prompt headline.
+ * @property toolsUsed pre-formatted comma-separated tool list
+ * (`"search_tool, delegate_task"`). Empty string hides the subtitle.
+ */
+data class ChatHomeSamplePromptCard(val id: String, val title: String, val toolsUsed: String)
 
 /**
  * Console projection passed to [ChatHomeContent] when the console pane is
@@ -140,6 +164,24 @@ data class ChatHomeViewState(
     val threads: List<ChatHomeThreadRow> = emptyList(),
     val console: ChatHomeConsoleState = ChatHomeConsoleState(),
     val samplePrompts: List<String> = emptyList(),
+    /** Pipeline currently bound to the thread; rendered in the TopAppBar subtitle and the empty-state caption. */
+    val pipelineName: String = "default",
+    /** Used / max token counts rendered in the TopAppBar subtitle (`"1.4k / 8k tok"`). */
+    val tokensUsed: Int = 0,
+    val tokensMax: Int = 0,
+    /** Star/favorite flag rendered in the trailing TopAppBar action. */
+    val favorite: Boolean = false,
+    /**
+     * Rich suggestion cards rendered inside the empty-state body. When
+     * non-empty this list replaces the legacy [samplePrompts] chip row;
+     * if both are empty the body renders the legacy "no prompts" copy.
+     */
+    val samplePromptCards: List<ChatHomeSamplePromptCard> = emptyList(),
+    /**
+     * Single-line agent status pill rendered above the composer
+     * (`"[NODE]  idle · ready"`). `null` hides the pill.
+     */
+    val agentStatusLine: String? = null,
 ) {
     init {
         require((visualState == ChatHomeVisualState.Error) == (errorMessage != null)) {
@@ -184,6 +226,11 @@ class ChatHomeCallbacks(
     val onClarificationReply: (String) -> Unit = {},
     val onErrorRetry: () -> Unit = {},
     val onTitleTripleTap: () -> Unit = {},
+    val onToggleFavorite: () -> Unit = {},
+    val onEditThread: (String) -> Unit = {},
+    val onImportChat: () -> Unit = {},
+    val onOpenSettings: () -> Unit = {},
+    val onSamplePromptCard: (ChatHomeSamplePromptCard) -> Unit = {},
 )
 
 /** Convenience factory returning a callbacks bundle that ignores every event. */

@@ -1,6 +1,8 @@
 package app.knotwork.design.components.chat
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
@@ -11,6 +13,7 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowUpward
+import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -24,37 +27,51 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.unit.dp
 import app.knotwork.design.R
 import app.knotwork.design.components.chips.ChipStyle
 import app.knotwork.design.components.chips.KnotworkChip
 import app.knotwork.design.theme.KnotworkTheme
+import app.knotwork.design.tokens.KnotworkPalette
 import app.knotwork.design.tokens.KnotworkTextStyles
 
+/** Card horizontal/vertical padding inside the cream container. */
+private val CardPadding = 16.dp
+
+/** Diameter of the leading spinner glyph rendered next to the header label. */
+private val HeaderIconSize = 18.dp
+
 /**
- * Knotwork clarification card — surfaces a clarifying question inside the
- * assistant bubble with quick-reply chips and a free-form text field.
+ * Knotwork clarification card — pinned-prompt surface rendered inline in
+ * the assistant message stream while the agent is waiting on a typed
+ * answer. Mirrors the spec mockup (Phase 21 / Task 10 follow-up):
  *
- * Visual contract (`compose/components/README.md` §Chat surface
- * §ClarificationCard):
- *  - **Question** — `BodyBase`, wraps full text (no clamp).
- *  - **Quick replies** — `FlowRow` of `KnotworkChip(style = Tonal)` rendered
- *    when `model.quickReplies` is non-empty. Tapping a chip submits its
- *    label as the reply.
- *  - **Free-form row** — single-line `OutlinedTextField` with
- *    `ImeAction.Send` and a trailing arrow-up icon button.
- *  - When `model.replied` is non-null the card collapses to a one-line
- *    `"Replied: …"` summary and stops accepting input.
+ *  - **Container.** Rounded `Accent50` tile so the prompt stands apart
+ *    from the surrounding assistant bubble without competing with the
+ *    risk-coloured HITL surface.
+ *  - **Header row.** Spinner-shaped glyph (`AutoAwesome`) tinted brand
+ *    primary, followed by the bold "Quick question from the agent"
+ *    label.
+ *  - **Question.** `BodyBase`, full-width, no clamp.
+ *  - **Quick-reply chips.** `FlowRow` of `KnotworkChip(style = Tonal)`.
+ *    The chip matching the user's already-submitted answer renders in
+ *    its `selected` state; the rest stay inactive.
+ *  - **Free-form row.** Single-line `OutlinedTextField` with
+ *    `ImeAction.Send` and a trailing arrow-up icon button. Kept on the
+ *    card so the user can override the quick replies with a custom
+ *    answer without leaving the prompt; the spec mockup shows quick
+ *    replies only, but the free-form affordance is retained for the
+ *    forthcoming long-answer flow.
  *
- * **Stateless** — the free-form value is hoisted internally to a `remember`
- * because the catalog component does not need to persist drafts across the
- * `replied → reset` transition (the screen rebuilds the card with a fresh
- * model after the user submits). The `onReply` callback is the single
- * source of truth for the submitted answer.
+ * Once the user replies the card collapses to the existing
+ * `Replied: …` summary so the conversation history reads cleanly.
  *
  * @param model immutable card payload.
- * @param onReply invoked with the user's chosen / typed answer.
+ * @param onReply invoked with the chosen quick-reply label.
  * @param modifier optional layout modifier applied to the card root.
  */
 @Composable
@@ -65,15 +82,23 @@ fun ClarificationCard(model: ClarificationCardModel, onReply: (String) -> Unit, 
     }
     Column(
         verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp2),
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(KnotworkTheme.shapes.md)
+            .background(color = KnotworkPalette.Accent50)
+            .padding(CardPadding),
     ) {
+        HeaderRow()
         Text(
             text = model.question,
             style = KnotworkTextStyles.BodyBase,
             color = MaterialTheme.colorScheme.onSurface,
         )
         if (model.quickReplies.isNotEmpty()) {
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp2)) {
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp2),
+                verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp2),
+            ) {
                 model.quickReplies.forEach { reply ->
                     KnotworkChip(
                         label = reply,
@@ -89,7 +114,12 @@ fun ClarificationCard(model: ClarificationCardModel, onReply: (String) -> Unit, 
     }
 }
 
-/** Bottom row of the unanswered card — text input + trailing send affordance. */
+/**
+ * Bottom row of the unanswered card — text input + trailing send
+ * affordance. Hidden behind the quick replies in the spec mockup but
+ * kept on the card so the user can submit a free-form answer that does
+ * not fit any canned chip.
+ */
 @Composable
 private fun FreeformRow(placeholder: String, onSubmit: (String) -> Unit) {
     var draft by remember { mutableStateOf("") }
@@ -133,6 +163,33 @@ private fun FreeformRow(placeholder: String, onSubmit: (String) -> Unit) {
                 },
             )
         }
+    }
+}
+
+/** Spinner glyph + header label aligned at the top of the card. */
+@Composable
+private fun HeaderRow() {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp2),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Box(
+            contentAlignment = Alignment.Center,
+            modifier = Modifier.size(HeaderIconSize),
+        ) {
+            Icon(
+                imageVector = Icons.Outlined.AutoAwesome,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(HeaderIconSize),
+            )
+        }
+        Text(
+            text = stringResource(R.string.knotwork_clarification_header),
+            style = KnotworkTextStyles.TitleMd.copy(fontWeight = FontWeight.SemiBold),
+            color = MaterialTheme.colorScheme.onSurface,
+        )
     }
 }
 

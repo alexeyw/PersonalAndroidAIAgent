@@ -207,7 +207,13 @@ private fun BubbleMessage(
                 allowOnceEnabled = allowOnceEnabled,
                 onClarificationReply = onClarificationReply,
             )
-            BubbleFooter(role = role, metadata = metadata)
+            // Clarification / HITL confirmation cards are self-contained
+            // panels with their own internal status indicators; rendering
+            // the standard timestamp + model footer underneath them clashes
+            // with the spec mockup. Every other variant keeps the footer.
+            if (content !is ChatContent.Clarification && content !is ChatContent.Confirmation) {
+                BubbleFooter(role = role, metadata = metadata)
+            }
         }
     }
 }
