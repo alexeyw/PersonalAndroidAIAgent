@@ -9,18 +9,28 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import app.knotwork.design.R
 import app.knotwork.design.components.chips.ChipStyle
@@ -50,11 +60,15 @@ private val HeaderIconSize = 18.dp
  *  - **Quick-reply chips.** `FlowRow` of `KnotworkChip(style = Tonal)`.
  *    The chip matching the user's already-submitted answer renders in
  *    its `selected` state; the rest stay inactive.
+ *  - **Free-form row.** Single-line `OutlinedTextField` with
+ *    `ImeAction.Send` and a trailing arrow-up icon button. Kept on the
+ *    card so the user can override the quick replies with a custom
+ *    answer without leaving the prompt; the spec mockup shows quick
+ *    replies only, but the free-form affordance is retained for the
+ *    forthcoming long-answer flow.
  *
- * The free-form text field has been removed — the user composes typed
- * answers in the main composer below the chat. Once the user replies
- * the card collapses to the existing `Replied: …` summary so the
- * conversation history reads cleanly.
+ * Once the user replies the card collapses to the existing
+ * `Replied: …` summary so the conversation history reads cleanly.
  *
  * @param model immutable card payload.
  * @param onReply invoked with the chosen quick-reply label.
@@ -93,6 +107,61 @@ fun ClarificationCard(model: ClarificationCardModel, onReply: (String) -> Unit, 
                     )
                 }
             }
+        }
+        val placeholder = model.freeformPlaceholder
+            ?: stringResource(R.string.knotwork_clarification_freeform_default)
+        FreeformRow(placeholder = placeholder, onSubmit = onReply)
+    }
+}
+
+/**
+ * Bottom row of the unanswered card — text input + trailing send
+ * affordance. Hidden behind the quick replies in the spec mockup but
+ * kept on the card so the user can submit a free-form answer that does
+ * not fit any canned chip.
+ */
+@Composable
+private fun FreeformRow(placeholder: String, onSubmit: (String) -> Unit) {
+    var draft by remember { mutableStateOf("") }
+    val canSubmit = draft.isNotBlank()
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+        OutlinedTextField(
+            value = draft,
+            onValueChange = { draft = it },
+            placeholder = {
+                Text(text = placeholder, color = KnotworkTheme.extended.onSurfaceDim)
+            },
+            singleLine = true,
+            textStyle = KnotworkTextStyles.BodyBase,
+            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
+            keyboardActions = KeyboardActions(
+                onSend = {
+                    if (canSubmit) {
+                        onSubmit(draft.trim())
+                        draft = ""
+                    }
+                },
+            ),
+            modifier = Modifier.weight(1f),
+        )
+        IconButton(
+            onClick = {
+                if (canSubmit) {
+                    onSubmit(draft.trim())
+                    draft = ""
+                }
+            },
+            enabled = canSubmit,
+        ) {
+            Icon(
+                imageVector = Icons.Filled.ArrowUpward,
+                contentDescription = stringResource(R.string.knotwork_clarification_send),
+                tint = if (canSubmit) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    KnotworkTheme.extended.onSurfaceDim
+                },
+            )
         }
     }
 }

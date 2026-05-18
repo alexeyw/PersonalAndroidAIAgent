@@ -66,6 +66,13 @@
 
     <!-- ============ ClarificationCard ============ -->
 
+    <!-- Default placeholder for the free-form clarification field if the caller -->
+    <!-- does not override `ClarificationCardModel.freeformPlaceholder`. -->
+    <string name="knotwork_clarification_freeform_default">Your answer…</string>
+
+    <!-- ContentDescription for the trailing send-icon-button. -->
+    <string name="knotwork_clarification_send">Send reply</string>
+
     <!-- Replied-summary line. "%1$s" is the user's submitted answer. -->
     <string name="knotwork_clarification_replied">Replied: %1$s</string>
 
