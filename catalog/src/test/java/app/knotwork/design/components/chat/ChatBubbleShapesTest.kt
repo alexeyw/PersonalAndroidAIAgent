@@ -14,13 +14,11 @@ import org.junit.Test
 class ChatBubbleShapesTest {
 
     @Test
-    fun `user shape tightens bottom-end corner`() {
-        val expected = RoundedCornerShape(
-            topStart = 16.dp,
-            topEnd = 16.dp,
-            bottomEnd = 4.dp,
-            bottomStart = 16.dp,
-        )
+    fun `user shape is a uniformly rounded pill`() {
+        // Phase 21 / Task 10 follow-up — the mockup tightens the user
+        // bubble to a full pill silhouette rather than the asymmetric
+        // 4 dp / 16 dp shape the legacy bubble used.
+        val expected = RoundedCornerShape(size = 22.dp)
         assertEquals(expected, ChatBubbleShapes.User)
     }
 

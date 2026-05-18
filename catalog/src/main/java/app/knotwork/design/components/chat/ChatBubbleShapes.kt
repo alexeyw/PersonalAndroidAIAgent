@@ -18,22 +18,21 @@ import androidx.compose.ui.unit.dp
  */
 object ChatBubbleShapes {
 
-    /** Tight-corner radius (`4 dp`) on the speaker-side bottom corner. */
+    /** Tight-corner radius (`4 dp`) on the assistant's leading bottom corner. */
     private val TightCornerRadius = 4.dp
 
-    /** Default radius (`16 dp`) on the three open corners. */
+    /** Default radius (`16 dp`) on the three open corners of the assistant bubble. */
     private val OpenCornerRadius = 16.dp
 
+    /** Full pill radius applied to every corner of the user bubble. */
+    private val UserCornerRadius = 22.dp
+
     /**
-     * User-side bubble shape: 16 dp on top-start, top-end, bottom-start;
-     * 4 dp on bottom-end (the trailing corner closest to the user).
+     * User-side bubble shape: uniformly rounded pill so the user's
+     * contribution reads as a quick spoken-style chip in the thread.
+     * Mirrors the spec mockup (Phase 21 / Task 10 follow-up).
      */
-    val User = RoundedCornerShape(
-        topStart = OpenCornerRadius,
-        topEnd = OpenCornerRadius,
-        bottomEnd = TightCornerRadius,
-        bottomStart = OpenCornerRadius,
-    )
+    val User = RoundedCornerShape(size = UserCornerRadius)
 
     /**
      * Assistant-side bubble shape: 16 dp on top-start, top-end, bottom-end;
