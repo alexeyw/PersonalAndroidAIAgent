@@ -32,6 +32,7 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.outlined.Add
@@ -43,6 +44,7 @@ import androidx.compose.material.icons.outlined.Menu
 import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.outlined.StarBorder
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -57,11 +59,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import app.knotwork.design.R
@@ -168,7 +172,7 @@ private fun ChatHomeTopBar(state: ChatHomeViewState, callbacks: ChatHomeCallback
                 Text(
                     text = state.threadTitle,
                     style = KnotworkTextStyles.TitleMd.copy(
-                        fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
+                        fontWeight = FontWeight.SemiBold,
                     ),
                     color = MaterialTheme.colorScheme.onSurface,
                     maxLines = 1,
@@ -199,11 +203,7 @@ private fun ChatHomeTopBar(state: ChatHomeViewState, callbacks: ChatHomeCallback
         actions = {
             IconButton(onClick = callbacks.onToggleFavorite) {
                 Icon(
-                    imageVector = if (state.favorite) {
-                        androidx.compose.material.icons.Icons.Filled.Star
-                    } else {
-                        androidx.compose.material.icons.Icons.Outlined.StarBorder
-                    },
+                    imageVector = if (state.favorite) Icons.Filled.Star else Icons.Outlined.StarBorder,
                     contentDescription = stringResource(R.string.knotwork_chat_home_action_favorite),
                     tint = if (state.favorite) {
                         MaterialTheme.colorScheme.primary
@@ -314,7 +314,7 @@ private fun AgentStatusPill(text: String) {
             Text(
                 text = tag,
                 style = KnotworkTextStyles.MonoBase.copy(
-                    fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
+                    fontWeight = FontWeight.SemiBold,
                 ),
                 color = MaterialTheme.colorScheme.primary,
             )
@@ -369,7 +369,7 @@ private fun ChatHomeEmptyBody(state: ChatHomeViewState, callbacks: ChatHomeCallb
         Text(
             text = stringResource(R.string.knotwork_chat_home_empty_title),
             style = KnotworkTextStyles.TitleLg.copy(
-                fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
+                fontWeight = FontWeight.SemiBold,
             ),
             color = MaterialTheme.colorScheme.onSurface,
         )
@@ -459,7 +459,7 @@ private fun SamplePromptCard(card: ChatHomeSamplePromptCard, onClick: () -> Unit
         Text(
             text = card.title,
             style = KnotworkTextStyles.TitleMd.copy(
-                fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
+                fontWeight = FontWeight.SemiBold,
             ),
             color = MaterialTheme.colorScheme.onSurface,
             maxLines = 2,
@@ -658,7 +658,7 @@ private fun ChatHomeDrawerOverlay(state: ChatHomeViewState, callbacks: ChatHomeC
                     }
                 }
                 // -------- Footer entries --------
-                androidx.compose.material3.HorizontalDivider(color = KnotworkTheme.extended.divider)
+                HorizontalDivider(color = KnotworkTheme.extended.divider)
                 DrawerFooterRow(
                     icon = Icons.Outlined.FileDownload,
                     title = stringResource(R.string.knotwork_chat_home_drawer_import_title),
@@ -703,7 +703,7 @@ private fun DrawerNewChatPill(onClick: () -> Unit) {
         Text(
             text = stringResource(R.string.knotwork_chat_home_drawer_new_thread),
             style = KnotworkTextStyles.LabelLg.copy(
-                fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
+                fontWeight = FontWeight.SemiBold,
             ),
             color = MaterialTheme.colorScheme.primary,
         )
@@ -734,13 +734,13 @@ private fun ChatHomeDrawerThreadRow(row: ChatHomeThreadRow, onClick: () -> Unit,
         Box(
             modifier = Modifier
                 .size(DRAWER_STATUS_DOT_SIZE)
-                .background(color = dotColor, shape = androidx.compose.foundation.shape.CircleShape),
+                .background(color = dotColor, shape = CircleShape),
         )
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = row.title,
                 style = KnotworkTextStyles.TitleMd.copy(
-                    fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
+                    fontWeight = FontWeight.SemiBold,
                 ),
                 color = MaterialTheme.colorScheme.onSurface,
                 maxLines = 1,
@@ -765,12 +765,7 @@ private fun ChatHomeDrawerThreadRow(row: ChatHomeThreadRow, onClick: () -> Unit,
 }
 
 @Composable
-private fun DrawerFooterRow(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    title: String,
-    subtitle: String,
-    onClick: () -> Unit,
-) {
+private fun DrawerFooterRow(icon: ImageVector, title: String, subtitle: String, onClick: () -> Unit) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp3),
@@ -789,7 +784,7 @@ private fun DrawerFooterRow(
             Text(
                 text = title,
                 style = KnotworkTextStyles.TitleMd.copy(
-                    fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
+                    fontWeight = FontWeight.SemiBold,
                 ),
                 color = MaterialTheme.colorScheme.onSurface,
             )
