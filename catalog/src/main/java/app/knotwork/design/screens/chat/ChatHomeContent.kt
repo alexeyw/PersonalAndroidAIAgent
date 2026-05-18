@@ -33,10 +33,15 @@ import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.Chat
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.outlined.Add
+import androidx.compose.material.icons.outlined.BrightnessMedium
+import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material.icons.outlined.FileDownload
+import androidx.compose.material.icons.outlined.Hub
 import androidx.compose.material.icons.outlined.Menu
 import androidx.compose.material.icons.outlined.MoreVert
-import androidx.compose.material.icons.outlined.SmartToy
+import androidx.compose.material.icons.outlined.StarBorder
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -145,7 +150,10 @@ fun ChatHomeContent(
     }
 }
 
-/** TopAppBar with title (thread name + model line) and trailing actions. */
+/**
+ * TopAppBar — bold thread title, monospace pipeline + token subtitle,
+ * leading hamburger, trailing star/favorite + overflow icons.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ChatHomeTopBar(state: ChatHomeViewState, callbacks: ChatHomeCallbacks) {
@@ -159,29 +167,24 @@ private fun ChatHomeTopBar(state: ChatHomeViewState, callbacks: ChatHomeCallback
             ) {
                 Text(
                     text = state.threadTitle,
-                    style = KnotworkTextStyles.TitleMd,
+                    style = KnotworkTextStyles.TitleMd.copy(
+                        fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
+                    ),
                     color = MaterialTheme.colorScheme.onSurface,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp1),
-                ) {
-                    Icon(
-                        imageVector = Icons.Outlined.SmartToy,
-                        contentDescription = null,
-                        tint = KnotworkTheme.extended.onSurfaceMuted,
-                        modifier = Modifier.size(KnotworkTheme.spacing.sp3),
-                    )
-                    Text(
-                        text = state.modelName,
-                        style = KnotworkTextStyles.MonoSm,
-                        color = KnotworkTheme.extended.onSurfaceMuted,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
+                Text(
+                    text = formatChatSubtitle(
+                        pipelineName = state.pipelineName,
+                        tokensUsed = state.tokensUsed,
+                        tokensMax = state.tokensMax,
+                    ),
+                    style = KnotworkTextStyles.MonoSm,
+                    color = KnotworkTheme.extended.onSurfaceMuted,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
             }
         },
         navigationIcon = {
@@ -194,11 +197,19 @@ private fun ChatHomeTopBar(state: ChatHomeViewState, callbacks: ChatHomeCallback
             }
         },
         actions = {
-            IconButton(onClick = callbacks.onOpenModelPicker) {
+            IconButton(onClick = callbacks.onToggleFavorite) {
                 Icon(
-                    imageVector = Icons.Outlined.SmartToy,
-                    contentDescription = stringResource(R.string.knotwork_chat_home_action_model_picker),
-                    tint = MaterialTheme.colorScheme.onSurface,
+                    imageVector = if (state.favorite) {
+                        androidx.compose.material.icons.Icons.Filled.Star
+                    } else {
+                        androidx.compose.material.icons.Icons.Outlined.StarBorder
+                    },
+                    contentDescription = stringResource(R.string.knotwork_chat_home_action_favorite),
+                    tint = if (state.favorite) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        MaterialTheme.colorScheme.onSurface
+                    },
                 )
             }
             IconButton(onClick = callbacks.onOverflow) {
@@ -217,23 +228,113 @@ private fun ChatHomeTopBar(state: ChatHomeViewState, callbacks: ChatHomeCallback
 }
 
 /**
+ * Builds the TopAppBar subtitle string ("Pipeline · default · 1.4k / 8k tok").
+ * The token segment is omitted when [tokensMax] is zero so the placeholder
+ * "0 / 0 tok" never reaches the surface.
+ */
+@Composable
+private fun formatChatSubtitle(pipelineName: String, tokensUsed: Int, tokensMax: Int): String {
+    val pipelinePart = stringResource(R.string.knotwork_chat_home_topbar_pipeline, pipelineName)
+    if (tokensMax <= 0) return pipelinePart
+    val tokensPart = stringResource(
+        R.string.knotwork_chat_home_topbar_tokens,
+        formatTokenCount(tokensUsed),
+        formatTokenCount(tokensMax),
+    )
+    return "$pipelinePart · $tokensPart"
+}
+
+/** "1432" → "1.4k", "8000" → "8k". Falls back to the raw integer for small values. */
+private fun formatTokenCount(value: Int): String = when {
+    value < TOKEN_FORMAT_THRESHOLD -> value.toString()
+    else -> {
+        val thousands = value.toFloat() / TOKEN_FORMAT_THRESHOLD.toFloat()
+        if (thousands % 1f == 0f) "${thousands.toInt()}k" else "%.1fk".format(thousands)
+    }
+}
+
+/** Threshold above which token counts are shortened to "Nk". */
+private const val TOKEN_FORMAT_THRESHOLD = 1000
+
+/**
  * Pinned [ChatComposer] sitting at the bottom of the surface. Disabled
  * (interactive but not actionable) when the surface is awaiting a HITL
  * confirmation — the buttons remain visible so the user understands the
  * surface is paused, but typing is allowed so the user can prepare the
  * next turn.
+ *
+ * When [ChatHomeViewState.agentStatusLine] is non-null a single-line
+ * mono pill is rendered above the composer (matches the spec mockup's
+ * `[NODE]  idle · ready` strip).
  */
 @Composable
 private fun ChatHomeBottomBar(state: ChatHomeViewState, callbacks: ChatHomeCallbacks) {
-    ChatComposer(
-        value = state.composerValue,
-        onValueChange = callbacks.onComposerValueChange,
-        onSend = callbacks.onSend,
-        onStop = callbacks.onStop,
-        onVoice = callbacks.onVoice,
-        onAttach = callbacks.onAttach,
-        state = state.composerState,
-    )
+    Column {
+        if (state.agentStatusLine != null) {
+            AgentStatusPill(text = state.agentStatusLine)
+        }
+        ChatComposer(
+            value = state.composerValue,
+            onValueChange = callbacks.onComposerValueChange,
+            onSend = callbacks.onSend,
+            onStop = callbacks.onStop,
+            onVoice = callbacks.onVoice,
+            onAttach = callbacks.onAttach,
+            state = state.composerState,
+        )
+    }
+}
+
+/**
+ * Compact agent-status pill rendered above the composer: dark console
+ * surface, monospace text, leading `[TAG]` token tinted brand-primary.
+ * Parses a leading `[X]` segment as the tag colour cue — anything else
+ * renders as one continuous mono line.
+ */
+@Composable
+private fun AgentStatusPill(text: String) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp2),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(
+                horizontal = ChatHorizontalPadding,
+                vertical = KnotworkTheme.spacing.sp1,
+            )
+            .clip(KnotworkTheme.shapes.sm)
+            .background(color = KnotworkTheme.extended.consoleBg)
+            .padding(
+                horizontal = KnotworkTheme.spacing.sp3,
+                vertical = KnotworkTheme.spacing.sp2,
+            ),
+    ) {
+        val (tag, rest) = splitAgentStatusTag(text)
+        if (tag != null) {
+            Text(
+                text = tag,
+                style = KnotworkTextStyles.MonoBase.copy(
+                    fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
+                ),
+                color = MaterialTheme.colorScheme.primary,
+            )
+        }
+        Text(
+            text = rest,
+            style = KnotworkTextStyles.MonoBase,
+            color = KnotworkTheme.extended.consoleFg,
+        )
+    }
+}
+
+/** Splits "[TAG] rest of line" into (`"[TAG]"`, `"rest of line"`). */
+private fun splitAgentStatusTag(text: String): Pair<String?, String> {
+    if (!text.startsWith("[")) return null to text
+    val end = text.indexOf(']')
+    if (end <= 0) return null to text
+    val tag = text.substring(startIndex = 0, endIndex = end + 1)
+    val rest = text.substring(startIndex = end + 1).trimStart()
+    return tag to rest
 }
 
 /** Body LazyColumn — empty state, idle conversation, or trailing loader/clarification/HITL/error. */
@@ -245,48 +346,133 @@ private fun ChatHomeBody(state: ChatHomeViewState, callbacks: ChatHomeCallbacks,
     }
 }
 
-/** Centered empty-state body with sample-prompt chips. */
+/**
+ * Empty-state body rendered for `ChatHomeVisualState.Empty` — vertically
+ * centred brand glyph tile, "New chat" headline, pipeline/model caption,
+ * and a column of outlined suggestion cards. Tap-targets dispatch through
+ * [ChatHomeCallbacks.onSamplePromptCard] (rich cards) with
+ * [ChatHomeCallbacks.onSamplePrompt] still available for the legacy chip
+ * row when the host only supplies [ChatHomeViewState.samplePrompts].
+ */
 @Composable
 private fun ChatHomeEmptyBody(state: ChatHomeViewState, callbacks: ChatHomeCallbacks, padding: PaddingValues) {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
+        verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp3),
         modifier = Modifier
             .fillMaxSize()
             .padding(padding)
             .padding(horizontal = ChatHorizontalPadding),
     ) {
-        Icon(
-            imageVector = Icons.AutoMirrored.Outlined.Chat,
-            contentDescription = null,
-            tint = KnotworkTheme.extended.onSurfaceMuted,
-            modifier = Modifier.size(KnotworkTheme.spacing.sp16),
-        )
-        Spacer(modifier = Modifier.height(KnotworkTheme.spacing.sp3))
+        Spacer(modifier = Modifier.weight(EMPTY_BODY_TOP_WEIGHT))
+        BrandGlyphTile()
         Text(
             text = stringResource(R.string.knotwork_chat_home_empty_title),
-            style = KnotworkTextStyles.TitleMd,
+            style = KnotworkTextStyles.TitleLg.copy(
+                fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
+            ),
             color = MaterialTheme.colorScheme.onSurface,
         )
-        Spacer(modifier = Modifier.height(KnotworkTheme.spacing.sp1))
         Text(
-            text = stringResource(R.string.knotwork_chat_home_empty_subtitle),
+            text = stringResource(
+                R.string.knotwork_chat_home_empty_caption,
+                state.pipelineName,
+                state.modelName,
+            ),
             style = KnotworkTextStyles.BodyBase,
             color = KnotworkTheme.extended.onSurfaceMuted,
         )
-        if (state.samplePrompts.isNotEmpty()) {
-            Spacer(modifier = Modifier.height(KnotworkTheme.spacing.sp4))
-            FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp2),
-                verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp2),
-            ) {
-                state.samplePrompts.forEach { prompt ->
-                    KnotworkChip(
-                        label = prompt,
-                        onClick = { callbacks.onSamplePrompt(prompt) },
-                    )
+        Spacer(modifier = Modifier.height(KnotworkTheme.spacing.sp2))
+        Column(
+            verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp2),
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            state.samplePromptCards.forEach { card ->
+                SamplePromptCard(card = card, onClick = { callbacks.onSamplePromptCard(card) })
+            }
+            // Legacy chip row remains usable when the host hasn't migrated
+            // to the rich-card list yet. Drops once `samplePromptCards`
+            // is populated.
+            if (state.samplePromptCards.isEmpty() && state.samplePrompts.isNotEmpty()) {
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp2),
+                    verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp2),
+                ) {
+                    state.samplePrompts.forEach { prompt ->
+                        KnotworkChip(
+                            label = prompt,
+                            onClick = { callbacks.onSamplePrompt(prompt) },
+                        )
+                    }
                 }
             }
+        }
+        Spacer(modifier = Modifier.weight(EMPTY_BODY_BOTTOM_WEIGHT))
+    }
+}
+
+/** Spring weights placing the brand tile and the suggestion cards in the upper half of the empty body. */
+private const val EMPTY_BODY_TOP_WEIGHT = 0.6f
+private const val EMPTY_BODY_BOTTOM_WEIGHT = 1.0f
+
+/** Brand tile size in dp. */
+private val BrandGlyphTileSize = 80.dp
+
+/** Inner brand glyph size in dp. */
+private val BrandGlyphInnerSize = 36.dp
+
+@Composable
+private fun BrandGlyphTile() {
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier = Modifier
+            .size(BrandGlyphTileSize)
+            .clip(KnotworkTheme.shapes.lg)
+            .background(color = app.knotwork.design.tokens.KnotworkPalette.Accent100),
+    ) {
+        Icon(
+            imageVector = Icons.Outlined.Hub,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.size(BrandGlyphInnerSize),
+        )
+    }
+}
+
+@Composable
+private fun SamplePromptCard(card: ChatHomeSamplePromptCard, onClick: () -> Unit) {
+    Column(
+        verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp1),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(KnotworkTheme.shapes.md)
+            .border(
+                border = BorderStroke(width = 1.dp, color = KnotworkTheme.extended.outlineStrong),
+                shape = KnotworkTheme.shapes.md,
+            )
+            .clickable(onClick = onClick)
+            .padding(
+                horizontal = KnotworkTheme.spacing.sp4,
+                vertical = KnotworkTheme.spacing.sp3,
+            ),
+    ) {
+        Text(
+            text = card.title,
+            style = KnotworkTextStyles.TitleMd.copy(
+                fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
+            ),
+            color = MaterialTheme.colorScheme.onSurface,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+        )
+        if (card.toolsUsed.isNotBlank()) {
+            Text(
+                text = stringResource(R.string.knotwork_chat_home_empty_card_uses, card.toolsUsed),
+                style = KnotworkTextStyles.MonoSm,
+                color = KnotworkTheme.extended.onSurfaceMuted,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
         }
     }
 }
@@ -407,16 +593,25 @@ private fun ChatHomeErrorTile(message: String, onRetry: () -> Unit) {
     }
 }
 
-/** Slide-in drawer overlay listing chat threads. */
+/**
+ * Slide-in drawer overlay rendered when [ChatHomeVisualState.DrawerOpen]
+ * is active. Mirrors the second-pass mockup:
+ *  - `SESSIONS` mono header.
+ *  - Big rounded `+ New chat` pill on `Accent50` with brand-primary glyph
+ *    and label.
+ *  - Thread list with leading status dot, bold title, mono subtitle, and
+ *    a trailing edit/rename icon. The active thread tints its row with
+ *    `Accent50` and pulls the dot up to the brand primary.
+ *  - Footer with two list rows — `Import chat (From JSON / text)` and
+ *    `Settings (API keys · model params)` — separated from the list by
+ *    a divider.
+ */
 @Composable
 private fun ChatHomeDrawerOverlay(state: ChatHomeViewState, callbacks: ChatHomeCallbacks) {
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(color = Color.Black.copy(alpha = DRAWER_SCRIM_ALPHA))
-            // The scrim itself is the dismiss surface — tapping anywhere
-            // outside the drawer panel collapses the overlay. `indication =
-            // null` keeps it visually inert (no ripple on the scrim).
             .scrimClickable(onClick = callbacks.onCloseDrawer),
         contentAlignment = Alignment.CenterStart,
     ) {
@@ -426,40 +621,31 @@ private fun ChatHomeDrawerOverlay(state: ChatHomeViewState, callbacks: ChatHomeC
             modifier = Modifier
                 .width(DrawerWidth)
                 .fillMaxHeight()
-                // Reserve the system status-bar inset inside the panel so
-                // the "Threads" header doesn't collide with the device's
-                // clock / status icons. Only the top inset — the bottom
-                // is already handled by the outer `AppShellScaffold`
-                // (which positions the body above the system nav bar).
                 .windowInsetsPadding(WindowInsets.statusBars)
-                // Absorb pointer events inside the panel so a tap on the
-                // drawer surface does not bubble up to the scrim's dismiss
-                // handler.
                 .absorbClicks(),
         ) {
             Column(modifier = Modifier.fillMaxSize()) {
+                // -------- Header + New chat pill --------
                 Text(
-                    text = stringResource(R.string.knotwork_chat_home_drawer_threads_header),
-                    style = KnotworkTextStyles.TitleLg,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier.padding(KnotworkTheme.spacing.sp4),
+                    text = stringResource(R.string.knotwork_chat_home_drawer_sessions_header),
+                    style = KnotworkTextStyles.MonoSm,
+                    color = KnotworkTheme.extended.onSurfaceMuted,
+                    modifier = Modifier.padding(
+                        start = KnotworkTheme.spacing.sp4,
+                        end = KnotworkTheme.spacing.sp4,
+                        top = KnotworkTheme.spacing.sp4,
+                        bottom = KnotworkTheme.spacing.sp2,
+                    ),
                 )
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = KnotworkTheme.spacing.sp4),
-                ) {
-                    KnotworkChip(
-                        label = stringResource(R.string.knotwork_chat_home_drawer_new_thread),
-                        onClick = {
-                            callbacks.onNewThread()
-                            callbacks.onCloseDrawer()
-                        },
-                    )
-                }
+                DrawerNewChatPill(
+                    onClick = {
+                        callbacks.onNewThread()
+                        callbacks.onCloseDrawer()
+                    },
+                )
                 Spacer(modifier = Modifier.height(KnotworkTheme.spacing.sp2))
-                LazyColumn(modifier = Modifier.fillMaxWidth()) {
+                // -------- Sessions list --------
+                LazyColumn(modifier = Modifier.fillMaxWidth().weight(1f)) {
                     items(items = state.threads, key = { it.id }) { thread ->
                         ChatHomeDrawerThreadRow(
                             row = thread,
@@ -467,48 +653,157 @@ private fun ChatHomeDrawerOverlay(state: ChatHomeViewState, callbacks: ChatHomeC
                                 callbacks.onSelectThread(thread.id)
                                 callbacks.onCloseDrawer()
                             },
+                            onEdit = { callbacks.onEditThread(thread.id) },
                         )
                     }
                 }
+                // -------- Footer entries --------
+                androidx.compose.material3.HorizontalDivider(color = KnotworkTheme.extended.divider)
+                DrawerFooterRow(
+                    icon = Icons.Outlined.FileDownload,
+                    title = stringResource(R.string.knotwork_chat_home_drawer_import_title),
+                    subtitle = stringResource(R.string.knotwork_chat_home_drawer_import_subtitle),
+                    onClick = {
+                        callbacks.onImportChat()
+                        callbacks.onCloseDrawer()
+                    },
+                )
+                DrawerFooterRow(
+                    icon = Icons.Outlined.BrightnessMedium,
+                    title = stringResource(R.string.knotwork_chat_home_drawer_settings_title),
+                    subtitle = stringResource(R.string.knotwork_chat_home_drawer_settings_subtitle),
+                    onClick = {
+                        callbacks.onOpenSettings()
+                        callbacks.onCloseDrawer()
+                    },
+                )
             }
         }
     }
 }
 
-/** One thread row inside the drawer overlay. */
 @Composable
-private fun ChatHomeDrawerThreadRow(row: ChatHomeThreadRow, onClick: () -> Unit) {
-    val container = if (row.selected) {
-        MaterialTheme.colorScheme.primaryContainer
-    } else {
-        Color.Transparent
-    }
-    Column(
+private fun DrawerNewChatPill(onClick: () -> Unit) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp2),
         modifier = Modifier
+            .padding(horizontal = KnotworkTheme.spacing.sp4)
             .fillMaxWidth()
-            .background(color = container)
+            .clip(KnotworkTheme.shapes.full)
+            .background(color = app.knotwork.design.tokens.KnotworkPalette.Accent100)
             .clickable(onClick = onClick)
             .padding(horizontal = KnotworkTheme.spacing.sp4, vertical = KnotworkTheme.spacing.sp3),
     ) {
-        Text(
-            text = row.title,
-            style = KnotworkTextStyles.TitleMd,
-            color = if (row.selected) {
-                MaterialTheme.colorScheme.onPrimaryContainer
-            } else {
-                MaterialTheme.colorScheme.onSurface
-            },
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.padding(bottom = 2.dp),
+        Icon(
+            imageVector = Icons.Outlined.Add,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.primary,
         )
         Text(
-            text = row.subtitle,
-            style = KnotworkTextStyles.BodySm,
-            color = KnotworkTheme.extended.onSurfaceMuted,
+            text = stringResource(R.string.knotwork_chat_home_drawer_new_thread),
+            style = KnotworkTextStyles.LabelLg.copy(
+                fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
+            ),
+            color = MaterialTheme.colorScheme.primary,
         )
     }
 }
+
+@Composable
+private fun ChatHomeDrawerThreadRow(row: ChatHomeThreadRow, onClick: () -> Unit, onEdit: () -> Unit) {
+    val rowBg = if (row.active || row.selected) {
+        app.knotwork.design.tokens.KnotworkPalette.Accent50
+    } else {
+        Color.Transparent
+    }
+    val dotColor = if (row.active) {
+        MaterialTheme.colorScheme.primary
+    } else {
+        KnotworkTheme.extended.onSurfaceMuted
+    }
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp3),
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(color = rowBg)
+            .clickable(onClick = onClick)
+            .padding(horizontal = KnotworkTheme.spacing.sp4, vertical = KnotworkTheme.spacing.sp3),
+    ) {
+        Box(
+            modifier = Modifier
+                .size(DRAWER_STATUS_DOT_SIZE)
+                .background(color = dotColor, shape = androidx.compose.foundation.shape.CircleShape),
+        )
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = row.title,
+                style = KnotworkTextStyles.TitleMd.copy(
+                    fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
+                ),
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                text = row.subtitle,
+                style = KnotworkTextStyles.MonoSm,
+                color = KnotworkTheme.extended.onSurfaceMuted,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        IconButton(onClick = onEdit) {
+            Icon(
+                imageVector = Icons.Outlined.Edit,
+                contentDescription = stringResource(R.string.knotwork_chat_home_drawer_edit_cd),
+                tint = KnotworkTheme.extended.onSurfaceMuted,
+            )
+        }
+    }
+}
+
+@Composable
+private fun DrawerFooterRow(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    title: String,
+    subtitle: String,
+    onClick: () -> Unit,
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp3),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = KnotworkTheme.spacing.sp4, vertical = KnotworkTheme.spacing.sp3),
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.size(KnotworkTheme.spacing.sp6),
+        )
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = title,
+                style = KnotworkTextStyles.TitleMd.copy(
+                    fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
+                ),
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            Text(
+                text = subtitle,
+                style = KnotworkTextStyles.BodySm,
+                color = KnotworkTheme.extended.onSurfaceMuted,
+            )
+        }
+    }
+}
+
+/** Diameter of the leading status dot rendered next to each session row. */
+private val DRAWER_STATUS_DOT_SIZE = 8.dp
 
 /** [ConsolePane] overlay anchored to the bottom of the chat surface. */
 @Composable

@@ -418,20 +418,34 @@
 
     <!-- TopAppBar action contentDescription: opens the thread drawer. -->
     <string name="knotwork_chat_home_action_threads">Open threads</string>
-    <!-- TopAppBar action contentDescription: opens the model picker. -->
-    <string name="knotwork_chat_home_action_model_picker">Choose model</string>
     <!-- TopAppBar overflow contentDescription. -->
     <string name="knotwork_chat_home_action_overflow">More chat options</string>
+    <!-- TopAppBar star/favorite action contentDescription. -->
+    <string name="knotwork_chat_home_action_favorite">Toggle favorite</string>
+    <!-- TopAppBar subtitle: pipeline name only — formatted "Pipeline · {name}". -->
+    <string name="knotwork_chat_home_topbar_pipeline">Pipeline · %1$s</string>
+    <!-- TopAppBar subtitle: token usage — formatted "1.4k / 8k tok". -->
+    <string name="knotwork_chat_home_topbar_tokens">%1$s / %2$s tok</string>
     <!-- TopAppBar accessibility hint for the title row triple-tap state picker (debug builds only). -->
     <string name="knotwork_chat_home_title_debug_hint">Triple-tap to open debug state picker</string>
     <!-- Empty-state title shown when a thread has no messages yet. -->
-    <string name="knotwork_chat_home_empty_title">Start a conversation</string>
-    <!-- Empty-state subtitle. -->
-    <string name="knotwork_chat_home_empty_subtitle">Try a sample prompt or type your own.</string>
-    <!-- Drawer header label. -->
-    <string name="knotwork_chat_home_drawer_threads_header">Threads</string>
-    <!-- Drawer action: start a new thread. -->
-    <string name="knotwork_chat_home_drawer_new_thread">New thread</string>
+    <string name="knotwork_chat_home_empty_title">New chat</string>
+    <!-- Empty-state caption — formatted "Pipeline · {name} · {model} (active)". -->
+    <string name="knotwork_chat_home_empty_caption">Pipeline · %1$s · %2$s (active)</string>
+    <!-- Empty-state suggestion card subtitle prefix: "uses · ". -->
+    <string name="knotwork_chat_home_empty_card_uses">uses · %1$s</string>
+    <!-- SESSIONS drawer header. -->
+    <string name="knotwork_chat_home_drawer_sessions_header">SESSIONS</string>
+    <!-- Drawer pill action: start a new chat. -->
+    <string name="knotwork_chat_home_drawer_new_thread">New chat</string>
+    <!-- Drawer per-row edit/rename icon contentDescription. -->
+    <string name="knotwork_chat_home_drawer_edit_cd">Rename thread</string>
+    <!-- Drawer footer entry: import a chat from JSON / text. -->
+    <string name="knotwork_chat_home_drawer_import_title">Import chat</string>
+    <string name="knotwork_chat_home_drawer_import_subtitle">From JSON / text</string>
+    <!-- Drawer footer entry: open Settings. -->
+    <string name="knotwork_chat_home_drawer_settings_title">Settings</string>
+    <string name="knotwork_chat_home_drawer_settings_subtitle">API keys · model params</string>
     <!-- Generating-state placeholder bubble label. -->
     <string name="knotwork_chat_home_generating_label">Generating…</string>
     <!-- Error-state inline tile title. -->

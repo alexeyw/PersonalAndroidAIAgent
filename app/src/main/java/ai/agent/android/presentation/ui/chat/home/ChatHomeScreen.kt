@@ -88,6 +88,11 @@ fun ChatHomeScreen(viewModel: ChatHomeViewModel, modifier: Modifier = Modifier) 
             onClarificationReply = { _ -> viewModel.forceState(ChatHomeUiState.Idle) },
             onErrorRetry = { viewModel.forceState(ChatHomeUiState.Idle) },
             onTitleTripleTap = { debugPickerExpanded = true },
+            onToggleFavorite = { /* stub: favorite persistence ships with the orchestrator integration */ },
+            onEditThread = { /* stub: rename sheet ships with the orchestrator integration */ },
+            onImportChat = { /* stub: import-from-JSON sheet ships with the orchestrator integration */ },
+            onOpenSettings = { /* stub: nav-graph deep-link to Settings ships in a follow-up */ },
+            onSamplePromptCard = { card -> viewModel.onComposerValueChange(card.title) },
         )
     }
 
