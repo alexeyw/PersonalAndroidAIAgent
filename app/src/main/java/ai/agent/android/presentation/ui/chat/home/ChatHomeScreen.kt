@@ -50,9 +50,16 @@ fun ChatHomeScreen(viewModel: ChatHomeViewModel, modifier: Modifier = Modifier) 
 
     var debugPickerExpanded by remember { mutableStateOf(false) }
 
+    // Resolve every user-facing stub string up here so the mapping below
+    // stays free of hardcoded strings — agent-status pills, drawer
+    // sessions, and the empty-state suggestion cards all flow from
+    // `strings_chat.xml`.
+    val fixtures = rememberChatHomeFixtures()
+
     val viewState = uiState.toViewState(
         threadTitle = threadTitle,
         modelName = modelName,
+        fixtures = fixtures,
         messages = messages,
         composerValue = composerValue,
         pendingTypedConfirm = pendingTypedConfirm,

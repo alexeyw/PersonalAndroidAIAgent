@@ -19,7 +19,6 @@ import app.knotwork.design.components.console.ConsoleVarRow
 import app.knotwork.design.components.console.SpanStatus
 import app.knotwork.design.screens.chat.ChatHomeConsoleState
 import app.knotwork.design.screens.chat.ChatHomeMessageRow
-import app.knotwork.design.screens.chat.ChatHomeThreadRow
 import app.knotwork.design.screens.chat.ChatHomeViewState
 import app.knotwork.design.screens.chat.ChatHomeVisualState
 
@@ -47,6 +46,7 @@ import app.knotwork.design.screens.chat.ChatHomeVisualState
 fun ChatHomeUiState.toViewState(
     threadTitle: String,
     modelName: String,
+    fixtures: ChatHomeFixtures = ChatHomeFixtures.forTesting(),
     messages: List<ChatHomeMessageRow> = emptyList(),
     composerValue: String = "",
     pendingTypedConfirm: String = "",
@@ -56,19 +56,18 @@ fun ChatHomeUiState.toViewState(
     tokensUsed: Int = 0,
     tokensMax: Int = 0,
     favorite: Boolean = false,
-    agentStatusLine: String? = "[NODE]  idle · ready",
 ): ChatHomeViewState = when (this) {
     is ChatHomeUiState.Empty -> ChatHomeViewState(
         visualState = ChatHomeVisualState.Empty,
         threadTitle = threadTitle,
         modelName = modelName,
         composerValue = composerValue,
-        samplePromptCards = sampleSuggestionCards(),
+        samplePromptCards = fixtures.suggestionCards,
         pipelineName = pipelineName,
         tokensUsed = tokensUsed,
         tokensMax = tokensMax,
         favorite = favorite,
-        agentStatusLine = agentStatusLine,
+        agentStatusLine = fixtures.statusIdle,
     )
 
     is ChatHomeUiState.Idle -> ChatHomeViewState(
@@ -81,7 +80,7 @@ fun ChatHomeUiState.toViewState(
         tokensUsed = tokensUsed,
         tokensMax = tokensMax,
         favorite = favorite,
-        agentStatusLine = agentStatusLine,
+        agentStatusLine = fixtures.statusIdle,
     )
 
     is ChatHomeUiState.Generating -> ChatHomeViewState(
@@ -95,7 +94,7 @@ fun ChatHomeUiState.toViewState(
         tokensUsed = tokensUsed,
         tokensMax = tokensMax,
         favorite = favorite,
-        agentStatusLine = "[NODE]  generating · streaming",
+        agentStatusLine = fixtures.statusGenerating,
     )
 
     is ChatHomeUiState.HitlConfirm -> ChatHomeViewState(
@@ -109,7 +108,7 @@ fun ChatHomeUiState.toViewState(
         tokensUsed = tokensUsed,
         tokensMax = tokensMax,
         favorite = favorite,
-        agentStatusLine = "[TOOL]  awaiting approval",
+        agentStatusLine = fixtures.statusHitl,
     )
 
     is ChatHomeUiState.Clarification -> ChatHomeViewState(
@@ -122,7 +121,7 @@ fun ChatHomeUiState.toViewState(
         tokensUsed = tokensUsed,
         tokensMax = tokensMax,
         favorite = favorite,
-        agentStatusLine = "[NODE]  waiting on clarification",
+        agentStatusLine = fixtures.statusClarification,
     )
 
     is ChatHomeUiState.Error -> ChatHomeViewState(
@@ -137,7 +136,7 @@ fun ChatHomeUiState.toViewState(
         tokensUsed = tokensUsed,
         tokensMax = tokensMax,
         favorite = favorite,
-        agentStatusLine = "[NODE]  error · see message",
+        agentStatusLine = fixtures.statusError,
     )
 
     is ChatHomeUiState.DrawerOpen -> ChatHomeViewState(
@@ -146,12 +145,12 @@ fun ChatHomeUiState.toViewState(
         modelName = modelName,
         messages = messages,
         composerValue = composerValue,
-        threads = sampleThreads(),
+        threads = fixtures.sessionRows,
         pipelineName = pipelineName,
         tokensUsed = tokensUsed,
         tokensMax = tokensMax,
         favorite = favorite,
-        agentStatusLine = agentStatusLine,
+        agentStatusLine = fixtures.statusIdle,
     )
 
     is ChatHomeUiState.ConsoleExpanded -> ChatHomeViewState(
@@ -164,7 +163,7 @@ fun ChatHomeUiState.toViewState(
         tokensUsed = tokensUsed,
         tokensMax = tokensMax,
         favorite = favorite,
-        agentStatusLine = agentStatusLine,
+        agentStatusLine = fixtures.statusIdle,
         console = ChatHomeConsoleState(
             snap = snap,
             tab = ConsoleTab.Logs,
@@ -258,55 +257,6 @@ internal fun clarificationRow(modelName: String): ChatHomeMessageRow = ChatHomeM
         ),
     ),
     metadata = ChatMetadata(timestamp = "09:16", model = modelName),
-)
-
-/** Sample threads shown inside the drawer overlay. */
-internal fun sampleThreads(): List<ChatHomeThreadRow> = listOf(
-    ChatHomeThreadRow(
-        id = "t1",
-        title = "Personal assistant",
-        subtitle = "now · default pipeline",
-        active = true,
-    ),
-    ChatHomeThreadRow(
-        id = "t2",
-        title = "Refactor planner",
-        subtitle = "12m · code-pipeline",
-    ),
-    ChatHomeThreadRow(
-        id = "t3",
-        title = "Weekly summary",
-        subtitle = "2h · summariser",
-    ),
-    ChatHomeThreadRow(
-        id = "t4",
-        title = "Travel research",
-        subtitle = "Mon · default pipeline",
-    ),
-    ChatHomeThreadRow(
-        id = "t5",
-        title = "LiteRT benchmark",
-        subtitle = "Last week",
-    ),
-)
-
-/** Sample prompt cards rendered on the empty-state surface. */
-internal fun sampleSuggestionCards(): List<app.knotwork.design.screens.chat.ChatHomeSamplePromptCard> = listOf(
-    app.knotwork.design.screens.chat.ChatHomeSamplePromptCard(
-        id = "card1",
-        title = "Summarise this week's emails",
-        toolsUsed = "search_tool, delegate_task",
-    ),
-    app.knotwork.design.screens.chat.ChatHomeSamplePromptCard(
-        id = "card2",
-        title = "Draft a reply to the last message",
-        toolsUsed = "clipboard",
-    ),
-    app.knotwork.design.screens.chat.ChatHomeSamplePromptCard(
-        id = "card3",
-        title = "Look up \"LiteRT delegate options\"",
-        toolsUsed = "search_tool",
-    ),
 )
 
 /** Sample console log lines surfaced when the console pane is expanded. */
