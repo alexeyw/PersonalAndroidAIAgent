@@ -15,6 +15,60 @@ details.
 
 ### Added
 
+- **Accessibility + release-candidate gate** (Phase 21 / Task 11/11) —
+  finalises the v0.1 surface against `decisions.md §14`:
+  - Localised the only hard-coded English `contentDescription` left in
+    the catalog (`PipelineListRow` overflow icon now resolves through
+    `knotwork_library_row_overflow_cd`) and dropped the duplicated
+    semantics override on `QuickAddRadialMenu`'s close button so
+    TalkBack reads the localised resource instead of `"close"`.
+  - `QuickAddTile` now merges its glyph + label into a single
+    `mergeDescendants` semantics node with a 48 dp `minimumInteractiveComponentSize`
+    floor, so the radial menu tiles are TalkBack-reachable in one focus
+    stop instead of two.
+  - Memory FLIP rank-shuffle (`animateItem(placementSpec)`) now gates
+    on `KnotworkTheme.a11y.reducedMotion()` — the 320 ms slide
+    collapses to an 80 ms crossfade when the user has the system
+    "Remove animations" toggle on.
+  - **`A11yMatrixSnapshotTest`** — new `:catalog` Roborazzi suite
+    locking baselines at `fontScale = 2.0` ("Largest" preset) for Chat
+    home / Pipeline library / Tools / Memory, plus a generating-state
+    snapshot under reduced-motion. Provides visual proof that no
+    dynamic-type layout breaks at 200 %.
+  - **`WcagContrastTest`** — pure-JVM ratifies WCAG 2.1 AA contrast for
+    the console foreground/background pair and the risk-destructive
+    label on `surface1` in both themes. Codifies the §14 contrast
+    contract so a future token regression fails CI.
+  - **`TalkBackHappyPathsTest`** — Compose-test scaffolds covering the
+    five happy paths from `decisions.md §14`. Asserts each entry
+    surface (chat home, pipeline library, tools, settings, memory)
+    publishes at least one TalkBack-reachable node (non-blank
+    `contentDescription`, `text`, or `OnClick` action). The live
+    TalkBack walkthrough on physical hardware is owned by QA via the
+    v0.1 release checklist.
+  - **Roborazzi baseline-lock** — every new screen's full state matrix
+    is committed under `:catalog/src/test/snapshots/` so
+    `:catalog:verifyRoborazziDebug` runs green without `*-actual.png`
+    leftovers.
+  - **`REVIEW_RETRO_phase21.md`** — internal retrospective walk through
+    the [`REVIEW.md`](project_docs/design/compose/components/REVIEW.md)
+    checklist for every Phase 21 sub-task, with the gaps closed in
+    Task 11 explicitly cross-linked.
+  - **Release APK build** — `:app:assembleRelease` now produces an
+    installable APK signed with the debug keystore (until a release
+    keystore is provisioned), targeting `arm64-v8a` only (every
+    `minSdk = 36` device is 64-bit). v0.1 APK weighs in well above the
+    initial 30 MB target — the on-device LiteRT-LM runtime, the
+    bundled cloud-provider SDKs (OpenAI / Anthropic / Google /
+    DeepSeek / Ollama via Koog), and the un-shrunk DEX classes
+    dominate. Switching to Android App Bundle + R8 minification is
+    tracked as the v0.2 size-reduction work; the APK size is documented
+    here so reviewers can plan accordingly.
+- **Hero screenshot in `README.md`** — pipeline editor (light theme)
+  rendered into `docs/images/hero-pipeline-editor.png` from the
+  catalog Roborazzi baseline. Replaces the missing visual entry the
+  README has carried since the rewrite started.
+
 - Redesigned **remaining screens C3 – C8** (Phase 21 / Task 10/11) — six
   user-facing surfaces now driven by stateless catalog content
   composables, each backed by a sealed `*ViewState` matrix mirroring

@@ -53,6 +53,21 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
             )
+            // Phase 21 / Task 11/11 — until a release keystore is provisioned,
+            // sign the release variant with the debug keystore so
+            // `./gradlew :app:assembleRelease` produces an installable APK we
+            // can measure for size and smoke-test on device. v0.1.0 ships
+            // unsigned for production use; a real `signingConfigs.release`
+            // block lands when the keystore is in place.
+            signingConfig = signingConfigs.getByName("debug")
+            // Strip non-arm64 ABIs from the release APK. With `minSdk = 36`
+            // (Android 16) every supported device is 64-bit; shipping
+            // `armeabi-v7a` + `x86` + `x86_64` would inflate the artefact
+            // by ~65 MB for zero benefit. Emulator-based smoke tests should
+            // use the debug variant which keeps every ABI.
+            ndk {
+                abiFilters += "arm64-v8a"
+            }
         }
     }
     compileOptions {
@@ -89,6 +104,10 @@ android {
         checkDependencies = true
         htmlReport = true
         xmlReport = true
+        // Phase 21 / Task 11/11: the release variant ships `arm64-v8a` only
+        // (every `minSdk = 36` device is 64-bit). ChromeOS support is not in
+        // scope for v0.1 — disable the lint check that demands an x86 binary.
+        disable += "ChromeOsAbiSupport"
     }
 }
 

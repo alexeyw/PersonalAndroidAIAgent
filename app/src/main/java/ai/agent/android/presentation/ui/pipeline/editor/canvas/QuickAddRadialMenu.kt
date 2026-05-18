@@ -21,6 +21,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -34,7 +35,6 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.IntSize
@@ -148,8 +148,7 @@ internal fun QuickAddRadialMenu(
             onClick = onDismiss,
             modifier = Modifier
                 .align(Alignment.TopEnd)
-                .padding(KnotworkTheme.spacing.sp4)
-                .semantics { contentDescription = "close" },
+                .padding(KnotworkTheme.spacing.sp4),
         ) {
             Icon(
                 imageVector = Icons.Outlined.Close,
@@ -164,10 +163,13 @@ internal fun QuickAddRadialMenu(
 private fun QuickAddTile(type: CatalogNodeType, onPick: () -> Unit, modifier: Modifier) {
     val tint = type.headerTint()
     val onTint = headerOnColor(tint)
+    val label = quickAddShortLabel(type)
     Column(
         modifier = modifier
             .width(TILE_LABEL_WIDTH_DP.dp)
-            .clickable(onClick = onPick),
+            .minimumInteractiveComponentSize()
+            .clickable(onClick = onPick)
+            .semantics(mergeDescendants = true) {},
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(TILE_LABEL_GAP_DP.dp),
     ) {
@@ -185,14 +187,14 @@ private fun QuickAddTile(type: CatalogNodeType, onPick: () -> Unit, modifier: Mo
             ) {
                 Icon(
                     imageVector = type.glyph(),
-                    contentDescription = quickAddShortLabel(type),
+                    contentDescription = null,
                     tint = onTint,
                     modifier = Modifier.size(GLYPH_SIZE_DP.dp),
                 )
             }
         }
         Text(
-            text = quickAddShortLabel(type),
+            text = label,
             style = KnotworkTextStyles.LabelSm,
             color = MaterialTheme.colorScheme.surface,
             textAlign = TextAlign.Center,

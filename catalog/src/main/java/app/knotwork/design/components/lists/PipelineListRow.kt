@@ -36,6 +36,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -240,7 +241,10 @@ fun PipelineListRow(
                 IconButton(onClick = onOverflow) {
                     Icon(
                         imageVector = Icons.Outlined.MoreVert,
-                        contentDescription = "More actions for $title",
+                        contentDescription = stringResource(
+                            app.knotwork.design.R.string.knotwork_library_row_overflow_cd,
+                            title,
+                        ),
                         tint = KnotworkTheme.extended.onSurfaceMuted,
                     )
                 }
