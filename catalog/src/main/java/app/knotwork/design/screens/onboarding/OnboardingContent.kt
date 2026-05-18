@@ -1,0 +1,551 @@
+@file:Suppress("MatchingDeclarationName") // Hosts OnboardingContent and its 4 step composables.
+
+package app.knotwork.design.screens.onboarding
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.ArrowForward
+import androidx.compose.material.icons.outlined.Hub
+import androidx.compose.material.icons.outlined.VpnKey
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import app.knotwork.design.R
+import app.knotwork.design.components.buttons.KnotworkPrimaryButton
+import app.knotwork.design.components.buttons.KnotworkTextButton
+import app.knotwork.design.theme.KnotworkTheme
+import app.knotwork.design.tokens.KnotworkPalette
+import app.knotwork.design.tokens.KnotworkTextStyles
+
+/** Height of the segmented progress bar shown above the bottom CTA. */
+private val ProgressSegmentHeight = 4.dp
+
+/** Width of the brand logo glyph rendered in the topbar. */
+private val LogoIconSize = 24.dp
+
+/** Diameter of the amber bullet rendered before each step-1 feature tile label. */
+private val FeatureBulletSize = 8.dp
+
+/** Diameter of the radio circle shown on each model row. */
+private val RadioOuterSize = 22.dp
+
+/** Diameter of the filled inner dot rendered when a model row is selected. */
+private val RadioInnerSize = 10.dp
+
+/** Border width of the unselected radio circle / the recommended pill / pipeline-node chip. */
+private val OutlineBorderWidth = 1.dp
+
+/** Diameter of the cloud-provider row's leading key icon. */
+private val CloudIconSize = 20.dp
+
+/** Height of the inline pipeline-node chip rendered in the step-4 recap. */
+private val PipelineChipHeight = 28.dp
+
+/**
+ * Stateless Knotwork onboarding surface — renders one of four steps from
+ * [OnboardingViewState.step]. The host (`:app/OnboardingScreen`) owns the
+ * `HorizontalPager` if the swipe gesture is desired; the catalog stays
+ * snapshot-deterministic by deriving the visible step from [state] alone.
+ *
+ * Layout (per the second-pass mockups, Phase 21 / Task 10):
+ *  - Top bar: brand glyph + product title left, Skip link right.
+ *  - Body: mono "0N · {label}" step indicator + headline + body + per-step
+ *    content (welcome tiles / radio cards / cloud rows / pipeline preview).
+ *  - Footer: 4 horizontal progress segments + a single full-width CTA
+ *    whose label varies per step.
+ *
+ * @param state immutable view-state snapshot.
+ * @param callbacks bundle of one-shot event handlers; defaults to no-op.
+ * @param modifier optional layout modifier applied to the screen root.
+ */
+@Composable
+fun OnboardingContent(
+    state: OnboardingViewState,
+    modifier: Modifier = Modifier,
+    callbacks: OnboardingCallbacks = noopOnboardingCallbacks(),
+) {
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .background(color = MaterialTheme.colorScheme.surface),
+    ) {
+        Column(modifier = Modifier.fillMaxSize()) {
+            OnboardingTopBar(state = state, callbacks = callbacks)
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+                    .padding(horizontal = KnotworkTheme.spacing.sp4),
+            ) {
+                when (state.step) {
+                    OnboardingStep.Welcome -> WelcomeStep(state = state)
+                    OnboardingStep.LiteRtModel -> LiteRtModelStep(state = state, callbacks = callbacks)
+                    OnboardingStep.CloudKeys -> CloudKeysStep(state = state, callbacks = callbacks)
+                    OnboardingStep.Ready -> ReadyStep(state = state)
+                }
+            }
+            OnboardingFooter(state = state, callbacks = callbacks)
+        }
+    }
+}
+
+@Composable
+private fun OnboardingTopBar(state: OnboardingViewState, callbacks: OnboardingCallbacks) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp2),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(
+                start = KnotworkTheme.spacing.sp4,
+                end = KnotworkTheme.spacing.sp4,
+                top = KnotworkTheme.spacing.sp3,
+                bottom = KnotworkTheme.spacing.sp3,
+            ),
+    ) {
+        Icon(
+            imageVector = Icons.Outlined.Hub,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.size(LogoIconSize),
+        )
+        Text(
+            text = androidx.compose.ui.res.stringResource(R.string.knotwork_onboarding_brand_title),
+            style = KnotworkTextStyles.TitleMd.copy(fontWeight = FontWeight.SemiBold),
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.weight(1f),
+        )
+        // Skip is suppressed on the final step — the user commits via the
+        // primary CTA there, not by skipping.
+        if (state.step != OnboardingStep.Ready) {
+            KnotworkTextButton(
+                text = androidx.compose.ui.res.stringResource(R.string.knotwork_onboarding_skip),
+                onClick = callbacks.onSkip,
+            )
+        }
+    }
+}
+
+@Composable
+private fun OnboardingFooter(state: OnboardingViewState, callbacks: OnboardingCallbacks) {
+    Column(
+        verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp4),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(
+                horizontal = KnotworkTheme.spacing.sp4,
+                vertical = KnotworkTheme.spacing.sp4,
+            ),
+    ) {
+        ProgressSegments(currentStepIndex = state.step.pageIndex)
+        val ctaLabel = when (state.step) {
+            OnboardingStep.Welcome -> androidx.compose.ui.res.stringResource(
+                R.string.knotwork_onboarding_continue,
+            )
+            OnboardingStep.LiteRtModel -> androidx.compose.ui.res.stringResource(
+                R.string.knotwork_onboarding_models_download_cta,
+                state.liteRtModel.displayName,
+            )
+            OnboardingStep.CloudKeys -> androidx.compose.ui.res.stringResource(
+                R.string.knotwork_onboarding_cloud_skip_cta,
+            )
+            OnboardingStep.Ready -> androidx.compose.ui.res.stringResource(
+                R.string.knotwork_onboarding_ready_cta,
+            )
+        }
+        val leadingIcon = if (state.step == OnboardingStep.Ready) {
+            Icons.AutoMirrored.Outlined.ArrowForward
+        } else {
+            null
+        }
+        KnotworkPrimaryButton(
+            text = ctaLabel,
+            onClick = if (state.isFinalStep) callbacks.onFinish else callbacks.onNext,
+            enabled = state.isPrimaryCtaEnabled,
+            leadingIcon = leadingIcon,
+            modifier = Modifier.fillMaxWidth(),
+        )
+    }
+}
+
+@Composable
+private fun ProgressSegments(currentStepIndex: Int) {
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp2),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        OnboardingStep.entries.forEach { entry ->
+            val filled = entry.pageIndex <= currentStepIndex
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .height(ProgressSegmentHeight)
+                    .clip(KnotworkTheme.shapes.full)
+                    .background(
+                        color = if (filled) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            KnotworkTheme.extended.divider
+                        },
+                    ),
+            )
+        }
+    }
+}
+
+@Composable
+private fun StepIndicator(step: OnboardingStep) {
+    val padded = "%02d".format(step.pageIndex + 1)
+    Text(
+        text = "$padded · ${step.indicatorLabel}",
+        style = KnotworkTextStyles.MonoSm,
+        color = KnotworkTheme.extended.onSurfaceMuted,
+    )
+}
+
+@Composable
+private fun StepHeadline(text: String) {
+    Text(
+        text = text,
+        style = KnotworkTextStyles.Display2xl,
+        color = MaterialTheme.colorScheme.onSurface,
+    )
+}
+
+@Composable
+private fun StepBody(text: String) {
+    Text(
+        text = text,
+        style = KnotworkTextStyles.BodyLg,
+        color = KnotworkTheme.extended.onSurfaceMuted,
+    )
+}
+
+// ----------------------- Step 1 · Welcome ---------------------------------
+
+@Composable
+private fun WelcomeStep(state: OnboardingViewState) {
+    Column(
+        verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp3),
+        modifier = Modifier.fillMaxSize(),
+    ) {
+        StepIndicator(step = state.step)
+        StepHeadline(
+            text = androidx.compose.ui.res.stringResource(R.string.knotwork_onboarding_welcome_headline),
+        )
+        StepBody(text = androidx.compose.ui.res.stringResource(R.string.knotwork_onboarding_welcome_body))
+        Spacer(modifier = Modifier.height(KnotworkTheme.spacing.sp2))
+        FeatureTile(
+            label = androidx.compose.ui.res.stringResource(R.string.knotwork_onboarding_welcome_tile_litert),
+        )
+        FeatureTile(
+            label = androidx.compose.ui.res.stringResource(R.string.knotwork_onboarding_welcome_tile_appfunctions),
+        )
+        FeatureTile(
+            label = androidx.compose.ui.res.stringResource(R.string.knotwork_onboarding_welcome_tile_storage),
+        )
+    }
+}
+
+@Composable
+private fun FeatureTile(label: String) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp3),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(KnotworkTheme.shapes.md)
+            .background(color = KnotworkTheme.extended.surface1)
+            .padding(
+                horizontal = KnotworkTheme.spacing.sp4,
+                vertical = KnotworkTheme.spacing.sp3,
+            ),
+    ) {
+        Box(
+            modifier = Modifier
+                .size(FeatureBulletSize)
+                .background(color = MaterialTheme.colorScheme.primary, shape = CircleShape),
+        )
+        Text(
+            text = label,
+            style = KnotworkTextStyles.BodyBase,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+    }
+}
+
+// ----------------------- Step 2 · LiteRT model ----------------------------
+
+@Composable
+private fun LiteRtModelStep(state: OnboardingViewState, callbacks: OnboardingCallbacks) {
+    Column(
+        verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp3),
+        modifier = Modifier.fillMaxSize(),
+    ) {
+        StepIndicator(step = state.step)
+        StepHeadline(
+            text = androidx.compose.ui.res.stringResource(R.string.knotwork_onboarding_models_headline),
+        )
+        StepBody(text = androidx.compose.ui.res.stringResource(R.string.knotwork_onboarding_models_body))
+        Spacer(modifier = Modifier.height(KnotworkTheme.spacing.sp2))
+        OnboardingLiteRtModel.entries.forEach { model ->
+            LiteRtModelRow(
+                model = model,
+                selected = model == state.liteRtModel,
+                onClick = { callbacks.onLiteRtModelPick(model) },
+            )
+        }
+    }
+}
+
+@Composable
+private fun LiteRtModelRow(model: OnboardingLiteRtModel, selected: Boolean, onClick: () -> Unit) {
+    val containerColor = if (selected) KnotworkPalette.Accent50 else KnotworkTheme.extended.surface1
+    val borderColor = if (selected) MaterialTheme.colorScheme.primary else Color.Transparent
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp3),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(KnotworkTheme.shapes.md)
+            .background(color = containerColor)
+            .border(width = OutlineBorderWidth, color = borderColor, shape = KnotworkTheme.shapes.md)
+            .clickable(onClick = onClick)
+            .padding(
+                horizontal = KnotworkTheme.spacing.sp4,
+                vertical = KnotworkTheme.spacing.sp3,
+            ),
+    ) {
+        RadioCircle(selected = selected)
+        Column(
+            verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp1),
+            modifier = Modifier.weight(1f),
+        ) {
+            Text(
+                text = model.displayName,
+                style = KnotworkTextStyles.TitleMd.copy(fontWeight = FontWeight.SemiBold),
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            Text(
+                text = model.sizeLabel,
+                style = KnotworkTextStyles.MonoSm,
+                color = KnotworkTheme.extended.onSurfaceMuted,
+            )
+        }
+        if (model.recommended) RecommendedPill()
+    }
+}
+
+@Composable
+private fun RadioCircle(selected: Boolean) {
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier = Modifier
+            .size(RadioOuterSize)
+            .border(
+                width = OutlineBorderWidth + 0.5.dp,
+                color = MaterialTheme.colorScheme.primary,
+                shape = CircleShape,
+            ),
+    ) {
+        if (selected) {
+            Box(
+                modifier = Modifier
+                    .size(RadioInnerSize)
+                    .background(color = MaterialTheme.colorScheme.primary, shape = CircleShape),
+            )
+        }
+    }
+}
+
+@Composable
+private fun RecommendedPill() {
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier = Modifier
+            .clip(KnotworkTheme.shapes.sm)
+            .border(
+                width = OutlineBorderWidth,
+                color = MaterialTheme.colorScheme.primary,
+                shape = KnotworkTheme.shapes.sm,
+            )
+            .padding(
+                horizontal = KnotworkTheme.spacing.sp2,
+                vertical = KnotworkTheme.spacing.sp1,
+            ),
+    ) {
+        Text(
+            text = androidx.compose.ui.res.stringResource(R.string.knotwork_onboarding_models_recommended),
+            style = KnotworkTextStyles.LabelSm.copy(fontWeight = FontWeight.SemiBold),
+            color = MaterialTheme.colorScheme.primary,
+        )
+    }
+}
+
+// ----------------------- Step 3 · Cloud keys ------------------------------
+
+@Composable
+private fun CloudKeysStep(state: OnboardingViewState, callbacks: OnboardingCallbacks) {
+    Column(
+        verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp3),
+        modifier = Modifier.fillMaxSize(),
+    ) {
+        StepIndicator(step = state.step)
+        StepHeadline(
+            text = androidx.compose.ui.res.stringResource(R.string.knotwork_onboarding_cloud_headline),
+        )
+        StepBody(text = androidx.compose.ui.res.stringResource(R.string.knotwork_onboarding_cloud_body))
+        Spacer(modifier = Modifier.height(KnotworkTheme.spacing.sp2))
+        OnboardingCloudProvider.entries.forEach { provider ->
+            CloudProviderRow(
+                provider = provider,
+                configured = provider.id in state.configuredCloudProviders,
+                onConfigure = { callbacks.onConfigureCloudProvider(provider) },
+            )
+        }
+    }
+}
+
+@Composable
+private fun CloudProviderRow(provider: OnboardingCloudProvider, configured: Boolean, onConfigure: () -> Unit) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp3),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(KnotworkTheme.shapes.md)
+            .background(color = KnotworkTheme.extended.surface1)
+            .clickable(onClick = onConfigure)
+            .padding(
+                horizontal = KnotworkTheme.spacing.sp4,
+                vertical = KnotworkTheme.spacing.sp3,
+            ),
+    ) {
+        Icon(
+            imageVector = Icons.Outlined.VpnKey,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.size(CloudIconSize),
+        )
+        Text(
+            text = provider.displayName,
+            style = KnotworkTextStyles.BodyBase.copy(fontWeight = FontWeight.SemiBold),
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.weight(1f),
+        )
+        Text(
+            text = androidx.compose.ui.res.stringResource(
+                if (configured) {
+                    R.string.knotwork_onboarding_cloud_configured
+                } else {
+                    R.string.knotwork_onboarding_cloud_configure
+                },
+            ),
+            style = KnotworkTextStyles.LabelLg.copy(fontWeight = FontWeight.SemiBold),
+            color = MaterialTheme.colorScheme.primary,
+        )
+    }
+}
+
+// ----------------------- Step 4 · Ready -----------------------------------
+
+@Composable
+private fun ReadyStep(state: OnboardingViewState) {
+    Column(
+        verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp3),
+        modifier = Modifier.fillMaxSize(),
+    ) {
+        StepIndicator(step = state.step)
+        StepHeadline(
+            text = androidx.compose.ui.res.stringResource(R.string.knotwork_onboarding_ready_headline),
+        )
+        StepBody(text = androidx.compose.ui.res.stringResource(R.string.knotwork_onboarding_ready_body))
+        Spacer(modifier = Modifier.height(KnotworkTheme.spacing.sp2))
+        state.defaultPipelinePreview?.let { PipelinePreviewCard(preview = it) }
+    }
+}
+
+@Composable
+private fun PipelinePreviewCard(preview: OnboardingDefaultPipelinePreview) {
+    Column(
+        verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp3),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(KnotworkTheme.shapes.md)
+            .background(color = KnotworkTheme.extended.surface1)
+            .padding(KnotworkTheme.spacing.sp4),
+    ) {
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp2),
+            verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp2),
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            preview.nodes.forEachIndexed { index, name ->
+                PipelineNodeChip(name = name, accent = name == preview.accentNodeName)
+                if (index < preview.nodes.lastIndex) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Outlined.ArrowForward,
+                        contentDescription = null,
+                        tint = KnotworkTheme.extended.onSurfaceMuted,
+                        modifier = Modifier
+                            .size(CloudIconSize)
+                            .padding(top = KnotworkTheme.spacing.sp1),
+                    )
+                }
+            }
+        }
+        Text(
+            text = androidx.compose.ui.res.pluralStringResource(
+                R.plurals.knotwork_onboarding_ready_preview_caption,
+                preview.nodeCount,
+                preview.nodeCount,
+                preview.edgeCount,
+            ),
+            style = KnotworkTextStyles.MonoSm,
+            color = KnotworkTheme.extended.onSurfaceMuted,
+        )
+    }
+}
+
+@Composable
+private fun PipelineNodeChip(name: String, accent: Boolean) {
+    val border = if (accent) KnotworkPalette.NodeIfCondition else MaterialTheme.colorScheme.primary
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier = Modifier
+            .height(PipelineChipHeight)
+            .clip(KnotworkTheme.shapes.sm)
+            .border(width = OutlineBorderWidth, color = border, shape = KnotworkTheme.shapes.sm)
+            .padding(
+                horizontal = KnotworkTheme.spacing.sp2,
+                vertical = KnotworkTheme.spacing.sp1,
+            ),
+    ) {
+        Text(
+            text = name,
+            style = KnotworkTextStyles.MonoSm.copy(fontWeight = FontWeight.SemiBold),
+            color = border,
+        )
+    }
+}

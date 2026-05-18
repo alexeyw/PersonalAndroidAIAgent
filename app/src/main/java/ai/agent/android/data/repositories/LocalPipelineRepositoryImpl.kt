@@ -50,6 +50,7 @@ class LocalPipelineRepositoryImpl @Inject constructor(private val pipelineDao: P
                 cloudProvider = it.cloudProvider,
                 clarificationTimeoutMs = it.clarificationTimeoutMs,
                 contextConfig = it.contextConfig,
+                configJson = it.configJson,
             )
         }
         val connectionEntities = pipeline.connections.map {
@@ -95,6 +96,7 @@ class LocalPipelineRepositoryImpl @Inject constructor(private val pipelineDao: P
                 cloudProvider = it.cloudProvider,
                 clarificationTimeoutMs = it.clarificationTimeoutMs,
                 contextConfig = it.contextConfig,
+                configJson = it.configJson,
             )
         },
         connections = this.connections.map {

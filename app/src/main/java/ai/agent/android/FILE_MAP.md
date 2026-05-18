@@ -200,24 +200,44 @@ This file maps the contents of the main application package.
   - `theme/` - Compose theme definitions.
     - `Theme.kt` - App theme definition. Reads the static fallback palette from `res/values/colors.xml` via `colorResource(...)`; dynamic color (Android 12+) takes precedence on supported devices.
     - `Type.kt` - Typography settings.
+    - `KnotworkFontsBootstrap.kt` - Builds the bundled Inter / JetBrains Mono `FontFamily` instances from `R.font.*` and installs them into `:catalog`'s `KnotworkFonts`. Called once from `App.onCreate()` so the design-system typography renders against the brand fonts on the first frame.
   - `ui/` - UI screens and ViewModels.
-    - `MainActivity.kt` - Main activity.
-    - `navigation/` - Navigation routing constants.
-      - `NavRoutes.kt` - Canonical `const val` registry of every Jetpack Navigation Compose route string.
-    - `chat/` - Chat screen components.
-      - `AgentThoughtIndicator.kt` - Indicator for agent thinking.
-      - `ApprovalBanner.kt` - Prominent inline approval prompt rendered above the chat input bar whenever the orchestrator is in `WaitingForApproval`; complements the compact console-line indicator with full-width Approve / Deny buttons and a risk-coloured badge.
-      - `ChatExportPayload.kt` - Payload carrying exported chat JSON to the share sheet.
-      - `ChatScreen.kt` - Chat UI screen.
-      - `ChatUiState.kt` - Chat UI state.
-      - `ChatViewModel.kt` - Chat ViewModel.
-      - `ClarificationCard.kt` - Inline chat card rendering an `AwaitingClarification` request (pending/answered/timed-out states with countdown).
-      - `ClarificationCardUiModel.kt` - UI projection of a clarification request held in `ChatUiState.clarificationCards`.
-      - `ConsoleFullLogSheet.kt` - Expanded-console `ModalBottomSheet` (Phase 17.5): renders the full chronological log of the active session with millisecond timestamps, filter chips, `Clear` / `Copy all` actions, auto-scroll, and a `↓ New events` FAB.
-      - `ConsoleLogFilter.kt` - Pure-Kotlin enum (`All / Nodes / Tools / Memory / Errors`) backing the filter-chip row in the expanded console, plus the `matches(event)` predicate.
-      - `ConsolePanelCollapsed.kt` - Stateless 56dp mini-console rendered above the chat input; shows the last 3 `ConsoleEvent`s in monospace with type-coded colors and `HH:mm:ss [TAG] message` formatting.
-      - `PipelineSummary.kt` - Lightweight UI projection of a pipeline (id + name) used by the chat-screen pipeline selectors and TopAppBar subtitle.
-      - `PipelineTraceCard.kt` - Pipeline trace UI component.
+    - `MainActivity.kt` - Main activity. Owns the platform splash, edge-to-edge insets, and the root Compose tree that wires `AppShellScaffold` + `AppNavGraph`.
+    - `navigation/` - App shell, bottom-nav scaffold, and the single nav-graph for the app.
+      - `NavRoutes.kt` - Canonical `const val` registry of every Jetpack Navigation Compose route string, including the chat deep-link template and modal-sheet placeholders.
+      - `TabDestination.kt` - `TabDestination` data class + `TAB_DESTINATIONS` for the four bottom-nav tabs (Chat / Pipelines / Tools / More).
+      - `BottomNavVisibility.kt` - Pure `shouldShowBottomNav(route)` function; unit-tested decision table for which routes hide the nav bar (splash, onboarding, editor, modal sheets).
+      - `KnotworkModalRoute.kt` - Generic `ModalBottomSheet` + `PredictiveBackHandler` wrapper reused by every modal-sheet route (`NodeConfigSheet`, `ConsolePane`, `AddMcpServerScreen` — bodies arrive in Tasks 6/7/10).
+      - `AppShellScaffold.kt` - Root scaffold: bottom-nav chrome, tab-switch state preservation, root-tab `BackHandler = activity.finish()`, theme-flip crossfade.
+      - `AppNavGraph.kt` - The single `NavHost` for the app, hosting splash → onboarding → tabs (Chat / Pipelines nested-graph / Tools / More) + secondary screens + modal-sheet placeholders. Reads `isFirstLaunch` to drive the onboarding gate.
+    - `onboarding/` - First-launch onboarding gate (Phase 21 / Task 4 stub; full pager in Task 10).
+      - `OnboardingScreen.kt` - Single-screen welcome + Get-started CTA; flips `SettingsRepository.isFirstLaunch` once on completion.
+      - `OnboardingViewModel.kt` - Hilt ViewModel; persists `isFirstLaunch = false`.
+    - `more/` - "More" tab landing screen.
+      - `MoreScreen.kt` - Material3 `ListItem` list with Memory / Models / Prompts / Task monitor / Live metrics / Settings / About rows.
+    - `about/` - About screen (Phase 21 / Task 4 stub; full body in Task 10).
+      - `AboutScreen.kt` - App name + version (`BuildConfig.VERSION_NAME`) + license name.
+    - `chat/` - Chat surface (Phase 21 / Task 8: the redesigned `home/` package is the production surface; `legacy/` keeps the original implementation while orchestrator integration is pending).
+      - `home/` - Redesigned Knotwork chat home (Phase 21 / Task 8). Wired to `CHAT_TAB` via `AppNavGraph`.
+        - `ChatHomeScreen.kt` - Stateful entry composable: subscribes to `ChatHomeViewModel`, maps `ChatHomeUiState → ChatHomeViewState`, threads the debug state picker, owns IME / navigation-bar insets.
+        - `ChatHomeUiState.kt` - Sealed UI state for the 9-state matrix (Empty / Idle / Generating / HitlConfirm(Risk) / Clarification / Error(message) / DrawerOpen / ConsoleExpanded(snap); dark theme is cross-cutting).
+        - `ChatHomeViewModel.kt` - Stub Hilt ViewModel exposing `state: StateFlow<ChatHomeUiState>`. Drives `Idle → Generating → Idle` round-trip on `sendMessage`; debug-only `forceState` for the picker. Orchestrator wiring lands post-v0.1.
+        - `ChatHomeStateMapping.kt` - Pure-Kotlin mapper from `ChatHomeUiState` to the catalog `ChatHomeViewState`, plus debug-picker fixtures and the `DebugStateIds` constants.
+        - `ChatHomeDebugStatePicker.kt` - Triple-tap state picker (`DropdownMenu`) — visible only in debug builds via `BuildConfig.DEBUG` guard.
+      - `legacy/` - Original chat surface preserved for post-v0.1 orchestrator integration. Not wired into navigation today.
+        - `AgentThoughtIndicator.kt` - Indicator for agent thinking.
+        - `ApprovalBanner.kt` - Prominent inline approval prompt rendered above the chat input bar whenever the orchestrator is in `WaitingForApproval`; complements the compact console-line indicator with full-width Approve / Deny buttons and a risk-coloured badge.
+        - `ChatExportPayload.kt` - Payload carrying exported chat JSON to the share sheet.
+        - `ChatScreen.kt` - Legacy chat UI screen (rebound to `CHAT_TAB` once the orchestrator-wiring task lands).
+        - `ChatUiState.kt` - Legacy chat UI state.
+        - `ChatViewModel.kt` - Legacy chat ViewModel — still wires `AgentOrchestratorUseCase`, `ChatRepository`, etc.
+        - `ClarificationCard.kt` - Inline chat card rendering an `AwaitingClarification` request (pending/answered/timed-out states with countdown).
+        - `ClarificationCardUiModel.kt` - UI projection of a clarification request held in `ChatUiState.clarificationCards`.
+        - `ConsoleFullLogSheet.kt` - Expanded-console `ModalBottomSheet` (Phase 17.5): renders the full chronological log of the active session with millisecond timestamps, filter chips, `Clear` / `Copy all` actions, auto-scroll, and a `↓ New events` FAB.
+        - `ConsoleLogFilter.kt` - Pure-Kotlin enum (`All / Nodes / Tools / Memory / Errors`) backing the filter-chip row in the expanded console, plus the `matches(event)` predicate.
+        - `ConsolePanelCollapsed.kt` - Stateless 56dp mini-console rendered above the chat input; shows the last 3 `ConsoleEvent`s in monospace with type-coded colors and `HH:mm:ss [TAG] message` formatting.
+        - `PipelineSummary.kt` - Lightweight UI projection of a pipeline (id + name) used by the chat-screen pipeline selectors and TopAppBar subtitle.
+        - `PipelineTraceCard.kt` - Pipeline trace UI component.
     - `memory/` - Memory screen components.
       - `MemoryScreen.kt` - Memory UI screen.
       - `MemoryUiState.kt` - Memory UI state.
@@ -230,15 +250,31 @@ This file maps the contents of the main application package.
       - `MonitoringScreen.kt` - Monitoring UI screen.
       - `MonitoringUiState.kt` - Monitoring UI state.
       - `MonitoringViewModel.kt` - Monitoring ViewModel.
-    - `orchestrator/` - Orchestrator screen components.
-      - `OrchestratorUiState.kt` - Orchestrator UI state.
-      - `OrchestratorViewModel.kt` - Orchestrator ViewModel.
+    - `orchestrator/` - Pipeline library + shared orchestrator ViewModel (the canvas surface moved to `pipeline/editor/` in Phase 21 / Task 9).
+      - `OrchestratorUiState.kt` - Orchestrator UI state and `PromptPreviewState` / `PipelineRunState`.
+      - `OrchestratorViewModel.kt` - Orchestrator ViewModel. Owns graph mutation, persistence, validation, run-state placeholder, and the editor `focusNodeRequest` SharedFlow.
       - `PipelineLibraryScreen.kt` - Library screen listing every saved pipeline (active highlight, long-press / `⋮` menu for Load / Rename / Duplicate / Delete, FAB for new pipeline). Shares `OrchestratorViewModel` with the editor via the `pipelines` nested nav graph.
-      - `VisualOrchestratorScreen.kt` - Visual orchestrator UI screen.
       - `components/` - Orchestrator UI components.
-        - `DraggableNode.kt` - Draggable node UI component.
         - `NodeContextConfigSection.kt` - "Input Data" section of the node configuration dialog: five checkboxes mapped to `NodeContextConfig` flags (with `nodeInput` rendered locked-on) plus a hint banner.
         - `PromptLibraryDialog.kt` - Prompt library dialog UI component.
+    - `pipeline/editor/` - Phase 21 / Task 9 — production pipeline editor.
+      - `PipelineEditorScreen.kt` - Stateful entry composable: subscribes to `OrchestratorViewModel` + `runState`, owns the screen-local `EditorState`, hosts the catalog `NodeConfigSheet`, dispatches graph mutations.
+      - `PipelineEditorContent.kt` - Pure-layout content. Vertical stack of `EditorToolbar` (or `MultiSelectToolbar`) + `EditorCanvas` + `ValidationBar` (or `RunTraceBar`).
+      - `config/NodeConfigCodec.kt` - JSON ↔ catalog `NodeConfig` codec + legacy-field derivation for pre-Phase-21 rows + `defaultFor(type, title)` factory.
+      - `config/NodeTypeMapper.kt` - Bridges between domain `NodeType` / `CloudProvider` and the catalog enums (`pipelineeditor.NodeType` / `CloudProvider`).
+      - `core/CanvasTransform.kt` - Pan / pinch-zoom math + `snapToGrid(value)` helper; pure Kotlin.
+      - `core/BezierEdge.kt` - Cubic-Bezier control-point math, point-evaluation, arc-length approximation, hit-test; pure Kotlin.
+      - `core/AutoLayout.kt` - Sugiyama-style hierarchical layout (longest-path layering + median crossing reduction + grid-snapped coordinates); pure Kotlin.
+      - `core/EditorUndoRedo.kt` - Bounded undo / redo snapshot stack (capacity = 50); pure Kotlin.
+      - `core/EditorState.kt` - `@Stable` screen-local state holder (`transform`, `selection`, `multiSelectMode`, `connectionInProgress`, `quickAddAnchor`, `activeRunningNodeId`, `isRunning`, `configuringNodeId`, `workingConfig`, `undoRedo`). `rememberEditorState()` factory.
+      - `canvas/EditorCanvas.kt` - Pinch-zoom + pan + tap / long-press gesture host; composes `EditorEdges` underneath every `EditorNode`; overlays the `QuickAddRadialMenu` when active.
+      - `canvas/EditorNode.kt` - Per-node Compose wrapper around the catalog `NodeCard`. Owns the drag pickup + spring-release animations and routes outbound-port drags to connection mode.
+      - `canvas/EditorEdges.kt` - Single `Canvas` drawing every edge as a cubic Bezier, the preview-edge while a connection is being drawn, and the traveling-dot run-trace animation.
+      - `canvas/QuickAddRadialMenu.kt` - 12-tile radial menu (one per node type) anchored at the long-press point; dispatches `onPick(type)`.
+      - `bars/ValidationBar.kt` - Bottom bar listing `PipelineValidationError`s; tap → `requestFocusNode(nodeId)`.
+      - `bars/RunTraceBar.kt` - Bottom bar shown while a run is active; displays the running node label and a steady indicator dot.
+      - `bars/MultiSelectToolbar.kt` - Top bar that replaces `EditorToolbar` while multi-select is active; surfaces count + Cancel / Delete.
+      - `sheet/NodeConfigSheetHost.kt` - Thin adapter exposing the catalog `NodeConfigSheet` (with all 12 per-type forms + validator) to the editor screen.
     - `prompts/` - Prompt Library screen components.
       - `PromptLibraryScreen.kt` - Prompt library UI screen.
       - `PromptLibraryUiState.kt` - Prompt library UI state.
@@ -256,7 +292,9 @@ This file maps the contents of the main application package.
       - `TaskMonitorState.kt` - Task monitor UI state.
       - `TaskMonitorViewModel.kt` - Task monitor ViewModel.
     - `tools/` - Tools screen components.
-      - `ToolsScreen.kt` - Tools UI screen.
+      - `ToolsScreen.kt` - Tools UI screen — Phase 21 / Task 10 rewrite, drives catalog `ToolsContent`.
       - `ToolsUiState.kt` - Tools UI state.
       - `ToolsViewModel.kt` - Tools ViewModel.
+      - `ToolDetailScreen.kt` - Per-tool detail screen (Phase 21 / Task 10) showing schema preview + enable toggle.
+      - `AddMcpServerScreen.kt` - Add-MCP-server screen with URL validation (Phase 21 / Task 10).
 - `FILE_MAP.md` - This file mapping the current directory structure.

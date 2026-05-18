@@ -28,6 +28,12 @@ import ai.agent.android.domain.constants.DefaultPrompts
  * results) that the orchestrator concatenates into the node's input on every
  * execution. Defaults to [NodeContextConfig.ALL_ENABLED] so legacy pipelines
  * keep their pre-Phase-15 behaviour.
+ * @property configJson Optional JSON payload encoding the per-type
+ * [app.knotwork.design.components.pipelineeditor.NodeConfig] populated from
+ * the Phase-21 `NodeConfigSheet` (see `node-specs.md`). `null` for legacy
+ * pipelines saved before Phase 21; the editor falls back to deriving a
+ * default config from the flat fields above on first edit. Serialised /
+ * deserialised by `presentation/ui/pipeline/editor/config/NodeConfigCodec`.
  */
 data class NodeModel(
     val id: String,
@@ -44,4 +50,5 @@ data class NodeModel(
     val cloudProvider: String? = null,
     val clarificationTimeoutMs: Long? = null,
     val contextConfig: NodeContextConfig = NodeContextConfig.ALL_ENABLED,
+    val configJson: String? = null,
 )

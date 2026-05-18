@@ -1,22 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:aapt="http://schemas.android.com/aapt"
     android:width="108dp"
     android:height="108dp"
-    android:viewportWidth="512"
-    android:viewportHeight="512">
+    android:viewportWidth="108"
+    android:viewportHeight="108">
 
-    <path android:pathData="M 0,0 H 512 V 512 H 0 Z">
-        <aapt:attr name="android:fillColor">
-            <gradient
-                android:startX="0"
-                android:startY="0"
-                android:endX="512"
-                android:endY="512"
-                android:type="linear">
-                <item android:color="#F2FBF5" android:offset="0.0" />
-                <item android:color="#CFEADD" android:offset="1.0" />
-            </gradient>
-        </aapt:attr>
-    </path>
+    <!--
+      Adaptive launcher background — solid Knotwork accent (matches
+      project_docs/design/compose/brand/ic_launcher_background.svg).
+      Color = accent-500 in the OKLCH palette.
+    -->
+    <path
+        android:pathData="M0,0 h108 v108 h-108 Z"
+        android:fillColor="#C48225" />
 </vector>

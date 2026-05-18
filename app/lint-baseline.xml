@@ -5,7 +5,7 @@
         id="BadPeriodicWorkRequestEnqueue"
         message="Use `enqueueUniquePeriodicWork()` instead of `enqueue()`">
         <location
-            file="../../../../.gradle/caches/9.4.1/transforms/4af5d4a02c42b429913ef10f8d7b856a/transformed/work-runtime-2.11.2/jars/classes.jar!/androidx/work/WorkManager.class"/>
+            file="../../../../.gradle/caches/9.4.1/transforms/8169723bf09fb0454fc3084989753c8c/transformed/work-runtime-2.11.2/jars/classes.jar!/androidx/work/WorkManager.class"/>
     </issue>
 
     <issue
@@ -15,7 +15,7 @@
         errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/AndroidManifest.xml"
-            line="90"
+            line="91"
             column="13"/>
     </issue>
 
@@ -80,7 +80,7 @@
         errorLine1="        val isCompactConsole = configuration.screenHeightDp &lt;= compactConsoleThresholdDp"
         errorLine2="                               ~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
-            file="src/main/java/ai/agent/android/presentation/ui/chat/ChatScreen.kt"
+            file="src/main/java/ai/agent/android/presentation/ui/chat/legacy/ChatScreen.kt"
             line="312"
             column="32"/>
     </issue>
@@ -91,7 +91,7 @@
         errorLine1="    modifier: Modifier = Modifier,"
         errorLine2="    ~~~~~~~~">
         <location
-            file="src/main/java/ai/agent/android/presentation/ui/chat/AgentThoughtIndicator.kt"
+            file="src/main/java/ai/agent/android/presentation/ui/chat/legacy/AgentThoughtIndicator.kt"
             line="66"
             column="5"/>
     </issue>
@@ -102,7 +102,7 @@
         errorLine1="    modifier: Modifier = Modifier,"
         errorLine2="    ~~~~~~~~">
         <location
-            file="src/main/java/ai/agent/android/presentation/ui/chat/ConsolePanelCollapsed.kt"
+            file="src/main/java/ai/agent/android/presentation/ui/chat/legacy/ConsolePanelCollapsed.kt"
             line="105"
             column="5"/>
     </issue>
@@ -169,7 +169,7 @@
         errorLine2="    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/res/values/strings_orchestrator.xml"
-            line="74"
+            line="27"
             column="5"/>
     </issue>
 
@@ -189,6 +189,39 @@
             file="src/main/java/ai/agent/android/presentation/ui/prompts/PromptLibraryScreen.kt"
             line="74"
             column="35"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.knotwork_tools_empty_learn` appears to be unused"
+        errorLine1="    &lt;string name=&quot;knotwork_tools_empty_learn&quot;>Learn about MCP&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="../catalog/src/main/res/values/strings.xml"
+            line="205"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.knotwork_settings_restart_required` appears to be unused"
+        errorLine1="    &lt;string name=&quot;knotwork_settings_restart_required&quot;>Changes take effect on restart.&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="../catalog/src/main/res/values/strings.xml"
+            line="253"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.knotwork_settings_destructive_confirm_message` appears to be unused"
+        errorLine1="    &lt;string name=&quot;knotwork_settings_destructive_confirm_message&quot;>This action cannot be undone.&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="../catalog/src/main/res/values/strings.xml"
+            line="256"
+            column="13"/>
     </issue>
 
     <issue
@@ -270,6 +303,39 @@
 
     <issue
         id="UnusedResources"
+        message="The resource `R.string.common_rename` appears to be unused"
+        errorLine1="    &lt;string name=&quot;common_rename&quot;>Rename&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings_common.xml"
+            line="25"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.common_duplicate` appears to be unused"
+        errorLine1="    &lt;string name=&quot;common_duplicate&quot;>Duplicate&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings_common.xml"
+            line="26"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.common_load` appears to be unused"
+        errorLine1="    &lt;string name=&quot;common_load&quot;>Load&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings_common.xml"
+            line="27"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
         message="The resource `R.string.common_done` appears to be unused"
         errorLine1="    &lt;string name=&quot;common_done&quot;>Done&lt;/string>"
         errorLine2="            ~~~~~~~~~~~~~~~~~~">
@@ -287,6 +353,39 @@
         <location
             file="src/main/res/values/strings_common.xml"
             line="29"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.onboarding_headline` appears to be unused"
+        errorLine1="    &lt;string name=&quot;onboarding_headline&quot;>Welcome to Knotwork&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings_common.xml"
+            line="40"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.onboarding_subtitle` appears to be unused"
+        errorLine1="    &lt;string name=&quot;onboarding_subtitle&quot;>An on-device AI agent for Android. Set up takes a moment.&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings_common.xml"
+            line="41"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.onboarding_get_started` appears to be unused"
+        errorLine1="    &lt;string name=&quot;onboarding_get_started&quot;>Get started&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings_common.xml"
+            line="42"
             column="13"/>
     </issue>
 
@@ -325,12 +424,342 @@
 
     <issue
         id="UnusedResources"
+        message="The resource `R.string.memory_screen_title` appears to be unused"
+        errorLine1="    &lt;string name=&quot;memory_screen_title&quot;>Memory Management&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings_memory.xml"
+            line="3"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.memory_tab_chat_history` appears to be unused"
+        errorLine1="    &lt;string name=&quot;memory_tab_chat_history&quot;>Chat History&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings_memory.xml"
+            line="4"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.memory_tab_vector_base` appears to be unused"
+        errorLine1="    &lt;string name=&quot;memory_tab_vector_base&quot;>Vector Base&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings_memory.xml"
+            line="5"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.memory_empty_chat_history` appears to be unused"
+        errorLine1="    &lt;string name=&quot;memory_empty_chat_history&quot;>No chat history available.&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings_memory.xml"
+            line="6"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.memory_empty_vector` appears to be unused"
+        errorLine1="    &lt;string name=&quot;memory_empty_vector&quot;>No vector memories stored yet.&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings_memory.xml"
+            line="7"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.memory_chunks_stored` appears to be unused"
+        errorLine1="    &lt;string name=&quot;memory_chunks_stored&quot;>%1$d chunks stored&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings_memory.xml"
+            line="8"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.memory_compact_button` appears to be unused"
+        errorLine1="    &lt;string name=&quot;memory_compact_button&quot;>Compact Memory&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings_memory.xml"
+            line="9"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.memory_session_header` appears to be unused"
+        errorLine1="    &lt;string name=&quot;memory_session_header&quot;>Session: %1$s...&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings_memory.xml"
+            line="10"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.memory_session_messages` appears to be unused"
+        errorLine1="    &lt;string name=&quot;memory_session_messages&quot;>%1$d messages&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings_memory.xml"
+            line="11"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.memory_delete_session_cd` appears to be unused"
+        errorLine1="    &lt;string name=&quot;memory_delete_session_cd&quot;>Delete Session&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings_memory.xml"
+            line="12"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.memory_delete_message_cd` appears to be unused"
+        errorLine1="    &lt;string name=&quot;memory_delete_message_cd&quot;>Delete Message&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings_memory.xml"
+            line="13"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.memory_delete_memory_cd` appears to be unused"
+        errorLine1="    &lt;string name=&quot;memory_delete_memory_cd&quot;>Delete Memory&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings_memory.xml"
+            line="14"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.memory_embedding_size` appears to be unused"
+        errorLine1="    &lt;string name=&quot;memory_embedding_size&quot;>Embedding size: %1$d dims&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings_memory.xml"
+            line="15"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.orchestrator_library_title` appears to be unused"
+        errorLine1="    &lt;string name=&quot;orchestrator_library_title&quot;>Pipelines&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings_orchestrator.xml"
+            line="13"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
         message="The resource `R.string.orchestrator_default_pipeline_name` appears to be unused"
         errorLine1="    &lt;string name=&quot;orchestrator_default_pipeline_name&quot;>New Pipeline&lt;/string>"
         errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/res/values/strings_orchestrator.xml"
+            line="16"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.orchestrator_library_new_pipeline_cd` appears to be unused"
+        errorLine1="    &lt;string name=&quot;orchestrator_library_new_pipeline_cd&quot;>New pipeline&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings_orchestrator.xml"
+            line="19"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.orchestrator_library_pipeline_unnamed` appears to be unused"
+        errorLine1="    &lt;string name=&quot;orchestrator_library_pipeline_unnamed&quot;>Unnamed (%1$s)&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings_orchestrator.xml"
+            line="24"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.orchestrator_library_badge_active` appears to be unused"
+        errorLine1="    &lt;string name=&quot;orchestrator_library_badge_active&quot;>Active&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings_orchestrator.xml"
+            line="25"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.orchestrator_library_badge_default` appears to be unused"
+        errorLine1="    &lt;string name=&quot;orchestrator_library_badge_default&quot;>Default&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings_orchestrator.xml"
+            line="26"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.orchestrator_library_pipeline_subtitle` appears to be unused"
+        errorLine1="    &lt;string name=&quot;orchestrator_library_pipeline_subtitle&quot;>Updated %1$s · %2$d nodes&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings_orchestrator.xml"
             line="27"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.orchestrator_library_pipeline_actions_cd` appears to be unused"
+        errorLine1="    &lt;string name=&quot;orchestrator_library_pipeline_actions_cd&quot;>Pipeline actions&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings_orchestrator.xml"
+            line="28"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.orchestrator_library_menu_default_pipeline` appears to be unused"
+        errorLine1="    &lt;string name=&quot;orchestrator_library_menu_default_pipeline&quot;>Default pipeline&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings_orchestrator.xml"
+            line="29"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.orchestrator_library_menu_set_as_default` appears to be unused"
+        errorLine1="    &lt;string name=&quot;orchestrator_library_menu_set_as_default&quot;>Set as default&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings_orchestrator.xml"
+            line="30"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.orchestrator_library_empty_title` appears to be unused"
+        errorLine1="    &lt;string name=&quot;orchestrator_library_empty_title&quot;>No pipelines yet&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings_orchestrator.xml"
+            line="32"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.orchestrator_library_empty_subtitle` appears to be unused"
+        errorLine1="    &lt;string name=&quot;orchestrator_library_empty_subtitle&quot;>Tap + to create your first pipeline.&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings_orchestrator.xml"
+            line="33"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.tools_screen_title` appears to be unused"
+        errorLine1="    &lt;string name=&quot;tools_screen_title&quot;>Tools &amp;amp; Integrations&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings_tools.xml"
+            line="4"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.tools_section_local_app_functions` appears to be unused"
+        errorLine1="    &lt;string name=&quot;tools_section_local_app_functions&quot;>Local AppFunctions&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings_tools.xml"
+            line="5"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.tools_section_mcp_servers` appears to be unused"
+        errorLine1="    &lt;string name=&quot;tools_section_mcp_servers&quot;>MCP Servers&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings_tools.xml"
+            line="6"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.tools_remove_server_cd` appears to be unused"
+        errorLine1="    &lt;string name=&quot;tools_remove_server_cd&quot;>Remove Server&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings_tools.xml"
+            line="7"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.tools_new_mcp_label` appears to be unused"
+        errorLine1="    &lt;string name=&quot;tools_new_mcp_label&quot;>Add New MCP Server URL&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings_tools.xml"
+            line="8"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.tools_add_server` appears to be unused"
+        errorLine1="    &lt;string name=&quot;tools_add_server&quot;>Add Server&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings_tools.xml"
+            line="9"
             column="13"/>
     </issue>
 

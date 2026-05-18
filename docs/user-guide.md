@@ -30,12 +30,27 @@ pre-release ships with real captures.
 
 ## Getting started
 
+The first time you launch the app you go through a brief onboarding
+screen, then land on the Chat tab.
+
+The bottom of the screen always shows the four navigation tabs:
+
+- **Chat** — talk to the agent (the default tab the app opens on).
+- **Pipelines** — browse and edit the agent's reasoning pipelines.
+- **Tools** — manage AppFunctions and connected MCP servers.
+- **More** — secondary screens (Memory, Models, Prompt library,
+  Active tasks, Live metrics, Settings, About).
+
+The Back gesture returns you up the inner stack of the current tab.
+While you are on the start screen of a tab, Back closes the app — it
+does not switch between tabs.
+
 The first time you open the app, there is no model loaded yet — you
 need to download one before you can talk to the agent.
 
 ### 1. Open the Models screen
 
-From the main navigation, open **Models**. The screen has two areas:
+Open the **More** tab and tap **Models**. The screen has two areas:
 
 - A list of **presets** — curated LiteRT models that are known to work
   with the agent. Each preset shows the model name and a **Download**
@@ -79,6 +94,42 @@ jump to [Troubleshooting](#troubleshooting).
 Every conversation lives in its own chat session. You can keep many
 sessions in parallel — each one has its own message history and can
 be bound to its own pipeline.
+
+### The chat home screen
+
+The chat home is the first surface that opens after onboarding. It is
+now built on the Knotwork design system and shows, top to bottom:
+
+- A **top app bar** with the current thread title, the active model
+  name beneath it (e.g. *Gemma 2 · 2B*), a menu icon on the left that
+  opens the thread drawer, and a model picker plus overflow menu on
+  the right.
+- A **message list** with user and assistant bubbles, inline tool
+  invocations, and any clarification or HITL confirmation card the
+  agent surfaced for the current run.
+- A pinned **composer** at the bottom — type a message, attach a file
+  with the paperclip, or dictate with the microphone. The send button
+  morphs into a stop button while the agent is generating.
+
+The surface adapts to nine deterministic visual states, all reachable
+from the same screen:
+
+| State            | When it appears                                                 |
+|------------------|-----------------------------------------------------------------|
+| Empty            | A brand-new thread with no messages — shows sample prompts.     |
+| Idle             | History present, no in-flight request. The default.             |
+| Generating       | The assistant is producing tokens.                              |
+| HITL Confirm     | A tool call awaits your approval (read-only / sensitive /       |
+|                  | destructive — each tier surfaces a different confirmation UI).  |
+| Clarification    | The assistant asks you for more details before continuing.      |
+| Error            | The model or network failed; an inline tile + retry appears.    |
+| Drawer Open      | The thread list slides in as an alt-nav drawer over the chat.   |
+| Console Expanded | The agent console rises from the bottom over the chat surface.  |
+| Dark             | A cross-cutting variant — every state respects the system theme. |
+
+**Debug builds** expose a state picker reachable by triple-tapping the
+title row, which flips between every documented state for visual QA.
+The picker is not present in release builds.
 
 ### Switching, creating, and renaming chats
 
@@ -227,13 +278,76 @@ default pipeline marked in the library.
 
 ### Visual editor
 
-Loading a pipeline opens the **Visual Orchestrator**. You can drag
-nodes around the canvas, draw connections between them, and tap a
-node to open its configuration dialog.
+Loading a pipeline opens the **Pipeline editor**. The editor surface
+is an infinite pan / zoom canvas with the following gestures:
+
+- **One-finger drag on empty canvas** — pan the viewport.
+- **Two-finger pinch** — zoom (`0.4×–2.0×`).
+- **Drag a node card** — move the node; it snaps to a 24 dp grid on
+  release with a soft spring settle.
+- **Add a connection** — press and hold one of the node's **bottom
+  port dots**, then drag toward another node and release when the
+  finger is over its **top port dot**. For multi-output nodes
+  (`If` → True / False, `Queue` → Item / Done, `Eval` → Pass / Retry /
+  Fail, `Router` → one port per declared class) the dot you grabbed
+  determines which branch the edge represents.
+- **Delete a connection** — two paths:
+  1. **Single-tap** the edge → it highlights in accent colour and the
+     toolbar 🗑 Delete becomes active. Press 🗑 to remove. Or
+  2. **Long-press** the edge → confirmation dialog "Remove
+     connection?" opens; tap Remove.
+  Both paths are undoable from the toolbar Undo button.
+- **Tap a node** — select it (single-select mode).
+- **Tap a selected node** — opens its **configuration sheet**
+  (`NodeConfigSheet`) so you can edit the per-type properties.
+  Equivalent to "double-tap the node".
+- **Long-press a node** — enter multi-select. Subsequent taps toggle
+  membership; the top bar swaps for a count + Cancel / Delete cluster.
+- **Long-press the empty canvas** — opens a **radial quick-add menu**
+  with one labelled tile per node type. Picking a tile spawns the node
+  at the long-press point and immediately opens its configuration sheet.
+- **Toolbar** — inline-editable pipeline name on the left; Undo /
+  Redo / Delete (selection-aware: edge if one is selected, otherwise
+  selected nodes) / Auto-layout / Run / overflow on the right.
+  Auto-layout re-arranges nodes via a Sugiyama-style hierarchy
+  (longest-path layering + median crossing reduction) so the graph
+  reads top-to-bottom.
+
+The bottom of the screen alternates between two bars:
+
+- **Validation bar** — lists pipeline errors (missing input, dangling
+  output, cycles, empty context, …). Tapping a row centres the canvas
+  on the offending node and selects it. The bar collapses to a
+  single-line "Pipeline is valid" when there are no errors.
+- **Run-trace bar** — replaces the validation bar while a pipeline run
+  is in progress; the active node header pulses and the connecting
+  edges show a traveling-dot animation. Reduced-motion is respected.
 
 The editor also has an **Import JSON** button that lets you load a
 pipeline exported from the standalone browser editor (see
 [Browser pipeline editor](#browser-pipeline-editor)).
+
+### Node configuration sheets
+
+Reach a node's per-type configuration by either:
+
+- **Tapping a node you've already selected** (single-tap → select,
+  tap again → open the sheet); or
+- **Picking the node from the radial quick-add menu** — newly added
+  nodes open the sheet immediately.
+
+The sheet is a modal bottom-sheet whose body is documented in
+`node-specs.md`. Every node type — Input, Output, LiteRt, Cloud,
+IntentRouter, IfCondition, Clarification, Tool, Decomposition,
+QueueProcessor, Evaluation, Summary — has its own form, with inline
+validation that disables Save until every required field is filled.
+
+For the **IntentRouter** node, the Classes section in its config
+sheet lets you grow / shrink the class list: each row has a small
+**−** button to remove it (disabled below the 2-class minimum), and a
+**+ Add class** button under the list creates a new empty class row
+(disabled above the 6-class maximum). The new class shows up as an
+additional outbound port on the node card immediately on Save.
 
 ### Variables in system prompts
 
@@ -404,7 +518,7 @@ the rolling context (described below).
 
 ### Browsing long-term memory
 
-Open the **Memory** screen. It has two tabs:
+Open the **More** tab, tap **Memory**. The screen has two tabs:
 
 - **Chat History** — every past session, grouped by chat. Expand a
   session to see its messages.

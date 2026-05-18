@@ -85,8 +85,6 @@ object KoogModelMapper {
     }
 
     fun getGoogleModelIdList(): List<String> = listOf(
-        GoogleModels.Gemini2_0Flash.id,
-        GoogleModels.Gemini2_0FlashLite.id,
         GoogleModels.Gemini2_5Pro.id,
         GoogleModels.Gemini2_5Flash.id,
         GoogleModels.Gemini2_5FlashLite.id,
@@ -95,8 +93,6 @@ object KoogModelMapper {
     )
 
     fun getGoogleModel(name: String): LLModel = when (name) {
-        GoogleModels.Gemini2_0Flash.id -> GoogleModels.Gemini2_0Flash
-        GoogleModels.Gemini2_0FlashLite.id -> GoogleModels.Gemini2_0FlashLite
         GoogleModels.Gemini2_5Pro.id -> GoogleModels.Gemini2_5Pro
         GoogleModels.Gemini2_5Flash.id -> GoogleModels.Gemini2_5Flash
         GoogleModels.Gemini2_5FlashLite.id -> GoogleModels.Gemini2_5FlashLite

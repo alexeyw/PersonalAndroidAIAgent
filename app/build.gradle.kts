@@ -53,6 +53,21 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
             )
+            // Phase 21 / Task 11/11 — until a release keystore is provisioned,
+            // sign the release variant with the debug keystore so
+            // `./gradlew :app:assembleRelease` produces an installable APK we
+            // can measure for size and smoke-test on device. v0.1.0 ships
+            // unsigned for production use; a real `signingConfigs.release`
+            // block lands when the keystore is in place.
+            signingConfig = signingConfigs.getByName("debug")
+            // Strip non-arm64 ABIs from the release APK. With `minSdk = 36`
+            // (Android 16) every supported device is 64-bit; shipping
+            // `armeabi-v7a` + `x86` + `x86_64` would inflate the artefact
+            // by ~65 MB for zero benefit. Emulator-based smoke tests should
+            // use the debug variant which keeps every ABI.
+            ndk {
+                abiFilters += "arm64-v8a"
+            }
         }
     }
     compileOptions {
@@ -89,6 +104,10 @@ android {
         checkDependencies = true
         htmlReport = true
         xmlReport = true
+        // Phase 21 / Task 11/11: the release variant ships `arm64-v8a` only
+        // (every `minSdk = 36` device is 64-bit). ChromeOS support is not in
+        // scope for v0.1 — disable the lint check that demands an x86 binary.
+        disable += "ChromeOsAbiSupport"
     }
 }
 
@@ -200,13 +219,36 @@ kover {
                     "ai.agent.android.presentation.ui.*Screen",
                     "ai.agent.android.presentation.ui.*ScreenKt",
                     "ai.agent.android.presentation.ui.*Screen$*",
-                    "ai.agent.android.presentation.ui.chat.ConsoleFullLogSheet*",
-                    "ai.agent.android.presentation.ui.chat.ConsolePanelCollapsed*",
-                    "ai.agent.android.presentation.ui.chat.AgentThoughtIndicator*",
-                    "ai.agent.android.presentation.ui.chat.ClarificationCard*",
-                    "ai.agent.android.presentation.ui.chat.PipelineTraceCard*",
+                    // Legacy chat surface (Phase 21 / Task 8: moved under chat/legacy/
+                    // pending the post-v0.1 orchestrator-rewiring task).
+                    "ai.agent.android.presentation.ui.chat.legacy.ConsoleFullLogSheet*",
+                    "ai.agent.android.presentation.ui.chat.legacy.ConsolePanelCollapsed*",
+                    "ai.agent.android.presentation.ui.chat.legacy.AgentThoughtIndicator*",
+                    "ai.agent.android.presentation.ui.chat.legacy.ClarificationCard*",
+                    "ai.agent.android.presentation.ui.chat.legacy.PipelineTraceCard*",
+                    "ai.agent.android.presentation.ui.chat.legacy.ApprovalBanner*",
+                    "ai.agent.android.presentation.ui.chat.legacy.ChatScreen*",
+                    // Redesigned chat-home Composables (Phase 21 / Task 8) — Compose
+                    // surfaces are covered by `:catalog` Roborazzi snapshots; the
+                    // testable VM / state-mapping live next to them and are
+                    // included in coverage.
+                    "ai.agent.android.presentation.ui.chat.home.ChatHomeScreen*",
+                    "ai.agent.android.presentation.ui.chat.home.ChatHomeDebugStatePicker*",
+                    "ai.agent.android.presentation.ui.chat.home.DebugStateRows*",
                     "ai.agent.android.presentation.ui.components.*",
                     "ai.agent.android.presentation.ui.orchestrator.components.*",
+                    // Phase 21 / Task 9 — pipeline editor Compose layer. Gestures,
+                    // animations, and Bezier draw paths are intentionally outside the
+                    // JVM Kover scope; the pure-Kotlin core (CanvasTransform,
+                    // AutoLayout, EditorUndoRedo, BezierEdge, NodeConfigCodec) plus
+                    // the VM hooks ARE covered. Screen-level visual coverage rides
+                    // on the catalog's PipelineEditorCatalogPageSnapshotTest (Task 7)
+                    // and the Phase 21 / Task 11 a11y + release-candidate gate.
+                    "ai.agent.android.presentation.ui.pipeline.editor.canvas.*",
+                    "ai.agent.android.presentation.ui.pipeline.editor.bars.*",
+                    "ai.agent.android.presentation.ui.pipeline.editor.sheet.*",
+                    "ai.agent.android.presentation.ui.pipeline.editor.PipelineEditorContent*",
+                    "ai.agent.android.presentation.ui.pipeline.editor.PipelineEditorScreen*",
                     "ai.agent.android.presentation.ui.splash.SplashScreen*",
                     "ai.agent.android.presentation.theme.*",
                     "ai.agent.android.presentation.notifications.*",
@@ -316,6 +358,17 @@ val checkNoInternalFqn by tasks.registering {
 tasks.named("check") { dependsOn(checkNoInternalFqn) }
 
 dependencies {
+    // Phase 21 / Task 1/11: design-system module — `KnotworkTheme` (currently
+    // a `MaterialTheme` pass-through) plus the foundations Task 2/11 will
+    // port into Kotlin sources.
+    implementation(project(":catalog"))
+
+    // Phase 21 / Task 1/11: `androidx.core.splashscreen` artefact — the
+    // platform-side splash is wired in Task 3/11 once the brand mark and
+    // accent token land. Declaring the dependency here keeps the build green
+    // when downstream tasks reference `installSplashScreen(...)`.
+    implementation(libs.androidx.core.splashscreen)
+
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.activity.compose)

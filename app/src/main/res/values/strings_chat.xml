@@ -126,4 +126,56 @@
 
     <!-- Stop-generation suffix appended to the partial agent message persisted on cancel -->
     <string name="chat_message_stopped_suffix">[stopped]</string>
+
+    <!-- ============ ChatHomeScreen debug state picker (debug builds only) ============ -->
+    <string name="chat_home_debug_state_empty">Empty</string>
+    <string name="chat_home_debug_state_idle">Idle</string>
+    <string name="chat_home_debug_state_generating">Generating</string>
+    <string name="chat_home_debug_state_hitl_readonly">HITL — Read-only</string>
+    <string name="chat_home_debug_state_hitl_sensitive">HITL — Sensitive</string>
+    <string name="chat_home_debug_state_hitl_destructive">HITL — Destructive</string>
+    <string name="chat_home_debug_state_clarification">Clarification</string>
+    <string name="chat_home_debug_state_error">Error</string>
+    <string name="chat_home_debug_state_drawer_open">Drawer open</string>
+    <string name="chat_home_debug_state_console_peek">Console — Peek</string>
+    <string name="chat_home_debug_state_console_partial">Console — Partial</string>
+    <string name="chat_home_debug_state_console_full">Console — Full</string>
+
+    <!--
+        Agent status lines rendered in the pill above the composer. Two spaces
+        between the bracketed tag and the body keep the surfaces vertically
+        aligned with the mockup.
+    -->
+    <string name="chat_home_status_idle">[NODE]  idle · ready</string>
+    <string name="chat_home_status_generating">[NODE]  generating · streaming</string>
+    <string name="chat_home_status_hitl">[TOOL]  awaiting approval</string>
+    <string name="chat_home_status_clarification">[NODE]  waiting on clarification</string>
+    <string name="chat_home_status_error">[NODE]  error · see message</string>
+
+    <!--
+        Stub session-drawer fixtures rendered while the orchestrator
+        integration is pending. The titles double as the thread display
+        names; the subtitles encode "{when} · {pipeline}".
+    -->
+    <string name="chat_home_stub_session_1_title">Personal assistant</string>
+    <string name="chat_home_stub_session_1_subtitle">now · default pipeline</string>
+    <string name="chat_home_stub_session_2_title">Refactor planner</string>
+    <string name="chat_home_stub_session_2_subtitle">12m · code-pipeline</string>
+    <string name="chat_home_stub_session_3_title">Weekly summary</string>
+    <string name="chat_home_stub_session_3_subtitle">2h · summariser</string>
+    <string name="chat_home_stub_session_4_title">Travel research</string>
+    <string name="chat_home_stub_session_4_subtitle">Mon · default pipeline</string>
+    <string name="chat_home_stub_session_5_title">LiteRT benchmark</string>
+    <string name="chat_home_stub_session_5_subtitle">Last week</string>
+
+    <!--
+        Empty-state suggestion cards. `tools` is the pre-formatted, comma-
+        separated tool-id list rendered in the mono "uses · …" subtitle.
+    -->
+    <string name="chat_home_suggestion_card_1_title">Summarise this week\'s emails</string>
+    <string name="chat_home_suggestion_card_1_tools">search_tool, delegate_task</string>
+    <string name="chat_home_suggestion_card_2_title">Draft a reply to the last message</string>
+    <string name="chat_home_suggestion_card_2_tools">clipboard</string>
+    <string name="chat_home_suggestion_card_3_title">Look up \"LiteRT delegate options\"</string>
+    <string name="chat_home_suggestion_card_3_tools">search_tool</string>
 </resources>

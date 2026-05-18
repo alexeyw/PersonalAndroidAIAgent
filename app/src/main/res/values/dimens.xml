@@ -1,9 +1,35 @@
 <?xml version="1.0" encoding="utf-8"?>
-<resources>
+<!--
+    `tools:ignore="UnusedResources"` covers the `knotwork_sp_*` mirror
+    published ahead of its non-Compose consumers (notifications, widgets,
+    splash window theme). Compose code reads spacing from `KnotworkTheme.spacing`.
+-->
+<resources xmlns:tools="http://schemas.android.com/tools" tools:ignore="UnusedResources">
     <!--
         Chat screen: minimum screen height at which the inline console panel is
         kept expanded. Below this threshold the panel auto-collapses to free
         vertical space for the message list.
     -->
     <dimen name="chat_compact_console_threshold_height">480dp</dimen>
+
+    <!--
+        Knotwork spacing scale (Phase 21 / Task 2/11).
+
+        Mirror of `KnotworkSpacing` in :catalog/.../tokens/Spacing.kt — the
+        4 dp grid the design system is built on. Provided as Android XML
+        dimens so non-Compose surfaces (notifications, app widgets, splash
+        window theme) can pull the same scale; Compose code must always
+        read from `KnotworkTheme.spacing` instead.
+    -->
+    <dimen name="knotwork_sp_0">0dp</dimen>
+    <dimen name="knotwork_sp_1">4dp</dimen>
+    <dimen name="knotwork_sp_2">8dp</dimen>
+    <dimen name="knotwork_sp_3">12dp</dimen>
+    <dimen name="knotwork_sp_4">16dp</dimen>
+    <dimen name="knotwork_sp_5">20dp</dimen>
+    <dimen name="knotwork_sp_6">24dp</dimen>
+    <dimen name="knotwork_sp_8">32dp</dimen>
+    <dimen name="knotwork_sp_10">40dp</dimen>
+    <dimen name="knotwork_sp_12">48dp</dimen>
+    <dimen name="knotwork_sp_16">64dp</dimen>
 </resources>

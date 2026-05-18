@@ -13,6 +13,12 @@ interface SettingsRepository {
     /**
      * A [Flow] representing the current state of the first launch flag.
      * Emits `true` if it's the user's first time launching the app, `false` otherwise.
+     *
+     * Semantics (intentionally narrow): this flag gates one-shot seeding
+     * inside `InitializeAppUseCase` (default prompts, the seeded
+     * `Default System Pipeline`). It is cleared as part of that
+     * initialization, so callers cannot rely on it to decide whether the
+     * user has seen onboarding — use [hasCompletedOnboarding] for that.
      */
     val isFirstLaunch: Flow<Boolean>
 
@@ -22,6 +28,30 @@ interface SettingsRepository {
      * @param isFirstLaunch The new value to set.
      */
     suspend fun setFirstLaunch(isFirstLaunch: Boolean)
+
+    /**
+     * A [Flow] indicating whether the user has finished (or skipped) the
+     * onboarding flow at least once. Emits `false` until [setHasCompletedOnboarding]
+     * is called.
+     *
+     * This is intentionally a separate flag from [isFirstLaunch]: cold-start
+     * initialization (`InitializeAppUseCase`) clears `isFirstLaunch` before
+     * the splash hands control to the nav-graph, so the onboarding gate
+     * cannot key off it. The two flags evolve independently — seeding the
+     * default pipeline runs exactly once per fresh install, while
+     * onboarding can be re-shown later via Settings → Reset onboarding
+     * (Phase 21 / Task 10) without re-seeding.
+     */
+    val hasCompletedOnboarding: Flow<Boolean>
+
+    /**
+     * Updates the onboarding-completion flag.
+     *
+     * @param completed `true` after the user finishes or skips onboarding;
+     *        `false` resets onboarding so it is shown again on the next
+     *        launch (consumed by the Settings → Reset onboarding action).
+     */
+    suspend fun setHasCompletedOnboarding(completed: Boolean)
 
     /**
      * A [Flow] representing the saved HuggingFace authorization token.

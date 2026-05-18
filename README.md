@@ -9,6 +9,12 @@
 > plans tasks, and takes real actions across Android — without requiring an
 > internet connection.
 
+![Pipeline editor — hero](docs/images/hero-pipeline-editor.png)
+
+> The Knotwork pipeline editor — drag-and-drop graph of typed nodes (input,
+> local LLM, cloud LLM, tools, routing, output) that processes every chat
+> message end-to-end on-device.
+
 ## Pre-release notice
 
 This project is currently at **version 0.1.0** and is published for review and
@@ -53,13 +59,19 @@ configured it.
   Ollama — all opt-in, bring-your-own-key.
 - Model Context Protocol (MCP) client for connecting external tool servers.
 - AppFunctions Jetpack integration for on-device tool calls.
-- Visual pipeline orchestrator inside the app for editing node graphs.
+- Knotwork **pipeline editor** with pan / pinch-zoom canvas, snap-to-grid
+  drag-and-drop, long-press radial node picker, Sugiyama auto-layout,
+  inline validation bar with focus-on-error, run-trace bar, undo / redo,
+  and per-type configuration sheets for all 12 node types.
 - Pipeline library with per-chat binding, plus rename / duplicate / delete.
 - Prompt variables (`$DATE`, `$TIME`, `$TOOLS`, `$MODEL`, `$MEMORY_SUMMARY`)
   rendered fresh on every execution.
 - Agent-initiated clarifications: the agent can ask the user a question
   mid-pipeline and wait for the reply (human-in-the-loop).
-- Multi-session chats with a priority task queue.
+- Multi-session chats with a priority task queue and a redesigned chat
+  home built on the Knotwork design system, covering the documented
+  Empty / Idle / Generating / HITL / Clarification / Error / Drawer /
+  Console-expanded states deterministically.
 - Background execution as an Android Foreground Service with explicit idle
   and power-state management.
 - Long-term memory with semantic retrieval (RAG) over past conversations.
@@ -75,9 +87,9 @@ configured it.
 > Placeholder images — real screenshots will land alongside the first
 > tagged pre-release.
 
-| Chat screen | Visual orchestrator |
+| Chat screen | Pipeline editor |
 |---|---|
-| ![Screenshot TODO — chat](docs/screenshots/TODO.png) | ![Screenshot TODO — orchestrator](docs/screenshots/TODO.png) |
+| ![Screenshot TODO — chat](docs/screenshots/TODO.png) | ![Screenshot TODO — pipeline editor](docs/screenshots/TODO.png) |
 
 | Pipeline library | Browser pipeline editor |
 |---|---|
@@ -114,6 +126,8 @@ After installing:
 |------------------|---------------------------------------------------------|
 | Language         | Kotlin                                                  |
 | UI               | Jetpack Compose + Material Design 3                     |
+| Design system    | Knotwork (in-tree `:catalog` library)                   |
+| Brand fonts      | Inter + JetBrains Mono (bundled TTF, SIL OFL 1.1)       |
 | LLM engine       | LiteRT-LM (Google Edge AI / ex-TensorFlow Lite)         |
 | Tool calling     | AppFunctions Jetpack                                    |
 | Agent framework  | Koog                                                    |

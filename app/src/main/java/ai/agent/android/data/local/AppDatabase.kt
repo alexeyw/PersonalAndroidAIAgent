@@ -38,7 +38,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         PromptTemplateEntity::class,
         TraceStepEntity::class,
     ],
-    version = 20,
+    version = 21,
     exportSchema = false,
 )
 @TypeConverters(Converters::class)
@@ -279,6 +279,27 @@ abstract class AppDatabase : RoomDatabase() {
                 db.execSQL(
                     "ALTER TABLE `chat_messages` ADD COLUMN `isStarred` INTEGER NOT NULL DEFAULT 0",
                 )
+            }
+        }
+
+        /**
+         * Migration from version 20 to 21 (Phase 21 / Task 9 — Pipeline editor).
+         *
+         * Adds the nullable `config_json` column to `pipeline_nodes`. The column
+         * stores the per-type `NodeConfig` payload edited by the new
+         * `NodeConfigSheet` (catalog `pipelineeditor.NodeConfig`) as a JSON blob
+         * — schema in `project_docs/design/compose/components/node-specs.md`.
+         *
+         * `NULL` is the canonical "no payload yet" value for every row created
+         * before Phase 21; on first edit the editor derives a default config
+         * from the flat columns (`systemPrompt`, `cloudProvider`, `toolName`,
+         * `conditionComplexity`, …) and writes the encoded payload here. The
+         * flat columns are kept untouched so the orchestrator runtime path
+         * (which still reads them) keeps working unchanged.
+         */
+        val MIGRATION_20_21 = object : Migration(20, 21) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `pipeline_nodes` ADD COLUMN `config_json` TEXT")
             }
         }
     }
