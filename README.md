@@ -9,6 +9,12 @@
 > plans tasks, and takes real actions across Android — without requiring an
 > internet connection.
 
+![Pipeline editor — hero](docs/images/hero-pipeline-editor.png)
+
+> The Knotwork pipeline editor — drag-and-drop graph of typed nodes (input,
+> local LLM, cloud LLM, tools, routing, output) that processes every chat
+> message end-to-end on-device.
+
 ## Pre-release notice
 
 This project is currently at **version 0.1.0** and is published for review and

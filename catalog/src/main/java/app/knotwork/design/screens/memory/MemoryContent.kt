@@ -61,6 +61,13 @@ import app.knotwork.design.tokens.KnotworkTextStyles
 /** Length of the FLIP rank-shuffle animation per `compose/components/animations.md`. */
 private const val RANK_SHUFFLE_DURATION_MS = 320
 
+/**
+ * Reduced-motion fallback duration for the FLIP rank-shuffle (per
+ * `decisions.md §14`). Matches the 80ms alpha-only crossfade window
+ * used by [app.knotwork.design.a11y.respectReducedMotionTransitions].
+ */
+private const val REDUCED_MOTION_FALLBACK_MS = 80
+
 /** Height of the trailing skeleton row used while paginating. */
 private val SkeletonRowHeight = 88.dp
 
@@ -265,6 +272,8 @@ private fun MemoryError(state: MemoryViewState, callbacks: MemoryCallbacks) {
 
 @Composable
 private fun MemoryList(state: MemoryViewState, callbacks: MemoryCallbacks, showSkeleton: Boolean) {
+    val reducedMotion = KnotworkTheme.a11y.reducedMotion()
+    val placementDuration = if (reducedMotion) REDUCED_MOTION_FALLBACK_MS else RANK_SHUFFLE_DURATION_MS
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(vertical = KnotworkTheme.spacing.sp2),
@@ -281,8 +290,11 @@ private fun MemoryList(state: MemoryViewState, callbacks: MemoryCallbacks, showS
                 // FLIP rank-shuffle: `LazyColumn.items(key = …)` already
                 // animates moves via `Modifier.animateItem`; bumping the
                 // duration here matches the spec's `motionLg` budget.
+                // Under reduced-motion (`decisions.md §14`) the placement
+                // animation collapses to an 80ms crossfade-equivalent so
+                // re-ranked rows still settle, just without the long slide.
                 modifier = Modifier.animateItem(
-                    placementSpec = tween(durationMillis = RANK_SHUFFLE_DURATION_MS),
+                    placementSpec = tween(durationMillis = placementDuration),
                 ),
             )
         }
