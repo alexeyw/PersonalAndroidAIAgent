@@ -588,6 +588,9 @@ class ChatHomeViewModelTest {
             )
         }
         assertNull(viewModel.pendingTool.value)
+        // Resuming the pipeline restarts orchestrator emission — the surface stays
+        // in Generating until the next state (or a terminal Completed / Error) lands.
+        assertEquals(ChatHomeUiState.Generating, viewModel.state.value)
     }
 
     @Test
@@ -710,6 +713,36 @@ class ChatHomeViewModelTest {
             )
         }
         assertNull(viewModel.pendingClarification.value)
+        // Pipeline resumes after the default answer is submitted — keep Generating
+        // until the orchestrator's next state lands.
+        assertEquals(ChatHomeUiState.Generating, viewModel.state.value)
+    }
+
+    @Test
+    fun `submitClarificationReply forwards an empty reply for free-form requests`() = runTest(testDispatcher) {
+        viewModel = createViewModel()
+        advanceUntilIdle()
+        val sessionId = viewModel.currentSessionId.value
+        val request = ClarificationRequest(
+            id = "req-blank",
+            question = "Anything else?",
+            options = null,
+            timeoutMs = 0,
+        )
+        coEvery { agentOrchestratorUseCase(sessionId, "hi", null) } returns flow {
+            emit(AgentOrchestratorState.AwaitingClarification(request))
+            delay(10_000)
+        }
+        viewModel.onComposerValueChange("hi")
+        viewModel.sendMessage()
+        advanceUntilIdle()
+
+        viewModel.submitClarificationReply("   ")
+        advanceUntilIdle()
+
+        coVerify { clarificationRepository.submitClarification("req-blank", "") }
+        assertNull(viewModel.pendingClarification.value)
+        assertEquals(ChatHomeUiState.Generating, viewModel.state.value)
     }
 
     @Test

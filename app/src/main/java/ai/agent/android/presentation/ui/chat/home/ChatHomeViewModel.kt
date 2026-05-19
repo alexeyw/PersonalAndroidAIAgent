@@ -531,7 +531,11 @@ class ChatHomeViewModel @Inject constructor(
         agentOrchestratorUseCase.resumeWithApproval(sessionId, false)
         _pendingTool.value = null
         _pendingTypedConfirm.value = ""
-        _state.value = restingState()
+        // Resuming the pipeline restarts orchestrator emission — keep the
+        // surface in `Generating` until the next state (or a terminal
+        // Completed / Error) settles it, otherwise the chat appears idle
+        // while the agent is actively producing the denial follow-up.
+        _state.value = ChatHomeUiState.Generating
         viewModelScope.launch {
             chatRepository.saveMessage(
                 ChatMessage(
@@ -555,8 +559,10 @@ class ChatHomeViewModel @Inject constructor(
      */
     fun submitClarificationReply(answer: String) {
         val pending = _pendingClarification.value ?: return
+        // Allow an empty reply through — the orchestrator already accepts
+        // `""` as the timeout fallback for free-form requests, so an
+        // intentional blank submit is a legitimate "skip" affordance.
         val trimmed = answer.trim()
-        if (trimmed.isEmpty()) return
         clarificationTimeoutJob?.cancel()
         _pendingClarification.value = null
         _state.value = ChatHomeUiState.Generating
@@ -599,15 +605,16 @@ class ChatHomeViewModel @Inject constructor(
      * Fires when the watchdog elapses without a user reply. Submits the
      * default answer (first option, or empty for free-form) so the
      * suspended pipeline coroutine resumes, drops the pending snapshot,
-     * appends a SYSTEM chat row recording the fallback, and settles the
-     * surface back on a resting state.
+     * appends a SYSTEM chat row recording the fallback, and keeps the
+     * surface in `Generating` while the agent produces the follow-up
+     * (terminal `Completed` / `Error` settles the resting state).
      */
     private fun onClarificationTimeout(request: ClarificationRequest) {
         if (_pendingClarification.value?.id != request.id) return
         val defaultAnswer = request.options?.firstOrNull().orEmpty()
         val sessionId = _currentSessionId.value
         _pendingClarification.value = null
-        _state.value = restingState()
+        _state.value = ChatHomeUiState.Generating
         viewModelScope.launch {
             clarificationRepository.submitClarification(request.id, defaultAnswer)
             if (sessionId.isNotBlank()) {
