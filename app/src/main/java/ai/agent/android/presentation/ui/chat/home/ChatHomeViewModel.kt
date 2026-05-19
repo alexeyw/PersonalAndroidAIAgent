@@ -1,5 +1,15 @@
 package ai.agent.android.presentation.ui.chat.home
 
+import ai.agent.android.domain.engine.LlmInferenceEngine
+import ai.agent.android.domain.models.AgentOrchestratorState
+import ai.agent.android.domain.models.ChatMessage
+import ai.agent.android.domain.models.ChatSession
+import ai.agent.android.domain.models.Role
+import ai.agent.android.domain.repositories.ChatRepository
+import ai.agent.android.domain.repositories.PipelineRepository
+import ai.agent.android.domain.repositories.SettingsRepository
+import ai.agent.android.domain.usecases.AgentOrchestratorUseCase
+import ai.agent.android.domain.usecases.GetContextWindowUseCase
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.knotwork.design.components.chat.ChatContent
@@ -11,10 +21,15 @@ import app.knotwork.design.components.console.ConsoleSnap
 import app.knotwork.design.components.console.ConsoleSource
 import app.knotwork.design.screens.chat.ChatHomeMessageRow
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.delay
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
@@ -24,60 +39,70 @@ import java.util.UUID
 import javax.inject.Inject
 
 /**
- * Stub Hilt [ViewModel] backing `ChatHomeScreen`. Phase 21 / Task 8 ships
- * the redesigned visual surface; this VM exposes a deterministic
- * [StateFlow] of [ChatHomeUiState] plus a live [messages] list so the
- * screen behaves like a real chat — typing and sending appends a real
- * user row and a canned assistant reply.
+ * Hilt [ViewModel] backing the redesigned Knotwork chat home
+ * (`compose/screens/README.md §C1`). Phase 22 / Task 1/17 replaces the
+ * Phase 21 stub VM with real wiring to:
+ *  - [AgentOrchestratorUseCase] for the agent execution stream;
+ *  - [ChatRepository] for session + message persistence;
+ *  - [PipelineRepository] for pipeline-binding observation and the
+ *    deleted-pipeline fallback Snackbar;
+ *  - [SettingsRepository] for the persisted active session id and the
+ *    context-window cap;
+ *  - [LlmInferenceEngine] for the "load a model first" gate;
+ *  - [GetContextWindowUseCase] for the rough token-counter TopAppBar
+ *    readout (v0.1 — `text.length / 4`).
  *
- * **Not** wired to the real `GraphExecutionEngine` / `ChatRepository` —
- * the legacy `chat.legacy.ChatViewModel` retains that integration and
- * will be reconnected to this screen in a follow-up task after v0.1. The
- * canned-reply behaviour is the smallest stub that keeps the surface
- * usable while we ship the visual RC; the debug-picker still drives the
- * 9 documented states for visual QA.
+ * Scope of Task 1/17 (the rest is split across follow-up tasks of the
+ * same phase): user-prompted generation cycle (`Idle → Generating →
+ * Idle / Error`), pipeline binding + deleted-pipeline fallback, session
+ * initialisation + thread switching, token counter.
  *
- * Constructor-injected (Hilt) but accepts no collaborators today —
- * keeping the empty constructor parameter list intact so the follow-up
- * integration only has to add dependencies, not change the wiring shape.
+ * Out of scope here (handled later):
+ *  - Task 2/17 — HITL (`WaitingForApproval`) and Clarification
+ *    (`AwaitingClarification`) wiring.
+ *  - Task 3/17 — Console pane (`ConsoleLog`) streaming.
+ *  - Task 4/17 — drawer / composer / overflow secondary actions
+ *    (new-thread, rename, favorite, import, model picker, settings).
+ *
+ * Until those tasks land, intermediate orchestrator states stay folded
+ * into [ChatHomeUiState.Generating] so the user still gets visual
+ * feedback while a request is in flight.
  */
 @HiltViewModel
-class ChatHomeViewModel @Inject constructor() : ViewModel() {
+@Suppress(
+    // Reason: Chat home is the single entry-point for every user-visible
+    // agent interaction (messaging, session switching, pipeline binding,
+    // token counter, deleted-pipeline fallback, debug picker). Splitting
+    // would require an external store; tracked for a future refactor.
+    "TooManyFunctions",
+    "LargeClass",
+    "LongParameterList",
+)
+class ChatHomeViewModel @Inject constructor(
+    private val agentOrchestratorUseCase: AgentOrchestratorUseCase,
+    private val chatRepository: ChatRepository,
+    private val pipelineRepository: PipelineRepository,
+    private val settingsRepository: SettingsRepository,
+    private val getContextWindowUseCase: GetContextWindowUseCase,
+    private val llmInferenceEngine: LlmInferenceEngine,
+) : ViewModel() {
 
-    /** Thread title surfaced on the TopAppBar. Tracked separately from [state] for cheap reads. */
+    private val _currentSessionId: MutableStateFlow<String> = MutableStateFlow("")
     private val _threadTitle: MutableStateFlow<String> = MutableStateFlow(DEFAULT_THREAD_TITLE)
-
-    /** Display name of the currently-active model. */
     private val _modelName: MutableStateFlow<String> = MutableStateFlow(DEFAULT_MODEL_NAME)
-
-    /** Mutable composer input value — hoisted here so state survives recompositions. */
     private val _composerValue: MutableStateFlow<String> = MutableStateFlow("")
-
-    /** Typed-confirm input for Destructive HITL confirmations. */
     private val _pendingTypedConfirm: MutableStateFlow<String> = MutableStateFlow("")
-
-    /**
-     * Live conversation history. Stub-only: every user turn appends one user
-     * row + one canned assistant reply. Cleared on `selectThread` so picking
-     * a new thread feels like a fresh conversation.
-     */
     private val _messages: MutableStateFlow<List<ChatHomeMessageRow>> = MutableStateFlow(emptyList())
-    val messages: StateFlow<List<ChatHomeMessageRow>> = _messages.asStateFlow()
-
-    /** Current sealed UI state — single source of truth for the chat-home surface. */
     private val _state: MutableStateFlow<ChatHomeUiState> = MutableStateFlow(ChatHomeUiState.Empty)
-    val state: StateFlow<ChatHomeUiState> = _state.asStateFlow()
-
-    /**
-     * Inline-search query for the console Logs tab. `null` means the search
-     * field is hidden; `""` means visible but matching every line. Hoisted
-     * to the VM so the value survives state-picker round-trips and tab
-     * switches.
-     */
     private val _consoleSearchQuery: MutableStateFlow<String?> = MutableStateFlow(null)
-
-    /** Active source-set filter applied to the console Logs tab. */
     private val _consoleFilter: MutableStateFlow<ConsoleFilter> = MutableStateFlow(ConsoleFilter.allOn)
+    private val _pipelineName: MutableStateFlow<String?> = MutableStateFlow(null)
+    private val _tokensUsed: MutableStateFlow<Int> = MutableStateFlow(0)
+    private val _tokensMax: MutableStateFlow<Int> = MutableStateFlow(0)
+    private val _pipelineFallbackEvents: MutableSharedFlow<Unit> = MutableSharedFlow(extraBufferCapacity = 1)
+
+    /** Externally-observable current session id. */
+    val currentSessionId: StateFlow<String> = _currentSessionId.asStateFlow()
 
     /** Externally-observable thread title used by the screen-level composable. */
     val threadTitle: StateFlow<String> = _threadTitle.asStateFlow()
@@ -91,57 +116,116 @@ class ChatHomeViewModel @Inject constructor() : ViewModel() {
     /** Externally-observable typed-confirm input. */
     val pendingTypedConfirm: StateFlow<String> = _pendingTypedConfirm.asStateFlow()
 
+    /** Externally-observable chat message rows projected from [ChatRepository]. */
+    val messages: StateFlow<List<ChatHomeMessageRow>> = _messages.asStateFlow()
+
+    /** Externally-observable sealed UI state — single source of truth for the chat-home surface. */
+    val state: StateFlow<ChatHomeUiState> = _state.asStateFlow()
+
     /** Externally-observable console search query (null = hidden, "" = visible but unfiltered). */
     val consoleSearchQuery: StateFlow<String?> = _consoleSearchQuery.asStateFlow()
 
     /** Externally-observable console source-set filter. */
     val consoleFilter: StateFlow<ConsoleFilter> = _consoleFilter.asStateFlow()
 
+    /** Display name of the pipeline bound to the active chat — rendered as TopAppBar subtitle. */
+    val pipelineName: StateFlow<String?> = _pipelineName.asStateFlow()
+
+    /** Rough token usage of the active session (text-length / 4). */
+    val tokensUsed: StateFlow<Int> = _tokensUsed.asStateFlow()
+
+    /** Configured context-window cap propagated from [SettingsRepository.maxContextLength]. */
+    val tokensMax: StateFlow<Int> = _tokensMax.asStateFlow()
+
     /**
-     * Updates the composer input value. Hoisted to the VM so screen
-     * recompositions never own the text.
+     * One-shot signal raised when the pipeline bound to the active chat
+     * disappears from the library and the binding silently falls back to
+     * the default pipeline. The screen surfaces a `KnotworkSnackbar` so
+     * the user is told their selection moved.
      */
+    val pipelineFallbackEvents: SharedFlow<Unit> = _pipelineFallbackEvents.asSharedFlow()
+
+    private var messagesJob: Job? = null
+    private var generationJob: Job? = null
+    private var sessions: List<ChatSession> = emptyList()
+    private var availablePipelinesObserved: Boolean = false
+    private var availablePipelines: List<PipelineSummary> = emptyList()
+    private var defaultPipelineId: String? = null
+
+    init {
+        observeAvailablePipelines()
+        observeDefaultPipelineId()
+        observeSessions()
+        observeMaxContextSize()
+        initializeSession()
+    }
+
+    /** Updates the composer input value. Hoisted to the VM so screen recompositions never own the text. */
     fun onComposerValueChange(value: String) {
         _composerValue.value = value
     }
 
-    /**
-     * Updates the typed-confirm input shown next to the Destructive HITL
-     * confirmation row. Mirrors `HitlConfirmationCard`'s typed-confirm
-     * contract.
-     */
+    /** Updates the typed-confirm input shown next to the Destructive HITL confirmation row. */
     fun onTypedConfirmChange(value: String) {
         _pendingTypedConfirm.value = value
     }
 
     /**
-     * Stub send pipeline: appends the user's message to [messages], flips
-     * the state to [ChatHomeUiState.Generating] for [STUB_GENERATING_DELAY_MS],
-     * then appends a canned assistant reply and settles back to
-     * [ChatHomeUiState.Idle]. No-op when the composer is empty.
+     * Sends the current composer draft through [AgentOrchestratorUseCase].
+     * No-op when the composer is blank, when generation is already in
+     * flight, or when no LLM model is loaded (in the last case the surface
+     * flips to [ChatHomeUiState.Error] so the user sees actionable
+     * guidance).
+     *
+     * The user prompt itself is persisted by the orchestrator's pipeline
+     * (see `TaskQueueManagerImpl.processTask` step 1), not by this VM —
+     * persisting it twice would surface duplicate rows in the display
+     * flow. Same for the final agent reply: `OutputNodeExecutor` writes
+     * the `isFinal = true` row when the pipeline reaches OUTPUT.
      */
     fun sendMessage() {
         val draft = _composerValue.value.trim()
         if (draft.isEmpty()) return
+        if (_state.value is ChatHomeUiState.Generating) return
+        if (!llmInferenceEngine.isInitialized) {
+            _state.value = ChatHomeUiState.Error(LOAD_MODEL_FIRST_MESSAGE)
+            return
+        }
         _composerValue.value = ""
-        val now = nowTimestamp()
-        _messages.update { it + userRow(text = draft, timestamp = now) }
+
+        val sessionId = _currentSessionId.value
+        if (sessionId.isBlank()) return
+        val pipelineId = sessions.firstOrNull { it.id == sessionId }?.pipelineId
+
         _state.value = ChatHomeUiState.Generating
-        viewModelScope.launch {
-            delay(STUB_GENERATING_DELAY_MS)
-            // Only collapse + append the canned reply if the user did not
-            // pick a different state via the debug picker while the stub
-            // was running.
-            if (_state.value !is ChatHomeUiState.Generating) return@launch
-            _messages.update { it + assistantRow(text = CANNED_REPLY, timestamp = nowTimestamp()) }
-            _state.value = ChatHomeUiState.Idle
+
+        autoRenameIfDefault(sessionId, draft)
+
+        generationJob?.cancel()
+        generationJob = viewModelScope.launch {
+            agentOrchestratorUseCase(sessionId, draft, pipelineId)
+                .catch { error ->
+                    _state.value = ChatHomeUiState.Error(error.message ?: UNKNOWN_ERROR_FALLBACK)
+                }
+                .collect { orchestratorState -> handleOrchestratorState(orchestratorState) }
         }
     }
 
-    /** Cancels a stub generation early — collapses [ChatHomeUiState.Generating] to [ChatHomeUiState.Idle]. */
+    /**
+     * Cancels the active generation job. Mirrors legacy behaviour — does
+     * not call into the orchestrator (no cancel-task API on
+     * [ai.agent.android.domain.engine.TaskQueueManager] today); the
+     * coroutine cancellation propagates through the engine via the
+     * collector teardown.
+     */
     fun stopGeneration() {
+        generationJob?.cancel()
         _state.update { current ->
-            if (current is ChatHomeUiState.Generating) ChatHomeUiState.Idle else current
+            if (current is ChatHomeUiState.Generating) {
+                if (_messages.value.isEmpty()) ChatHomeUiState.Empty else ChatHomeUiState.Idle
+            } else {
+                current
+            }
         }
     }
 
@@ -158,14 +242,20 @@ class ChatHomeViewModel @Inject constructor() : ViewModel() {
     }
 
     /**
-     * Selects a thread by id. Stub-only: persists nothing beyond updating
-     * the TopAppBar title, clearing the live message list (so the new
-     * thread feels fresh), and closing any open overlay.
+     * Switches the active chat session. Persists the selection, cancels
+     * any in-flight generation, and re-subscribes the message stream to
+     * the newly-selected session.
      */
     fun selectThread(threadId: String) {
-        _threadTitle.value = "Thread $threadId"
-        _messages.value = emptyList()
-        _state.value = ChatHomeUiState.Empty
+        if (threadId.isBlank() || threadId == _currentSessionId.value) return
+        generationJob?.cancel()
+        viewModelScope.launch {
+            settingsRepository.setCurrentChatSessionId(threadId)
+            _currentSessionId.value = threadId
+            applyCurrentSessionMetadata()
+            observeMessages(threadId)
+            _state.value = restingState()
+        }
     }
 
     /** Opens the console pane at the given [snap] (default: Partial). */
@@ -187,10 +277,7 @@ class ChatHomeViewModel @Inject constructor() : ViewModel() {
         }
     }
 
-    /**
-     * Toggles the console inline-search field. Calling this twice cycles
-     * `null → "" → null`. The host wires this to the header `Search` button.
-     */
+    /** Toggles the console inline-search field. Cycles `null → "" → null`. */
     fun toggleConsoleSearch() {
         _consoleSearchQuery.update { current -> if (current == null) "" else null }
     }
@@ -205,10 +292,7 @@ class ChatHomeViewModel @Inject constructor() : ViewModel() {
         _consoleFilter.value = filter
     }
 
-    /**
-     * Reacts to the long-press "Only show this source" menu item by
-     * narrowing [consoleFilter] to a single-source set.
-     */
+    /** Reacts to the long-press "Only show this source" menu item. */
     fun filterConsoleByLineSource(source: ConsoleSource) {
         _consoleFilter.value = ConsoleFilter(sources = setOf(source))
     }
@@ -223,36 +307,223 @@ class ChatHomeViewModel @Inject constructor() : ViewModel() {
         _state.value = state
     }
 
+    /**
+     * Loads or restores the active chat session, mirroring legacy
+     * `ChatViewModel.initializeSession`. Either reuses the id persisted
+     * in [SettingsRepository.currentChatSessionId] or generates a fresh
+     * one and creates an empty [ChatSession] for it.
+     */
+    private fun initializeSession() {
+        viewModelScope.launch {
+            val savedSessionId = settingsRepository.currentChatSessionId.first()
+            val sessionId = if (savedSessionId.isNullOrBlank()) {
+                val newId = UUID.randomUUID().toString()
+                settingsRepository.setCurrentChatSessionId(newId)
+                chatRepository.saveSession(
+                    ChatSession(
+                        id = newId,
+                        name = DEFAULT_NEW_CHAT_NAME,
+                        updatedAt = System.currentTimeMillis(),
+                    ),
+                )
+                newId
+            } else {
+                savedSessionId
+            }
+            _currentSessionId.value = sessionId
+            applyCurrentSessionMetadata()
+            observeMessages(sessionId)
+        }
+    }
+
+    /**
+     * Continuously observes the pipeline library. Used for three things:
+     *  1. Caching the available pipelines so [sendMessage] can resolve
+     *     the bound pipeline name.
+     *  2. Recomputing the TopAppBar subtitle ([pipelineName]).
+     *  3. Detecting deletion of the pipeline bound to the active chat
+     *     and silently rebinding it to the default pipeline, surfacing
+     *     a one-shot Snackbar via [pipelineFallbackEvents].
+     */
+    private fun observeAvailablePipelines() {
+        viewModelScope.launch {
+            pipelineRepository.getAllPipelines().collect { graphs ->
+                val summaries = graphs.map { PipelineSummary(id = it.id, name = it.name) }
+                availablePipelines = summaries
+                availablePipelinesObserved = true
+                refreshPipelineName()
+                handleDeletedBoundPipeline(summaries)
+            }
+        }
+    }
+
+    /** Observes the user-set default pipeline id and refreshes the subtitle when it changes. */
+    private fun observeDefaultPipelineId() {
+        viewModelScope.launch {
+            settingsRepository.defaultPipelineId.collect { id ->
+                defaultPipelineId = id
+                refreshPipelineName()
+            }
+        }
+    }
+
+    /** Observes the session list. Keeps a cache for pipeline-id lookups and refreshes the title + subtitle. */
+    private fun observeSessions() {
+        viewModelScope.launch {
+            chatRepository.getSessionsFlow().collect { current ->
+                sessions = current
+                applyCurrentSessionMetadata()
+                handleDeletedBoundPipeline(availablePipelines)
+            }
+        }
+    }
+
+    /** Observes the configured context-window cap and mirrors it into [tokensMax]. */
+    private fun observeMaxContextSize() {
+        viewModelScope.launch {
+            settingsRepository.maxContextLength.collect { value ->
+                _tokensMax.value = value
+            }
+        }
+    }
+
+    /**
+     * Subscribes the message stream to [sessionId], cancelling any prior
+     * subscription. Each emission is projected through
+     * [chatMessageToRow] and folded into [_messages] plus the rough
+     * token counter computed from [GetContextWindowUseCase].
+     */
+    private fun observeMessages(sessionId: String) {
+        messagesJob?.cancel()
+        if (sessionId.isBlank()) {
+            _messages.value = emptyList()
+            _tokensUsed.value = 0
+            return
+        }
+        messagesJob = viewModelScope.launch {
+            chatRepository.getDisplayMessagesForSession(sessionId).collect { incoming ->
+                _messages.value = incoming.map { chatMessageToRow(it, _modelName.value) }
+                _tokensUsed.value = runCatching {
+                    getContextWindowUseCase(sessionId).length / TOKEN_CHARS_PER_TOKEN
+                }.getOrDefault(0)
+                rebalanceRestingState()
+            }
+        }
+    }
+
+    /**
+     * Reacts to the message stream emitting an empty / non-empty list by
+     * flipping between [ChatHomeUiState.Empty] and [ChatHomeUiState.Idle].
+     * Active overlays (Generating, Error, Drawer, Console, HITL,
+     * Clarification) are preserved — the resting state only matters when
+     * no overlay is up.
+     */
+    private fun rebalanceRestingState() {
+        _state.update { current ->
+            when {
+                current is ChatHomeUiState.Empty && _messages.value.isNotEmpty() -> ChatHomeUiState.Idle
+                current is ChatHomeUiState.Idle && _messages.value.isEmpty() -> ChatHomeUiState.Empty
+                else -> current
+            }
+        }
+    }
+
+    /** Branches on the orchestrator emission. Terminal states settle UI; intermediate states keep `Generating`. */
+    private fun handleOrchestratorState(state: AgentOrchestratorState) {
+        when (state) {
+            is AgentOrchestratorState.Completed -> {
+                _state.value = if (_messages.value.isEmpty()) ChatHomeUiState.Empty else ChatHomeUiState.Idle
+            }
+            is AgentOrchestratorState.Error -> {
+                _state.value = ChatHomeUiState.Error(state.message)
+            }
+            // Intermediate states keep `Generating` while the request is in flight. The HITL,
+            // Clarification, and Console handling lands in Phase 22 tasks 2/17 and 3/17.
+            else -> Unit
+        }
+    }
+
+    /**
+     * Auto-renames a newly-created chat to the first user message
+     * (truncated to [AUTO_RENAME_CHAR_LIMIT] characters). Mirrors legacy
+     * `ChatViewModel` behaviour so the drawer entry reflects the user's
+     * framing.
+     */
+    private fun autoRenameIfDefault(sessionId: String, prompt: String) {
+        val session = sessions.firstOrNull { it.id == sessionId } ?: return
+        if (session.name != DEFAULT_NEW_CHAT_NAME) return
+        val truncated = if (prompt.length > AUTO_RENAME_CHAR_LIMIT) {
+            prompt.take(AUTO_RENAME_CHAR_LIMIT) + AUTO_RENAME_SUFFIX
+        } else {
+            prompt
+        }
+        viewModelScope.launch {
+            chatRepository.saveSession(session.copy(name = truncated))
+        }
+    }
+
+    /**
+     * Rebinds the active chat to the default pipeline when the bound
+     * pipeline disappears from the library. No-op while the pipeline
+     * flow has not produced its initial snapshot — without this guard a
+     * startup race would misread the empty initial `availablePipelines`
+     * as "the bound pipeline no longer exists" and silently rebind every
+     * chat to the default.
+     */
+    private suspend fun handleDeletedBoundPipeline(summaries: List<PipelineSummary>) {
+        if (!availablePipelinesObserved) return
+        val session = sessions.firstOrNull { it.id == _currentSessionId.value } ?: return
+        val boundId = session.pipelineId ?: return
+        if (summaries.any { it.id == boundId }) return
+        chatRepository.saveSession(session.copy(pipelineId = null))
+        _pipelineFallbackEvents.tryEmit(Unit)
+    }
+
+    /** Refreshes [pipelineName] from the latest cache of sessions + pipelines + default-pipeline id. */
+    private fun refreshPipelineName() {
+        _pipelineName.value = resolvePipelineName(
+            sessions = sessions,
+            currentSessionId = _currentSessionId.value,
+            summaries = availablePipelines,
+            defaultPipelineId = defaultPipelineId,
+        )
+    }
+
+    /**
+     * Resolves the pipeline display name for the active chat — explicit
+     * binding when set, otherwise the user-marked default (or the first
+     * pipeline in the library as a final fallback). Returns `null` only
+     * when the pipeline library is still empty.
+     */
+    private fun resolvePipelineName(
+        sessions: List<ChatSession>,
+        currentSessionId: String,
+        summaries: List<PipelineSummary>,
+        defaultPipelineId: String?,
+    ): String? {
+        if (summaries.isEmpty()) return null
+        val session = sessions.firstOrNull { it.id == currentSessionId }
+        val boundId = session?.pipelineId
+        val boundMatch = boundId?.let { id -> summaries.firstOrNull { it.id == id } }
+        if (boundMatch != null) return boundMatch.name
+        val defaultMatch = defaultPipelineId?.let { id -> summaries.firstOrNull { it.id == id } }
+        return (defaultMatch ?: summaries.first()).name
+    }
+
+    /** Refreshes thread title + pipeline subtitle from the latest session/pipeline caches. */
+    private fun applyCurrentSessionMetadata() {
+        val session = sessions.firstOrNull { it.id == _currentSessionId.value }
+        if (session != null) {
+            _threadTitle.value = session.name.ifBlank { DEFAULT_THREAD_TITLE }
+        } else if (_currentSessionId.value.isBlank()) {
+            _threadTitle.value = DEFAULT_THREAD_TITLE
+        }
+        refreshPipelineName()
+    }
+
     /** Resting (non-overlay) state given the current message list — `Empty` if no messages, else `Idle`. */
     private fun restingState(): ChatHomeUiState =
         if (_messages.value.isEmpty()) ChatHomeUiState.Empty else ChatHomeUiState.Idle
-
-    /** Builds a user message row stamped with [timestamp]. */
-    private fun userRow(text: String, timestamp: String): ChatHomeMessageRow = ChatHomeMessageRow(
-        id = "u-${UUID.randomUUID()}",
-        role = ChatRole.User,
-        content = ChatContent.Text(text),
-        metadata = ChatMetadata(timestamp = timestamp, status = ChatMessageStatus.Sent),
-    )
-
-    /** Builds an assistant message row stamped with [timestamp]. */
-    private fun assistantRow(text: String, timestamp: String): ChatHomeMessageRow = ChatHomeMessageRow(
-        id = "a-${UUID.randomUUID()}",
-        role = ChatRole.Assistant,
-        content = ChatContent.Text(text),
-        metadata = ChatMetadata(
-            timestamp = timestamp,
-            model = _modelName.value,
-            status = ChatMessageStatus.Sent,
-        ),
-    )
-
-    /**
-     * Pre-formats the current device-local time as `HH:mm`. The formatter
-     * is constructed per call (not cached) so a locale change while the
-     * app is running is picked up on the next stub message.
-     */
-    private fun nowTimestamp(): String = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date())
 
     companion object {
         /** Pre-formatted fallback thread title surfaced before any thread is selected. */
@@ -261,13 +532,78 @@ class ChatHomeViewModel @Inject constructor() : ViewModel() {
         /** Pre-formatted fallback model name surfaced when no local model is loaded. */
         const val DEFAULT_MODEL_NAME: String = "Local model"
 
-        /** Duration of the stub `Idle → Generating → Idle` round-trip in milliseconds. */
-        const val STUB_GENERATING_DELAY_MS: Long = 1_200L
+        /** Default name of a freshly-created chat session — must match legacy `ChatViewModel` for compatibility. */
+        const val DEFAULT_NEW_CHAT_NAME: String = "New Chat"
 
-        /** Canned assistant reply appended after every stub send round-trip. */
-        const val CANNED_REPLY: String =
-            "The on-device backend isn't wired up to this surface yet — this is a stub reply so " +
-                "you can see the chat round-trip. The orchestrator integration ships in a " +
-                "follow-up task after v0.1."
+        /** Maximum characters of the first user message used as the auto-generated session name. */
+        const val AUTO_RENAME_CHAR_LIMIT: Int = 20
+
+        /** Suffix appended to a truncated auto-rename name. */
+        const val AUTO_RENAME_SUFFIX: String = "..."
+
+        /** Fallback message for `Throwable` instances surfaced via [ChatHomeUiState.Error] without a cause. */
+        const val UNKNOWN_ERROR_FALLBACK: String = "Unknown error"
+
+        /**
+         * User-facing message surfaced when [sendMessage] is invoked
+         * while no LLM model is loaded. Kept here as a constant rather
+         * than read from `strings_errors.xml` so the VM stays free of
+         * `Context`/`Resources` dependencies; the screen layer will swap
+         * this for a localised string once Phase 22 / Task 5 audits
+         * surface localisation (the equivalent error in legacy chat
+         * lives under `errors_chat_load_model_first`).
+         */
+        const val LOAD_MODEL_FIRST_MESSAGE: String =
+            "Please load a model in Settings before sending a message."
+
+        /** Rough chars-per-token divisor used for the v0.1 token counter (`text.length / 4`). */
+        const val TOKEN_CHARS_PER_TOKEN: Int = 4
+
+        /** Pre-formatted timestamp format used in [ChatMetadata.timestamp] (24h, locale-aware). */
+        private const val TIMESTAMP_PATTERN: String = "HH:mm"
+
+        /**
+         * Projects a domain [ChatMessage] onto the design-system row
+         * model. Kept on the companion so the mapping can be unit-tested
+         * without spinning up the VM.
+         */
+        fun chatMessageToRow(message: ChatMessage, activeModelName: String): ChatHomeMessageRow {
+            val role = when (message.role) {
+                Role.USER -> ChatRole.User
+                Role.AGENT -> ChatRole.Assistant
+                Role.SYSTEM -> ChatRole.System
+            }
+            val formattedTimestamp = SimpleDateFormat(TIMESTAMP_PATTERN, Locale.getDefault())
+                .format(Date(message.timestamp))
+            val metadata = ChatMetadata(
+                timestamp = formattedTimestamp,
+                model = if (role == ChatRole.Assistant) activeModelName else null,
+                status = ChatMessageStatus.Sent,
+            )
+            val idPrefix = when (role) {
+                ChatRole.User -> "u"
+                ChatRole.Assistant -> "a"
+                ChatRole.System -> "s"
+                ChatRole.Tool -> "t"
+            }
+            val rowId = message.id?.let { "$idPrefix-$it" } ?: "$idPrefix-${UUID.randomUUID()}"
+            return ChatHomeMessageRow(
+                id = rowId,
+                role = role,
+                content = ChatContent.Text(message.content),
+                metadata = metadata,
+            )
+        }
     }
 }
+
+/**
+ * Minimal pipeline summary used by [ChatHomeViewModel] to resolve the
+ * TopAppBar subtitle and the deleted-pipeline fallback. Mirrors the
+ * legacy `chat.legacy.PipelineSummary` so the same shape is available
+ * after the legacy package is deleted in Phase 22 / Task 17.
+ *
+ * @property id stable identifier of the pipeline.
+ * @property name display name of the pipeline.
+ */
+internal data class PipelineSummary(val id: String, val name: String)
