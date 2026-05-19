@@ -87,6 +87,26 @@ details.
     composer opens the console pane at the Partial snap (catalog
     `ChatHomeCallbacks.onAgentStatusClick`, screen routes to
     `viewModel.openConsole()`).
+  - **Console hosted in M3 `ModalBottomSheet`** — the hand-rolled
+    overlay (custom scrim + `Modifier.height(snap.height)` +
+    self-implemented `detectVerticalDragGestures`) is replaced with
+    Material 3's anchored-draggable bottom sheet. We get smooth
+    snap-transition animations, fling-to-snap physics, drag-from-body
+    (not just the handle), tap-outside-to-dismiss, swipe-down-to-close,
+    and a `BottomSheetDefaults.DragHandle` that announces correctly
+    via TalkBack — all for free. The console keeps its "always dark"
+    identity via overridden `containerColor` / `contentColor`. The
+    sheet's `SheetState` is bidirectionally synced with the host's
+    `consoleSnap` flow: programmatic `partialExpand()` /
+    `expand()` calls follow VM-driven changes, and user-driven snap
+    moves are mirrored back through `onConsoleSnapChange`.
+  - **`ConsoleSnap.Peek` retired.** The 44 dp ticker strip duplicated
+    the agent-status pill above the composer and proved a dead-end UX
+    in user testing. The enum is now `Partial` ↔ `PartiallyExpanded` +
+    `Full` ↔ `Expanded`, matching M3's native `SheetValue`. The
+    debug-picker `CONSOLE_PEEK` entry, the `PeekHeader` /
+    `PeekTabStrip` / `PeekTickerRow` / `DragHandleStrip` composables,
+    and the custom `resolveDragOutcome` snap-cycle helper are deleted.
 
 - **Chat home — HITL and Clarification real-time wiring** (Phase 22 /
   Task 2/17) — replaces the `forceState(...)` stubs in

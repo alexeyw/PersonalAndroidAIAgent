@@ -4,15 +4,19 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
 /**
- * Discrete snap points for the [ConsolePane] sheet. The screen tweens
- * between heights via `motionLg`; the catalog composable simply renders at
- * the given snap so previews and snapshots remain deterministic.
+ * Discrete snap points for the [ConsolePane] sheet. Mapped 1-to-1 onto
+ * Material 3 `SheetValue` by the chat-home `ModalBottomSheet` host:
+ * [Partial] ↔ `PartiallyExpanded`, [Full] ↔ `Expanded`. The screen layer
+ * leaves height control to the sheet's own anchored-draggable engine —
+ * the [height] property is retained for previews / snapshot fixtures only.
+ *
+ * The historical `Peek` snap (44 dp ticker strip) was retired together
+ * with the custom-drawn overlay; it duplicated the ticker that already
+ * lives in the agent-status pill above the composer and proved to be a
+ * dead-end UX in user testing (every action required expanding further).
  */
 enum class ConsoleSnap(val height: Dp) {
-    /** Drag handle + header only — last log line ticker visible. */
-    Peek(height = 44.dp),
-
-    /** ≈ 40 % of screen — active monitoring during a pipeline run. */
+    /** ≈ 50 % of screen — active monitoring during a pipeline run. */
     Partial(height = 360.dp),
 
     /** ≈ 90 % of screen — triage; chat barely visible underneath. */

@@ -205,7 +205,6 @@ class ChatHomeStateMappingTest {
         // Console picker ids no longer round-trip through `debugStateForId`
         // — the console is an independent overlay and is opened via
         // `debugConsoleSnapForId`.
-        assertNull(debugStateForId(DebugStateIds.CONSOLE_PEEK))
         assertNull(debugStateForId(DebugStateIds.CONSOLE_PARTIAL))
         assertNull(debugStateForId(DebugStateIds.CONSOLE_FULL))
         assertNull(debugStateForId("not_a_real_id"))
@@ -213,7 +212,6 @@ class ChatHomeStateMappingTest {
 
     @Test
     fun `debugConsoleSnapForId maps console picker ids to snaps`() {
-        assertEquals(ConsoleSnap.Peek, debugConsoleSnapForId(DebugStateIds.CONSOLE_PEEK))
         assertEquals(ConsoleSnap.Partial, debugConsoleSnapForId(DebugStateIds.CONSOLE_PARTIAL))
         assertEquals(ConsoleSnap.Full, debugConsoleSnapForId(DebugStateIds.CONSOLE_FULL))
         assertNull(debugConsoleSnapForId(DebugStateIds.EMPTY))

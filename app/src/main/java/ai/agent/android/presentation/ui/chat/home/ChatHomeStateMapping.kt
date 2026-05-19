@@ -379,7 +379,6 @@ internal object DebugStateIds {
     const val CLARIFICATION: String = "clarification"
     const val ERROR: String = "error"
     const val DRAWER_OPEN: String = "drawer_open"
-    const val CONSOLE_PEEK: String = "console_peek"
     const val CONSOLE_PARTIAL: String = "console_partial"
     const val CONSOLE_FULL: String = "console_full"
 }
@@ -407,7 +406,6 @@ internal fun debugStateForId(id: String): ChatHomeUiState? = when (id) {
  * picker entries — the caller falls back to [debugStateForId] for those.
  */
 internal fun debugConsoleSnapForId(id: String): ConsoleSnap? = when (id) {
-    DebugStateIds.CONSOLE_PEEK -> ConsoleSnap.Peek
     DebugStateIds.CONSOLE_PARTIAL -> ConsoleSnap.Partial
     DebugStateIds.CONSOLE_FULL -> ConsoleSnap.Full
     else -> null

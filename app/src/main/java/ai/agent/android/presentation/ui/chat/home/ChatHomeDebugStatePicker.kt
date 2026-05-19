@@ -64,7 +64,6 @@ internal enum class DebugStateRows(val id: String, val labelRes: Int) {
     Clarification(id = DebugStateIds.CLARIFICATION, labelRes = R.string.chat_home_debug_state_clarification),
     Error(id = DebugStateIds.ERROR, labelRes = R.string.chat_home_debug_state_error),
     DrawerOpen(id = DebugStateIds.DRAWER_OPEN, labelRes = R.string.chat_home_debug_state_drawer_open),
-    ConsolePeek(id = DebugStateIds.CONSOLE_PEEK, labelRes = R.string.chat_home_debug_state_console_peek),
     ConsolePartial(id = DebugStateIds.CONSOLE_PARTIAL, labelRes = R.string.chat_home_debug_state_console_partial),
     ConsoleFull(id = DebugStateIds.CONSOLE_FULL, labelRes = R.string.chat_home_debug_state_console_full),
 }

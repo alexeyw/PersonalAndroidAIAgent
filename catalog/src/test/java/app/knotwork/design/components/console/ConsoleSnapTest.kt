@@ -5,18 +5,12 @@ import org.junit.Assert.assertEquals
 import org.junit.Test
 
 /**
- * Documents the discrete [ConsoleSnap] heights so an accidental tweak shows
- * up as a unit-test breakage rather than a silent snapshot diff. The
- * canonical values are pulled from `compose/components/README.md` §Chat
- * surface §ConsolePane (Peek 44 dp / Partial 360 dp ≈ 40 % / Full 720 dp ≈
- * 90 %).
+ * Documents the discrete [ConsoleSnap] heights as preview-only fixtures.
+ * The production console is hosted inside an M3 `ModalBottomSheet` that
+ * owns its own anchored heights — the constants here drive
+ * snapshot/preview rendering only.
  */
 class ConsoleSnapTest {
-
-    @Test
-    fun `peek snap is 44 dp`() {
-        assertEquals(44.dp, ConsoleSnap.Peek.height)
-    }
 
     @Test
     fun `partial snap is 360 dp`() {
@@ -30,7 +24,6 @@ class ConsoleSnapTest {
 
     @Test
     fun `snaps grow monotonically`() {
-        assertEquals(true, ConsoleSnap.Peek.height < ConsoleSnap.Partial.height)
         assertEquals(true, ConsoleSnap.Partial.height < ConsoleSnap.Full.height)
     }
 }

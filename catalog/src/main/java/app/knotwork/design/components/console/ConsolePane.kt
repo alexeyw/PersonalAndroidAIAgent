@@ -4,7 +4,6 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -18,7 +17,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Close
@@ -33,7 +31,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -43,51 +40,18 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import app.knotwork.design.R
 import app.knotwork.design.theme.KnotworkTheme
 import app.knotwork.design.tokens.KnotworkPalette
 import app.knotwork.design.tokens.KnotworkTextStyles
-import kotlin.math.abs
 
-/** Height of the full (Partial / Full) header — drag handle + tab strip + actions row. */
-private val FullHeaderHeight = 56.dp
-
-/** Drag handle bar — `32 × 4 dp` centred at the top of every header. */
-private val DragHandleWidth = 32.dp
-private val DragHandleHeight = 4.dp
-
-/** Vertical area reserved for the drag handle bar (handle + padding above/below). */
-private val DragHandleAreaHeight = 8.dp
-
-/** Compact tab-strip height used by the Peek header. */
-private val PeekTabStripHeight = 18.dp
-
-/** Single-line ticker height used by the Peek header. */
-private val PeekTickerHeight = 16.dp
-
-/** Combined Peek-header vertical budget (`8 + 18 + 16 = 42`); leaves `2 dp` slack inside the 44 dp snap. */
-@Suppress("UnusedPrivateProperty") // Documented sum of the three Peek rows — kept as an explicit invariant marker.
-private val PeekHeaderBudget: Dp = DragHandleAreaHeight + PeekTabStripHeight + PeekTickerHeight
-
-/** Opacity of the drag handle relative to `consoleFg`. */
-private const val DRAG_HANDLE_ALPHA = 0.30f
-
-/**
- * Minimum accumulated vertical-drag distance on the handle strip that
- * counts as an intentional snap change. Drags shorter than this are
- * treated as taps so a stray finger movement does not collapse the pane.
- * Tuned to roughly half of [ConsoleSnap.Peek.height] so a comfortable
- * thumb-flick crosses the threshold but a jitter does not.
- */
-private val DragSnapThreshold = 24.dp
+/** Height of the console header — tab strip + trailing actions row. */
+private val ConsoleHeaderHeight = 56.dp
 
 /** Selected-tab underline thickness (used by Partial / Full headers only — Peek tabs are label-only). */
 private val TabIndicatorHeight = 2.dp
@@ -180,8 +144,6 @@ private val TraceBarHeight = 4.dp
 @Composable
 @Suppress("LongParameterList") // Stable public API mirroring `components/README.md`.
 fun ConsolePane(
-    snap: ConsoleSnap,
-    onSnapChange: (ConsoleSnap) -> Unit,
     tab: ConsoleTab,
     onTabChange: (ConsoleTab) -> Unit,
     logs: List<ConsoleLine>,
@@ -192,250 +154,71 @@ fun ConsolePane(
     onSearch: () -> Unit,
     onCopyAll: () -> Unit,
     onClear: () -> Unit,
+    onCloseConsole: () -> Unit,
     modifier: Modifier = Modifier,
     searchQuery: String? = null,
     onSearchQueryChange: (String) -> Unit = {},
     onCopyLine: (ConsoleLine) -> Unit = {},
     onFilterByLineSource: (ConsoleSource) -> Unit = {},
-    /**
-     * Dispatched when the user taps the trailing `Close` icon in the
-     * Partial / Full header. Hosts wire this to fully dismiss the overlay
-     * (clear their console-snap state). Falls back to a snap-collapse to
-     * Peek when omitted so legacy callers keep working without changes.
-     */
-    onCloseConsole: () -> Unit = { onSnapChange(ConsoleSnap.Peek) },
 ) {
+    // Stateless content — the surrounding `ModalBottomSheet` owns the
+    // sheet container (drag handle, anchored-draggable physics, snap
+    // animations, dismiss). This composable just renders the
+    // tab-strip-and-actions header + the active tab's body.
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .height(snap.height)
             .background(color = KnotworkTheme.extended.consoleBg),
     ) {
-        if (snap == ConsoleSnap.Peek) {
-            PeekHeader(
-                tab = tab,
-                onTabChange = onTabChange,
-                logs = logs,
-                onSnapChange = onSnapChange,
-                onCloseConsole = onCloseConsole,
-            )
-        } else {
-            FullHeader(
-                snap = snap,
-                onSnapChange = onSnapChange,
-                tab = tab,
-                onTabChange = onTabChange,
-                onSearch = onSearch,
-                onCopyAll = onCopyAll,
-                onClear = onClear,
-                onCloseConsole = onCloseConsole,
-            )
-            when (tab) {
-                ConsoleTab.Logs -> ConsoleLogsBody(
-                    logs = logs,
-                    filter = filter,
-                    onFilterChange = onFilterChange,
-                    searchQuery = searchQuery,
-                    onSearchQueryChange = onSearchQueryChange,
-                    onCopyLine = onCopyLine,
-                    onFilterByLineSource = onFilterByLineSource,
-                )
-                ConsoleTab.Vars -> ConsoleVarsBody(rows = vars)
-                ConsoleTab.Traces -> ConsoleTracesBody(spans = traces)
-            }
-        }
-    }
-}
-
-/**
- * Compact header used in the 44 dp Peek snap. Renders drag handle, a
- * label-only tab strip, and a single-line ticker — totalling 42 dp inside
- * the 44 dp budget.
- */
-@Composable
-private fun PeekHeader(
-    tab: ConsoleTab,
-    onTabChange: (ConsoleTab) -> Unit,
-    logs: List<ConsoleLine>,
-    onSnapChange: (ConsoleSnap) -> Unit,
-    onCloseConsole: () -> Unit,
-) {
-    Column(modifier = Modifier.fillMaxWidth()) {
-        DragHandleStrip(
-            snap = ConsoleSnap.Peek,
-            onSnapChange = onSnapChange,
+        ConsolePaneHeader(
+            tab = tab,
+            onTabChange = onTabChange,
+            onSearch = onSearch,
+            onCopyAll = onCopyAll,
+            onClear = onClear,
             onCloseConsole = onCloseConsole,
-            onTap = { onSnapChange(ConsoleSnap.Partial) },
         )
-        PeekTabStrip(tab = tab, onTabChange = onTabChange)
-        PeekTickerRow(logs = logs)
-    }
-}
-
-/**
- * Drag handle strip — 8 dp tall with a 4 dp horizontal pill.
- *
- * Supports two gestures:
- *  - **Tap** dispatches [onTap]. Hosts wire this to a cycle through the
- *    snap points (or an "expand from Peek" shortcut).
- *  - **Vertical drag** accumulates the pointer delta and, on release,
- *    snaps the pane to the next discrete snap in the drag direction —
- *    or dismisses the overlay entirely when the user drags down past
- *    the Peek snap. Tiny drags shorter than [DragSnapThreshold] are
- *    treated as taps (no snap change).
- */
-@Composable
-private fun DragHandleStrip(
-    snap: ConsoleSnap,
-    onSnapChange: (ConsoleSnap) -> Unit,
-    onCloseConsole: () -> Unit,
-    onTap: () -> Unit,
-) {
-    val thresholdPx = with(LocalDensity.current) { DragSnapThreshold.toPx() }
-    // Reset on every snap change so a drag that just landed Partial does
-    // not carry residual delta into the next gesture.
-    var accumulated by remember(snap) { mutableFloatStateOf(0f) }
-    Box(
-        contentAlignment = Alignment.Center,
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(DragHandleAreaHeight)
-            .pointerInput(snap) {
-                detectVerticalDragGestures(
-                    onDragStart = { accumulated = 0f },
-                    onDragCancel = { accumulated = 0f },
-                    onDragEnd = {
-                        resolveDragOutcome(
-                            snap = snap,
-                            accumulated = accumulated,
-                            thresholdPx = thresholdPx,
-                            onSnapChange = onSnapChange,
-                            onCloseConsole = onCloseConsole,
-                        )
-                        accumulated = 0f
-                    },
-                    onVerticalDrag = { _, delta -> accumulated += delta },
-                )
-            }
-            .clickable(onClick = onTap),
-    ) {
-        Box(
-            modifier = Modifier
-                .size(width = DragHandleWidth, height = DragHandleHeight)
-                .clip(RoundedCornerShape(percent = 50))
-                .background(color = KnotworkTheme.extended.consoleFg.copy(alpha = DRAG_HANDLE_ALPHA)),
-        )
-    }
-}
-
-/**
- * Resolves a finished vertical drag on the handle strip:
- *
- *  - Drag *down* further than the threshold collapses one snap; from
- *    [ConsoleSnap.Peek] the pane is dismissed via [onCloseConsole].
- *  - Drag *up* further than the threshold expands one snap; from
- *    [ConsoleSnap.Full] the gesture is a no-op (already at max).
- *  - Drags under the threshold are treated as accidental and ignored —
- *    the user can still tap to cycle.
- *
- * Pulled out of the composable so the snap-cycle is unit-testable and
- * the gesture handler stays a thin shell over the pure logic.
- */
-internal fun resolveDragOutcome(
-    snap: ConsoleSnap,
-    accumulated: Float,
-    thresholdPx: Float,
-    onSnapChange: (ConsoleSnap) -> Unit,
-    onCloseConsole: () -> Unit,
-) {
-    if (abs(accumulated) < thresholdPx) return
-    val draggedDown = accumulated > 0f
-    if (draggedDown) {
-        when (snap) {
-            ConsoleSnap.Full -> onSnapChange(ConsoleSnap.Partial)
-            ConsoleSnap.Partial -> onSnapChange(ConsoleSnap.Peek)
-            ConsoleSnap.Peek -> onCloseConsole()
-        }
-    } else {
-        when (snap) {
-            ConsoleSnap.Peek -> onSnapChange(ConsoleSnap.Partial)
-            ConsoleSnap.Partial -> onSnapChange(ConsoleSnap.Full)
-            ConsoleSnap.Full -> Unit
-        }
-    }
-}
-
-/** Label-only tab strip used in the Peek header — selected tab is bold-bright, others dim. */
-@Composable
-private fun PeekTabStrip(tab: ConsoleTab, onTabChange: (ConsoleTab) -> Unit) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp3),
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(PeekTabStripHeight)
-            .padding(horizontal = KnotworkTheme.spacing.sp3),
-    ) {
-        ConsoleTab.entries.forEach { entry ->
-            val selected = entry == tab
-            Text(
-                text = entry.name,
-                style = KnotworkTextStyles.LabelSm,
-                color = if (selected) {
-                    KnotworkTheme.extended.consoleFg
-                } else {
-                    KnotworkTheme.extended.consoleFg.copy(alpha = INACTIVE_TAB_ALPHA)
-                },
-                modifier = Modifier.clickable { onTabChange(entry) },
+        when (tab) {
+            ConsoleTab.Logs -> ConsoleLogsBody(
+                logs = logs,
+                filter = filter,
+                onFilterChange = onFilterChange,
+                searchQuery = searchQuery,
+                onSearchQueryChange = onSearchQueryChange,
+                onCopyLine = onCopyLine,
+                onFilterByLineSource = onFilterByLineSource,
             )
+            ConsoleTab.Vars -> ConsoleVarsBody(rows = vars)
+            ConsoleTab.Traces -> ConsoleTracesBody(spans = traces)
         }
     }
 }
 
-/** Full Partial/Full header: drag handle + tab strip + trailing actions. */
+/** Tab strip + trailing actions row. */
 @Composable
-@Suppress("LongParameterList") // Internal header — split-out further would just shuffle the params.
-private fun FullHeader(
-    snap: ConsoleSnap,
-    onSnapChange: (ConsoleSnap) -> Unit,
+@Suppress("LongParameterList")
+private fun ConsolePaneHeader(
     tab: ConsoleTab,
     onTabChange: (ConsoleTab) -> Unit,
     onSearch: () -> Unit,
     onCopyAll: () -> Unit,
     onClear: () -> Unit,
     onCloseConsole: () -> Unit,
-) { // onCloseConsole reaches the trailing Close icon AND the drag-handle dismiss gesture.
-    Column(
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
             .fillMaxWidth()
-            .height(FullHeaderHeight)
+            .height(ConsoleHeaderHeight)
             .background(color = KnotworkTheme.extended.consoleBg),
     ) {
-        DragHandleStrip(
-            snap = snap,
-            onSnapChange = onSnapChange,
-            onCloseConsole = onCloseConsole,
-            onTap = {
-                val next = when (snap) {
-                    ConsoleSnap.Peek -> ConsoleSnap.Partial
-                    ConsoleSnap.Partial -> ConsoleSnap.Full
-                    ConsoleSnap.Full -> ConsoleSnap.Peek
-                }
-                onSnapChange(next)
-            },
+        FullTabStrip(tab = tab, onTabChange = onTabChange, modifier = Modifier.weight(1f))
+        ConsoleActions(
+            onSearch = onSearch,
+            onCopyAll = onCopyAll,
+            onClear = onClear,
+            onClose = onCloseConsole,
         )
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.fillMaxWidth().weight(1f),
-        ) {
-            FullTabStrip(tab = tab, onTabChange = onTabChange, modifier = Modifier.weight(1f))
-            ConsoleActions(
-                onSearch = onSearch,
-                onCopyAll = onCopyAll,
-                onClear = onClear,
-                onClose = onCloseConsole,
-            )
-        }
     }
 }
 
@@ -514,24 +297,6 @@ private fun ConsoleHeaderIcon(icon: ImageVector, contentDescription: String, onC
             tint = KnotworkTheme.extended.consoleFg,
         )
     }
-}
-
-/** Peek-snap ticker — single line showing the last log entry. */
-@Composable
-private fun PeekTickerRow(logs: List<ConsoleLine>) {
-    val last = logs.lastOrNull()
-    val tickerText = if (last != null) "${last.timestamp} [${last.source}] ${last.text}" else ""
-    Text(
-        text = tickerText,
-        style = KnotworkTextStyles.MonoSm,
-        color = KnotworkTheme.extended.consoleFg.copy(alpha = INACTIVE_TAB_ALPHA),
-        maxLines = 1,
-        overflow = TextOverflow.Ellipsis,
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(PeekTickerHeight)
-            .padding(horizontal = KnotworkTheme.spacing.sp3),
-    )
 }
 
 /**
