@@ -535,6 +535,7 @@ private fun ChatHomeMessageList(state: ChatHomeViewState, callbacks: ChatHomeCal
                 onReject = callbacks.onHitlReject,
                 onClarificationReply = callbacks.onClarificationReply,
                 onErrorRetry = callbacks.onErrorRetry,
+                onContextAction = { action -> callbacks.onMessageContextAction(row.id, action) },
             )
         }
         if (state.visualState == ChatHomeVisualState.Generating) {

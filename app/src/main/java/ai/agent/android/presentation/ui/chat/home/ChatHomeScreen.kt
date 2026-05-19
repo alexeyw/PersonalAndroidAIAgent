@@ -55,6 +55,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.knotwork.design.components.chat.ChatContextAction
 import app.knotwork.design.components.misc.KnotworkSnackbar
 import app.knotwork.design.screens.chat.ChatHomeCallbacks
 import app.knotwork.design.screens.chat.ChatHomeContent
@@ -136,6 +137,8 @@ fun ChatHomeScreen(
     val exportChooserTitle = stringResource(R.string.chat_export_chooser_title)
     val importFailedTemplate = stringResource(R.string.chat_import_failed)
     val importUnreadableMessage = stringResource(R.string.chat_import_unreadable)
+    val messageCopiedMessage = stringResource(R.string.chat_snackbar_copied)
+    val rateComingSoonMessage = stringResource(R.string.chat_message_rate_coming_soon)
 
     LaunchedEffect(viewModel) {
         viewModel.pipelineFallbackEvents.collect {
@@ -265,6 +268,27 @@ fun ChatHomeScreen(
         // console pane at the Partial snap — the one-tap drill-in
         // affordance from `compose/screens/README.md §C1`.
         onAgentStatusClick = { viewModel.openConsole() },
+        onMessageContextAction = { rowId, action ->
+            when (action) {
+                ChatContextAction.Copy -> {
+                    val text = viewModel.textForRow(rowId)
+                    if (!text.isNullOrEmpty()) {
+                        clipboardManager.setText(AnnotatedString(text))
+                        coroutineScope.launch {
+                            snackbarHostState.showSnackbar(message = messageCopiedMessage)
+                        }
+                    }
+                }
+                ChatContextAction.Rerun -> {
+                    viewModel.textForRow(rowId)?.let(viewModel::onComposerValueChange)
+                }
+                ChatContextAction.Rate -> {
+                    coroutineScope.launch {
+                        snackbarHostState.showSnackbar(message = rateComingSoonMessage)
+                    }
+                }
+            }
+        },
     )
 
     // Inset wiring (Phase 21 / Task 8 review fixes):

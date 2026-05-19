@@ -1,6 +1,7 @@
 package app.knotwork.design.screens.chat
 
 import app.knotwork.design.components.chat.ChatContent
+import app.knotwork.design.components.chat.ChatContextAction
 import app.knotwork.design.components.chat.ChatMessageStatus
 import app.knotwork.design.components.chat.ChatMetadata
 import app.knotwork.design.components.chat.ChatRole
@@ -255,6 +256,18 @@ class ChatHomeCallbacks(
      * itself surfaces only a one-line summary).
      */
     val onAgentStatusClick: () -> Unit = {},
+    /**
+     * Fired when the user picks an action from a message-bubble's
+     * long-press context menu (Copy / Rerun / Rate). The first argument
+     * is the `ChatHomeMessageRow.id` of the row that was long-pressed —
+     * hosts use it to look up the underlying domain message and act
+     * (write to clipboard, re-send the prompt, open the rating sheet).
+     *
+     * Default no-op disables the long-press menu — the catalog only
+     * enables `combinedClickable` when the underlying `onContextAction`
+     * is non-null.
+     */
+    val onMessageContextAction: (rowId: String, action: ChatContextAction) -> Unit = { _, _ -> },
 )
 
 /** Convenience factory returning a callbacks bundle that ignores every event. */

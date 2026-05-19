@@ -1086,6 +1086,25 @@ class ChatHomeViewModel @Inject constructor(
      */
     fun currentPipelineId(): String? = sessions.firstOrNull { it.id == _currentSessionId.value }?.pipelineId
 
+    /**
+     * Extracts the plain-text body of a chat-home row by its catalog id
+     * (`ChatHomeMessageRow.id`). Returns `null` for rows whose content
+     * is not a plain-text bubble (Clarification cards, HITL
+     * confirmations, tool-call tiles, inline errors) — those have their
+     * own affordances and don't expose a copyable payload.
+     *
+     * Used by the long-press context menu (`onMessageContextAction`) to
+     * resolve Copy / Rerun targets.
+     */
+    fun textForRow(rowId: String): String? {
+        val row = _messages.value.firstOrNull { it.id == rowId } ?: return null
+        return when (val content = row.content) {
+            is ChatContent.Text -> content.text
+            is ChatContent.Markdown -> content.source
+            else -> null
+        }
+    }
+
     /** Resting (non-overlay) state given the current message list — `Empty` if no messages, else `Idle`. */
     private fun restingState(): ChatHomeUiState =
         if (_messages.value.isEmpty()) ChatHomeUiState.Empty else ChatHomeUiState.Idle
