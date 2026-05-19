@@ -63,6 +63,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -271,7 +272,7 @@ private const val TOKEN_FORMAT_THRESHOLD = 1000
 private fun ChatHomeBottomBar(state: ChatHomeViewState, callbacks: ChatHomeCallbacks) {
     Column {
         if (state.agentStatusLine != null) {
-            AgentStatusPill(text = state.agentStatusLine)
+            AgentStatusPill(text = state.agentStatusLine, onClick = callbacks.onAgentStatusClick)
         }
         ChatComposer(
             value = state.composerValue,
@@ -290,9 +291,16 @@ private fun ChatHomeBottomBar(state: ChatHomeViewState, callbacks: ChatHomeCallb
  * surface, monospace text, leading `[TAG]` token tinted brand-primary.
  * Parses a leading `[X]` segment as the tag colour cue — anything else
  * renders as one continuous mono line.
+ *
+ * Tappable: the pill is the user-facing affordance for opening the
+ * console pane (Phase 22 / Task 3). The host wires [onClick] to its
+ * `openConsole(Partial)` callback. The whole row carries Role.Button +
+ * `contentDescription` so TalkBack announces it as a button rather than
+ * two separate text labels.
  */
 @Composable
-private fun AgentStatusPill(text: String) {
+private fun AgentStatusPill(text: String, onClick: () -> Unit) {
+    val openConsoleCd = stringResource(R.string.knotwork_chat_home_agent_status_open_console_cd)
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp2),
@@ -304,6 +312,8 @@ private fun AgentStatusPill(text: String) {
             )
             .clip(KnotworkTheme.shapes.sm)
             .background(color = KnotworkTheme.extended.consoleBg)
+            .clickable(role = Role.Button, onClick = onClick)
+            .semantics { contentDescription = openConsoleCd }
             .padding(
                 horizontal = KnotworkTheme.spacing.sp3,
                 vertical = KnotworkTheme.spacing.sp2,

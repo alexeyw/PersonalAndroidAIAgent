@@ -165,6 +165,10 @@ fun ChatHomeScreen(viewModel: ChatHomeViewModel, modifier: Modifier = Modifier) 
         onImportChat = { /* stub: import-from-JSON sheet ships with Phase 22 / Task 4 */ },
         onOpenSettings = { /* stub: nav-graph deep-link to Settings ships in a follow-up */ },
         onSamplePromptCard = { card -> viewModel.onComposerValueChange(card.title) },
+        // Tapping the agent-status pill above the composer opens the
+        // console pane at the Partial snap — the one-tap drill-in
+        // affordance from `compose/screens/README.md §C1`.
+        onAgentStatusClick = { viewModel.openConsole() },
     )
 
     // Inset wiring (Phase 21 / Task 8 review fixes):

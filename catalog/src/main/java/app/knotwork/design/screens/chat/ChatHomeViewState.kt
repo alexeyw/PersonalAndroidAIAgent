@@ -231,6 +231,13 @@ class ChatHomeCallbacks(
     val onImportChat: () -> Unit = {},
     val onOpenSettings: () -> Unit = {},
     val onSamplePromptCard: (ChatHomeSamplePromptCard) -> Unit = {},
+    /**
+     * Fired when the user taps the agent-status pill above the composer.
+     * Hosts wire this to opening the console pane at the Partial snap so
+     * the user can drill into pipeline activity in one tap (the pill
+     * itself surfaces only a one-line summary).
+     */
+    val onAgentStatusClick: () -> Unit = {},
 )
 
 /** Convenience factory returning a callbacks bundle that ignores every event. */
