@@ -15,8 +15,10 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.launch
@@ -67,17 +69,43 @@ class TaskQueueManagerImpl @Inject constructor(
     override val activeSessionsState: StateFlow<Map<String, AgentOrchestratorState>> =
         _activeSessionsState.asStateFlow()
 
-    // State flows per session — capped by evicting only terminal (non-running) sessions
+    /**
+     * Per-session event streams — one [MutableSharedFlow] per active chat
+     * session, capped by [MAX_SESSION_STATES] and pruned via
+     * [evictOldestTerminalSession]. Modelled as a `SharedFlow` (not the
+     * earlier `StateFlow`) so the engine's tight-sequence emits never get
+     * conflated: emits like `PipelineTrace` immediately followed by
+     * `NodeIO` would previously overwrite each other inside the state
+     * flow and only one would reach the chat-home collector — depriving
+     * the console pane of every event that wasn't the latest. The
+     * `replay = 1` keeps the legacy "latest state on subscription"
+     * semantics; `extraBufferCapacity` ([CONSOLE_EVENT_BUFFER_CAPACITY])
+     * absorbs the longest engine burst observed in practice (memory
+     * retrieval + per-node start/end console events for a 12-node graph
+     * fit comfortably).
+     */
     @VisibleForTesting
-    internal val sessionStates = LinkedHashMap<String, MutableStateFlow<AgentOrchestratorState>>()
+    internal val sessionStates = LinkedHashMap<String, MutableSharedFlow<AgentOrchestratorState>>()
 
     companion object {
         @VisibleForTesting
         internal const val MAX_SESSION_STATES = 20
+
+        /**
+         * Buffer capacity for [sessionStates] entries — large enough to
+         * hold every intermediate emit of the longest pipeline run
+         * observed in practice without back-pressuring the engine.
+         */
+        @VisibleForTesting
+        internal const val CONSOLE_EVENT_BUFFER_CAPACITY = 256
     }
 
     private fun updateActiveSessionsState() {
-        val currentState = sessionStates.mapValues { it.value.value }
+        // Per-session flow is a SharedFlow now; the latest value lives in
+        // the replay cache (size 1) rather than under `.value`.
+        val currentState = sessionStates.mapValues { entry ->
+            entry.value.replayCache.lastOrNull() ?: AgentOrchestratorState.Idle
+        }
         _activeSessionsState.value = currentState
     }
 
@@ -102,7 +130,7 @@ class TaskQueueManagerImpl @Inject constructor(
     private suspend fun processTask(task: AgentTask) {
         val stateFlow = getOrCreateStateFlow(task.sessionId)
         val loadingState = AgentOrchestratorState.Loading
-        stateFlow.value = loadingState
+        stateFlow.emit(loadingState)
         _globalState.value = loadingState
 
         // 1. Save user message
@@ -130,7 +158,7 @@ class TaskQueueManagerImpl @Inject constructor(
             val errState = AgentOrchestratorState.Error(
                 "No active pipeline found. Please create one in the Visual Orchestrator.",
             )
-            stateFlow.value = errState
+            stateFlow.emit(errState)
             _globalState.value = errState
             return
         }
@@ -138,18 +166,21 @@ class TaskQueueManagerImpl @Inject constructor(
         // 3. Delegate to engine
         try {
             graphExecutionEngine(task.sessionId, task.prompt, activePipeline).collect { state ->
-                stateFlow.value = state
+                // `emit` (vs. `tryEmit`) back-pressures the engine if the
+                // buffer ever fills, so we never silently drop an event.
+                stateFlow.emit(state)
                 _globalState.value = state
             }
         } catch (e: Exception) {
             val errState = AgentOrchestratorState.Error(e.message ?: "Execution failed")
-            stateFlow.value = errState
+            stateFlow.emit(errState)
             _globalState.value = errState
         } finally {
-            if (stateFlow.value !is AgentOrchestratorState.Completed &&
-                stateFlow.value !is AgentOrchestratorState.Error
+            val last = stateFlow.replayCache.lastOrNull()
+            if (last !is AgentOrchestratorState.Completed &&
+                last !is AgentOrchestratorState.Error
             ) {
-                stateFlow.value = AgentOrchestratorState.Idle
+                stateFlow.emit(AgentOrchestratorState.Idle)
             }
             _globalState.value = AgentOrchestratorState.Idle
         }
@@ -166,11 +197,12 @@ class TaskQueueManagerImpl @Inject constructor(
         scope.launch {
             queueMutex.withLock {
                 val stateFlow = getOrCreateStateFlow(task.sessionId)
-                if (stateFlow.value == AgentOrchestratorState.Idle ||
-                    stateFlow.value is AgentOrchestratorState.Completed ||
-                    stateFlow.value is AgentOrchestratorState.Error
+                val last = stateFlow.replayCache.lastOrNull()
+                if (last == AgentOrchestratorState.Idle ||
+                    last is AgentOrchestratorState.Completed ||
+                    last is AgentOrchestratorState.Error
                 ) {
-                    stateFlow.value = AgentOrchestratorState.Loading
+                    stateFlow.emit(AgentOrchestratorState.Loading)
                     updateActiveSessionsState()
                 }
                 taskQueue.offer(task)
@@ -180,19 +212,27 @@ class TaskQueueManagerImpl @Inject constructor(
     }
 
     override fun observeTaskState(sessionId: String): Flow<AgentOrchestratorState> =
-        getOrCreateStateFlow(sessionId).asStateFlow()
+        getOrCreateStateFlow(sessionId).asSharedFlow()
 
     override fun resumeWithApproval(sessionId: String, isApproved: Boolean) {
         graphExecutionEngine.resumeWithApproval(sessionId, isApproved)
     }
 
-    private fun getOrCreateStateFlow(sessionId: String): MutableStateFlow<AgentOrchestratorState> {
+    private fun getOrCreateStateFlow(sessionId: String): MutableSharedFlow<AgentOrchestratorState> {
         synchronized(sessionStates) {
             return sessionStates.getOrPut(sessionId) {
                 if (sessionStates.size >= MAX_SESSION_STATES) {
                     evictOldestTerminalSession()
                 }
-                MutableStateFlow(AgentOrchestratorState.Idle)
+                MutableSharedFlow<AgentOrchestratorState>(
+                    replay = 1,
+                    extraBufferCapacity = CONSOLE_EVENT_BUFFER_CAPACITY,
+                ).apply {
+                    // Seed the replay cache with `Idle` so subscribers that
+                    // attach before the engine emits its first state see
+                    // the same initial value the legacy StateFlow used.
+                    tryEmit(AgentOrchestratorState.Idle)
+                }
             }
         }
     }
@@ -201,7 +241,7 @@ class TaskQueueManagerImpl @Inject constructor(
     // If all sessions are still running, no eviction occurs — active flows are never dropped.
     private fun evictOldestTerminalSession() {
         val entry = sessionStates.entries.firstOrNull { (_, flow) ->
-            val state = flow.value
+            val state = flow.replayCache.lastOrNull()
             state is AgentOrchestratorState.Idle ||
                 state is AgentOrchestratorState.Completed ||
                 state is AgentOrchestratorState.Error

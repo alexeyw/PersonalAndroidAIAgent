@@ -100,6 +100,20 @@ details.
     `consoleSnap` flow: programmatic `partialExpand()` /
     `expand()` calls follow VM-driven changes, and user-driven snap
     moves are mirrored back through `onConsoleSnapChange`.
+  - **Engine emits no longer conflated.** The per-session orchestrator
+    flow in `TaskQueueManagerImpl` switched from `MutableStateFlow` to
+    `MutableSharedFlow(replay = 1, extraBufferCapacity = 256)`. The
+    `StateFlow` was conflated — when `GraphExecutionEngine` emitted
+    `PipelineTrace` immediately followed by `NodeIO` (two `emit`
+    calls back-to-back), the second `.value =` overwrote the first
+    before the chat-home collector resumed on the main dispatcher, so
+    the Traces tab stayed empty even when the Vars tab populated
+    correctly. `SharedFlow` with `replay = 1` preserves the legacy
+    "subscriber sees latest state on attach" behaviour while the 256-
+    event buffer guarantees no engine emit is silently dropped. The
+    `enqueueTask` / `processTask` / `updateActiveSessionsState` /
+    `evictOldestTerminalSession` paths are migrated to
+    `emit(...)` + `replayCache.lastOrNull()`.
   - **`ConsoleSnap.Peek` retired.** The 44 dp ticker strip duplicated
     the agent-status pill above the composer and proved a dead-end UX
     in user testing. The enum is now `Partial` ↔ `PartiallyExpanded` +
