@@ -443,6 +443,8 @@
     <string name="knotwork_chat_home_drawer_new_thread">New chat</string>
     <!-- Drawer per-row edit/rename icon contentDescription. -->
     <string name="knotwork_chat_home_drawer_edit_cd">Rename thread</string>
+    <!-- Drawer per-row starred glyph contentDescription. -->
+    <string name="knotwork_chat_home_drawer_starred_cd">Starred</string>
     <!-- Drawer footer entry: import a chat from JSON / text. -->
     <string name="knotwork_chat_home_drawer_import_title">Import chat</string>
     <string name="knotwork_chat_home_drawer_import_subtitle">From JSON / text</string>

@@ -5,15 +5,19 @@ import ai.agent.android.domain.models.AgentOrchestratorState
 import ai.agent.android.domain.models.ChatMessage
 import ai.agent.android.domain.models.ChatSession
 import ai.agent.android.domain.models.ClarificationRequest
+import ai.agent.android.domain.models.LocalModel
 import ai.agent.android.domain.models.PipelineGraph
+import ai.agent.android.domain.models.Result
 import ai.agent.android.domain.models.Role
 import ai.agent.android.domain.models.ToolRisk
 import ai.agent.android.domain.repositories.ChatRepository
 import ai.agent.android.domain.repositories.ClarificationRepository
+import ai.agent.android.domain.repositories.LocalModelRepository
 import ai.agent.android.domain.repositories.PipelineRepository
 import ai.agent.android.domain.repositories.SettingsRepository
 import ai.agent.android.domain.usecases.AgentOrchestratorUseCase
 import ai.agent.android.domain.usecases.GetContextWindowUseCase
+import ai.agent.android.domain.usecases.LoadModelUseCase
 import app.knotwork.design.components.chat.ChatContent
 import app.knotwork.design.components.chat.ChatRole
 import app.knotwork.design.components.chips.Risk
@@ -25,13 +29,16 @@ import io.mockk.mockk
 import io.mockk.verify
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
@@ -73,8 +80,11 @@ class ChatHomeViewModelTest {
     private lateinit var getContextWindowUseCase: GetContextWindowUseCase
     private lateinit var llmInferenceEngine: LlmInferenceEngine
     private lateinit var clarificationRepository: ClarificationRepository
+    private lateinit var localModelRepository: LocalModelRepository
+    private lateinit var loadModelUseCase: LoadModelUseCase
 
     private lateinit var sessionsFlow: MutableStateFlow<List<ChatSession>>
+    private lateinit var localModelsFlow: MutableStateFlow<List<LocalModel>>
     private lateinit var pipelinesFlow: MutableStateFlow<List<PipelineGraph>>
     private lateinit var messagesFlow: MutableStateFlow<List<ChatMessage>>
     private lateinit var savedSessionIdFlow: MutableStateFlow<String?>
@@ -94,8 +104,11 @@ class ChatHomeViewModelTest {
         getContextWindowUseCase = mockk()
         llmInferenceEngine = mockk(relaxed = true)
         clarificationRepository = mockk(relaxed = true)
+        localModelRepository = mockk(relaxed = true)
+        loadModelUseCase = mockk()
 
         sessionsFlow = MutableStateFlow(emptyList())
+        localModelsFlow = MutableStateFlow(emptyList())
         pipelinesFlow = MutableStateFlow(emptyList())
         messagesFlow = MutableStateFlow(emptyList())
         savedSessionIdFlow = MutableStateFlow(null)
@@ -104,6 +117,14 @@ class ChatHomeViewModelTest {
         consolePreferredConsoleTabNameFlow = MutableStateFlow("Logs")
 
         every { llmInferenceEngine.isInitialized } returns true
+        every { localModelRepository.getAllModels() } returns localModelsFlow
+        coEvery { loadModelUseCase(any()) } returns Result.Success(Unit)
+        coEvery { chatRepository.renameSession(any(), any()) } returns Unit
+        coEvery { chatRepository.setSessionFavorite(any(), any()) } returns Unit
+        coEvery { chatRepository.deleteSession(any()) } returns Unit
+        coEvery { chatRepository.importChat(any()) } returns "imported-session-id"
+        coEvery { chatRepository.getMessagesForSession(any()) } returns flowOf(emptyList())
+        coEvery { chatRepository.getSessionById(any()) } returns null
         every { chatRepository.getSessionsFlow() } returns sessionsFlow
         every { chatRepository.getDisplayMessagesForSession(any()) } returns messagesFlow
         coEvery { chatRepository.saveSession(any()) } answers {
@@ -139,6 +160,8 @@ class ChatHomeViewModelTest {
         getContextWindowUseCase,
         llmInferenceEngine,
         clarificationRepository,
+        localModelRepository,
+        loadModelUseCase,
     )
 
     @Test
@@ -803,6 +826,223 @@ class ChatHomeViewModelTest {
         assertEquals("Gemma 2B", row.metadata.model)
         assertNotNull(row.metadata.timestamp)
         assertTrue(row.id.startsWith("a-"))
+    }
+
+    // -----------------------------------------------------------------
+    // Phase 22 / Task 4 — drawer / overflow / model-picker / favorites.
+    // -----------------------------------------------------------------
+
+    @Test
+    fun `createNewSessionWithPipeline persists session with picked pipeline and switches`() = runTest(testDispatcher) {
+        viewModel = createViewModel()
+        advanceUntilIdle()
+
+        viewModel.createNewSessionWithPipeline(pipelineId = "pipe-42")
+        advanceUntilIdle()
+
+        coVerify { chatRepository.saveSession(match { it.pipelineId == "pipe-42" }) }
+        // After save, the new session id is propagated as the active session.
+        assertTrue(viewModel.currentSessionId.value.isNotBlank())
+    }
+
+    @Test
+    fun `renameSession trims input and forwards to repository`() = runTest(testDispatcher) {
+        viewModel = createViewModel()
+        advanceUntilIdle()
+
+        viewModel.renameSession("thread-x", "   New name   ")
+        advanceUntilIdle()
+
+        coVerify { chatRepository.renameSession("thread-x", "New name") }
+    }
+
+    @Test
+    fun `renameSession with blank input is a no-op`() = runTest(testDispatcher) {
+        viewModel = createViewModel()
+        advanceUntilIdle()
+
+        viewModel.renameSession("thread-x", "    ")
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) { chatRepository.renameSession(any(), any()) }
+    }
+
+    @Test
+    fun `toggleFavoriteCurrent flips persisted isStarred flag on the active session`() = runTest(testDispatcher) {
+        val sessionId = "fav-session"
+        savedSessionIdFlow.value = sessionId
+        sessionsFlow.value = listOf(
+            ChatSession(id = sessionId, name = "S", updatedAt = 0, isStarred = false),
+        )
+        viewModel = createViewModel()
+        advanceUntilIdle()
+
+        viewModel.toggleFavoriteCurrent()
+        advanceUntilIdle()
+
+        coVerify { chatRepository.setSessionFavorite(sessionId, true) }
+    }
+
+    @Test
+    fun `toggleFavoriteCurrent reflects current isStarred via favorite StateFlow`() = runTest(testDispatcher) {
+        val sessionId = "fav-session"
+        savedSessionIdFlow.value = sessionId
+        sessionsFlow.value = listOf(
+            ChatSession(id = sessionId, name = "S", updatedAt = 0, isStarred = true),
+        )
+        viewModel = createViewModel()
+        advanceUntilIdle()
+
+        assertEquals(true, viewModel.favorite.value)
+    }
+
+    @Test
+    fun `pickModel activates the model and loads it via LoadModelUseCase`() = runTest(testDispatcher) {
+        viewModel = createViewModel()
+        advanceUntilIdle()
+
+        viewModel.pickModel(modelId = 17L)
+        advanceUntilIdle()
+
+        coVerify { localModelRepository.setActiveModel(17L) }
+        coVerify { loadModelUseCase() }
+    }
+
+    @Test
+    fun `installedModels mirrors LocalModelRepository getAllModels emissions`() = runTest(testDispatcher) {
+        viewModel = createViewModel()
+        advanceUntilIdle()
+
+        localModelsFlow.value = listOf(
+            LocalModel(id = 1L, name = "Gemma 2B", path = "/g", size = 0L, isActive = true),
+            LocalModel(id = 2L, name = "Other", path = "/o", size = 0L, isActive = false),
+        )
+        advanceUntilIdle()
+
+        assertEquals(2, viewModel.installedModels.value.size)
+        assertEquals(1L, viewModel.activeModelId.value)
+        assertEquals("Gemma 2B", viewModel.modelName.value)
+    }
+
+    @Test
+    fun `deleteCurrentSession deletes and auto-selects the next available thread`() = runTest(testDispatcher) {
+        val sessionId = "active-id"
+        val other = "other-id"
+        savedSessionIdFlow.value = sessionId
+        sessionsFlow.value = listOf(
+            ChatSession(id = sessionId, name = "A", updatedAt = 2L),
+            ChatSession(id = other, name = "B", updatedAt = 1L),
+        )
+        // Simulate the repository removing the row when delete is called.
+        coEvery { chatRepository.deleteSession(sessionId) } answers {
+            sessionsFlow.value = sessionsFlow.value.filterNot { it.id == sessionId }
+            Unit
+        }
+
+        viewModel = createViewModel()
+        advanceUntilIdle()
+
+        viewModel.deleteCurrentSession()
+        advanceUntilIdle()
+
+        coVerify { chatRepository.deleteSession(sessionId) }
+        assertEquals(other, viewModel.currentSessionId.value)
+    }
+
+    @Test
+    fun `deleteCurrentSession creates fresh session when no thread remains`() = runTest(testDispatcher) {
+        val sessionId = "only-id"
+        savedSessionIdFlow.value = sessionId
+        sessionsFlow.value = listOf(ChatSession(id = sessionId, name = "only", updatedAt = 0))
+        coEvery { chatRepository.deleteSession(sessionId) } answers {
+            sessionsFlow.value = emptyList()
+            Unit
+        }
+
+        viewModel = createViewModel()
+        advanceUntilIdle()
+
+        viewModel.deleteCurrentSession()
+        advanceUntilIdle()
+
+        coVerify { chatRepository.deleteSession(sessionId) }
+        // After delete + auto-create, the active session id is the newly-created one.
+        assertTrue(viewModel.currentSessionId.value.isNotBlank())
+        coVerify(atLeast = 1) { chatRepository.saveSession(any()) }
+    }
+
+    @Test
+    fun `importChatFromJson delegates to repository and selects the imported session`() = runTest(testDispatcher) {
+        viewModel = createViewModel()
+        advanceUntilIdle()
+
+        viewModel.importChatFromJson("""[{"role":"USER","text":"hi","timestamp":1}]""")
+        advanceUntilIdle()
+
+        coVerify { chatRepository.importChat(any()) }
+        assertEquals("imported-session-id", viewModel.currentSessionId.value)
+    }
+
+    @Test
+    fun `importChatFromJson emits importErrorEvents when repository throws`() = runTest(testDispatcher) {
+        coEvery { chatRepository.importChat(any()) } throws org.json.JSONException("bad shape")
+        viewModel = createViewModel()
+        advanceUntilIdle()
+
+        // Use async to suspend on the first emission. `runCurrent` parks the
+        // collector inside `first()`, then the trigger runs, then `await`
+        // resumes once `tryEmit` lands. MutableSharedFlow(replay=0) only
+        // delivers to subscribers active at emit time, so the await-then-emit
+        // ordering is mandatory.
+        val received = async { viewModel.importErrorEvents.first() }
+        runCurrent()
+        viewModel.importChatFromJson("not json")
+        advanceUntilIdle()
+
+        assertEquals("bad shape", received.await())
+    }
+
+    @Test
+    fun `exportCurrentSession emits payload carrying session name and JSON`() = runTest(testDispatcher) {
+        val sessionId = "exp-id"
+        savedSessionIdFlow.value = sessionId
+        sessionsFlow.value = listOf(ChatSession(id = sessionId, name = "Trip plan", updatedAt = 0))
+        coEvery { chatRepository.getSessionById(sessionId) } returns
+            ChatSession(id = sessionId, name = "Trip plan", updatedAt = 0)
+        coEvery { chatRepository.getMessagesForSession(sessionId) } returns flowOf(
+            listOf(
+                ChatMessage(id = 1L, sessionId = sessionId, role = Role.USER, content = "hi", timestamp = 1L),
+            ),
+        )
+        viewModel = createViewModel()
+        advanceUntilIdle()
+
+        val payload = async { viewModel.exportEvents.first() }
+        runCurrent()
+        viewModel.exportCurrentSession()
+        advanceUntilIdle()
+
+        val captured = payload.await()
+        assertEquals("Trip plan", captured.sessionName)
+        assertTrue(captured.json.contains("\"role\""))
+        assertTrue(captured.json.contains("\"USER\""))
+    }
+
+    @Test
+    fun `threadRows projects sessions with favorited at the top`() = runTest(testDispatcher) {
+        val a = "id-a"
+        val b = "id-b"
+        sessionsFlow.value = listOf(
+            ChatSession(id = a, name = "Older", updatedAt = 100L, isStarred = false),
+            ChatSession(id = b, name = "Pinned", updatedAt = 50L, isStarred = true),
+        )
+        viewModel = createViewModel()
+        advanceUntilIdle()
+
+        val rows = viewModel.threadRows.value
+        assertEquals(b, rows.first().id)
+        assertTrue(rows.first().starred)
+        assertEquals(a, rows.last().id)
     }
 
     private companion object {

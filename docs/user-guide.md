@@ -135,17 +135,36 @@ The picker is not present in release builds.
 
 Open the side drawer from the chat screen (tap the menu icon, or
 swipe from the left edge). The drawer lists every chat under
-**Chat Sessions**. The currently active session is highlighted.
+**SESSIONS**. The currently active session is highlighted; favorited
+chats are sorted to the top with a small leading star glyph.
 
-- **New chat** — tap **New Chat** at the top of the drawer. The new
-  session uses the default pipeline unless you explicitly attach a
-  different one (see [Pipelines](#pipelines)).
+- **New chat** — tap **New chat** at the top of the drawer. A bottom
+  sheet opens with the available pipelines (pre-selected to the one
+  currently bound to your active chat); confirm to create a fresh
+  session. If no pipelines exist, the new chat inherits the default
+  pipeline automatically.
 - **Switch chat** — tap any row in the list. The chat screen updates
   immediately.
 - **Rename chat** — tap the pencil icon next to a session row. A
-  dialog titled **Rename Chat** opens with a **Chat Name** field.
+  bottom sheet titled **Rename chat** opens with the current name
+  pre-filled; **Save** persists the new name.
+- **Favorite chat** — tap the star icon in the chat top bar to favorite
+  the active chat. Favorited chats persist across restarts and sort to
+  the top of the drawer.
 
-![Screenshot TODO — chat drawer](screenshots/TODO.png)
+### Switching models from the chat top bar
+
+Tap the model label under the chat title to open a model-picker bottom
+sheet listing every locally installed LiteRT model. Picking a model
+activates it and reloads the inference engine. If no models are
+installed, the sheet shows **Open Models** that takes you directly to
+the Models screen.
+
+### Settings shortcut
+
+The drawer footer carries a **Settings** entry that deep-links to the
+Settings screen. Use it whenever the chat surface needs a quick jump
+to API keys, sampling parameters, or appearance toggles.
 
 ### Exporting and importing chat history
 
@@ -153,14 +172,20 @@ The app uses standard Android share and file-picker intents, so chat
 history is portable to any app that handles JSON or plain text.
 
 - **Export** — from the chat screen's top-bar overflow menu (`⋮`)
-  choose **Export Chat**. The Android **Share Sheet** opens with a
+  choose **Export chat**. The Android **Share Sheet** opens with a
   JSON payload containing the full message history. Choose any
   destination that accepts JSON (Files, email, a messenger, a
   cloud-drive app, and so on).
-- **Import** — open the drawer and tap **Import Chat**. The system
-  file picker opens, filtered to `application/json` and `text/plain`.
-  Selecting a previously exported file creates a new chat session
-  with the imported messages.
+- **Import** — open the drawer and tap **Import chat**. The system
+  file picker opens, filtered to `application/json`. Selecting a
+  previously exported file creates a new chat session with the
+  imported messages and switches to it immediately. Malformed files
+  surface an inline error via the chat snackbar.
+- **Delete chat** — from the same overflow menu choose **Delete chat**.
+  A destructive confirmation dialog appears; once confirmed the
+  conversation (and every message in it) is removed. The next
+  available chat is auto-selected, or a fresh unbound chat is created
+  if none remain.
 
 ### Saving and filtering messages
 

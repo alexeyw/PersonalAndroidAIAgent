@@ -759,15 +759,29 @@ private fun ChatHomeDrawerThreadRow(row: ChatHomeThreadRow, onClick: () -> Unit,
                 .background(color = dotColor, shape = CircleShape),
         )
         Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = row.title,
-                style = KnotworkTextStyles.TitleMd.copy(
-                    fontWeight = FontWeight.SemiBold,
-                ),
-                color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp1),
+            ) {
+                if (row.starred) {
+                    Icon(
+                        imageVector = Icons.Filled.Star,
+                        contentDescription =
+                        stringResource(R.string.knotwork_chat_home_drawer_starred_cd),
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(DRAWER_STARRED_ICON_SIZE),
+                    )
+                }
+                Text(
+                    text = row.title,
+                    style = KnotworkTextStyles.TitleMd.copy(
+                        fontWeight = FontWeight.SemiBold,
+                    ),
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
             Text(
                 text = row.subtitle,
                 style = KnotworkTextStyles.MonoSm,
@@ -821,6 +835,9 @@ private fun DrawerFooterRow(icon: ImageVector, title: String, subtitle: String, 
 
 /** Diameter of the leading status dot rendered next to each session row. */
 private val DRAWER_STATUS_DOT_SIZE = 8.dp
+
+/** Size of the inline star glyph rendered before a favorited session's title. */
+private val DRAWER_STARRED_ICON_SIZE = 14.dp
 
 /**
  * Material 3 [ModalBottomSheet] hosting the stateless [ConsolePane].

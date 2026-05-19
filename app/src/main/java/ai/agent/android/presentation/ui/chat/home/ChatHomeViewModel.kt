@@ -6,14 +6,17 @@ import ai.agent.android.domain.models.ChatMessage
 import ai.agent.android.domain.models.ChatSession
 import ai.agent.android.domain.models.ClarificationRequest
 import ai.agent.android.domain.models.ConsoleEvent
+import ai.agent.android.domain.models.LocalModel
 import ai.agent.android.domain.models.Role
 import ai.agent.android.domain.models.ToolRisk
 import ai.agent.android.domain.repositories.ChatRepository
 import ai.agent.android.domain.repositories.ClarificationRepository
+import ai.agent.android.domain.repositories.LocalModelRepository
 import ai.agent.android.domain.repositories.PipelineRepository
 import ai.agent.android.domain.repositories.SettingsRepository
 import ai.agent.android.domain.usecases.AgentOrchestratorUseCase
 import ai.agent.android.domain.usecases.GetContextWindowUseCase
+import ai.agent.android.domain.usecases.LoadModelUseCase
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.knotwork.design.components.chat.ChatContent
@@ -29,6 +32,7 @@ import app.knotwork.design.components.console.ConsoleTab
 import app.knotwork.design.components.console.ConsoleTraceSpan
 import app.knotwork.design.components.console.ConsoleVarRow
 import app.knotwork.design.screens.chat.ChatHomeMessageRow
+import app.knotwork.design.screens.chat.ChatHomeThreadRow
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -42,6 +46,8 @@ import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import org.json.JSONArray
+import org.json.JSONObject
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -96,6 +102,8 @@ class ChatHomeViewModel @Inject constructor(
     private val getContextWindowUseCase: GetContextWindowUseCase,
     private val llmInferenceEngine: LlmInferenceEngine,
     private val clarificationRepository: ClarificationRepository,
+    private val localModelRepository: LocalModelRepository,
+    private val loadModelUseCase: LoadModelUseCase,
 ) : ViewModel() {
 
     private val _currentSessionId: MutableStateFlow<String> = MutableStateFlow("")
@@ -121,6 +129,13 @@ class ChatHomeViewModel @Inject constructor(
     private val _consoleClearConfirmRequested: MutableStateFlow<Boolean> = MutableStateFlow(false)
     private val _consoleSnackbarEvents: MutableSharedFlow<ConsoleSnackbarEvent> =
         MutableSharedFlow(extraBufferCapacity = 1)
+    private val _favorite: MutableStateFlow<Boolean> = MutableStateFlow(false)
+    private val _threadRows: MutableStateFlow<List<ChatHomeThreadRow>> = MutableStateFlow(emptyList())
+    private val _installedModels: MutableStateFlow<List<LocalModel>> = MutableStateFlow(emptyList())
+    private val _activeModelId: MutableStateFlow<Long?> = MutableStateFlow(null)
+    private val _availablePipelines: MutableStateFlow<List<PipelineSummary>> = MutableStateFlow(emptyList())
+    private val _exportEvents: MutableSharedFlow<ChatExportPayload> = MutableSharedFlow(extraBufferCapacity = 1)
+    private val _importErrorEvents: MutableSharedFlow<String> = MutableSharedFlow(extraBufferCapacity = 1)
 
     /** Externally-observable current session id. */
     val currentSessionId: StateFlow<String> = _currentSessionId.asStateFlow()
@@ -238,6 +253,41 @@ class ChatHomeViewModel @Inject constructor(
      */
     val consoleSnackbarEvents: SharedFlow<ConsoleSnackbarEvent> = _consoleSnackbarEvents.asSharedFlow()
 
+    /** Whether the currently active session is favorited. Drives the TopAppBar star icon. */
+    val favorite: StateFlow<Boolean> = _favorite.asStateFlow()
+
+    /**
+     * Drawer thread list projected from the live [ChatSession] cache. Favorited
+     * sessions sort to the top; the rest follow the repository's `updatedAt
+     * DESC` order. The catalog `ChatHomeViewState.threads` slot is wired to
+     * this flow so the screen no longer needs to call into fixtures for the
+     * drawer body.
+     */
+    val threadRows: StateFlow<List<ChatHomeThreadRow>> = _threadRows.asStateFlow()
+
+    /** Locally installed LiteRT models — feeds the chat-home model-picker sheet. */
+    val installedModels: StateFlow<List<LocalModel>> = _installedModels.asStateFlow()
+
+    /** Row id of the currently active local model (`null` when none is active). */
+    val activeModelId: StateFlow<Long?> = _activeModelId.asStateFlow()
+
+    /** Available pipelines — surfaced by the new-chat pipeline picker. */
+    internal val availablePipelinesFlow: StateFlow<List<PipelineSummary>> = _availablePipelines.asStateFlow()
+
+    /**
+     * One-shot stream raised when the user picks `Export chat` from the
+     * overflow menu. The screen consumes each payload via a `LaunchedEffect`
+     * and dispatches a system share-sheet (`Intent.ACTION_SEND`).
+     */
+    val exportEvents: SharedFlow<ChatExportPayload> = _exportEvents.asSharedFlow()
+
+    /**
+     * One-shot stream of import-failure messages. Surfaced via the shared
+     * `SnackbarHostState`; the carried string is a localised user-visible
+     * description ("Could not read the selected file", JSON parse error, …).
+     */
+    val importErrorEvents: SharedFlow<String> = _importErrorEvents.asSharedFlow()
+
     private var messagesJob: Job? = null
     private var generationJob: Job? = null
     private var tokenCounterJob: Job? = null
@@ -275,6 +325,7 @@ class ChatHomeViewModel @Inject constructor(
         observeSessions()
         observeMaxContextSize()
         observeConsolePreferredTab()
+        observeInstalledModels()
         initializeSession()
     }
 
@@ -569,9 +620,27 @@ class ChatHomeViewModel @Inject constructor(
             pipelineRepository.getAllPipelines().collect { graphs ->
                 val summaries = graphs.map { PipelineSummary(id = it.id, name = it.name) }
                 availablePipelines = summaries
+                _availablePipelines.value = summaries
                 availablePipelinesObserved = true
                 refreshPipelineName()
                 handleDeletedBoundPipeline(summaries)
+            }
+        }
+    }
+
+    /**
+     * Observes the installed-model list and mirrors it into [installedModels]
+     * + [activeModelId]. Also keeps [_modelName] in sync with the currently
+     * active model so the TopAppBar subtitle always reflects the real
+     * inference engine bound to the chat.
+     */
+    private fun observeInstalledModels() {
+        viewModelScope.launch {
+            localModelRepository.getAllModels().collect { models ->
+                _installedModels.value = models
+                val active = models.firstOrNull { it.isActive }
+                _activeModelId.value = active?.id
+                _modelName.value = active?.name ?: DEFAULT_MODEL_NAME
             }
         }
     }
@@ -592,8 +661,33 @@ class ChatHomeViewModel @Inject constructor(
             chatRepository.getSessionsFlow().collect { current ->
                 sessions = current
                 applyCurrentSessionMetadata()
+                refreshThreadRows()
                 handleDeletedBoundPipeline(availablePipelines)
             }
+        }
+    }
+
+    /**
+     * Rebuilds [_threadRows] from the live [sessions] cache. Favorited
+     * sessions sort to the top of the drawer; the rest follow the
+     * repository's `updatedAt DESC` ordering. The catalog drawer renders
+     * the `selected`/`active` chrome from the matching flags here.
+     */
+    private fun refreshThreadRows() {
+        val activeId = _currentSessionId.value
+        val sorted = sessions.sortedWith(
+            compareByDescending<ChatSession> { it.isStarred }
+                .thenByDescending { it.updatedAt },
+        )
+        _threadRows.value = sorted.map { session ->
+            ChatHomeThreadRow(
+                id = session.id,
+                title = session.name.ifBlank { DEFAULT_THREAD_TITLE },
+                subtitle = formatThreadSubtitle(session.updatedAt),
+                selected = session.id == activeId,
+                active = session.id == activeId,
+                starred = session.isStarred,
+            )
         }
     }
 
@@ -975,15 +1069,160 @@ class ChatHomeViewModel @Inject constructor(
         val session = sessions.firstOrNull { it.id == _currentSessionId.value }
         if (session != null) {
             _threadTitle.value = session.name.ifBlank { DEFAULT_THREAD_TITLE }
+            _favorite.value = session.isStarred
         } else if (_currentSessionId.value.isBlank()) {
             _threadTitle.value = DEFAULT_THREAD_TITLE
+            _favorite.value = false
         }
         refreshPipelineName()
+        refreshThreadRows()
     }
+
+    /**
+     * Returns the active session's pipeline binding (or `null` when the
+     * session inherits the default). Surfaced to the screen so the
+     * new-thread picker can pre-select the same pipeline as the current
+     * chat, matching legacy `ChatViewModel.requestNewSession` ergonomics.
+     */
+    fun currentPipelineId(): String? = sessions.firstOrNull { it.id == _currentSessionId.value }?.pipelineId
 
     /** Resting (non-overlay) state given the current message list — `Empty` if no messages, else `Idle`. */
     private fun restingState(): ChatHomeUiState =
         if (_messages.value.isEmpty()) ChatHomeUiState.Empty else ChatHomeUiState.Idle
+
+    /**
+     * Creates a new chat session bound to [pipelineId] and switches to it.
+     * Mirrors legacy `ChatViewModel.createNewSession` so the new-thread
+     * picker behaves identically across both surfaces.
+     *
+     * @param pipelineId Pipeline identifier to bind, or `null` to inherit
+     *   the application-wide default pipeline.
+     */
+    fun createNewSessionWithPipeline(pipelineId: String?) {
+        viewModelScope.launch {
+            val newId = UUID.randomUUID().toString()
+            chatRepository.saveSession(
+                ChatSession(
+                    id = newId,
+                    name = DEFAULT_NEW_CHAT_NAME,
+                    updatedAt = System.currentTimeMillis(),
+                    pipelineId = pipelineId,
+                ),
+            )
+            selectThread(newId)
+        }
+    }
+
+    /**
+     * Renames the chat session identified by [threadId]. Trims the input
+     * and short-circuits when the trimmed value is blank — the rename
+     * sheet's Save button is already gated on a non-blank value, but the
+     * VM mirrors the gate defensively.
+     */
+    fun renameSession(threadId: String, newName: String) {
+        val trimmed = newName.trim()
+        if (threadId.isBlank() || trimmed.isEmpty()) return
+        viewModelScope.launch {
+            chatRepository.renameSession(threadId, trimmed)
+        }
+    }
+
+    /**
+     * Flips the session-level favorite flag on the currently active chat.
+     * No-op when no session is loaded.
+     */
+    fun toggleFavoriteCurrent() {
+        val sessionId = _currentSessionId.value
+        if (sessionId.isBlank()) return
+        val current = sessions.firstOrNull { it.id == sessionId }?.isStarred ?: false
+        viewModelScope.launch {
+            chatRepository.setSessionFavorite(sessionId, !current)
+        }
+    }
+
+    /**
+     * Imports a chat from a JSON document. Surfaces a snackbar event on
+     * failure via [importErrorEvents]; on success the newly created
+     * session becomes the active thread.
+     *
+     * @param json Raw JSON payload (export shape or bare message array).
+     */
+    fun importChatFromJson(json: String) {
+        viewModelScope.launch {
+            runCatching { chatRepository.importChat(json) }
+                .onSuccess { newId -> selectThread(newId) }
+                .onFailure { error ->
+                    _importErrorEvents.tryEmit(
+                        error.localizedMessage ?: IMPORT_GENERIC_FAILURE_MESSAGE,
+                    )
+                }
+        }
+    }
+
+    /**
+     * Activates the LiteRT model identified by [modelId] and reloads the
+     * inference engine. Subsequent `sendMessage` calls run against the
+     * freshly-loaded model.
+     */
+    fun pickModel(modelId: Long) {
+        viewModelScope.launch {
+            localModelRepository.setActiveModel(modelId)
+            loadModelUseCase()
+        }
+    }
+
+    /**
+     * Serialises the currently active session and emits the resulting
+     * [ChatExportPayload] via [exportEvents]. The screen consumes the
+     * payload and dispatches a system share-sheet (`Intent.ACTION_SEND`)
+     * — kept in the screen because Hilt-ViewModels stay free of `Context`.
+     */
+    fun exportCurrentSession() {
+        val sessionId = _currentSessionId.value
+        if (sessionId.isBlank()) return
+        viewModelScope.launch {
+            runCatching {
+                val rawMessages = chatRepository.getMessagesForSession(sessionId).first()
+                val session = chatRepository.getSessionById(sessionId)
+                val sessionName = session?.name ?: EXPORT_FALLBACK_SESSION_NAME
+                val messagesArray = JSONArray()
+                rawMessages.forEach { message ->
+                    messagesArray.put(
+                        JSONObject()
+                            .put("role", message.role.name)
+                            .put("text", message.content)
+                            .put("timestamp", message.timestamp),
+                    )
+                }
+                val root = JSONObject()
+                    .put("sessionId", sessionId)
+                    .put("sessionName", sessionName)
+                    .put("exportedAt", System.currentTimeMillis())
+                    .put("messages", messagesArray)
+                ChatExportPayload(sessionName = sessionName, json = root.toString(EXPORT_JSON_INDENT))
+            }.onSuccess { payload -> _exportEvents.tryEmit(payload) }
+        }
+    }
+
+    /**
+     * Deletes the currently active session and auto-selects the next
+     * available thread; when no other session exists, creates a fresh
+     * unbound chat so the user is never stranded on a non-existent
+     * session id.
+     */
+    fun deleteCurrentSession() {
+        val sessionId = _currentSessionId.value
+        if (sessionId.isBlank()) return
+        viewModelScope.launch {
+            chatRepository.deleteSession(sessionId)
+            val remaining = sessions.filter { it.id != sessionId }
+            if (remaining.isNotEmpty()) {
+                selectThread(remaining.first().id)
+            } else {
+                createNewSessionWithPipeline(pipelineId = null)
+            }
+        }
+    }
 
     companion object {
         /** Pre-formatted fallback thread title surfaced before any thread is selected. */
@@ -1051,6 +1290,22 @@ class ChatHomeViewModel @Inject constructor(
 
         /** Pre-formatted timestamp format used in [ChatMetadata.timestamp] (24h, locale-aware). */
         private const val TIMESTAMP_PATTERN: String = "HH:mm"
+
+        /** Pattern used for the drawer thread subtitle (e.g. `Mon 14:32`). */
+        private const val THREAD_SUBTITLE_PATTERN: String = "EEE HH:mm"
+
+        /** Fallback session name forwarded as the share-sheet subject when the session has no name. */
+        const val EXPORT_FALLBACK_SESSION_NAME: String = "Chat"
+
+        /** JSON pretty-print indent used for export payloads. */
+        const val EXPORT_JSON_INDENT: Int = 2
+
+        /** Fallback localised-error string used when the import path throws without a message. */
+        const val IMPORT_GENERIC_FAILURE_MESSAGE: String = "Could not import the chat."
+
+        /** Formats a session `updatedAt` timestamp as the drawer thread subtitle. */
+        fun formatThreadSubtitle(updatedAt: Long): String =
+            SimpleDateFormat(THREAD_SUBTITLE_PATTERN, Locale.getDefault()).format(Date(updatedAt))
 
         /**
          * Projects a domain [ChatMessage] onto the design-system row

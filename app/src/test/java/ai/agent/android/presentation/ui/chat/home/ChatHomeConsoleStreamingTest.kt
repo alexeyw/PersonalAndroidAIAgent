@@ -6,13 +6,17 @@ import ai.agent.android.domain.models.ChatMessage
 import ai.agent.android.domain.models.ChatSession
 import ai.agent.android.domain.models.ConsoleEvent
 import ai.agent.android.domain.models.ConsoleEventType
+import ai.agent.android.domain.models.LocalModel
 import ai.agent.android.domain.models.PipelineGraph
+import ai.agent.android.domain.models.Result
 import ai.agent.android.domain.repositories.ChatRepository
 import ai.agent.android.domain.repositories.ClarificationRepository
+import ai.agent.android.domain.repositories.LocalModelRepository
 import ai.agent.android.domain.repositories.PipelineRepository
 import ai.agent.android.domain.repositories.SettingsRepository
 import ai.agent.android.domain.usecases.AgentOrchestratorUseCase
 import ai.agent.android.domain.usecases.GetContextWindowUseCase
+import ai.agent.android.domain.usecases.LoadModelUseCase
 import app.knotwork.design.components.console.ConsoleLevel
 import app.knotwork.design.components.console.ConsoleSource
 import app.knotwork.design.components.console.ConsoleTab
@@ -60,8 +64,11 @@ class ChatHomeConsoleStreamingTest {
     private lateinit var getContextWindowUseCase: GetContextWindowUseCase
     private lateinit var llmInferenceEngine: LlmInferenceEngine
     private lateinit var clarificationRepository: ClarificationRepository
+    private lateinit var localModelRepository: LocalModelRepository
+    private lateinit var loadModelUseCase: LoadModelUseCase
 
     private lateinit var sessionsFlow: MutableStateFlow<List<ChatSession>>
+    private lateinit var localModelsFlow: MutableStateFlow<List<LocalModel>>
     private lateinit var pipelinesFlow: MutableStateFlow<List<PipelineGraph>>
     private lateinit var messagesFlow: MutableStateFlow<List<ChatMessage>>
     private lateinit var savedSessionIdFlow: MutableStateFlow<String?>
@@ -82,8 +89,12 @@ class ChatHomeConsoleStreamingTest {
         getContextWindowUseCase = mockk()
         llmInferenceEngine = mockk(relaxed = true)
         clarificationRepository = mockk(relaxed = true)
+        localModelRepository = mockk(relaxed = true)
+        loadModelUseCase = mockk()
+        coEvery { loadModelUseCase(any()) } returns Result.Success(Unit)
 
         sessionsFlow = MutableStateFlow(emptyList())
+        localModelsFlow = MutableStateFlow(emptyList())
         pipelinesFlow = MutableStateFlow(emptyList())
         messagesFlow = MutableStateFlow(emptyList())
         savedSessionIdFlow = MutableStateFlow(null)
@@ -93,6 +104,7 @@ class ChatHomeConsoleStreamingTest {
         orchestratorStateFlow = MutableSharedFlow(extraBufferCapacity = 64)
 
         every { llmInferenceEngine.isInitialized } returns true
+        every { localModelRepository.getAllModels() } returns localModelsFlow
         every { chatRepository.getSessionsFlow() } returns sessionsFlow
         every { chatRepository.getDisplayMessagesForSession(any()) } returns messagesFlow
         coEvery { chatRepository.saveSession(any()) } answers {
@@ -129,6 +141,8 @@ class ChatHomeConsoleStreamingTest {
         getContextWindowUseCase,
         llmInferenceEngine,
         clarificationRepository,
+        localModelRepository,
+        loadModelUseCase,
     )
 
     @Test

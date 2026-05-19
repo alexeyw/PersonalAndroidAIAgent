@@ -94,6 +94,50 @@ interface ChatRepository {
     suspend fun saveSession(session: ChatSession)
 
     /**
+     * Renames an existing chat session without rewriting other fields. Faster
+     * than reading the row and calling [saveSession] and avoids the race
+     * inherent in a read-modify-write performed off the main thread while
+     * the orchestrator is concurrently updating `updatedAt`.
+     *
+     * No-op when no session with [sessionId] exists.
+     *
+     * @param sessionId The id of the session to rename.
+     * @param newName The new display name to persist. Callers are expected to
+     *   trim / validate the value upstream.
+     */
+    suspend fun renameSession(sessionId: String, newName: String)
+
+    /**
+     * Toggles the session-level favorite flag persisted on
+     * `chat_sessions.isStarred`. Favorited chats sort to the top of the
+     * drawer thread list and render a small star indicator.
+     *
+     * Distinct from [setMessageStarred] which operates on individual messages.
+     *
+     * @param sessionId The id of the session to update.
+     * @param favorite The new favorite flag to persist.
+     */
+    suspend fun setSessionFavorite(sessionId: String, favorite: Boolean)
+
+    /**
+     * Imports a chat from a JSON document into a freshly-created session and
+     * returns the new session id. The caller is expected to switch the
+     * active session to the returned id.
+     *
+     * Accepted shapes:
+     *  - the document produced by an export (`{"sessionName": ..., "messages": [...]}`);
+     *  - a bare top-level array of message objects (`[{...}, ...]`).
+     *
+     * Each message must carry `role`, `text`, and `timestamp`. Unknown roles
+     * default to `USER`; missing timestamps default to "now".
+     *
+     * @param json The JSON content to import.
+     * @return The id of the newly created session.
+     * @throws org.json.JSONException If the document cannot be parsed.
+     */
+    suspend fun importChat(json: String): String
+
+    /**
      * Retrieves all chat sessions as a flow, ordered by the last update time.
      *
      * @return A [Flow] emitting the list of [ChatSession].

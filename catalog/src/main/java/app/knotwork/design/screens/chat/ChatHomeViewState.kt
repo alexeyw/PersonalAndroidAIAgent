@@ -83,6 +83,14 @@ data class ChatHomeThreadRow(
      * highlighted with a cream row background.
      */
     val active: Boolean = false,
+    /**
+     * `true` when the user has favorited this thread. Renders a small
+     * leading star glyph in the drawer and lets the host sort favorited
+     * threads to the top of the list. Mirrors the session-level
+     * `isStarred` flag persisted in `chat_sessions.isStarred` (Phase 22 /
+     * Task 4).
+     */
+    val starred: Boolean = false,
 )
 
 /**
