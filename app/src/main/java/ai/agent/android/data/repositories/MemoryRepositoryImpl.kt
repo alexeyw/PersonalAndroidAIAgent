@@ -41,6 +41,7 @@ class MemoryRepositoryImpl @Inject constructor(private val memoryDao: MemoryDao,
                     text = entity.text,
                     embedding = embeddingArray,
                     timestamp = entity.timestamp,
+                    isPinned = entity.isPinned,
                 )
             } else {
                 null
@@ -69,6 +70,7 @@ class MemoryRepositoryImpl @Inject constructor(private val memoryDao: MemoryDao,
                     text = entity.text,
                     embedding = embeddingArray,
                     timestamp = entity.timestamp,
+                    isPinned = entity.isPinned,
                 )
             } else {
                 null
@@ -89,6 +91,16 @@ class MemoryRepositoryImpl @Inject constructor(private val memoryDao: MemoryDao,
 
     override suspend fun deleteMemory(id: Long) = withContext(Dispatchers.IO) {
         memoryDao.deleteMemoryById(id)
+    }
+
+    override suspend fun updateMemory(id: Long, text: String, embedding: FloatArray) = withContext(Dispatchers.IO) {
+        val embeddingString = converters.fromFloatArray(embedding)
+            ?: throw IllegalArgumentException("Failed to serialize embedding")
+        memoryDao.updateMemory(id = id, text = text, embedding = embeddingString)
+    }
+
+    override suspend fun setMemoryPinned(id: Long, pinned: Boolean) = withContext(Dispatchers.IO) {
+        memoryDao.setMemoryPinned(id = id, isPinned = pinned)
     }
 
     /**

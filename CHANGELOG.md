@@ -15,6 +15,19 @@ details.
 
 ### Added
 
+- **Memory — edit + pin persistence** (Phase 22 / Task 6/17) — the
+  detail-sheet Edit and Pin affordances on the Memory screen now drive
+  real persistence instead of "coming soon" snackbars.
+  `MemoryRepository` gains `updateMemory(id, text, embedding)` and
+  `setMemoryPinned(id, pinned)`; the editor regenerates the vector
+  embedding for the new text through `TextEmbeddingEngine` so semantic
+  search stays coherent with the visible body. The catalog
+  `MemoryRow` / `MemoryEntryDetail` / `MemoryEntryRow` carry a new
+  `isPinned` field — pinned rows render a leading star glyph and float
+  to the top of the list ahead of the active sort partition, and the
+  sheet pin button toggles between "Pin to top" and "Unpin" depending
+  on the current state. Room migrates `v22 → v23` adding
+  `memory_chunks.isPinned INTEGER NOT NULL DEFAULT 0`.
 - **Chat home — design audit & alignment** (Phase 22 / Task 5/17) — token
   sweep over the production chat scope, drawer slide-in motion gated
   through `respectReducedMotionTransitions`, HitlConfirm snapshot matrix

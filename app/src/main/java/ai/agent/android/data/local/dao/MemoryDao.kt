@@ -40,6 +40,31 @@ interface MemoryDao {
     suspend fun deleteMemoryById(id: Long)
 
     /**
+     * Replaces the text content and embedding of an existing memory chunk.
+     *
+     * Used by the in-app memory editor: when the user commits an edit the
+     * embedding must be regenerated for the new text, so the DAO writes both
+     * columns atomically. The `timestamp` is intentionally left untouched —
+     * an edit is not a fresh entry and should keep its original position in
+     * the time-ordered history.
+     *
+     * @param id Identifier of the chunk to update.
+     * @param text New raw text content.
+     * @param embedding Serialized embedding vector (comma-encoded floats).
+     */
+    @Query("UPDATE memory_chunks SET text = :text, embedding = :embedding WHERE id = :id")
+    suspend fun updateMemory(id: Long, text: String, embedding: String)
+
+    /**
+     * Sets the `isPinned` flag on a single memory chunk.
+     *
+     * @param id Identifier of the chunk to update.
+     * @param isPinned `true` to pin the chunk, `false` to unpin it.
+     */
+    @Query("UPDATE memory_chunks SET isPinned = :isPinned WHERE id = :id")
+    suspend fun setMemoryPinned(id: Long, isPinned: Boolean)
+
+    /**
      * Retrieves a limited number of the most recent memory chunks from the database.
      * This is used to load a bounded number of embeddings into memory for vector similarity search.
      *
@@ -64,13 +89,21 @@ interface MemoryDao {
     suspend fun getRecentMemorySummaries(limit: Int): List<MemorySummary>
 
     /**
-     * Deletes older memory chunks, keeping only the specified number of the most recent ones.
+     * Deletes older unpinned memory chunks, keeping only the specified number
+     * of the most recent ones.
      *
-     * @param keepLimit The number of recent memory chunks to keep.
+     * Pinned chunks (`isPinned = 1`) are exempt — they survive compaction
+     * regardless of `keepLimit`, matching the contract advertised on
+     * [ai.agent.android.data.local.models.MemoryChunkEntity.isPinned]. The
+     * `keepLimit` window is therefore evaluated over the *unpinned* subset
+     * only.
+     *
+     * @param keepLimit The number of recent unpinned memory chunks to keep.
      */
     @Query(
-        "DELETE FROM memory_chunks WHERE id NOT IN " +
-            "(SELECT id FROM memory_chunks ORDER BY timestamp DESC LIMIT :keepLimit)",
+        "DELETE FROM memory_chunks WHERE isPinned = 0 AND id NOT IN " +
+            "(SELECT id FROM memory_chunks WHERE isPinned = 0 " +
+            "ORDER BY timestamp DESC LIMIT :keepLimit)",
     )
     suspend fun deleteOldestMemories(keepLimit: Int)
 }

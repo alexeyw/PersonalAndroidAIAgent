@@ -123,4 +123,28 @@ class MemoryRepositoryImplTest {
             assertEquals(emptyList<MemorySummary>(), result)
             io.mockk.coVerify(exactly = 0) { memoryDao.getRecentMemorySummaries(any()) }
         }
+
+    @Test
+    fun `updateMemory serializes embedding and forwards to dao`() = kotlinx.coroutines.test.runTest {
+        val newEmbedding = floatArrayOf(0.25f, -0.5f, 0.75f)
+        val expectedSerialized = converters.fromFloatArray(newEmbedding)
+
+        repository.updateMemory(id = 42L, text = "edited text", embedding = newEmbedding)
+
+        io.mockk.coVerify(exactly = 1) {
+            memoryDao.updateMemory(id = 42L, text = "edited text", embedding = expectedSerialized!!)
+        }
+    }
+
+    @Test
+    fun `setMemoryPinned forwards pinned true to dao`() = kotlinx.coroutines.test.runTest {
+        repository.setMemoryPinned(id = 7L, pinned = true)
+        io.mockk.coVerify(exactly = 1) { memoryDao.setMemoryPinned(id = 7L, isPinned = true) }
+    }
+
+    @Test
+    fun `setMemoryPinned forwards pinned false to dao`() = kotlinx.coroutines.test.runTest {
+        repository.setMemoryPinned(id = 7L, pinned = false)
+        io.mockk.coVerify(exactly = 1) { memoryDao.setMemoryPinned(id = 7L, isPinned = false) }
+    }
 }

@@ -296,6 +296,7 @@ private fun MemoryList(state: MemoryViewState, callbacks: MemoryCallbacks, showS
                 modifier = Modifier.animateItem(
                     placementSpec = tween(durationMillis = placementDuration),
                 ),
+                isPinned = row.isPinned,
             )
         }
         if (showSkeleton) {
@@ -392,7 +393,13 @@ private fun MemoryDetailOverlay(detail: MemoryEntryDetail, editing: Boolean, cal
                         onClick = { callbacks.onEntryEditRequest(detail.id) },
                     )
                     KnotworkTextButton(
-                        text = stringResource(R.string.knotwork_memory_detail_pin),
+                        text = stringResource(
+                            if (detail.isPinned) {
+                                R.string.knotwork_memory_detail_unpin
+                            } else {
+                                R.string.knotwork_memory_detail_pin
+                            },
+                        ),
                         onClick = { callbacks.onEntryPin(detail.id) },
                     )
                     Spacer(modifier = Modifier.weight(1f))

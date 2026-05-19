@@ -68,4 +68,28 @@ interface MemoryRepository {
      * @param id The ID of the memory chunk to delete.
      */
     suspend fun deleteMemory(id: Long)
+
+    /**
+     * Replaces the text content and embedding of an existing memory chunk.
+     *
+     * The caller is responsible for regenerating the embedding for the new
+     * text — the repository will not derive it implicitly. The chunk's
+     * `timestamp` is intentionally left untouched so the entry keeps its
+     * original chronological position.
+     *
+     * @param id Identifier of the chunk to update.
+     * @param text The new raw text content.
+     * @param embedding The new vector embedding produced from [text].
+     */
+    suspend fun updateMemory(id: Long, text: String, embedding: FloatArray)
+
+    /**
+     * Flips the pinned state of a single memory chunk. Pinned chunks sort
+     * ahead of unpinned chunks on the memory surface and are exempt from
+     * future compaction passes.
+     *
+     * @param id Identifier of the chunk to update.
+     * @param pinned `true` to pin the chunk, `false` to unpin it.
+     */
+    suspend fun setMemoryPinned(id: Long, pinned: Boolean)
 }
