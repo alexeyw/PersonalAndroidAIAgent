@@ -4,6 +4,12 @@
 
 package app.knotwork.design.screens.chat
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -76,6 +82,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import app.knotwork.design.R
+import app.knotwork.design.a11y.respectReducedMotionTransitions
 import app.knotwork.design.components.buttons.KnotworkSecondaryButton
 import app.knotwork.design.components.chat.ChatComposer
 import app.knotwork.design.components.chat.ChatContent
@@ -158,7 +165,30 @@ fun ChatHomeContent(
         ) { padding ->
             ChatHomeBody(state = state, callbacks = callbacks, padding = padding)
         }
-        if (state.visualState == ChatHomeVisualState.DrawerOpen) {
+        // Drawer slide-in honours `animations.md §Chat` — 280 ms emphasised
+        // slide + fade enter; reduced-motion collapses to an 80 ms crossfade
+        // through `respectReducedMotionTransitions`.
+        val drawerTransitions = respectReducedMotionTransitions(
+            enter = slideInHorizontally(
+                animationSpec = tween(
+                    durationMillis = KnotworkTheme.motion.dur3,
+                    easing = KnotworkTheme.motion.easeEmph,
+                ),
+                initialOffsetX = { full -> -full },
+            ) + fadeIn(animationSpec = tween(durationMillis = KnotworkTheme.motion.dur3)),
+            exit = slideOutHorizontally(
+                animationSpec = tween(
+                    durationMillis = KnotworkTheme.motion.dur3,
+                    easing = KnotworkTheme.motion.easeEmph,
+                ),
+                targetOffsetX = { full -> -full },
+            ) + fadeOut(animationSpec = tween(durationMillis = KnotworkTheme.motion.dur3)),
+        )
+        AnimatedVisibility(
+            visible = state.visualState == ChatHomeVisualState.DrawerOpen,
+            enter = drawerTransitions.enter,
+            exit = drawerTransitions.exit,
+        ) {
             ChatHomeDrawerOverlay(state = state, callbacks = callbacks)
         }
         if (state.console.snap != null) {
