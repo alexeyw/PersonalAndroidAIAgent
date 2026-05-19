@@ -147,6 +147,7 @@ class ChatHomeViewModel @Inject constructor(
 
     private var messagesJob: Job? = null
     private var generationJob: Job? = null
+    private var tokenCounterJob: Job? = null
     private var sessions: List<ChatSession> = emptyList()
     private var availablePipelinesObserved: Boolean = false
     private var availablePipelines: List<PipelineSummary> = emptyList()
@@ -245,16 +246,25 @@ class ChatHomeViewModel @Inject constructor(
      * Switches the active chat session. Persists the selection, cancels
      * any in-flight generation, and re-subscribes the message stream to
      * the newly-selected session.
+     *
+     * The previous thread's rows are cleared *synchronously* before the
+     * persistence coroutine launches — otherwise [restingState] would
+     * read stale data from [_messages] and resolve to `Idle` while the
+     * UI is conceptually empty, producing a brief flicker of the
+     * outgoing thread's content.
      */
     fun selectThread(threadId: String) {
         if (threadId.isBlank() || threadId == _currentSessionId.value) return
         generationJob?.cancel()
+        messagesJob?.cancel()
+        _messages.value = emptyList()
+        _tokensUsed.value = 0
+        _state.value = ChatHomeUiState.Empty
+        _currentSessionId.value = threadId
+        applyCurrentSessionMetadata()
+        observeMessages(threadId)
         viewModelScope.launch {
             settingsRepository.setCurrentChatSessionId(threadId)
-            _currentSessionId.value = threadId
-            applyCurrentSessionMetadata()
-            observeMessages(threadId)
-            _state.value = restingState()
         }
     }
 
@@ -390,11 +400,16 @@ class ChatHomeViewModel @Inject constructor(
     /**
      * Subscribes the message stream to [sessionId], cancelling any prior
      * subscription. Each emission is projected through
-     * [chatMessageToRow] and folded into [_messages] plus the rough
-     * token counter computed from [GetContextWindowUseCase].
+     * [chatMessageToRow] and folded into [_messages]; the rough token
+     * counter is recomputed *concurrently* via [GetContextWindowUseCase]
+     * so that the suspending tokenisation never stalls the collector
+     * (otherwise [rebalanceRestingState] would only fire after the use
+     * case resumes, gating the UI behind a background computation that
+     * could take dozens of milliseconds on a cold session).
      */
     private fun observeMessages(sessionId: String) {
         messagesJob?.cancel()
+        tokenCounterJob?.cancel()
         if (sessionId.isBlank()) {
             _messages.value = emptyList()
             _tokensUsed.value = 0
@@ -403,10 +418,14 @@ class ChatHomeViewModel @Inject constructor(
         messagesJob = viewModelScope.launch {
             chatRepository.getDisplayMessagesForSession(sessionId).collect { incoming ->
                 _messages.value = incoming.map { chatMessageToRow(it, _modelName.value) }
-                _tokensUsed.value = runCatching {
-                    getContextWindowUseCase(sessionId).length / TOKEN_CHARS_PER_TOKEN
-                }.getOrDefault(0)
                 rebalanceRestingState()
+                tokenCounterJob?.cancel()
+                tokenCounterJob = launch {
+                    val approx = runCatching {
+                        getContextWindowUseCase(sessionId).length / TOKEN_CHARS_PER_TOKEN
+                    }.getOrDefault(0)
+                    _tokensUsed.value = approx
+                }
             }
         }
     }
