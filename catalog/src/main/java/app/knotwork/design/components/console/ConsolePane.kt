@@ -56,13 +56,6 @@ private val ConsoleHeaderHeight = 56.dp
 /** Selected-tab underline thickness (used by Partial / Full headers only — Peek tabs are label-only). */
 private val TabIndicatorHeight = 2.dp
 
-/** Width of one tab in the full (Partial / Full) tab strip. */
-// Sized for the widest [ConsoleTab.name] (`TRACES`, 6 chars) at the
-// `KnotworkTextStyles.MonoBase` size — 72 dp was tight and produced a
-// two-line wrap on default font scale. Bumping to 88 dp keeps every label
-// on one line and leaves the trailing [ConsoleActions] row visually balanced.
-private val FullTabWidth = 88.dp
-
 /** Width of the leading accent strip on every log row. */
 private val LogAccentStripWidth = 2.dp
 
@@ -222,7 +215,12 @@ private fun ConsolePaneHeader(
     }
 }
 
-/** Three-tab strip with a 2 dp accent underline on the selected tab. */
+/**
+ * Three-tab strip with a 2 dp accent underline on the selected tab. Each
+ * tab takes an equal weighted share of the strip's allocated width so the
+ * trailing [ConsoleActions] icons (4 × 48 dp ≈ 192 dp on typical phones)
+ * always fit on the same row without pushing TRACES off-screen.
+ */
 @Composable
 private fun FullTabStrip(tab: ConsoleTab, onTabChange: (ConsoleTab) -> Unit, modifier: Modifier = Modifier) {
     Row(modifier = modifier.fillMaxHeight()) {
@@ -232,7 +230,7 @@ private fun FullTabStrip(tab: ConsoleTab, onTabChange: (ConsoleTab) -> Unit, mod
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center,
                 modifier = Modifier
-                    .width(FullTabWidth)
+                    .weight(1f)
                     .fillMaxHeight()
                     .clickable { onTabChange(entry) },
             ) {
@@ -250,7 +248,8 @@ private fun FullTabStrip(tab: ConsoleTab, onTabChange: (ConsoleTab) -> Unit, mod
                 Spacer(modifier = Modifier.height(KnotworkTheme.spacing.sp1))
                 Box(
                     modifier = Modifier
-                        .size(width = FullTabWidth, height = TabIndicatorHeight)
+                        .fillMaxWidth()
+                        .height(TabIndicatorHeight)
                         .background(
                             color = if (selected) KnotworkPalette.Accent400 else Color.Transparent,
                         ),
@@ -588,8 +587,13 @@ private fun ConsoleVarsBody(rows: List<ConsoleVarRow>) {
                 )
             }
             items(items = entries) { row ->
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp2),
+                // Key + value laid out as a Column so the value text wraps
+                // across as many lines as it needs. The Vars tab is the
+                // debugging surface for full node I/O — truncating with
+                // ellipsis discards the very data the user opened the
+                // pane to inspect. The outer LazyColumn already gives us
+                // vertical scrolling for free.
+                Column(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(
@@ -606,8 +610,6 @@ private fun ConsoleVarsBody(rows: List<ConsoleVarRow>) {
                         text = row.valueJson,
                         style = KnotworkTextStyles.MonoBase,
                         color = KnotworkTheme.extended.consoleFg,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
                     )
                 }
             }
