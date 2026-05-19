@@ -481,20 +481,54 @@ class ChatHomeViewModelTest {
     }
 
     @Test
-    fun `openConsole sets ConsoleExpanded with the supplied snap`() = runTest(testDispatcher) {
+    fun `openConsole flips consoleSnap without touching chat state`() = runTest(testDispatcher) {
         viewModel = createViewModel()
         advanceUntilIdle()
+        val stateBefore = viewModel.state.value
         viewModel.openConsole(ConsoleSnap.Full)
-        assertEquals(ChatHomeUiState.ConsoleExpanded(ConsoleSnap.Full), viewModel.state.value)
+        assertEquals(ConsoleSnap.Full, viewModel.consoleSnap.value)
+        assertEquals(stateBefore, viewModel.state.value)
     }
 
     @Test
-    fun `closeConsole settles on Empty when there are no messages`() = runTest(testDispatcher) {
+    fun `closeConsole clears consoleSnap without touching chat state`() = runTest(testDispatcher) {
         viewModel = createViewModel()
         advanceUntilIdle()
         viewModel.openConsole(ConsoleSnap.Partial)
+        val stateBefore = viewModel.state.value
         viewModel.closeConsole()
-        assertEquals(ChatHomeUiState.Empty, viewModel.state.value)
+        assertNull(viewModel.consoleSnap.value)
+        assertEquals(stateBefore, viewModel.state.value)
+    }
+
+    @Test
+    fun `setConsoleSnap updates an open console pane`() = runTest(testDispatcher) {
+        viewModel = createViewModel()
+        advanceUntilIdle()
+        viewModel.openConsole(ConsoleSnap.Partial)
+        viewModel.setConsoleSnap(ConsoleSnap.Full)
+        assertEquals(ConsoleSnap.Full, viewModel.consoleSnap.value)
+    }
+
+    @Test
+    fun `setConsoleSnap is a no-op when console is closed`() = runTest(testDispatcher) {
+        viewModel = createViewModel()
+        advanceUntilIdle()
+        viewModel.setConsoleSnap(ConsoleSnap.Full)
+        assertNull(viewModel.consoleSnap.value)
+    }
+
+    @Test
+    fun `console pane survives terminal Completed orchestrator emission`() = runTest(testDispatcher) {
+        // Regression: in the pre-refactor sealed state, every terminal
+        // emit (Completed / Error / WaitingForApproval) overwrote the
+        // pane state and closed the overlay before the user could read
+        // any of the streamed events.
+        viewModel = createViewModel()
+        advanceUntilIdle()
+        viewModel.openConsole(ConsoleSnap.Partial)
+        viewModel.forceState(ChatHomeUiState.Idle)
+        assertEquals(ConsoleSnap.Partial, viewModel.consoleSnap.value)
     }
 
     @Test

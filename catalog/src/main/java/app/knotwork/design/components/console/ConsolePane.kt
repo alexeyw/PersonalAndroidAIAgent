@@ -79,7 +79,11 @@ private const val DRAG_HANDLE_ALPHA = 0.30f
 private val TabIndicatorHeight = 2.dp
 
 /** Width of one tab in the full (Partial / Full) tab strip. */
-private val FullTabWidth = 72.dp
+// Sized for the widest [ConsoleTab.name] (`TRACES`, 6 chars) at the
+// `KnotworkTextStyles.MonoBase` size — 72 dp was tight and produced a
+// two-line wrap on default font scale. Bumping to 88 dp keeps every label
+// on one line and leaves the trailing [ConsoleActions] row visually balanced.
+private val FullTabWidth = 88.dp
 
 /** Width of the leading accent strip on every log row. */
 private val LogAccentStripWidth = 2.dp
@@ -179,6 +183,13 @@ fun ConsolePane(
     onSearchQueryChange: (String) -> Unit = {},
     onCopyLine: (ConsoleLine) -> Unit = {},
     onFilterByLineSource: (ConsoleSource) -> Unit = {},
+    /**
+     * Dispatched when the user taps the trailing `Close` icon in the
+     * Partial / Full header. Hosts wire this to fully dismiss the overlay
+     * (clear their console-snap state). Falls back to a snap-collapse to
+     * Peek when omitted so legacy callers keep working without changes.
+     */
+    onCloseConsole: () -> Unit = { onSnapChange(ConsoleSnap.Peek) },
 ) {
     Column(
         modifier = modifier
@@ -197,6 +208,7 @@ fun ConsolePane(
                 onSearch = onSearch,
                 onCopyAll = onCopyAll,
                 onClear = onClear,
+                onCloseConsole = onCloseConsole,
             )
             when (tab) {
                 ConsoleTab.Logs -> ConsoleLogsBody(
@@ -291,6 +303,7 @@ private fun FullHeader(
     onSearch: () -> Unit,
     onCopyAll: () -> Unit,
     onClear: () -> Unit,
+    onCloseConsole: () -> Unit,
 ) {
     Column(
         modifier = Modifier
@@ -317,7 +330,7 @@ private fun FullHeader(
                 onSearch = onSearch,
                 onCopyAll = onCopyAll,
                 onClear = onClear,
-                onClose = { onSnapChange(ConsoleSnap.Peek) },
+                onClose = onCloseConsole,
             )
         }
     }
@@ -345,6 +358,8 @@ private fun FullTabStrip(tab: ConsoleTab, onTabChange: (ConsoleTab) -> Unit, mod
                     } else {
                         KnotworkTheme.extended.consoleFg.copy(alpha = INACTIVE_TAB_ALPHA)
                     },
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                 )
                 Spacer(modifier = Modifier.height(KnotworkTheme.spacing.sp1))
                 Box(

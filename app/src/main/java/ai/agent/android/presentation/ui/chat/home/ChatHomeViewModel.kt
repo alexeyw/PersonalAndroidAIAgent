@@ -117,6 +117,7 @@ class ChatHomeViewModel @Inject constructor(
     private val _consoleVars: MutableStateFlow<List<ConsoleVarRow>> = MutableStateFlow(emptyList())
     private val _consoleTraces: MutableStateFlow<List<ConsoleTraceSpan>> = MutableStateFlow(emptyList())
     private val _consoleTab: MutableStateFlow<ConsoleTab> = MutableStateFlow(ConsoleTab.Logs)
+    private val _consoleSnap: MutableStateFlow<ConsoleSnap?> = MutableStateFlow(null)
     private val _consoleClearConfirmRequested: MutableStateFlow<Boolean> = MutableStateFlow(false)
     private val _consoleSnackbarEvents: MutableSharedFlow<ConsoleSnackbarEvent> =
         MutableSharedFlow(extraBufferCapacity = 1)
@@ -212,6 +213,15 @@ class ChatHomeViewModel @Inject constructor(
      * and updated by [onConsoleTabChange].
      */
     val consoleTab: StateFlow<ConsoleTab> = _consoleTab.asStateFlow()
+
+    /**
+     * Active console-pane snap (`null` = closed). Independent of [state] so
+     * the pane can stay open across `Generating → HitlConfirm →
+     * Clarification → Idle / Completed / Error` transitions. The catalog
+     * renders the overlay whenever this is non-null, keeping the underlying
+     * chat surface visible behind the pane.
+     */
+    val consoleSnap: StateFlow<ConsoleSnap?> = _consoleSnap.asStateFlow()
 
     /**
      * Whether the destructive "Clear console for this session?" confirmation
@@ -373,6 +383,7 @@ class ChatHomeViewModel @Inject constructor(
         messagesJob?.cancel()
         clearPendingApprovalAndClarification()
         resetConsoleStateForNewRun()
+        _consoleSnap.value = null
         _messages.value = emptyList()
         _tokensUsed.value = 0
         _state.value = ChatHomeUiState.Empty
@@ -384,23 +395,29 @@ class ChatHomeViewModel @Inject constructor(
         }
     }
 
-    /** Opens the console pane at the given [snap] (default: Partial). */
+    /**
+     * Opens the console pane at the given [snap] (default: Partial). The
+     * pane is an independent overlay — the underlying [state] is left
+     * untouched, so the user can drill into pipeline activity during
+     * Generating / HitlConfirm / Clarification without losing their place.
+     */
     fun openConsole(snap: ConsoleSnap = ConsoleSnap.Partial) {
-        _state.value = ChatHomeUiState.ConsoleExpanded(snap)
+        _consoleSnap.value = snap
     }
 
-    /** Updates the snap point of the currently-open console pane. */
+    /**
+     * Updates the snap point of the currently-open console pane. No-op
+     * when the pane is closed.
+     */
     fun setConsoleSnap(snap: ConsoleSnap) {
-        _state.update { current ->
-            if (current is ChatHomeUiState.ConsoleExpanded) ChatHomeUiState.ConsoleExpanded(snap) else current
+        if (_consoleSnap.value != null) {
+            _consoleSnap.value = snap
         }
     }
 
-    /** Dismisses the console pane and settles on the right resting state. */
+    /** Dismisses the console pane without touching the underlying chat state. */
     fun closeConsole() {
-        if (_state.value is ChatHomeUiState.ConsoleExpanded) {
-            _state.value = restingState()
-        }
+        _consoleSnap.value = null
     }
 
     /** Toggles the console inline-search field. Cycles `null → "" → null`. */

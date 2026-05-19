@@ -125,7 +125,7 @@ class ChatHomeStateMappingTest {
     }
 
     @Test
-    fun `ConsoleExpanded threads the snap point through and forwards supplied console data`() {
+    fun `consoleSnap threads through and forwards supplied console data regardless of state`() {
         val logs = listOf(
             ConsoleLine(
                 timestamp = "09:14:00.000",
@@ -139,16 +139,19 @@ class ChatHomeStateMappingTest {
             ConsoleTraceSpan(name = "LITE_RT", durationMs = 10L, startedAt = "09:14:00.000", status = SpanStatus.Ok),
         )
 
-        val view = ChatHomeUiState.ConsoleExpanded(ConsoleSnap.Full).toViewState(
+        // Console pane open while the chat state is Generating — overlay
+        // and underlying state are orthogonal post-refactor.
+        val view = ChatHomeUiState.Generating.toViewState(
             threadTitle = title,
             modelName = model,
             consoleLogs = logs,
             consoleVars = vars,
             consoleTraces = traces,
             consoleTab = ConsoleTab.Traces,
+            consoleSnap = ConsoleSnap.Full,
         )
 
-        assertEquals(ChatHomeVisualState.ConsoleExpanded, view.visualState)
+        assertEquals(ChatHomeVisualState.Generating, view.visualState)
         assertEquals(ConsoleSnap.Full, view.console.snap)
         assertEquals(ConsoleTab.Traces, view.console.tab)
         assertEquals(logs, view.console.logs)
@@ -157,8 +160,9 @@ class ChatHomeStateMappingTest {
     }
 
     @Test
-    fun `ConsoleExpanded defaults to empty lists when host supplies no data`() {
-        val view = ChatHomeUiState.ConsoleExpanded(ConsoleSnap.Peek).toViewState(title, model)
+    fun `console snap null means the overlay is closed`() {
+        val view = ChatHomeUiState.Idle.toViewState(title, model)
+        assertNull(view.console.snap)
         assertTrue(view.console.logs.isEmpty())
         assertTrue(view.console.vars.isEmpty())
         assertTrue(view.console.traces.isEmpty())
@@ -175,7 +179,6 @@ class ChatHomeStateMappingTest {
             ChatHomeUiState.Clarification,
             ChatHomeUiState.Error("boom"),
             ChatHomeUiState.DrawerOpen,
-            ChatHomeUiState.ConsoleExpanded(ConsoleSnap.Peek),
         )
         states.forEach { state ->
             val view = state.toViewState(title, model, composerValue = "draft")
@@ -184,7 +187,7 @@ class ChatHomeStateMappingTest {
     }
 
     @Test
-    fun `debugStateForId maps every documented id back to a concrete state`() {
+    fun `debugStateForId maps top-level state ids back to concrete states`() {
         val ids = listOf(
             DebugStateIds.EMPTY,
             DebugStateIds.IDLE,
@@ -195,13 +198,24 @@ class ChatHomeStateMappingTest {
             DebugStateIds.CLARIFICATION,
             DebugStateIds.ERROR,
             DebugStateIds.DRAWER_OPEN,
-            DebugStateIds.CONSOLE_PEEK,
-            DebugStateIds.CONSOLE_PARTIAL,
-            DebugStateIds.CONSOLE_FULL,
         )
         ids.forEach { id ->
             assertNotNull("missing mapping for $id", debugStateForId(id))
         }
+        // Console picker ids no longer round-trip through `debugStateForId`
+        // — the console is an independent overlay and is opened via
+        // `debugConsoleSnapForId`.
+        assertNull(debugStateForId(DebugStateIds.CONSOLE_PEEK))
+        assertNull(debugStateForId(DebugStateIds.CONSOLE_PARTIAL))
+        assertNull(debugStateForId(DebugStateIds.CONSOLE_FULL))
         assertNull(debugStateForId("not_a_real_id"))
+    }
+
+    @Test
+    fun `debugConsoleSnapForId maps console picker ids to snaps`() {
+        assertEquals(ConsoleSnap.Peek, debugConsoleSnapForId(DebugStateIds.CONSOLE_PEEK))
+        assertEquals(ConsoleSnap.Partial, debugConsoleSnapForId(DebugStateIds.CONSOLE_PARTIAL))
+        assertEquals(ConsoleSnap.Full, debugConsoleSnapForId(DebugStateIds.CONSOLE_FULL))
+        assertNull(debugConsoleSnapForId(DebugStateIds.EMPTY))
     }
 }

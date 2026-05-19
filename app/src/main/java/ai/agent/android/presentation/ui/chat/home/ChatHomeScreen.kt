@@ -71,6 +71,7 @@ fun ChatHomeScreen(viewModel: ChatHomeViewModel, modifier: Modifier = Modifier) 
     val consoleVars by viewModel.consoleVars.collectAsStateWithLifecycle()
     val consoleTraces by viewModel.consoleTraces.collectAsStateWithLifecycle()
     val consoleTab by viewModel.consoleTab.collectAsStateWithLifecycle()
+    val consoleSnap by viewModel.consoleSnap.collectAsStateWithLifecycle()
     val consoleClearConfirm by viewModel.consoleClearConfirmRequested.collectAsStateWithLifecycle()
 
     var debugPickerExpanded by remember { mutableStateOf(false) }
@@ -115,6 +116,7 @@ fun ChatHomeScreen(viewModel: ChatHomeViewModel, modifier: Modifier = Modifier) 
         consoleVars = consoleVars,
         consoleTraces = consoleTraces,
         consoleTab = consoleTab,
+        consoleSnap = consoleSnap,
         pipelineName = pipelineName ?: PIPELINE_NAME_PLACEHOLDER,
         tokensUsed = tokensUsed,
         tokensMax = tokensMax,
@@ -198,7 +200,14 @@ fun ChatHomeScreen(viewModel: ChatHomeViewModel, modifier: Modifier = Modifier) 
             expanded = debugPickerExpanded,
             onDismiss = { debugPickerExpanded = false },
             onPick = { id ->
-                debugStateForId(id)?.let(viewModel::forceState)
+                // Console entries open the overlay; every other entry
+                // forces the underlying chat state.
+                val snap = debugConsoleSnapForId(id)
+                if (snap != null) {
+                    viewModel.openConsole(snap)
+                } else {
+                    debugStateForId(id)?.let(viewModel::forceState)
+                }
             },
         )
         if (consoleClearConfirm) {

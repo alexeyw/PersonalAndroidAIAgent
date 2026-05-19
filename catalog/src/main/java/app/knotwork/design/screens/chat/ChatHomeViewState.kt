@@ -110,7 +110,16 @@ data class ChatHomeSamplePromptCard(val id: String, val title: String, val tools
  * @property filter source filter applied to [logs].
  */
 data class ChatHomeConsoleState(
-    val snap: ConsoleSnap = ConsoleSnap.Peek,
+    /**
+     * When non-null the console pane is rendered as an overlay anchored to
+     * the bottom of the chat surface at the requested snap height. `null`
+     * means the pane is closed — the orthogonal sealed [ChatHomeVisualState]
+     * keeps its meaning and the body underneath renders unchanged. The
+     * console is therefore truly independent of the chat state machine
+     * (Generating / HitlConfirm / Clarification / Idle / Empty / Error all
+     * stay visible behind the pane).
+     */
+    val snap: ConsoleSnap? = null,
     val tab: ConsoleTab = ConsoleTab.Logs,
     val logs: List<ConsoleLine> = emptyList(),
     val vars: List<ConsoleVarRow> = emptyList(),

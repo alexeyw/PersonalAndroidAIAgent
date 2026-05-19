@@ -65,6 +65,28 @@ details.
     `ChatHomeConsoleState`. The old `sampleConsoleLines()` /
     `sampleConsoleVars()` / `sampleConsoleTraces()` fixtures are
     deleted.
+  - **Console pane is now an independent overlay** —
+    `ChatHomeConsoleState.snap` becomes nullable (`null` = closed);
+    catalog `ChatHomeContent` renders the overlay whenever
+    `state.console.snap != null` instead of gating on
+    `visualState == ConsoleExpanded`. `ChatHomeUiState.ConsoleExpanded`
+    is removed from the sealed hierarchy. The VM exposes a dedicated
+    `consoleSnap: StateFlow<ConsoleSnap?>` that is orthogonal to the
+    chat state machine, so the pane survives `Generating →
+    HitlConfirm → Clarification → Completed / Error` transitions
+    instead of being closed by every terminal emission. The debug
+    state picker now routes its `CONSOLE_*` entries through
+    `debugConsoleSnapForId` + `openConsole(snap)`.
+  - Console `Close` icon in the Partial / Full header now actually
+    dismisses the overlay (catalog `ConsolePane` gains a dedicated
+    `onCloseConsole` parameter); previously it only snapped the pane
+    down to `Peek`.
+  - `FullTabStrip` columns widened from 72 dp → 88 dp + `maxLines = 1`
+    so the longest tab label (`TRACES`) no longer wraps onto two lines.
+  - Pill-tap affordance: tapping the agent-status pill above the
+    composer opens the console pane at the Partial snap (catalog
+    `ChatHomeCallbacks.onAgentStatusClick`, screen routes to
+    `viewModel.openConsole()`).
 
 - **Chat home — HITL and Clarification real-time wiring** (Phase 22 /
   Task 2/17) — replaces the `forceState(...)` stubs in

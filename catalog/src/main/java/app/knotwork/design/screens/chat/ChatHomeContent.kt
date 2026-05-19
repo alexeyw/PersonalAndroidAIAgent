@@ -77,6 +77,7 @@ import app.knotwork.design.components.chat.ChatMessage
 import app.knotwork.design.components.chips.KnotworkChip
 import app.knotwork.design.components.chips.Risk
 import app.knotwork.design.components.console.ConsolePane
+import app.knotwork.design.components.console.ConsoleSnap
 import app.knotwork.design.components.misc.KnotworkLoader
 import app.knotwork.design.theme.KnotworkTheme
 import app.knotwork.design.tokens.KnotworkTextStyles
@@ -149,7 +150,7 @@ fun ChatHomeContent(
         if (state.visualState == ChatHomeVisualState.DrawerOpen) {
             ChatHomeDrawerOverlay(state = state, callbacks = callbacks)
         }
-        if (state.visualState == ChatHomeVisualState.ConsoleExpanded) {
+        if (state.console.snap != null) {
             ChatHomeConsoleOverlay(state = state, callbacks = callbacks)
         }
     }
@@ -829,8 +830,11 @@ private fun ChatHomeConsoleOverlay(state: ChatHomeViewState, callbacks: ChatHome
         // scrim above; the pane has its own header / drag-handle actions.
         Box(modifier = Modifier.absorbClicks()) {
             ConsolePane(
-                snap = state.console.snap,
+                // `snap == null` is filtered upstream — if we got here the
+                // overlay is open and a concrete snap is required.
+                snap = state.console.snap ?: ConsoleSnap.Partial,
                 onSnapChange = callbacks.onConsoleSnapChange,
+                onCloseConsole = callbacks.onCloseConsole,
                 tab = state.console.tab,
                 onTabChange = callbacks.onConsoleTabChange,
                 logs = state.console.logs,
