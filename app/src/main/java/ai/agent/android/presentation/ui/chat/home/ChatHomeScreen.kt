@@ -9,8 +9,11 @@ import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -19,7 +22,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.knotwork.design.components.misc.KnotworkSnackbar
@@ -62,15 +67,32 @@ fun ChatHomeScreen(viewModel: ChatHomeViewModel, modifier: Modifier = Modifier) 
     val tokensMax by viewModel.tokensMax.collectAsStateWithLifecycle()
     val pendingTool by viewModel.pendingTool.collectAsStateWithLifecycle()
     val pendingClarification by viewModel.pendingClarification.collectAsStateWithLifecycle()
+    val consoleLogs by viewModel.consoleLines.collectAsStateWithLifecycle()
+    val consoleVars by viewModel.consoleVars.collectAsStateWithLifecycle()
+    val consoleTraces by viewModel.consoleTraces.collectAsStateWithLifecycle()
+    val consoleTab by viewModel.consoleTab.collectAsStateWithLifecycle()
+    val consoleClearConfirm by viewModel.consoleClearConfirmRequested.collectAsStateWithLifecycle()
 
     var debugPickerExpanded by remember { mutableStateOf(false) }
 
     val snackbarHostState = remember { SnackbarHostState() }
+    val clipboardManager = LocalClipboardManager.current
     val pipelineFallbackMessage = stringResource(R.string.errors_chat_pipeline_removed)
+    val consoleLineCopiedMessage = stringResource(R.string.chat_snackbar_console_line_copied)
+    val consoleAllCopiedMessage = stringResource(R.string.chat_snackbar_console_copied)
 
     LaunchedEffect(viewModel) {
         viewModel.pipelineFallbackEvents.collect {
             snackbarHostState.showSnackbar(message = pipelineFallbackMessage)
+        }
+    }
+    LaunchedEffect(viewModel) {
+        viewModel.consoleSnackbarEvents.collect { event ->
+            val message = when (event) {
+                ConsoleSnackbarEvent.LineCopied -> consoleLineCopiedMessage
+                ConsoleSnackbarEvent.AllCopied -> consoleAllCopiedMessage
+            }
+            snackbarHostState.showSnackbar(message = message)
         }
     }
 
@@ -89,6 +111,10 @@ fun ChatHomeScreen(viewModel: ChatHomeViewModel, modifier: Modifier = Modifier) 
         pendingTypedConfirm = pendingTypedConfirm,
         consoleSearchQuery = consoleSearchQuery,
         consoleFilter = consoleFilter,
+        consoleLogs = consoleLogs,
+        consoleVars = consoleVars,
+        consoleTraces = consoleTraces,
+        consoleTab = consoleTab,
         pipelineName = pipelineName ?: PIPELINE_NAME_PLACEHOLDER,
         tokensUsed = tokensUsed,
         tokensMax = tokensMax,
@@ -96,41 +122,50 @@ fun ChatHomeScreen(viewModel: ChatHomeViewModel, modifier: Modifier = Modifier) 
         pendingClarification = pendingClarification,
     )
 
-    val callbacks = remember(viewModel) {
-        ChatHomeCallbacks(
-            onComposerValueChange = viewModel::onComposerValueChange,
-            onSend = viewModel::sendMessage,
-            onStop = viewModel::stopGeneration,
-            onOpenDrawer = viewModel::openDrawer,
-            onCloseDrawer = viewModel::closeDrawer,
-            onSelectThread = viewModel::selectThread,
-            onNewThread = { /* stub: real new-thread wiring ships with Phase 22 / Task 4 */ },
-            onOpenModelPicker = { /* stub: model picker sheet ships with Phase 22 / Task 4 */ },
-            onOverflow = { /* stub: overflow menu ships with Phase 22 / Task 4 */ },
-            onSamplePrompt = viewModel::onComposerValueChange,
-            onConsoleSnapChange = viewModel::setConsoleSnap,
-            onConsoleTabChange = { /* stub: console wiring ships with Phase 22 / Task 3 */ },
-            onConsoleFilterChange = viewModel::onConsoleFilterChange,
-            onConsoleSearch = viewModel::toggleConsoleSearch,
-            onConsoleSearchQueryChange = viewModel::onConsoleSearchQueryChange,
-            onConsoleCopyLine = { /* stub: console wiring ships with Phase 22 / Task 3 */ },
-            onConsoleFilterByLineSource = viewModel::filterConsoleByLineSource,
-            onConsoleCopyAll = { /* stub: console wiring ships with Phase 22 / Task 3 */ },
-            onConsoleClear = { /* stub: console wiring ships with Phase 22 / Task 3 */ },
-            onCloseConsole = viewModel::closeConsole,
-            onHitlAllowOnce = viewModel::approveTool,
-            onHitlReject = viewModel::rejectTool,
-            onHitlTypedConfirmChange = viewModel::onTypedConfirmChange,
-            onClarificationReply = viewModel::submitClarificationReply,
-            onErrorRetry = { viewModel.forceState(ChatHomeUiState.Idle) },
-            onTitleTripleTap = { debugPickerExpanded = true },
-            onToggleFavorite = { /* stub: favorite persistence ships with Phase 22 / Task 4 */ },
-            onEditThread = { /* stub: rename sheet ships with Phase 22 / Task 4 */ },
-            onImportChat = { /* stub: import-from-JSON sheet ships with Phase 22 / Task 4 */ },
-            onOpenSettings = { /* stub: nav-graph deep-link to Settings ships in a follow-up */ },
-            onSamplePromptCard = { card -> viewModel.onComposerValueChange(card.title) },
-        )
-    }
+    val callbacks = ChatHomeCallbacks(
+        onComposerValueChange = viewModel::onComposerValueChange,
+        onSend = viewModel::sendMessage,
+        onStop = viewModel::stopGeneration,
+        onOpenDrawer = viewModel::openDrawer,
+        onCloseDrawer = viewModel::closeDrawer,
+        onSelectThread = viewModel::selectThread,
+        onNewThread = { /* stub: real new-thread wiring ships with Phase 22 / Task 4 */ },
+        onOpenModelPicker = { /* stub: model picker sheet ships with Phase 22 / Task 4 */ },
+        onOverflow = { /* stub: overflow menu ships with Phase 22 / Task 4 */ },
+        onSamplePrompt = viewModel::onComposerValueChange,
+        onConsoleSnapChange = viewModel::setConsoleSnap,
+        onConsoleTabChange = viewModel::onConsoleTabChange,
+        onConsoleFilterChange = viewModel::onConsoleFilterChange,
+        onConsoleSearch = viewModel::toggleConsoleSearch,
+        onConsoleSearchQueryChange = viewModel::onConsoleSearchQueryChange,
+        onConsoleCopyLine = { line ->
+            clipboardManager.setText(AnnotatedString(viewModel.buildConsoleLineCopyPayload(line)))
+            viewModel.signalConsoleLineCopied()
+        },
+        onConsoleFilterByLineSource = viewModel::filterConsoleByLineSource,
+        // The catalog applies `console.filter` + `console.searchQuery` itself
+        // before rendering rows; the `Copy all` payload mirrors what the
+        // user is actively looking at, so the screen reproduces the same
+        // pre-filter here.
+        onConsoleCopyAll = {
+            val visible = visibleConsoleLogs(consoleLogs, consoleFilter, consoleSearchQuery)
+            clipboardManager.setText(AnnotatedString(viewModel.buildConsoleAllCopyPayload(visible)))
+            viewModel.signalConsoleAllCopied()
+        },
+        onConsoleClear = viewModel::requestConsoleClear,
+        onCloseConsole = viewModel::closeConsole,
+        onHitlAllowOnce = viewModel::approveTool,
+        onHitlReject = viewModel::rejectTool,
+        onHitlTypedConfirmChange = viewModel::onTypedConfirmChange,
+        onClarificationReply = viewModel::submitClarificationReply,
+        onErrorRetry = { viewModel.forceState(ChatHomeUiState.Idle) },
+        onTitleTripleTap = { debugPickerExpanded = true },
+        onToggleFavorite = { /* stub: favorite persistence ships with Phase 22 / Task 4 */ },
+        onEditThread = { /* stub: rename sheet ships with Phase 22 / Task 4 */ },
+        onImportChat = { /* stub: import-from-JSON sheet ships with Phase 22 / Task 4 */ },
+        onOpenSettings = { /* stub: nav-graph deep-link to Settings ships in a follow-up */ },
+        onSamplePromptCard = { card -> viewModel.onComposerValueChange(card.title) },
+    )
 
     // Inset wiring (Phase 21 / Task 8 review fixes):
     //  - `AppShellScaffold` already wraps its Scaffold in `.imePadding()`,
@@ -162,7 +197,48 @@ fun ChatHomeScreen(viewModel: ChatHomeViewModel, modifier: Modifier = Modifier) 
                 debugStateForId(id)?.let(viewModel::forceState)
             },
         )
+        if (consoleClearConfirm) {
+            AlertDialog(
+                onDismissRequest = viewModel::dismissConsoleClear,
+                title = { Text(stringResource(R.string.chat_console_clear_dialog_title)) },
+                text = { Text(stringResource(R.string.chat_console_clear_dialog_text)) },
+                confirmButton = {
+                    TextButton(onClick = viewModel::confirmConsoleClear) {
+                        Text(stringResource(R.string.chat_console_clear_dialog_confirm))
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = viewModel::dismissConsoleClear) {
+                        Text(stringResource(R.string.chat_console_clear_dialog_cancel))
+                    }
+                },
+            )
+        }
     }
+}
+
+/**
+ * Reproduces the catalog's filter + substring-search pass over [logs] so
+ * the `Copy all` clipboard payload mirrors exactly what the user sees in
+ * the Logs tab. The catalog `ConsoleLogsBody` performs the same two-stage
+ * filter; duplicating it here is the cheapest cut while the catalog's
+ * filter helpers stay internal.
+ *
+ * @param logs Raw aggregated log lines.
+ * @param filter Active source-set filter.
+ * @param searchQuery Inline-search query (`null` means hidden — no
+ *   substring filter is applied).
+ * @return Lines currently visible to the user, in the same order as
+ *   rendered.
+ */
+internal fun visibleConsoleLogs(
+    logs: List<app.knotwork.design.components.console.ConsoleLine>,
+    filter: app.knotwork.design.components.console.ConsoleFilter,
+    searchQuery: String?,
+): List<app.knotwork.design.components.console.ConsoleLine> {
+    val sourceFiltered = logs.filter(filter::matches)
+    if (searchQuery.isNullOrEmpty()) return sourceFiltered
+    return sourceFiltered.filter { it.text.contains(searchQuery, ignoreCase = true) }
 }
 
 /**

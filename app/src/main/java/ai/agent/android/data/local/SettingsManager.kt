@@ -50,6 +50,7 @@ class SettingsManager @Inject constructor(private val dataStore: DataStore<Prefe
         val MEMORY_SUMMARY_DEFAULT_LIMIT = intPreferencesKey("memory_summary_default_limit")
         val DEFAULT_PIPELINE_ID = stringPreferencesKey("default_pipeline_id")
         val CRASH_REPORTING_ENABLED = booleanPreferencesKey("crash_reporting_enabled")
+        val CONSOLE_PREFERRED_TAB = stringPreferencesKey("console_preferred_tab")
     }
 
     override val isFirstLaunch: Flow<Boolean> = dataStore.data
@@ -367,6 +368,25 @@ class SettingsManager @Inject constructor(private val dataStore: DataStore<Prefe
         }
     }
 
+    override val consolePreferredConsoleTabName: Flow<String> = dataStore.data
+        .catch { exception ->
+            if (exception is IOException) {
+                Timber.e(exception, "Error reading preferences")
+                emit(emptyPreferences())
+            } else {
+                throw exception
+            }
+        }
+        .map { preferences ->
+            preferences[PreferencesKeys.CONSOLE_PREFERRED_TAB] ?: CONSOLE_PREFERRED_TAB_DEFAULT
+        }
+
+    override suspend fun setConsolePreferredConsoleTabName(name: String) {
+        dataStore.edit { preferences ->
+            preferences[PreferencesKeys.CONSOLE_PREFERRED_TAB] = name
+        }
+    }
+
     override val maxMemoryChunksForSearch: Flow<Int> = dataStore.data
         .catch { exception ->
             if (exception is IOException) {
@@ -510,5 +530,14 @@ class SettingsManager @Inject constructor(private val dataStore: DataStore<Prefe
 
     private companion object {
         const val DEFAULT_MEMORY_SUMMARY_LIMIT = 5
+
+        /**
+         * Default value for [PreferencesKeys.CONSOLE_PREFERRED_TAB] on a
+         * fresh install. Mirrors the enum name of
+         * `app.knotwork.design.components.console.ConsoleTab.Logs` — kept as
+         * a raw string so this data-layer constant stays free of the
+         * `:catalog` dependency.
+         */
+        const val CONSOLE_PREFERRED_TAB_DEFAULT = "Logs"
     }
 }

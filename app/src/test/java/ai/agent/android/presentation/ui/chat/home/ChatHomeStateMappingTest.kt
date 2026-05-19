@@ -3,7 +3,14 @@ package ai.agent.android.presentation.ui.chat.home
 import app.knotwork.design.components.chat.ChatContent
 import app.knotwork.design.components.chat.ComposerState
 import app.knotwork.design.components.chips.Risk
+import app.knotwork.design.components.console.ConsoleLevel
+import app.knotwork.design.components.console.ConsoleLine
 import app.knotwork.design.components.console.ConsoleSnap
+import app.knotwork.design.components.console.ConsoleSource
+import app.knotwork.design.components.console.ConsoleTab
+import app.knotwork.design.components.console.ConsoleTraceSpan
+import app.knotwork.design.components.console.ConsoleVarRow
+import app.knotwork.design.components.console.SpanStatus
 import app.knotwork.design.screens.chat.ChatHomeVisualState
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -118,13 +125,44 @@ class ChatHomeStateMappingTest {
     }
 
     @Test
-    fun `ConsoleExpanded threads the snap point through and populates the panel`() {
-        val view = ChatHomeUiState.ConsoleExpanded(ConsoleSnap.Full).toViewState(title, model)
+    fun `ConsoleExpanded threads the snap point through and forwards supplied console data`() {
+        val logs = listOf(
+            ConsoleLine(
+                timestamp = "09:14:00.000",
+                source = ConsoleSource.NODE,
+                level = ConsoleLevel.Trace,
+                text = "▶ LITE_RT",
+            ),
+        )
+        val vars = listOf(ConsoleVarRow(node = "LITE_RT#a", key = "input", valueJson = "\"x\""))
+        val traces = listOf(
+            ConsoleTraceSpan(name = "LITE_RT", durationMs = 10L, startedAt = "09:14:00.000", status = SpanStatus.Ok),
+        )
+
+        val view = ChatHomeUiState.ConsoleExpanded(ConsoleSnap.Full).toViewState(
+            threadTitle = title,
+            modelName = model,
+            consoleLogs = logs,
+            consoleVars = vars,
+            consoleTraces = traces,
+            consoleTab = ConsoleTab.Traces,
+        )
+
         assertEquals(ChatHomeVisualState.ConsoleExpanded, view.visualState)
         assertEquals(ConsoleSnap.Full, view.console.snap)
-        assertTrue(view.console.logs.isNotEmpty())
-        assertTrue(view.console.vars.isNotEmpty())
-        assertTrue(view.console.traces.isNotEmpty())
+        assertEquals(ConsoleTab.Traces, view.console.tab)
+        assertEquals(logs, view.console.logs)
+        assertEquals(vars, view.console.vars)
+        assertEquals(traces, view.console.traces)
+    }
+
+    @Test
+    fun `ConsoleExpanded defaults to empty lists when host supplies no data`() {
+        val view = ChatHomeUiState.ConsoleExpanded(ConsoleSnap.Peek).toViewState(title, model)
+        assertTrue(view.console.logs.isEmpty())
+        assertTrue(view.console.vars.isEmpty())
+        assertTrue(view.console.traces.isEmpty())
+        assertEquals(ConsoleTab.Logs, view.console.tab)
     }
 
     @Test

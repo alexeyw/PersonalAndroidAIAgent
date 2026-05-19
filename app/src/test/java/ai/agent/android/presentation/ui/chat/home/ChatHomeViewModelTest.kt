@@ -80,6 +80,7 @@ class ChatHomeViewModelTest {
     private lateinit var savedSessionIdFlow: MutableStateFlow<String?>
     private lateinit var defaultPipelineIdFlow: MutableStateFlow<String?>
     private lateinit var maxContextLengthFlow: MutableStateFlow<Int>
+    private lateinit var consolePreferredConsoleTabNameFlow: MutableStateFlow<String>
 
     private lateinit var viewModel: ChatHomeViewModel
 
@@ -100,6 +101,7 @@ class ChatHomeViewModelTest {
         savedSessionIdFlow = MutableStateFlow(null)
         defaultPipelineIdFlow = MutableStateFlow(null)
         maxContextLengthFlow = MutableStateFlow(DEFAULT_TOKENS_MAX)
+        consolePreferredConsoleTabNameFlow = MutableStateFlow("Logs")
 
         every { llmInferenceEngine.isInitialized } returns true
         every { chatRepository.getSessionsFlow() } returns sessionsFlow
@@ -114,6 +116,10 @@ class ChatHomeViewModelTest {
         every { settingsRepository.currentChatSessionId } returns savedSessionIdFlow
         every { settingsRepository.defaultPipelineId } returns defaultPipelineIdFlow
         every { settingsRepository.maxContextLength } returns maxContextLengthFlow
+        every { settingsRepository.consolePreferredConsoleTabName } returns consolePreferredConsoleTabNameFlow
+        coEvery { settingsRepository.setConsolePreferredConsoleTabName(any()) } answers {
+            consolePreferredConsoleTabNameFlow.value = firstArg()
+        }
         coEvery { settingsRepository.setCurrentChatSessionId(any()) } answers {
             savedSessionIdFlow.value = firstArg()
         }

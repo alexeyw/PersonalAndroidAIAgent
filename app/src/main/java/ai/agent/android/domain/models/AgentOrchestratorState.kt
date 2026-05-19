@@ -133,4 +133,24 @@ sealed interface AgentOrchestratorState {
      *   current run. The engine emits a fresh immutable copy on every change.
      */
     data class ConsoleLog(val events: List<ConsoleEvent>) : AgentOrchestratorState
+
+    /**
+     * Per-node input/output snapshot emitted by
+     * [ai.agent.android.domain.engine.GraphExecutionEngine] after every
+     * non-`INPUT` / non-`OUTPUT` node completes. Powers the Vars tab of the
+     * chat-home console pane: the UI accumulates each emission into a
+     * `Map<nodeId, NodeIO>` and renders two rows per node (`input` and
+     * `output`), grouped by [nodeId].
+     *
+     * @property nodeId stable identifier of the producing node (matches
+     *   `NodeModel.id` so the UI can correlate vars rows with the same
+     *   node across re-renders).
+     * @property nodeType type name of the producing node (e.g. `LITE_RT`).
+     * @property input executor input observed at the start of the step
+     *   (already-composed context if the node opted into
+     *   `NodeContextConfig`, otherwise the upstream node's raw output).
+     * @property output executor result observed at the end of the step.
+     */
+    data class NodeIO(val nodeId: String, val nodeType: String, val input: String, val output: String) :
+        AgentOrchestratorState
 }

@@ -119,6 +119,9 @@
     <!-- Snackbar feedback -->
     <string name="chat_snackbar_copied">Copied</string>
     <string name="chat_snackbar_console_copied">Console log copied</string>
+    <string name="chat_snackbar_console_line_copied">Line copied</string>
+    <string name="chat_console_clear_dialog_confirm">Clear</string>
+    <string name="chat_console_clear_dialog_cancel">Cancel</string>
 
     <!-- Session naming -->
     <string name="chat_session_imported_default_name">Imported Chat</string>

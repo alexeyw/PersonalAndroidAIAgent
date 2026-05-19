@@ -15,6 +15,57 @@ details.
 
 ### Added
 
+- **Chat home — Console pane real-time wiring** (Phase 22 / Task 3/17) —
+  replaces the `sampleConsoleLines()` / `sampleConsoleVars()` /
+  `sampleConsoleTraces()` fixtures with live data streamed off the agent
+  orchestrator. The console pane now reflects the real pipeline run on
+  every step and survives Clear / Copy / tab-change interactions across
+  process death.
+  - New domain state `AgentOrchestratorState.NodeIO(nodeId, nodeType,
+    input, output)`, emitted by `GraphExecutionEngine` after every
+    non-`INPUT` / non-`OUTPUT` node completes (right after the existing
+    `PipelineTrace` emission). Powers the Vars tab of the console pane —
+    the VM aggregates emissions into a `LinkedHashMap<nodeId, NodeIO>`
+    so repeated invocations of the same node id overwrite (rather than
+    duplicate) Vars rows.
+  - New pure-Kotlin `ChatHomeConsoleMapping.kt`: `ConsoleEvent →
+    ConsoleLine` (timestamp `HH:mm:ss.SSS`, source resolution and severity
+    mapping covering every `ConsoleEventType`), `TraceStep →
+    ConsoleTraceSpan`, `NodeIO → List<ConsoleVarRow>` with
+    `JSONObject.quote`-escaped values.
+  - `ChatHomeViewModel` extensions: `consoleLines`, `consoleVars`,
+    `consoleTraces`, `consoleTab`, `consoleClearConfirmRequested`,
+    `consoleSnackbarEvents` flows plus public methods
+    `onConsoleTabChange`, `requestConsoleClear`,
+    `confirmConsoleClear`, `dismissConsoleClear`,
+    `signalConsoleLineCopied`, `signalConsoleAllCopied`,
+    `buildConsoleLineCopyPayload`, `buildConsoleAllCopyPayload`. The
+    `consoleClearBaseline` logic from the legacy `ChatViewModel` is
+    preserved verbatim so a mid-run `Clear` survives the next cumulative
+    engine snapshot.
+  - `SettingsRepository` gains
+    `consolePreferredConsoleTabName: Flow<String>` +
+    `setConsolePreferredConsoleTabName(name: String)`. The VM hydrates
+    the active tab from this flow at init and writes through on
+    `onConsoleTabChange`, so the user's chosen tab survives process
+    death. Domain stays free of `:catalog` imports — the enum name is
+    stored as a raw string and decoded at the presentation boundary.
+  - `ChatHomeScreen` wires the four previously-stubbed callbacks:
+    `onConsoleCopyLine` writes the plain-text payload via
+    `LocalClipboardManager` and raises a Snackbar; `onConsoleCopyAll`
+    pre-filters the buffer through the active `ConsoleFilter` +
+    search-query so the clipboard mirrors exactly what the user sees;
+    `onConsoleClear` opens a destructive `AlertDialog` and only advances
+    the baseline once the user confirms; `onConsoleTabChange` persists
+    through the VM. The Clear and Line-copied snackbars use new
+    `chat_console_clear_dialog_confirm` / `chat_console_clear_dialog_cancel`
+    / `chat_snackbar_console_line_copied` strings.
+  - `ChatHomeStateMapping.toViewState` now accepts `consoleLogs`,
+    `consoleVars`, `consoleTraces`, `consoleTab` and forwards them to
+    `ChatHomeConsoleState`. The old `sampleConsoleLines()` /
+    `sampleConsoleVars()` / `sampleConsoleTraces()` fixtures are
+    deleted.
+
 - **Chat home — HITL and Clarification real-time wiring** (Phase 22 /
   Task 2/17) — replaces the `forceState(...)` stubs in
   `ChatHomeScreen.onHitlAllowOnce` / `onHitlReject` / `onClarificationReply`
