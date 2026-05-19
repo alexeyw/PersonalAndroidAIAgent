@@ -40,6 +40,31 @@ interface MemoryDao {
     suspend fun deleteMemoryById(id: Long)
 
     /**
+     * Replaces the text content and embedding of an existing memory chunk.
+     *
+     * Used by the in-app memory editor: when the user commits an edit the
+     * embedding must be regenerated for the new text, so the DAO writes both
+     * columns atomically. The `timestamp` is intentionally left untouched —
+     * an edit is not a fresh entry and should keep its original position in
+     * the time-ordered history.
+     *
+     * @param id Identifier of the chunk to update.
+     * @param text New raw text content.
+     * @param embedding Serialized embedding vector (comma-encoded floats).
+     */
+    @Query("UPDATE memory_chunks SET text = :text, embedding = :embedding WHERE id = :id")
+    suspend fun updateMemory(id: Long, text: String, embedding: String)
+
+    /**
+     * Sets the `isPinned` flag on a single memory chunk.
+     *
+     * @param id Identifier of the chunk to update.
+     * @param isPinned `true` to pin the chunk, `false` to unpin it.
+     */
+    @Query("UPDATE memory_chunks SET isPinned = :isPinned WHERE id = :id")
+    suspend fun setMemoryPinned(id: Long, isPinned: Boolean)
+
+    /**
      * Retrieves a limited number of the most recent memory chunks from the database.
      * This is used to load a bounded number of embeddings into memory for vector similarity search.
      *

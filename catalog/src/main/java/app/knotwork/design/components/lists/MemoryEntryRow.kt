@@ -8,13 +8,20 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import app.knotwork.design.R
 import app.knotwork.design.components.chips.ChipStyle
 import app.knotwork.design.components.chips.KnotworkChip
 import app.knotwork.design.theme.KnotworkTheme
@@ -22,6 +29,9 @@ import app.knotwork.design.tokens.KnotworkTextStyles
 
 /** Maximum lines of body text rendered before ellipsis. */
 private const val MEMORY_BODY_MAX_LINES = 3
+
+/** Size of the leading pin glyph; matches `TitleMd` cap-height. */
+private val MEMORY_PIN_GLYPH_SIZE = 16.dp
 
 /**
  * Knotwork memory-entry row.
@@ -42,6 +52,8 @@ private const val MEMORY_BODY_MAX_LINES = 3
  * @param lastAccessed human-readable last-accessed string ("3 days ago").
  * @param onClick invoked when the user taps the row.
  * @param modifier optional layout modifier applied to the row root.
+ * @param isPinned When `true`, renders a leading star glyph in front of the
+ * title to signal that the user pinned this entry.
  */
 @Composable
 @Suppress("LongParameterList") // Stable API; collapsing into a `Row` data class hurts call-site clarity.
@@ -53,6 +65,7 @@ fun MemoryEntryRow(
     lastAccessed: String,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    isPinned: Boolean = false,
 ) {
     Column(
         verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp2),
@@ -65,13 +78,26 @@ fun MemoryEntryRow(
                 vertical = KnotworkTheme.spacing.sp3,
             ),
     ) {
-        Text(
-            text = title,
-            style = KnotworkTextStyles.TitleMd,
-            color = MaterialTheme.colorScheme.onSurface,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
-        )
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp2),
+        ) {
+            if (isPinned) {
+                Icon(
+                    imageVector = Icons.Filled.Star,
+                    contentDescription = stringResource(R.string.knotwork_memory_pinned_cd),
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(MEMORY_PIN_GLYPH_SIZE),
+                )
+            }
+            Text(
+                text = title,
+                style = KnotworkTextStyles.TitleMd,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
         Text(
             text = body,
             style = KnotworkTextStyles.BodyBase,

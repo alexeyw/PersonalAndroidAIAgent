@@ -274,6 +274,8 @@
     <string name="knotwork_memory_detail_edit">Edit</string>
     <string name="knotwork_memory_detail_delete">Delete</string>
     <string name="knotwork_memory_detail_pin">Pin to top</string>
+    <string name="knotwork_memory_detail_unpin">Unpin</string>
+    <string name="knotwork_memory_pinned_cd">Pinned</string>
     <string name="knotwork_memory_detail_close">Close</string>
 
     <!-- ============ Onboarding pager ============ -->

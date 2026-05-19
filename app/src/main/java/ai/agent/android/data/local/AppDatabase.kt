@@ -38,7 +38,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         PromptTemplateEntity::class,
         TraceStepEntity::class,
     ],
-    version = 22,
+    version = 23,
     exportSchema = false,
 )
 @TypeConverters(Converters::class)
@@ -320,6 +320,25 @@ abstract class AppDatabase : RoomDatabase() {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL(
                     "ALTER TABLE `chat_sessions` ADD COLUMN `isStarred` INTEGER NOT NULL DEFAULT 0",
+                )
+            }
+        }
+
+        /**
+         * Migration from version 22 to 23 (Phase 22 / Task 6 — Memory edit +
+         * pin persistence).
+         *
+         * Adds the `isPinned` column to `memory_chunks` so users can mark a
+         * memory chunk as pinned. Pinned rows sort ahead of unpinned rows on
+         * the memory surface and are exempt from future `compactMemory()`
+         * passes. Backfilled to `0` for every existing row — before this
+         * migration the schema had no notion of pinning, so no historical
+         * data needs to be carried over.
+         */
+        val MIGRATION_22_23 = object : Migration(22, 23) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "ALTER TABLE `memory_chunks` ADD COLUMN `isPinned` INTEGER NOT NULL DEFAULT 0",
                 )
             }
         }

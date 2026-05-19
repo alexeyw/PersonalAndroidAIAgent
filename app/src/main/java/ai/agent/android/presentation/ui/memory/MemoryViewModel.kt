@@ -1,5 +1,6 @@
 package ai.agent.android.presentation.ui.memory
 
+import ai.agent.android.domain.engine.TextEmbeddingEngine
 import ai.agent.android.domain.models.ChatMessage
 import ai.agent.android.domain.repositories.ChatRepository
 import ai.agent.android.domain.repositories.MemoryRepository
@@ -25,6 +26,7 @@ class MemoryViewModel @Inject constructor(
     private val chatRepository: ChatRepository,
     private val memoryRepository: MemoryRepository,
     private val settingsRepository: SettingsRepository,
+    private val textEmbeddingEngine: TextEmbeddingEngine,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(MemoryUiState(isLoading = true))
@@ -111,6 +113,38 @@ class MemoryViewModel @Inject constructor(
     fun deleteVectorMemory(memoryId: Long) {
         viewModelScope.launch {
             memoryRepository.deleteMemory(memoryId)
+            loadAllData()
+        }
+    }
+
+    /**
+     * Replaces the body of a long-term memory chunk. Recomputes the
+     * embedding from the new text via [TextEmbeddingEngine] before persisting
+     * — re-embedding is required so semantic-search results stay coherent
+     * with the visible text.
+     *
+     * @param id Identifier of the chunk to update.
+     * @param newText The new raw text content committed by the user.
+     */
+    fun editVectorMemory(id: Long, newText: String) {
+        viewModelScope.launch {
+            val newEmbedding = textEmbeddingEngine.generateEmbedding(newText)
+            memoryRepository.updateMemory(id = id, text = newText, embedding = newEmbedding)
+            loadAllData()
+        }
+    }
+
+    /**
+     * Toggles the pinned state of a long-term memory chunk. The new state is
+     * derived from the currently-loaded snapshot (`isPinned` flip), then
+     * persisted; the surface reloads to reflect the change.
+     *
+     * @param id Identifier of the chunk whose pinned flag should flip.
+     */
+    fun togglePinned(id: Long) {
+        viewModelScope.launch {
+            val current = _uiState.value.vectorMemories.firstOrNull { it.id == id } ?: return@launch
+            memoryRepository.setMemoryPinned(id = id, pinned = !current.isPinned)
             loadAllData()
         }
     }
