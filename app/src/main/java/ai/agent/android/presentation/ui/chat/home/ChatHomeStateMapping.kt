@@ -1,5 +1,6 @@
 package ai.agent.android.presentation.ui.chat.home
 
+import ai.agent.android.domain.models.ClarificationRequest
 import app.knotwork.design.components.chat.ChatContent
 import app.knotwork.design.components.chat.ChatMessageStatus
 import app.knotwork.design.components.chat.ChatMetadata
@@ -21,6 +22,12 @@ import app.knotwork.design.screens.chat.ChatHomeConsoleState
 import app.knotwork.design.screens.chat.ChatHomeMessageRow
 import app.knotwork.design.screens.chat.ChatHomeViewState
 import app.knotwork.design.screens.chat.ChatHomeVisualState
+import org.json.JSONArray
+import org.json.JSONException
+import org.json.JSONObject
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 /**
  * Pure-Kotlin projection of the sealed [ChatHomeUiState] onto the catalog
@@ -56,6 +63,8 @@ fun ChatHomeUiState.toViewState(
     tokensUsed: Int = 0,
     tokensMax: Int = 0,
     favorite: Boolean = false,
+    pendingTool: HitlPending? = null,
+    pendingClarification: ClarificationRequest? = null,
 ): ChatHomeViewState = when (this) {
     is ChatHomeUiState.Empty -> ChatHomeViewState(
         visualState = ChatHomeVisualState.Empty,
@@ -101,7 +110,7 @@ fun ChatHomeUiState.toViewState(
         visualState = ChatHomeVisualState.HitlConfirm,
         threadTitle = threadTitle,
         modelName = modelName,
-        messages = messages + hitlRow(modelName, risk),
+        messages = messages + (pendingTool?.let { liveHitlRow(modelName, it) } ?: hitlRow(modelName, risk)),
         composerValue = composerValue,
         pendingTypedConfirm = pendingTypedConfirm,
         pipelineName = pipelineName,
@@ -115,7 +124,10 @@ fun ChatHomeUiState.toViewState(
         visualState = ChatHomeVisualState.Clarification,
         threadTitle = threadTitle,
         modelName = modelName,
-        messages = messages + clarificationRow(modelName),
+        messages = messages + (
+            pendingClarification?.let { liveClarificationRow(modelName, it) }
+                ?: clarificationRow(modelName)
+            ),
         composerValue = composerValue,
         pipelineName = pipelineName,
         tokensUsed = tokensUsed,
@@ -245,6 +257,101 @@ internal fun hitlRow(modelName: String, risk: Risk): ChatHomeMessageRow {
         metadata = ChatMetadata(timestamp = "09:16", model = modelName),
     )
 }
+
+/**
+ * Trailing HITL confirmation row driven by the live [HitlPending]
+ * snapshot the orchestrator captured. Renders the real tool name, risk
+ * tier, and JSON-decoded argument map; the user-visible "summary" line
+ * falls back to the tool name when the agent did not attach one.
+ */
+internal fun liveHitlRow(modelName: String, pending: HitlPending): ChatHomeMessageRow {
+    val argumentsMap = parseHitlArguments(pending.arguments)
+    val timestamp = SimpleDateFormat(HITL_TIMESTAMP_PATTERN, Locale.getDefault())
+        .format(Date(System.currentTimeMillis()))
+    return ChatHomeMessageRow(
+        id = "a-hitl-${pending.toolName}",
+        role = ChatRole.Assistant,
+        content = ChatContent.Confirmation(
+            model = HitlConfirmationModel(
+                risk = pending.risk.toCatalogRisk(),
+                toolName = pending.toolName,
+                summary = pending.toolName,
+                arguments = argumentsMap,
+                timestamp = timestamp,
+            ),
+        ),
+        metadata = ChatMetadata(timestamp = timestamp, model = modelName),
+    )
+}
+
+/**
+ * Trailing clarification row driven by the live [ClarificationRequest]
+ * snapshot the orchestrator captured. Renders the real question text and
+ * options as quick-reply chips; free-form fallback is supplied by the
+ * catalog `ClarificationCard`.
+ */
+internal fun liveClarificationRow(modelName: String, request: ClarificationRequest): ChatHomeMessageRow {
+    val timestamp = SimpleDateFormat(HITL_TIMESTAMP_PATTERN, Locale.getDefault())
+        .format(Date(System.currentTimeMillis()))
+    return ChatHomeMessageRow(
+        id = "a-clar-${request.id}",
+        role = ChatRole.Assistant,
+        content = ChatContent.Clarification(
+            model = ClarificationCardModel(
+                question = request.question,
+                quickReplies = request.options ?: emptyList(),
+            ),
+        ),
+        metadata = ChatMetadata(timestamp = timestamp, model = modelName),
+    )
+}
+
+/**
+ * Parses the orchestrator-emitted JSON argument blob into the
+ * `Map<String, String>` of rendered JSON fragments the catalog
+ * `HitlConfirmationCard` expects. Each value is re-serialised through
+ * [JSONObject] so strings keep their surrounding double-quotes, numbers /
+ * booleans render bare, and nested objects/arrays stay compact JSON.
+ * Falls back to a single `args` entry holding the raw blob when the
+ * payload is not a parseable object — defensive against agents emitting
+ * non-JSON or array-shaped argument payloads.
+ */
+internal fun parseHitlArguments(raw: String): Map<String, String> {
+    val trimmed = raw.trim()
+    if (trimmed.isEmpty()) return emptyMap()
+    return try {
+        val obj = JSONObject(trimmed)
+        val result = linkedMapOf<String, String>()
+        val keys = obj.keys()
+        while (keys.hasNext()) {
+            val key = keys.next()
+            result[key] = renderJsonFragment(obj.get(key))
+        }
+        result
+    } catch (_: JSONException) {
+        mapOf(RAW_ARGS_FALLBACK_KEY to trimmed)
+    }
+}
+
+/**
+ * Renders a single JSON value as the fragment string the catalog
+ * `HitlConfirmationCard` expects: strings are wrapped in double quotes,
+ * numbers and booleans render bare, nested objects/arrays render as
+ * compact JSON, and `JSONObject.NULL` becomes `null`.
+ */
+private fun renderJsonFragment(value: Any?): String = when (value) {
+    null, JSONObject.NULL -> "null"
+    is String -> JSONObject.quote(value)
+    is JSONObject -> value.toString()
+    is JSONArray -> value.toString()
+    else -> value.toString()
+}
+
+/** Pattern used for the HITL / clarification row timestamp. */
+private const val HITL_TIMESTAMP_PATTERN: String = "HH:mm"
+
+/** Key used when the orchestrator's argument blob cannot be parsed as a JSON object. */
+internal const val RAW_ARGS_FALLBACK_KEY: String = "args"
 
 /** Trailing clarification row appended in the Clarification state. */
 internal fun clarificationRow(modelName: String): ChatHomeMessageRow = ChatHomeMessageRow(

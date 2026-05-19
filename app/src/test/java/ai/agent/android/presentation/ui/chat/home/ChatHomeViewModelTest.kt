@@ -4,9 +4,12 @@ import ai.agent.android.domain.engine.LlmInferenceEngine
 import ai.agent.android.domain.models.AgentOrchestratorState
 import ai.agent.android.domain.models.ChatMessage
 import ai.agent.android.domain.models.ChatSession
+import ai.agent.android.domain.models.ClarificationRequest
 import ai.agent.android.domain.models.PipelineGraph
 import ai.agent.android.domain.models.Role
+import ai.agent.android.domain.models.ToolRisk
 import ai.agent.android.domain.repositories.ChatRepository
+import ai.agent.android.domain.repositories.ClarificationRepository
 import ai.agent.android.domain.repositories.PipelineRepository
 import ai.agent.android.domain.repositories.SettingsRepository
 import ai.agent.android.domain.usecases.AgentOrchestratorUseCase
@@ -69,6 +72,7 @@ class ChatHomeViewModelTest {
     private lateinit var settingsRepository: SettingsRepository
     private lateinit var getContextWindowUseCase: GetContextWindowUseCase
     private lateinit var llmInferenceEngine: LlmInferenceEngine
+    private lateinit var clarificationRepository: ClarificationRepository
 
     private lateinit var sessionsFlow: MutableStateFlow<List<ChatSession>>
     private lateinit var pipelinesFlow: MutableStateFlow<List<PipelineGraph>>
@@ -82,12 +86,13 @@ class ChatHomeViewModelTest {
     @Before
     fun setUp() {
         Dispatchers.setMain(testDispatcher)
-        agentOrchestratorUseCase = mockk()
+        agentOrchestratorUseCase = mockk(relaxed = true)
         chatRepository = mockk()
         pipelineRepository = mockk()
         settingsRepository = mockk(relaxed = true)
         getContextWindowUseCase = mockk()
         llmInferenceEngine = mockk(relaxed = true)
+        clarificationRepository = mockk(relaxed = true)
 
         sessionsFlow = MutableStateFlow(emptyList())
         pipelinesFlow = MutableStateFlow(emptyList())
@@ -127,6 +132,7 @@ class ChatHomeViewModelTest {
         settingsRepository,
         getContextWindowUseCase,
         llmInferenceEngine,
+        clarificationRepository,
     )
 
     @Test
@@ -491,6 +497,219 @@ class ChatHomeViewModelTest {
         advanceUntilIdle()
         viewModel.forceState(ChatHomeUiState.HitlConfirm(Risk.Destructive))
         assertEquals(ChatHomeUiState.HitlConfirm(Risk.Destructive), viewModel.state.value)
+    }
+
+    @Test
+    fun `sendMessage emits HitlConfirm when orchestrator waits for approval`() = runTest(testDispatcher) {
+        viewModel = createViewModel()
+        advanceUntilIdle()
+        val sessionId = viewModel.currentSessionId.value
+        coEvery { agentOrchestratorUseCase(sessionId, "hi", null) } returns flow {
+            emit(
+                AgentOrchestratorState.WaitingForApproval(
+                    toolName = "fs.write_file",
+                    arguments = "{\"path\":\"/tmp/x\"}",
+                    risk = ToolRisk.SENSITIVE,
+                ),
+            )
+            delay(10_000)
+        }
+
+        viewModel.onComposerValueChange("hi")
+        viewModel.sendMessage()
+        advanceUntilIdle()
+
+        val state = viewModel.state.value
+        assertTrue("Expected HitlConfirm, got $state", state is ChatHomeUiState.HitlConfirm)
+        assertEquals(Risk.Sensitive, (state as ChatHomeUiState.HitlConfirm).risk)
+        val pending = viewModel.pendingTool.value
+        assertNotNull(pending)
+        assertEquals("fs.write_file", pending!!.toolName)
+        assertEquals(ToolRisk.SENSITIVE, pending.risk)
+    }
+
+    @Test
+    fun `approveTool calls resumeWithApproval(true) and flips to Generating`() = runTest(testDispatcher) {
+        viewModel = createViewModel()
+        advanceUntilIdle()
+        val sessionId = viewModel.currentSessionId.value
+        coEvery { agentOrchestratorUseCase(sessionId, "hi", null) } returns flow {
+            emit(
+                AgentOrchestratorState.WaitingForApproval(
+                    toolName = "calendar.create_event",
+                    arguments = "{}",
+                    risk = ToolRisk.SENSITIVE,
+                ),
+            )
+            delay(10_000)
+        }
+        viewModel.onComposerValueChange("hi")
+        viewModel.sendMessage()
+        advanceUntilIdle()
+
+        viewModel.approveTool()
+        advanceUntilIdle()
+
+        verify { agentOrchestratorUseCase.resumeWithApproval(sessionId, true) }
+        assertEquals(ChatHomeUiState.Generating, viewModel.state.value)
+        assertNull(viewModel.pendingTool.value)
+    }
+
+    @Test
+    fun `rejectTool calls resumeWithApproval(false) and appends system denial message`() = runTest(testDispatcher) {
+        viewModel = createViewModel()
+        advanceUntilIdle()
+        val sessionId = viewModel.currentSessionId.value
+        coEvery { agentOrchestratorUseCase(sessionId, "hi", null) } returns flow {
+            emit(
+                AgentOrchestratorState.WaitingForApproval(
+                    toolName = "fs.delete_file",
+                    arguments = "{}",
+                    risk = ToolRisk.DESTRUCTIVE,
+                ),
+            )
+            delay(10_000)
+        }
+        viewModel.onComposerValueChange("hi")
+        viewModel.sendMessage()
+        advanceUntilIdle()
+
+        viewModel.rejectTool()
+        advanceUntilIdle()
+
+        verify { agentOrchestratorUseCase.resumeWithApproval(sessionId, false) }
+        coVerify {
+            chatRepository.saveMessage(
+                match { msg ->
+                    msg.role == Role.SYSTEM &&
+                        msg.content.contains("fs.delete_file") &&
+                        msg.content.contains("denied")
+                },
+            )
+        }
+        assertNull(viewModel.pendingTool.value)
+    }
+
+    @Test
+    fun `approveTool destructive is a no-op without typed yes`() = runTest(testDispatcher) {
+        viewModel = createViewModel()
+        advanceUntilIdle()
+        val sessionId = viewModel.currentSessionId.value
+        coEvery { agentOrchestratorUseCase(sessionId, "hi", null) } returns flow {
+            emit(
+                AgentOrchestratorState.WaitingForApproval(
+                    toolName = "fs.delete_file",
+                    arguments = "{}",
+                    risk = ToolRisk.DESTRUCTIVE,
+                ),
+            )
+            delay(10_000)
+        }
+        viewModel.onComposerValueChange("hi")
+        viewModel.sendMessage()
+        advanceUntilIdle()
+
+        // Empty typed-confirm — Allow must be refused.
+        viewModel.approveTool()
+        advanceUntilIdle()
+        verify(exactly = 0) { agentOrchestratorUseCase.resumeWithApproval(any(), true) }
+        assertTrue(viewModel.state.value is ChatHomeUiState.HitlConfirm)
+
+        // Typing the canonical magic word unlocks the gate.
+        viewModel.onTypedConfirmChange("yes")
+        viewModel.approveTool()
+        advanceUntilIdle()
+        verify { agentOrchestratorUseCase.resumeWithApproval(sessionId, true) }
+        assertEquals(ChatHomeUiState.Generating, viewModel.state.value)
+    }
+
+    @Test
+    fun `AwaitingClarification emits Clarification state and captures the request`() = runTest(testDispatcher) {
+        viewModel = createViewModel()
+        advanceUntilIdle()
+        val sessionId = viewModel.currentSessionId.value
+        val request = ClarificationRequest(
+            id = "req-1",
+            question = "Which calendar?",
+            options = listOf("Work", "Personal"),
+            timeoutMs = 0,
+        )
+        coEvery { agentOrchestratorUseCase(sessionId, "hi", null) } returns flow {
+            emit(AgentOrchestratorState.AwaitingClarification(request))
+            delay(10_000)
+        }
+
+        viewModel.onComposerValueChange("hi")
+        viewModel.sendMessage()
+        advanceUntilIdle()
+
+        assertEquals(ChatHomeUiState.Clarification, viewModel.state.value)
+        assertEquals(request, viewModel.pendingClarification.value)
+    }
+
+    @Test
+    fun `submitClarificationReply calls repository and flips to Generating`() = runTest(testDispatcher) {
+        viewModel = createViewModel()
+        advanceUntilIdle()
+        val sessionId = viewModel.currentSessionId.value
+        val request = ClarificationRequest(
+            id = "req-7",
+            question = "Q?",
+            options = listOf("Yes", "No"),
+            timeoutMs = 0,
+        )
+        coEvery { agentOrchestratorUseCase(sessionId, "hi", null) } returns flow {
+            emit(AgentOrchestratorState.AwaitingClarification(request))
+            delay(10_000)
+        }
+        viewModel.onComposerValueChange("hi")
+        viewModel.sendMessage()
+        advanceUntilIdle()
+
+        viewModel.submitClarificationReply(" Yes  ")
+        advanceUntilIdle()
+
+        coVerify { clarificationRepository.submitClarification("req-7", "Yes") }
+        assertNull(viewModel.pendingClarification.value)
+        assertEquals(ChatHomeUiState.Generating, viewModel.state.value)
+    }
+
+    @Test
+    fun `clarification watchdog submits default answer on timeout`() = runTest(testDispatcher) {
+        viewModel = createViewModel()
+        advanceUntilIdle()
+        val sessionId = viewModel.currentSessionId.value
+        val request = ClarificationRequest(
+            id = "req-timeout",
+            question = "Pick one",
+            options = listOf("Alpha", "Beta"),
+            timeoutMs = 500L,
+        )
+        coEvery { agentOrchestratorUseCase(sessionId, "hi", null) } returns flow {
+            emit(AgentOrchestratorState.AwaitingClarification(request))
+            delay(10_000)
+        }
+        viewModel.onComposerValueChange("hi")
+        viewModel.sendMessage()
+        // Use runCurrent() not advanceUntilIdle: the latter would skip past the
+        // 500ms watchdog delay and fire the timeout *before* this assertion.
+        testScheduler.runCurrent()
+        assertEquals(ChatHomeUiState.Clarification, viewModel.state.value)
+
+        testScheduler.advanceTimeBy(600L)
+        testScheduler.runCurrent()
+
+        coVerify { clarificationRepository.submitClarification("req-timeout", "Alpha") }
+        coVerify {
+            chatRepository.saveMessage(
+                match { msg ->
+                    msg.role == Role.SYSTEM &&
+                        msg.content.contains("Alpha") &&
+                        msg.content.contains("timed out")
+                },
+            )
+        }
+        assertNull(viewModel.pendingClarification.value)
     }
 
     @Test

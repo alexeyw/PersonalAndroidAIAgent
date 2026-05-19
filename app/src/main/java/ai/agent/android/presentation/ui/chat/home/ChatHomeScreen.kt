@@ -60,6 +60,8 @@ fun ChatHomeScreen(viewModel: ChatHomeViewModel, modifier: Modifier = Modifier) 
     val pipelineName by viewModel.pipelineName.collectAsStateWithLifecycle()
     val tokensUsed by viewModel.tokensUsed.collectAsStateWithLifecycle()
     val tokensMax by viewModel.tokensMax.collectAsStateWithLifecycle()
+    val pendingTool by viewModel.pendingTool.collectAsStateWithLifecycle()
+    val pendingClarification by viewModel.pendingClarification.collectAsStateWithLifecycle()
 
     var debugPickerExpanded by remember { mutableStateOf(false) }
 
@@ -90,6 +92,8 @@ fun ChatHomeScreen(viewModel: ChatHomeViewModel, modifier: Modifier = Modifier) 
         pipelineName = pipelineName ?: PIPELINE_NAME_PLACEHOLDER,
         tokensUsed = tokensUsed,
         tokensMax = tokensMax,
+        pendingTool = pendingTool,
+        pendingClarification = pendingClarification,
     )
 
     val callbacks = remember(viewModel) {
@@ -114,10 +118,10 @@ fun ChatHomeScreen(viewModel: ChatHomeViewModel, modifier: Modifier = Modifier) 
             onConsoleCopyAll = { /* stub: console wiring ships with Phase 22 / Task 3 */ },
             onConsoleClear = { /* stub: console wiring ships with Phase 22 / Task 3 */ },
             onCloseConsole = viewModel::closeConsole,
-            onHitlAllowOnce = { viewModel.forceState(ChatHomeUiState.Idle) },
-            onHitlReject = { viewModel.forceState(ChatHomeUiState.Idle) },
+            onHitlAllowOnce = viewModel::approveTool,
+            onHitlReject = viewModel::rejectTool,
             onHitlTypedConfirmChange = viewModel::onTypedConfirmChange,
-            onClarificationReply = { _ -> viewModel.forceState(ChatHomeUiState.Idle) },
+            onClarificationReply = viewModel::submitClarificationReply,
             onErrorRetry = { viewModel.forceState(ChatHomeUiState.Idle) },
             onTitleTripleTap = { debugPickerExpanded = true },
             onToggleFavorite = { /* stub: favorite persistence ships with Phase 22 / Task 4 */ },

@@ -4,8 +4,11 @@ import ai.agent.android.domain.engine.LlmInferenceEngine
 import ai.agent.android.domain.models.AgentOrchestratorState
 import ai.agent.android.domain.models.ChatMessage
 import ai.agent.android.domain.models.ChatSession
+import ai.agent.android.domain.models.ClarificationRequest
 import ai.agent.android.domain.models.Role
+import ai.agent.android.domain.models.ToolRisk
 import ai.agent.android.domain.repositories.ChatRepository
+import ai.agent.android.domain.repositories.ClarificationRepository
 import ai.agent.android.domain.repositories.PipelineRepository
 import ai.agent.android.domain.repositories.SettingsRepository
 import ai.agent.android.domain.usecases.AgentOrchestratorUseCase
@@ -16,12 +19,14 @@ import app.knotwork.design.components.chat.ChatContent
 import app.knotwork.design.components.chat.ChatMessageStatus
 import app.knotwork.design.components.chat.ChatMetadata
 import app.knotwork.design.components.chat.ChatRole
+import app.knotwork.design.components.chips.Risk
 import app.knotwork.design.components.console.ConsoleFilter
 import app.knotwork.design.components.console.ConsoleSnap
 import app.knotwork.design.components.console.ConsoleSource
 import app.knotwork.design.screens.chat.ChatHomeMessageRow
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -85,6 +90,7 @@ class ChatHomeViewModel @Inject constructor(
     private val settingsRepository: SettingsRepository,
     private val getContextWindowUseCase: GetContextWindowUseCase,
     private val llmInferenceEngine: LlmInferenceEngine,
+    private val clarificationRepository: ClarificationRepository,
 ) : ViewModel() {
 
     private val _currentSessionId: MutableStateFlow<String> = MutableStateFlow("")
@@ -100,6 +106,8 @@ class ChatHomeViewModel @Inject constructor(
     private val _tokensUsed: MutableStateFlow<Int> = MutableStateFlow(0)
     private val _tokensMax: MutableStateFlow<Int> = MutableStateFlow(0)
     private val _pipelineFallbackEvents: MutableSharedFlow<Unit> = MutableSharedFlow(extraBufferCapacity = 1)
+    private val _pendingTool: MutableStateFlow<HitlPending?> = MutableStateFlow(null)
+    private val _pendingClarification: MutableStateFlow<ClarificationRequest?> = MutableStateFlow(null)
 
     /** Externally-observable current session id. */
     val currentSessionId: StateFlow<String> = _currentSessionId.asStateFlow()
@@ -145,9 +153,27 @@ class ChatHomeViewModel @Inject constructor(
      */
     val pipelineFallbackEvents: SharedFlow<Unit> = _pipelineFallbackEvents.asSharedFlow()
 
+    /**
+     * Snapshot of the tool invocation that the orchestrator has paused on,
+     * surfaced so the trailing HITL confirmation card can render its real
+     * tool name / arguments / risk. `null` whenever no approval gate is
+     * active. Mirrors [pendingClarification] which plays the same role for
+     * `AwaitingClarification`.
+     */
+    val pendingTool: StateFlow<HitlPending?> = _pendingTool.asStateFlow()
+
+    /**
+     * Snapshot of the clarification request the orchestrator has paused on,
+     * surfaced so the trailing clarification card can render the real
+     * question + canned answer options. `null` whenever the agent is not
+     * waiting on a clarification reply.
+     */
+    val pendingClarification: StateFlow<ClarificationRequest?> = _pendingClarification.asStateFlow()
+
     private var messagesJob: Job? = null
     private var generationJob: Job? = null
     private var tokenCounterJob: Job? = null
+    private var clarificationTimeoutJob: Job? = null
     private var sessions: List<ChatSession> = emptyList()
     private var availablePipelinesObserved: Boolean = false
     private var availablePipelines: List<PipelineSummary> = emptyList()
@@ -199,6 +225,7 @@ class ChatHomeViewModel @Inject constructor(
         val pipelineId = sessions.firstOrNull { it.id == sessionId }?.pipelineId
 
         _state.value = ChatHomeUiState.Generating
+        clearPendingApprovalAndClarification()
 
         autoRenameIfDefault(sessionId, draft)
 
@@ -221,6 +248,7 @@ class ChatHomeViewModel @Inject constructor(
      */
     fun stopGeneration() {
         generationJob?.cancel()
+        clearPendingApprovalAndClarification()
         _state.update { current ->
             if (current is ChatHomeUiState.Generating) {
                 if (_messages.value.isEmpty()) ChatHomeUiState.Empty else ChatHomeUiState.Idle
@@ -257,6 +285,7 @@ class ChatHomeViewModel @Inject constructor(
         if (threadId.isBlank() || threadId == _currentSessionId.value) return
         generationJob?.cancel()
         messagesJob?.cancel()
+        clearPendingApprovalAndClarification()
         _messages.value = emptyList()
         _tokensUsed.value = 0
         _state.value = ChatHomeUiState.Empty
@@ -450,16 +479,163 @@ class ChatHomeViewModel @Inject constructor(
     /** Branches on the orchestrator emission. Terminal states settle UI; intermediate states keep `Generating`. */
     private fun handleOrchestratorState(state: AgentOrchestratorState) {
         when (state) {
+            is AgentOrchestratorState.WaitingForApproval -> handleWaitingForApproval(state)
+            is AgentOrchestratorState.AwaitingClarification -> handleAwaitingClarification(state.request)
             is AgentOrchestratorState.Completed -> {
+                clearPendingApprovalAndClarification()
                 _state.value = if (_messages.value.isEmpty()) ChatHomeUiState.Empty else ChatHomeUiState.Idle
             }
             is AgentOrchestratorState.Error -> {
+                clearPendingApprovalAndClarification()
                 _state.value = ChatHomeUiState.Error(state.message)
             }
-            // Intermediate states keep `Generating` while the request is in flight. The HITL,
-            // Clarification, and Console handling lands in Phase 22 tasks 2/17 and 3/17.
+            // Intermediate states keep `Generating` while the request is in flight.
+            // Console handling lands in Phase 22 / Task 3/17.
             else -> Unit
         }
+    }
+
+    /**
+     * Approves the tool the orchestrator is paused on. For a destructive
+     * tool the approval is gated on the typed-confirm matching the
+     * canonical magic word (`"yes"`, trimmed, case-insensitive) — the
+     * catalog `HitlConfirmationCard` already disables the Allow CTA in
+     * that case, but the VM mirrors the gate defensively so a programmatic
+     * caller (tests, automation) cannot bypass it.
+     *
+     * No-op when no tool is pending.
+     */
+    fun approveTool() {
+        val pending = _pendingTool.value ?: return
+        if (pending.risk == ToolRisk.DESTRUCTIVE && !isTypedConfirmValid()) return
+        val sessionId = _currentSessionId.value
+        if (sessionId.isBlank()) return
+        agentOrchestratorUseCase.resumeWithApproval(sessionId, true)
+        _pendingTool.value = null
+        _pendingTypedConfirm.value = ""
+        _state.value = ChatHomeUiState.Generating
+    }
+
+    /**
+     * Rejects the tool the orchestrator is paused on. Persists a SYSTEM
+     * chat row recording the denial so the user can see in-thread what
+     * happened — the legacy chat surface only cleared state, which left
+     * the conversation looking like the agent had silently moved on.
+     *
+     * No-op when no tool is pending.
+     */
+    fun rejectTool() {
+        val pending = _pendingTool.value ?: return
+        val sessionId = _currentSessionId.value
+        if (sessionId.isBlank()) return
+        agentOrchestratorUseCase.resumeWithApproval(sessionId, false)
+        _pendingTool.value = null
+        _pendingTypedConfirm.value = ""
+        _state.value = restingState()
+        viewModelScope.launch {
+            chatRepository.saveMessage(
+                ChatMessage(
+                    sessionId = sessionId,
+                    role = Role.SYSTEM,
+                    content = SYSTEM_MESSAGE_TOOL_DENIED.format(pending.toolName),
+                    timestamp = System.currentTimeMillis(),
+                ),
+            )
+        }
+    }
+
+    /**
+     * Submits the user's reply to the active clarification request and
+     * cancels the watchdog timer. The pipeline coroutine resumes
+     * immediately via [ClarificationRepository.submitClarification]; the
+     * agent then publishes its next state, which the orchestrator stream
+     * collector translates into the next UI tick.
+     *
+     * @param answer the user's reply text (option label or free-form).
+     */
+    fun submitClarificationReply(answer: String) {
+        val pending = _pendingClarification.value ?: return
+        val trimmed = answer.trim()
+        if (trimmed.isEmpty()) return
+        clarificationTimeoutJob?.cancel()
+        _pendingClarification.value = null
+        _state.value = ChatHomeUiState.Generating
+        viewModelScope.launch {
+            clarificationRepository.submitClarification(pending.id, trimmed)
+        }
+    }
+
+    /** Captures the orchestrator's pending approval and flips the UI to the HITL state. */
+    private fun handleWaitingForApproval(state: AgentOrchestratorState.WaitingForApproval) {
+        _pendingTool.value = HitlPending(
+            toolName = state.toolName,
+            arguments = state.arguments,
+            risk = state.risk,
+        )
+        _pendingTypedConfirm.value = ""
+        _state.value = ChatHomeUiState.HitlConfirm(state.risk.toCatalogRisk())
+    }
+
+    /**
+     * Captures the orchestrator's pending clarification, flips the UI to
+     * the Clarification state, and arms the watchdog timer. The repository
+     * owns the authoritative timeout via `withTimeout`; this watchdog is a
+     * UI safety-net that ensures the surface flips back to a resting state
+     * even if the user backgrounds the app for longer than [timeoutMs].
+     */
+    private fun handleAwaitingClarification(request: ClarificationRequest) {
+        _pendingClarification.value = request
+        _state.value = ChatHomeUiState.Clarification
+        clarificationTimeoutJob?.cancel()
+        if (request.timeoutMs > 0) {
+            clarificationTimeoutJob = viewModelScope.launch {
+                delay(request.timeoutMs)
+                onClarificationTimeout(request)
+            }
+        }
+    }
+
+    /**
+     * Fires when the watchdog elapses without a user reply. Submits the
+     * default answer (first option, or empty for free-form) so the
+     * suspended pipeline coroutine resumes, drops the pending snapshot,
+     * appends a SYSTEM chat row recording the fallback, and settles the
+     * surface back on a resting state.
+     */
+    private fun onClarificationTimeout(request: ClarificationRequest) {
+        if (_pendingClarification.value?.id != request.id) return
+        val defaultAnswer = request.options?.firstOrNull().orEmpty()
+        val sessionId = _currentSessionId.value
+        _pendingClarification.value = null
+        _state.value = restingState()
+        viewModelScope.launch {
+            clarificationRepository.submitClarification(request.id, defaultAnswer)
+            if (sessionId.isNotBlank()) {
+                chatRepository.saveMessage(
+                    ChatMessage(
+                        sessionId = sessionId,
+                        role = Role.SYSTEM,
+                        content = SYSTEM_MESSAGE_CLARIFICATION_TIMED_OUT.format(
+                            defaultAnswer.ifBlank { CLARIFICATION_DEFAULT_BLANK },
+                        ),
+                        timestamp = System.currentTimeMillis(),
+                    ),
+                )
+            }
+        }
+    }
+
+    /** Whether the current typed-confirm input satisfies the destructive HITL gate. */
+    private fun isTypedConfirmValid(): Boolean =
+        _pendingTypedConfirm.value.trim().equals(DESTRUCTIVE_TYPED_CONFIRM_WORD, ignoreCase = true)
+
+    /** Clears every pending HITL / clarification snapshot and cancels the watchdog. */
+    private fun clearPendingApprovalAndClarification() {
+        clarificationTimeoutJob?.cancel()
+        clarificationTimeoutJob = null
+        _pendingTool.value = null
+        _pendingClarification.value = null
+        _pendingTypedConfirm.value = ""
     }
 
     /**
@@ -578,6 +754,36 @@ class ChatHomeViewModel @Inject constructor(
         /** Rough chars-per-token divisor used for the v0.1 token counter (`text.length / 4`). */
         const val TOKEN_CHARS_PER_TOKEN: Int = 4
 
+        /**
+         * Magic word the user must type to confirm a destructive tool call.
+         * Mirrors the catalog `HitlConfirmationState.DESTRUCTIVE_CONFIRM_WORD`
+         * but duplicated here so the VM gate stays free of `:catalog`
+         * imports beyond the [Risk] adapter.
+         */
+        const val DESTRUCTIVE_TYPED_CONFIRM_WORD: String = "yes"
+
+        /**
+         * Template of the SYSTEM chat row persisted when the user rejects a
+         * pending tool call via [ChatHomeViewModel.rejectTool]. `%s` is
+         * replaced with the tool name.
+         */
+        const val SYSTEM_MESSAGE_TOOL_DENIED: String = "Tool '%s' denied by user."
+
+        /**
+         * Template of the SYSTEM chat row persisted when the clarification
+         * watchdog elapses without a user reply. `%s` is replaced with the
+         * default answer that the pipeline actually consumed.
+         */
+        const val SYSTEM_MESSAGE_CLARIFICATION_TIMED_OUT: String =
+            "Clarification timed out; default answer used: %s."
+
+        /**
+         * Placeholder inserted into the timeout SYSTEM message when the
+         * agent fell back to an empty default (free-form request with no
+         * options).
+         */
+        const val CLARIFICATION_DEFAULT_BLANK: String = "(blank)"
+
         /** Pre-formatted timestamp format used in [ChatMetadata.timestamp] (24h, locale-aware). */
         private const val TIMESTAMP_PATTERN: String = "HH:mm"
 
@@ -626,3 +832,25 @@ class ChatHomeViewModel @Inject constructor(
  * @property name display name of the pipeline.
  */
 internal data class PipelineSummary(val id: String, val name: String)
+
+/**
+ * Snapshot of the tool the orchestrator is currently paused on, exposed
+ * by [ChatHomeViewModel.pendingTool] so the mapper can render the
+ * trailing HITL confirmation card from real data instead of fixtures.
+ *
+ * @property toolName fully-qualified tool id (e.g. `fs.write_file`).
+ * @property arguments raw JSON-encoded argument blob emitted by the agent.
+ * @property risk per-tool risk tier resolved by `ToolRepository.getRisk`.
+ */
+data class HitlPending(val toolName: String, val arguments: String, val risk: ToolRisk)
+
+/**
+ * Maps the domain [ToolRisk] enum onto the catalog [Risk] enum. The two
+ * exist in different layers (domain stays free of catalog imports) so a
+ * thin adapter at the presentation boundary is the cleanest cut.
+ */
+internal fun ToolRisk.toCatalogRisk(): Risk = when (this) {
+    ToolRisk.READ_ONLY -> Risk.Readonly
+    ToolRisk.SENSITIVE -> Risk.Sensitive
+    ToolRisk.DESTRUCTIVE -> Risk.Destructive
+}
