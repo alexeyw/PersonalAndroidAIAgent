@@ -25,7 +25,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.RadioButtonUnchecked
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -38,7 +37,6 @@ import androidx.compose.material3.RadioButton
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -53,12 +51,14 @@ import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
-import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.knotwork.design.components.buttons.KnotworkPrimaryButton
+import app.knotwork.design.components.buttons.KnotworkTextButton
 import app.knotwork.design.components.chat.ChatContextAction
 import app.knotwork.design.components.misc.KnotworkSnackbar
 import app.knotwork.design.screens.chat.ChatHomeCallbacks
 import app.knotwork.design.screens.chat.ChatHomeContent
+import app.knotwork.design.theme.KnotworkTheme
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -310,7 +310,10 @@ fun ChatHomeScreen(
             hostState = snackbarHostState,
             modifier = Modifier
                 .align(Alignment.BottomCenter)
-                .padding(bottom = SNACKBAR_BOTTOM_INSET_DP.dp),
+                // sp16 (bottom-nav) + sp8 (composer breathing room) = 96 dp.
+                // No dedicated catalog "snackbar inset" token yet — composed
+                // from the spacing scale so the value stays grounded.
+                .padding(bottom = KnotworkTheme.spacing.sp16 + KnotworkTheme.spacing.sp8),
         ) { data ->
             KnotworkSnackbar(data = data)
         }
@@ -365,14 +368,16 @@ fun ChatHomeScreen(
                 title = { Text(stringResource(R.string.chat_console_clear_dialog_title)) },
                 text = { Text(stringResource(R.string.chat_console_clear_dialog_text)) },
                 confirmButton = {
-                    TextButton(onClick = viewModel::confirmConsoleClear) {
-                        Text(stringResource(R.string.chat_console_clear_dialog_confirm))
-                    }
+                    KnotworkTextButton(
+                        text = stringResource(R.string.chat_console_clear_dialog_confirm),
+                        onClick = viewModel::confirmConsoleClear,
+                    )
                 },
                 dismissButton = {
-                    TextButton(onClick = viewModel::dismissConsoleClear) {
-                        Text(stringResource(R.string.chat_console_clear_dialog_cancel))
-                    }
+                    KnotworkTextButton(
+                        text = stringResource(R.string.chat_console_clear_dialog_cancel),
+                        onClick = viewModel::dismissConsoleClear,
+                    )
                 },
             )
         }
@@ -382,17 +387,20 @@ fun ChatHomeScreen(
                 title = { Text(stringResource(R.string.chat_delete_dialog_title)) },
                 text = { Text(stringResource(R.string.chat_delete_dialog_text)) },
                 confirmButton = {
-                    TextButton(
+                    KnotworkTextButton(
+                        text = stringResource(R.string.chat_delete_dialog_confirm),
+                        destructive = true,
                         onClick = {
                             deleteDialogVisible = false
                             viewModel.deleteCurrentSession()
                         },
-                    ) { Text(stringResource(R.string.chat_delete_dialog_confirm)) }
+                    )
                 },
                 dismissButton = {
-                    TextButton(onClick = { deleteDialogVisible = false }) {
-                        Text(stringResource(R.string.chat_delete_dialog_cancel))
-                    }
+                    KnotworkTextButton(
+                        text = stringResource(R.string.chat_delete_dialog_cancel),
+                        onClick = { deleteDialogVisible = false },
+                    )
                 },
             )
         }
@@ -468,14 +476,17 @@ private fun RenameSessionSheetContent(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = SHEET_HORIZONTAL_PADDING_DP.dp, vertical = SHEET_VERTICAL_PADDING_DP.dp)
+            .padding(
+                horizontal = KnotworkTheme.spacing.sp6,
+                vertical = KnotworkTheme.spacing.sp4,
+            )
             .navigationBarsPadding(),
     ) {
         Text(
             text = stringResource(R.string.chat_rename_sheet_title),
             style = MaterialTheme.typography.titleMedium,
         )
-        Spacer(modifier = Modifier.height(SHEET_GAP_DP.dp))
+        Spacer(modifier = Modifier.height(KnotworkTheme.spacing.sp3))
         OutlinedTextField(
             value = value,
             onValueChange = onValueChange,
@@ -483,16 +494,19 @@ private fun RenameSessionSheetContent(
             label = { Text(stringResource(R.string.chat_rename_sheet_label)) },
             modifier = Modifier.fillMaxWidth(),
         )
-        Spacer(modifier = Modifier.height(SHEET_GAP_DP.dp))
+        Spacer(modifier = Modifier.height(KnotworkTheme.spacing.sp3))
         Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterEnd) {
             Row {
-                TextButton(onClick = onCancel) {
-                    Text(stringResource(R.string.chat_rename_sheet_cancel))
-                }
-                Spacer(modifier = Modifier.padding(horizontal = 4.dp))
-                Button(onClick = onSave, enabled = value.trim().isNotEmpty()) {
-                    Text(stringResource(R.string.chat_rename_sheet_save))
-                }
+                KnotworkTextButton(
+                    text = stringResource(R.string.chat_rename_sheet_cancel),
+                    onClick = onCancel,
+                )
+                Spacer(modifier = Modifier.padding(horizontal = KnotworkTheme.spacing.sp1))
+                KnotworkPrimaryButton(
+                    text = stringResource(R.string.chat_rename_sheet_save),
+                    onClick = onSave,
+                    enabled = value.trim().isNotEmpty(),
+                )
             }
         }
     }
@@ -529,14 +543,17 @@ private fun NewThreadPipelinePickerSheetContent(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = SHEET_HORIZONTAL_PADDING_DP.dp, vertical = SHEET_VERTICAL_PADDING_DP.dp)
+            .padding(
+                horizontal = KnotworkTheme.spacing.sp6,
+                vertical = KnotworkTheme.spacing.sp4,
+            )
             .navigationBarsPadding(),
     ) {
         Text(
             text = stringResource(R.string.chat_new_thread_sheet_title),
             style = MaterialTheme.typography.titleMedium,
         )
-        Spacer(modifier = Modifier.height(SHEET_GAP_DP.dp))
+        Spacer(modifier = Modifier.height(KnotworkTheme.spacing.sp3))
         Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
             PipelinePickerRow(
                 label = useDefaultLabel,
@@ -551,16 +568,18 @@ private fun NewThreadPipelinePickerSheetContent(
                 )
             }
         }
-        Spacer(modifier = Modifier.height(SHEET_GAP_DP.dp))
+        Spacer(modifier = Modifier.height(KnotworkTheme.spacing.sp3))
         Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterEnd) {
             Row {
-                TextButton(onClick = onCancel) {
-                    Text(stringResource(R.string.chat_new_thread_sheet_cancel))
-                }
-                Spacer(modifier = Modifier.padding(horizontal = 4.dp))
-                Button(onClick = { onCreate(selectedId) }) {
-                    Text(stringResource(R.string.chat_new_thread_sheet_create))
-                }
+                KnotworkTextButton(
+                    text = stringResource(R.string.chat_new_thread_sheet_cancel),
+                    onClick = onCancel,
+                )
+                Spacer(modifier = Modifier.padding(horizontal = KnotworkTheme.spacing.sp1))
+                KnotworkPrimaryButton(
+                    text = stringResource(R.string.chat_new_thread_sheet_create),
+                    onClick = { onCreate(selectedId) },
+                )
             }
         }
     }
@@ -602,20 +621,24 @@ private fun ModelPickerSheetContent(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = SHEET_HORIZONTAL_PADDING_DP.dp, vertical = SHEET_VERTICAL_PADDING_DP.dp)
+            .padding(
+                horizontal = KnotworkTheme.spacing.sp6,
+                vertical = KnotworkTheme.spacing.sp4,
+            )
             .navigationBarsPadding(),
     ) {
         Text(
             text = stringResource(R.string.chat_model_picker_sheet_title),
             style = MaterialTheme.typography.titleMedium,
         )
-        Spacer(modifier = Modifier.height(SHEET_GAP_DP.dp))
+        Spacer(modifier = Modifier.height(KnotworkTheme.spacing.sp3))
         if (models.isEmpty()) {
             Text(text = stringResource(R.string.chat_model_picker_empty))
-            Spacer(modifier = Modifier.height(SHEET_GAP_DP.dp))
-            Button(onClick = onOpenModels) {
-                Text(stringResource(R.string.chat_model_picker_open_models))
-            }
+            Spacer(modifier = Modifier.height(KnotworkTheme.spacing.sp3))
+            KnotworkPrimaryButton(
+                text = stringResource(R.string.chat_model_picker_open_models),
+                onClick = onOpenModels,
+            )
         } else {
             Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
                 models.forEach { model ->
@@ -672,15 +695,6 @@ internal fun visibleConsoleLogs(
 }
 
 /**
- * Bottom inset of the floating SnackbarHost relative to the screen edge.
- * Hand-tuned so the snackbar clears the composer + bottom-nav stack
- * without colliding with the inline error pill (when present). A
- * dedicated catalog spacing token is introduced once Phase 22 / Task 5
- * (Chat design audit) covers snackbar placement.
- */
-private const val SNACKBAR_BOTTOM_INSET_DP: Int = 96
-
-/**
  * Fallback subtitle rendered when the pipeline library is still empty
  * (no pipelines have been created yet). Matches the catalog default in
  * `ChatHomeViewState.pipelineName` so the TopAppBar subtitle does not
@@ -690,12 +704,3 @@ private const val PIPELINE_NAME_PLACEHOLDER: String = "default"
 
 /** MIME type used by both the export share-sheet and the import file picker. */
 private const val MIME_JSON: String = "application/json"
-
-/** Standard horizontal padding around bottom-sheet body content (matches Material 3 defaults). */
-private const val SHEET_HORIZONTAL_PADDING_DP: Int = 24
-
-/** Vertical padding around bottom-sheet body content. */
-private const val SHEET_VERTICAL_PADDING_DP: Int = 16
-
-/** Gap between stacked sections inside a bottom-sheet body. */
-private const val SHEET_GAP_DP: Int = 12

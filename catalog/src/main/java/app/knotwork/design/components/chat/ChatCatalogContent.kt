@@ -151,8 +151,6 @@ fun ChatCatalogContent() {
                 onValueChange = {},
                 onSend = {},
                 onStop = {},
-                onVoice = {},
-                onAttach = {},
                 state = ComposerState.Idle,
             )
             ChatComposer(
@@ -160,8 +158,6 @@ fun ChatCatalogContent() {
                 onValueChange = {},
                 onSend = {},
                 onStop = {},
-                onVoice = {},
-                onAttach = {},
                 state = ComposerState.Generating,
             )
             ChatComposer(
@@ -169,8 +165,6 @@ fun ChatCatalogContent() {
                 onValueChange = {},
                 onSend = {},
                 onStop = {},
-                onVoice = {},
-                onAttach = {},
                 state = ComposerState.Error(message = "Network unreachable"),
             )
         }

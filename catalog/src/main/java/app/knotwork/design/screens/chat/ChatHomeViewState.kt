@@ -218,8 +218,6 @@ class ChatHomeCallbacks(
     val onComposerValueChange: (String) -> Unit = {},
     val onSend: () -> Unit = {},
     val onStop: () -> Unit = {},
-    val onAttach: () -> Unit = {},
-    val onVoice: () -> Unit = {},
     val onOpenDrawer: () -> Unit = {},
     val onCloseDrawer: () -> Unit = {},
     val onSelectThread: (String) -> Unit = {},

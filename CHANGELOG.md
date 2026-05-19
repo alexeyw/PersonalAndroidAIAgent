@@ -15,6 +15,15 @@ details.
 
 ### Added
 
+- **Chat home — design audit & alignment** (Phase 22 / Task 5/17) — token
+  sweep over the production chat scope, drawer slide-in motion gated
+  through `respectReducedMotionTransitions`, HitlConfirm snapshot matrix
+  expanded to the 3 risk variants (`Readonly` / `Sensitive` /
+  `Destructive`), and 2 new font-scale 2.0× snapshots covering the worst
+  cases. New `ChatHomeAccessibilityTest` asserts that the TopAppBar,
+  drawer, HITL card, and console pane each publish the minimum number of
+  TalkBack-reachable nodes. Audit findings (closed / deferred) live in
+  `project_docs/ui-audit-phase22.md`.
 - **Chat home — secondary affordances** (Phase 22 / Task 4/17) — the
   drawer, top app bar, and composer-overflow callbacks that were left
   stubbed in Tasks 1–3 now drive real backend operations. Every entry
