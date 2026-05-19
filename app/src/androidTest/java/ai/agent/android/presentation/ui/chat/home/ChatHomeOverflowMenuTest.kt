@@ -19,6 +19,7 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import org.junit.Rule
 import org.junit.Test
+import app.knotwork.design.R as KnotworkR
 
 /**
  * Phase 22 / Task 4 — verifies the TopAppBar overflow menu wiring. The
@@ -86,7 +87,7 @@ class ChatHomeOverflowMenuTest {
     @Test
     fun deleteFromOverflow_removesSession() {
         val ctx = InstrumentationRegistry.getInstrumentation().targetContext
-        val overflowCd = ctx.getString(R.string.knotwork_chat_home_action_overflow)
+        val overflowCd = ctx.getString(KnotworkR.string.knotwork_chat_home_action_overflow)
         val deleteItem = ctx.getString(R.string.chat_overflow_delete)
         val confirmLabel = ctx.getString(R.string.chat_delete_dialog_confirm)
         val viewModel = mockViewModel()
