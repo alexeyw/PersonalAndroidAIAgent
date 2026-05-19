@@ -321,8 +321,6 @@ private fun ChatHomeBottomBar(state: ChatHomeViewState, callbacks: ChatHomeCallb
             onValueChange = callbacks.onComposerValueChange,
             onSend = callbacks.onSend,
             onStop = callbacks.onStop,
-            onVoice = callbacks.onVoice,
-            onAttach = callbacks.onAttach,
             state = state.composerState,
         )
     }

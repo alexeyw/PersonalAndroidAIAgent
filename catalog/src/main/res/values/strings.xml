@@ -82,11 +82,7 @@
     <!-- ============ ChatComposer ============ -->
 
     <!-- Placeholder for the multiline composer input. -->
-    <string name="knotwork_composer_placeholder">Message…</string>
-    <!-- ContentDescription for the leading attach-file icon button. -->
-    <string name="knotwork_composer_attach">Attach file</string>
-    <!-- ContentDescription for the leading voice-input icon button. -->
-    <string name="knotwork_composer_voice">Start voice input</string>
+    <string name="knotwork_composer_placeholder">Message the agent…</string>
     <!-- ContentDescription for the trailing send button (Idle / Error states). -->
     <string name="knotwork_composer_send">Send message</string>
     <!-- ContentDescription for the trailing stop button (Generating state). -->
