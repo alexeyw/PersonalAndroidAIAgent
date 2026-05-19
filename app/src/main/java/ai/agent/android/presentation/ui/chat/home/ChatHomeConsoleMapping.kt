@@ -10,9 +10,9 @@ import app.knotwork.design.components.console.ConsoleTraceSpan
 import app.knotwork.design.components.console.ConsoleVarRow
 import app.knotwork.design.components.console.SpanStatus
 import org.json.JSONObject
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 
 /**
  * Pure-Kotlin mappers that bridge the domain orchestrator output to the
@@ -29,6 +29,19 @@ import java.util.Locale
 internal const val CONSOLE_LINE_TIMESTAMP_PATTERN: String = "HH:mm:ss.SSS"
 
 /**
+ * Cached [DateTimeFormatter] instance reused for every timestamp the
+ * console mappers render. Critical for throughput: the orchestrator emits
+ * cumulative `ConsoleLog` snapshots on every pipeline step, so the mapper
+ * is invoked once per visible row per emission — `SimpleDateFormat`
+ * instantiated per call produced an O(N²) allocation bottleneck for long
+ * runs. `DateTimeFormatter` is immutable and thread-safe so a single
+ * top-level instance is safe to share. Pinned to the device default zone
+ * so the displayed clock matches the user's locale.
+ */
+private val TIMESTAMP_FORMATTER: DateTimeFormatter =
+    DateTimeFormatter.ofPattern(CONSOLE_LINE_TIMESTAMP_PATTERN).withZone(ZoneId.systemDefault())
+
+/**
  * Maps a single domain [ConsoleEvent] to the catalog [ConsoleLine] consumed
  * by the Logs tab of the chat-home console pane. The mapping is total —
  * every value of [ConsoleEventType] is covered, so the renderer never has
@@ -39,8 +52,7 @@ internal const val CONSOLE_LINE_TIMESTAMP_PATTERN: String = "HH:mm:ss.SSS"
  *   string, an attribution [ConsoleSource], and a severity [ConsoleLevel].
  */
 fun ConsoleEvent.toConsoleLine(): ConsoleLine = ConsoleLine(
-    timestamp = SimpleDateFormat(CONSOLE_LINE_TIMESTAMP_PATTERN, Locale.getDefault())
-        .format(Date(timestamp)),
+    timestamp = TIMESTAMP_FORMATTER.format(Instant.ofEpochMilli(timestamp)),
     source = type.toConsoleSource(),
     level = type.toConsoleLevel(),
     text = message,
@@ -91,8 +103,7 @@ fun traceStepToConsoleSpan(trace: AgentOrchestratorState.TraceStep, startedAtMs:
     ConsoleTraceSpan(
         name = trace.nodeName,
         durationMs = trace.durationMs,
-        startedAt = SimpleDateFormat(CONSOLE_LINE_TIMESTAMP_PATTERN, Locale.getDefault())
-            .format(Date(startedAtMs)),
+        startedAt = TIMESTAMP_FORMATTER.format(Instant.ofEpochMilli(startedAtMs)),
         status = SpanStatus.Ok,
     )
 
