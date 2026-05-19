@@ -3,6 +3,7 @@ package ai.agent.android.domain.usecases
 import ai.agent.android.data.services.AgentWorker
 import androidx.work.Constraints
 import androidx.work.Data
+import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
@@ -37,12 +38,20 @@ class ScheduleTaskUseCase @Inject constructor(private val workManager: WorkManag
             .build()
 
         if (intervalHours > 0) {
-            // Periodic task
+            // Periodic task — keyed by (prompt, intervalHours) so re-scheduling
+            // the same recurring agent task does not stack duplicate
+            // PeriodicWorkRequests in the WorkManager queue. `KEEP` means the
+            // first schedule wins; a later identical call short-circuits.
             val request = PeriodicWorkRequestBuilder<AgentWorker>(intervalHours, TimeUnit.HOURS)
                 .setInputData(inputData)
                 .setConstraints(constraints)
                 .build()
-            workManager.enqueue(request)
+            val uniqueName = "agent-periodic|${intervalHours}h|$prompt"
+            workManager.enqueueUniquePeriodicWork(
+                uniqueName,
+                ExistingPeriodicWorkPolicy.KEEP,
+                request,
+            )
             Timber.d("Scheduled periodic task every \$intervalHours hours with prompt: \$prompt")
             "Task successfully scheduled to run every \$intervalHours hours."
         } else {

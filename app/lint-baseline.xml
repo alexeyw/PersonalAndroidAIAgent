@@ -2,13 +2,6 @@
 <issues format="6" by="lint 9.2.1" type="baseline" client="gradle" dependencies="true" name="AGP (9.2.1)" variant="all" version="9.2.1">
 
     <issue
-        id="BadPeriodicWorkRequestEnqueue"
-        message="Use `enqueueUniquePeriodicWork()` instead of `enqueue()`">
-        <location
-            file="../../../../.gradle/caches/9.4.1/transforms/8169723bf09fb0454fc3084989753c8c/transformed/work-runtime-2.11.2/jars/classes.jar!/androidx/work/WorkManager.class"/>
-    </issue>
-
-    <issue
         id="RedundantLabel"
         message="Redundant label can be removed"
         errorLine1="            android:label=&quot;@string/app_name&quot;"
@@ -63,16 +56,6 @@
             column="13"/>
     </issue>
 
-    <issue
-        id="NewerVersionAvailable"
-        message="A newer version of net.zetetic:sqlcipher-android than 4.15.0 is available: 4.16.0"
-        errorLine1="sqlcipher = &quot;4.15.0&quot;"
-        errorLine2="            ~~~~~~~~">
-        <location
-            file="../gradle/libs.versions.toml"
-            line="31"
-            column="13"/>
-    </issue>
 
     <issue
         id="ConfigurationScreenWidthHeight"
