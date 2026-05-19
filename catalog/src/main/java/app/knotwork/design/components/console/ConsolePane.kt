@@ -4,6 +4,7 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -32,6 +33,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -41,6 +43,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -51,6 +55,7 @@ import app.knotwork.design.R
 import app.knotwork.design.theme.KnotworkTheme
 import app.knotwork.design.tokens.KnotworkPalette
 import app.knotwork.design.tokens.KnotworkTextStyles
+import kotlin.math.abs
 
 /** Height of the full (Partial / Full) header — drag handle + tab strip + actions row. */
 private val FullHeaderHeight = 56.dp
@@ -74,6 +79,15 @@ private val PeekHeaderBudget: Dp = DragHandleAreaHeight + PeekTabStripHeight + P
 
 /** Opacity of the drag handle relative to `consoleFg`. */
 private const val DRAG_HANDLE_ALPHA = 0.30f
+
+/**
+ * Minimum accumulated vertical-drag distance on the handle strip that
+ * counts as an intentional snap change. Drags shorter than this are
+ * treated as taps so a stray finger movement does not collapse the pane.
+ * Tuned to roughly half of [ConsoleSnap.Peek.height] so a comfortable
+ * thumb-flick crosses the threshold but a jitter does not.
+ */
+private val DragSnapThreshold = 24.dp
 
 /** Selected-tab underline thickness (used by Partial / Full headers only — Peek tabs are label-only). */
 private val TabIndicatorHeight = 2.dp
@@ -198,7 +212,13 @@ fun ConsolePane(
             .background(color = KnotworkTheme.extended.consoleBg),
     ) {
         if (snap == ConsoleSnap.Peek) {
-            PeekHeader(tab = tab, onTabChange = onTabChange, logs = logs, onSnapChange = onSnapChange)
+            PeekHeader(
+                tab = tab,
+                onTabChange = onTabChange,
+                logs = logs,
+                onSnapChange = onSnapChange,
+                onCloseConsole = onCloseConsole,
+            )
         } else {
             FullHeader(
                 snap = snap,
@@ -238,23 +258,66 @@ private fun PeekHeader(
     onTabChange: (ConsoleTab) -> Unit,
     logs: List<ConsoleLine>,
     onSnapChange: (ConsoleSnap) -> Unit,
+    onCloseConsole: () -> Unit,
 ) {
     Column(modifier = Modifier.fillMaxWidth()) {
-        DragHandleStrip(onClick = { onSnapChange(ConsoleSnap.Partial) })
+        DragHandleStrip(
+            snap = ConsoleSnap.Peek,
+            onSnapChange = onSnapChange,
+            onCloseConsole = onCloseConsole,
+            onTap = { onSnapChange(ConsoleSnap.Partial) },
+        )
         PeekTabStrip(tab = tab, onTabChange = onTabChange)
         PeekTickerRow(logs = logs)
     }
 }
 
-/** Drag handle area — 8 dp tall, the 4 dp bar centred horizontally. */
+/**
+ * Drag handle strip — 8 dp tall with a 4 dp horizontal pill.
+ *
+ * Supports two gestures:
+ *  - **Tap** dispatches [onTap]. Hosts wire this to a cycle through the
+ *    snap points (or an "expand from Peek" shortcut).
+ *  - **Vertical drag** accumulates the pointer delta and, on release,
+ *    snaps the pane to the next discrete snap in the drag direction —
+ *    or dismisses the overlay entirely when the user drags down past
+ *    the Peek snap. Tiny drags shorter than [DragSnapThreshold] are
+ *    treated as taps (no snap change).
+ */
 @Composable
-private fun DragHandleStrip(onClick: () -> Unit) {
+private fun DragHandleStrip(
+    snap: ConsoleSnap,
+    onSnapChange: (ConsoleSnap) -> Unit,
+    onCloseConsole: () -> Unit,
+    onTap: () -> Unit,
+) {
+    val thresholdPx = with(LocalDensity.current) { DragSnapThreshold.toPx() }
+    // Reset on every snap change so a drag that just landed Partial does
+    // not carry residual delta into the next gesture.
+    var accumulated by remember(snap) { mutableFloatStateOf(0f) }
     Box(
         contentAlignment = Alignment.Center,
         modifier = Modifier
             .fillMaxWidth()
             .height(DragHandleAreaHeight)
-            .clickable(onClick = onClick),
+            .pointerInput(snap) {
+                detectVerticalDragGestures(
+                    onDragStart = { accumulated = 0f },
+                    onDragCancel = { accumulated = 0f },
+                    onDragEnd = {
+                        resolveDragOutcome(
+                            snap = snap,
+                            accumulated = accumulated,
+                            thresholdPx = thresholdPx,
+                            onSnapChange = onSnapChange,
+                            onCloseConsole = onCloseConsole,
+                        )
+                        accumulated = 0f
+                    },
+                    onVerticalDrag = { _, delta -> accumulated += delta },
+                )
+            }
+            .clickable(onClick = onTap),
     ) {
         Box(
             modifier = Modifier
@@ -262,6 +325,43 @@ private fun DragHandleStrip(onClick: () -> Unit) {
                 .clip(RoundedCornerShape(percent = 50))
                 .background(color = KnotworkTheme.extended.consoleFg.copy(alpha = DRAG_HANDLE_ALPHA)),
         )
+    }
+}
+
+/**
+ * Resolves a finished vertical drag on the handle strip:
+ *
+ *  - Drag *down* further than the threshold collapses one snap; from
+ *    [ConsoleSnap.Peek] the pane is dismissed via [onCloseConsole].
+ *  - Drag *up* further than the threshold expands one snap; from
+ *    [ConsoleSnap.Full] the gesture is a no-op (already at max).
+ *  - Drags under the threshold are treated as accidental and ignored —
+ *    the user can still tap to cycle.
+ *
+ * Pulled out of the composable so the snap-cycle is unit-testable and
+ * the gesture handler stays a thin shell over the pure logic.
+ */
+internal fun resolveDragOutcome(
+    snap: ConsoleSnap,
+    accumulated: Float,
+    thresholdPx: Float,
+    onSnapChange: (ConsoleSnap) -> Unit,
+    onCloseConsole: () -> Unit,
+) {
+    if (abs(accumulated) < thresholdPx) return
+    val draggedDown = accumulated > 0f
+    if (draggedDown) {
+        when (snap) {
+            ConsoleSnap.Full -> onSnapChange(ConsoleSnap.Partial)
+            ConsoleSnap.Partial -> onSnapChange(ConsoleSnap.Peek)
+            ConsoleSnap.Peek -> onCloseConsole()
+        }
+    } else {
+        when (snap) {
+            ConsoleSnap.Peek -> onSnapChange(ConsoleSnap.Partial)
+            ConsoleSnap.Partial -> onSnapChange(ConsoleSnap.Full)
+            ConsoleSnap.Full -> Unit
+        }
     }
 }
 
@@ -304,7 +404,7 @@ private fun FullHeader(
     onCopyAll: () -> Unit,
     onClear: () -> Unit,
     onCloseConsole: () -> Unit,
-) {
+) { // onCloseConsole reaches the trailing Close icon AND the drag-handle dismiss gesture.
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -312,7 +412,10 @@ private fun FullHeader(
             .background(color = KnotworkTheme.extended.consoleBg),
     ) {
         DragHandleStrip(
-            onClick = {
+            snap = snap,
+            onSnapChange = onSnapChange,
+            onCloseConsole = onCloseConsole,
+            onTap = {
                 val next = when (snap) {
                     ConsoleSnap.Peek -> ConsoleSnap.Partial
                     ConsoleSnap.Partial -> ConsoleSnap.Full
