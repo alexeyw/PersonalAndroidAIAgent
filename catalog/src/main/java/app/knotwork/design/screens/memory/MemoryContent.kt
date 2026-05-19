@@ -374,7 +374,10 @@ private fun MemoryDetailOverlay(detail: MemoryEntryDetail, editing: Boolean, cal
                         verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp1),
                     ) {
                         detail.tags.forEach { tag ->
-                            KnotworkChip(label = tag, style = ChipStyle.Outline)
+                            // `screens/README.md §C6` calls for `KnotworkChip(Tonal)` in
+                            // the detail sheet (filled accent), distinct from the
+                            // outline-style chips on `MemoryEntryRow` list items.
+                            KnotworkChip(label = tag, style = ChipStyle.Tonal)
                         }
                     }
                 }

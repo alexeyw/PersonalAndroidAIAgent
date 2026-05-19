@@ -15,6 +15,16 @@ details.
 
 ### Added
 
+- **Memory — design audit & alignment** (Phase 22 / Task 7/17) — full 7-state
+  Roborazzi baseline (Empty / Populated / Searching / LoadingMore /
+  EntryExpanded / Editing / Error) in both themes plus a populated-pinned
+  snapshot covering the Task 6 glyph. Detail-sheet tag chips switched from
+  `ChipStyle.Outline` to `ChipStyle.Tonal` per `screens/README.md §C6`. New
+  `MemoryAccessibilityTest` enumerates the TalkBack-reachable surfaces on
+  happy path #5 (Search → expand → delete) and asserts the pinned-row
+  glyph publishes a non-blank `contentDescription` so colour is never the
+  only signal. Audit findings (closed / deferred) appended to
+  `project_docs/ui-audit-phase22.md`.
 - **Memory — edit + pin persistence** (Phase 22 / Task 6/17) — the
   detail-sheet Edit and Pin affordances on the Memory screen now drive
   real persistence instead of "coming soon" snackbars.
