@@ -15,6 +15,65 @@ details.
 
 ### Added
 
+- **Chat home — secondary affordances** (Phase 22 / Task 4/17) — the
+  drawer, top app bar, and composer-overflow callbacks that were left
+  stubbed in Tasks 1–3 now drive real backend operations. Every entry
+  point in `compose/screens/README.md §C1` is wired:
+  - **New chat** opens a `ModalBottomSheet` pipeline picker pre-selected
+    to the user's current binding; confirming persists a fresh
+    `ChatSession` and switches to it.
+  - **Rename thread** opens a rename sheet (`OutlinedTextField` +
+    Save / Cancel) driving the new
+    `ChatRepository.renameSession(sessionId, newName)`. The input is
+    trimmed and a blank Save is a no-op.
+  - **Favorite chat** persists a session-level `isStarred` flag via
+    `ChatRepository.setSessionFavorite`. Favorited chats sort to the top
+    of the drawer thread list and render a small leading star glyph next
+    to the title (new `ChatHomeThreadRow.starred` field in the catalog).
+  - **Import chat** launches `ActivityResultContracts.OpenDocument()`
+    with mime `application/json`, reads the file on `Dispatchers.IO`,
+    and forwards the payload to `ChatRepository.importChat(json)` (port
+    of the legacy JSON parser; accepts both export-shaped objects and
+    bare message arrays).
+  - **Open Settings / Models** — `ChatHomeScreen` now takes
+    `onOpenSettings` / `onOpenModels` constructor parameters wired by
+    `AppNavGraph` to the existing `NavRoutes.SETTINGS` and
+    `NavRoutes.MODELS` routes.
+  - **Model picker** opens a `ModalBottomSheet` listing the locally
+    installed LiteRT models (live from
+    `LocalModelRepository.getAllModels()`). Picking a model calls
+    `setActiveModel` + `LoadModelUseCase` to swap the inference handle;
+    the empty case surfaces an "Open Models" pill deep-linking to the
+    Models tab.
+  - **Overflow menu** (anchored `DropdownMenu` on the TopAppBar `⋮`
+    icon) drives Export chat, Delete chat (destructive `AlertDialog`),
+    and Clear console. Export emits a `ChatExportPayload` via
+    `viewModel.exportEvents`; the screen handles the
+    `Intent.ACTION_SEND` share-sheet dispatch. Delete cascades into
+    auto-selecting the next available thread, or creating a fresh
+    unbound chat when none remains.
+- **Room migration `v21 → v22`** — adds the `isStarred INTEGER NOT NULL
+  DEFAULT 0` column to `chat_sessions`. Backfilled to `0` for every
+  pre-existing row. Distinct from `MIGRATION_19_20` which introduced the
+  message-level `isStarred` on `chat_messages`.
+- **`ChatExportPayload`** relocated from `chat/legacy/` to `chat/home/`
+  so the legacy package can be deleted in Phase 22 / Task 17 without a
+  dangling import.
+- **Catalog: `ChatHomeThreadRow.starred: Boolean`** + leading star glyph
+  in `ChatHomeDrawerThreadRow`.
+
+### Changed
+
+- `ChatHomeViewModel` constructor now injects `LocalModelRepository` and
+  `LoadModelUseCase`. Both are used exclusively by the new model-picker
+  sheet — every other flow is untouched.
+- `ChatHomeStateMapping.toViewState` accepts a `threads:
+  List<ChatHomeThreadRow>` parameter so the screen can pass the live VM
+  projection. The fixtures fallback is preserved for the debug picker
+  when the drawer is forced open before any session has been persisted.
+- `ChatHomeViewModel._modelName` is now derived from the active
+  `LocalModel.name` instead of the static `"Local model"` placeholder.
+
 - **Chat home — Console pane real-time wiring** (Phase 22 / Task 3/17) —
   replaces the `sampleConsoleLines()` / `sampleConsoleVars()` /
   `sampleConsoleTraces()` fixtures with live data streamed off the agent

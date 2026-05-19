@@ -17,6 +17,7 @@ import app.knotwork.design.components.console.ConsoleTraceSpan
 import app.knotwork.design.components.console.ConsoleVarRow
 import app.knotwork.design.screens.chat.ChatHomeConsoleState
 import app.knotwork.design.screens.chat.ChatHomeMessageRow
+import app.knotwork.design.screens.chat.ChatHomeThreadRow
 import app.knotwork.design.screens.chat.ChatHomeViewState
 import app.knotwork.design.screens.chat.ChatHomeVisualState
 import org.json.JSONArray
@@ -67,6 +68,7 @@ fun ChatHomeUiState.toViewState(
     favorite: Boolean = false,
     pendingTool: HitlPending? = null,
     pendingClarification: ClarificationRequest? = null,
+    threads: List<ChatHomeThreadRow> = emptyList(),
 ): ChatHomeViewState {
     val consoleState = ChatHomeConsoleState(
         snap = consoleSnap,
@@ -175,7 +177,11 @@ fun ChatHomeUiState.toViewState(
             modelName = modelName,
             messages = messages,
             composerValue = composerValue,
-            threads = fixtures.sessionRows,
+            // Live VM-projected threads. Falls back to fixtures only when
+            // the debug picker forces DrawerOpen on an empty session list
+            // (e.g. before the first session is persisted) — production
+            // flows always have at least the active session present.
+            threads = threads.ifEmpty { fixtures.sessionRows },
             pipelineName = pipelineName,
             tokensUsed = tokensUsed,
             tokensMax = tokensMax,

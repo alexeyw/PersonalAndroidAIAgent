@@ -103,7 +103,11 @@ fun AppNavGraph(navController: NavHostController, showOnboarding: Boolean, modif
         // follow-up task after v0.1.
         composable(NavRoutes.CHAT_TAB) {
             val chatHomeViewModel: ChatHomeViewModel = hiltViewModel()
-            ChatHomeScreen(viewModel = chatHomeViewModel)
+            ChatHomeScreen(
+                viewModel = chatHomeViewModel,
+                onOpenSettings = { navController.navigate(NavRoutes.SETTINGS) },
+                onOpenModels = { navController.navigate(NavRoutes.MODELS) },
+            )
         }
         composable(
             route = NavRoutes.CHAT_WITH_THREAD,
@@ -124,7 +128,11 @@ fun AppNavGraph(navController: NavHostController, showOnboarding: Boolean, modif
                     chatHomeViewModel.selectThread(threadId)
                 }
             }
-            ChatHomeScreen(viewModel = chatHomeViewModel)
+            ChatHomeScreen(
+                viewModel = chatHomeViewModel,
+                onOpenSettings = { navController.navigate(NavRoutes.SETTINGS) },
+                onOpenModels = { navController.navigate(NavRoutes.MODELS) },
+            )
         }
 
         // ─── Pipelines tab (nested graph) ──────────────────────────────────

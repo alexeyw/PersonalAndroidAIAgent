@@ -165,4 +165,22 @@ interface ChatDao {
      */
     @Upsert
     suspend fun upsertSession(session: ChatSessionEntity)
+
+    /**
+     * Renames an existing session in place. No-op when no row matches [sessionId].
+     *
+     * @param sessionId The id of the session to rename.
+     * @param newName The new display name to persist.
+     */
+    @Query("UPDATE chat_sessions SET name = :newName WHERE id = :sessionId")
+    suspend fun renameSession(sessionId: String, newName: String)
+
+    /**
+     * Toggles the session-level favorite flag. No-op when no row matches [sessionId].
+     *
+     * @param sessionId The id of the session to update.
+     * @param starred The new favorite flag to persist.
+     */
+    @Query("UPDATE chat_sessions SET isStarred = :starred WHERE id = :sessionId")
+    suspend fun setSessionStarred(sessionId: String, starred: Boolean)
 }

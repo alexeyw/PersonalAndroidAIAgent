@@ -11,5 +11,15 @@ package ai.agent.android.domain.models
  *   returned by `PipelineRepository.getAllPipelines()`), preserving the
  *   pre-Phase-17.2 behaviour for legacy sessions and any chat that does not
  *   explicitly opt into a specific pipeline.
+ * @property isStarred Whether the user has favorited this chat. Favorited
+ *   chats sort to the top of the drawer thread list and render a small star
+ *   indicator next to the title. Persisted in `chat_sessions.isStarred`
+ *   (Phase 22 / Task 4, migration v21 → v22).
  */
-data class ChatSession(val id: String, val name: String, val updatedAt: Long, val pipelineId: String? = null)
+data class ChatSession(
+    val id: String,
+    val name: String,
+    val updatedAt: Long,
+    val pipelineId: String? = null,
+    val isStarred: Boolean = false,
+)

@@ -71,7 +71,10 @@ configured it.
 - Multi-session chats with a priority task queue and a redesigned chat
   home built on the Knotwork design system, covering the documented
   Empty / Idle / Generating / HITL / Clarification / Error / Drawer /
-  Console-expanded states deterministically.
+  Console-expanded states deterministically. Drawer / overflow secondary
+  affordances — new chat with pipeline picker, rename, favorite, JSON
+  import / export, in-chat model picker, Settings deep-link — are wired
+  directly into chat home.
 - Background execution as an Android Foreground Service with explicit idle
   and power-state management.
 - Long-term memory with semantic retrieval (RAG) over past conversations.

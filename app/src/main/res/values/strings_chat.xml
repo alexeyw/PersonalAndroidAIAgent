@@ -180,4 +180,40 @@
     <string name="chat_home_suggestion_card_2_tools">clipboard</string>
     <string name="chat_home_suggestion_card_3_title">Look up \"LiteRT delegate options\"</string>
     <string name="chat_home_suggestion_card_3_tools">search_tool</string>
+
+    <!-- Overflow menu (Phase 22 / Task 4) -->
+    <string name="chat_overflow_export">Export chat</string>
+    <string name="chat_overflow_delete">Delete chat</string>
+    <string name="chat_overflow_clear_console">Clear console</string>
+
+    <!-- Delete chat confirmation (Phase 22 / Task 4) -->
+    <string name="chat_delete_dialog_title">Delete this chat?</string>
+    <string name="chat_delete_dialog_text">This permanently removes the conversation, including every message in it. This cannot be undone.</string>
+    <string name="chat_delete_dialog_confirm">Delete</string>
+    <string name="chat_delete_dialog_cancel">Cancel</string>
+
+    <!-- Rename session sheet (Phase 22 / Task 4) -->
+    <string name="chat_rename_sheet_title">Rename chat</string>
+    <string name="chat_rename_sheet_label">Chat name</string>
+    <string name="chat_rename_sheet_save">Save</string>
+    <string name="chat_rename_sheet_cancel">Cancel</string>
+
+    <!-- New chat pipeline picker sheet (Phase 22 / Task 4) -->
+    <string name="chat_new_thread_sheet_title">Start a new chat</string>
+    <string name="chat_new_thread_sheet_create">Create</string>
+    <string name="chat_new_thread_sheet_cancel">Cancel</string>
+    <string name="chat_new_thread_sheet_use_default">Use default pipeline</string>
+
+    <!-- Model picker sheet (Phase 22 / Task 4) -->
+    <string name="chat_model_picker_sheet_title">Choose model</string>
+    <string name="chat_model_picker_empty">No models installed</string>
+    <string name="chat_model_picker_open_models">Open Models</string>
+    <string name="chat_model_picker_active_cd">Active model</string>
+
+    <!-- Import chat (Phase 22 / Task 4) -->
+    <string name="chat_import_failed">Could not import chat: %1$s</string>
+    <string name="chat_import_unreadable">Selected file could not be read.</string>
+
+    <!-- Long-press message context menu (Phase 22 / Task 4 review fix). -->
+    <string name="chat_message_rate_coming_soon">Message rating is not yet available.</string>
 </resources>

@@ -1,5 +1,6 @@
 package ai.agent.android.data.local.models
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.PrimaryKey
 
@@ -13,6 +14,9 @@ import androidx.room.PrimaryKey
  *   `null` means "use the application default pipeline"; this is the value
  *   produced by `MIGRATION_18_19` for every pre-existing row so legacy chats
  *   continue to behave exactly as before.
+ * @property isStarred Whether the user has favorited this chat. Favorited
+ *   chats sort to the top of the drawer thread list. Added in Phase 22 /
+ *   Task 4 via `MIGRATION_21_22` (default `0`).
  */
 @Entity(tableName = "chat_sessions")
 data class ChatSessionEntity(
@@ -21,4 +25,6 @@ data class ChatSessionEntity(
     val name: String,
     val updatedAt: Long,
     val pipelineId: String? = null,
+    @ColumnInfo(name = "isStarred", defaultValue = "0")
+    val isStarred: Boolean = false,
 )
