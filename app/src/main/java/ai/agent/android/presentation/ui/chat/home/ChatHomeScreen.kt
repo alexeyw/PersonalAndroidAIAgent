@@ -22,7 +22,6 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.RadioButtonChecked
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.RadioButtonUnchecked
 import androidx.compose.material3.AlertDialog
@@ -494,9 +493,15 @@ private fun NewThreadPipelinePickerSheetContent(
     onCancel: () -> Unit,
     onCreate: (String?) -> Unit,
 ) {
+    // `null` represents the "Use default pipeline" option, mirroring the
+    // ChatSession.pipelineId semantics: null means "inherit the
+    // application-wide default". The picker always surfaces this option
+    // regardless of whether the library has pipelines, so the user can
+    // intentionally leave the binding unset.
     var selectedId by remember(initialPipelineId, pipelines) {
-        mutableStateOf(initialPipelineId ?: pipelines.firstOrNull()?.id)
+        mutableStateOf(initialPipelineId)
     }
+    val useDefaultLabel = stringResource(R.string.chat_new_thread_sheet_use_default)
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -508,33 +513,18 @@ private fun NewThreadPipelinePickerSheetContent(
             style = MaterialTheme.typography.titleMedium,
         )
         Spacer(modifier = Modifier.height(SHEET_GAP_DP.dp))
-        if (pipelines.isEmpty()) {
-            // No pipelines yet — surface the "use default" affordance only;
-            // the user can still create a chat that inherits the default.
-            ListItem(
-                headlineContent = { Text(stringResource(R.string.chat_new_thread_sheet_use_default)) },
-                leadingContent = {
-                    Icon(
-                        imageVector = Icons.Filled.RadioButtonChecked,
-                        contentDescription = null,
-                    )
-                },
-                modifier = Modifier.fillMaxWidth(),
+        Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+            PipelinePickerRow(
+                label = useDefaultLabel,
+                selected = selectedId == null,
+                onClick = { selectedId = null },
             )
-        } else {
-            Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
-                pipelines.forEach { pipeline ->
-                    ListItem(
-                        headlineContent = { Text(pipeline.name) },
-                        leadingContent = {
-                            RadioButton(
-                                selected = pipeline.id == selectedId,
-                                onClick = { selectedId = pipeline.id },
-                            )
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                }
+            pipelines.forEach { pipeline ->
+                PipelinePickerRow(
+                    label = pipeline.name,
+                    selected = pipeline.id == selectedId,
+                    onClick = { selectedId = pipeline.id },
+                )
             }
         }
         Spacer(modifier = Modifier.height(SHEET_GAP_DP.dp))
@@ -550,6 +540,25 @@ private fun NewThreadPipelinePickerSheetContent(
             }
         }
     }
+}
+
+/**
+ * Single row in the new-thread pipeline picker. The whole row is
+ * clickable so the touch target spans the full sheet width — relying on
+ * the RadioButton alone leaves a thin strip that fails the 48dp
+ * accessibility guideline.
+ */
+@Composable
+private fun PipelinePickerRow(label: String, selected: Boolean, onClick: () -> Unit) {
+    ListItem(
+        headlineContent = { Text(label) },
+        leadingContent = {
+            RadioButton(selected = selected, onClick = onClick)
+        },
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick),
+    )
 }
 
 /** Minimal projection of a local model row in the model-picker sheet. */
