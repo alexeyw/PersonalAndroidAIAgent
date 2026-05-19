@@ -148,6 +148,7 @@ class AgentForegroundService : Service() {
         is AgentOrchestratorState.PipelineStage -> "Pipeline stage: ${state.stepInfo.nodeName}"
         is AgentOrchestratorState.PipelineTrace -> "Pipeline trace updated"
         is AgentOrchestratorState.ConsoleLog -> "Pipeline running..."
+        is AgentOrchestratorState.NodeIO -> "Pipeline running..."
     }
 
     private fun createNotificationChannel() {

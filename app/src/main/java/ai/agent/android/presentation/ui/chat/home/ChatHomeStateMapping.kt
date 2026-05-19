@@ -10,14 +10,11 @@ import app.knotwork.design.components.chat.ComposerState
 import app.knotwork.design.components.chat.HitlConfirmationModel
 import app.knotwork.design.components.chips.Risk
 import app.knotwork.design.components.console.ConsoleFilter
-import app.knotwork.design.components.console.ConsoleLevel
 import app.knotwork.design.components.console.ConsoleLine
 import app.knotwork.design.components.console.ConsoleSnap
-import app.knotwork.design.components.console.ConsoleSource
 import app.knotwork.design.components.console.ConsoleTab
 import app.knotwork.design.components.console.ConsoleTraceSpan
 import app.knotwork.design.components.console.ConsoleVarRow
-import app.knotwork.design.components.console.SpanStatus
 import app.knotwork.design.screens.chat.ChatHomeConsoleState
 import app.knotwork.design.screens.chat.ChatHomeMessageRow
 import app.knotwork.design.screens.chat.ChatHomeViewState
@@ -59,133 +56,134 @@ fun ChatHomeUiState.toViewState(
     pendingTypedConfirm: String = "",
     consoleSearchQuery: String? = null,
     consoleFilter: ConsoleFilter = ConsoleFilter.allOn,
+    consoleLogs: List<ConsoleLine> = emptyList(),
+    consoleVars: List<ConsoleVarRow> = emptyList(),
+    consoleTraces: List<ConsoleTraceSpan> = emptyList(),
+    consoleTab: ConsoleTab = ConsoleTab.Logs,
+    consoleSnap: ConsoleSnap? = null,
     pipelineName: String = "default",
     tokensUsed: Int = 0,
     tokensMax: Int = 0,
     favorite: Boolean = false,
     pendingTool: HitlPending? = null,
     pendingClarification: ClarificationRequest? = null,
-): ChatHomeViewState = when (this) {
-    is ChatHomeUiState.Empty -> ChatHomeViewState(
-        visualState = ChatHomeVisualState.Empty,
-        threadTitle = threadTitle,
-        modelName = modelName,
-        composerValue = composerValue,
-        samplePromptCards = fixtures.suggestionCards,
-        pipelineName = pipelineName,
-        tokensUsed = tokensUsed,
-        tokensMax = tokensMax,
-        favorite = favorite,
-        agentStatusLine = fixtures.statusIdle,
+): ChatHomeViewState {
+    val consoleState = ChatHomeConsoleState(
+        snap = consoleSnap,
+        tab = consoleTab,
+        logs = consoleLogs,
+        vars = consoleVars,
+        traces = consoleTraces,
+        filter = consoleFilter,
+        searchQuery = consoleSearchQuery,
     )
+    return when (this) {
+        is ChatHomeUiState.Empty -> ChatHomeViewState(
+            visualState = ChatHomeVisualState.Empty,
+            threadTitle = threadTitle,
+            modelName = modelName,
+            composerValue = composerValue,
+            samplePromptCards = fixtures.suggestionCards,
+            pipelineName = pipelineName,
+            tokensUsed = tokensUsed,
+            tokensMax = tokensMax,
+            favorite = favorite,
+            agentStatusLine = fixtures.statusIdle,
+            console = consoleState,
+        )
 
-    is ChatHomeUiState.Idle -> ChatHomeViewState(
-        visualState = ChatHomeVisualState.Idle,
-        threadTitle = threadTitle,
-        modelName = modelName,
-        messages = messages,
-        composerValue = composerValue,
-        pipelineName = pipelineName,
-        tokensUsed = tokensUsed,
-        tokensMax = tokensMax,
-        favorite = favorite,
-        agentStatusLine = fixtures.statusIdle,
-    )
+        is ChatHomeUiState.Idle -> ChatHomeViewState(
+            visualState = ChatHomeVisualState.Idle,
+            threadTitle = threadTitle,
+            modelName = modelName,
+            messages = messages,
+            composerValue = composerValue,
+            pipelineName = pipelineName,
+            tokensUsed = tokensUsed,
+            tokensMax = tokensMax,
+            favorite = favorite,
+            agentStatusLine = fixtures.statusIdle,
+            console = consoleState,
+        )
 
-    is ChatHomeUiState.Generating -> ChatHomeViewState(
-        visualState = ChatHomeVisualState.Generating,
-        threadTitle = threadTitle,
-        modelName = modelName,
-        messages = messages,
-        composerValue = composerValue,
-        composerState = ComposerState.Generating,
-        pipelineName = pipelineName,
-        tokensUsed = tokensUsed,
-        tokensMax = tokensMax,
-        favorite = favorite,
-        agentStatusLine = fixtures.statusGenerating,
-    )
+        is ChatHomeUiState.Generating -> ChatHomeViewState(
+            visualState = ChatHomeVisualState.Generating,
+            threadTitle = threadTitle,
+            modelName = modelName,
+            messages = messages,
+            composerValue = composerValue,
+            composerState = ComposerState.Generating,
+            pipelineName = pipelineName,
+            tokensUsed = tokensUsed,
+            tokensMax = tokensMax,
+            favorite = favorite,
+            agentStatusLine = fixtures.statusGenerating,
+            console = consoleState,
+        )
 
-    is ChatHomeUiState.HitlConfirm -> ChatHomeViewState(
-        visualState = ChatHomeVisualState.HitlConfirm,
-        threadTitle = threadTitle,
-        modelName = modelName,
-        messages = messages + (pendingTool?.let { liveHitlRow(modelName, it) } ?: hitlRow(modelName, risk)),
-        composerValue = composerValue,
-        pendingTypedConfirm = pendingTypedConfirm,
-        pipelineName = pipelineName,
-        tokensUsed = tokensUsed,
-        tokensMax = tokensMax,
-        favorite = favorite,
-        agentStatusLine = fixtures.statusHitl,
-    )
+        is ChatHomeUiState.HitlConfirm -> ChatHomeViewState(
+            visualState = ChatHomeVisualState.HitlConfirm,
+            threadTitle = threadTitle,
+            modelName = modelName,
+            messages = messages + (pendingTool?.let { liveHitlRow(modelName, it) } ?: hitlRow(modelName, risk)),
+            composerValue = composerValue,
+            pendingTypedConfirm = pendingTypedConfirm,
+            pipelineName = pipelineName,
+            tokensUsed = tokensUsed,
+            tokensMax = tokensMax,
+            favorite = favorite,
+            agentStatusLine = fixtures.statusHitl,
+            console = consoleState,
+        )
 
-    is ChatHomeUiState.Clarification -> ChatHomeViewState(
-        visualState = ChatHomeVisualState.Clarification,
-        threadTitle = threadTitle,
-        modelName = modelName,
-        messages = messages + (
-            pendingClarification?.let { liveClarificationRow(modelName, it) }
-                ?: clarificationRow(modelName)
-            ),
-        composerValue = composerValue,
-        pipelineName = pipelineName,
-        tokensUsed = tokensUsed,
-        tokensMax = tokensMax,
-        favorite = favorite,
-        agentStatusLine = fixtures.statusClarification,
-    )
+        is ChatHomeUiState.Clarification -> ChatHomeViewState(
+            visualState = ChatHomeVisualState.Clarification,
+            threadTitle = threadTitle,
+            modelName = modelName,
+            messages = messages + (
+                pendingClarification?.let { liveClarificationRow(modelName, it) }
+                    ?: clarificationRow(modelName)
+                ),
+            composerValue = composerValue,
+            pipelineName = pipelineName,
+            tokensUsed = tokensUsed,
+            tokensMax = tokensMax,
+            favorite = favorite,
+            agentStatusLine = fixtures.statusClarification,
+            console = consoleState,
+        )
 
-    is ChatHomeUiState.Error -> ChatHomeViewState(
-        visualState = ChatHomeVisualState.Error,
-        threadTitle = threadTitle,
-        modelName = modelName,
-        messages = messages,
-        composerValue = composerValue,
-        composerState = ComposerState.Error(message = message),
-        errorMessage = message,
-        pipelineName = pipelineName,
-        tokensUsed = tokensUsed,
-        tokensMax = tokensMax,
-        favorite = favorite,
-        agentStatusLine = fixtures.statusError,
-    )
+        is ChatHomeUiState.Error -> ChatHomeViewState(
+            visualState = ChatHomeVisualState.Error,
+            threadTitle = threadTitle,
+            modelName = modelName,
+            messages = messages,
+            composerValue = composerValue,
+            composerState = ComposerState.Error(message = message),
+            errorMessage = message,
+            pipelineName = pipelineName,
+            tokensUsed = tokensUsed,
+            tokensMax = tokensMax,
+            favorite = favorite,
+            agentStatusLine = fixtures.statusError,
+            console = consoleState,
+        )
 
-    is ChatHomeUiState.DrawerOpen -> ChatHomeViewState(
-        visualState = ChatHomeVisualState.DrawerOpen,
-        threadTitle = threadTitle,
-        modelName = modelName,
-        messages = messages,
-        composerValue = composerValue,
-        threads = fixtures.sessionRows,
-        pipelineName = pipelineName,
-        tokensUsed = tokensUsed,
-        tokensMax = tokensMax,
-        favorite = favorite,
-        agentStatusLine = fixtures.statusIdle,
-    )
-
-    is ChatHomeUiState.ConsoleExpanded -> ChatHomeViewState(
-        visualState = ChatHomeVisualState.ConsoleExpanded,
-        threadTitle = threadTitle,
-        modelName = modelName,
-        messages = messages,
-        composerValue = composerValue,
-        pipelineName = pipelineName,
-        tokensUsed = tokensUsed,
-        tokensMax = tokensMax,
-        favorite = favorite,
-        agentStatusLine = fixtures.statusIdle,
-        console = ChatHomeConsoleState(
-            snap = snap,
-            tab = ConsoleTab.Logs,
-            logs = sampleConsoleLines(),
-            vars = sampleConsoleVars(),
-            traces = sampleConsoleTraces(),
-            filter = consoleFilter,
-            searchQuery = consoleSearchQuery,
-        ),
-    )
+        is ChatHomeUiState.DrawerOpen -> ChatHomeViewState(
+            visualState = ChatHomeVisualState.DrawerOpen,
+            threadTitle = threadTitle,
+            modelName = modelName,
+            messages = messages,
+            composerValue = composerValue,
+            threads = fixtures.sessionRows,
+            pipelineName = pipelineName,
+            tokensUsed = tokensUsed,
+            tokensMax = tokensMax,
+            favorite = favorite,
+            agentStatusLine = fixtures.statusIdle,
+            console = consoleState,
+        )
+    }
 }
 
 /** Pre-canned baseline conversation used by every non-Empty state. */
@@ -366,50 +364,6 @@ internal fun clarificationRow(modelName: String): ChatHomeMessageRow = ChatHomeM
     metadata = ChatMetadata(timestamp = "09:16", model = modelName),
 )
 
-/** Sample console log lines surfaced when the console pane is expanded. */
-internal fun sampleConsoleLines(): List<ConsoleLine> = listOf(
-    ConsoleLine(
-        timestamp = "09:14:00.012",
-        source = ConsoleSource.RUNTIME,
-        level = ConsoleLevel.Info,
-        text = "pipeline=default loaded (3 nodes)",
-    ),
-    ConsoleLine(
-        timestamp = "09:14:00.118",
-        source = ConsoleSource.NODE,
-        level = ConsoleLevel.Trace,
-        text = "INPUT → LITE_RT prompt rendered (412 tokens)",
-    ),
-    ConsoleLine(
-        timestamp = "09:14:02.341",
-        source = ConsoleSource.TOOL,
-        level = ConsoleLevel.Warn,
-        text = "calendar.create_event awaiting user approval (Sensitive)",
-    ),
-)
-
-/** Sample console var rows surfaced inside the Vars tab. */
-internal fun sampleConsoleVars(): List<ConsoleVarRow> = listOf(
-    ConsoleVarRow(node = "lite_rt#1", key = "temperature", valueJson = "0.7"),
-    ConsoleVarRow(node = "lite_rt#1", key = "topP", valueJson = "0.9"),
-)
-
-/** Sample console trace spans surfaced inside the Traces tab. */
-internal fun sampleConsoleTraces(): List<ConsoleTraceSpan> = listOf(
-    ConsoleTraceSpan(
-        name = "lite_rt#1.generate",
-        durationMs = 1840L,
-        startedAt = "09:14:00.118",
-        status = SpanStatus.Ok,
-    ),
-    ConsoleTraceSpan(
-        name = "calendar.create_event",
-        durationMs = 86L,
-        startedAt = "09:14:02.341",
-        status = SpanStatus.Ok,
-    ),
-)
-
 /**
  * Stable identifiers for every entry in the debug state picker. Kept apart
  * from [ChatHomeUiState] so adding a state to the picker does not force
@@ -425,7 +379,6 @@ internal object DebugStateIds {
     const val CLARIFICATION: String = "clarification"
     const val ERROR: String = "error"
     const val DRAWER_OPEN: String = "drawer_open"
-    const val CONSOLE_PEEK: String = "console_peek"
     const val CONSOLE_PARTIAL: String = "console_partial"
     const val CONSOLE_FULL: String = "console_full"
 }
@@ -441,8 +394,19 @@ internal fun debugStateForId(id: String): ChatHomeUiState? = when (id) {
     DebugStateIds.CLARIFICATION -> ChatHomeUiState.Clarification
     DebugStateIds.ERROR -> ChatHomeUiState.Error(message = "Something went wrong while generating the reply.")
     DebugStateIds.DRAWER_OPEN -> ChatHomeUiState.DrawerOpen
-    DebugStateIds.CONSOLE_PEEK -> ChatHomeUiState.ConsoleExpanded(ConsoleSnap.Peek)
-    DebugStateIds.CONSOLE_PARTIAL -> ChatHomeUiState.ConsoleExpanded(ConsoleSnap.Partial)
-    DebugStateIds.CONSOLE_FULL -> ChatHomeUiState.ConsoleExpanded(ConsoleSnap.Full)
+    // Console snaps are handled separately via [debugConsoleSnapForId] —
+    // they no longer correspond to a top-level [ChatHomeUiState] because
+    // the console is rendered as an independent overlay.
+    else -> null
+}
+
+/**
+ * Resolves a [DebugStateIds] entry into the [ConsoleSnap] the debug
+ * picker should open the console at. Returns `null` for non-console
+ * picker entries — the caller falls back to [debugStateForId] for those.
+ */
+internal fun debugConsoleSnapForId(id: String): ConsoleSnap? = when (id) {
+    DebugStateIds.CONSOLE_PARTIAL -> ConsoleSnap.Partial
+    DebugStateIds.CONSOLE_FULL -> ConsoleSnap.Full
     else -> null
 }

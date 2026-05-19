@@ -119,6 +119,9 @@
     <!-- Snackbar feedback -->
     <string name="chat_snackbar_copied">Copied</string>
     <string name="chat_snackbar_console_copied">Console log copied</string>
+    <string name="chat_snackbar_console_line_copied">Line copied</string>
+    <string name="chat_console_clear_dialog_confirm">Clear</string>
+    <string name="chat_console_clear_dialog_cancel">Cancel</string>
 
     <!-- Session naming -->
     <string name="chat_session_imported_default_name">Imported Chat</string>
@@ -137,7 +140,6 @@
     <string name="chat_home_debug_state_clarification">Clarification</string>
     <string name="chat_home_debug_state_error">Error</string>
     <string name="chat_home_debug_state_drawer_open">Drawer open</string>
-    <string name="chat_home_debug_state_console_peek">Console — Peek</string>
     <string name="chat_home_debug_state_console_partial">Console — Partial</string>
     <string name="chat_home_debug_state_console_full">Console — Full</string>
 

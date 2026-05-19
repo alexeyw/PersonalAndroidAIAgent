@@ -15,6 +15,113 @@ details.
 
 ### Added
 
+- **Chat home — Console pane real-time wiring** (Phase 22 / Task 3/17) —
+  replaces the `sampleConsoleLines()` / `sampleConsoleVars()` /
+  `sampleConsoleTraces()` fixtures with live data streamed off the agent
+  orchestrator. The console pane now reflects the real pipeline run on
+  every step and survives Clear / Copy / tab-change interactions across
+  process death.
+  - New domain state `AgentOrchestratorState.NodeIO(nodeId, nodeType,
+    input, output)`, emitted by `GraphExecutionEngine` after every
+    non-`INPUT` / non-`OUTPUT` node completes (right after the existing
+    `PipelineTrace` emission). Powers the Vars tab of the console pane —
+    the VM aggregates emissions into a `LinkedHashMap<nodeId, NodeIO>`
+    so repeated invocations of the same node id overwrite (rather than
+    duplicate) Vars rows.
+  - New pure-Kotlin `ChatHomeConsoleMapping.kt`: `ConsoleEvent →
+    ConsoleLine` (timestamp `HH:mm:ss.SSS`, source resolution and severity
+    mapping covering every `ConsoleEventType`), `TraceStep →
+    ConsoleTraceSpan`, `NodeIO → List<ConsoleVarRow>` with
+    `JSONObject.quote`-escaped values.
+  - `ChatHomeViewModel` extensions: `consoleLines`, `consoleVars`,
+    `consoleTraces`, `consoleTab`, `consoleClearConfirmRequested`,
+    `consoleSnackbarEvents` flows plus public methods
+    `onConsoleTabChange`, `requestConsoleClear`,
+    `confirmConsoleClear`, `dismissConsoleClear`,
+    `signalConsoleLineCopied`, `signalConsoleAllCopied`,
+    `buildConsoleLineCopyPayload`, `buildConsoleAllCopyPayload`. The
+    `consoleClearBaseline` logic from the legacy `ChatViewModel` is
+    preserved verbatim so a mid-run `Clear` survives the next cumulative
+    engine snapshot.
+  - `SettingsRepository` gains
+    `consolePreferredConsoleTabName: Flow<String>` +
+    `setConsolePreferredConsoleTabName(name: String)`. The VM hydrates
+    the active tab from this flow at init and writes through on
+    `onConsoleTabChange`, so the user's chosen tab survives process
+    death. Domain stays free of `:catalog` imports — the enum name is
+    stored as a raw string and decoded at the presentation boundary.
+  - `ChatHomeScreen` wires the four previously-stubbed callbacks:
+    `onConsoleCopyLine` writes the plain-text payload via
+    `LocalClipboardManager` and raises a Snackbar; `onConsoleCopyAll`
+    pre-filters the buffer through the active `ConsoleFilter` +
+    search-query so the clipboard mirrors exactly what the user sees;
+    `onConsoleClear` opens a destructive `AlertDialog` and only advances
+    the baseline once the user confirms; `onConsoleTabChange` persists
+    through the VM. The Clear and Line-copied snackbars use new
+    `chat_console_clear_dialog_confirm` / `chat_console_clear_dialog_cancel`
+    / `chat_snackbar_console_line_copied` strings.
+  - `ChatHomeStateMapping.toViewState` now accepts `consoleLogs`,
+    `consoleVars`, `consoleTraces`, `consoleTab` and forwards them to
+    `ChatHomeConsoleState`. The old `sampleConsoleLines()` /
+    `sampleConsoleVars()` / `sampleConsoleTraces()` fixtures are
+    deleted.
+  - **Console pane is now an independent overlay** —
+    `ChatHomeConsoleState.snap` becomes nullable (`null` = closed);
+    catalog `ChatHomeContent` renders the overlay whenever
+    `state.console.snap != null` instead of gating on
+    `visualState == ConsoleExpanded`. `ChatHomeUiState.ConsoleExpanded`
+    is removed from the sealed hierarchy. The VM exposes a dedicated
+    `consoleSnap: StateFlow<ConsoleSnap?>` that is orthogonal to the
+    chat state machine, so the pane survives `Generating →
+    HitlConfirm → Clarification → Completed / Error` transitions
+    instead of being closed by every terminal emission. The debug
+    state picker now routes its `CONSOLE_*` entries through
+    `debugConsoleSnapForId` + `openConsole(snap)`.
+  - Console `Close` icon in the Partial / Full header now actually
+    dismisses the overlay (catalog `ConsolePane` gains a dedicated
+    `onCloseConsole` parameter); previously it only snapped the pane
+    down to `Peek`.
+  - `FullTabStrip` columns widened from 72 dp → 88 dp + `maxLines = 1`
+    so the longest tab label (`TRACES`) no longer wraps onto two lines.
+  - Pill-tap affordance: tapping the agent-status pill above the
+    composer opens the console pane at the Partial snap (catalog
+    `ChatHomeCallbacks.onAgentStatusClick`, screen routes to
+    `viewModel.openConsole()`).
+  - **Console hosted in M3 `ModalBottomSheet`** — the hand-rolled
+    overlay (custom scrim + `Modifier.height(snap.height)` +
+    self-implemented `detectVerticalDragGestures`) is replaced with
+    Material 3's anchored-draggable bottom sheet. We get smooth
+    snap-transition animations, fling-to-snap physics, drag-from-body
+    (not just the handle), tap-outside-to-dismiss, swipe-down-to-close,
+    and a `BottomSheetDefaults.DragHandle` that announces correctly
+    via TalkBack — all for free. The console keeps its "always dark"
+    identity via overridden `containerColor` / `contentColor`. The
+    sheet's `SheetState` is bidirectionally synced with the host's
+    `consoleSnap` flow: programmatic `partialExpand()` /
+    `expand()` calls follow VM-driven changes, and user-driven snap
+    moves are mirrored back through `onConsoleSnapChange`.
+  - **Engine emits no longer conflated.** The per-session orchestrator
+    flow in `TaskQueueManagerImpl` switched from `MutableStateFlow` to
+    `MutableSharedFlow(replay = 1, extraBufferCapacity = 256)`. The
+    `StateFlow` was conflated — when `GraphExecutionEngine` emitted
+    `PipelineTrace` immediately followed by `NodeIO` (two `emit`
+    calls back-to-back), the second `.value =` overwrote the first
+    before the chat-home collector resumed on the main dispatcher, so
+    the Traces tab stayed empty even when the Vars tab populated
+    correctly. `SharedFlow` with `replay = 1` preserves the legacy
+    "subscriber sees latest state on attach" behaviour while the 256-
+    event buffer guarantees no engine emit is silently dropped. The
+    `enqueueTask` / `processTask` / `updateActiveSessionsState` /
+    `evictOldestTerminalSession` paths are migrated to
+    `emit(...)` + `replayCache.lastOrNull()`.
+  - **`ConsoleSnap.Peek` retired.** The 44 dp ticker strip duplicated
+    the agent-status pill above the composer and proved a dead-end UX
+    in user testing. The enum is now `Partial` ↔ `PartiallyExpanded` +
+    `Full` ↔ `Expanded`, matching M3's native `SheetValue`. The
+    debug-picker `CONSOLE_PEEK` entry, the `PeekHeader` /
+    `PeekTabStrip` / `PeekTickerRow` / `DragHandleStrip` composables,
+    and the custom `resolveDragOutcome` snap-cycle helper are deleted.
+
 - **Chat home — HITL and Clarification real-time wiring** (Phase 22 /
   Task 2/17) — replaces the `forceState(...)` stubs in
   `ChatHomeScreen.onHitlAllowOnce` / `onHitlReject` / `onClarificationReply`

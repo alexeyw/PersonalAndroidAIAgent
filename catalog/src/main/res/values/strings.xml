@@ -457,5 +457,7 @@
     <string name="knotwork_chat_home_error_retry">Retry</string>
     <!-- Debug state picker label (visible only in debug builds). -->
     <string name="knotwork_chat_home_debug_picker_title">Debug state</string>
+    <!-- Content description for the agent-status pill above the composer — tapping it opens the console pane. -->
+    <string name="knotwork_chat_home_agent_status_open_console_cd">Open console</string>
 
 </resources>

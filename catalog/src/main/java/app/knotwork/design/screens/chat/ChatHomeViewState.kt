@@ -110,7 +110,16 @@ data class ChatHomeSamplePromptCard(val id: String, val title: String, val tools
  * @property filter source filter applied to [logs].
  */
 data class ChatHomeConsoleState(
-    val snap: ConsoleSnap = ConsoleSnap.Peek,
+    /**
+     * When non-null the console pane is rendered as an overlay anchored to
+     * the bottom of the chat surface at the requested snap height. `null`
+     * means the pane is closed — the orthogonal sealed [ChatHomeVisualState]
+     * keeps its meaning and the body underneath renders unchanged. The
+     * console is therefore truly independent of the chat state machine
+     * (Generating / HitlConfirm / Clarification / Idle / Empty / Error all
+     * stay visible behind the pane).
+     */
+    val snap: ConsoleSnap? = null,
     val tab: ConsoleTab = ConsoleTab.Logs,
     val logs: List<ConsoleLine> = emptyList(),
     val vars: List<ConsoleVarRow> = emptyList(),
@@ -231,6 +240,13 @@ class ChatHomeCallbacks(
     val onImportChat: () -> Unit = {},
     val onOpenSettings: () -> Unit = {},
     val onSamplePromptCard: (ChatHomeSamplePromptCard) -> Unit = {},
+    /**
+     * Fired when the user taps the agent-status pill above the composer.
+     * Hosts wire this to opening the console pane at the Partial snap so
+     * the user can drill into pipeline activity in one tap (the pill
+     * itself surfaces only a one-line summary).
+     */
+    val onAgentStatusClick: () -> Unit = {},
 )
 
 /** Convenience factory returning a callbacks bundle that ignores every event. */

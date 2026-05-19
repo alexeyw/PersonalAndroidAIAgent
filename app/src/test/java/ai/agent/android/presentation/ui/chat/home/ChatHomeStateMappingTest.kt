@@ -3,7 +3,14 @@ package ai.agent.android.presentation.ui.chat.home
 import app.knotwork.design.components.chat.ChatContent
 import app.knotwork.design.components.chat.ComposerState
 import app.knotwork.design.components.chips.Risk
+import app.knotwork.design.components.console.ConsoleLevel
+import app.knotwork.design.components.console.ConsoleLine
 import app.knotwork.design.components.console.ConsoleSnap
+import app.knotwork.design.components.console.ConsoleSource
+import app.knotwork.design.components.console.ConsoleTab
+import app.knotwork.design.components.console.ConsoleTraceSpan
+import app.knotwork.design.components.console.ConsoleVarRow
+import app.knotwork.design.components.console.SpanStatus
 import app.knotwork.design.screens.chat.ChatHomeVisualState
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -118,13 +125,48 @@ class ChatHomeStateMappingTest {
     }
 
     @Test
-    fun `ConsoleExpanded threads the snap point through and populates the panel`() {
-        val view = ChatHomeUiState.ConsoleExpanded(ConsoleSnap.Full).toViewState(title, model)
-        assertEquals(ChatHomeVisualState.ConsoleExpanded, view.visualState)
+    fun `consoleSnap threads through and forwards supplied console data regardless of state`() {
+        val logs = listOf(
+            ConsoleLine(
+                timestamp = "09:14:00.000",
+                source = ConsoleSource.NODE,
+                level = ConsoleLevel.Trace,
+                text = "▶ LITE_RT",
+            ),
+        )
+        val vars = listOf(ConsoleVarRow(node = "LITE_RT#a", key = "input", valueJson = "\"x\""))
+        val traces = listOf(
+            ConsoleTraceSpan(name = "LITE_RT", durationMs = 10L, startedAt = "09:14:00.000", status = SpanStatus.Ok),
+        )
+
+        // Console pane open while the chat state is Generating — overlay
+        // and underlying state are orthogonal post-refactor.
+        val view = ChatHomeUiState.Generating.toViewState(
+            threadTitle = title,
+            modelName = model,
+            consoleLogs = logs,
+            consoleVars = vars,
+            consoleTraces = traces,
+            consoleTab = ConsoleTab.Traces,
+            consoleSnap = ConsoleSnap.Full,
+        )
+
+        assertEquals(ChatHomeVisualState.Generating, view.visualState)
         assertEquals(ConsoleSnap.Full, view.console.snap)
-        assertTrue(view.console.logs.isNotEmpty())
-        assertTrue(view.console.vars.isNotEmpty())
-        assertTrue(view.console.traces.isNotEmpty())
+        assertEquals(ConsoleTab.Traces, view.console.tab)
+        assertEquals(logs, view.console.logs)
+        assertEquals(vars, view.console.vars)
+        assertEquals(traces, view.console.traces)
+    }
+
+    @Test
+    fun `console snap null means the overlay is closed`() {
+        val view = ChatHomeUiState.Idle.toViewState(title, model)
+        assertNull(view.console.snap)
+        assertTrue(view.console.logs.isEmpty())
+        assertTrue(view.console.vars.isEmpty())
+        assertTrue(view.console.traces.isEmpty())
+        assertEquals(ConsoleTab.Logs, view.console.tab)
     }
 
     @Test
@@ -137,7 +179,6 @@ class ChatHomeStateMappingTest {
             ChatHomeUiState.Clarification,
             ChatHomeUiState.Error("boom"),
             ChatHomeUiState.DrawerOpen,
-            ChatHomeUiState.ConsoleExpanded(ConsoleSnap.Peek),
         )
         states.forEach { state ->
             val view = state.toViewState(title, model, composerValue = "draft")
@@ -146,7 +187,7 @@ class ChatHomeStateMappingTest {
     }
 
     @Test
-    fun `debugStateForId maps every documented id back to a concrete state`() {
+    fun `debugStateForId maps top-level state ids back to concrete states`() {
         val ids = listOf(
             DebugStateIds.EMPTY,
             DebugStateIds.IDLE,
@@ -157,13 +198,22 @@ class ChatHomeStateMappingTest {
             DebugStateIds.CLARIFICATION,
             DebugStateIds.ERROR,
             DebugStateIds.DRAWER_OPEN,
-            DebugStateIds.CONSOLE_PEEK,
-            DebugStateIds.CONSOLE_PARTIAL,
-            DebugStateIds.CONSOLE_FULL,
         )
         ids.forEach { id ->
             assertNotNull("missing mapping for $id", debugStateForId(id))
         }
+        // Console picker ids no longer round-trip through `debugStateForId`
+        // — the console is an independent overlay and is opened via
+        // `debugConsoleSnapForId`.
+        assertNull(debugStateForId(DebugStateIds.CONSOLE_PARTIAL))
+        assertNull(debugStateForId(DebugStateIds.CONSOLE_FULL))
         assertNull(debugStateForId("not_a_real_id"))
+    }
+
+    @Test
+    fun `debugConsoleSnapForId maps console picker ids to snaps`() {
+        assertEquals(ConsoleSnap.Partial, debugConsoleSnapForId(DebugStateIds.CONSOLE_PARTIAL))
+        assertEquals(ConsoleSnap.Full, debugConsoleSnapForId(DebugStateIds.CONSOLE_FULL))
+        assertNull(debugConsoleSnapForId(DebugStateIds.EMPTY))
     }
 }

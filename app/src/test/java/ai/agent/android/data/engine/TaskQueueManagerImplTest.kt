@@ -78,7 +78,11 @@ class TaskQueueManagerImplTest {
     fun `given all sessions are active when at capacity then no session is evicted`() {
         repeat(20) { i ->
             taskQueueManager.observeTaskState("session_$i")
-            taskQueueManager.sessionStates["session_$i"]?.value = AgentOrchestratorState.Loading
+            // Push the session into a non-terminal state. The per-session
+            // flow is a SharedFlow now (was a StateFlow); `tryEmit`
+            // replaces the `.value =` setter while keeping the test free
+            // of suspending calls.
+            taskQueueManager.sessionStates["session_$i"]?.tryEmit(AgentOrchestratorState.Loading)
         }
         taskQueueManager.observeTaskState("session_20")
         // No terminal session to evict, so size grows beyond MAX_SESSION_STATES

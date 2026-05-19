@@ -1,7 +1,6 @@
 package ai.agent.android.presentation.ui.chat.home
 
 import app.knotwork.design.components.chips.Risk
-import app.knotwork.design.components.console.ConsoleSnap
 
 /**
  * Sealed UI state for the redesigned chat home (`compose/screens/README.md
@@ -49,11 +48,4 @@ sealed interface ChatHomeUiState {
 
     /** Alternate nav drawer over the chat surface. */
     data object DrawerOpen : ChatHomeUiState
-
-    /**
-     * Console pane expanded over the chat surface.
-     *
-     * @property snap snap position the pane should adopt on first render.
-     */
-    data class ConsoleExpanded(val snap: ConsoleSnap) : ChatHomeUiState
 }

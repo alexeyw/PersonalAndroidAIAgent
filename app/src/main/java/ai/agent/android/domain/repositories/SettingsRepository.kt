@@ -214,6 +214,22 @@ interface SettingsRepository {
     suspend fun setCurrentChatSessionId(sessionId: String?)
 
     /**
+     * A [Flow] emitting the user's last-selected console tab on the chat
+     * home pane. Stored as a raw string (the enum name from
+     * `app.knotwork.design.components.console.ConsoleTab`) so the domain
+     * layer stays free of `:catalog` imports. Defaults to `"Logs"` for a
+     * fresh install.
+     */
+    val consolePreferredConsoleTabName: Flow<String>
+
+    /**
+     * Persists the user's chosen console tab so it survives process death.
+     *
+     * @param name Enum name of the chosen tab (`Logs` / `Vars` / `Traces`).
+     */
+    suspend fun setConsolePreferredConsoleTabName(name: String)
+
+    /**
      * A [Flow] representing the maximum number of memory chunks to load for similarity search.
      */
     val maxMemoryChunksForSearch: Flow<Int>

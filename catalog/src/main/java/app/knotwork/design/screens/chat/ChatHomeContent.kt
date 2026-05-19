@@ -43,18 +43,24 @@ import androidx.compose.material.icons.outlined.Hub
 import androidx.compose.material.icons.outlined.Menu
 import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.outlined.StarBorder
+import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SheetValue
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -63,6 +69,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -76,9 +83,11 @@ import app.knotwork.design.components.chat.ChatMessage
 import app.knotwork.design.components.chips.KnotworkChip
 import app.knotwork.design.components.chips.Risk
 import app.knotwork.design.components.console.ConsolePane
+import app.knotwork.design.components.console.ConsoleSnap
 import app.knotwork.design.components.misc.KnotworkLoader
 import app.knotwork.design.theme.KnotworkTheme
 import app.knotwork.design.tokens.KnotworkTextStyles
+import kotlinx.coroutines.launch
 
 /** Horizontal padding around chat-message rows (per `screens/README.md §C1`). */
 private val ChatHorizontalPadding = 16.dp
@@ -92,8 +101,12 @@ private val DrawerWidth = 320.dp
 /** Alpha of the scrim painted over the chat surface while the drawer is open. */
 private const val DRAWER_SCRIM_ALPHA = 0.32f
 
-/** Alpha of the scrim painted over the chat surface while the console pane is expanded. */
-private const val CONSOLE_SCRIM_ALPHA = 0.20f
+/**
+ * Alpha applied to the M3 `BottomSheetDefaults.DragHandle` so it picks up
+ * the console-foreground colour at the same opacity as the legacy
+ * hand-rolled handle (`DRAG_HANDLE_ALPHA` in the deleted code path).
+ */
+private const val CONSOLE_DRAG_HANDLE_ALPHA = 0.30f
 
 /**
  * Stateless Knotwork Chat home — the primary user-facing surface. Drives the
@@ -148,7 +161,7 @@ fun ChatHomeContent(
         if (state.visualState == ChatHomeVisualState.DrawerOpen) {
             ChatHomeDrawerOverlay(state = state, callbacks = callbacks)
         }
-        if (state.visualState == ChatHomeVisualState.ConsoleExpanded) {
+        if (state.console.snap != null) {
             ChatHomeConsoleOverlay(state = state, callbacks = callbacks)
         }
     }
@@ -271,7 +284,7 @@ private const val TOKEN_FORMAT_THRESHOLD = 1000
 private fun ChatHomeBottomBar(state: ChatHomeViewState, callbacks: ChatHomeCallbacks) {
     Column {
         if (state.agentStatusLine != null) {
-            AgentStatusPill(text = state.agentStatusLine)
+            AgentStatusPill(text = state.agentStatusLine, onClick = callbacks.onAgentStatusClick)
         }
         ChatComposer(
             value = state.composerValue,
@@ -290,9 +303,16 @@ private fun ChatHomeBottomBar(state: ChatHomeViewState, callbacks: ChatHomeCallb
  * surface, monospace text, leading `[TAG]` token tinted brand-primary.
  * Parses a leading `[X]` segment as the tag colour cue — anything else
  * renders as one continuous mono line.
+ *
+ * Tappable: the pill is the user-facing affordance for opening the
+ * console pane (Phase 22 / Task 3). The host wires [onClick] to its
+ * `openConsole(Partial)` callback. The whole row carries Role.Button +
+ * `contentDescription` so TalkBack announces it as a button rather than
+ * two separate text labels.
  */
 @Composable
-private fun AgentStatusPill(text: String) {
+private fun AgentStatusPill(text: String, onClick: () -> Unit) {
+    val openConsoleCd = stringResource(R.string.knotwork_chat_home_agent_status_open_console_cd)
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp2),
@@ -304,6 +324,8 @@ private fun AgentStatusPill(text: String) {
             )
             .clip(KnotworkTheme.shapes.sm)
             .background(color = KnotworkTheme.extended.consoleBg)
+            .clickable(role = Role.Button, onClick = onClick)
+            .semantics { contentDescription = openConsoleCd }
             .padding(
                 horizontal = KnotworkTheme.spacing.sp3,
                 vertical = KnotworkTheme.spacing.sp2,
@@ -800,43 +822,96 @@ private fun DrawerFooterRow(icon: ImageVector, title: String, subtitle: String, 
 /** Diameter of the leading status dot rendered next to each session row. */
 private val DRAWER_STATUS_DOT_SIZE = 8.dp
 
-/** [ConsolePane] overlay anchored to the bottom of the chat surface. */
+/**
+ * Material 3 [ModalBottomSheet] hosting the stateless [ConsolePane].
+ *
+ * The sheet owns:
+ *  - the drag handle (`BottomSheetDefaults.DragHandle`);
+ *  - anchored-draggable physics — drag-to-snap, fling-to-snap, swipe-down
+ *    to dismiss;
+ *  - the scrim above the sheet and tap-outside-to-dismiss;
+ *  - enter / exit animations.
+ *
+ * The host's [ChatHomeConsoleState.snap] drives the sheet via
+ * `sheetState.partialExpand()` / `expand()`; user-driven snap changes are
+ * mirrored back via [ChatHomeCallbacks.onConsoleSnapChange]. The same
+ * channel handles dismiss → [ChatHomeCallbacks.onCloseConsole].
+ *
+ * The console keeps its "always dark" identity by overriding
+ * `containerColor` / `contentColor` with the Knotwork console tokens
+ * regardless of the system theme.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ChatHomeConsoleOverlay(state: ChatHomeViewState, callbacks: ChatHomeCallbacks) {
-    Column(modifier = Modifier.fillMaxSize()) {
-        Box(
-            modifier = Modifier
-                .weight(1f)
-                .fillMaxWidth()
-                .background(color = Color.Black.copy(alpha = CONSOLE_SCRIM_ALPHA))
-                // Tapping the scrim above the console pane collapses it
-                // back to the underlying chat surface. Without this the
-                // tap would fall through to the chat list and could
-                // trigger long-press menus on hidden bubbles.
-                .scrimClickable(onClick = callbacks.onCloseConsole),
-        )
-        // Absorb taps inside the console pane so they don't reach the
-        // scrim above; the pane has its own header / drag-handle actions.
-        Box(modifier = Modifier.absorbClicks()) {
-            ConsolePane(
-                snap = state.console.snap,
-                onSnapChange = callbacks.onConsoleSnapChange,
-                tab = state.console.tab,
-                onTabChange = callbacks.onConsoleTabChange,
-                logs = state.console.logs,
-                vars = state.console.vars,
-                traces = state.console.traces,
-                filter = state.console.filter,
-                onFilterChange = callbacks.onConsoleFilterChange,
-                onSearch = callbacks.onConsoleSearch,
-                onCopyAll = callbacks.onConsoleCopyAll,
-                onClear = callbacks.onConsoleClear,
-                searchQuery = state.console.searchQuery,
-                onSearchQueryChange = callbacks.onConsoleSearchQueryChange,
-                onCopyLine = callbacks.onConsoleCopyLine,
-                onFilterByLineSource = callbacks.onConsoleFilterByLineSource,
-            )
+    val targetSnap = state.console.snap ?: return
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = false)
+    val scope = rememberCoroutineScope()
+
+    // Pull the sheet toward the host-requested snap. Anchors may not be
+    // wired the first time this LaunchedEffect runs (sheet hasn't been
+    // measured yet) — we retry on every recomposition that changes the
+    // target snap, so the host can request Full immediately after open
+    // without race conditions.
+    LaunchedEffect(targetSnap, sheetState.hasPartiallyExpandedState) {
+        when (targetSnap) {
+            ConsoleSnap.Partial ->
+                if (sheetState.hasPartiallyExpandedState && sheetState.currentValue != SheetValue.PartiallyExpanded) {
+                    sheetState.partialExpand()
+                }
+            ConsoleSnap.Full ->
+                if (sheetState.currentValue != SheetValue.Expanded) {
+                    sheetState.expand()
+                }
         }
+    }
+
+    // Mirror user-driven snap changes (drag + fling) back to the host so
+    // the persisted snap survives recomposition.
+    LaunchedEffect(sheetState.currentValue) {
+        val newSnap = when (sheetState.currentValue) {
+            SheetValue.PartiallyExpanded -> ConsoleSnap.Partial
+            SheetValue.Expanded -> ConsoleSnap.Full
+            SheetValue.Hidden -> null
+        }
+        if (newSnap != null && newSnap != targetSnap) {
+            callbacks.onConsoleSnapChange(newSnap)
+        }
+    }
+
+    ModalBottomSheet(
+        onDismissRequest = callbacks.onCloseConsole,
+        sheetState = sheetState,
+        containerColor = KnotworkTheme.extended.consoleBg,
+        contentColor = KnotworkTheme.extended.consoleFg,
+        dragHandle = {
+            BottomSheetDefaults.DragHandle(
+                color = KnotworkTheme.extended.consoleFg.copy(alpha = CONSOLE_DRAG_HANDLE_ALPHA),
+            )
+        },
+    ) {
+        ConsolePane(
+            tab = state.console.tab,
+            onTabChange = callbacks.onConsoleTabChange,
+            logs = state.console.logs,
+            vars = state.console.vars,
+            traces = state.console.traces,
+            filter = state.console.filter,
+            onFilterChange = callbacks.onConsoleFilterChange,
+            onSearch = callbacks.onConsoleSearch,
+            onCopyAll = callbacks.onConsoleCopyAll,
+            onClear = callbacks.onConsoleClear,
+            onCloseConsole = {
+                // Trigger the sheet's hide animation; the resulting
+                // `Hidden` state propagates through `onDismissRequest`
+                // which calls the host's `onCloseConsole`.
+                scope.launch { sheetState.hide() }
+            },
+            searchQuery = state.console.searchQuery,
+            onSearchQueryChange = callbacks.onConsoleSearchQueryChange,
+            onCopyLine = callbacks.onConsoleCopyLine,
+            onFilterByLineSource = callbacks.onConsoleFilterByLineSource,
+        )
     }
 }
 

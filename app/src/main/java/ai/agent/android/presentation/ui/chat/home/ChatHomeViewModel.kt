@@ -5,6 +5,7 @@ import ai.agent.android.domain.models.AgentOrchestratorState
 import ai.agent.android.domain.models.ChatMessage
 import ai.agent.android.domain.models.ChatSession
 import ai.agent.android.domain.models.ClarificationRequest
+import ai.agent.android.domain.models.ConsoleEvent
 import ai.agent.android.domain.models.Role
 import ai.agent.android.domain.models.ToolRisk
 import ai.agent.android.domain.repositories.ChatRepository
@@ -21,8 +22,12 @@ import app.knotwork.design.components.chat.ChatMetadata
 import app.knotwork.design.components.chat.ChatRole
 import app.knotwork.design.components.chips.Risk
 import app.knotwork.design.components.console.ConsoleFilter
+import app.knotwork.design.components.console.ConsoleLine
 import app.knotwork.design.components.console.ConsoleSnap
 import app.knotwork.design.components.console.ConsoleSource
+import app.knotwork.design.components.console.ConsoleTab
+import app.knotwork.design.components.console.ConsoleTraceSpan
+import app.knotwork.design.components.console.ConsoleVarRow
 import app.knotwork.design.screens.chat.ChatHomeMessageRow
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
@@ -108,6 +113,14 @@ class ChatHomeViewModel @Inject constructor(
     private val _pipelineFallbackEvents: MutableSharedFlow<Unit> = MutableSharedFlow(extraBufferCapacity = 1)
     private val _pendingTool: MutableStateFlow<HitlPending?> = MutableStateFlow(null)
     private val _pendingClarification: MutableStateFlow<ClarificationRequest?> = MutableStateFlow(null)
+    private val _consoleLines: MutableStateFlow<List<ConsoleLine>> = MutableStateFlow(emptyList())
+    private val _consoleVars: MutableStateFlow<List<ConsoleVarRow>> = MutableStateFlow(emptyList())
+    private val _consoleTraces: MutableStateFlow<List<ConsoleTraceSpan>> = MutableStateFlow(emptyList())
+    private val _consoleTab: MutableStateFlow<ConsoleTab> = MutableStateFlow(ConsoleTab.Logs)
+    private val _consoleSnap: MutableStateFlow<ConsoleSnap?> = MutableStateFlow(null)
+    private val _consoleClearConfirmRequested: MutableStateFlow<Boolean> = MutableStateFlow(false)
+    private val _consoleSnackbarEvents: MutableSharedFlow<ConsoleSnackbarEvent> =
+        MutableSharedFlow(extraBufferCapacity = 1)
 
     /** Externally-observable current session id. */
     val currentSessionId: StateFlow<String> = _currentSessionId.asStateFlow()
@@ -170,6 +183,61 @@ class ChatHomeViewModel @Inject constructor(
      */
     val pendingClarification: StateFlow<ClarificationRequest?> = _pendingClarification.asStateFlow()
 
+    /**
+     * Live snapshot of the console pane's Logs tab. Aggregated from every
+     * [AgentOrchestratorState.ConsoleLog] emission of the active run, with
+     * cleared rows trimmed off via [consoleClearBaseline] so a mid-run
+     * `Clear` survives the next cumulative engine snapshot.
+     */
+    val consoleLines: StateFlow<List<ConsoleLine>> = _consoleLines.asStateFlow()
+
+    /**
+     * Live snapshot of the console pane's Vars tab. Derived from every
+     * [AgentOrchestratorState.NodeIO] emission; two rows per node (`input`
+     * and `output`), grouped by node label inside the catalog body.
+     */
+    val consoleVars: StateFlow<List<ConsoleVarRow>> = _consoleVars.asStateFlow()
+
+    /**
+     * Live snapshot of the console pane's Traces tab. Built from every
+     * [AgentOrchestratorState.PipelineTrace] emission; the catalog spans
+     * carry pre-formatted start timestamps observed when the trace step
+     * landed (not the node's own wall-clock start, which the engine does
+     * not surface today).
+     */
+    val consoleTraces: StateFlow<List<ConsoleTraceSpan>> = _consoleTraces.asStateFlow()
+
+    /**
+     * User-selected console tab persisted via
+     * [SettingsRepository.consolePreferredConsoleTabName]. Hydrated on init
+     * and updated by [onConsoleTabChange].
+     */
+    val consoleTab: StateFlow<ConsoleTab> = _consoleTab.asStateFlow()
+
+    /**
+     * Active console-pane snap (`null` = closed). Independent of [state] so
+     * the pane can stay open across `Generating → HitlConfirm →
+     * Clarification → Idle / Completed / Error` transitions. The catalog
+     * renders the overlay whenever this is non-null, keeping the underlying
+     * chat surface visible behind the pane.
+     */
+    val consoleSnap: StateFlow<ConsoleSnap?> = _consoleSnap.asStateFlow()
+
+    /**
+     * Whether the destructive "Clear console for this session?" confirmation
+     * dialog is requested. Toggled by [requestConsoleClear] /
+     * [dismissConsoleClear] / [confirmConsoleClear].
+     */
+    val consoleClearConfirmRequested: StateFlow<Boolean> = _consoleClearConfirmRequested.asStateFlow()
+
+    /**
+     * One-shot stream of snackbar events raised by the console pane (line
+     * copied, full log copied). The screen mirrors each emission into the
+     * shared `SnackbarHostState`; the clipboard write itself is performed
+     * by the Composable (which owns `LocalClipboardManager`).
+     */
+    val consoleSnackbarEvents: SharedFlow<ConsoleSnackbarEvent> = _consoleSnackbarEvents.asSharedFlow()
+
     private var messagesJob: Job? = null
     private var generationJob: Job? = null
     private var tokenCounterJob: Job? = null
@@ -179,11 +247,34 @@ class ChatHomeViewModel @Inject constructor(
     private var availablePipelines: List<PipelineSummary> = emptyList()
     private var defaultPipelineId: String? = null
 
+    /**
+     * Number of [ConsoleEvent]s the user has already dismissed via
+     * `Clear`. The engine emits cumulative [AgentOrchestratorState.ConsoleLog]
+     * snapshots on every step, so the next snapshot post-Clear still
+     * carries every previously-visible event; the baseline trims the
+     * leading slice so cleared rows do not pop back in. Reset on every new
+     * send / session switch (legacy `ChatViewModel.consoleClearBaseline`).
+     */
+    private var consoleClearBaseline: Int = 0
+
+    /**
+     * Per-node ordered map of the latest [AgentOrchestratorState.NodeIO]
+     * snapshot for the active run. Kept on the VM (not in the flow) so
+     * repeated emissions for the same node id (e.g. a queue-processor loop
+     * revisiting the same body node) overwrite the previous I/O instead of
+     * appending duplicate Vars rows.
+     */
+    private val nodeIoSnapshots: LinkedHashMap<String, AgentOrchestratorState.NodeIO> = LinkedHashMap()
+
+    /** Counts of trace-step landings; used to assign a deterministic startedAt to each span. */
+    private val traceStepStartMs: MutableList<Long> = mutableListOf()
+
     init {
         observeAvailablePipelines()
         observeDefaultPipelineId()
         observeSessions()
         observeMaxContextSize()
+        observeConsolePreferredTab()
         initializeSession()
     }
 
@@ -226,6 +317,11 @@ class ChatHomeViewModel @Inject constructor(
 
         _state.value = ChatHomeUiState.Generating
         clearPendingApprovalAndClarification()
+        // Fresh run = fresh cumulative log upstream; the baseline carried
+        // over from a previous run's mid-stream Clear no longer applies
+        // (the engine restarts events from scratch). Mirrors legacy
+        // `ChatViewModel.sendMessage`.
+        resetConsoleStateForNewRun()
 
         autoRenameIfDefault(sessionId, draft)
 
@@ -286,6 +382,8 @@ class ChatHomeViewModel @Inject constructor(
         generationJob?.cancel()
         messagesJob?.cancel()
         clearPendingApprovalAndClarification()
+        resetConsoleStateForNewRun()
+        _consoleSnap.value = null
         _messages.value = emptyList()
         _tokensUsed.value = 0
         _state.value = ChatHomeUiState.Empty
@@ -297,23 +395,29 @@ class ChatHomeViewModel @Inject constructor(
         }
     }
 
-    /** Opens the console pane at the given [snap] (default: Partial). */
+    /**
+     * Opens the console pane at the given [snap] (default: Partial). The
+     * pane is an independent overlay — the underlying [state] is left
+     * untouched, so the user can drill into pipeline activity during
+     * Generating / HitlConfirm / Clarification without losing their place.
+     */
     fun openConsole(snap: ConsoleSnap = ConsoleSnap.Partial) {
-        _state.value = ChatHomeUiState.ConsoleExpanded(snap)
+        _consoleSnap.value = snap
     }
 
-    /** Updates the snap point of the currently-open console pane. */
+    /**
+     * Updates the snap point of the currently-open console pane. No-op
+     * when the pane is closed.
+     */
     fun setConsoleSnap(snap: ConsoleSnap) {
-        _state.update { current ->
-            if (current is ChatHomeUiState.ConsoleExpanded) ChatHomeUiState.ConsoleExpanded(snap) else current
+        if (_consoleSnap.value != null) {
+            _consoleSnap.value = snap
         }
     }
 
-    /** Dismisses the console pane and settles on the right resting state. */
+    /** Dismisses the console pane without touching the underlying chat state. */
     fun closeConsole() {
-        if (_state.value is ChatHomeUiState.ConsoleExpanded) {
-            _state.value = restingState()
-        }
+        _consoleSnap.value = null
     }
 
     /** Toggles the console inline-search field. Cycles `null → "" → null`. */
@@ -335,6 +439,82 @@ class ChatHomeViewModel @Inject constructor(
     fun filterConsoleByLineSource(source: ConsoleSource) {
         _consoleFilter.value = ConsoleFilter(sources = setOf(source))
     }
+
+    /**
+     * Persists the user's currently-selected console tab. Mirrors the
+     * change into the local [consoleTab] flow synchronously so the catalog
+     * tab strip re-renders without waiting for the DataStore round-trip.
+     */
+    fun onConsoleTabChange(tab: ConsoleTab) {
+        if (_consoleTab.value == tab) return
+        _consoleTab.value = tab
+        viewModelScope.launch {
+            settingsRepository.setConsolePreferredConsoleTabName(tab.name)
+        }
+    }
+
+    /**
+     * Requests the destructive "Clear console for this session?" dialog —
+     * the screen renders an [AlertDialog] driven by
+     * [consoleClearConfirmRequested]. The actual clear runs on
+     * [confirmConsoleClear] so the user has a chance to back out.
+     */
+    fun requestConsoleClear() {
+        if (_consoleLines.value.isEmpty()) return
+        _consoleClearConfirmRequested.value = true
+    }
+
+    /** Dismisses the confirmation dialog without altering the log. */
+    fun dismissConsoleClear() {
+        _consoleClearConfirmRequested.value = false
+    }
+
+    /**
+     * Advances [consoleClearBaseline] by the count of currently-visible
+     * lines and clears [consoleLines]. The next cumulative engine snapshot
+     * trims its leading slice, so cleared rows do not pop back in.
+     */
+    fun confirmConsoleClear() {
+        val visible = _consoleLines.value
+        _consoleClearConfirmRequested.value = false
+        if (visible.isEmpty()) return
+        consoleClearBaseline += visible.size
+        _consoleLines.value = emptyList()
+    }
+
+    /**
+     * Emits a one-shot snackbar event after the screen has placed the
+     * single-line clipboard payload on the system clipboard. The
+     * `ClipboardManager` interaction itself happens inside the Composable
+     * layer (which has access to `LocalClipboardManager`).
+     */
+    fun signalConsoleLineCopied() {
+        _consoleSnackbarEvents.tryEmit(ConsoleSnackbarEvent.LineCopied)
+    }
+
+    /** One-shot snackbar event raised after the full filtered log is copied. */
+    fun signalConsoleAllCopied() {
+        _consoleSnackbarEvents.tryEmit(ConsoleSnackbarEvent.AllCopied)
+    }
+
+    /**
+     * Renders a single [ConsoleLine] as the plain-text clipboard payload
+     * inserted by `onConsoleCopyLine`. Format: `[timestamp] [source] text`.
+     * Public for testability — kept on the VM (not the screen) so unit
+     * tests can pin the format without spinning up the Compose tooling.
+     */
+    fun buildConsoleLineCopyPayload(line: ConsoleLine): String =
+        "[${line.timestamp}] [${line.source.name}] ${line.text}"
+
+    /**
+     * Renders the supplied list of [ConsoleLine]s as the multi-line
+     * clipboard payload inserted by `onConsoleCopyAll`. The caller is
+     * expected to apply the current [ConsoleFilter] / search query before
+     * passing the list in — the chat-home `Copy all` action only copies
+     * what the user is actively looking at.
+     */
+    fun buildConsoleAllCopyPayload(lines: List<ConsoleLine>): String =
+        lines.joinToString(separator = "\n") { buildConsoleLineCopyPayload(it) }
 
     /**
      * Debug-only escape hatch used by the triple-tap state picker to force
@@ -427,6 +607,20 @@ class ChatHomeViewModel @Inject constructor(
     }
 
     /**
+     * Hydrates [consoleTab] from the persisted DataStore preference. An
+     * unrecognised value (e.g. an enum entry removed in a future version)
+     * falls back to [ConsoleTab.Logs] so the surface never renders an
+     * undefined tab.
+     */
+    private fun observeConsolePreferredTab() {
+        viewModelScope.launch {
+            settingsRepository.consolePreferredConsoleTabName.collect { name ->
+                _consoleTab.value = ConsoleTab.entries.firstOrNull { it.name == name } ?: ConsoleTab.Logs
+            }
+        }
+    }
+
+    /**
      * Subscribes the message stream to [sessionId], cancelling any prior
      * subscription. Each emission is projected through
      * [chatMessageToRow] and folded into [_messages]; the rough token
@@ -481,6 +675,9 @@ class ChatHomeViewModel @Inject constructor(
         when (state) {
             is AgentOrchestratorState.WaitingForApproval -> handleWaitingForApproval(state)
             is AgentOrchestratorState.AwaitingClarification -> handleAwaitingClarification(state.request)
+            is AgentOrchestratorState.ConsoleLog -> handleConsoleLog(state.events)
+            is AgentOrchestratorState.PipelineTrace -> handlePipelineTrace(state.steps)
+            is AgentOrchestratorState.NodeIO -> handleNodeIo(state)
             is AgentOrchestratorState.Completed -> {
                 clearPendingApprovalAndClarification()
                 _state.value = if (_messages.value.isEmpty()) ChatHomeUiState.Empty else ChatHomeUiState.Idle
@@ -490,9 +687,70 @@ class ChatHomeViewModel @Inject constructor(
                 _state.value = ChatHomeUiState.Error(state.message)
             }
             // Intermediate states keep `Generating` while the request is in flight.
-            // Console handling lands in Phase 22 / Task 3/17.
             else -> Unit
         }
+    }
+
+    /**
+     * Mirrors a cumulative [AgentOrchestratorState.ConsoleLog.events]
+     * snapshot into [consoleLines]. Applies the baseline so events the
+     * user just dismissed via [confirmConsoleClear] stay hidden until the
+     * next session switch / send.
+     */
+    private fun handleConsoleLog(events: List<ConsoleEvent>) {
+        val trimmed = applyConsoleClearBaseline(events)
+        _consoleLines.value = trimmed.map(ConsoleEvent::toConsoleLine)
+    }
+
+    /**
+     * Mirrors the latest [AgentOrchestratorState.PipelineTrace.steps]
+     * snapshot into [consoleTraces]. The catalog span requires a
+     * pre-formatted `startedAt` — we observe wall-clock time the first
+     * time we see each step index and reuse it for subsequent emissions of
+     * the same step so the displayed start does not jitter on every
+     * snapshot.
+     */
+    private fun handlePipelineTrace(steps: List<AgentOrchestratorState.TraceStep>) {
+        val nowMs = System.currentTimeMillis()
+        // Grow the start-timestamp cache to match the step count; existing entries are preserved.
+        while (traceStepStartMs.size < steps.size) {
+            traceStepStartMs.add(nowMs)
+        }
+        _consoleTraces.value = steps.mapIndexed { index, step ->
+            traceStepToConsoleSpan(step, traceStepStartMs[index])
+        }
+    }
+
+    /**
+     * Captures a per-node I/O snapshot and re-projects [consoleVars] from
+     * the accumulated map so repeated emissions for the same node id
+     * overwrite (not duplicate) the previous Vars rows.
+     */
+    private fun handleNodeIo(io: AgentOrchestratorState.NodeIO) {
+        nodeIoSnapshots[io.nodeId] = io
+        _consoleVars.value = nodeIoSnapshots.values.flatMap(::nodeIoToVarRows)
+    }
+
+    /**
+     * Trims the leading [consoleClearBaseline] entries off a cumulative
+     * [AgentOrchestratorState.ConsoleLog.events] snapshot. When the
+     * baseline already covers the snapshot (no new events since the last
+     * Clear) the result is an empty list.
+     */
+    private fun applyConsoleClearBaseline(events: List<ConsoleEvent>): List<ConsoleEvent> {
+        if (consoleClearBaseline <= 0) return events
+        if (consoleClearBaseline >= events.size) return emptyList()
+        return events.subList(consoleClearBaseline, events.size)
+    }
+
+    /** Drops every cached console-side projection. Called at the start of each new run. */
+    private fun resetConsoleStateForNewRun() {
+        consoleClearBaseline = 0
+        nodeIoSnapshots.clear()
+        traceStepStartMs.clear()
+        _consoleLines.value = emptyList()
+        _consoleVars.value = emptyList()
+        _consoleTraces.value = emptyList()
     }
 
     /**
@@ -860,4 +1118,18 @@ internal fun ToolRisk.toCatalogRisk(): Risk = when (this) {
     ToolRisk.READ_ONLY -> Risk.Readonly
     ToolRisk.SENSITIVE -> Risk.Sensitive
     ToolRisk.DESTRUCTIVE -> Risk.Destructive
+}
+
+/**
+ * Discrete one-shot events raised by the console pane and consumed by the
+ * screen-level snackbar host. Modelled as an enum so the screen can map
+ * each value to the right localised string in one place (no resource id
+ * leaks into the VM).
+ */
+enum class ConsoleSnackbarEvent {
+    /** A single console line was copied to the system clipboard. */
+    LineCopied,
+
+    /** The full filtered log was copied to the system clipboard. */
+    AllCopied,
 }

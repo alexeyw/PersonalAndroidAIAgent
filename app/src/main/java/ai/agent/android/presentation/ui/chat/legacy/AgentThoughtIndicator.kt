@@ -200,6 +200,7 @@ internal fun thoughtLineFor(state: AgentOrchestratorState): String? = when (stat
     is AgentOrchestratorState.PipelineStage -> stringResource(R.string.chat_thought_now_stage, state.stepInfo.nodeName)
     is AgentOrchestratorState.PipelineTrace,
     is AgentOrchestratorState.ConsoleLog,
+    is AgentOrchestratorState.NodeIO,
     -> null
 }
 
@@ -217,6 +218,7 @@ internal fun thoughtLineHasOutput(state: AgentOrchestratorState): Boolean = when
     is AgentOrchestratorState.AwaitingClarification,
     is AgentOrchestratorState.PipelineTrace,
     is AgentOrchestratorState.ConsoleLog,
+    is AgentOrchestratorState.NodeIO,
     -> false
     is AgentOrchestratorState.Loading,
     is AgentOrchestratorState.Thinking,
