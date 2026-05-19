@@ -15,6 +15,39 @@ details.
 
 ### Added
 
+- **Chat home — orchestrator core wiring** (Phase 22 / Task 1/17) —
+  replaces the Phase 21 stub `ChatHomeViewModel` (canned delay + reply)
+  with a fully wired Hilt ViewModel that runs the agent orchestrator on
+  the redesigned chat surface.
+  - `ChatHomeViewModel` now injects `AgentOrchestratorUseCase`,
+    `ChatRepository`, `PipelineRepository`, `SettingsRepository`,
+    `LlmInferenceEngine`, and `GetContextWindowUseCase`. `sendMessage()`
+    drives the `Idle → Generating → Idle / Error` cycle through
+    `agentOrchestratorUseCase(sessionId, prompt, pipelineId).collect`,
+    forwarding the active session's `pipelineId`; intermediate states
+    keep `Generating` until HITL / Clarification / Console handlers land
+    in tasks 2/17 and 3/17.
+  - **Pipeline binding** wired end-to-end: TopAppBar subtitle resolves
+    to the bound pipeline name (or the user-marked default, or the
+    first available pipeline), and the deleted-pipeline fallback
+    silently rebinds the session to the default and surfaces a
+    `KnotworkSnackbar` via a new `pipelineFallbackEvents` one-shot
+    `SharedFlow`.
+  - **Session lifecycle**: initial session is restored from
+    `SettingsRepository.currentChatSessionId` (or freshly generated
+    when none exists) and persisted via `ChatRepository.saveSession`;
+    `selectThread` re-subscribes the message stream and rebalances the
+    resting state.
+  - **Token counter**: the TopAppBar shows a rough
+    `getContextWindowUseCase(sessionId).length / 4` estimate against
+    `SettingsRepository.maxContextLength`; a precise tokenizer is
+    queued as a separate follow-up.
+  - Display-message flow now goes through
+    `ChatRepository.getDisplayMessagesForSession`; the legacy in-VM
+    `MutableStateFlow` of pretend messages and the canned reply
+    constants are gone.
+  - Auto-renames a new chat to the first user message (truncated to 20
+    characters) on send, matching legacy parity.
 - **Accessibility + release-candidate gate** (Phase 21 / Task 11/11) —
   finalises the v0.1 surface against `decisions.md §14`:
   - Localised the only hard-coded English `contentDescription` left in
