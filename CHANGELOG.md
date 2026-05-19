@@ -15,6 +15,38 @@ details.
 
 ### Added
 
+- **Chat home — HITL and Clarification real-time wiring** (Phase 22 /
+  Task 2/17) — replaces the `forceState(...)` stubs in
+  `ChatHomeScreen.onHitlAllowOnce` / `onHitlReject` / `onClarificationReply`
+  with live orchestrator round-trips.
+  - `ChatHomeViewModel` now injects `ClarificationRepository` and exposes
+    two new `StateFlow`s: `pendingTool: StateFlow<HitlPending?>`
+    (snapshot of the tool the orchestrator is paused on, with risk +
+    raw arguments) and `pendingClarification: StateFlow<ClarificationRequest?>`.
+  - `handleOrchestratorState` maps `WaitingForApproval(name, args, risk)`
+    onto `ChatHomeUiState.HitlConfirm(Risk)` (via `ToolRisk.toCatalogRisk`)
+    and `AwaitingClarification(request)` onto `ChatHomeUiState.Clarification`.
+  - New VM callbacks: `approveTool()` resumes the pipeline with `true`
+    (refused defensively for `Destructive` tools until the typed-confirm
+    matches `"yes"`); `rejectTool()` resumes with `false` and persists a
+    `SYSTEM` chat row recording the denial; `submitClarificationReply(text)`
+    forwards the reply through `ClarificationRepository.submitClarification`
+    and flips back to `Generating`.
+  - Clarification watchdog: when `AwaitingClarification` arrives with a
+    positive `timeoutMs`, the VM arms a `delay(timeoutMs)` job that — on
+    elapse — submits the default answer (first option, or empty for
+    free-form), appends a `SYSTEM` "clarification timed out" chat row,
+    and settles back on `Idle` / `Empty`. The repository's own
+    `withTimeout` remains the authoritative gate; the watchdog is a
+    UI safety-net.
+  - `ChatHomeStateMapping.toViewState` now accepts `pendingTool` /
+    `pendingClarification` and renders the trailing HITL /
+    Clarification rows from live data — tool name, risk, JSON-decoded
+    `Map<String, String>` of argument fragments, question, and
+    quick-reply options — falling back to the existing fixtures only
+    when no real pending snapshot is available (preserves the debug
+    state picker).
+
 - **Chat home — orchestrator core wiring** (Phase 22 / Task 1/17) —
   replaces the Phase 21 stub `ChatHomeViewModel` (canned delay + reply)
   with a fully wired Hilt ViewModel that runs the agent orchestrator on
