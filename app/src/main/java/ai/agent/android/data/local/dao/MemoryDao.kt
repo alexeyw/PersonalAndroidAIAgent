@@ -89,13 +89,21 @@ interface MemoryDao {
     suspend fun getRecentMemorySummaries(limit: Int): List<MemorySummary>
 
     /**
-     * Deletes older memory chunks, keeping only the specified number of the most recent ones.
+     * Deletes older unpinned memory chunks, keeping only the specified number
+     * of the most recent ones.
      *
-     * @param keepLimit The number of recent memory chunks to keep.
+     * Pinned chunks (`isPinned = 1`) are exempt — they survive compaction
+     * regardless of `keepLimit`, matching the contract advertised on
+     * [ai.agent.android.data.local.models.MemoryChunkEntity.isPinned]. The
+     * `keepLimit` window is therefore evaluated over the *unpinned* subset
+     * only.
+     *
+     * @param keepLimit The number of recent unpinned memory chunks to keep.
      */
     @Query(
-        "DELETE FROM memory_chunks WHERE id NOT IN " +
-            "(SELECT id FROM memory_chunks ORDER BY timestamp DESC LIMIT :keepLimit)",
+        "DELETE FROM memory_chunks WHERE isPinned = 0 AND id NOT IN " +
+            "(SELECT id FROM memory_chunks WHERE isPinned = 0 " +
+            "ORDER BY timestamp DESC LIMIT :keepLimit)",
     )
     suspend fun deleteOldestMemories(keepLimit: Int)
 }
