@@ -1,5 +1,25 @@
 import dev.detekt.gradle.Detekt
 
+/**
+ * Resolves the current short git SHA (e.g. `19b9c8f`) via
+ * `providers.exec("git", "rev-parse", "--short", "HEAD")`. Returns
+ * `"unknown"` when git is absent, the working tree is not a repository,
+ * or the command otherwise fails (e.g. a tarball-based release build on a
+ * CI runner that lacks git history).
+ */
+fun Project.resolveGitSha(): String = runCatching {
+    val output = providers.exec {
+        commandLine("git", "rev-parse", "--short", "HEAD")
+        isIgnoreExitValue = true
+    }
+    val exitCode = output.result.get().exitValue
+    if (exitCode == 0) {
+        output.standardOutput.asText.get().trim().ifEmpty { "unknown" }
+    } else {
+        "unknown"
+    }
+}.getOrDefault("unknown")
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
@@ -44,6 +64,13 @@ android {
         // link to the canonical text without hardcoding the values in UI code.
         resValue("string", "license_name", "Apache License 2.0")
         resValue("string", "license_url", "https://www.apache.org/licenses/LICENSE-2.0")
+
+        // Phase 22 / Task 8: surface the build's short git SHA inside the
+        // About row of the Knotwork settings screen so users can paste a
+        // precise build identifier into bug reports without needing the APK
+        // hash. Falls back to "unknown" when `git` is unavailable (e.g. a
+        // tarball build).
+        buildConfigField("String", "GIT_SHA", "\"${resolveGitSha()}\"")
     }
 
     buildTypes {

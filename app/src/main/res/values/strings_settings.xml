@@ -1,39 +1,52 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="settings_screen_title">Settings</string>
-    <string name="settings_section_system_instructions">System Instructions</string>
-    <string name="settings_field_system_prompt_prefix">Be concise. Prefer bullet points. Use $DATE for any date reference.</string>
-    <string name="settings_system_prompt_helper">Prepended to every system prompt the agent sends.</string>
-    <string name="settings_section_restrictions">Restrictions</string>
-    <string name="settings_human_in_loop_label">Human-in-the-loop</string>
-    <string name="settings_human_in_loop_hint">Require approval for every tool call, not only sensitive ones.</string>
-    <string name="settings_section_llm_parameters">LLM Parameters</string>
-    <string name="settings_param_temperature_label">Temperature</string>
-    <string name="settings_param_top_k_label">Top-K</string>
-    <string name="settings_param_top_p_label">Top-P</string>
-    <string name="settings_param_max_context_label">Max context</string>
     <plurals name="settings_param_max_context_value">
         <item quantity="one">%1$d tok</item>
         <item quantity="other">%1$d tok</item>
     </plurals>
+
+    <!-- Misc legacy strings still referenced from PipelineMaxStepsField and the
+         inference-backend / provider rows. -->
     <string name="settings_pipeline_max_steps_label">Pipeline Max Steps (5–100)</string>
     <string name="settings_pipeline_max_steps_helper">Enter a value between 5 and 100</string>
-    <string name="settings_section_local_model">Local Model Settings</string>
-    <string name="settings_inference_backend">Inference Backend</string>
     <string name="settings_test_backend_button">Test Local Model with %1$s</string>
-    <string name="settings_section_external_providers">External Providers (API Keys &amp; Models)</string>
-    <string name="settings_section_ollama">Local Network Models (Ollama)</string>
-    <string name="settings_ollama_base_url_label">Ollama Base URL (e.g., http://192.168.1.100:11434)</string>
+    <string name="settings_ollama_base_url_label">Ollama Base URL</string>
+    <string name="settings_ollama_base_url_placeholder">http://192.168.1.100:11434</string>
+    <string name="settings_ollama_base_url_error">Base URL is required</string>
     <string name="settings_ollama_model_label">Ollama Model Name</string>
     <string name="settings_ollama_context_label">Ollama Context Window Size</string>
     <string name="settings_provider_api_key_label">%1$s API Key</string>
     <string name="settings_provider_model_label">%1$s Model</string>
     <string name="settings_backend_test_success">Success! Backend initialized correctly.</string>
-    <string name="settings_section_privacy">Privacy</string>
+    <string name="settings_field_system_prompt_prefix">Be concise. Prefer bullet points. Use $DATE for any date reference.</string>
+
+    <!-- Privacy section row labels (Knotwork port) -->
+    <string name="settings_human_in_loop_label">Human-in-the-loop</string>
+    <string name="settings_human_in_loop_hint">Require approval for every tool call, not only sensitive ones.</string>
     <string name="settings_crash_reporting_label">Send anonymous crash reports</string>
     <string name="settings_crash_reporting_hint">Help improve stability by sharing anonymous crash data with Firebase Crashlytics.</string>
     <string name="settings_crash_reporting_dialog_title">Enable crash reporting?</string>
     <string name="settings_crash_reporting_dialog_body">When enabled, this app uploads anonymous crash and error data to Firebase Crashlytics. Reports contain: stack traces of fatal and non-fatal exceptions, device model and Android version, app version, the active pipeline id, and the active local model name. No chat messages, prompts, memory, API keys, or other personal content is uploaded. You can turn this off at any time.</string>
     <string name="settings_crash_reporting_dialog_confirm">Enable</string>
     <string name="settings_crash_reporting_dialog_dismiss">Cancel</string>
+
+    <!-- Knotwork settings row titles (Phase 22 / Task 8) -->
+    <string name="settings_row_theme_title">Theme</string>
+    <string name="settings_row_theme_subtitle">System default — theme switch lands in a follow-up.</string>
+    <string name="settings_row_system_prompt_title">System prompt prefix</string>
+    <string name="settings_row_system_prompt_subtitle">Prepended to every system prompt the agent sends.</string>
+    <string name="settings_row_backend_title">Inference backend</string>
+    <string name="settings_row_temperature_title">Sampling — temperature</string>
+    <string name="settings_row_top_k_title">Sampling — top-K</string>
+    <string name="settings_row_top_p_title">Sampling — top-P</string>
+    <string name="settings_row_max_context_title">Sampling — max context</string>
+    <string name="settings_row_pipeline_max_steps_title">Pipeline max steps</string>
+    <string name="settings_row_pipeline_max_steps_subtitle">Hard cap on planner iterations (5–100).</string>
+    <string name="settings_row_memory_summary_limit_title">Memory summary default limit</string>
+    <string name="settings_row_memory_summary_limit_subtitle">Max recent memories inlined into $MEMORY_SUMMARY (1–50).</string>
+    <string name="settings_row_mcp_manage_title">Manage MCP servers</string>
+    <string name="settings_row_mcp_manage_subtitle">Open the Tools screen to add or remove MCP servers.</string>
+    <string name="settings_row_about_version_title">App version</string>
+    <string name="settings_row_about_commit_title">Commit</string>
+    <string name="settings_row_about_license_title">License</string>
 </resources>

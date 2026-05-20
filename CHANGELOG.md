@@ -15,6 +15,26 @@ details.
 
 ### Added
 
+- **Settings — port provider/sampling forms in the Knotwork style**
+  (Phase 22 / Task 8/17) — the Settings screen now drives the catalog
+  `SettingsContent` as the single source of truth for chrome (TopAppBar,
+  sections, scroll, visual states). Provider configuration moved to the
+  catalog: `KnotworkProviderRow` renders a collapsible card with masked
+  API-key input, model dropdown, and (for Ollama) base-URL +
+  context-window fields with inline validation. Sampling sliders
+  (temperature, top-K, top-P, max context, pipeline max steps, memory
+  summary default limit) render through `KnotworkParamSlider`. The
+  system-prompt prefix uses the new `KnotworkMonoTextArea`. A new
+  `memorySummaryDefaultLimit` slider exposes the `$MEMORY_SUMMARY`
+  limit (1–50) on the Memory section. About surfaces `app version`,
+  short `git SHA` (via `BuildConfig.GIT_SHA`), and a license link
+  routed to `AboutScreen`. MCP section navigates to the Tools screen
+  for server management. `SettingsContent` now accepts an optional
+  `rowContent` override so the app can replace the default
+  title-subtitle-trailing row with the richer Knotwork variants without
+  forking the catalog scaffolding, and an optional `onBack` callback so
+  the embedded TopAppBar can render a navigation icon. Restart-required
+  / destructive-confirm wiring stays deferred to Task 9 (audit pass).
 - **Memory — design audit & alignment** (Phase 22 / Task 7/17) — full 7-state
   Roborazzi baseline (Empty / Populated / Searching / LoadingMore /
   EntryExpanded / Editing / Error) in both themes plus a populated-pinned

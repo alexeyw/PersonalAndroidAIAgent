@@ -46,6 +46,7 @@ class SettingsViewModelTest {
         every { settingsRepository.localModelBackend } returns MutableStateFlow("CPU")
         every { settingsRepository.pipelineMaxSteps } returns MutableStateFlow(15)
         every { settingsRepository.crashReportingEnabled } returns MutableStateFlow(false)
+        every { settingsRepository.memorySummaryDefaultLimit } returns MutableStateFlow(5)
 
         // Setup default flows for API keys repository
         every { apiKeyRepository.getOpenAIKey() } returns MutableStateFlow("sk-open")
@@ -226,5 +227,69 @@ class SettingsViewModelTest {
         )
         advanceUntilIdle()
         assertEquals(42, vm.uiState.value.pipelineMaxSteps)
+    }
+
+    @Test
+    fun `memorySummaryDefaultLimit is populated from repository in initial state`() = runTest {
+        every { settingsRepository.memorySummaryDefaultLimit } returns MutableStateFlow(12)
+        val vm = SettingsViewModel(
+            settingsRepository,
+            apiKeyRepository,
+            loadModelUseCase,
+            localModelRepository,
+            crashReportingRepository,
+        )
+        advanceUntilIdle()
+        assertEquals(12, vm.uiState.value.memorySummaryDefaultLimit)
+    }
+
+    @Test
+    fun `updateMemorySummaryDefaultLimit calls repository with valid value`() = runTest {
+        viewModel.updateMemorySummaryDefaultLimit(20)
+        advanceUntilIdle()
+        coVerify { settingsRepository.setMemorySummaryDefaultLimit(20) }
+    }
+
+    @Test
+    fun `updateMemorySummaryDefaultLimit coerces value below minimum`() = runTest {
+        viewModel.updateMemorySummaryDefaultLimit(0)
+        advanceUntilIdle()
+        coVerify { settingsRepository.setMemorySummaryDefaultLimit(1) }
+    }
+
+    @Test
+    fun `updateMemorySummaryDefaultLimit coerces value above maximum`() = runTest {
+        viewModel.updateMemorySummaryDefaultLimit(999)
+        advanceUntilIdle()
+        coVerify { settingsRepository.setMemorySummaryDefaultLimit(50) }
+    }
+
+    @Test
+    fun `updateOllamaBaseUrl marks invalid flag when blank`() = runTest {
+        viewModel.updateOllamaBaseUrl("   ")
+        advanceUntilIdle()
+        val state = viewModel.uiState.value
+        assertEquals(true, state.ollamaBaseUrlInvalid)
+        coVerify { apiKeyRepository.setOllamaBaseUrl(null) }
+    }
+
+    @Test
+    fun `updateOllamaBaseUrl clears invalid flag once a URL is supplied`() = runTest {
+        viewModel.updateOllamaBaseUrl("")
+        advanceUntilIdle()
+        viewModel.updateOllamaBaseUrl("http://x:1")
+        advanceUntilIdle()
+        assertEquals(false, viewModel.uiState.value.ollamaBaseUrlInvalid)
+    }
+
+    @Test
+    fun `updateOpenAiModel marks row as pending until repository persists`() = runTest {
+        viewModel.updateOpenAiModel("gpt-4o-mini")
+        // Before advancing the dispatcher the launch{} block has not yet
+        // cleared the pending flag — the row should still be tracked.
+        assertEquals(true, viewModel.uiState.value.pendingRowIds.contains("openai"))
+        advanceUntilIdle()
+        assertEquals(false, viewModel.uiState.value.pendingRowIds.contains("openai"))
+        coVerify { apiKeyRepository.setOpenAIModel("gpt-4o-mini") }
     }
 }

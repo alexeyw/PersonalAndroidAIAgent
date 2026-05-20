@@ -274,6 +274,12 @@ fun AppNavGraph(navController: NavHostController, showOnboarding: Boolean, modif
             SettingsScreen(
                 modifier = Modifier.fillMaxSize(),
                 onBack = { navController.popBackStack() },
+                onOpenTools = {
+                    navController.navigate(NavRoutes.TOOLS) {
+                        applyTabSwitchOptions()
+                    }
+                },
+                onOpenAbout = { navController.navigate(NavRoutes.ABOUT) },
             )
         }
         composable(NavRoutes.PROMPTS) {
