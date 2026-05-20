@@ -87,9 +87,12 @@ data class OllamaProviderInputs(
  * @param onKeyChange callback invoked when the user edits the key.
  * @param keyLabel localised key field label.
  * @param modelValue current model identifier.
- * @param onModelChange callback invoked when a model is picked or typed.
+ * @param onModelChange callback invoked when a model is picked from the
+ *  dropdown (cloud) or typed (Ollama free-form).
  * @param modelLabel localised model field label.
- * @param availableModels dropdown choices for [modelValue].
+ * @param availableModels dropdown choices for [modelValue]; an empty list
+ *  switches the field into a free-form text input (used by Ollama where
+ *  the user types the model identifier themselves).
  * @param pendingChange `true` while an async write is in flight; shows the
  *  `KnotworkLoader` in the header and disables the inputs.
  * @param ollama optional Ollama-specific fields; `null` for cloud providers.
@@ -173,38 +176,54 @@ fun KnotworkProviderRow(
                         enabled = !pendingChange,
                         colors = brandTextFieldColors(),
                     )
-                    ExposedDropdownMenuBox(
-                        expanded = modelDropdownExpanded,
-                        onExpandedChange = { modelDropdownExpanded = it },
-                    ) {
+                    if (availableModels.isEmpty()) {
+                        // Free-form input — Ollama variant where the user types the model id.
                         OutlinedTextField(
                             value = modelValue,
                             onValueChange = onModelChange,
                             label = { Text(modelLabel) },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .menuAnchor(
-                                    ExposedDropdownMenuAnchorType.PrimaryNotEditable,
-                                    enabled = !pendingChange,
-                                ),
-                            trailingIcon = {
-                                ExposedDropdownMenuDefaults.TrailingIcon(expanded = modelDropdownExpanded)
-                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true,
                             enabled = !pendingChange,
                             colors = brandTextFieldColors(),
                         )
-                        ExposedDropdownMenu(
+                    } else {
+                        // Fixed-list dropdown — cloud providers. The field is read-only so
+                        // tapping it surfaces the menu without raising the soft keyboard.
+                        ExposedDropdownMenuBox(
                             expanded = modelDropdownExpanded,
-                            onDismissRequest = { modelDropdownExpanded = false },
+                            onExpandedChange = { modelDropdownExpanded = it },
                         ) {
-                            availableModels.forEach { model ->
-                                DropdownMenuItem(
-                                    text = { Text(model) },
-                                    onClick = {
-                                        onModelChange(model)
-                                        modelDropdownExpanded = false
-                                    },
-                                )
+                            OutlinedTextField(
+                                value = modelValue,
+                                onValueChange = {},
+                                readOnly = true,
+                                label = { Text(modelLabel) },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .menuAnchor(
+                                        ExposedDropdownMenuAnchorType.PrimaryNotEditable,
+                                        enabled = !pendingChange,
+                                    ),
+                                trailingIcon = {
+                                    ExposedDropdownMenuDefaults.TrailingIcon(expanded = modelDropdownExpanded)
+                                },
+                                enabled = !pendingChange,
+                                colors = brandTextFieldColors(),
+                            )
+                            ExposedDropdownMenu(
+                                expanded = modelDropdownExpanded,
+                                onDismissRequest = { modelDropdownExpanded = false },
+                            ) {
+                                availableModels.forEach { model ->
+                                    DropdownMenuItem(
+                                        text = { Text(model) },
+                                        onClick = {
+                                            onModelChange(model)
+                                            modelDropdownExpanded = false
+                                        },
+                                    )
+                                }
                             }
                         }
                     }
@@ -218,6 +237,10 @@ fun KnotworkProviderRow(
                             singleLine = true,
                             enabled = !pendingChange,
                             isError = ollama.baseUrlValidationError != null,
+                            keyboardOptions = KeyboardOptions(
+                                keyboardType = KeyboardType.Uri,
+                                autoCorrectEnabled = false,
+                            ),
                             supportingText = {
                                 if (ollama.baseUrlValidationError != null) {
                                     Text(
