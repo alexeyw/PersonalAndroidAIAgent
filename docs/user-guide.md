@@ -389,7 +389,7 @@ Built-in variables:
 | `$TIME`            | Current device-local time (`HH:mm`, 24-hour).            |
 | `$TOOLS`           | The active tools list, one `name — description` per line.|
 | `$MODEL`           | The display name of the currently active local model.    |
-| `$MEMORY_SUMMARY`  | A numbered list of recent long-term memory entries.      |
+| `$MEMORY_SUMMARY`  | A numbered list of recent long-term memory entries. The default upper bound is configurable from **Settings → Memory → Memory summary default limit** (1–50). |
 
 When you edit a system prompt in a node's configuration dialog, a
 row of chips beneath the prompt field shows every available variable.

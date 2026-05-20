@@ -400,11 +400,34 @@ DataStore, never in `local.properties`, never committed to git.
 
 ### 3.5. Add a Settings section
 
-Add a UI block to
-[`SettingsScreen`](../app/src/main/java/ai/agent/android/presentation/ui/settings/SettingsScreen.kt)
-that lets the user paste the API key and select a default model. Reuse
-the existing `ProviderSettingsSection` shape so the new entry is
-visually consistent with OpenAI / Anthropic / etc.
+The Settings screen renders the six Knotwork sections (Appearance,
+Models, Privacy, Memory, MCP, About) through the catalog
+[`SettingsContent`](../catalog/src/main/java/app/knotwork/design/screens/settings/SettingsContent.kt).
+Each row arrives as a `SettingsRowState` and is mapped to a Compose
+control via the `rowContent` lambda in
+[`SettingsScreen`](../app/src/main/java/ai/agent/android/presentation/ui/settings/SettingsScreen.kt).
+
+To add a new provider:
+
+1. Allocate a stable `ROW_ID_<PROVIDER>` constant inside `SettingsScreen.kt`.
+2. Append a `row(ROW_ID_<PROVIDER>, "<Name>")` line under the **Models**
+   block in `buildViewState`.
+3. Wire a `when` branch in the `rowContent` lambda that delegates to the
+   catalog
+   [`KnotworkProviderRow`](../catalog/src/main/java/app/knotwork/design/screens/settings/KnotworkProviderRow.kt).
+   For cloud providers, leave the `ollama` parameter `null`; for
+   network-local providers, supply an `OllamaProviderInputs` bundle with
+   the base-URL and context-window fields.
+4. Extend `SettingsViewModel` with `updateXxxKey` / `updateXxxModel`
+   methods that flush through `ApiKeyRepository`. Wrap the model picker
+   in `markPending(ROW_ID_<PROVIDER>)` + `clearPending(...)` so the
+   per-row `KnotworkLoader` spins during the async DataStore write.
+
+The catalog composables that power this screen:
+
+- `KnotworkProviderRow` — collapsible provider card.
+- `KnotworkParamSlider` — branded labelled slider.
+- `KnotworkMonoTextArea` — multi-line mono text input.
 
 ### 3.6. Tests
 

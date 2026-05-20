@@ -123,6 +123,30 @@ class SettingsViewModel @Inject constructor(
         settingsRepository.crashReportingEnabled.onEach { value ->
             _uiState.update { it.copy(crashReportingEnabled = value) }
         }.launchIn(viewModelScope)
+
+        settingsRepository.memorySummaryDefaultLimit.onEach { value ->
+            _uiState.update { it.copy(memorySummaryDefaultLimit = value) }
+        }.launchIn(viewModelScope)
+    }
+
+    /**
+     * Updates the default limit applied to the `$MEMORY_SUMMARY` prompt
+     * variable. The repository persists the raw value; this VM coerces the
+     * input to the documented `1..50` bracket so a misbehaving slider can
+     * never write an out-of-range preference.
+     *
+     * @param limit Desired upper bound on the number of memory chunks
+     *   inlined into the prompt summary.
+     */
+    fun updateMemorySummaryDefaultLimit(limit: Int) {
+        viewModelScope.launch {
+            settingsRepository.setMemorySummaryDefaultLimit(
+                limit.coerceIn(
+                    SettingsDefaults.MEMORY_SUMMARY_LIMIT_MIN,
+                    SettingsDefaults.MEMORY_SUMMARY_LIMIT_MAX,
+                ),
+            )
+        }
     }
 
     /**
@@ -264,13 +288,17 @@ class SettingsViewModel @Inject constructor(
     }
 
     /**
-     * Updates the OpenAI model name.
+     * Updates the OpenAI model name. Tracks the row as `PendingChange`
+     * until the repository flush completes so the per-row `KnotworkLoader`
+     * spins for the duration of the async write.
      *
      * @param model The new model or empty string to clear.
      */
     fun updateOpenAiModel(model: String) {
+        markPending(ROW_ID_OPENAI)
         viewModelScope.launch {
             apiKeyRepository.setOpenAIModel(model.takeIf { it.isNotBlank() })
+            clearPending(ROW_ID_OPENAI)
         }
     }
 
@@ -286,13 +314,16 @@ class SettingsViewModel @Inject constructor(
     }
 
     /**
-     * Updates the Anthropic model name.
+     * Updates the Anthropic model name. Tracks the row as `PendingChange`
+     * until the repository flush completes.
      *
      * @param model The new model or empty string to clear.
      */
     fun updateAnthropicModel(model: String) {
+        markPending(ROW_ID_ANTHROPIC)
         viewModelScope.launch {
             apiKeyRepository.setAnthropicModel(model.takeIf { it.isNotBlank() })
+            clearPending(ROW_ID_ANTHROPIC)
         }
     }
 
@@ -308,13 +339,16 @@ class SettingsViewModel @Inject constructor(
     }
 
     /**
-     * Updates the Google model name.
+     * Updates the Google model name. Tracks the row as `PendingChange`
+     * until the repository flush completes.
      *
      * @param model The new model or empty string to clear.
      */
     fun updateGoogleModel(model: String) {
+        markPending(ROW_ID_GOOGLE)
         viewModelScope.launch {
             apiKeyRepository.setGoogleModel(model.takeIf { it.isNotBlank() })
+            clearPending(ROW_ID_GOOGLE)
         }
     }
 
@@ -330,24 +364,36 @@ class SettingsViewModel @Inject constructor(
     }
 
     /**
-     * Updates the DeepSeek model name.
+     * Updates the DeepSeek model name. Tracks the row as `PendingChange`
+     * until the repository flush completes.
      *
      * @param model The new model or empty string to clear.
      */
     fun updateDeepSeekModel(model: String) {
+        markPending(ROW_ID_DEEPSEEK)
         viewModelScope.launch {
             apiKeyRepository.setDeepSeekModel(model.takeIf { it.isNotBlank() })
+            clearPending(ROW_ID_DEEPSEEK)
         }
     }
 
     /**
-     * Updates the Ollama local base URL.
+     * Updates the Ollama local base URL. A blank value surfaces an inline
+     * validation error on the row; a non-blank value clears it.
      *
      * @param url The new URL or empty string to clear.
      */
     fun updateOllamaBaseUrl(url: String) {
+        _uiState.update {
+            it.copy(
+                ollamaBaseUrl = url,
+                ollamaBaseUrlInvalid = url.isBlank(),
+                pendingRowIds = it.pendingRowIds + ROW_ID_OLLAMA,
+            )
+        }
         viewModelScope.launch {
             apiKeyRepository.setOllamaBaseUrl(url.takeIf { it.isNotBlank() })
+            _uiState.update { it.copy(pendingRowIds = it.pendingRowIds - ROW_ID_OLLAMA) }
         }
     }
 
@@ -374,11 +420,29 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
+    private fun markPending(rowId: String) {
+        _uiState.update { it.copy(pendingRowIds = it.pendingRowIds + rowId) }
+    }
+
+    private fun clearPending(rowId: String) {
+        _uiState.update { it.copy(pendingRowIds = it.pendingRowIds - rowId) }
+    }
+
     private companion object {
         /**
          * Short delay between writing the backend setting and triggering the test
          * load, giving DataStore time to flush so the loader observes the new value.
          */
         const val BACKEND_TEST_FLUSH_DELAY_MS: Long = 500L
+
+        /**
+         * Stable row identifiers used by the Knotwork settings surface. Kept
+         * in lock-step with `SettingsRowIds` consumed from the UI layer.
+         */
+        const val ROW_ID_OPENAI = "openai"
+        const val ROW_ID_ANTHROPIC = "anthropic"
+        const val ROW_ID_GOOGLE = "google"
+        const val ROW_ID_DEEPSEEK = "deepseek"
+        const val ROW_ID_OLLAMA = "ollama"
     }
 }

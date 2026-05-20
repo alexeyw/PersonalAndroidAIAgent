@@ -24,6 +24,13 @@ import ai.agent.android.domain.models.LocalBackend
  * @property ollamaContextWindow The Ollama context window size.
  * @property pipelineMaxSteps The maximum number of pipeline execution steps (5–100).
  * @property crashReportingEnabled Whether the user has opted in to anonymous crash reporting.
+ * @property memorySummaryDefaultLimit Maximum number of recent memories surfaced in
+ *  the `$MEMORY_SUMMARY` prompt variable (1..50).
+ * @property pendingRowIds Row ids that currently render a `PendingChange` spinner
+ *  while an async DataStore write is in flight (e.g. `openai_model`).
+ * @property ollamaBaseUrlInvalid `true` when the user blanked the Ollama
+ *  base-URL field; the screen converts this flag into a localized error
+ *  message via [ai.agent.android.R.string.settings_ollama_base_url_error].
  */
 data class SettingsUiState(
     val temperature: Float = 0.7f,
@@ -46,4 +53,7 @@ data class SettingsUiState(
     val localModelBackend: String = LocalBackend.CPU.key,
     val pipelineMaxSteps: Int = 15,
     val crashReportingEnabled: Boolean = false,
+    val memorySummaryDefaultLimit: Int = 5,
+    val pendingRowIds: Set<String> = emptySet(),
+    val ollamaBaseUrlInvalid: Boolean = false,
 )

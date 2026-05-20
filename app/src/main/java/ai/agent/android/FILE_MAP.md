@@ -285,10 +285,10 @@ This file maps the contents of the main application package.
       - `SplashScreen.kt` - Compose splash UI: app name, determinate `LinearProgressIndicator`, status label, inline error + Retry button. Calls `onInitialized` once initialization reaches `InitStage.Done` so the activity can navigate to `home`.
       - `SplashUiState.kt` - Render state of `SplashScreen` (message, progressFraction, isDone, errorMessage).
       - `SplashViewModel.kt` - Hilt ViewModel that subscribes to `AppInitializationUseCase`, folds each `InitProgress` into `SplashUiState`, and exposes `retry()` to re-run the pipeline after a fatal failure.
-    - `settings/` - Settings screen components.
-      - `SettingsScreen.kt` - Settings UI screen.
-      - `SettingsUiState.kt` - Settings UI state.
-      - `SettingsViewModel.kt` - Settings ViewModel.
+    - `settings/` - Settings screen components. Phase 22 / Task 8 rewired the screen onto the catalog `SettingsContent` surface; provider / sampling / system-prompt rows render through the Knotwork composables under `catalog/.../screens/settings/`.
+      - `SettingsScreen.kt` - Knotwork-styled settings surface. Builds a `SettingsViewState` from `SettingsUiState` and dispatches each row id (theme / system_prompt / backend / temperature / top_k / top_p / max_context / pipeline_max_steps / provider rows / hitl / crash_reporting / memory_summary_limit / mcp_manage / about_*) to the matching catalog composable via the `rowContent` slot.
+      - `SettingsUiState.kt` - Settings UI state — adds `memorySummaryDefaultLimit`, `pendingRowIds`, and `ollamaBaseUrlInvalid` for the row-level `PendingChange` and `ValidationError` matrix entries.
+      - `SettingsViewModel.kt` - Settings ViewModel. Wires DataStore + EncryptedPrefs flows into `SettingsUiState`, tracks per-row `PendingChange` flags during async writes for `pickModel(...)` and `updateOllamaBaseUrl(...)`, and exposes `updateMemorySummaryDefaultLimit(1..50)`.
     - `taskmonitor/` - Task monitoring screen components.
       - `TaskMonitorScreen.kt` - Task monitor UI screen.
       - `TaskMonitorState.kt` - Task monitor UI state.

@@ -241,6 +241,7 @@
     <!-- ============ Settings screen ============ -->
 
     <string name="knotwork_settings_title">Settings</string>
+    <string name="knotwork_settings_back">Back</string>
     <string name="knotwork_settings_section_appearance">Appearance</string>
     <string name="knotwork_settings_section_models">Models</string>
     <string name="knotwork_settings_section_privacy">Privacy</string>

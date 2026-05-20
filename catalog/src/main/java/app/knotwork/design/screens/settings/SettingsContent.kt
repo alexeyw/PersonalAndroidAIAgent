@@ -16,8 +16,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
@@ -43,6 +47,21 @@ import app.knotwork.design.tokens.KnotworkTextStyles
  * The screen renders sectioned headers + rows. Each row is rendered via
  * [SettingsRow] which exposes a trailing control slot — `:app` code passes
  * the matching `Switch` / `Slider` / dropdown for the row.
+ *
+ * For richer rows (collapsible provider cards, full-width sliders) the
+ * caller may supply [rowContent] which fully replaces the default
+ * `SettingsRow` rendering. The lambda receives the row and a
+ * `defaultRender` slot pointing at the stock rendering, so a single
+ * lambda can mix custom + default branches by inspecting `row.id`.
+ *
+ * @param state immutable input describing the whole surface.
+ * @param modifier optional layout modifier applied to the outer box.
+ * @param callbacks bundle invoked for top-level surface actions (restart,
+ *  destructive confirm / cancel).
+ * @param trailingControl slot rendered to the right of the row title when
+ *  the default `SettingsRow` is used. Receives the row to dispatch on.
+ * @param rowContent optional row-level override. Defaults to falling
+ *  through to `SettingsRow` + [trailingControl] for every row.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -51,14 +70,24 @@ fun SettingsContent(
     modifier: Modifier = Modifier,
     callbacks: SettingsCallbacks = noopSettingsCallbacks(),
     trailingControl: @Composable (SettingsRowState) -> Unit = { _ -> },
+    rowContent: @Composable (
+        row: SettingsRowState,
+        defaultRender: @Composable () -> Unit,
+    ) -> Unit = { _, defaultRender -> defaultRender() },
+    onBack: (() -> Unit)? = null,
 ) {
     Box(modifier = modifier.fillMaxSize()) {
         Scaffold(
             containerColor = MaterialTheme.colorScheme.surface,
-            topBar = { SettingsTopBar() },
+            topBar = { SettingsTopBar(onBack = onBack) },
             modifier = Modifier.fillMaxSize(),
         ) { padding ->
-            SettingsBody(state = state, padding = padding, trailingControl = trailingControl)
+            SettingsBody(
+                state = state,
+                padding = padding,
+                trailingControl = trailingControl,
+                rowContent = rowContent,
+            )
         }
         if (state.visualState == SettingsVisualState.RestartRequired) {
             RestartBanner(message = state.restartRequiredMessage.orEmpty(), onRestart = callbacks.onRestart)
@@ -75,7 +104,7 @@ fun SettingsContent(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun SettingsTopBar() {
+private fun SettingsTopBar(onBack: (() -> Unit)?) {
     TopAppBar(
         title = {
             Text(
@@ -83,6 +112,19 @@ private fun SettingsTopBar() {
                 style = KnotworkTextStyles.TitleLg,
                 color = MaterialTheme.colorScheme.onSurface,
             )
+        },
+        navigationIcon = {
+            if (onBack != null) {
+                IconButton(onClick = onBack) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                        contentDescription = androidx.compose.ui.res.stringResource(
+                            R.string.knotwork_settings_back,
+                        ),
+                        tint = MaterialTheme.colorScheme.onSurface,
+                    )
+                }
+            }
         },
         colors = TopAppBarDefaults.topAppBarColors(
             containerColor = MaterialTheme.colorScheme.surface,
@@ -96,6 +138,10 @@ private fun SettingsBody(
     state: SettingsViewState,
     padding: PaddingValues,
     trailingControl: @Composable (SettingsRowState) -> Unit,
+    rowContent: @Composable (
+        row: SettingsRowState,
+        defaultRender: @Composable () -> Unit,
+    ) -> Unit,
 ) {
     when (state.visualState) {
         SettingsVisualState.Loading -> SettingsLoading(padding = padding)
@@ -109,7 +155,9 @@ private fun SettingsBody(
                     SettingsSectionHeader(section = block.section)
                 }
                 items(items = block.rows, key = { row -> "${block.section.name}-${row.id}" }) { row ->
-                    SettingsRow(row = row) { trailingControl(row) }
+                    rowContent(row) {
+                        SettingsRow(row = row) { trailingControl(row) }
+                    }
                 }
                 if (block.errorMessage != null) {
                     item(key = "section-error-${block.section.name}") {

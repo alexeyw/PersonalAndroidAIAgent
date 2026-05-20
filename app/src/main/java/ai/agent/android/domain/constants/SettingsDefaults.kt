@@ -63,4 +63,10 @@ object SettingsDefaults {
      * per-model override has not been configured.
      */
     const val OLLAMA_CONTEXT_WINDOW_DEFAULT: Int = 4_096
+
+    /** Lower bound enforced when the user edits the memory-summary default limit. */
+    const val MEMORY_SUMMARY_LIMIT_MIN: Int = 1
+
+    /** Upper bound enforced when the user edits the memory-summary default limit. */
+    const val MEMORY_SUMMARY_LIMIT_MAX: Int = 50
 }
