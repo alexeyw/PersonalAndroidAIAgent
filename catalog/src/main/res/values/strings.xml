@@ -238,22 +238,55 @@
     <string name="knotwork_tools_detail_schema">JSON Schema</string>
     <string name="knotwork_tools_detail_schema_error">Schema unavailable — the server returned malformed JSON.</string>
 
-    <!-- ============ Settings screen ============ -->
+    <!-- ============ Settings screen (Phase 22 / Task 9 redesign) ============ -->
 
     <string name="knotwork_settings_title">Settings</string>
     <string name="knotwork_settings_back">Back</string>
-    <string name="knotwork_settings_section_appearance">Appearance</string>
-    <string name="knotwork_settings_section_models">Models</string>
-    <string name="knotwork_settings_section_privacy">Privacy</string>
+    <string name="knotwork_settings_search_cd">Search settings</string>
+
+    <string name="knotwork_settings_section_system_instructions">System instructions</string>
+    <string name="knotwork_settings_section_restrictions">Restrictions · Human-in-the-loop</string>
+    <string name="knotwork_settings_section_llm">LLM parameters</string>
+    <string name="knotwork_settings_section_local_model">Local model</string>
+    <string name="knotwork_settings_section_providers">External providers</string>
     <string name="knotwork_settings_section_memory">Memory</string>
-    <string name="knotwork_settings_section_mcp">MCP</string>
-    <string name="knotwork_settings_section_about">About</string>
-    <string name="knotwork_settings_restart_required">Changes take effect on restart.</string>
+    <string name="knotwork_settings_section_notifications">Notifications</string>
+    <string name="knotwork_settings_section_privacy">Privacy</string>
+
+    <string name="knotwork_settings_system_instructions_insert">Insert variable</string>
+    <string name="knotwork_settings_system_instructions_counter" tools:ignore="PluralsCandidate">%1$d / %2$d chars · ≈ %3$d tok</string>
+
+    <string name="knotwork_settings_restrictions_approve">Approve tool calls</string>
+    <string name="knotwork_settings_restrictions_block_destructive">Block destructive tools</string>
+    <string name="knotwork_settings_restrictions_block_network">Block network from local model</string>
+    <string name="knotwork_settings_restrictions_cap_steps">Cap autonomous steps</string>
+
+    <string name="knotwork_settings_llm_reset">Reset to defaults</string>
+
+    <string name="knotwork_settings_local_model_manage">Manage</string>
+    <string name="knotwork_settings_local_model_change">Change</string>
+    <string name="knotwork_settings_local_model_active_pill">Active</string>
+    <string name="knotwork_settings_local_model_empty">No model installed</string>
+    <string name="knotwork_settings_local_model_backend_title">Inference backend</string>
+    <string name="knotwork_settings_local_model_test_title">Test backend</string>
+    <string name="knotwork_settings_local_model_test_run">Run</string>
+
+    <string name="knotwork_settings_providers_add">Add provider</string>
+    <string name="knotwork_settings_providers_lan">LAN</string>
+    <string name="knotwork_settings_providers_not_configured">Not configured · tap to add API key</string>
+
+    <string name="knotwork_settings_notifications_long_running">Long-running tasks</string>
+    <string name="knotwork_settings_notifications_long_running_subtitle">Ping when a pipeline runs &gt; 8 s in background.</string>
+
+    <string name="knotwork_settings_crash_reporting_label">Send anonymous crash reports</string>
+    <string name="knotwork_settings_crash_reporting_hint">Help improve stability by sharing anonymous crash data.</string>
+    <string name="knotwork_settings_reset_button">Reset all settings</string>
+
+    <string name="knotwork_settings_restart_required">Backend change requires restart.</string>
     <string name="knotwork_settings_restart_action">Restart</string>
-    <string name="knotwork_settings_destructive_confirm_title">Are you sure?</string>
-    <string name="knotwork_settings_destructive_confirm_message">This action cannot be undone.</string>
-    <string name="knotwork_settings_destructive_confirm_yes">Confirm</string>
-    <string name="knotwork_settings_destructive_confirm_cancel">Cancel</string>
+
+    <string name="knotwork_settings_destructive_confirm">Confirm</string>
+    <string name="knotwork_settings_destructive_cancel">Cancel</string>
 
     <!-- ============ Memory screen ============ -->
 

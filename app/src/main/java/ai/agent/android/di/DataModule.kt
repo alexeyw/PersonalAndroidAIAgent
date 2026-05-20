@@ -13,6 +13,7 @@ import ai.agent.android.data.network.AndroidModelDownloadManager
 import ai.agent.android.data.repositories.ChatRepositoryImpl
 import ai.agent.android.data.repositories.ClarificationRepositoryImpl
 import ai.agent.android.data.repositories.FirebaseCrashReportingRepositoryImpl
+import ai.agent.android.data.repositories.IdentityRepositoryImpl
 import ai.agent.android.data.repositories.LocalModelRepositoryImpl
 import ai.agent.android.data.repositories.LocalPipelineRepositoryImpl
 import ai.agent.android.data.repositories.MemoryRepositoryImpl
@@ -21,6 +22,7 @@ import ai.agent.android.data.repositories.NetworkStateRepositoryImpl
 import ai.agent.android.data.repositories.PowerStateRepositoryImpl
 import ai.agent.android.data.repositories.PromptRepositoryImpl
 import ai.agent.android.data.repositories.ToolRepositoryImpl
+import ai.agent.android.data.services.LongRunningTaskNotifierImpl
 import ai.agent.android.domain.engine.LlmInferenceEngine
 import ai.agent.android.domain.engine.TaskQueueManager
 import ai.agent.android.domain.engine.TextEmbeddingEngine
@@ -28,6 +30,7 @@ import ai.agent.android.domain.repositories.ApiKeyRepository
 import ai.agent.android.domain.repositories.ChatRepository
 import ai.agent.android.domain.repositories.ClarificationRepository
 import ai.agent.android.domain.repositories.CrashReportingRepository
+import ai.agent.android.domain.repositories.IdentityRepository
 import ai.agent.android.domain.repositories.LocalModelRepository
 import ai.agent.android.domain.repositories.MemoryRepository
 import ai.agent.android.domain.repositories.MetricsRepository
@@ -38,6 +41,7 @@ import ai.agent.android.domain.repositories.PowerStateRepository
 import ai.agent.android.domain.repositories.PromptRepository
 import ai.agent.android.domain.repositories.SettingsRepository
 import ai.agent.android.domain.repositories.ToolRepository
+import ai.agent.android.domain.services.LongRunningTaskNotifier
 import dagger.Binds
 import dagger.Module
 import dagger.hilt.InstallIn
@@ -192,4 +196,22 @@ abstract class DataModule {
     abstract fun bindCrashReportingRepository(
         repository: FirebaseCrashReportingRepositoryImpl,
     ): CrashReportingRepository
+
+    /**
+     * Binds [IdentityRepositoryImpl] to [IdentityRepository]. Surfaces the
+     * Settings identity card snapshot (device-id + Keystore probe).
+     */
+    @Binds
+    @Singleton
+    abstract fun bindIdentityRepository(repository: IdentityRepositoryImpl): IdentityRepository
+
+    /**
+     * Binds [LongRunningTaskNotifierImpl] to [LongRunningTaskNotifier].
+     * The implementation gates every `notify` call on the user's
+     * `Long-running tasks` toggle so the binding is safe to provide
+     * unconditionally.
+     */
+    @Binds
+    @Singleton
+    abstract fun bindLongRunningTaskNotifier(notifier: LongRunningTaskNotifierImpl): LongRunningTaskNotifier
 }

@@ -1,7 +1,9 @@
 package ai.agent.android.domain.repositories
 
 import ai.agent.android.domain.models.MemoryChunk
+import ai.agent.android.domain.models.MemoryStats
 import ai.agent.android.domain.models.MemorySummary
+import kotlinx.coroutines.flow.Flow
 
 /**
  * Repository interface for managing and searching long-term memory.
@@ -92,4 +94,23 @@ interface MemoryRepository {
      * @param pinned `true` to pin the chunk, `false` to unpin it.
      */
     suspend fun setMemoryPinned(id: Long, pinned: Boolean)
+
+    /**
+     * Removes every memory chunk — including pinned entries — from the
+     * underlying table. Backs the Settings → Memory → Clear destructive
+     * action (typed-confirm dialog).
+     */
+    suspend fun deleteAllMemories()
+
+    /**
+     * Live snapshot of the aggregate stats rendered in the Settings →
+     * Memory card. Emits a fresh value whenever the underlying table
+     * mutates; consumers should `collectAsState` or `stateIn` it.
+     *
+     * Thread count and average similarity score are best-effort: the v0.1
+     * implementation returns `0` for threads (thread-attribution lands in
+     * a follow-up) and `null` for averageSimilarityScore until a
+     * similarity-search call has been recorded.
+     */
+    fun observeStats(): Flow<MemoryStats>
 }

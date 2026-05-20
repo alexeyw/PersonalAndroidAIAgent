@@ -15,6 +15,46 @@ details.
 
 ### Added
 
+- **Settings — redesign + full backend wiring** (Phase 22 / Task 9/17) —
+  Settings was rewritten end-to-end to match the new mockup. New surface
+  hosts nine cards: identity (device-id + Keystore probe), system
+  instructions (with variable chip row and char/token counter),
+  restrictions (segmented `Approve tool calls` + Block destructive /
+  Block network from local model toggles + Cap autonomous steps),
+  LLM parameters (Temperature / Top-K / Top-P / Repetition penalty /
+  Max context / Max steps + "Reset to defaults"), local model
+  (metadata card + Inference backend dropdown + Test backend with
+  persisted `TestProbeResult`), external providers (collapsed nav-rows
+  with key fingerprint + Add provider sheet → `ProviderDetailScreen`),
+  memory (CHUNKS / SIZE / THREADS / AVG SCORE stat grid +
+  Auto-summarize threshold slider + Embedding model row +
+  Export / Re-embed / Clear actions), notifications (Long-running
+  tasks toggle), and privacy (Crash reporting + Reset all settings).
+  The legacy boolean `requiresUserConfirmation` flag is migrated
+  one-shot into the new `ToolApprovalPolicy` enum
+  (`true` → `SensitiveOrDestructive`, `false` → `NeverPrompt`). New
+  domain: `IdentityRepository`, `MemoryRepository.observeStats()` +
+  `deleteAllMemories()`, `LocalModelRepository.observeActiveModelMeta()`,
+  `EmbeddingModelMetaProvider` (static), `LongRunningTaskNotifier`,
+  `ToolApprovalPolicy`, `TestProbeResult`, `MemoryStats`,
+  `ActiveModelMeta`, `ProviderSummary`, `Identity`, four new
+  `$VARIABLE` providers (`$LANG`, `$LOCATION`, `$USER`, `$DEVICE`),
+  and seven new use cases (`ResetSamplingDefaults`, `ClearAllMemory`,
+  `ExportMemoryBase` over SAF, `ReembedAllMemories` with progress flow,
+  `TestBackend` returning typed probe metrics,
+  `GetSystemPromptVariableCatalog`). `ToolNodeExecutor` now gates by
+  the new policy enum and hard-denies destructive tools when the
+  `Block destructive tools` toggle is on; `KoogClientFactory` returns
+  `null` for every cloud provider (Ollama still reachable) when the
+  `Block network from local model` toggle is on. Restart-required
+  banner detects backend / Ollama URL changes and reboots via
+  `ProcessPhoenix.triggerRebirth`. Destructive actions
+  (Clear memory / Reset settings) use a typed-confirm dialog (`yes`
+  keyword, matching the HITL Destructive pattern). New routes:
+  `settings/provider/{providerId}` (detail editor) +
+  `settings/provider/add` (picker). About screen expanded with
+  version / commit / license / acknowledgments / privacy policy
+  sections.
 - **Settings — port provider/sampling forms in the Knotwork style**
   (Phase 22 / Task 8/17) — the Settings screen now drives the catalog
   `SettingsContent` as the single source of truth for chrome (TopAppBar,

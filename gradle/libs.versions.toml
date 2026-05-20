@@ -38,6 +38,7 @@ crashlyticsPlugin = "3.0.7"
 coreSplashscreen = "1.2.0"
 roborazzi = "1.61.0"
 robolectric = "4.16.1"
+processPhoenix = "3.0.0"
 
 [libraries]
 androidx-compose-material-icons-core = { module = "androidx.compose.material:material-icons-core" }
@@ -100,6 +101,7 @@ roborazzi = { group = "io.github.takahirom.roborazzi", name = "roborazzi", versi
 roborazzi-compose = { group = "io.github.takahirom.roborazzi", name = "roborazzi-compose", version.ref = "roborazzi" }
 roborazzi-junit-rule = { group = "io.github.takahirom.roborazzi", name = "roborazzi-junit-rule", version.ref = "roborazzi" }
 robolectric = { group = "org.robolectric", name = "robolectric", version.ref = "robolectric" }
+process-phoenix = { group = "com.jakewharton", name = "process-phoenix", version.ref = "processPhoenix" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

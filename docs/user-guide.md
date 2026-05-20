@@ -571,85 +571,109 @@ chat history or memory.
 
 ## Settings
 
-The **Settings** screen groups every user-tunable knob into clearly
-labelled sections.
+The **Settings** screen groups every user-tunable knob into nine
+cards. The top bar carries the app version, channel and build date
+plus a magnifying-glass action for in-settings search.
+
+### Identity
+
+An avatar + label confirm the device identity is anonymous and
+local. The meta line shows the truncated device id and whether your
+API keys live in the Android Keystore (hardware-backed) or — on
+constrained devices — in encrypted preferences.
 
 ### System Instructions
 
-A multi-line **System Prompt Prefix** field. Anything you type here
-is prepended to every system prompt the agent sends, regardless of
-which pipeline runs.
+A monospaced multi-line field whose content is prepended to every
+system prompt the agent sends. Tap a chip to insert one of the
+built-in variables (`$DATE`, `$TIME`, `$LANG`, `$LOCATION`,
+`$USER`, `$DEVICE`) — they expand fresh on every prompt render.
+The counter shows live character usage against the 4 000-character
+limit.
 
-### Restrictions
+### Restrictions · Human-in-the-loop
 
-- **Human-in-the-loop** — when on, every tool call requires your
-  approval, not just sensitive or destructive ones (see
-  [Tools and MCP](#tools-and-mcp)).
+- **Approve tool calls** — segmented control switching between
+  `All` (prompt for every call), `Sensitive +` (only sensitive or
+  destructive tools — recommended default), and `Never` (no
+  prompts at all; reserved for known-safe pipelines).
+- **Block destructive tools** — when on, destructive tools are
+  refused outright rather than going through the HITL prompt.
+  Useful when the agent runs unattended.
+- **Block network from local model** — when on, every cloud
+  provider returns `null` to the inference pipeline and only the
+  on-device LiteRT engine plus LAN-local Ollama remain reachable.
+- **Cap autonomous steps** — upper bound on planner iterations
+  per user message; the agent pauses for guidance when the cap is
+  hit.
 
 ### LLM Parameters
 
-These knobs control how the on-device model generates text:
+The "Reset to defaults" action restores every slider in this card.
 
-- **Temperature** (0.0 – 2.0) — higher values produce more varied,
-  creative output; lower values stay closer to the most likely
-  token.
-- **Top-K** (1 – 100) — limits sampling to the K most likely tokens
-  at each step.
-- **Top-P** (0.0 – 1.0) — nucleus sampling threshold. The model
-  considers the smallest set of tokens whose probabilities add up
-  to P.
-- **Max Context Length** (512 – 8192) — maximum number of tokens
-  the model keeps in its working window.
-- **Max Steps** (5 – 100) — upper bound on how many pipeline
-  iterations the agent is allowed to run for a single message. Use
-  it to cap runaway loops.
+- **Temperature** (0.0 – 2.0) — higher values produce more varied
+  output.
+- **Top-K** (1 – 100) — keeps only the K most likely tokens.
+- **Top-P** (0.0 – 1.0) — nucleus sampling threshold.
+- **Repetition penalty** (1.0 – 2.0) — `1.0` is neutral; higher
+  values discourage the model from repeating recent tokens.
+- **Max context** (512 – 8 192) — working window in tokens.
+- **Max steps** (5 – 100) — pipeline-iteration cap (same value
+  as Restrictions → Cap autonomous steps; the two surfaces share
+  the underlying preference).
 
-### Local Model Settings
+### Local Model
 
-- **Inference Backend** — drop-down that selects the engine used to
-  run the local model.
-- **Test Backend** — runs a tiny inference probe and shows a toast
-  with the result. Use it after switching backends to make sure
-  acceleration is wired up.
-
-### Privacy
-
-- **Opt-in Crash Reporting** — when on, anonymous crash reports are
-  forwarded to Firebase Crashlytics so problems can be diagnosed.
-  The first time you enable it, the app shows a dialog explaining
-  exactly what is and is not collected; you must explicitly confirm
-  to opt in.
-
-  Crash reporting transmits stack traces, device model, Android
-  version, app version/build, and the identifiers of the active
-  pipeline and model. It **never** transmits the contents of chat
-  messages, model prompts or replies, memory chunks, tool inputs or
-  outputs, or any value stored in encrypted preferences. Debug
-  builds disable crash reporting entirely regardless of the toggle.
-  Full details are in [SECURITY.md](../SECURITY.md).
+- Active-model card showing name, file size, context window,
+  quantization and download date. Tap **Change** to pick a
+  different model; **Manage** opens the full Models browser.
+- **Inference backend** — drop-down picking the engine (NPU
+  preferred, falls back to GPU then CPU).
+- **Test backend** — runs a fixed prompt-probe and persists the
+  measurement (`Last probe · N tok in T s · K tok/s`) so the row
+  keeps the metric across navigation. Changing the backend
+  surfaces a restart banner — tap **Restart** to apply the
+  change immediately.
 
 ### External Providers
 
-Each optional cloud provider (**OpenAI**, **Anthropic**, **Google**,
-**DeepSeek**) has its own subsection with two fields:
+Each provider — **OpenAI**, **Anthropic**, **Google**,
+**DeepSeek**, **Ollama** — collapses to a single row showing the
+masked key fingerprint and selected model. Tap the row to open
+the standalone provider editor. The Ollama row additionally
+carries a **LAN** pill plus the base URL. Use **+ Add provider**
+to surface an unconfigured provider's editor without scrolling.
+Leaving every cloud row blank keeps the agent fully offline.
 
-- **API Key** — masked password field. Keys are stored in
-  encrypted shared preferences and are never written to plain
-  storage, logs, or chat exports.
-- **Model** — drop-down that selects the default model identifier
-  the agent uses when it dispatches a request to that provider.
+### Memory
 
-A separate **Ollama (Local Network Models)** subsection adds three
-fields:
+Four-cell stat grid — **Chunks / Size / Threads / Avg score** —
+plus an **Auto-summarize threshold** slider (`%` of the memory
+context budget) and an **Embedding model** row identifying the
+on-device encoder. The action trio:
 
-- **Ollama Base URL** (for example, `http://localhost:11434`).
-- **Ollama Model** (for example, `mistral`).
-- **Ollama Context Window** (numeric, used to clamp the prompt
-  size sent to Ollama).
+- **Export base** — opens a SAF picker; saves the entire memory
+  table as a JSON blob.
+- **Re-embed** — re-runs the embedder over every chunk; an inline
+  progress bar tracks completion.
+- **Clear** — opens a typed-confirm dialog ("type `yes` to
+  confirm"); on confirm wipes every chunk, pinned included.
 
-Leaving every cloud provider blank is fine — the agent runs fully
-offline on the local LiteRT model and hides any tools that require
-cloud reasoning.
+### Notifications
+
+- **Long-running tasks** — when on, a low-importance system
+  notification fires when a backgrounded pipeline run exceeds the
+  long-running threshold.
+
+### Privacy
+
+- **Send anonymous crash reports** — forwards stack traces +
+  device meta + active pipeline / model identifiers to Firebase
+  Crashlytics. Off by default; debug builds never report. Full
+  policy in [SECURITY.md](../SECURITY.md).
+- **Reset all settings** — typed-confirm dialog that restores
+  every preference to defaults (API keys, downloaded models, and
+  memory are untouched).
 
 ---
 

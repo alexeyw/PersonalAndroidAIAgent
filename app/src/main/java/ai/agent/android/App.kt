@@ -4,6 +4,7 @@ import ai.agent.android.data.logging.CrashlyticsTimberTree
 import ai.agent.android.data.tools.local.appfunctions.SearchAppFunction
 import ai.agent.android.domain.repositories.CrashReportingRepository
 import ai.agent.android.domain.repositories.SettingsRepository
+import ai.agent.android.domain.services.LongRunningTaskNotifier
 import ai.agent.android.presentation.theme.KnotworkFontsBootstrap
 import android.app.Application
 import androidx.appfunctions.service.AppFunctionConfiguration
@@ -55,6 +56,9 @@ class App :
     @Inject
     lateinit var crashReportingRepository: CrashReportingRepository
 
+    @Inject
+    lateinit var longRunningTaskNotifier: LongRunningTaskNotifier
+
     /**
      * Hilt-managed factory for the callee-side [SearchAppFunction] wrapper. A [Provider] is
      * used (not a direct [Inject]) because the AppFunctions runtime asks for a fresh
@@ -93,6 +97,7 @@ class App :
         // design-system typography sheet before the first Compose composition
         // so screens render against the brand fonts on the very first frame.
         KnotworkFontsBootstrap.install()
+        longRunningTaskNotifier.registerChannel()
         if (BuildConfig.DEBUG) {
             Timber.plant(Timber.DebugTree())
         } else {

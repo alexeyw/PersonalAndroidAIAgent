@@ -34,4 +34,13 @@ object NotificationChannels {
      * irreversible operations are easy to spot among other approval prompts.
      */
     const val AGENT_APPROVAL_DESTRUCTIVE: String = "AgentApprovalDestructiveChannel"
+
+    /**
+     * Low-importance channel for informational pings when a backgrounded
+     * pipeline run exceeds the long-running threshold. Backs the Settings →
+     * Notifications → "Long-running tasks" toggle: the channel is created
+     * once at app start and `LongRunningTaskNotifier` posts to it when the
+     * user-controlled flag is on.
+     */
+    const val LONG_RUNNING_TASKS: String = "LongRunningTasksChannel"
 }

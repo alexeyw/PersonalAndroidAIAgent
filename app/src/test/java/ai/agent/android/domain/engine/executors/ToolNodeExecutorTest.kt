@@ -8,6 +8,7 @@ import ai.agent.android.domain.models.NodeModel
 import ai.agent.android.domain.models.NodeOutput
 import ai.agent.android.domain.models.NodeType
 import ai.agent.android.domain.models.Result
+import ai.agent.android.domain.models.ToolApprovalPolicy
 import ai.agent.android.domain.models.ToolRisk
 import ai.agent.android.domain.repositories.ChatRepository
 import ai.agent.android.domain.repositories.SettingsRepository
@@ -67,7 +68,8 @@ class ToolNodeExecutorTest {
         )
 
         coEvery { loadModelUseCase(any()) } returns Result.Success(Unit)
-        every { settingsRepository.requiresUserConfirmation } returns flowOf(false)
+        every { settingsRepository.toolApprovalPolicy } returns flowOf(ToolApprovalPolicy.SensitiveOrDestructive)
+        every { settingsRepository.blockDestructiveTools } returns flowOf(false)
         every { settingsRepository.toolCallTimeoutMs } returns flowOf(60_000L)
         // Default risk for tests that don't care about the HITL gate. Individual
         // tests override `getRisk(...)` to drive the gate explicitly.
@@ -165,7 +167,8 @@ class ToolNodeExecutorTest {
 
     @Test
     fun `given READ_ONLY tool and global override off when execute then no approval emitted`() = runTest {
-        every { settingsRepository.requiresUserConfirmation } returns flowOf(false)
+        every { settingsRepository.toolApprovalPolicy } returns flowOf(ToolApprovalPolicy.SensitiveOrDestructive)
+        every { settingsRepository.blockDestructiveTools } returns flowOf(false)
         coEvery { toolRepository.getRisk(any()) } returns ToolRisk.READ_ONLY
 
         val toolName = "ReadTool"
@@ -189,7 +192,8 @@ class ToolNodeExecutorTest {
     @Test
     fun `given READ_ONLY tool and global override on when execute then approval emitted with READ_ONLY risk`() =
         runTest {
-            every { settingsRepository.requiresUserConfirmation } returns flowOf(true)
+            every { settingsRepository.toolApprovalPolicy } returns flowOf(ToolApprovalPolicy.AllCalls)
+            every { settingsRepository.blockDestructiveTools } returns flowOf(false)
             every { settingsRepository.toolCallTimeoutMs } returns flowOf(100L)
             coEvery { toolRepository.getRisk(any()) } returns ToolRisk.READ_ONLY
 
@@ -223,7 +227,8 @@ class ToolNodeExecutorTest {
     @Test
     fun `given SENSITIVE tool and global override off when execute then approval emitted with SENSITIVE risk`() =
         runTest {
-            every { settingsRepository.requiresUserConfirmation } returns flowOf(false)
+            every { settingsRepository.toolApprovalPolicy } returns flowOf(ToolApprovalPolicy.SensitiveOrDestructive)
+            every { settingsRepository.blockDestructiveTools } returns flowOf(false)
             every { settingsRepository.toolCallTimeoutMs } returns flowOf(100L)
             coEvery { toolRepository.getRisk(any()) } returns ToolRisk.SENSITIVE
 
@@ -257,7 +262,8 @@ class ToolNodeExecutorTest {
     @Test
     fun `given DESTRUCTIVE tool and global override off when execute then approval emitted with DESTRUCTIVE risk`() =
         runTest {
-            every { settingsRepository.requiresUserConfirmation } returns flowOf(false)
+            every { settingsRepository.toolApprovalPolicy } returns flowOf(ToolApprovalPolicy.SensitiveOrDestructive)
+            every { settingsRepository.blockDestructiveTools } returns flowOf(false)
             every { settingsRepository.toolCallTimeoutMs } returns flowOf(100L)
             coEvery { toolRepository.getRisk(any()) } returns ToolRisk.DESTRUCTIVE
 
@@ -310,7 +316,8 @@ class ToolNodeExecutorTest {
 
     @Test
     fun `given SENSITIVE tool and user denies when execute then emits execution denied observation`() = runTest {
-        every { settingsRepository.requiresUserConfirmation } returns flowOf(false)
+        every { settingsRepository.toolApprovalPolicy } returns flowOf(ToolApprovalPolicy.SensitiveOrDestructive)
+        every { settingsRepository.blockDestructiveTools } returns flowOf(false)
         every { settingsRepository.toolCallTimeoutMs } returns flowOf(5_000L)
         coEvery { toolRepository.getRisk(any()) } returns ToolRisk.SENSITIVE
 
