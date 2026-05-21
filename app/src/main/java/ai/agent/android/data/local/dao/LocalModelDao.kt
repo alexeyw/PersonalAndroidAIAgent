@@ -30,6 +30,14 @@ interface LocalModelDao {
     suspend fun getActiveModel(): LocalModelEntity?
 
     /**
+     * Live projection of the currently active model — emits a new value
+     * whenever any row toggles the `isActive` column. Powers the
+     * Settings → Local model card.
+     */
+    @Query("SELECT * FROM local_models WHERE isActive = 1 LIMIT 1")
+    fun observeActiveModel(): Flow<LocalModelEntity?>
+
+    /**
      * Inserts a new model record. Replaces if a conflict occurs.
      *
      * @param model The [LocalModelEntity] to insert.

@@ -1,5 +1,6 @@
 package ai.agent.android.presentation.ui.navigation
 
+import ai.agent.android.domain.models.ProviderId
 import ai.agent.android.presentation.ui.about.AboutScreen
 import ai.agent.android.presentation.ui.chat.home.ChatHomeScreen
 import ai.agent.android.presentation.ui.chat.home.ChatHomeViewModel
@@ -14,6 +15,8 @@ import ai.agent.android.presentation.ui.orchestrator.PipelineLibraryScreen
 import ai.agent.android.presentation.ui.pipeline.editor.PipelineEditorScreen
 import ai.agent.android.presentation.ui.prompts.PromptLibraryScreen
 import ai.agent.android.presentation.ui.settings.SettingsScreen
+import ai.agent.android.presentation.ui.settings.provider.ProviderDetailScreen
+import ai.agent.android.presentation.ui.settings.provider.ProviderPickerScreen
 import ai.agent.android.presentation.ui.splash.SplashScreen
 import ai.agent.android.presentation.ui.taskmonitor.TaskMonitorScreen
 import ai.agent.android.presentation.ui.taskmonitor.TaskMonitorViewModel
@@ -274,13 +277,60 @@ fun AppNavGraph(navController: NavHostController, showOnboarding: Boolean, modif
             SettingsScreen(
                 modifier = Modifier.fillMaxSize(),
                 onBack = { navController.popBackStack() },
-                onOpenTools = {
-                    navController.navigate(NavRoutes.TOOLS) {
-                        applyTabSwitchOptions()
+                onOpenModels = { navController.navigate(NavRoutes.MODELS) },
+                onOpenProvider = { providerId ->
+                    val wireId = providerId.cloudProvider.id
+                    navController.navigate(
+                        NavRoutes.PROVIDER_DETAIL.replace(
+                            oldValue = "{${NavRoutes.PROVIDER_DETAIL_ID_ARG}}",
+                            newValue = wireId,
+                        ),
+                    )
+                },
+                onOpenAddProvider = { navController.navigate(NavRoutes.ADD_PROVIDER) },
+                onOpenSearch = { navController.navigate(NavRoutes.SETTINGS_SEARCH) },
+            )
+        }
+        composable(
+            route = NavRoutes.PROVIDER_DETAIL,
+            arguments = listOf(
+                navArgument(NavRoutes.PROVIDER_DETAIL_ID_ARG) {
+                    type = NavType.StringType
+                    nullable = false
+                },
+            ),
+        ) { entry ->
+            val wireId = entry.arguments?.getString(NavRoutes.PROVIDER_DETAIL_ID_ARG).orEmpty()
+            val providerId = ProviderId.entries.firstOrNull { it.cloudProvider.id == wireId }
+                ?: ProviderId.OpenAi
+            ProviderDetailScreen(
+                providerId = providerId,
+                onBack = { navController.popBackStack() },
+            )
+        }
+        composable(NavRoutes.ADD_PROVIDER) {
+            // v0.1: Add provider goes through the same picker as the
+            // detail screen — surface a minimal list-style picker that
+            // forwards to the per-provider detail route. The richer
+            // bottom-sheet picker is a follow-up.
+            ProviderPickerScreen(
+                onPick = { providerId ->
+                    val wireId = providerId.cloudProvider.id
+                    navController.navigate(
+                        NavRoutes.PROVIDER_DETAIL.replace(
+                            oldValue = "{${NavRoutes.PROVIDER_DETAIL_ID_ARG}}",
+                            newValue = wireId,
+                        ),
+                    ) {
+                        popUpTo(NavRoutes.SETTINGS)
                     }
                 },
-                onOpenAbout = { navController.navigate(NavRoutes.ABOUT) },
+                onBack = { navController.popBackStack() },
             )
+        }
+        composable(NavRoutes.SETTINGS_SEARCH) {
+            // Placeholder until the search-in-settings sheet lands.
+            KnotworkModalRoute(onDismiss = { navController.popBackStack() }) { _ -> }
         }
         composable(NavRoutes.PROMPTS) {
             PromptLibraryScreen(

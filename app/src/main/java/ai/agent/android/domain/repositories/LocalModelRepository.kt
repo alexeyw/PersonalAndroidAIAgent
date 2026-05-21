@@ -1,5 +1,6 @@
 package ai.agent.android.domain.repositories
 
+import ai.agent.android.domain.models.ActiveModelMeta
 import ai.agent.android.domain.models.LocalModel
 import kotlinx.coroutines.flow.Flow
 
@@ -49,4 +50,13 @@ interface LocalModelRepository {
      * @param id The ID of the model to activate.
      */
     suspend fun setActiveModel(id: Long)
+
+    /**
+     * Live snapshot of the currently active model enriched with on-device
+     * metadata (file size, parsed quantization marker, downloaded
+     * timestamp). Emits `null` when no model has been activated yet —
+     * the Settings → Local model card then renders an empty state with a
+     * primary "Browse models" CTA.
+     */
+    fun observeActiveModelMeta(): Flow<ActiveModelMeta?>
 }

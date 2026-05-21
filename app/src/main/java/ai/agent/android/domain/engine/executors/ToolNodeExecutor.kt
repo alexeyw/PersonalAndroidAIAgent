@@ -9,6 +9,7 @@ import ai.agent.android.domain.models.NodeModel
 import ai.agent.android.domain.models.NodeOutput
 import ai.agent.android.domain.models.Result
 import ai.agent.android.domain.models.Role
+import ai.agent.android.domain.models.ToolApprovalPolicy
 import ai.agent.android.domain.models.ToolRisk
 import ai.agent.android.domain.repositories.ChatRepository
 import ai.agent.android.domain.repositories.SettingsRepository
@@ -249,10 +250,42 @@ class ToolNodeExecutor @Inject constructor(
             emit(NodeOutput.Result(NodeExecutionResult(error = errorMsg, resolvedToolName = resolvedToolName)))
             return@flow
         }
-        val globalConfirmationOverride = settingsRepository.requiresUserConfirmation.first()
-        val needsApproval = when (risk) {
-            ToolRisk.READ_ONLY -> globalConfirmationOverride
-            ToolRisk.SENSITIVE, ToolRisk.DESTRUCTIVE -> true
+        // Hard-deny gate: when the user has opted to block destructive tools
+        // outright, refuse the call before even staging the HITL prompt.
+        //
+        // The denial is surfaced as a `NodeExecutionResult.error` (NOT
+        // `outputText`) so the orchestrator treats the node as failed and
+        // the upstream planner sees a tool-failure signal rather than a
+        // successful observation. Without that distinction the LLM would
+        // hallucinate that the destructive action succeeded and could
+        // loop back to retry the same call.
+        if (risk == ToolRisk.DESTRUCTIVE && settingsRepository.blockDestructiveTools.first()) {
+            val message = "Destructive tools are blocked by Settings — $resolvedToolName was not executed."
+            chatRepository.saveMessage(
+                ChatMessage(
+                    sessionId = sessionId,
+                    role = Role.SYSTEM,
+                    content = message,
+                    timestamp = System.currentTimeMillis(),
+                    isFinal = false,
+                ),
+            )
+            emit(NodeOutput.State(AgentOrchestratorState.Error(message)))
+            emit(
+                NodeOutput.Result(
+                    NodeExecutionResult(
+                        error = message,
+                        resolvedToolName = resolvedToolName,
+                    ),
+                ),
+            )
+            return@flow
+        }
+        val approvalPolicy = settingsRepository.toolApprovalPolicy.first()
+        val needsApproval = when (approvalPolicy) {
+            ToolApprovalPolicy.AllCalls -> true
+            ToolApprovalPolicy.NeverPrompt -> false
+            ToolApprovalPolicy.SensitiveOrDestructive -> risk == ToolRisk.SENSITIVE || risk == ToolRisk.DESTRUCTIVE
         }
         var isApproved = true
 

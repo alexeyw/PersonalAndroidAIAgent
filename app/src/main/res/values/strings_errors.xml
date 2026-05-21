@@ -38,7 +38,10 @@
     <string name="errors_orchestrator_validation_node_no_sources">Node \"%1$s\" will not receive any data — enable at least one source</string>
 
     <!-- Settings feature -->
-    <string name="errors_settings_no_active_model">No active local model found. Please download and select one first.</string>
-    <string name="errors_settings_test_backend_failed">Failed: %1$s</string>
-    <string name="errors_settings_test_backend_exception">Exception: %1$s</string>
+    <!--
+        Phase 22 / Task 9 — the legacy `errors_settings_*` strings were removed
+        once `SettingsViewModel` switched to the typed [TestProbeResult]
+        envelope (failure copy now lives inside `settings_row_test_backend_failed`
+        and is reused by the snackbar surface).
+    -->
 </resources>

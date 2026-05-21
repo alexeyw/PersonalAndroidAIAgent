@@ -27,6 +27,7 @@ import ai.agent.android.domain.models.NodeType
 import ai.agent.android.domain.models.PipelineGraph
 import ai.agent.android.domain.models.Result
 import ai.agent.android.domain.models.Role
+import ai.agent.android.domain.models.ToolApprovalPolicy
 import ai.agent.android.domain.models.ToolRisk
 import ai.agent.android.domain.prompt.PromptTemplateEngine
 import ai.agent.android.domain.prompt.PromptVariableProvider
@@ -197,7 +198,8 @@ class GraphExecutionEngineTest {
         every { chatRepository.getMessagesForSession(any()) } returns flowOf(emptyList())
         every { settingsRepository.systemPromptPrefix } returns flowOf("")
         every { settingsRepository.toolUsageInstruction } returns flowOf("")
-        every { settingsRepository.requiresUserConfirmation } returns flowOf(false)
+        every { settingsRepository.toolApprovalPolicy } returns flowOf(ToolApprovalPolicy.SensitiveOrDestructive)
+        every { settingsRepository.blockDestructiveTools } returns flowOf(false)
         every { settingsRepository.pipelineMaxSteps } returns flowOf(15)
         coEvery { toolRepository.getAvailableTools() } returns emptyList()
 
@@ -1157,7 +1159,8 @@ class GraphExecutionEngineTest {
     @Test
     fun `given TOOL node configured as auto when executed then resolved tool name reaches downstream`() = runTest {
         every { settingsRepository.pipelineMaxSteps } returns flowOf(15)
-        every { settingsRepository.requiresUserConfirmation } returns flowOf(false)
+        every { settingsRepository.toolApprovalPolicy } returns flowOf(ToolApprovalPolicy.SensitiveOrDestructive)
+        every { settingsRepository.blockDestructiveTools } returns flowOf(false)
 
         // Two tools registered; the LITE_RT used by ToolNodeExecutor for auto-selection
         // returns a JSON object naming "web.search" — so the observation must be
@@ -1263,7 +1266,8 @@ class GraphExecutionEngineTest {
     @Test
     fun `given INPUT-TOOL-CLOUD-OUTPUT with distinct contexts when run then TOOL is nodeInput-only`() = runTest {
         every { settingsRepository.pipelineMaxSteps } returns flowOf(15)
-        every { settingsRepository.requiresUserConfirmation } returns flowOf(false)
+        every { settingsRepository.toolApprovalPolicy } returns flowOf(ToolApprovalPolicy.SensitiveOrDestructive)
+        every { settingsRepository.blockDestructiveTools } returns flowOf(false)
 
         // Pre-seed the pipeline-scoped data sources so every block in
         // ALL_ENABLED has something visible to render. Without these stubs the
@@ -1529,7 +1533,8 @@ class GraphExecutionEngineTest {
     @Test
     fun `given pipeline with READ_ONLY tool node when run then completes without HITL pause`() = runTest {
         every { settingsRepository.pipelineMaxSteps } returns flowOf(15)
-        every { settingsRepository.requiresUserConfirmation } returns flowOf(false)
+        every { settingsRepository.toolApprovalPolicy } returns flowOf(ToolApprovalPolicy.SensitiveOrDestructive)
+        every { settingsRepository.blockDestructiveTools } returns flowOf(false)
 
         // READ_ONLY + global override OFF must skip the HITL gate entirely: no
         // WaitingForApproval emission, no notifier call, and the pipeline

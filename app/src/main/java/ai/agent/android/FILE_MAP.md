@@ -44,6 +44,10 @@ This file maps the contents of the main application package.
     - `ToolsVariableProvider.kt` - Resolves `$TOOLS` to the active tools list (`name — description`, one per line).
     - `ModelVariableProvider.kt` - Resolves `$MODEL` to the currently active local model display name.
     - `MemorySummaryVariableProvider.kt` - Resolves `$MEMORY_SUMMARY` to a numbered list of recent long-term memory chunks.
+    - `LangVariableProvider.kt` - Resolves `$LANG` to the device's BCP-47 language tag.
+    - `LocationVariableProvider.kt` - Resolves `$LOCATION` to the device's coarse region (country code).
+    - `UserVariableProvider.kt` - Resolves `$USER` to the identity card's display name (currently "Anonymous").
+    - `DeviceVariableProvider.kt` - Resolves `$DEVICE` to a short "manufacturer · model · Android version" descriptor.
   - `mappers/` - Data mapping layer.
     - `LocalModelMapper.kt` - Mapper for local models.
     - `ChatMessageMapper.kt` - Mapper for chat messages.
@@ -58,7 +62,8 @@ This file maps the contents of the main application package.
     - `ChatRepositoryImpl.kt` - Chat repository implementation.
     - `ClarificationRepositoryImpl.kt` - In-memory implementation of `ClarificationRepository` that suspends pipeline coroutines until the user answers (or the request times out).
     - `FirebaseCrashReportingRepositoryImpl.kt` - Firebase-backed `CrashReportingRepository`. Every method is gated on `SettingsRepository.crashReportingEnabled` and short-circuits to no-op when the user has not opted in.
-    - `LocalModelRepositoryImpl.kt` - Local model repository implementation.
+    - `IdentityRepositoryImpl.kt` - Resolves the Settings identity card snapshot (ANDROID_ID → 8-hex device id, AndroidKeyStore probe).
+    - `LocalModelRepositoryImpl.kt` - Local model repository implementation; observes the active model file metadata for the Settings local-model card.
     - `LocalPipelineRepositoryImpl.kt` - Local pipeline repository implementation.
     - `MemoryRepositoryImpl.kt` - Memory repository implementation.
     - `MetricsRepositoryImpl.kt` - Metrics repository implementation.
@@ -70,6 +75,7 @@ This file maps the contents of the main application package.
     - `AgentIdleManager.kt` - Manager for device idle state.
     - `AgentPowerManager.kt` - Manager for power states.
     - `AgentWorker.kt` - WorkManager worker for agent tasks.
+    - `LongRunningTaskNotifierImpl.kt` - Notifier for the `LongRunningTasksChannel`; gated on the Settings → Notifications toggle.
   - `testing/` - Production-graph entry points used solely by instrumented tests.
     - `AppFunctionsE2ETestEntryPoint.kt` - Hilt `EntryPoint` exposing `ToolRepository`, `SettingsRepository`, and `ChatRepository` to `AppFunctionsEndToEndTest` so the test can reach the production singletons without a Hilt test component.
   - `tools/` - Tool and action implementations.
@@ -182,6 +188,12 @@ This file maps the contents of the main application package.
     - `SavePipelineUseCase.kt` - Use case to save a pipeline.
     - `ScheduleTaskUseCase.kt` - Use case to schedule tasks.
     - `TaskRouterUseCase.kt` - Use case to route tasks.
+    - `ResetSamplingDefaultsUseCase.kt` - Resets temperature / top-K / top-P / repetition penalty / max context / max steps to the documented defaults.
+    - `ClearAllMemoryUseCase.kt` - Wipes every memory chunk (pinned and unpinned). Gated behind the typed-confirm dialog.
+    - `ExportMemoryBaseUseCase.kt` - Serialises the memory table to a portable JSON blob. SAF-driven from `SettingsScreen`.
+    - `ReembedAllMemoriesUseCase.kt` - Re-runs the active embedding engine over every chunk; streams `0f..1f` progress.
+    - `TestBackendUseCase.kt` - Runs a fixed prompt-probe against the active local model and persists `TestProbeResult` so the Settings row keeps showing the latest throughput.
+    - `GetSystemPromptVariableCatalogUseCase.kt` - Materialises the `$VARIABLE` chip catalog with live preview samples for the Settings → System instructions card.
 - `presentation/` - UI and presentation layer.
   - `common/` - Cross-feature presentation utilities.
     - `UiText.kt` - Sealed `UiText` (`Resource` / `Dynamic` / `Joined` / `Empty`) used by `UiState`s to carry user-visible text without holding a `Context`.
@@ -285,10 +297,13 @@ This file maps the contents of the main application package.
       - `SplashScreen.kt` - Compose splash UI: app name, determinate `LinearProgressIndicator`, status label, inline error + Retry button. Calls `onInitialized` once initialization reaches `InitStage.Done` so the activity can navigate to `home`.
       - `SplashUiState.kt` - Render state of `SplashScreen` (message, progressFraction, isDone, errorMessage).
       - `SplashViewModel.kt` - Hilt ViewModel that subscribes to `AppInitializationUseCase`, folds each `InitProgress` into `SplashUiState`, and exposes `retry()` to re-run the pipeline after a fatal failure.
-    - `settings/` - Settings screen components. Phase 22 / Task 8 rewired the screen onto the catalog `SettingsContent` surface; provider / sampling / system-prompt rows render through the Knotwork composables under `catalog/.../screens/settings/`.
-      - `SettingsScreen.kt` - Knotwork-styled settings surface. Builds a `SettingsViewState` from `SettingsUiState` and dispatches each row id (theme / system_prompt / backend / temperature / top_k / top_p / max_context / pipeline_max_steps / provider rows / hitl / crash_reporting / memory_summary_limit / mcp_manage / about_*) to the matching catalog composable via the `rowContent` slot.
-      - `SettingsUiState.kt` - Settings UI state — adds `memorySummaryDefaultLimit`, `pendingRowIds`, and `ollamaBaseUrlInvalid` for the row-level `PendingChange` and `ValidationError` matrix entries.
-      - `SettingsViewModel.kt` - Settings ViewModel. Wires DataStore + EncryptedPrefs flows into `SettingsUiState`, tracks per-row `PendingChange` flags during async writes for `pickModel(...)` and `updateOllamaBaseUrl(...)`, and exposes `updateMemorySummaryDefaultLimit(1..50)`.
+    - `settings/` - Settings screen components. Phase 22 / Task 9 redesigned the surface end-to-end: nine cards (identity / system instructions / restrictions / LLM parameters / local model / external providers / memory / notifications / privacy) drive the catalog `SettingsContent`.
+      - `SettingsScreen.kt` - Slim mapper. Translates `SettingsUiState` into the catalog `SettingsViewState`, hosts the SAF launcher for memory export, the `ProcessPhoenix.triggerRebirth` restart hook, and the `SnackbarHost`.
+      - `SettingsUiState.kt` - Per-card state slices (identity, system instructions + variable chip catalog, restrictions, LLM params, local model + active-model meta, providers, memory stats, notifications, privacy, restart-required flag, destructive-action staging).
+      - `SettingsViewModel.kt` - Aggregates every preference + repository projection. Owns the restart-required baseline snapshot, the destructive typed-confirm gate (Clear memory / Reset settings), and the test-backend probe runner.
+      - `provider/` - Standalone provider editor reached from the External providers nav-rows.
+        - `ProviderDetailScreen.kt` - Hosts `KnotworkProviderRow` for the selected provider. Routes through `ProviderDetailViewModel` to `ApiKeyRepository`.
+        - `ProviderPickerScreen.kt` - "+ Add provider" picker — full-screen list of the 5 known providers.
     - `taskmonitor/` - Task monitoring screen components.
       - `TaskMonitorScreen.kt` - Task monitor UI screen.
       - `TaskMonitorState.kt` - Task monitor UI state.

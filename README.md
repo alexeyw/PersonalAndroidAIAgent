@@ -64,8 +64,14 @@ configured it.
   inline validation bar with focus-on-error, run-trace bar, undo / redo,
   and per-type configuration sheets for all 12 node types.
 - Pipeline library with per-chat binding, plus rename / duplicate / delete.
-- Prompt variables (`$DATE`, `$TIME`, `$TOOLS`, `$MODEL`, `$MEMORY_SUMMARY`)
-  rendered fresh on every execution.
+- Prompt variables (`$DATE`, `$TIME`, `$TOOLS`, `$MODEL`, `$MEMORY_SUMMARY`,
+  `$LANG`, `$LOCATION`, `$USER`, `$DEVICE`) rendered fresh on every
+  execution.
+- Redesigned **Settings** screen with identity card, structured
+  HITL restrictions, sampling/repetition controls, memory dashboard
+  (Chunks · Size · Threads · Avg score + Export / Re-embed / Clear),
+  test-backend probe metrics, and a long-running-task notification
+  channel.
 - Agent-initiated clarifications: the agent can ask the user a question
   mid-pipeline and wait for the reply (human-in-the-loop).
 - Multi-session chats with a priority task queue and a redesigned chat

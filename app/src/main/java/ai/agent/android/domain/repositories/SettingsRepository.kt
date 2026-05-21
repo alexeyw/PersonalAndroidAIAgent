@@ -1,13 +1,22 @@
 package ai.agent.android.domain.repositories
 
+import ai.agent.android.domain.models.TestProbeResult
+import ai.agent.android.domain.models.ToolApprovalPolicy
 import ai.agent.android.domain.models.ToolRisk
 import kotlinx.coroutines.flow.Flow
 
 /**
- * Repository interface for managing application-wide settings and user preferences.
+ * Repository interface for managing application-wide settings and user
+ * preferences. Provides abstraction over the underlying persistence
+ * mechanism (DataStore + EncryptedSharedPreferences for the secret
+ * payloads).
  *
- * Provides abstraction over the underlying persistence mechanism (e.g., DataStore, SharedPreferences).
+ * The interface is intentionally large; per-feature splits (Sampling /
+ * Identity / Memory) are planned post-v0.1. The detekt suppression is
+ * file-scoped because every method here serves a single coherent
+ * "user-tunable preference" concern.
  */
+@Suppress("TooManyFunctions")
 interface SettingsRepository {
 
     /**
@@ -336,4 +345,123 @@ interface SettingsRepository {
      * variable (it resolves to an empty string).
      */
     suspend fun setMemorySummaryDefaultLimit(limit: Int)
+
+    /**
+     * Policy that drives the Human-in-the-Loop approval gate in
+     * `ToolNodeExecutor`. Supersedes the legacy boolean
+     * [requiresUserConfirmation] flag.
+     *
+     * The first read of this flow performs a one-shot migration from the
+     * legacy boolean key: `true` → [ToolApprovalPolicy.SensitiveOrDestructive],
+     * `false` → [ToolApprovalPolicy.NeverPrompt]. Migration only fires when
+     * the new key is absent.
+     */
+    val toolApprovalPolicy: Flow<ToolApprovalPolicy>
+
+    /**
+     * Persists the user's tool-approval policy choice.
+     *
+     * @param policy The new policy.
+     */
+    suspend fun setToolApprovalPolicy(policy: ToolApprovalPolicy)
+
+    /**
+     * `true` when the user has opted to hard-block every `DESTRUCTIVE`
+     * tool — `ToolNodeExecutor` refuses to call the tool and returns a
+     * structured "blocked by policy" observation. Defaults to `false`.
+     */
+    val blockDestructiveTools: Flow<Boolean>
+
+    /**
+     * Updates the hard-deny destructive-tool flag.
+     *
+     * @param blocked `true` to refuse destructive tools outright.
+     */
+    suspend fun setBlockDestructiveTools(blocked: Boolean)
+
+    /**
+     * Local-only mode flag. When `true`, `KoogClientFactory` returns `null`
+     * for every cloud provider (OpenAI / Anthropic / Google / DeepSeek);
+     * only the on-device LiteRT engine and LAN-local Ollama remain
+     * reachable. Defaults to `false`.
+     */
+    val blockNetworkFromLocalModel: Flow<Boolean>
+
+    /**
+     * Updates the local-only mode flag.
+     *
+     * @param blocked `true` to gate every cloud provider.
+     */
+    suspend fun setBlockNetworkFromLocalModel(blocked: Boolean)
+
+    /**
+     * Repetition-penalty parameter applied to local generation. Range
+     * `1.0..2.0`. `1.0f` is the neutral identity; higher values penalise
+     * recent tokens.
+     */
+    val repetitionPenalty: Flow<Float>
+
+    /**
+     * Updates the repetition-penalty value. The implementation coerces the
+     * argument into the documented `1.0..2.0` range so a misbehaving
+     * slider cannot persist out-of-bounds values.
+     *
+     * @param value New penalty.
+     */
+    suspend fun setRepetitionPenalty(value: Float)
+
+    /**
+     * Fraction of the memory context budget at which automatic
+     * summarisation triggers. Range `0f..1f`. Default
+     * [ai.agent.android.domain.constants.SettingsDefaults.AUTO_SUMMARIZE_THRESHOLD_DEFAULT].
+     */
+    val autoSummarizeThreshold: Flow<Float>
+
+    /**
+     * Updates the auto-summarize threshold. Coerced into `0f..1f`.
+     *
+     * @param threshold Fraction triggering summarisation.
+     */
+    suspend fun setAutoSummarizeThreshold(threshold: Float)
+
+    /**
+     * `true` when the user has opted into long-running task notifications.
+     * Drives the "Long-running tasks" toggle in the Notifications card —
+     * gates the runtime watcher that fires a system notification when a
+     * pipeline run exceeds the wall-clock threshold while the app is in the
+     * background. Defaults to `true`.
+     */
+    val longRunningTaskNotificationsEnabled: Flow<Boolean>
+
+    /**
+     * Persists the long-running task notifications toggle.
+     *
+     * @param enabled `true` to allow background notifications.
+     */
+    suspend fun setLongRunningTaskNotificationsEnabled(enabled: Boolean)
+
+    /**
+     * Last persisted result of a `Test backend` run inside Settings.
+     * Emits `null` until the user has run the probe at least once.
+     */
+    val lastTestProbeResult: Flow<TestProbeResult?>
+
+    /**
+     * Persists the latest test-backend probe result so the row's
+     * subtitle survives navigation.
+     *
+     * @param result Probe outcome to persist; pass `null` to clear.
+     */
+    suspend fun setLastTestProbeResult(result: TestProbeResult?)
+
+    /**
+     * Resets the local-generation sampling parameters back to the
+     * documented defaults ([SettingsDefaults.TEMPERATURE_DEFAULT],
+     * [SettingsDefaults.TOP_K_DEFAULT], [SettingsDefaults.TOP_P_DEFAULT],
+     * [SettingsDefaults.REPETITION_PENALTY_DEFAULT],
+     * [SettingsDefaults.MAX_CONTEXT_LENGTH_DEFAULT],
+     * [SettingsDefaults.PIPELINE_MAX_STEPS_DEFAULT]). Used by the
+     * "Reset to defaults" action in Settings → LLM parameters.
+     */
+    suspend fun resetSamplingDefaults()
 }

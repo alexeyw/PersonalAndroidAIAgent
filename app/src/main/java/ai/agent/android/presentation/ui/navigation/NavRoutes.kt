@@ -96,6 +96,21 @@ object NavRoutes {
     /** About screen (under More). Phase 21 / Task 4 stub; full body in Task 10. */
     const val ABOUT: String = "about"
 
+    /**
+     * Standalone external-LLM provider editor reached from the Settings
+     * → External providers nav-rows.
+     */
+    const val PROVIDER_DETAIL: String = "settings/provider/{providerId}"
+
+    /** Navigation argument carrying the [ProviderId.cloudProvider]'s wire id. */
+    const val PROVIDER_DETAIL_ID_ARG: String = "providerId"
+
+    /** Picker sheet shown when the user taps "+ Add provider". */
+    const val ADD_PROVIDER: String = "settings/provider/add"
+
+    /** Search-in-settings modal sheet. */
+    const val SETTINGS_SEARCH: String = "settings/search"
+
     // ─── Modal bottom-sheet placeholder routes ─────────────────────────────
     // Phase 21 / Task 4 introduces the [KnotworkModalRoute] wrapper used by
     // every modal surface. The three sheets below are registered as empty

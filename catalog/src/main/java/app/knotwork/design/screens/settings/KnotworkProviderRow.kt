@@ -119,6 +119,7 @@ fun KnotworkProviderRow(
     ollama: OllamaProviderInputs? = null,
     onOllamaBaseUrlChange: (String) -> Unit = {},
     onOllamaContextWindowChange: (String) -> Unit = {},
+    showApiKey: Boolean = true,
 ) {
     var expanded by remember { mutableStateOf(false) }
     var modelDropdownExpanded by remember { mutableStateOf(false) }
@@ -166,16 +167,18 @@ fun KnotworkProviderRow(
                         .padding(top = KnotworkTheme.spacing.sp3),
                     verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp2),
                 ) {
-                    OutlinedTextField(
-                        value = keyValue,
-                        onValueChange = onKeyChange,
-                        label = { Text(keyLabel) },
-                        modifier = Modifier.fillMaxWidth(),
-                        visualTransformation = PasswordVisualTransformation(),
-                        singleLine = true,
-                        enabled = !pendingChange,
-                        colors = brandTextFieldColors(),
-                    )
+                    if (showApiKey) {
+                        OutlinedTextField(
+                            value = keyValue,
+                            onValueChange = onKeyChange,
+                            label = { Text(keyLabel) },
+                            modifier = Modifier.fillMaxWidth(),
+                            visualTransformation = PasswordVisualTransformation(),
+                            singleLine = true,
+                            enabled = !pendingChange,
+                            colors = brandTextFieldColors(),
+                        )
+                    }
                     if (availableModels.isEmpty()) {
                         // Free-form input — Ollama variant where the user types the model id.
                         OutlinedTextField(

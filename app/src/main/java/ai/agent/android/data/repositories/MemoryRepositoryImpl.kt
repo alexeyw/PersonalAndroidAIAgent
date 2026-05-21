@@ -4,9 +4,14 @@ import ai.agent.android.data.local.Converters
 import ai.agent.android.data.local.dao.MemoryDao
 import ai.agent.android.data.local.models.MemoryChunkEntity
 import ai.agent.android.domain.models.MemoryChunk
+import ai.agent.android.domain.models.MemoryStats
 import ai.agent.android.domain.models.MemorySummary
 import ai.agent.android.domain.repositories.MemoryRepository
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -19,6 +24,17 @@ import kotlin.math.sqrt
 @Singleton
 class MemoryRepositoryImpl @Inject constructor(private val memoryDao: MemoryDao, private val converters: Converters) :
     MemoryRepository {
+
+    /**
+     * Rolling average of the cosine similarity scores observed across the
+     * most recent `findSimilarMemories` calls. Read by [observeStats] and
+     * surfaced as the AVG SCORE stat cell in Settings → Memory.
+     *
+     * `null` until the user (or the agent on their behalf) performs at
+     * least one similarity search. Bounded to the last 32 observations so
+     * the value reflects recent behaviour, not the entire app lifetime.
+     */
+    private val recentSimilarityScores = MutableStateFlow<List<Float>>(emptyList())
 
     override suspend fun saveMemory(text: String, embedding: FloatArray): Long = withContext(Dispatchers.IO) {
         val embeddingString = converters.fromFloatArray(embedding)
@@ -77,12 +93,24 @@ class MemoryRepositoryImpl @Inject constructor(private val memoryDao: MemoryDao,
             }
         }
 
-        recentMemories.map { memory ->
+        val ranked = recentMemories.map { memory ->
             val similarity = cosineSimilarity(queryEmbedding, memory.embedding)
             memory to similarity
         }
             .sortedByDescending { it.second }
             .take(limit)
+
+        // Record the top-k scores so the Settings stats card surfaces a
+        // representative recency-weighted average. Bounded so the average
+        // tracks recent behaviour rather than the lifetime mean.
+        val newScores = ranked.map { it.second }
+        if (newScores.isNotEmpty()) {
+            recentSimilarityScores.update { previous ->
+                (previous + newScores).takeLast(RECENT_SIMILARITY_WINDOW)
+            }
+        }
+
+        ranked
     }
 
     override suspend fun compactMemory(keepLimit: Int) = withContext(Dispatchers.IO) {
@@ -101,6 +129,26 @@ class MemoryRepositoryImpl @Inject constructor(private val memoryDao: MemoryDao,
 
     override suspend fun setMemoryPinned(id: Long, pinned: Boolean) = withContext(Dispatchers.IO) {
         memoryDao.setMemoryPinned(id = id, isPinned = pinned)
+    }
+
+    override suspend fun deleteAllMemories() = withContext(Dispatchers.IO) {
+        memoryDao.deleteAllMemories()
+        recentSimilarityScores.value = emptyList()
+    }
+
+    override fun observeStats(): Flow<MemoryStats> = combine(
+        memoryDao.observeChunkCount(),
+        memoryDao.observeTotalBytes(),
+        recentSimilarityScores,
+    ) { chunkCount, totalBytes, scores ->
+        MemoryStats(
+            chunkCount = chunkCount,
+            totalBytes = totalBytes,
+            // Thread attribution lands in a follow-up — v0.1 reports zero
+            // and the UI then renders a dash for the THREADS stat cell.
+            threadCount = 0,
+            averageSimilarityScore = scores.takeIf { it.isNotEmpty() }?.average()?.toFloat(),
+        )
     }
 
     /**
@@ -129,5 +177,10 @@ class MemoryRepositoryImpl @Inject constructor(private val memoryDao: MemoryDao,
         if (normA == 0f || normB == 0f) return 0f
 
         return dotProduct / (sqrt(normA) * sqrt(normB))
+    }
+
+    private companion object {
+        /** Number of recent cosine-similarity scores tracked for the AVG SCORE stat cell. */
+        const val RECENT_SIMILARITY_WINDOW: Int = 32
     }
 }

@@ -2,720 +2,434 @@ package ai.agent.android.presentation.ui.settings
 
 import ai.agent.android.BuildConfig
 import ai.agent.android.R
-import ai.agent.android.data.engine.KoogModelMapper
 import ai.agent.android.domain.constants.SettingsDefaults
+import ai.agent.android.domain.models.ActiveModelMeta
 import ai.agent.android.domain.models.LocalBackend
-import ai.agent.android.presentation.ui.common.resolve
-import android.widget.Toast
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
+import ai.agent.android.domain.models.ProviderId
+import ai.agent.android.domain.models.ToolApprovalPolicy
+import android.content.Intent
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.ChevronRight
-import androidx.compose.material.icons.outlined.ExpandMore
-import androidx.compose.material.icons.outlined.Memory
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExposedDropdownMenuAnchorType
-import androidx.compose.material3.ExposedDropdownMenuBox
-import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
-import androidx.compose.material3.Switch
-import androidx.compose.material3.SwitchDefaults
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
-import app.knotwork.design.screens.settings.KnotworkMonoTextArea
-import app.knotwork.design.screens.settings.KnotworkParamSlider
-import app.knotwork.design.screens.settings.KnotworkProviderRow
-import app.knotwork.design.screens.settings.OllamaProviderInputs
+import app.knotwork.design.screens.settings.ApproveToolCallsOption
+import app.knotwork.design.screens.settings.DestructiveActionKind
+import app.knotwork.design.screens.settings.DestructiveActionState
+import app.knotwork.design.screens.settings.ExternalProvidersCardState
+import app.knotwork.design.screens.settings.IdentityCardState
+import app.knotwork.design.screens.settings.LlmParameterSlider
+import app.knotwork.design.screens.settings.LlmParametersCardState
+import app.knotwork.design.screens.settings.LocalModelCardState
+import app.knotwork.design.screens.settings.MemoryCardState
+import app.knotwork.design.screens.settings.MemoryStatCell
+import app.knotwork.design.screens.settings.NotificationsCardState
+import app.knotwork.design.screens.settings.PrivacyCardState
+import app.knotwork.design.screens.settings.ProviderRowState
+import app.knotwork.design.screens.settings.RestrictionsCardState
+import app.knotwork.design.screens.settings.SettingsCallbacks
 import app.knotwork.design.screens.settings.SettingsContent
-import app.knotwork.design.screens.settings.SettingsRowState
-import app.knotwork.design.screens.settings.SettingsSection
-import app.knotwork.design.screens.settings.SettingsSectionBlock
 import app.knotwork.design.screens.settings.SettingsViewState
 import app.knotwork.design.screens.settings.SettingsVisualState
-import app.knotwork.design.theme.KnotworkTheme
-import app.knotwork.design.tokens.KnotworkTextStyles
+import app.knotwork.design.screens.settings.SystemInstructionsCardState
+import com.jakewharton.processphoenix.ProcessPhoenix
+import java.text.SimpleDateFormat
+import java.util.Locale
 import kotlin.math.roundToInt
 
 /**
- * Phase 22 / Task 8 — Knotwork-styled settings surface.
+ * Phase 22 / Task 9 — redesigned Settings surface.
  *
- * The screen renders the six canonical settings sections (Appearance,
- * Models, Privacy, Memory, MCP, About) via the catalog
- * [SettingsContent]. Each row is dispatched through the catalog's
- * `rowContent` slot so the screen can replace the default
- * title-subtitle-trailing layout with the richer Knotwork variants —
- * the multi-line system-prompt area, branded sliders, collapsible
- * provider cards, and About/MCP navigation rows.
+ * Slim mapper between [SettingsViewModel] state and the catalog's
+ * [SettingsContent]. Hosts the SAF launcher for memory export and the
+ * `ProcessPhoenix.triggerRebirth` call wired to the restart-required
+ * banner.
  *
- * The composable holds no settings state itself: every value originates
- * in [SettingsViewModel] and writes flow back through the same VM.
- *
- * @param modifier outer layout modifier (typically `Modifier.fillMaxSize`).
- * @param viewModel injected Hilt VM bridging DataStore + EncryptedPrefs.
+ * @param viewModel Hilt-injected VM holding the persisted state.
  * @param onBack invoked when the user taps the system back button.
- * @param onOpenTools invoked from the MCP section's `Manage servers` row;
- *  routes the user to the Tools screen where MCP servers are wired in
- *  task 10.
- * @param onOpenAbout invoked from the About section's license row.
+ * @param onOpenModels invoked from the Local model card's "Manage" /
+ *   "Change" buttons; routes to the Models screen.
+ * @param onOpenProvider invoked when the user taps a collapsed provider
+ *   nav-row; routes to the standalone provider detail screen.
+ * @param onOpenAddProvider invoked from the "+ Add provider" action.
+ * @param onOpenSearch invoked from the magnifying-glass action.
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
     modifier: Modifier = Modifier,
     viewModel: SettingsViewModel = hiltViewModel(),
     onBack: () -> Unit = {},
-    onOpenTools: () -> Unit = {},
-    onOpenAbout: () -> Unit = {},
+    onOpenModels: () -> Unit = {},
+    onOpenProvider: (ProviderId) -> Unit = {},
+    onOpenAddProvider: () -> Unit = {},
+    onOpenSearch: () -> Unit = {},
 ) {
     val uiState by viewModel.uiState.collectAsState()
-    val locale = LocalConfiguration.current.locales[0]
     val context = LocalContext.current
+    val snackbarHostState = remember { SnackbarHostState() }
 
-    val ollamaError = if (uiState.ollamaBaseUrlInvalid) {
-        stringResource(R.string.settings_ollama_base_url_error)
-    } else {
-        null
+    val exportLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument(MIME_JSON),
+    ) { uri: Uri? ->
+        uri ?: return@rememberLauncherForActivityResult
+        val stream = runCatching { context.contentResolver.openOutputStream(uri) }.getOrNull()
+        if (stream != null) viewModel.exportMemoryBase(stream)
     }
-    val viewState = buildViewState(uiState, locale, ollamaError)
 
-    SettingsContent(
-        state = viewState,
-        modifier = modifier,
+    LaunchedEffect(uiState.snackbarMessage) {
+        val message = uiState.snackbarMessage ?: return@LaunchedEffect
+        snackbarHostState.showSnackbar(message)
+        viewModel.snackbarShown()
+    }
+
+    val exportFilename = stringResource(R.string.settings_memory_export_filename)
+    val viewState = buildViewState(uiState, context)
+    val callbacks = buildCallbacks(
+        viewModel = viewModel,
         onBack = onBack,
-        rowContent = { row, defaultRender ->
-            when (row.id) {
-                // ─── Appearance ─────────────────────────────────────────
-                ROW_ID_THEME -> defaultRender()
-                ROW_ID_SYSTEM_PROMPT -> SystemPromptRow(
-                    value = uiState.systemPromptPrefix,
-                    onValueChange = viewModel::updateSystemPromptPrefix,
-                )
-
-                // ─── Models ─────────────────────────────────────────────
-                ROW_ID_BACKEND -> InferenceBackendRow(
-                    currentBackend = uiState.localModelBackend,
-                    onBackendChange = viewModel::updateLocalModelBackend,
-                    onTestBackend = {
-                        viewModel.testBackend { resultMsg ->
-                            Toast.makeText(context, context.resolve(resultMsg), Toast.LENGTH_LONG).show()
-                        }
-                    },
-                )
-                ROW_ID_TEMPERATURE -> ParamSliderRow {
-                    KnotworkParamSlider(
-                        label = stringResource(R.string.settings_row_temperature_title),
-                        valueLabel = String.format(locale, "%.1f", uiState.temperature),
-                        value = uiState.temperature,
-                        onValueChange = viewModel::updateTemperature,
-                        valueRange = 0f..2f,
-                    )
-                }
-                ROW_ID_TOP_K -> ParamSliderRow {
-                    KnotworkParamSlider(
-                        label = stringResource(R.string.settings_row_top_k_title),
-                        valueLabel = uiState.topK.toString(),
-                        value = uiState.topK.toFloat(),
-                        onValueChange = { viewModel.updateTopK(it.roundToInt()) },
-                        valueRange = 1f..100f,
-                        steps = 99,
-                    )
-                }
-                ROW_ID_TOP_P -> ParamSliderRow {
-                    KnotworkParamSlider(
-                        label = stringResource(R.string.settings_row_top_p_title),
-                        valueLabel = String.format(locale, "%.2f", uiState.topP),
-                        value = uiState.topP,
-                        onValueChange = viewModel::updateTopP,
-                        valueRange = 0f..1f,
-                    )
-                }
-                ROW_ID_MAX_CONTEXT -> ParamSliderRow {
-                    KnotworkParamSlider(
-                        label = stringResource(R.string.settings_row_max_context_title),
-                        valueLabel = pluralStringResource(
-                            R.plurals.settings_param_max_context_value,
-                            uiState.maxContextLength,
-                            uiState.maxContextLength,
-                        ),
-                        value = uiState.maxContextLength.toFloat(),
-                        onValueChange = { viewModel.updateMaxContextLength(it.roundToInt()) },
-                        valueRange = 512f..8192f,
-                        steps = 14,
-                    )
-                }
-                ROW_ID_PIPELINE_MAX_STEPS -> ParamSliderRow {
-                    PipelineMaxStepsField(
-                        currentValue = uiState.pipelineMaxSteps,
-                        onCommit = viewModel::updatePipelineMaxSteps,
-                    )
-                }
-                ROW_ID_OPENAI -> ProviderCardRow {
-                    KnotworkProviderRow(
-                        title = "OpenAI",
-                        keyValue = uiState.openAiKey,
-                        onKeyChange = viewModel::updateOpenAiKey,
-                        keyLabel = stringResource(R.string.settings_provider_api_key_label, "OpenAI"),
-                        modelValue = uiState.openAiModel,
-                        onModelChange = viewModel::updateOpenAiModel,
-                        modelLabel = stringResource(R.string.settings_provider_model_label, "OpenAI"),
-                        availableModels = KoogModelMapper.getOpenAIModelIdList(),
-                        pendingChange = ROW_ID_OPENAI in uiState.pendingRowIds,
-                    )
-                }
-                ROW_ID_ANTHROPIC -> ProviderCardRow {
-                    KnotworkProviderRow(
-                        title = "Anthropic",
-                        keyValue = uiState.anthropicKey,
-                        onKeyChange = viewModel::updateAnthropicKey,
-                        keyLabel = stringResource(R.string.settings_provider_api_key_label, "Anthropic"),
-                        modelValue = uiState.anthropicModel,
-                        onModelChange = viewModel::updateAnthropicModel,
-                        modelLabel = stringResource(R.string.settings_provider_model_label, "Anthropic"),
-                        availableModels = KoogModelMapper.getAnthropicModelIdList(),
-                        pendingChange = ROW_ID_ANTHROPIC in uiState.pendingRowIds,
-                    )
-                }
-                ROW_ID_GOOGLE -> ProviderCardRow {
-                    KnotworkProviderRow(
-                        title = "Google",
-                        keyValue = uiState.googleKey,
-                        onKeyChange = viewModel::updateGoogleKey,
-                        keyLabel = stringResource(R.string.settings_provider_api_key_label, "Google"),
-                        modelValue = uiState.googleModel,
-                        onModelChange = viewModel::updateGoogleModel,
-                        modelLabel = stringResource(R.string.settings_provider_model_label, "Google"),
-                        availableModels = KoogModelMapper.getGoogleModelIdList(),
-                        pendingChange = ROW_ID_GOOGLE in uiState.pendingRowIds,
-                    )
-                }
-                ROW_ID_DEEPSEEK -> ProviderCardRow {
-                    KnotworkProviderRow(
-                        title = "DeepSeek",
-                        keyValue = uiState.deepSeekKey,
-                        onKeyChange = viewModel::updateDeepSeekKey,
-                        keyLabel = stringResource(R.string.settings_provider_api_key_label, "DeepSeek"),
-                        modelValue = uiState.deepSeekModel,
-                        onModelChange = viewModel::updateDeepSeekModel,
-                        modelLabel = stringResource(R.string.settings_provider_model_label, "DeepSeek"),
-                        availableModels = KoogModelMapper.getDeepSeekModelIdList(),
-                        pendingChange = ROW_ID_DEEPSEEK in uiState.pendingRowIds,
-                    )
-                }
-                ROW_ID_OLLAMA -> ProviderCardRow {
-                    KnotworkProviderRow(
-                        title = "Ollama",
-                        keyValue = "",
-                        onKeyChange = {},
-                        keyLabel = stringResource(R.string.settings_provider_api_key_label, "Ollama"),
-                        modelValue = uiState.ollamaModel,
-                        onModelChange = viewModel::updateOllamaModel,
-                        modelLabel = stringResource(R.string.settings_ollama_model_label),
-                        availableModels = emptyList(),
-                        pendingChange = ROW_ID_OLLAMA in uiState.pendingRowIds,
-                        ollama = OllamaProviderInputs(
-                            baseUrl = uiState.ollamaBaseUrl,
-                            baseUrlPlaceholder = stringResource(R.string.settings_ollama_base_url_placeholder),
-                            baseUrlValidationError = ollamaError,
-                            contextWindow = uiState.ollamaContextWindow,
-                            contextWindowLabel = stringResource(R.string.settings_ollama_context_label),
-                            baseUrlLabel = stringResource(R.string.settings_ollama_base_url_label),
-                        ),
-                        onOllamaBaseUrlChange = viewModel::updateOllamaBaseUrl,
-                        onOllamaContextWindowChange = viewModel::updateOllamaContextWindow,
-                    )
-                }
-
-                // ─── Privacy ────────────────────────────────────────────
-                ROW_ID_HITL -> ToggleRow(
-                    row = row,
-                    checked = uiState.requiresUserConfirmation,
-                    onCheckedChange = viewModel::updateRequiresUserConfirmation,
-                )
-                ROW_ID_CRASH_REPORTING -> CrashReportingRow(
-                    enabled = uiState.crashReportingEnabled,
-                    onChange = viewModel::updateCrashReportingEnabled,
-                    row = row,
-                )
-
-                // ─── Memory ─────────────────────────────────────────────
-                ROW_ID_MEMORY_SUMMARY_LIMIT -> ParamSliderRow {
-                    val minLimit = SettingsDefaults.MEMORY_SUMMARY_LIMIT_MIN
-                    val maxLimit = SettingsDefaults.MEMORY_SUMMARY_LIMIT_MAX
-                    KnotworkParamSlider(
-                        label = stringResource(R.string.settings_row_memory_summary_limit_title),
-                        valueLabel = uiState.memorySummaryDefaultLimit.toString(),
-                        value = uiState.memorySummaryDefaultLimit.toFloat(),
-                        onValueChange = { viewModel.updateMemorySummaryDefaultLimit(it.roundToInt()) },
-                        valueRange = minLimit.toFloat()..maxLimit.toFloat(),
-                        steps = maxLimit - minLimit - 1,
-                    )
-                }
-
-                // ─── MCP ────────────────────────────────────────────────
-                ROW_ID_MCP_MANAGE -> NavigationRow(row = row, onClick = onOpenTools)
-
-                // ─── About ──────────────────────────────────────────────
-                ROW_ID_ABOUT_LICENSE -> NavigationRow(row = row, onClick = onOpenAbout)
-                else -> defaultRender()
-            }
+        onOpenModels = onOpenModels,
+        onOpenAddProvider = onOpenAddProvider,
+        onOpenSearch = onOpenSearch,
+        onProviderClick = { id ->
+            ProviderId.entries.firstOrNull { it.cloudProvider.id == id }?.let(onOpenProvider)
+        },
+        onExportClick = { exportLauncher.launch(exportFilename) },
+        onRestart = {
+            viewModel.acknowledgeRestart()
+            ProcessPhoenix.triggerRebirth(context.applicationContext, Intent())
         },
     )
+
+    Box(modifier = modifier.fillMaxSize()) {
+        SettingsContent(state = viewState, callbacks = callbacks)
+        SnackbarHost(hostState = snackbarHostState)
+    }
 }
 
-/**
- * Builds a fresh [SettingsViewState] from the current [uiState]. Composable
- * so localized titles / subtitles flow through `stringResource`.
- */
 @Composable
-@Suppress("LongMethod") // Single declarative builder; splitting hurts readability.
-private fun buildViewState(
-    uiState: SettingsUiState,
-    locale: java.util.Locale,
-    ollamaError: String?,
-): SettingsViewState {
-    val licenseName = stringResource(R.string.license_name)
-    fun row(id: String, title: String, subtitle: String? = null): SettingsRowState = SettingsRowState(
-        id = id,
-        title = title,
-        subtitle = subtitle,
-        pendingChange = id in uiState.pendingRowIds,
-        validationError = if (id == ROW_ID_OLLAMA) ollamaError else null,
-    )
-
-    val appearance = SettingsSectionBlock(
-        section = SettingsSection.Appearance,
-        rows = listOf(
-            row(
-                ROW_ID_THEME,
-                stringResource(R.string.settings_row_theme_title),
-                stringResource(R.string.settings_row_theme_subtitle),
+@Suppress("LongMethod")
+private fun buildViewState(uiState: SettingsUiState, context: android.content.Context): SettingsViewState {
+    val buildDate = formatBuildDate(BuildConfig.GIT_COMMIT_DATE_EPOCH_MS)
+    val placeholder = stringResource(R.string.settings_field_system_prompt_prefix)
+    val helperText = stringResource(R.string.settings_system_instructions_helper)
+    val characterCount = uiState.systemInstructions.length
+    val charLimit = SettingsDefaults.SYSTEM_INSTRUCTIONS_CHAR_LIMIT
+    val tokenApprox = (characterCount / CHARS_PER_TOKEN).toInt().coerceAtLeast(0)
+    val identity = uiState.identity?.let { id ->
+        IdentityCardState(
+            displayName = id.displayName,
+            avatarInitials = context.getString(R.string.settings_identity_avatar_initials),
+            metaLine = context.getString(
+                if (id.keystoreAvailable) {
+                    R.string.settings_identity_meta_keystore_ok
+                } else {
+                    R.string.settings_identity_meta_keystore_missing
+                },
+                id.deviceId,
             ),
-            row(ROW_ID_SYSTEM_PROMPT, stringResource(R.string.settings_row_system_prompt_title)),
+        )
+    }
+    val systemInstructions = SystemInstructionsCardState(
+        value = uiState.systemInstructions,
+        placeholder = placeholder,
+        variableChips = uiState.variableCatalog.map { it.placeholder },
+        characterCount = characterCount,
+        characterLimit = charLimit,
+        approximateTokens = tokenApprox,
+        helperText = helperText,
+        validationError = if (characterCount > charLimit) {
+            context.getString(R.string.settings_system_instructions_too_long, charLimit)
+        } else {
+            null
+        },
+    )
+    val restrictions = RestrictionsCardState(
+        approveSelection = when (uiState.toolApprovalPolicy) {
+            ToolApprovalPolicy.AllCalls -> ApproveToolCallsOption.AllCalls
+            ToolApprovalPolicy.SensitiveOrDestructive -> ApproveToolCallsOption.Sensitive
+            ToolApprovalPolicy.NeverPrompt -> ApproveToolCallsOption.Never
+        },
+        approveAllLabel = stringResource(R.string.settings_restrictions_approve_all),
+        approveSensitiveLabel = stringResource(R.string.settings_restrictions_approve_sensitive),
+        approveNeverLabel = stringResource(R.string.settings_restrictions_approve_never),
+        blockDestructive = uiState.blockDestructiveTools,
+        blockDestructiveSubtitle = stringResource(R.string.settings_restrictions_block_destructive_subtitle),
+        blockNetwork = uiState.blockNetworkFromLocalModel,
+        blockNetworkSubtitle = stringResource(R.string.settings_restrictions_block_network_subtitle),
+        capSteps = uiState.capAutonomousSteps,
+        capStepsSubtitle = stringResource(R.string.settings_restrictions_cap_steps_subtitle),
+    )
+    val locale = LocalConfiguration.current.locales[0]
+    val llm = LlmParametersCardState(
+        sliders = listOf(
+            LlmParameterSlider(
+                id = "temperature",
+                title = stringResource(R.string.settings_row_temperature_title),
+                valueLabel = String.format(locale, "%.1f", uiState.temperature),
+                value = uiState.temperature,
+                valueRange = 0f..2f,
+            ),
+            LlmParameterSlider(
+                id = "top_k",
+                title = stringResource(R.string.settings_row_top_k_title),
+                valueLabel = uiState.topK.toString(),
+                value = uiState.topK.toFloat(),
+                valueRange = 1f..100f,
+                steps = 99,
+            ),
+            LlmParameterSlider(
+                id = "top_p",
+                title = stringResource(R.string.settings_row_top_p_title),
+                valueLabel = String.format(locale, "%.2f", uiState.topP),
+                value = uiState.topP,
+                valueRange = 0f..1f,
+            ),
+            LlmParameterSlider(
+                id = "repetition_penalty",
+                title = stringResource(R.string.settings_row_repetition_penalty_title),
+                valueLabel = String.format(locale, "%.2f", uiState.repetitionPenalty),
+                value = uiState.repetitionPenalty,
+                valueRange = 1f..2f,
+            ),
+            LlmParameterSlider(
+                id = "max_context",
+                title = stringResource(R.string.settings_row_max_context_title),
+                valueLabel = "${uiState.maxContextLength} tok",
+                value = uiState.maxContextLength.toFloat(),
+                valueRange = 512f..8192f,
+                steps = 14,
+            ),
+            LlmParameterSlider(
+                id = "max_steps",
+                title = stringResource(R.string.settings_row_max_steps_title),
+                valueLabel = uiState.capAutonomousSteps.toString(),
+                value = uiState.capAutonomousSteps.toFloat(),
+                valueRange = 5f..100f,
+                steps = 94,
+            ),
         ),
     )
-    val models = SettingsSectionBlock(
-        section = SettingsSection.Models,
-        rows = listOf(
-            row(ROW_ID_BACKEND, stringResource(R.string.settings_row_backend_title), uiState.localModelBackend),
-            row(
-                ROW_ID_TEMPERATURE,
-                stringResource(R.string.settings_row_temperature_title),
-                String.format(locale, "%.1f", uiState.temperature),
-            ),
-            row(ROW_ID_TOP_K, stringResource(R.string.settings_row_top_k_title), uiState.topK.toString()),
-            row(
-                ROW_ID_TOP_P,
-                stringResource(R.string.settings_row_top_p_title),
-                String.format(locale, "%.2f", uiState.topP),
-            ),
-            row(
-                ROW_ID_MAX_CONTEXT,
-                stringResource(R.string.settings_row_max_context_title),
-                uiState.maxContextLength.toString(),
-            ),
-            row(
-                ROW_ID_PIPELINE_MAX_STEPS,
-                stringResource(R.string.settings_row_pipeline_max_steps_title),
-                stringResource(R.string.settings_row_pipeline_max_steps_subtitle),
-            ),
-            row(ROW_ID_OPENAI, "OpenAI"),
-            row(ROW_ID_ANTHROPIC, "Anthropic"),
-            row(ROW_ID_GOOGLE, "Google"),
-            row(ROW_ID_DEEPSEEK, "DeepSeek"),
-            row(ROW_ID_OLLAMA, "Ollama"),
+    val activeMeta = uiState.activeModelMeta
+    val localModel = LocalModelCardState(
+        modelName = activeMeta?.name,
+        metaLine = activeMeta?.let { formatActiveModelMeta(it, context) },
+        backendLabel = stringResource(
+            R.string.settings_row_inference_backend_subtitle,
+            uiState.localModelBackend,
         ),
+        backendOptions = LocalBackend.entries.map { it.key },
+        selectedBackend = uiState.localModelBackend,
+        testProbeText = formatTestProbe(uiState, context),
+        testProbeIsError = uiState.lastTestProbeResult?.success == false,
     )
-    val privacy = SettingsSectionBlock(
-        section = SettingsSection.Privacy,
-        rows = listOf(
-            row(
-                ROW_ID_HITL,
-                stringResource(R.string.settings_human_in_loop_label),
-                stringResource(R.string.settings_human_in_loop_hint),
-            ),
-            row(
-                ROW_ID_CRASH_REPORTING,
-                stringResource(R.string.settings_crash_reporting_label),
-                stringResource(R.string.settings_crash_reporting_hint),
-            ),
-        ),
+    val providers = ExternalProvidersCardState(
+        rows = uiState.providers.map { summary ->
+            ProviderRowState(
+                id = summary.id.cloudProvider.id,
+                title = summary.displayName,
+                fingerprint = summary.keyFingerprint,
+                model = summary.model,
+                endpointHint = summary.endpointHint,
+                isLan = summary.isLanLocal,
+            )
+        },
     )
-    val memory = SettingsSectionBlock(
-        section = SettingsSection.Memory,
-        rows = listOf(
-            row(
-                ROW_ID_MEMORY_SUMMARY_LIMIT,
-                stringResource(R.string.settings_row_memory_summary_limit_title),
-                stringResource(R.string.settings_row_memory_summary_limit_subtitle),
+    val memory = MemoryCardState(
+        stats = listOf(
+            MemoryStatCell(
+                value = uiState.memoryStats.chunkCount.toString(),
+                label = stringResource(R.string.settings_memory_stat_chunks),
+            ),
+            MemoryStatCell(
+                value = formatBytes(uiState.memoryStats.totalBytes),
+                label = stringResource(R.string.settings_memory_stat_size),
+            ),
+            MemoryStatCell(
+                value = if (uiState.memoryStats.threadCount > 0) {
+                    uiState.memoryStats.threadCount.toString()
+                } else {
+                    stringResource(R.string.settings_memory_stat_dash)
+                },
+                label = stringResource(R.string.settings_memory_stat_threads),
+            ),
+            MemoryStatCell(
+                value = uiState.memoryStats.averageSimilarityScore
+                    ?.let { String.format(locale, "%.2f", it) }
+                    ?: stringResource(R.string.settings_memory_stat_dash),
+                label = stringResource(R.string.settings_memory_stat_avg_score),
             ),
         ),
+        autoSummarizeThreshold = (uiState.autoSummarizeThreshold * MAX_PERCENT).roundToInt(),
+        autoSummarizeLabel = stringResource(R.string.settings_memory_auto_summarize_title),
+        embeddingTitle = stringResource(R.string.settings_memory_embedding_title),
+        embeddingSubtitle = stringResource(R.string.settings_memory_embedding_subtitle),
+        exportLabel = stringResource(R.string.settings_memory_export),
+        reembedLabel = stringResource(R.string.settings_memory_reembed),
+        clearLabel = stringResource(R.string.settings_memory_clear),
+        reembedProgressPercent = uiState.reembedProgress?.let { (it * MAX_PERCENT).roundToInt() },
     )
-    val mcp = SettingsSectionBlock(
-        section = SettingsSection.Mcp,
-        rows = listOf(
-            row(
-                ROW_ID_MCP_MANAGE,
-                stringResource(R.string.settings_row_mcp_manage_title),
-                stringResource(R.string.settings_row_mcp_manage_subtitle),
+    val notifications = NotificationsCardState(longRunningEnabled = uiState.longRunningTaskNotificationsEnabled)
+    val privacy = PrivacyCardState(crashReportingEnabled = uiState.crashReportingEnabled)
+    val destructive = uiState.pendingDestructive?.let { kind ->
+        DestructiveActionState(
+            title = stringResource(
+                if (kind == PendingDestructiveAction.ClearMemory) {
+                    R.string.settings_destructive_clear_memory_title
+                } else {
+                    R.string.settings_destructive_reset_title
+                },
             ),
-        ),
-    )
-    val about = SettingsSectionBlock(
-        section = SettingsSection.About,
-        rows = listOf(
-            row(
-                ROW_ID_ABOUT_VERSION,
-                stringResource(R.string.settings_row_about_version_title),
-                BuildConfig.VERSION_NAME,
+            body = stringResource(
+                if (kind == PendingDestructiveAction.ClearMemory) {
+                    R.string.settings_destructive_clear_memory_body
+                } else {
+                    R.string.settings_destructive_reset_body
+                },
             ),
-            row(
-                ROW_ID_ABOUT_COMMIT,
-                stringResource(R.string.settings_row_about_commit_title),
-                BuildConfig.GIT_SHA,
-            ),
-            row(ROW_ID_ABOUT_LICENSE, stringResource(R.string.settings_row_about_license_title), licenseName),
-        ),
-    )
-
+            keyword = stringResource(R.string.settings_destructive_typed_keyword),
+            hint = stringResource(R.string.settings_destructive_typed_hint),
+            pendingInput = uiState.destructiveTypedInput,
+            kind = if (kind == PendingDestructiveAction.ClearMemory) {
+                DestructiveActionKind.ClearMemory
+            } else {
+                DestructiveActionKind.ResetSettings
+            },
+        )
+    }
     val visualState = when {
-        uiState.ollamaBaseUrlInvalid -> SettingsVisualState.ValidationError
-        uiState.pendingRowIds.isNotEmpty() -> SettingsVisualState.PendingChange
+        uiState.identity == null -> SettingsVisualState.Loading
+        uiState.pendingDestructive != null -> SettingsVisualState.DestructiveAction
+        uiState.restartRequired -> SettingsVisualState.RestartRequired
         else -> SettingsVisualState.Default
     }
-
     return SettingsViewState(
         visualState = visualState,
-        sections = listOf(appearance, models, privacy, memory, mcp, about),
+        subtitleVersion = BuildConfig.VERSION_NAME,
+        subtitleChannel = BuildConfig.BUILD_TYPE,
+        subtitleBuildDate = buildDate,
+        identity = identity,
+        systemInstructions = systemInstructions,
+        restrictions = restrictions,
+        llmParameters = llm,
+        localModel = localModel,
+        externalProviders = providers,
+        memory = memory,
+        notifications = notifications,
+        privacy = privacy,
+        restartRequiredMessage = stringResource(R.string.settings_restart_required_message)
+            .takeIf { visualState == SettingsVisualState.RestartRequired },
+        destructiveAction = destructive,
     )
 }
 
-// ─── Row composables ─────────────────────────────────────────────────────
-
 @Composable
-private fun SystemPromptRow(value: String, onValueChange: (String) -> Unit) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = KnotworkTheme.spacing.sp4, vertical = KnotworkTheme.spacing.sp2),
-        verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp2),
-    ) {
-        Text(
-            text = stringResource(R.string.settings_row_system_prompt_title),
-            style = KnotworkTextStyles.TitleMd.copy(fontWeight = FontWeight.SemiBold),
-            color = MaterialTheme.colorScheme.onSurface,
-        )
-        KnotworkMonoTextArea(
-            value = value,
-            onValueChange = onValueChange,
-            placeholder = stringResource(R.string.settings_field_system_prompt_prefix),
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(SYSTEM_PROMPT_FIELD_HEIGHT),
-        )
-        Text(
-            text = stringResource(R.string.settings_row_system_prompt_subtitle),
-            style = KnotworkTextStyles.BodySm,
-            color = KnotworkTheme.extended.onSurfaceMuted,
-        )
-    }
-}
-
-@Composable
-private fun ParamSliderRow(content: @Composable () -> Unit) {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = KnotworkTheme.spacing.sp4, vertical = KnotworkTheme.spacing.sp2),
-    ) { content() }
-}
-
-@Composable
-private fun ProviderCardRow(content: @Composable () -> Unit) {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = KnotworkTheme.spacing.sp4, vertical = KnotworkTheme.spacing.sp1),
-    ) { content() }
-}
-
-@Composable
-private fun ToggleRow(row: SettingsRowState, checked: Boolean, onCheckedChange: (Boolean) -> Unit) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp3),
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable { onCheckedChange(!checked) }
-            .padding(horizontal = KnotworkTheme.spacing.sp4, vertical = KnotworkTheme.spacing.sp2),
-    ) {
-        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp1)) {
-            Text(
-                text = row.title,
-                style = KnotworkTextStyles.TitleMd.copy(fontWeight = FontWeight.SemiBold),
-                color = MaterialTheme.colorScheme.onSurface,
-            )
-            val subtitle = row.subtitle
-            if (subtitle != null) {
-                Text(
-                    text = subtitle,
-                    style = KnotworkTextStyles.BodyBase,
-                    color = KnotworkTheme.extended.onSurfaceMuted,
-                )
-            }
-        }
-        Switch(
-            checked = checked,
-            onCheckedChange = null,
-            colors = SwitchDefaults.colors(
-                checkedThumbColor = MaterialTheme.colorScheme.onPrimary,
-                checkedTrackColor = MaterialTheme.colorScheme.primary,
-                checkedBorderColor = MaterialTheme.colorScheme.primary,
-            ),
-        )
-    }
-}
-
-@Composable
-private fun CrashReportingRow(enabled: Boolean, onChange: (Boolean) -> Unit, row: SettingsRowState) {
-    var showConsentDialog by remember { mutableStateOf(false) }
-    ToggleRow(
-        row = row,
-        checked = enabled,
-        onCheckedChange = { wantOn ->
-            if (wantOn) {
-                showConsentDialog = true
-            } else {
-                onChange(false)
-            }
-        },
-    )
-    if (showConsentDialog) {
-        AlertDialog(
-            onDismissRequest = { showConsentDialog = false },
-            title = { Text(stringResource(R.string.settings_crash_reporting_dialog_title)) },
-            text = { Text(stringResource(R.string.settings_crash_reporting_dialog_body)) },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        showConsentDialog = false
-                        onChange(true)
-                    },
-                ) {
-                    Text(stringResource(R.string.settings_crash_reporting_dialog_confirm))
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showConsentDialog = false }) {
-                    Text(stringResource(R.string.settings_crash_reporting_dialog_dismiss))
-                }
+@Suppress("LongParameterList")
+private fun buildCallbacks(
+    viewModel: SettingsViewModel,
+    onBack: () -> Unit,
+    onOpenModels: () -> Unit,
+    onOpenAddProvider: () -> Unit,
+    onOpenSearch: () -> Unit,
+    onProviderClick: (String) -> Unit,
+    onExportClick: () -> Unit,
+    onRestart: () -> Unit,
+): SettingsCallbacks = SettingsCallbacks(
+    onBack = onBack,
+    onSearchClick = onOpenSearch,
+    onSystemInstructionsChange = viewModel::updateSystemInstructions,
+    onInsertVariableClick = { /* sheet wiring lands in a follow-up; chip row already inserts. */ },
+    onChipInsert = viewModel::insertVariable,
+    onApproveSelectionChange = { option ->
+        viewModel.setToolApprovalPolicy(
+            when (option) {
+                ApproveToolCallsOption.AllCalls -> ToolApprovalPolicy.AllCalls
+                ApproveToolCallsOption.Sensitive -> ToolApprovalPolicy.SensitiveOrDestructive
+                ApproveToolCallsOption.Never -> ToolApprovalPolicy.NeverPrompt
             },
         )
+    },
+    onBlockDestructiveChange = viewModel::setBlockDestructiveTools,
+    onBlockNetworkChange = viewModel::setBlockNetworkFromLocalModel,
+    onCapStepsChange = viewModel::setCapAutonomousSteps,
+    onSliderChange = { id, value ->
+        when (id) {
+            "temperature" -> viewModel.setTemperature(value)
+            "top_k" -> viewModel.setTopK(value.roundToInt())
+            "top_p" -> viewModel.setTopP(value)
+            "repetition_penalty" -> viewModel.setRepetitionPenalty(value)
+            "max_context" -> viewModel.setMaxContextLength(value.roundToInt())
+            "max_steps" -> viewModel.setCapAutonomousSteps(value.roundToInt())
+        }
+    },
+    onResetLlmDefaults = viewModel::resetSamplingDefaults,
+    onManageModelsClick = onOpenModels,
+    onChangeModelClick = onOpenModels,
+    onBackendSelected = viewModel::setLocalModelBackend,
+    onTestBackendClick = viewModel::runBackendProbe,
+    onProviderRowClick = onProviderClick,
+    onAddProviderClick = onOpenAddProvider,
+    onAutoSummarizeChange = viewModel::setAutoSummarizeThreshold,
+    onExportMemoryClick = onExportClick,
+    onReembedClick = viewModel::runReembed,
+    onClearMemoryClick = viewModel::stageClearMemory,
+    onLongRunningToggle = viewModel::setLongRunningTaskNotificationsEnabled,
+    onCrashReportingToggle = viewModel::setCrashReportingEnabled,
+    onResetSettingsClick = viewModel::stageResetSettings,
+    onRestartClick = onRestart,
+    onDestructiveTypedConfirmChange = viewModel::updateDestructiveTypedInput,
+    onDestructiveConfirm = viewModel::confirmDestructive,
+    onDestructiveCancel = viewModel::cancelDestructive,
+)
+
+private fun formatBuildDate(epochMs: Long): String =
+    SimpleDateFormat("yyyy.MM.dd", Locale.US).format(java.util.Date(epochMs))
+
+private fun formatActiveModelMeta(meta: ActiveModelMeta, context: android.content.Context): String {
+    val size = formatBytes(meta.sizeBytes)
+    val ctx = "${meta.contextWindowTokens}"
+    val quant = meta.quantization ?: "-"
+    val downloaded = meta.downloadedAtMs?.let {
+        SimpleDateFormat("d MMM", Locale.getDefault()).format(java.util.Date(it))
+    } ?: "-"
+    return context.getString(R.string.settings_local_model_meta, size, ctx, quant, downloaded)
+}
+
+private fun formatTestProbe(uiState: SettingsUiState, context: android.content.Context): String {
+    val probe = uiState.lastTestProbeResult ?: return context.getString(R.string.settings_row_test_backend_idle)
+    return if (probe.success) {
+        val durationLabel = String.format(Locale.getDefault(), "%.2fs", probe.durationMs / MS_PER_SECOND_F)
+        val tpsLabel = String.format(Locale.getDefault(), "%.1f", probe.tokensPerSecond)
+        context.getString(R.string.settings_row_test_backend_success, probe.tokensGenerated, durationLabel, tpsLabel)
+    } else {
+        context.getString(R.string.settings_row_test_backend_failed, probe.errorMessage.orEmpty())
     }
 }
 
-@Composable
-private fun NavigationRow(row: SettingsRowState, onClick: () -> Unit) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp3),
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(horizontal = KnotworkTheme.spacing.sp4, vertical = KnotworkTheme.spacing.sp2),
-    ) {
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = row.title,
-                style = KnotworkTextStyles.TitleMd.copy(fontWeight = FontWeight.SemiBold),
-                color = MaterialTheme.colorScheme.onSurface,
-            )
-            val subtitle = row.subtitle
-            if (subtitle != null) {
-                Text(
-                    text = subtitle,
-                    style = KnotworkTextStyles.BodySm,
-                    color = KnotworkTheme.extended.onSurfaceMuted,
-                )
-            }
-        }
-        Icon(
-            imageVector = Icons.Outlined.ChevronRight,
-            contentDescription = null,
-            tint = KnotworkTheme.extended.onSurfaceMuted,
-        )
-    }
+private fun formatBytes(bytes: Long): String {
+    if (bytes < BYTES_PER_KB) return "$bytes B"
+    val kb = bytes / BYTES_PER_KB_F
+    if (kb < BYTES_PER_KB) return String.format(Locale.getDefault(), "%.1f KB", kb)
+    val mb = kb / BYTES_PER_KB
+    if (mb < BYTES_PER_KB) return String.format(Locale.getDefault(), "%.1f MB", mb)
+    val gb = mb / BYTES_PER_KB
+    return String.format(Locale.getDefault(), "%.1f GB", gb)
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun InferenceBackendRow(currentBackend: String, onBackendChange: (String) -> Unit, onTestBackend: () -> Unit) {
-    var expanded by remember { mutableStateOf(false) }
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = KnotworkTheme.spacing.sp4, vertical = KnotworkTheme.spacing.sp2),
-        verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp1),
-    ) {
-        ExposedDropdownMenuBox(
-            expanded = expanded,
-            onExpandedChange = { expanded = it },
-        ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp3),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .menuAnchor(
-                        ExposedDropdownMenuAnchorType.PrimaryNotEditable,
-                        enabled = true,
-                    ),
-            ) {
-                Box(
-                    contentAlignment = Alignment.Center,
-                    modifier = Modifier
-                        .size(BACKEND_ICON_TILE_SIZE)
-                        .clip(KnotworkTheme.shapes.sm)
-                        .background(color = KnotworkTheme.extended.surface2),
-                ) {
-                    Icon(
-                        imageVector = Icons.Outlined.Memory,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier.size(KnotworkTheme.spacing.sp5),
-                    )
-                }
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = stringResource(R.string.settings_row_backend_title),
-                        style = KnotworkTextStyles.TitleMd.copy(fontWeight = FontWeight.SemiBold),
-                        color = MaterialTheme.colorScheme.onSurface,
-                    )
-                    Text(
-                        text = currentBackend,
-                        style = KnotworkTextStyles.MonoSm,
-                        color = KnotworkTheme.extended.onSurfaceMuted,
-                    )
-                }
-                Icon(
-                    imageVector = Icons.Outlined.ExpandMore,
-                    contentDescription = null,
-                    tint = KnotworkTheme.extended.onSurfaceMuted,
-                )
-            }
-            ExposedDropdownMenu(
-                expanded = expanded,
-                onDismissRequest = { expanded = false },
-            ) {
-                LocalBackend.entries.forEach { backend ->
-                    DropdownMenuItem(
-                        text = { Text(backend.key) },
-                        onClick = {
-                            onBackendChange(backend.key)
-                            expanded = false
-                        },
-                    )
-                }
-            }
-        }
-        TextButton(onClick = onTestBackend, modifier = Modifier.fillMaxWidth()) {
-            Text(stringResource(R.string.settings_test_backend_button, currentBackend))
-        }
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun PipelineMaxStepsField(currentValue: Int, onCommit: (Int) -> Unit) {
-    var text by remember { mutableStateOf(currentValue.toString()) }
-    LaunchedEffect(currentValue) {
-        val coerced = text.toIntOrNull()?.coerceIn(
-            SettingsDefaults.PIPELINE_MAX_STEPS_MIN,
-            SettingsDefaults.PIPELINE_MAX_STEPS_MAX,
-        )
-        if (coerced != currentValue) {
-            text = currentValue.toString()
-        }
-    }
-    val parsed = text.toIntOrNull()
-    val outOfRange = parsed?.let { it !in PIPELINE_MAX_STEPS_VALID_RANGE } ?: true
-    OutlinedTextField(
-        value = text,
-        onValueChange = { input ->
-            text = input
-            val v = input.toIntOrNull()
-            if (v != null && v in PIPELINE_MAX_STEPS_VALID_RANGE) onCommit(v)
-        },
-        label = { Text(stringResource(R.string.settings_pipeline_max_steps_label)) },
-        modifier = Modifier.fillMaxWidth(),
-        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-        singleLine = true,
-        isError = outOfRange,
-        supportingText = {
-            if (outOfRange) Text(stringResource(R.string.settings_pipeline_max_steps_helper))
-        },
-        colors = OutlinedTextFieldDefaults.colors(
-            focusedBorderColor = MaterialTheme.colorScheme.primary,
-            cursorColor = MaterialTheme.colorScheme.primary,
-            focusedLabelColor = MaterialTheme.colorScheme.primary,
-        ),
-    )
-}
-
-// ─── Constants ───────────────────────────────────────────────────────────
-
-internal const val ROW_ID_THEME = "theme"
-internal const val ROW_ID_SYSTEM_PROMPT = "system_prompt"
-internal const val ROW_ID_BACKEND = "backend"
-internal const val ROW_ID_TEMPERATURE = "temperature"
-internal const val ROW_ID_TOP_K = "top_k"
-internal const val ROW_ID_TOP_P = "top_p"
-internal const val ROW_ID_MAX_CONTEXT = "max_context"
-internal const val ROW_ID_PIPELINE_MAX_STEPS = "pipeline_max_steps"
-internal const val ROW_ID_OPENAI = "openai"
-internal const val ROW_ID_ANTHROPIC = "anthropic"
-internal const val ROW_ID_GOOGLE = "google"
-internal const val ROW_ID_DEEPSEEK = "deepseek"
-internal const val ROW_ID_OLLAMA = "ollama"
-internal const val ROW_ID_HITL = "hitl"
-internal const val ROW_ID_CRASH_REPORTING = "crash_reporting"
-internal const val ROW_ID_MEMORY_SUMMARY_LIMIT = "memory_summary_limit"
-internal const val ROW_ID_MCP_MANAGE = "mcp_manage"
-internal const val ROW_ID_ABOUT_VERSION = "about_version"
-internal const val ROW_ID_ABOUT_COMMIT = "about_commit"
-internal const val ROW_ID_ABOUT_LICENSE = "about_license"
-
-private val SYSTEM_PROMPT_FIELD_HEIGHT = 120.dp
-private val BACKEND_ICON_TILE_SIZE = 40.dp
-private val PIPELINE_MAX_STEPS_VALID_RANGE =
-    SettingsDefaults.PIPELINE_MAX_STEPS_MIN..SettingsDefaults.PIPELINE_MAX_STEPS_MAX
+private const val MIME_JSON = "application/json"
+private const val CHARS_PER_TOKEN = 3.5f
+private const val MS_PER_SECOND_F = 1_000f
+private const val MAX_PERCENT = 100
+private const val BYTES_PER_KB = 1_024L
+private const val BYTES_PER_KB_F = 1_024f

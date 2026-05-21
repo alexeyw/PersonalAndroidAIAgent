@@ -71,6 +71,18 @@ android {
         // hash. Falls back to "unknown" when `git` is unavailable (e.g. a
         // tarball build).
         buildConfigField("String", "GIT_SHA", "\"${resolveGitSha()}\"")
+
+        // Phase 22 / Task 9: build date surfaced in the Settings top-app-bar
+        // subtitle (`v0.9.2 · alpha · 2026.05.18`). Captured at configuration
+        // time as an epoch-millis Long so the formatter on the screen owns
+        // the locale-specific rendering. Stable across CI builds — the value
+        // reflects when the APK was assembled, not when the binary is
+        // installed.
+        buildConfigField(
+            "long",
+            "GIT_COMMIT_DATE_EPOCH_MS",
+            "${System.currentTimeMillis()}L",
+        )
     }
 
     buildTypes {
@@ -423,6 +435,9 @@ dependencies {
 
     // Logging
     implementation(libs.timber)
+
+    // Process restart for the Settings → restart-required banner.
+    implementation(libs.process.phoenix)
 
     // Local Storage (Room)
     implementation(libs.room.runtime)

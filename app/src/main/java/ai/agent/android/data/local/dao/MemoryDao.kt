@@ -6,6 +6,7 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import kotlinx.coroutines.flow.Flow
 
 /**
  * Data Access Object for managing long-term memory chunks in the local database.
@@ -106,4 +107,29 @@ interface MemoryDao {
             "ORDER BY timestamp DESC LIMIT :keepLimit)",
     )
     suspend fun deleteOldestMemories(keepLimit: Int)
+
+    /**
+     * Removes every memory chunk from the table — including pinned entries.
+     * Backs the Settings → Memory → Clear destructive action. Pinned-or-not
+     * is intentionally ignored because the user has explicitly confirmed
+     * the wipe via the typed-confirm dialog.
+     */
+    @Query("DELETE FROM memory_chunks")
+    suspend fun deleteAllMemories()
+
+    /**
+     * Live count of stored memory chunks. Powers the Settings → Memory
+     * "CHUNKS" stat cell.
+     */
+    @Query("SELECT COUNT(*) FROM memory_chunks")
+    fun observeChunkCount(): Flow<Int>
+
+    /**
+     * Live aggregate byte size of the table content. Uses `LENGTH(text)` +
+     * `LENGTH(embedding)` so the estimate matches what the SQLite VFS
+     * actually stores rather than a raw row count. Powers the
+     * Settings → Memory "SIZE" stat cell.
+     */
+    @Query("SELECT COALESCE(SUM(LENGTH(text) + LENGTH(embedding)), 0) FROM memory_chunks")
+    fun observeTotalBytes(): Flow<Long>
 }

@@ -3,6 +3,8 @@ package ai.agent.android.data.local
 import ai.agent.android.domain.constants.DefaultPrompts
 import ai.agent.android.domain.constants.SettingsDefaults
 import ai.agent.android.domain.models.LocalBackend
+import ai.agent.android.domain.models.TestProbeResult
+import ai.agent.android.domain.models.ToolApprovalPolicy
 import ai.agent.android.domain.models.ToolRisk
 import ai.agent.android.domain.repositories.SettingsRepository
 import androidx.datastore.core.DataStore
@@ -16,6 +18,7 @@ import androidx.datastore.preferences.core.stringSetPreferencesKey
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.map
+import org.json.JSONException
 import org.json.JSONObject
 import timber.log.Timber
 import java.io.IOException
@@ -26,6 +29,7 @@ import javax.inject.Inject
  *
  * @property dataStore The underlying DataStore instance for persistence.
  */
+@Suppress("LargeClass") // 31-field DataStore facade by design; per-section split planned post-v0.1.
 class SettingsManager @Inject constructor(private val dataStore: DataStore<Preferences>) : SettingsRepository {
 
     private object PreferencesKeys {
@@ -51,6 +55,17 @@ class SettingsManager @Inject constructor(private val dataStore: DataStore<Prefe
         val DEFAULT_PIPELINE_ID = stringPreferencesKey("default_pipeline_id")
         val CRASH_REPORTING_ENABLED = booleanPreferencesKey("crash_reporting_enabled")
         val CONSOLE_PREFERRED_TAB = stringPreferencesKey("console_preferred_tab")
+
+        // Phase 22 / Task 9 — Settings redesign.
+        val TOOL_APPROVAL_POLICY = stringPreferencesKey("tool_approval_policy")
+        val BLOCK_DESTRUCTIVE_TOOLS = booleanPreferencesKey("block_destructive_tools")
+        val BLOCK_NETWORK_FROM_LOCAL_MODEL = booleanPreferencesKey("block_network_from_local_model")
+        val REPETITION_PENALTY = androidx.datastore.preferences.core.floatPreferencesKey("repetition_penalty")
+        val AUTO_SUMMARIZE_THRESHOLD = androidx.datastore.preferences.core.floatPreferencesKey(
+            "auto_summarize_threshold",
+        )
+        val LONG_RUNNING_TASKS_NOTIFICATIONS = booleanPreferencesKey("long_running_tasks_notifications")
+        val LAST_TEST_PROBE_RESULT = stringPreferencesKey("last_test_probe_result")
     }
 
     override val isFirstLaunch: Flow<Boolean> = dataStore.data
@@ -525,6 +540,199 @@ class SettingsManager @Inject constructor(private val dataStore: DataStore<Prefe
     override suspend fun setMemorySummaryDefaultLimit(limit: Int) {
         dataStore.edit { preferences ->
             preferences[PreferencesKeys.MEMORY_SUMMARY_DEFAULT_LIMIT] = limit
+        }
+    }
+
+    override val toolApprovalPolicy: Flow<ToolApprovalPolicy> = dataStore.data
+        .catch { exception ->
+            if (exception is IOException) {
+                Timber.e(exception, "Error reading preferences")
+                emit(emptyPreferences())
+            } else {
+                throw exception
+            }
+        }
+        .map { preferences ->
+            val storedKey = preferences[PreferencesKeys.TOOL_APPROVAL_POLICY]
+            if (storedKey != null) {
+                ToolApprovalPolicy.fromKey(storedKey)
+            } else {
+                // One-shot migration from the legacy boolean key.
+                // true  → SensitiveOrDestructive (default-with-care).
+                // false → NeverPrompt (only way the legacy UI let users skip destructive prompts).
+                when (preferences[PreferencesKeys.REQUIRES_USER_CONFIRMATION]) {
+                    false -> ToolApprovalPolicy.NeverPrompt
+                    true -> ToolApprovalPolicy.SensitiveOrDestructive
+                    null -> ToolApprovalPolicy.DEFAULT
+                }
+            }
+        }
+
+    override suspend fun setToolApprovalPolicy(policy: ToolApprovalPolicy) {
+        dataStore.edit { preferences ->
+            preferences[PreferencesKeys.TOOL_APPROVAL_POLICY] = policy.key
+            // Keep the legacy flag in sync so any consumer still reading the
+            // old boolean (until they migrate) sees a coherent value:
+            // anything other than NeverPrompt counts as "ask sometimes".
+            preferences[PreferencesKeys.REQUIRES_USER_CONFIRMATION] = policy != ToolApprovalPolicy.NeverPrompt
+        }
+    }
+
+    override val blockDestructiveTools: Flow<Boolean> = dataStore.data
+        .catch { exception ->
+            if (exception is IOException) {
+                Timber.e(exception, "Error reading preferences")
+                emit(emptyPreferences())
+            } else {
+                throw exception
+            }
+        }
+        .map { preferences ->
+            preferences[PreferencesKeys.BLOCK_DESTRUCTIVE_TOOLS] ?: false
+        }
+
+    override suspend fun setBlockDestructiveTools(blocked: Boolean) {
+        dataStore.edit { preferences ->
+            preferences[PreferencesKeys.BLOCK_DESTRUCTIVE_TOOLS] = blocked
+        }
+    }
+
+    override val blockNetworkFromLocalModel: Flow<Boolean> = dataStore.data
+        .catch { exception ->
+            if (exception is IOException) {
+                Timber.e(exception, "Error reading preferences")
+                emit(emptyPreferences())
+            } else {
+                throw exception
+            }
+        }
+        .map { preferences ->
+            preferences[PreferencesKeys.BLOCK_NETWORK_FROM_LOCAL_MODEL] ?: false
+        }
+
+    override suspend fun setBlockNetworkFromLocalModel(blocked: Boolean) {
+        dataStore.edit { preferences ->
+            preferences[PreferencesKeys.BLOCK_NETWORK_FROM_LOCAL_MODEL] = blocked
+        }
+    }
+
+    override val repetitionPenalty: Flow<Float> = dataStore.data
+        .catch { exception ->
+            if (exception is IOException) {
+                Timber.e(exception, "Error reading preferences")
+                emit(emptyPreferences())
+            } else {
+                throw exception
+            }
+        }
+        .map { preferences ->
+            preferences[PreferencesKeys.REPETITION_PENALTY] ?: SettingsDefaults.REPETITION_PENALTY_DEFAULT
+        }
+
+    override suspend fun setRepetitionPenalty(value: Float) {
+        dataStore.edit { preferences ->
+            preferences[PreferencesKeys.REPETITION_PENALTY] = value.coerceIn(
+                SettingsDefaults.REPETITION_PENALTY_MIN,
+                SettingsDefaults.REPETITION_PENALTY_MAX,
+            )
+        }
+    }
+
+    override val autoSummarizeThreshold: Flow<Float> = dataStore.data
+        .catch { exception ->
+            if (exception is IOException) {
+                Timber.e(exception, "Error reading preferences")
+                emit(emptyPreferences())
+            } else {
+                throw exception
+            }
+        }
+        .map { preferences ->
+            preferences[PreferencesKeys.AUTO_SUMMARIZE_THRESHOLD]
+                ?: SettingsDefaults.AUTO_SUMMARIZE_THRESHOLD_DEFAULT
+        }
+
+    override suspend fun setAutoSummarizeThreshold(threshold: Float) {
+        dataStore.edit { preferences ->
+            preferences[PreferencesKeys.AUTO_SUMMARIZE_THRESHOLD] = threshold.coerceIn(0f, 1f)
+        }
+    }
+
+    override val longRunningTaskNotificationsEnabled: Flow<Boolean> = dataStore.data
+        .catch { exception ->
+            if (exception is IOException) {
+                Timber.e(exception, "Error reading preferences")
+                emit(emptyPreferences())
+            } else {
+                throw exception
+            }
+        }
+        .map { preferences ->
+            preferences[PreferencesKeys.LONG_RUNNING_TASKS_NOTIFICATIONS] ?: true
+        }
+
+    override suspend fun setLongRunningTaskNotificationsEnabled(enabled: Boolean) {
+        dataStore.edit { preferences ->
+            preferences[PreferencesKeys.LONG_RUNNING_TASKS_NOTIFICATIONS] = enabled
+        }
+    }
+
+    override val lastTestProbeResult: Flow<TestProbeResult?> = dataStore.data
+        .catch { exception ->
+            if (exception is IOException) {
+                Timber.e(exception, "Error reading preferences")
+                emit(emptyPreferences())
+            } else {
+                throw exception
+            }
+        }
+        .map { preferences ->
+            decodeTestProbeResult(preferences[PreferencesKeys.LAST_TEST_PROBE_RESULT])
+        }
+
+    override suspend fun setLastTestProbeResult(result: TestProbeResult?) {
+        dataStore.edit { preferences ->
+            if (result == null) {
+                preferences.remove(PreferencesKeys.LAST_TEST_PROBE_RESULT)
+            } else {
+                preferences[PreferencesKeys.LAST_TEST_PROBE_RESULT] = encodeTestProbeResult(result)
+            }
+        }
+    }
+
+    override suspend fun resetSamplingDefaults() {
+        dataStore.edit { preferences ->
+            preferences[PreferencesKeys.TEMPERATURE] = SettingsDefaults.TEMPERATURE_DEFAULT
+            preferences[PreferencesKeys.TOP_K] = SettingsDefaults.TOP_K_DEFAULT
+            preferences[PreferencesKeys.TOP_P] = SettingsDefaults.TOP_P_DEFAULT
+            preferences[PreferencesKeys.REPETITION_PENALTY] = SettingsDefaults.REPETITION_PENALTY_DEFAULT
+            preferences[PreferencesKeys.MAX_CONTEXT_LENGTH] = SettingsDefaults.MAX_CONTEXT_LENGTH_DEFAULT
+            preferences[PreferencesKeys.PIPELINE_MAX_STEPS] = SettingsDefaults.PIPELINE_MAX_STEPS_DEFAULT
+        }
+    }
+
+    private fun encodeTestProbeResult(result: TestProbeResult): String = JSONObject().apply {
+        put("tokens", result.tokensGenerated)
+        put("durationMs", result.durationMs)
+        put("timestampMs", result.timestampMs)
+        put("success", result.success)
+        if (result.errorMessage != null) put("error", result.errorMessage)
+    }.toString()
+
+    private fun decodeTestProbeResult(raw: String?): TestProbeResult? {
+        if (raw.isNullOrBlank()) return null
+        return try {
+            val json = JSONObject(raw)
+            TestProbeResult(
+                tokensGenerated = json.optInt("tokens", 0),
+                durationMs = json.optLong("durationMs", 0L),
+                timestampMs = json.optLong("timestampMs", 0L),
+                success = json.optBoolean("success", false),
+                errorMessage = json.optString("error", "").takeIf { it.isNotBlank() },
+            )
+        } catch (e: JSONException) {
+            Timber.w(e, "Failed to parse last_test_probe_result — clearing")
+            null
         }
     }
 
