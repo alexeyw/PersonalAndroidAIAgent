@@ -56,9 +56,14 @@
     <string name="settings_memory_auto_summarize_title">Auto-summarize threshold</string>
     <string name="settings_memory_embedding_title">Embedding model</string>
     <string name="settings_memory_embedding_subtitle">bge-small-en-v1.5 · 384 dim · on-device</string>
-    <string name="settings_memory_export">Export base</string>
+    <!-- Memory action button labels — kept short so the three buttons fit
+         side-by-side in the row without ellipsis at the default font scale. -->
+    <string name="settings_memory_export">Export</string>
     <string name="settings_memory_reembed">Re-embed</string>
-    <string name="settings_memory_clear">Memory cleared.</string>
+    <string name="settings_memory_clear">Clear</string>
+
+    <!-- Memory snackbar messages emitted after the destructive action completes. -->
+    <string name="settings_memory_cleared_snackbar">Memory cleared.</string>
     <string name="settings_memory_export_filename">memory-base.json</string>
     <string name="settings_memory_export_success" tools:ignore="PluralsCandidate">Exported %1$d chunks.</string>
     <string name="settings_memory_export_failed">Export failed: %1$s</string>

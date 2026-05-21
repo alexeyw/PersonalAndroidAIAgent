@@ -149,11 +149,15 @@ fun ProviderDetailScreen(
                             title = providerLabel(providerId),
                             keyValue = "",
                             onKeyChange = {},
-                            keyLabel = stringResource(R.string.settings_provider_api_key_label, "Ollama"),
+                            keyLabel = "",
                             modelValue = uiState.ollamaModel,
                             onModelChange = viewModel::updateOllamaModel,
                             modelLabel = stringResource(R.string.settings_ollama_model_label),
                             availableModels = emptyList(),
+                            // Ollama runs LAN-local without authentication — hide the API-key
+                            // input entirely. Only base URL, model name, and context window
+                            // remain configurable.
+                            showApiKey = false,
                             ollama = OllamaProviderInputs(
                                 baseUrl = uiState.ollamaBaseUrl,
                                 baseUrlPlaceholder = stringResource(R.string.settings_ollama_base_url_placeholder),

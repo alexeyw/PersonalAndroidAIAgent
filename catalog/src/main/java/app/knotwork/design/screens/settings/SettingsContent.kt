@@ -62,6 +62,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
@@ -474,6 +475,12 @@ private fun IconToggleRow(
                 checkedTrackColor = MaterialTheme.colorScheme.primary,
                 checkedBorderColor = MaterialTheme.colorScheme.primary,
             ),
+            // Material3's default Switch is 52×32 dp which dwarfs the
+            // row-titles at our 14sp scale. Shrink the rendering box to
+            // ~78% so the visual matches the mockup; the actual touch
+            // target lives on the parent Row (`Modifier.clickable`), so
+            // we keep the documented 48 dp interactive floor.
+            modifier = Modifier.scale(SWITCH_SCALE),
         )
     }
 }
@@ -544,7 +551,7 @@ private fun LlmParametersCard(state: LlmParametersCardState, callbacks: Settings
                         color = KnotworkTheme.extended.onSurfaceMuted,
                     )
                 }
-                Slider(
+                CompactSlider(
                     value = slider.value,
                     onValueChange = { newValue -> callbacks.onSliderChange(slider.id, newValue) },
                     valueRange = slider.valueRange,
@@ -883,7 +890,7 @@ private fun MemoryCard(state: MemoryCardState, callbacks: SettingsCallbacks) {
                     color = KnotworkTheme.extended.onSurfaceMuted,
                 )
             }
-            Slider(
+            CompactSlider(
                 value = state.autoSummarizeThreshold.toFloat(),
                 onValueChange = { newValue -> callbacks.onAutoSummarizeChange(newValue.toInt()) },
                 valueRange = 0f..100f,
@@ -1103,6 +1110,53 @@ private fun DestructiveTypedConfirmDialog(
 
 // ─── Constants ─────────────────────────────────────────────────────────────
 
+/**
+ * Compact wrapper around the Material3 [Slider] used by every Settings
+ * card. Renders a thinner track + smaller pill-style thumb than the
+ * stock control so the slider does not visually dominate the row at
+ * the design's 14 sp label scale.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun CompactSlider(
+    value: Float,
+    onValueChange: (Float) -> Unit,
+    valueRange: ClosedFloatingPointRange<Float>,
+    modifier: Modifier = Modifier,
+    steps: Int = 0,
+) {
+    val interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+    Slider(
+        value = value,
+        onValueChange = onValueChange,
+        valueRange = valueRange,
+        steps = steps,
+        modifier = modifier,
+        interactionSource = interactionSource,
+        thumb = {
+            androidx.compose.material3.SliderDefaults.Thumb(
+                interactionSource = interactionSource,
+                modifier = Modifier.size(
+                    width = COMPACT_SLIDER_THUMB_WIDTH,
+                    height = COMPACT_SLIDER_THUMB_HEIGHT,
+                ),
+                thumbSize = androidx.compose.ui.unit.DpSize(
+                    COMPACT_SLIDER_THUMB_WIDTH,
+                    COMPACT_SLIDER_THUMB_HEIGHT,
+                ),
+            )
+        },
+        track = { sliderState ->
+            androidx.compose.material3.SliderDefaults.Track(
+                sliderState = sliderState,
+                modifier = Modifier.height(COMPACT_SLIDER_TRACK_HEIGHT),
+                drawStopIndicator = null,
+                drawTick = { _, _ -> },
+            )
+        },
+    )
+}
+
 /** Test tag for the scrollable Settings body — used by instrumented tests. */
 const val SETTINGS_BODY_TEST_TAG: String = "settings_body"
 const val IDENTITY_CARD_TEST_TAG: String = "settings_identity_card"
@@ -1130,3 +1184,21 @@ private const val ACTIVE_PILL_ALPHA = 0.18f
  * width for the longest label ("Sensitive +") at the default font scale.
  */
 private const val SEGMENTED_TRAILING_WEIGHT = 2.5f
+
+/**
+ * Visual scale of the Material3 Switch inside the restrictions /
+ * notifications / privacy toggle rows. The default 52×32 dp control
+ * dwarfs the surrounding 14 sp row title; 78% trims it to ~40×25 dp
+ * which matches the mockup. The interactive 48 dp floor stays intact
+ * because the parent `Row` carries the `clickable` modifier.
+ */
+private const val SWITCH_SCALE = 0.78f
+
+/**
+ * Compact thumb / track dimensions used by [CompactSlider]. The
+ * defaults render a thinner track + smaller pill thumb than the stock
+ * Material3 Slider, matching the mockup's "settings slider" treatment.
+ */
+private val COMPACT_SLIDER_THUMB_WIDTH = 4.dp
+private val COMPACT_SLIDER_THUMB_HEIGHT = 18.dp
+private val COMPACT_SLIDER_TRACK_HEIGHT = 4.dp

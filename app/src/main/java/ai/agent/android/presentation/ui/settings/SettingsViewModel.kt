@@ -478,7 +478,7 @@ class SettingsViewModel @Inject constructor(
     private fun performClearMemory() {
         viewModelScope.launch {
             clearAllMemoryUseCase()
-            emitSnackbar(appContext.getString(R.string.settings_memory_clear))
+            emitSnackbar(appContext.getString(R.string.settings_memory_cleared_snackbar))
         }
     }
 
