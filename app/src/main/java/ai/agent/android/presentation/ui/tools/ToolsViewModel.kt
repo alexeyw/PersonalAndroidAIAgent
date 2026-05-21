@@ -81,6 +81,12 @@ class ToolsViewModel @Inject constructor(
      * status observer for every newly-added URL, cancels the observer and
      * disconnects the underlying client for every removed URL, and rebuilds
      * the snapshot list so the UI sees the new order.
+     *
+     * Ordering matters: the snapshot list is rewritten **before** any
+     * observer or fetch coroutine is launched. Both [observeServer] and
+     * [fetchToolsAndUpdate] mutate `_uiState.mcpServers` via `state.map`
+     * lookups keyed by URL — if the snapshot for a freshly-added URL is
+     * not present yet, those async updates are silently dropped.
      */
     private fun reconcileServerSet(urls: Set<String>) {
         val existing = serverObservers.keys.toSet()
@@ -91,11 +97,9 @@ class ToolsViewModel @Inject constructor(
             serverObservers.remove(url)?.cancel()
             viewModelScope.launch { mcpServerRepository.disconnect(serverUrl = url) }
         }
-        toAdd.forEach { url ->
-            serverObservers[url] = observeServer(url)
-            fetchToolsAndUpdate(serverUrl = url, forceRefresh = false)
-        }
 
+        // 1) Snapshot list MUST be rewritten first so concurrent async writes
+        //    from the observers / fetches launched below find their entry.
         _uiState.update { state ->
             val existingByUrl = state.mcpServers.associateBy { it.url }
             val snapshots = urls.map { url ->
@@ -109,6 +113,12 @@ class ToolsViewModel @Inject constructor(
                 mcpServers = snapshots,
                 expandedServerUrls = state.expandedServerUrls.intersect(urls),
             )
+        }
+
+        // 2) Observers / fetches are launched only after the snapshots exist.
+        toAdd.forEach { url ->
+            serverObservers[url] = observeServer(url)
+            fetchToolsAndUpdate(serverUrl = url, forceRefresh = false)
         }
     }
 

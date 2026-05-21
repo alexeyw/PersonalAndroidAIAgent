@@ -159,18 +159,23 @@ class ToolRepositoryImpl @Inject constructor(
      * fetched from connected MCP servers.
      *
      * The `disabledAppFunctions` setting filters the merged local catalogue — it gates
-     * both built-ins and discovered AppFunctions by name.
+     * both built-ins and discovered AppFunctions by name. The `disabledMcpTools` setting
+     * filters MCP-advertised tools by their stable
+     * `mcp:<sha8(serverUrl)>:<toolName>` id (see [McpServerRepositoryImpl.mcpToolId]).
      *
      * @return A list of [AgentTool] representing all tools currently available to the agent.
      */
     override suspend fun getAvailableTools(): List<AgentTool> {
         syncMcpClients()
-        val disabled = settingsRepository.disabledAppFunctions.first()
-        val availableLocal = getAllLocalTools().filter { it.name !in disabled }
+        val disabledLocal = settingsRepository.disabledAppFunctions.first()
+        val disabledMcp = settingsRepository.disabledMcpTools.first()
+        val availableLocal = getAllLocalTools().filter { it.name !in disabledLocal }
 
-        val mcpTools = mcpClients.values.flatMap { client ->
+        val mcpTools = mcpClients.entries.flatMap { (url, client) ->
             try {
-                client.getTools()
+                client.getTools().filter { tool ->
+                    McpServerRepositoryImpl.mcpToolId(serverUrl = url, toolName = tool.name) !in disabledMcp
+                }
             } catch (e: Exception) {
                 emptyList()
             }
@@ -219,19 +224,35 @@ class ToolRepositoryImpl @Inject constructor(
             return localAppFunctionManager.invokeByName(name, arguments)
         }
 
+        return executeMcpTool(name = name, arguments = arguments)
+    }
+
+    /**
+     * MCP-side dispatch for [executeTool]. Iterates over every active MCP client
+     * and, for the first one that advertises [name], either rejects the call
+     * (when the tool's `mcp:<sha8(url)>:<name>` id is in
+     * [SettingsRepository.disabledMcpTools]) or forwards it to the client.
+     *
+     * Errors thrown from `getTools()` on a single client are swallowed so the
+     * loop can fall through to other clients — but disabled-tool rejections
+     * are surfaced to the caller, otherwise the gate would silently fail open.
+     */
+    private suspend fun executeMcpTool(name: String, arguments: String): String {
         syncMcpClients()
-
-        for (client in mcpClients.values) {
-            try {
-                val tools = client.getTools()
-                if (tools.any { it.name == name }) {
-                    return client.executeTool(name, arguments)
-                }
-            } catch (e: Exception) {
-                // Error querying or executing on this client, try the next one
+        val disabledMcp = settingsRepository.disabledMcpTools.first()
+        for ((url, client) in mcpClients) {
+            val advertised = runCatching { client.getTools().any { it.name == name } }.getOrDefault(false)
+            if (!advertised) continue
+            val mcpId = McpServerRepositoryImpl.mcpToolId(serverUrl = url, toolName = name)
+            if (mcpId in disabledMcp) {
+                throw IllegalArgumentException("Tool $name is disabled")
             }
+            val executed = runCatching { client.executeTool(name, arguments) }.getOrNull()
+            if (executed != null) return executed
+            // Execution failure on the only advertising client → fall through to the
+            // outer "not found" error so the agent gets a consistent failure shape.
+            break
         }
-
         throw IllegalArgumentException("Tool $name not found across active providers")
     }
 

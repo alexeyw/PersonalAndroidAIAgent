@@ -63,6 +63,34 @@ class ToolDetailScreenTest {
     }
 
     @Test
+    fun mcpTool_missingWithErrorStatus_rendersErrorInsteadOfPermanentSkeleton() {
+        // A stale deep link, a removed server, or a failed fetch can produce a `null`
+        // McpTool. Without explicit handling the surface stays on a loading skeleton
+        // forever; this test pins the regression for the SchemaError fallback.
+        val toolId = McpServerRepositoryImpl.mcpToolId(serverUrl = serverUrl, toolName = "ghost")
+        val viewModel = mockk<ToolsViewModel>(relaxed = true)
+        val state = MutableStateFlow(
+            ToolsUiState(
+                mcpServers = listOf(
+                    McpServerSnapshot(
+                        url = serverUrl,
+                        status = McpConnectionStatus.Error(reason = "handshake failed"),
+                        tools = emptyList(),
+                    ),
+                ),
+            ),
+        )
+        every { viewModel.uiState } returns state
+        every { viewModel.findMcpTool(toolId = toolId) } returns null
+
+        composeTestRule.setContent {
+            ToolDetailScreen(toolId = toolId, onBack = {}, viewModel = viewModel)
+        }
+
+        composeTestRule.onNodeWithText(text = "Schema unavailable", substring = true).assertIsDisplayed()
+    }
+
+    @Test
     fun localTool_rendersRealParametersInsteadOfPlaceholder() {
         val tool = AgentTool(
             name = "get_system_time",

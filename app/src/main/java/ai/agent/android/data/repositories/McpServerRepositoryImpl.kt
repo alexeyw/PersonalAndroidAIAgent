@@ -46,15 +46,20 @@ class McpServerRepositoryImpl @Inject constructor(private val clientFactory: Mcp
 
     override suspend fun fetchToolList(serverUrl: String, forceRefresh: Boolean): Result<List<McpTool>> {
         val mutex = mutexes.getOrPut(serverUrl) { Mutex() }
+        val flow = statusFlows.getOrPut(serverUrl) { MutableStateFlow(McpConnectionStatus.Connecting) }
         return mutex.withLock {
             val now = clockMs()
             if (!forceRefresh) {
                 val cached = caches[serverUrl]
                 if (cached != null && now - cached.fetchedAtMs <= McpServerRepository.TOOL_LIST_TTL_MS) {
+                    // A previously-failed refresh may have left the status flow in `Error`.
+                    // Serving cached tools while still telling the UI we're broken would
+                    // surface a stale red pill on a perfectly usable server — so reconcile
+                    // the status to `Connected` whenever we successfully return cached data.
+                    flow.value = McpConnectionStatus.Connected
                     return@withLock Result.success(cached.tools)
                 }
             }
-            val flow = statusFlows.getOrPut(serverUrl) { MutableStateFlow(McpConnectionStatus.Connecting) }
             flow.value = McpConnectionStatus.Connecting
 
             runCatching {
@@ -77,12 +82,20 @@ class McpServerRepositoryImpl @Inject constructor(private val clientFactory: Mcp
         }.asStateFlow()
 
     override suspend fun disconnect(serverUrl: String) {
-        val client = clients.remove(serverUrl)
-        runCatching { client?.disconnect() }
-            .onFailure { Timber.w(it, "MCP disconnect failed for %s", serverUrl) }
-        caches.remove(serverUrl)
-        statusFlows.remove(serverUrl)
-        mutexes.remove(serverUrl)
+        // Re-use whatever Mutex an in-flight fetchToolList may already hold so we
+        // serialise with it instead of racing past it. The Mutex entry is intentionally
+        // NOT removed from the map: removing it while another coroutine is suspended
+        // waiting on it would silently drop the lock contract, and a follow-up fetch
+        // would `getOrPut` a fresh Mutex that runs in parallel with the in-flight
+        // disconnect.
+        val mutex = mutexes.getOrPut(serverUrl) { Mutex() }
+        mutex.withLock {
+            val client = clients.remove(serverUrl)
+            runCatching { client?.disconnect() }
+                .onFailure { Timber.w(it, "MCP disconnect failed for %s", serverUrl) }
+            caches.remove(serverUrl)
+            statusFlows.remove(serverUrl)
+        }
     }
 
     /**

@@ -135,6 +135,31 @@ class McpServerRepositoryImplTest {
     }
 
     @Test
+    fun `cache fast-path clears a previous Error status`() = runTest {
+        // After a failed force-refresh has put the status flow in Error, a follow-up
+        // cached-tool fetch must reconcile the flow back to Connected so the UI doesn't
+        // leave a stale red pill on a server whose tools are still available from cache.
+        val client = mockk<McpClient>(relaxed = true)
+        coEvery { client.getTools() } returns listOf(AgentTool("a", "d", "{}"))
+        val factory = mockk<McpClientFactory>()
+        coEvery { factory.create() } returns client
+        val repo = McpServerRepositoryImpl(clientFactory = factory)
+        repo.clockMs = { 1_000L }
+
+        // 1) First fetch succeeds → cache populated, status = Connected.
+        repo.fetchToolList(serverUrl = url)
+        // 2) Force-refresh fails → status flips to Error, but cache remains.
+        coEvery { client.getTools() } throws IllegalStateException("transient")
+        repo.fetchToolList(serverUrl = url, forceRefresh = true)
+        assertTrue(repo.observeConnectionStatus(url).first() is McpConnectionStatus.Error)
+
+        // 3) Non-forced fetch within TTL → cache hit → status must reconcile to Connected.
+        val cached = repo.fetchToolList(serverUrl = url, forceRefresh = false)
+        assertTrue(cached.isSuccess)
+        assertEquals(McpConnectionStatus.Connected, repo.observeConnectionStatus(url).first())
+    }
+
+    @Test
     fun `mcpToolId is deterministic and route-safe`() {
         val id1 = McpServerRepositoryImpl.mcpToolId(serverUrl = url, toolName = "search")
         val id2 = McpServerRepositoryImpl.mcpToolId(serverUrl = url, toolName = "search")

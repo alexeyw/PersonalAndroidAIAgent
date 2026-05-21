@@ -1,6 +1,7 @@
 package ai.agent.android.presentation.ui.tools
 
 import ai.agent.android.data.repositories.McpServerRepositoryImpl
+import ai.agent.android.domain.models.McpConnectionStatus
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -45,13 +46,20 @@ fun ToolDetailScreen(
 
     val viewState = if (isMcp) {
         val mcpTool = remember(toolId, uiState.mcpServers) { viewModel.findMcpTool(toolId = toolId) }
+        val owningStatus = remember(toolId, uiState.mcpServers) { findOwningServerStatus(uiState, toolId) }
         val enabled by remember(toolId, uiState.disabledMcpTools) {
             derivedStateOf { toolId !in uiState.disabledMcpTools }
         }
         ToolDetailViewState(
-            visualState = mcpTool?.inputSchemaJson?.visualStateForSchema() ?: ToolDetailVisualState.Loading,
+            visualState = when {
+                mcpTool != null -> mcpTool.inputSchemaJson.visualStateForSchema()
+                owningStatus is McpConnectionStatus.Connecting -> ToolDetailVisualState.Loading
+                else -> ToolDetailVisualState.SchemaError
+            },
             toolName = mcpTool?.name ?: toolId,
-            description = mcpTool?.description.orEmpty(),
+            description = mcpTool?.description
+                ?: (owningStatus as? McpConnectionStatus.Error)?.let { "Server error: ${it.reason}" }
+                ?: "",
             serverDisplayName = mcpTool?.serverUrl ?: "MCP tool",
             schemaJson = mcpTool?.inputSchemaJson,
             lastUsed = null,
@@ -91,6 +99,22 @@ fun ToolDetailScreen(
         callbacks = callbacks,
         modifier = modifier.testTag(tag = TOOL_DETAIL_ROOT_TEST_TAG),
     )
+}
+
+/**
+ * Finds the connection status of the server that owns [toolId] (if any).
+ *
+ * The id format is `mcp:<sha8(serverUrl)>:<toolName>`, so we re-hash every
+ * known server URL and compare prefixes. Returns `null` when no known
+ * server matches — e.g. the user navigated via a stale deep link after
+ * removing the originating server.
+ */
+private fun findOwningServerStatus(state: ToolsUiState, toolId: String): McpConnectionStatus? {
+    val prefix = McpServerRepositoryImpl.MCP_ID_PREFIX
+    if (!toolId.startsWith(prefix)) return null
+    return state.mcpServers.firstOrNull { snapshot ->
+        toolId.startsWith(McpServerRepositoryImpl.mcpToolId(serverUrl = snapshot.url, toolName = "").trimEnd(':'))
+    }?.status
 }
 
 /**

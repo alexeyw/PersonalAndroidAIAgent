@@ -101,6 +101,32 @@ class ToolsViewModelTest {
     }
 
     @Test
+    fun `appearing server snapshot exists before observers and fetches launch`() = runTest {
+        // Regression guard for the reconcile-order race: the snapshot list MUST be
+        // rewritten BEFORE observers / fetches launch, otherwise the status flow's
+        // initial Connecting emission and the fetchToolList result update can race
+        // against the snapshot insertion and be silently overwritten.
+        val url = "https://racy.example/mcp"
+        val sample = McpTool(
+            id = "mcp:cafebabe:tool",
+            serverUrl = url,
+            name = "tool",
+            description = "",
+            inputSchemaJson = "{}",
+        )
+        coEvery {
+            mcpServerRepository.fetchToolList(serverUrl = url, forceRefresh = false)
+        } returns Result.success(listOf(sample))
+
+        mcpServersFlow.value = setOf(url)
+        advanceUntilIdle()
+
+        val snapshot = viewModel.uiState.value.mcpServers.firstOrNull { it.url == url }
+        assertTrue("snapshot for $url must exist", snapshot != null)
+        assertEquals(listOf(sample), snapshot!!.tools)
+    }
+
+    @Test
     fun `appearing server triggers fetchToolList and surfaces tools`() = runTest {
         val url = "https://example.com/mcp"
         val sample = McpTool(
