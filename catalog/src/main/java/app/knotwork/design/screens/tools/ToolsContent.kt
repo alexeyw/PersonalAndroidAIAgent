@@ -2,6 +2,13 @@
 
 package app.knotwork.design.screens.tools
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.SizeTransform
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -55,6 +62,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
@@ -89,6 +97,22 @@ private const val SWITCH_SCALE = 0.78f
 /** Number of section / row skeletons rendered while the surface is loading. */
 private const val LOADING_SECTION_COUNT = 2
 private const val LOADING_ROWS_PER_SECTION = 3
+
+/**
+ * Opacity applied to the server row and its nested tools when the server's
+ * connection state is [McpConnectionState.Disconnected] (`screens/README.md
+ * §C4`). Pairs the colour-only signal (warning dot) with a second visual
+ * cue per `decisions.md §14`.
+ */
+private const val DISCONNECTED_ROW_ALPHA = 0.6f
+
+/**
+ * Composite key for the server-row subtitle's `AnimatedContent`. Re-keys the
+ * crossfade on both connection-state transitions (Connecting → Connected →
+ * Error) and label-only changes (Connected `42 ms` → `318 ms`) so the
+ * mono-text re-flows through the same animation channel.
+ */
+private data class ServerSubtitle(val state: McpConnectionState, val label: String, val count: Int)
 
 /**
  * Stateless Knotwork tools surface. Mirrors the second-pass mockup
@@ -264,13 +288,19 @@ private fun ToolsList(state: ToolsViewState, callbacks: ToolsCallbacks, padding:
             )
         }
         state.mcpServers.forEach { server ->
+            // Per `screens/README.md §C4` Disconnected state, the server row plus
+            // every nested tool row renders at 60 % opacity so the disabled-by-
+            // server-failure affordances read at a glance. The opacity stops at
+            // the row level (it does NOT cascade into the catalog `EmptyState`
+            // or `StripedPlaceholder` containers, which live outside this loop).
+            val rowAlpha = if (server.state == McpConnectionState.Disconnected) DISCONNECTED_ROW_ALPHA else 1f
             item(key = "mcp-${server.id}") {
-                McpServerRowView(server = server, callbacks = callbacks)
+                McpServerRowView(server = server, callbacks = callbacks, rowAlpha = rowAlpha)
                 HorizontalDivider(color = KnotworkTheme.extended.divider)
             }
             if (server.expanded) {
                 items(items = server.tools, key = { "mcp-tool-${it.id}" }) { entry ->
-                    McpToolEntryRowView(entry = entry, callbacks = callbacks)
+                    McpToolEntryRowView(entry = entry, callbacks = callbacks, rowAlpha = rowAlpha)
                     HorizontalDivider(color = KnotworkTheme.extended.divider)
                 }
             }
@@ -406,21 +436,45 @@ private fun riskAccent(risk: BuiltInToolRisk): Color = when (risk) {
     BuiltInToolRisk.Destructive -> KnotworkTheme.extended.riskDestructive
 }
 
+/**
+ * Resolves the leading status-dot colour for one server row.
+ *
+ * Kept as a small helper so the dot colour can be passed through
+ * `animateColorAsState` for the connection-state transition animation
+ * without duplicating the `when` table at every call site.
+ */
 @Composable
-private fun McpServerRowView(server: McpServerRow, callbacks: ToolsCallbacks) {
-    val dotColor = when (server.state) {
-        McpConnectionState.Connected -> KnotworkTheme.extended.signalSuccess
-        McpConnectionState.Disconnected -> KnotworkTheme.extended.signalWarn
-        McpConnectionState.Syncing -> MaterialTheme.colorScheme.primary
-        McpConnectionState.Error -> KnotworkTheme.extended.signalError
-        McpConnectionState.Disabled -> KnotworkTheme.extended.onSurfaceMuted
-    }
+private fun serverDotColor(state: McpConnectionState): Color = when (state) {
+    McpConnectionState.Connected -> KnotworkTheme.extended.signalSuccess
+    McpConnectionState.Disconnected -> KnotworkTheme.extended.signalWarn
+    McpConnectionState.Syncing -> MaterialTheme.colorScheme.primary
+    McpConnectionState.Error -> KnotworkTheme.extended.signalError
+    McpConnectionState.Disabled -> KnotworkTheme.extended.onSurfaceMuted
+}
+
+@Composable
+private fun McpServerRowView(server: McpServerRow, callbacks: ToolsCallbacks, rowAlpha: Float = 1f) {
+    val targetDotColor = serverDotColor(state = server.state)
+    val reducedMotion = KnotworkTheme.a11y.reducedMotion()
+    // Connection-state transitions animate the dot colour (target colour
+    // tween) and the subtitle (`AnimatedContent` with `SizeTransform` so the
+    // monospace `<N tools · <label>` line re-flows when the label widens —
+    // e.g. `Connecting → Connected` shrinks, `Connected → Error("reason")`
+    // grows). Under reduced motion both animations collapse to an instant
+    // snap per `decisions.md §14`.
+    val animationDurationMs = if (reducedMotion) 0 else KnotworkTheme.motion.dur3
+    val dotColor by animateColorAsState(
+        targetValue = targetDotColor,
+        animationSpec = tween(durationMillis = animationDurationMs, easing = KnotworkTheme.motion.easeStd),
+        label = "mcpServerDotColor",
+    )
     val expandable = server.tools.isNotEmpty()
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp3),
         modifier = Modifier
             .fillMaxWidth()
+            .alpha(rowAlpha)
             .then(
                 if (expandable) Modifier.clickable { callbacks.onServerExpandToggle(server.id) } else Modifier,
             )
@@ -445,11 +499,27 @@ private fun McpServerRowView(server: McpServerRow, callbacks: ToolsCallbacks) {
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
-            Text(
-                text = "${server.toolCount} tools · ${server.latencyLabel}",
-                style = KnotworkTextStyles.MonoSm,
-                color = KnotworkTheme.extended.onSurfaceMuted,
-            )
+            AnimatedContent(
+                targetState = ServerSubtitle(
+                    state = server.state,
+                    label = server.latencyLabel,
+                    count = server.toolCount,
+                ),
+                transitionSpec = {
+                    val enter = fadeIn(animationSpec = tween(durationMillis = animationDurationMs))
+                    val exit = fadeOut(animationSpec = tween(durationMillis = animationDurationMs))
+                    enter.togetherWith(exit).using(
+                        SizeTransform(clip = false) { _, _ -> tween(durationMillis = animationDurationMs) },
+                    )
+                },
+                label = "mcpServerSubtitle",
+            ) { subtitle ->
+                Text(
+                    text = "${subtitle.count} tools · ${subtitle.label}",
+                    style = KnotworkTextStyles.MonoSm,
+                    color = KnotworkTheme.extended.onSurfaceMuted,
+                )
+            }
         }
         if (expandable) {
             IconButton(onClick = { callbacks.onServerExpandToggle(server.id) }) {
@@ -530,12 +600,13 @@ private fun ServerRowOverflowMenu(server: McpServerRow, callbacks: ToolsCallback
 }
 
 @Composable
-private fun McpToolEntryRowView(entry: McpToolEntry, callbacks: ToolsCallbacks) {
+private fun McpToolEntryRowView(entry: McpToolEntry, callbacks: ToolsCallbacks, rowAlpha: Float = 1f) {
     Row(
         verticalAlignment = Alignment.Top,
         horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp3),
         modifier = Modifier
             .fillMaxWidth()
+            .alpha(rowAlpha)
             .clickable { callbacks.onMcpToolClick(entry.id) }
             .padding(
                 start = KnotworkTheme.spacing.sp8,
@@ -869,11 +940,19 @@ fun ToolDetailContent(
                     color = KnotworkTheme.extended.consoleBg,
                     modifier = Modifier.fillMaxWidth(),
                 ) {
+                    // Horizontal-scroll the monospace schema preview so long
+                    // lines (deep JSON-Schema, MCP tool inputs) stay legible
+                    // without wrapping — required at fontScale 2× per
+                    // `screens/README.md §C4` (`ToolDetailScreen` rule:
+                    // "schema-preview remains horizontally-scrollable").
                     Text(
                         text = state.schemaJson.orEmpty(),
                         style = KnotworkTextStyles.MonoBase,
                         color = KnotworkTheme.extended.consoleFg,
-                        modifier = Modifier.padding(KnotworkTheme.spacing.sp3),
+                        softWrap = false,
+                        modifier = Modifier
+                            .horizontalScroll(state = rememberScrollState())
+                            .padding(KnotworkTheme.spacing.sp3),
                     )
                 }
             }
