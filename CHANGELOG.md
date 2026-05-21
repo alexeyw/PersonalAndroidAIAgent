@@ -17,11 +17,13 @@ details.
 
 - **Tools — full MCP server configuration** (Phase 22 / Task 10/17) —
   Each MCP server now carries a full [McpServerConfig]: optional
-  display name, transport selection (SSE today; Streamable HTTP
-  hidden from the picker until Koog ships a working transport
-  for it), a typed authentication selector (None / Bearer / Basic
-  / API Key) with per-scheme fields, and arbitrary request headers
-  for advanced overrides. Adding and editing happen on a
+  display name, transport selection (SSE via Koog's
+  `defaultSseTransport`; Streamable HTTP via the upstream MCP
+  Kotlin SDK's `HttpClient.mcpStreamableHttpTransport` extension —
+  both end-to-end wired against real servers), a typed
+  authentication selector (None / Bearer / Basic / API Key) with
+  per-scheme fields, and arbitrary request headers for advanced
+  overrides. Adding and editing happen on a
   dedicated full-screen `McpServerConfigScreen` (route
   `tools/mcp-config?originalUrl={url}`) — the row's overflow ⋮
   menu (Refresh / Edit / Remove) opens it pre-filled, the

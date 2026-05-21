@@ -3,6 +3,7 @@ package ai.agent.android.data.mcp
 import ai.agent.android.domain.models.AgentTool
 import ai.agent.android.domain.models.McpAuth
 import ai.agent.android.domain.models.McpServerConfig
+import ai.agent.android.domain.models.McpTransport
 import ai.koog.agents.core.tools.ToolRegistry
 import ai.koog.agents.mcp.McpToolRegistryProvider
 import ai.koog.agents.mcp.metadata.McpServerInfo
@@ -10,7 +11,10 @@ import ai.koog.serialization.kotlinx.KotlinxSerializer
 import ai.koog.serialization.kotlinx.toKoogJSONObject
 import io.ktor.client.HttpClient
 import io.ktor.client.plugins.defaultRequest
+import io.ktor.client.plugins.sse.SSE
 import io.ktor.http.HttpHeaders
+import io.modelcontextprotocol.kotlin.sdk.client.mcpStreamableHttpTransport
+import io.modelcontextprotocol.kotlin.sdk.shared.Transport
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
@@ -36,20 +40,27 @@ class KoogMcpClient : McpClient {
     private val serializer = KotlinxSerializer(Json { ignoreUnknownKeys = true })
 
     /**
-     * Connects to the MCP server at the specified URL using the Koog MCP transport.
+     * Connects to the MCP server described by [config]. Branches on
+     * [McpServerConfig.transport]:
+     *  - [McpTransport.SSE] — classic server-sent events via Koog's
+     *    `defaultSseTransport`.
+     *  - [McpTransport.STREAMABLE_HTTP] — the post-2025-03-26 spec
+     *    transport via the upstream MCP Kotlin SDK
+     *    (`HttpClient.mcpStreamableHttpTransport`). Uses POST for
+     *    outbound JSON-RPC and an SSE channel for inbound, so the SSE
+     *    Ktor plugin is installed on the shared client unconditionally.
      *
-     * Calling [connect] more than once on the same instance is supported (e.g. reconnect
-     * or repoint scenarios): any previously-attached `HttpClient` is closed before a
-     * fresh one is installed so its socket pool and engine threads do not leak until
-     * process teardown.
+     * Calling [connect] more than once on the same instance is supported
+     * (e.g. reconnect or repoint scenarios): any previously-attached
+     * `HttpClient` is closed before a fresh one is installed so its
+     * socket pool and engine threads do not leak until process teardown.
      *
-     * The freshly-created `HttpClient` is published into the [httpClient] field **only
-     * after** transport construction succeeds. If `defaultSseTransport` or
-     * `fromTransport` throws (network error, malformed URL, server-side rejection), the
-     * client is closed locally and the field is left in its previous state, so a leaked
-     * Ktor engine cannot accumulate across failed connects.
-     *
-     * @param url The endpoint URL of the MCP server.
+     * The freshly-created `HttpClient` is published into the [httpClient]
+     * field **only after** transport construction succeeds. If transport
+     * construction or `fromTransport` throws (network error, malformed
+     * URL, server-side rejection), the client is closed locally and the
+     * field is left in its previous state, so a leaked Ktor engine
+     * cannot accumulate across failed connects.
      */
     override suspend fun connect(config: McpServerConfig) {
         withContext(Dispatchers.IO) {
@@ -65,24 +76,26 @@ class KoogMcpClient : McpClient {
             // are appended on top (the user wins on conflict — e.g. an
             // explicit `Authorization` row overrides the typed auth).
             val composedHeaders = composeHeaders(config = config)
+            // The SSE plugin is required by both transports: classic SSE for the
+            // event stream, Streamable HTTP for the inbound notification channel.
+            // Installing it unconditionally lets either branch reuse the same
+            // HttpClient without juggling `client.config { install(SSE) }` calls.
             val client = HttpClient {
+                install(SSE)
                 if (composedHeaders.isNotEmpty()) {
                     defaultRequest {
                         composedHeaders.forEach { (key, value) -> headers.append(key, value) }
-                        // Convenience: only add the SSE Accept hint when the user
-                        // hasn't already supplied one through custom headers.
-                        if (composedHeaders.keys.none { it.equals(HttpHeaders.Accept, ignoreCase = true) }) {
-                            headers.append(HttpHeaders.Accept, "text/event-stream")
-                        }
                     }
                 }
             }
             try {
-                // Koog 0.8 only ships an SSE transport; `STREAMABLE_HTTP` falls
-                // back to SSE here until the upstream SDK surfaces a dedicated
-                // transport. The user's intent is still persisted so the choice
-                // survives a future client upgrade.
-                val transport = McpToolRegistryProvider.defaultSseTransport(url = config.url, baseClient = client)
+                val transport: Transport = when (config.transport) {
+                    McpTransport.SSE -> McpToolRegistryProvider.defaultSseTransport(
+                        url = config.url,
+                        baseClient = client,
+                    )
+                    McpTransport.STREAMABLE_HTTP -> client.mcpStreamableHttpTransport(url = config.url)
+                }
                 val serverInfo = McpServerInfo(url = config.url, command = "")
                 registry = McpToolRegistryProvider.fromTransport(transport, serverInfo)
                 // Publish the client into the field only after the transport has been

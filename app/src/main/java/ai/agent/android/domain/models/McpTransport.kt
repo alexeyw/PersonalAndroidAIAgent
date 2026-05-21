@@ -1,26 +1,24 @@
 package ai.agent.android.domain.models
 
 /**
- * Transport protocol used to talk to a remote MCP server.
+ * Transport protocol used to talk to a remote MCP server. Both variants
+ * are end-to-end wired today:
  *
- * The Android client today wires only [SSE] end-to-end (via Koog 0.8's
- * `defaultSseTransport`). [STREAMABLE_HTTP] is the post-2025-03-26 spec
- * replacement for SSE; we capture the user's intent so the persisted
- * config carries it forward, but the underlying client falls back to
- * SSE until Koog ships a streamable-HTTP transport.
+ *  - [SSE] — classic server-sent events through Koog's
+ *    `defaultSseTransport`.
+ *  - [STREAMABLE_HTTP] — the post-2025-03-26 spec replacement; runs
+ *    through the upstream MCP Kotlin SDK's
+ *    `HttpClient.mcpStreamableHttpTransport` extension (POST for
+ *    outbound, SSE channel for inbound).
  */
 enum class McpTransport(
     /** Stable wire identifier persisted in DataStore; never localise this. */
     val wireId: String,
 ) {
-    /** Server-Sent Events transport — fully wired through Koog 0.8. */
+    /** Server-Sent Events transport. */
     SSE(wireId = "sse"),
 
-    /**
-     * MCP Streamable HTTP transport (spec 2025-03-26). The persisted intent
-     * survives; the runtime falls back to SSE until Koog ships native
-     * Streamable HTTP support.
-     */
+    /** MCP Streamable HTTP transport (spec 2025-03-26). */
     STREAMABLE_HTTP(wireId = "streamable_http"),
     ;
 

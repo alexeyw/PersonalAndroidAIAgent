@@ -100,15 +100,14 @@ data class McpToolEntry(
  * dependencies; the host translates between the two.
  *
  * @property selectable `true` for options the user can actually pick
- * in the UI today. `StreamableHttp` stays in the enum so a previously-
- * persisted choice survives a round-trip through the form, but it is
- * filtered out of the visible chip row until the underlying client
- * supports it (Koog 0.8 ships only SSE; the streamable-HTTP fallback
- * to SSE was returning `405 Method Not Allowed` against real servers).
+ * in the UI today. Both transports are end-to-end wired against real
+ * servers (SSE via Koog's `defaultSseTransport`, Streamable HTTP via
+ * the upstream MCP Kotlin SDK's `HttpClient.mcpStreamableHttpTransport`
+ * extension).
  */
 enum class McpTransportOption(val label: String, val selectable: Boolean) {
     SSE(label = "SSE", selectable = true),
-    StreamableHttp(label = "Streamable HTTP", selectable = false),
+    StreamableHttp(label = "Streamable HTTP", selectable = true),
 }
 
 /** One header key/value pair authored in the MCP server form. */
