@@ -96,7 +96,15 @@ class McpServerRepositoryImpl @Inject constructor(private val clientFactory: Mcp
             runCatching { client?.disconnect() }
                 .onFailure { Timber.w(it, "MCP disconnect failed for %s", serverUrl) }
             caches.remove(serverUrl)
-            statusFlows.remove(serverUrl)
+            // Status flow entry stays in the map so any active observer keeps a
+            // live handle. Removing it here would orphan the observer's
+            // collection — a follow-up `fetchToolList` would `getOrPut` a brand-
+            // new MutableStateFlow that the in-flight collector knows nothing
+            // about, leaving the UI pinned to whatever value the orphaned flow
+            // last held (typically the previous `Error`). Reset to `Connecting`
+            // so the UI immediately reflects the "no live session" state until
+            // the next fetch resolves it.
+            statusFlows[serverUrl]?.value = McpConnectionStatus.Connecting
         }
     }
 

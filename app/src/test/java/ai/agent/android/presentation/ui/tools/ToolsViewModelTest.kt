@@ -156,6 +156,24 @@ class ToolsViewModelTest {
     }
 
     @Test
+    fun `edited config for an existing URL triggers a forced refetch`() = runTest {
+        // Regression guard for the on-save-edit flow: after the user changes
+        // auth headers or transport on a known URL, reconcileServerSet must
+        // re-fetch with forceRefresh=true so the UI reflects the new
+        // connection state without a manual Refresh tap.
+        val url = "https://hf.example/mcp"
+        val original = McpServerConfig(url = url)
+        val edited = McpServerConfig(url = url, headers = mapOf("Authorization" to "Bearer t"))
+        mcpServersFlow.value = listOf(original)
+        advanceUntilIdle()
+
+        mcpServersFlow.value = listOf(edited)
+        advanceUntilIdle()
+
+        coVerify { mcpServerRepository.fetchToolList(config = edited, forceRefresh = true) }
+    }
+
+    @Test
     fun `refreshServer forces a fresh fetchToolList with the persisted config`() = runTest {
         val url = "https://refresh.example/mcp"
         val config = McpServerConfig(url = url, headers = mapOf("X-Test" to "1"))

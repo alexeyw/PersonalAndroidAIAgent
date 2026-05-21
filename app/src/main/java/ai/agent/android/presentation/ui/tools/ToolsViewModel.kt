@@ -87,6 +87,11 @@ class ToolsViewModel @Inject constructor(
             viewModelScope.launch { mcpServerRepository.disconnect(serverUrl = url) }
         }
 
+        // Capture the prior snapshot map BEFORE mutating state so we can detect
+        // config drift (auth header swapped, transport flipped, …) and trigger
+        // a fresh fetch for previously-known URLs whose config just changed.
+        val previousByUrl = _uiState.value.mcpServers.associateBy { it.url }
+
         _uiState.update { state ->
             val existingByUrl = state.mcpServers.associateBy { it.url }
             val snapshots = configs.map { config ->
@@ -110,6 +115,17 @@ class ToolsViewModel @Inject constructor(
         toAdd.forEach { config ->
             serverObservers[config.url] = observeServer(config.url)
             fetchToolsAndUpdate(config = config, forceRefresh = false)
+        }
+        // Existing URLs whose persisted config differs from what the VM last
+        // observed get a forced refetch. This is the on-save-edit path: the
+        // user updated auth/transport/URL via `McpServerConfigScreen`, the
+        // repository has just dropped its cached client, and we need to
+        // reconnect with the new config without waiting for a manual Refresh.
+        configs.forEach { config ->
+            val previous = previousByUrl[config.url] ?: return@forEach
+            if (previous.config != config) {
+                fetchToolsAndUpdate(config = config, forceRefresh = true)
+            }
         }
     }
 

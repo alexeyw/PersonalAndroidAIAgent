@@ -162,6 +162,33 @@ class McpServerRepositoryImplTest {
     }
 
     @Test
+    fun `disconnect keeps the status flow so live observers see future emissions`() = runTest {
+        // Regression guard: removing the MutableStateFlow on disconnect orphans
+        // any in-flight collector — `getOrPut` would then return a brand-new
+        // flow instance to the next fetchToolList caller, while the original
+        // collector stayed pinned to the previous (now never-updating) flow.
+        val client = mockk<McpClient>(relaxed = true)
+        coEvery { client.getTools() } returns listOf(AgentTool("a", "d", "{}"))
+        val factory = mockk<McpClientFactory>()
+        coEvery { factory.create() } returns client
+        val repo = McpServerRepositoryImpl(clientFactory = factory)
+
+        // Acquire the status flow first — this is what a live observer holds.
+        val statusFlow = repo.observeConnectionStatus(url)
+        repo.fetchToolList(config = config)
+        assertEquals(McpConnectionStatus.Connected, statusFlow.first())
+
+        // Simulate the edit flow: disconnect drops the cached client + resets
+        // the status flow to Connecting (same instance), then the next fetch
+        // transitions Connecting → Connected on the very same flow.
+        repo.disconnect(serverUrl = url)
+        assertEquals(McpConnectionStatus.Connecting, statusFlow.first())
+
+        repo.fetchToolList(config = config)
+        assertEquals(McpConnectionStatus.Connected, statusFlow.first())
+    }
+
+    @Test
     fun `mcpToolId is deterministic and route-safe`() {
         val id1 = McpServerRepositoryImpl.mcpToolId(serverUrl = url, toolName = "search")
         val id2 = McpServerRepositoryImpl.mcpToolId(serverUrl = url, toolName = "search")
