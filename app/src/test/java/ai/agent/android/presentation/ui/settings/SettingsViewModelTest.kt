@@ -198,6 +198,30 @@ class SettingsViewModelTest {
     }
 
     @Test
+    fun `setting Ollama base URL from blank to value flips restartRequired`() = runTest {
+        val ollamaUrlFlow = MutableStateFlow<String?>(null)
+        every { apiKeys.getOllamaBaseUrl() } returns ollamaUrlFlow
+        viewModel = newViewModel()
+        advanceUntilIdle()
+        assertFalse(viewModel.uiState.value.restartRequired)
+        ollamaUrlFlow.value = "http://192.168.1.42:11434"
+        advanceUntilIdle()
+        assertTrue(viewModel.uiState.value.restartRequired)
+    }
+
+    @Test
+    fun `clearing Ollama base URL from value to blank flips restartRequired`() = runTest {
+        val ollamaUrlFlow = MutableStateFlow<String?>("http://192.168.1.42:11434")
+        every { apiKeys.getOllamaBaseUrl() } returns ollamaUrlFlow
+        viewModel = newViewModel()
+        advanceUntilIdle()
+        assertFalse(viewModel.uiState.value.restartRequired)
+        ollamaUrlFlow.value = null
+        advanceUntilIdle()
+        assertTrue(viewModel.uiState.value.restartRequired)
+    }
+
+    @Test
     fun `acknowledgeRestart resets the baseline`() = runTest {
         val backendFlow = MutableStateFlow("CPU")
         every { settings.localModelBackend } returns backendFlow

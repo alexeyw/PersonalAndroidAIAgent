@@ -72,11 +72,24 @@ class SettingsViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(SettingsUiState())
     val uiState: StateFlow<SettingsUiState> = _uiState.asStateFlow()
 
-    /** Initial `localModelBackend` value; baseline for restart-required detection. */
+    /**
+     * Initial `localModelBackend` value; baseline for restart-required detection.
+     * `null` is a legitimate baseline value (when no model has been picked yet),
+     * so the dedicated [hasCapturedBackendBaseline] flag — not the field's
+     * nullability — decides whether the baseline has been seen.
+     */
     private var appliedBackend: String? = null
+    private var hasCapturedBackendBaseline: Boolean = false
 
-    /** Initial `ollamaBaseUrl` value; baseline for restart-required detection. */
+    /**
+     * Initial `ollamaBaseUrl` value; baseline for restart-required detection.
+     * Captured on the very first emission of the providers flow (even when the
+     * URL is `null`) so the `null → some URL` and `some URL → null` transitions
+     * are both detected. Until the providers flow has emitted at least once we
+     * cannot derive Ollama-side restart-required, hence the explicit flag.
+     */
     private var appliedOllamaBaseUrl: String? = null
+    private var hasCapturedOllamaBaseline: Boolean = false
 
     init {
         loadIdentity()
@@ -145,7 +158,10 @@ class SettingsViewModel @Inject constructor(
         }.launchIn(viewModelScope)
 
         settingsRepository.localModelBackend.onEach { value ->
-            if (appliedBackend == null) appliedBackend = value
+            if (!hasCapturedBackendBaseline) {
+                appliedBackend = value
+                hasCapturedBackendBaseline = true
+            }
             _uiState.update {
                 it.copy(
                     localModelBackend = value,
@@ -184,12 +200,17 @@ class SettingsViewModel @Inject constructor(
         // single payload it can map straight to ProviderRowState.
         viewModelScope.launch {
             combineProviderFlows().collect { summaries ->
+                val ollamaUrl = summaries.ollamaBaseUrl()
+                if (!hasCapturedOllamaBaseline) {
+                    appliedOllamaBaseUrl = ollamaUrl
+                    hasCapturedOllamaBaseline = true
+                }
                 _uiState.update {
                     it.copy(
                         providers = summaries,
                         restartRequired = restartRequired(
                             backend = it.localModelBackend,
-                            ollamaUrl = summaries.ollamaBaseUrl(),
+                            ollamaUrl = ollamaUrl,
                         ),
                     )
                 }
@@ -266,15 +287,16 @@ class SettingsViewModel @Inject constructor(
     }
 
     /**
-     * Restart-required is derived state — `appliedBackend` is captured
-     * on the first emission, then any deviation from it (or from the
-     * persisted Ollama base URL captured the same way) flips the flag.
+     * Restart-required is derived state — comparison-only. The baselines
+     * are captured by the two source flows the first time they emit (so
+     * `null → some URL` and `some URL → null` transitions for Ollama are
+     * both detected). This function never mutates the baseline so the
+     * call ordering between the backend and providers flows cannot race
+     * the comparison.
      */
     private fun restartRequired(backend: String, ollamaUrl: String?): Boolean {
-        if (appliedBackend == null) appliedBackend = backend
-        if (appliedOllamaBaseUrl == null && ollamaUrl != null) appliedOllamaBaseUrl = ollamaUrl
-        val backendChanged = appliedBackend != backend
-        val ollamaChanged = appliedOllamaBaseUrl != null && ollamaUrl != null && appliedOllamaBaseUrl != ollamaUrl
+        val backendChanged = hasCapturedBackendBaseline && appliedBackend != backend
+        val ollamaChanged = hasCapturedOllamaBaseline && appliedOllamaBaseUrl != ollamaUrl
         return backendChanged || ollamaChanged
     }
 
@@ -483,6 +505,8 @@ class SettingsViewModel @Inject constructor(
         val current = _uiState.value
         appliedBackend = current.localModelBackend
         appliedOllamaBaseUrl = current.providers.ollamaBaseUrl()
+        hasCapturedBackendBaseline = true
+        hasCapturedOllamaBaseline = true
         _uiState.update { it.copy(restartRequired = false) }
     }
 

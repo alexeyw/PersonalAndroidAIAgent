@@ -252,6 +252,13 @@ class ToolNodeExecutor @Inject constructor(
         }
         // Hard-deny gate: when the user has opted to block destructive tools
         // outright, refuse the call before even staging the HITL prompt.
+        //
+        // The denial is surfaced as a `NodeExecutionResult.error` (NOT
+        // `outputText`) so the orchestrator treats the node as failed and
+        // the upstream planner sees a tool-failure signal rather than a
+        // successful observation. Without that distinction the LLM would
+        // hallucinate that the destructive action succeeded and could
+        // loop back to retry the same call.
         if (risk == ToolRisk.DESTRUCTIVE && settingsRepository.blockDestructiveTools.first()) {
             val message = "Destructive tools are blocked by Settings — $resolvedToolName was not executed."
             chatRepository.saveMessage(
@@ -263,11 +270,11 @@ class ToolNodeExecutor @Inject constructor(
                     isFinal = false,
                 ),
             )
-            emit(NodeOutput.State(AgentOrchestratorState.ObservationResult(resolvedToolName, message)))
+            emit(NodeOutput.State(AgentOrchestratorState.Error(message)))
             emit(
                 NodeOutput.Result(
                     NodeExecutionResult(
-                        outputText = message,
+                        error = message,
                         resolvedToolName = resolvedToolName,
                     ),
                 ),
