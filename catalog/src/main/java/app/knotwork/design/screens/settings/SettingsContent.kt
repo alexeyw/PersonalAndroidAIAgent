@@ -109,6 +109,11 @@ fun SettingsContent(
         Scaffold(
             containerColor = MaterialTheme.colorScheme.surface,
             topBar = { SettingsTopBar(state = state, onBack = callbacks.onBack, onSearch = callbacks.onSearchClick) },
+            // The outer `AppShellScaffold` already applies the system /
+            // bottom-nav insets for the whole shell. Letting this catalog
+            // Scaffold replay them would double-count the bottom inset and
+            // leave dead space between the Privacy card and the bottom-nav.
+            contentWindowInsets = androidx.compose.foundation.layout.WindowInsets(0, 0, 0, 0),
             modifier = Modifier.fillMaxSize(),
         ) { padding ->
             when (state.visualState) {
