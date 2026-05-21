@@ -147,8 +147,6 @@ data class AddMcpServerForm(
  * @property visualState which of the documented states to render.
  * @property builtInTools rows in the "Built-in (AppFunctions)" section.
  * @property mcpServers rows in the "MCP servers" section.
- * @property addServerForm non-null when the inline add-server form is
- * visible; `null` hides the form entirely.
  * @property errorMessage user-visible error rendered in
  * [ToolsVisualState.Error]; `null` otherwise.
  */
@@ -156,7 +154,6 @@ data class ToolsViewState(
     val visualState: ToolsVisualState,
     val builtInTools: List<BuiltInToolRow> = emptyList(),
     val mcpServers: List<McpServerRow> = emptyList(),
-    val addServerForm: AddMcpServerForm? = null,
     val errorMessage: String? = null,
 ) {
     init {
@@ -177,14 +174,6 @@ class ToolsCallbacks(
     val onMcpToolToggle: (toolId: String, enabled: Boolean) -> Unit = { _, _ -> },
     val onMcpToolClick: (toolId: String) -> Unit = {},
     val onAddServerOpen: () -> Unit = {},
-    val onAddServerUrlChange: (String) -> Unit = {},
-    val onAddServerNameChange: (String) -> Unit = {},
-    val onAddServerTransportSelect: (McpTransportOption) -> Unit = {},
-    val onAddServerHeaderAdd: () -> Unit = {},
-    val onAddServerHeaderChange: (index: Int, key: String, value: String) -> Unit = { _, _, _ -> },
-    val onAddServerHeaderRemove: (index: Int) -> Unit = {},
-    val onAddServerSubmit: () -> Unit = {},
-    val onAddServerCancel: () -> Unit = {},
     val onErrorRetry: () -> Unit = {},
     val onOpenDrawer: () -> Unit = {},
     val onTopOverflow: () -> Unit = {},
@@ -220,21 +209,22 @@ class ToolDetailCallbacks(val onBack: () -> Unit = {}, val onToggle: (Boolean) -
 
 fun noopToolDetailCallbacks(): ToolDetailCallbacks = ToolDetailCallbacks()
 
-// -------------------- AddMcpServerScreen (legacy modal route) --------------------
+// -------------------- McpServerConfigContent --------------------
 
 /**
- * Top-level input to `AddMcpServerContent`. The redesigned tools screen
- * ships the add-server form inline, but the modal route is preserved so
- * deep links keep working until the standalone screen is retired.
+ * Callback bundle for the standalone MCP server configuration screen.
+ * Mirrors the per-field shape of [AddMcpServerForm].
  */
-data class AddMcpServerViewState(val url: String, val urlError: String? = null, val submitting: Boolean = false) {
-    val canSubmit: Boolean get() = url.isNotBlank() && urlError == null && !submitting
-}
-
-class AddMcpServerCallbacks(
+@Suppress("LongParameterList")
+class McpServerConfigCallbacks(
     val onUrlChange: (String) -> Unit = {},
+    val onNameChange: (String) -> Unit = {},
+    val onTransportSelect: (McpTransportOption) -> Unit = {},
+    val onHeaderAdd: () -> Unit = {},
+    val onHeaderChange: (index: Int, key: String, value: String) -> Unit = { _, _, _ -> },
+    val onHeaderRemove: (index: Int) -> Unit = {},
     val onSubmit: () -> Unit = {},
     val onCancel: () -> Unit = {},
 )
 
-fun noopAddMcpServerCallbacks(): AddMcpServerCallbacks = AddMcpServerCallbacks()
+fun noopMcpServerConfigCallbacks(): McpServerConfigCallbacks = McpServerConfigCallbacks()

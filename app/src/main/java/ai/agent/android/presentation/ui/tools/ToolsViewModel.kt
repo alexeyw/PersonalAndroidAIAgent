@@ -147,42 +147,6 @@ class ToolsViewModel @Inject constructor(
         }
     }
 
-    /** Updates the text input field for a new MCP server URL. */
-    fun onMcpUrlInputChanged(url: String) {
-        _uiState.update { it.copy(newMcpUrlInput = url) }
-    }
-
-    /**
-     * Persists [config] and triggers an immediate `tools/list` fetch.
-     */
-    fun addMcpServer(config: McpServerConfig) {
-        if (config.url.isBlank()) return
-        viewModelScope.launch {
-            settingsRepository.addMcpServer(config = config)
-            _uiState.update { it.copy(newMcpUrlInput = "") }
-        }
-    }
-
-    /**
-     * Replaces the persisted server identified by [originalUrl] with
-     * [updated]. When the URL changes, the old client connection is
-     * dropped so the new headers/url take effect on the next fetch.
-     */
-    fun updateMcpServer(originalUrl: String, updated: McpServerConfig) {
-        viewModelScope.launch {
-            if (originalUrl != updated.url) {
-                serverObservers.remove(originalUrl)?.cancel()
-                mcpServerRepository.disconnect(serverUrl = originalUrl)
-            } else {
-                // Drop the cached client so the next fetch reconnects with
-                // the new headers/transport instead of reusing the old
-                // session.
-                mcpServerRepository.disconnect(serverUrl = originalUrl)
-            }
-            settingsRepository.updateMcpServer(originalUrl = originalUrl, updated = updated)
-        }
-    }
-
     /** Removes an MCP server URL and disconnects the underlying client. */
     fun removeMcpServer(url: String) {
         viewModelScope.launch {
@@ -226,9 +190,6 @@ class ToolsViewModel @Inject constructor(
             settingsRepository.setDisabledMcpTools(toolIds = current)
         }
     }
-
-    /** Returns the persisted config for [url], or `null` if unknown. */
-    fun configFor(url: String): McpServerConfig? = _uiState.value.mcpServers.firstOrNull { it.url == url }?.config
 
     /**
      * Resolves an MCP tool by its stable id (matches

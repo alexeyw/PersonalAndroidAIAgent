@@ -319,4 +319,6 @@ This file maps the contents of the main application package.
       - `ToolsUiState.kt` - Tools UI state. Carries per-server `McpServerSnapshot` (status + tool list) plus expansion + disabled-MCP-tool sets.
       - `ToolsViewModel.kt` - Tools ViewModel. Reconciles `SettingsRepository.mcpServerUrls` against per-URL status observers from `McpServerRepository`; persists local + MCP toggle changes; exposes `findMcpTool(id)` lookup.
       - `ToolDetailScreen.kt` - Per-tool detail screen. Branches on `toolId` prefix: `mcp:…` → resolves `McpTool` via `ToolsViewModel.findMcpTool` and renders the server-supplied JSON Schema verbatim; otherwise renders the real `AgentTool.parameters` for local AppFunctions.
+      - `McpServerConfigScreen.kt` - Standalone full-screen Add/Edit MCP server screen. Reached from the Tools surface via the `+ Add MCP` link (Add mode) or the pencil icon on a server row (Edit mode). Form supports URL, optional display name, transport selector, and arbitrary headers.
+      - `McpServerConfigViewModel.kt` - Drives `McpServerConfigScreen`. Reads `SettingsRepository.mcpServers` once for Edit pre-fill; persists via `addMcpServer` / `updateMcpServer` and disconnects the cached client on save so new headers take effect.
 - `FILE_MAP.md` - This file mapping the current directory structure.

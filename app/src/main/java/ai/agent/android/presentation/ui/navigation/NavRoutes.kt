@@ -67,6 +67,23 @@ object NavRoutes {
     /** Path-argument key for [TOOL_DETAIL]. */
     const val TOOL_DETAIL_ID_ARG: String = "toolId"
 
+    /**
+     * MCP server configuration screen — both Add and Edit modes.
+     * `originalUrl` is an optional query argument: absent ⇒ Add new
+     * server; non-empty ⇒ Edit the server with that URL.
+     */
+    const val MCP_SERVER_CONFIG: String = "tools/mcp-config?originalUrl={originalUrl}"
+
+    /** Query-argument key for [MCP_SERVER_CONFIG]. */
+    const val MCP_SERVER_CONFIG_URL_ARG: String = "originalUrl"
+
+    /** Route for Add mode (no `originalUrl` query argument). */
+    const val MCP_SERVER_CONFIG_ADD: String = "tools/mcp-config"
+
+    /** Builds the route for Edit mode against [originalUrl]. */
+    fun mcpServerConfigEditRoute(originalUrl: String): String =
+        "tools/mcp-config?originalUrl=${android.net.Uri.encode(originalUrl)}"
+
     /** More tab — landing screen with secondary navigation. */
     const val MORE: String = "more"
 

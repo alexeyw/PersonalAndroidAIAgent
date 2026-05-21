@@ -11,10 +11,6 @@ import ai.agent.android.domain.models.McpTool
  * @property mcpServers per-server snapshot for the MCP section: full
  * [McpServerConfig], connection status, and the tool list (when the
  * connection succeeded).
- * @property newMcpUrlInput current text in the inline "Add MCP server URL"
- * form. Persisted in the ViewModel so the input survives configuration
- * changes; the catalog passes it back through [ToolsUiState] when the
- * form is open.
  * @property disabledAppFunctions ids of locally registered AppFunctions
  * the user has paused (stored in `SettingsRepository.disabledAppFunctions`).
  * @property disabledMcpTools ids (`McpTool.id`) of MCP tools the user has
@@ -29,7 +25,6 @@ import ai.agent.android.domain.models.McpTool
  */
 data class ToolsUiState(
     val mcpServers: List<McpServerSnapshot> = emptyList(),
-    val newMcpUrlInput: String = "",
     val disabledAppFunctions: Set<String> = emptySet(),
     val disabledMcpTools: Set<String> = emptySet(),
     val localTools: List<AgentTool> = emptyList(),

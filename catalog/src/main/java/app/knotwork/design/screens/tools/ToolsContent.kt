@@ -1,4 +1,4 @@
-@file:Suppress("MatchingDeclarationName") // Hosts ToolsContent, ToolDetailContent, AddMcpServerContent.
+@file:Suppress("MatchingDeclarationName") // Hosts ToolsContent, ToolDetailContent, McpServerConfigContent.
 
 package app.knotwork.design.screens.tools
 
@@ -266,11 +266,6 @@ private fun ToolsList(state: ToolsViewState, callbacks: ToolsCallbacks, padding:
                     McpToolEntryRowView(entry = entry, callbacks = callbacks)
                     HorizontalDivider(color = KnotworkTheme.extended.divider)
                 }
-            }
-        }
-        if (state.addServerForm != null) {
-            item(key = "add-server-form") {
-                AddServerForm(form = state.addServerForm, callbacks = callbacks)
             }
         }
     }
@@ -555,120 +550,6 @@ private fun McpToolEntryRowView(entry: McpToolEntry, callbacks: ToolsCallbacks) 
 }
 
 @Composable
-private fun AddServerForm(form: AddMcpServerForm, callbacks: ToolsCallbacks) {
-    Column(
-        verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp3),
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(KnotworkTheme.spacing.sp4)
-            .clip(KnotworkTheme.shapes.md)
-            .border(width = 1.dp, color = KnotworkTheme.extended.divider, shape = KnotworkTheme.shapes.md)
-            .padding(KnotworkTheme.spacing.sp4),
-    ) {
-        Text(
-            text = stringResource(R.string.knotwork_tools_add_form_header),
-            style = KnotworkTextStyles.MonoSm,
-            color = KnotworkTheme.extended.onSurfaceMuted,
-        )
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(KnotworkTheme.shapes.sm)
-                .border(
-                    width = 1.dp,
-                    color = if (form.urlError != null) {
-                        KnotworkTheme.extended.signalError
-                    } else {
-                        KnotworkTheme.extended.outlineStrong
-                    },
-                    shape = KnotworkTheme.shapes.sm,
-                )
-                .padding(KnotworkTheme.spacing.sp3),
-        ) {
-            BasicTextField(
-                value = form.url,
-                onValueChange = callbacks.onAddServerUrlChange,
-                singleLine = true,
-                textStyle = KnotworkTextStyles.MonoBase.copy(color = MaterialTheme.colorScheme.onSurface),
-                cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-                modifier = Modifier.fillMaxWidth(),
-            )
-            if (form.url.isEmpty()) {
-                Text(
-                    text = stringResource(R.string.knotwork_tools_add_form_placeholder),
-                    style = KnotworkTextStyles.MonoBase,
-                    color = KnotworkTheme.extended.onSurfaceMuted,
-                )
-            }
-        }
-        if (form.urlError != null) {
-            Text(
-                text = form.urlError,
-                style = KnotworkTextStyles.BodySm,
-                color = KnotworkTheme.extended.signalError,
-            )
-        }
-
-        // Display name (optional).
-        FormSectionLabel(text = stringResource(R.string.knotwork_tools_form_name_label))
-        OutlinedFormTextField(
-            value = form.name,
-            onValueChange = callbacks.onAddServerNameChange,
-            placeholder = stringResource(R.string.knotwork_tools_form_name_placeholder),
-            isError = false,
-        )
-
-        // Transport selector — two segmented options.
-        FormSectionLabel(text = stringResource(R.string.knotwork_tools_form_transport_label))
-        Row(horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp2)) {
-            McpTransportOption.entries.forEach { option ->
-                TransportChip(
-                    option = option,
-                    selected = form.transport == option,
-                    onClick = { callbacks.onAddServerTransportSelect(option) },
-                )
-            }
-        }
-
-        // Custom headers — repeating key/value rows + add button.
-        FormSectionLabel(text = stringResource(R.string.knotwork_tools_form_headers_label))
-        form.headers.forEachIndexed { index, row ->
-            HeaderRow(
-                row = row,
-                onKeyChange = { newKey -> callbacks.onAddServerHeaderChange(index, newKey, row.value) },
-                onValueChange = { newValue -> callbacks.onAddServerHeaderChange(index, row.key, newValue) },
-                onRemove = { callbacks.onAddServerHeaderRemove(index) },
-            )
-        }
-        KnotworkTextButton(
-            text = stringResource(R.string.knotwork_tools_form_headers_add),
-            onClick = callbacks.onAddServerHeaderAdd,
-        )
-
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            Spacer(modifier = Modifier.weight(1f))
-            KnotworkTextButton(
-                text = stringResource(R.string.knotwork_tools_add_form_cancel),
-                onClick = callbacks.onAddServerCancel,
-            )
-            Spacer(modifier = Modifier.size(KnotworkTheme.spacing.sp2))
-            KnotworkPrimaryButton(
-                text = if (form.isEdit) {
-                    stringResource(R.string.knotwork_tools_form_submit_save)
-                } else {
-                    stringResource(R.string.knotwork_tools_add_form_submit)
-                },
-                onClick = callbacks.onAddServerSubmit,
-                enabled = form.canSubmit,
-            )
-        }
-    }
-}
-
-@Composable
 private fun FormSectionLabel(text: String) {
     Text(
         text = text,
@@ -887,28 +768,38 @@ fun ToolDetailContent(
     }
 }
 
-// ------------------------- AddMcpServerContent (legacy modal route) -------------------------
+// ------------------------- McpServerConfigContent -------------------------
 
 /**
- * Stateless add-MCP-server surface. The redesigned tools screen embeds
- * the form inline; this composable is preserved so the
- * `tools/add-mcp` deep-link route keeps rendering until it is retired.
+ * Full-screen MCP-server configuration surface. Hosts the rich form
+ * (URL, optional display name, transport selector, repeating headers)
+ * for both Add (`form.editingUrl == null`) and Edit
+ * (`form.editingUrl == <original URL>`) flows.
+ *
+ * The host composable (app-layer screen) owns the [AddMcpServerForm]
+ * state and translates submissions into persistence calls; this
+ * composable renders the chrome and dispatches per-field callbacks.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AddMcpServerContent(
-    state: AddMcpServerViewState,
+fun McpServerConfigContent(
+    form: AddMcpServerForm,
     modifier: Modifier = Modifier,
-    callbacks: AddMcpServerCallbacks = noopAddMcpServerCallbacks(),
+    callbacks: McpServerConfigCallbacks = noopMcpServerConfigCallbacks(),
 ) {
     Scaffold(
         modifier = modifier.fillMaxSize(),
         containerColor = MaterialTheme.colorScheme.surface,
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
             TopAppBar(
                 title = {
                     Text(
-                        text = "Add MCP server",
+                        text = if (form.isEdit) {
+                            stringResource(R.string.knotwork_tools_form_title_edit)
+                        } else {
+                            stringResource(R.string.knotwork_tools_form_title_add)
+                        },
                         style = KnotworkTextStyles.TitleLg,
                         color = MaterialTheme.colorScheme.onSurface,
                     )
@@ -931,20 +822,80 @@ fun AddMcpServerContent(
     ) { padding ->
         Column(
             verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp3),
-            modifier = Modifier.fillMaxSize().padding(padding).padding(KnotworkTheme.spacing.sp4),
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .verticalScroll(state = rememberScrollState())
+                .padding(KnotworkTheme.spacing.sp4),
         ) {
-            AddServerForm(
-                form = AddMcpServerForm(
-                    url = state.url,
-                    urlError = state.urlError,
-                    submitting = state.submitting,
-                ),
-                callbacks = ToolsCallbacks(
-                    onAddServerUrlChange = callbacks.onUrlChange,
-                    onAddServerSubmit = callbacks.onSubmit,
-                    onAddServerCancel = callbacks.onCancel,
-                ),
+            FormSectionLabel(text = stringResource(R.string.knotwork_tools_add_form_header))
+            OutlinedFormTextField(
+                value = form.url,
+                onValueChange = callbacks.onUrlChange,
+                placeholder = stringResource(R.string.knotwork_tools_add_form_placeholder),
+                isError = form.urlError != null,
             )
+            if (form.urlError != null) {
+                Text(
+                    text = form.urlError,
+                    style = KnotworkTextStyles.BodySm,
+                    color = KnotworkTheme.extended.signalError,
+                )
+            }
+
+            FormSectionLabel(text = stringResource(R.string.knotwork_tools_form_name_label))
+            OutlinedFormTextField(
+                value = form.name,
+                onValueChange = callbacks.onNameChange,
+                placeholder = stringResource(R.string.knotwork_tools_form_name_placeholder),
+                isError = false,
+            )
+
+            FormSectionLabel(text = stringResource(R.string.knotwork_tools_form_transport_label))
+            Row(horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp2)) {
+                McpTransportOption.entries.forEach { option ->
+                    TransportChip(
+                        option = option,
+                        selected = form.transport == option,
+                        onClick = { callbacks.onTransportSelect(option) },
+                    )
+                }
+            }
+
+            FormSectionLabel(text = stringResource(R.string.knotwork_tools_form_headers_label))
+            form.headers.forEachIndexed { index, row ->
+                HeaderRow(
+                    row = row,
+                    onKeyChange = { newKey -> callbacks.onHeaderChange(index, newKey, row.value) },
+                    onValueChange = { newValue -> callbacks.onHeaderChange(index, row.key, newValue) },
+                    onRemove = { callbacks.onHeaderRemove(index) },
+                )
+            }
+            KnotworkTextButton(
+                text = stringResource(R.string.knotwork_tools_form_headers_add),
+                onClick = callbacks.onHeaderAdd,
+            )
+
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Spacer(modifier = Modifier.weight(1f))
+                KnotworkTextButton(
+                    text = stringResource(R.string.knotwork_tools_add_form_cancel),
+                    onClick = callbacks.onCancel,
+                )
+                Spacer(modifier = Modifier.size(KnotworkTheme.spacing.sp2))
+                KnotworkPrimaryButton(
+                    text = if (form.isEdit) {
+                        stringResource(R.string.knotwork_tools_form_submit_save)
+                    } else {
+                        stringResource(R.string.knotwork_tools_add_form_submit)
+                    },
+                    onClick = callbacks.onSubmit,
+                    enabled = form.canSubmit,
+                )
+            }
         }
     }
 }

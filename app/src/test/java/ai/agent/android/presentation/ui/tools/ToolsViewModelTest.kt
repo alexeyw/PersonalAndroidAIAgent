@@ -80,30 +80,6 @@ class ToolsViewModelTest {
     }
 
     @Test
-    fun `addMcpServer persists the config`() = runTest {
-        val config = McpServerConfig(url = "http://new.com", name = "My MCP")
-
-        viewModel.addMcpServer(config = config)
-        advanceUntilIdle()
-
-        coVerify { settingsRepository.addMcpServer(config = config) }
-    }
-
-    @Test
-    fun `updateMcpServer disconnects old client and persists the new config`() = runTest {
-        val url = "https://renamed.example/mcp"
-        mcpServersFlow.value = listOf(McpServerConfig(url = url))
-        advanceUntilIdle()
-        val updated = McpServerConfig(url = url, headers = mapOf("Authorization" to "Bearer x"))
-
-        viewModel.updateMcpServer(originalUrl = url, updated = updated)
-        advanceUntilIdle()
-
-        coVerify { mcpServerRepository.disconnect(serverUrl = url) }
-        coVerify { settingsRepository.updateMcpServer(originalUrl = url, updated = updated) }
-    }
-
-    @Test
     fun `appearing server snapshot exists before observers and fetches launch`() = runTest {
         val url = "https://racy.example/mcp"
         val config = McpServerConfig(url = url)
@@ -244,16 +220,5 @@ class ToolsViewModelTest {
 
         assertEquals(tool, viewModel.findMcpTool(toolId = tool.id))
         assertNull(viewModel.findMcpTool(toolId = "mcp:deadbeef:missing"))
-    }
-
-    @Test
-    fun `configFor returns the persisted config or null`() = runTest {
-        val url = "https://lookup.example/mcp"
-        val config = McpServerConfig(url = url, name = "Lookup", headers = mapOf("X-K" to "v"))
-        mcpServersFlow.value = listOf(config)
-        advanceUntilIdle()
-
-        assertEquals(config, viewModel.configFor(url = url))
-        assertNull(viewModel.configFor(url = "https://unknown/"))
     }
 }
