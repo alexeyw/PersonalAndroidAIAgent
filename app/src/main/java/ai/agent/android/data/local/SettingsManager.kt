@@ -3,6 +3,7 @@ package ai.agent.android.data.local
 import ai.agent.android.domain.constants.DefaultPrompts
 import ai.agent.android.domain.constants.SettingsDefaults
 import ai.agent.android.domain.models.LocalBackend
+import ai.agent.android.domain.models.McpAuth
 import ai.agent.android.domain.models.McpServerConfig
 import ai.agent.android.domain.models.McpTransport
 import ai.agent.android.domain.models.TestProbeResult
@@ -335,6 +336,7 @@ class SettingsManager @Inject constructor(private val dataStore: DataStore<Prefe
                 .put("url", config.url)
                 .put("transport", config.transport.wireId)
             if (!config.name.isNullOrBlank()) obj.put("name", config.name)
+            encodeAuth(config.auth)?.let { obj.put("auth", it) }
             if (config.headers.isNotEmpty()) {
                 val headers = JSONObject()
                 config.headers.forEach { (k, v) -> headers.put(k, v) }
@@ -345,6 +347,35 @@ class SettingsManager @Inject constructor(private val dataStore: DataStore<Prefe
         return array.toString()
     }
 
+    private fun encodeAuth(auth: McpAuth): JSONObject? = when (auth) {
+        is McpAuth.None -> null
+        is McpAuth.Bearer -> JSONObject().put("type", "bearer").put("token", auth.token)
+        is McpAuth.Basic -> JSONObject()
+            .put("type", "basic")
+            .put("username", auth.username)
+            .put("password", auth.password)
+        is McpAuth.ApiKey -> JSONObject()
+            .put("type", "apiKey")
+            .put("headerName", auth.headerName)
+            .put("value", auth.value)
+    }
+
+    private fun decodeAuth(obj: JSONObject?): McpAuth {
+        if (obj == null) return McpAuth.None
+        return when (obj.optString("type")) {
+            "bearer" -> McpAuth.Bearer(token = obj.optString("token"))
+            "basic" -> McpAuth.Basic(
+                username = obj.optString("username"),
+                password = obj.optString("password"),
+            )
+            "apiKey" -> McpAuth.ApiKey(
+                headerName = obj.optString("headerName"),
+                value = obj.optString("value"),
+            )
+            else -> McpAuth.None
+        }
+    }
+
     private fun decodeMcpServers(json: String): List<McpServerConfig> = try {
         val array = JSONArray(json)
         buildList(capacity = array.length()) {
@@ -353,6 +384,7 @@ class SettingsManager @Inject constructor(private val dataStore: DataStore<Prefe
                 val url = obj.optString("url").takeIf { it.isNotBlank() } ?: continue
                 val name = obj.optString("name").takeIf { it.isNotBlank() }
                 val transport = McpTransport.fromWireId(obj.optString("transport").takeIf { it.isNotBlank() })
+                val auth = decodeAuth(obj.optJSONObject("auth"))
                 val headers = obj.optJSONObject("headers")?.let { headerObj ->
                     buildMap<String, String> {
                         val keys = headerObj.keys()
@@ -362,7 +394,15 @@ class SettingsManager @Inject constructor(private val dataStore: DataStore<Prefe
                         }
                     }
                 } ?: emptyMap()
-                add(McpServerConfig(url = url, name = name, transport = transport, headers = headers))
+                add(
+                    McpServerConfig(
+                        url = url,
+                        name = name,
+                        transport = transport,
+                        auth = auth,
+                        headers = headers,
+                    ),
+                )
             }
         }
     } catch (e: JSONException) {

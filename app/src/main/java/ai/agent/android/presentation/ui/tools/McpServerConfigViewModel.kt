@@ -1,5 +1,6 @@
 package ai.agent.android.presentation.ui.tools
 
+import ai.agent.android.domain.models.McpAuth
 import ai.agent.android.domain.models.McpServerConfig
 import ai.agent.android.domain.models.McpTransport
 import ai.agent.android.domain.repositories.McpServerRepository
@@ -8,6 +9,7 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.knotwork.design.screens.tools.AddMcpServerForm
+import app.knotwork.design.screens.tools.McpAuthSelector
 import app.knotwork.design.screens.tools.McpHeaderRow
 import app.knotwork.design.screens.tools.McpTransportOption
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -75,6 +77,18 @@ class McpServerConfigViewModel @Inject constructor(
     fun onNameChange(value: String) = _form.update { it.copy(name = value) }
 
     fun onTransportSelect(option: McpTransportOption) = _form.update { it.copy(transport = option) }
+
+    fun onAuthTypeSelect(option: McpAuthSelector) = _form.update { it.copy(authType = option) }
+
+    fun onBearerTokenChange(value: String) = _form.update { it.copy(bearerToken = value) }
+
+    fun onBasicUsernameChange(value: String) = _form.update { it.copy(basicUsername = value) }
+
+    fun onBasicPasswordChange(value: String) = _form.update { it.copy(basicPassword = value) }
+
+    fun onApiKeyHeaderNameChange(value: String) = _form.update { it.copy(apiKeyHeaderName = value) }
+
+    fun onApiKeyValueChange(value: String) = _form.update { it.copy(apiKeyValue = value) }
 
     fun onHeaderAdd() = _form.update { it.copy(headers = it.headers + McpHeaderRow()) }
 
@@ -164,14 +178,36 @@ class McpServerConfigViewModel @Inject constructor(
     }
 }
 
-private fun AddMcpServerForm.fromConfig(config: McpServerConfig): AddMcpServerForm = copy(
-    url = config.url,
-    urlError = null,
-    name = config.name.orEmpty(),
-    transport = config.transport.toCatalogOption(),
-    headers = config.headers.entries.map { McpHeaderRow(key = it.key, value = it.value) },
-    editingUrl = config.url,
-)
+private fun AddMcpServerForm.fromConfig(config: McpServerConfig): AddMcpServerForm {
+    val base = copy(
+        url = config.url,
+        urlError = null,
+        name = config.name.orEmpty(),
+        transport = config.transport.toCatalogOption(),
+        authType = McpAuthSelector.NONE,
+        bearerToken = "",
+        basicUsername = "",
+        basicPassword = "",
+        apiKeyHeaderName = "",
+        apiKeyValue = "",
+        headers = config.headers.entries.map { McpHeaderRow(key = it.key, value = it.value) },
+        editingUrl = config.url,
+    )
+    return when (val auth = config.auth) {
+        is McpAuth.None -> base
+        is McpAuth.Bearer -> base.copy(authType = McpAuthSelector.BEARER, bearerToken = auth.token)
+        is McpAuth.Basic -> base.copy(
+            authType = McpAuthSelector.BASIC,
+            basicUsername = auth.username,
+            basicPassword = auth.password,
+        )
+        is McpAuth.ApiKey -> base.copy(
+            authType = McpAuthSelector.API_KEY,
+            apiKeyHeaderName = auth.headerName,
+            apiKeyValue = auth.value,
+        )
+    }
+}
 
 private fun AddMcpServerForm.toDomain(): McpServerConfig {
     val cleaned = headers
@@ -181,8 +217,24 @@ private fun AddMcpServerForm.toDomain(): McpServerConfig {
         url = url.trim(),
         name = name.trim().takeIf { it.isNotBlank() },
         transport = transport.toDomain(),
+        auth = authToDomain(),
         headers = cleaned,
     )
+}
+
+private fun AddMcpServerForm.authToDomain(): McpAuth = when (authType) {
+    McpAuthSelector.NONE -> McpAuth.None
+    McpAuthSelector.BEARER -> if (bearerToken.isBlank()) McpAuth.None else McpAuth.Bearer(token = bearerToken)
+    McpAuthSelector.BASIC -> if (basicUsername.isBlank() && basicPassword.isBlank()) {
+        McpAuth.None
+    } else {
+        McpAuth.Basic(username = basicUsername, password = basicPassword)
+    }
+    McpAuthSelector.API_KEY -> if (apiKeyHeaderName.isBlank() || apiKeyValue.isBlank()) {
+        McpAuth.None
+    } else {
+        McpAuth.ApiKey(headerName = apiKeyHeaderName.trim(), value = apiKeyValue)
+    }
 }
 
 private fun McpTransportOption.toDomain(): McpTransport = when (this) {

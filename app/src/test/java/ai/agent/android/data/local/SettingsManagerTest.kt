@@ -1,6 +1,7 @@
 package ai.agent.android.data.local
 
 import ai.agent.android.domain.constants.SettingsDefaults
+import ai.agent.android.domain.models.McpAuth
 import ai.agent.android.domain.models.McpTransport
 import ai.agent.android.domain.models.ToolRisk
 import androidx.datastore.core.DataStore
@@ -316,5 +317,49 @@ class SettingsManagerTest {
         assertEquals("HuggingFace", result[0].name)
         assertEquals(McpTransport.STREAMABLE_HTTP, result[0].transport)
         assertEquals("Bearer secret", result[0].headers["Authorization"])
+    }
+
+    @Test
+    fun `mcpServers decodes typed Bearer auth payload`() = runTest {
+        val newJsonKey = stringPreferencesKey("mcp_servers_json")
+        val prefs = mockk<Preferences>()
+        every { prefs[stringSetPreferencesKey("mcp_server_urls")] } returns null
+        every {
+            prefs[newJsonKey]
+        } returns """
+            [
+              {
+                "url":"https://hf.example/mcp",
+                "auth":{"type":"bearer","token":"abc"}
+              }
+            ]
+        """.trimIndent()
+        every { dataStore.data } returns flowOf(prefs)
+
+        val result = SettingsManager(dataStore).mcpServers.first()
+
+        assertEquals(McpAuth.Bearer(token = "abc"), result.single().auth)
+    }
+
+    @Test
+    fun `mcpServers decodes typed ApiKey auth payload`() = runTest {
+        val newJsonKey = stringPreferencesKey("mcp_servers_json")
+        val prefs = mockk<Preferences>()
+        every { prefs[stringSetPreferencesKey("mcp_server_urls")] } returns null
+        every {
+            prefs[newJsonKey]
+        } returns """
+            [
+              {
+                "url":"https://api.example/mcp",
+                "auth":{"type":"apiKey","headerName":"X-API-Key","value":"v1"}
+              }
+            ]
+        """.trimIndent()
+        every { dataStore.data } returns flowOf(prefs)
+
+        val result = SettingsManager(dataStore).mcpServers.first()
+
+        assertEquals(McpAuth.ApiKey(headerName = "X-API-Key", value = "v1"), result.single().auth)
     }
 }

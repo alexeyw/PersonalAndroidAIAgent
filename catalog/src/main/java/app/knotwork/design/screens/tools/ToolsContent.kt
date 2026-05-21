@@ -5,6 +5,7 @@ package app.knotwork.design.screens.tools
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -33,6 +34,8 @@ import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.WarningAmber
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -46,6 +49,10 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -444,27 +451,6 @@ private fun McpServerRowView(server: McpServerRow, callbacks: ToolsCallbacks) {
                 color = KnotworkTheme.extended.onSurfaceMuted,
             )
         }
-        IconButton(onClick = { callbacks.onServerRefresh(server.id) }) {
-            Icon(
-                imageVector = Icons.Outlined.Refresh,
-                contentDescription = stringResource(R.string.knotwork_tools_refresh_server_cd),
-                tint = KnotworkTheme.extended.onSurfaceMuted,
-            )
-        }
-        IconButton(onClick = { callbacks.onServerEdit(server.id) }) {
-            Icon(
-                imageVector = Icons.Outlined.Edit,
-                contentDescription = stringResource(R.string.knotwork_tools_edit_server_cd),
-                tint = KnotworkTheme.extended.onSurfaceMuted,
-            )
-        }
-        IconButton(onClick = { callbacks.onServerRemove(server.id) }) {
-            Icon(
-                imageVector = Icons.Outlined.DeleteOutline,
-                contentDescription = stringResource(R.string.knotwork_tools_remove_server_cd),
-                tint = KnotworkTheme.extended.onSurfaceMuted,
-            )
-        }
         if (expandable) {
             IconButton(onClick = { callbacks.onServerExpandToggle(server.id) }) {
                 Icon(
@@ -477,6 +463,68 @@ private fun McpServerRowView(server: McpServerRow, callbacks: ToolsCallbacks) {
                     tint = KnotworkTheme.extended.onSurfaceMuted,
                 )
             }
+        }
+        ServerRowOverflowMenu(server = server, callbacks = callbacks)
+    }
+}
+
+@Composable
+private fun ServerRowOverflowMenu(server: McpServerRow, callbacks: ToolsCallbacks) {
+    var menuOpen by remember { mutableStateOf(false) }
+    Box {
+        IconButton(onClick = { menuOpen = true }) {
+            Icon(
+                imageVector = Icons.Outlined.MoreVert,
+                contentDescription = stringResource(R.string.knotwork_tools_row_overflow_cd),
+                tint = KnotworkTheme.extended.onSurfaceMuted,
+            )
+        }
+        DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+            DropdownMenuItem(
+                text = { Text(text = stringResource(R.string.knotwork_tools_row_action_refresh)) },
+                onClick = {
+                    menuOpen = false
+                    callbacks.onServerRefresh(server.id)
+                },
+                leadingIcon = {
+                    Icon(
+                        imageVector = Icons.Outlined.Refresh,
+                        contentDescription = null,
+                    )
+                },
+            )
+            DropdownMenuItem(
+                text = { Text(text = stringResource(R.string.knotwork_tools_row_action_edit)) },
+                onClick = {
+                    menuOpen = false
+                    callbacks.onServerEdit(server.id)
+                },
+                leadingIcon = {
+                    Icon(
+                        imageVector = Icons.Outlined.Edit,
+                        contentDescription = null,
+                    )
+                },
+            )
+            DropdownMenuItem(
+                text = {
+                    Text(
+                        text = stringResource(R.string.knotwork_tools_row_action_delete),
+                        color = KnotworkTheme.extended.signalError,
+                    )
+                },
+                onClick = {
+                    menuOpen = false
+                    callbacks.onServerRemove(server.id)
+                },
+                leadingIcon = {
+                    Icon(
+                        imageVector = Icons.Outlined.DeleteOutline,
+                        contentDescription = null,
+                        tint = KnotworkTheme.extended.signalError,
+                    )
+                },
+            )
         }
     }
 }
@@ -590,6 +638,66 @@ private fun OutlinedFormTextField(
                 text = placeholder,
                 style = KnotworkTextStyles.MonoBase,
                 color = KnotworkTheme.extended.onSurfaceMuted,
+            )
+        }
+    }
+}
+
+@Composable
+private fun AuthChip(option: McpAuthSelector, selected: Boolean, onClick: () -> Unit) {
+    val borderColor = if (selected) MaterialTheme.colorScheme.primary else KnotworkTheme.extended.outlineStrong
+    val labelColor = if (selected) MaterialTheme.colorScheme.primary else KnotworkTheme.extended.onSurfaceMuted
+    Box(
+        modifier = Modifier
+            .clip(KnotworkTheme.shapes.full)
+            .border(width = 1.dp, color = borderColor, shape = KnotworkTheme.shapes.full)
+            .clickable(onClick = onClick)
+            .padding(horizontal = KnotworkTheme.spacing.sp3, vertical = KnotworkTheme.spacing.sp1),
+    ) {
+        Text(
+            text = option.label,
+            style = KnotworkTextStyles.LabelMd,
+            color = labelColor,
+        )
+    }
+}
+
+@Composable
+private fun AuthFields(form: AddMcpServerForm, callbacks: McpServerConfigCallbacks) {
+    when (form.authType) {
+        McpAuthSelector.NONE -> Unit
+        McpAuthSelector.BEARER -> OutlinedFormTextField(
+            value = form.bearerToken,
+            onValueChange = callbacks.onBearerTokenChange,
+            placeholder = stringResource(R.string.knotwork_tools_form_auth_bearer_placeholder),
+            isError = false,
+        )
+        McpAuthSelector.BASIC -> {
+            OutlinedFormTextField(
+                value = form.basicUsername,
+                onValueChange = callbacks.onBasicUsernameChange,
+                placeholder = stringResource(R.string.knotwork_tools_form_auth_basic_user_placeholder),
+                isError = false,
+            )
+            OutlinedFormTextField(
+                value = form.basicPassword,
+                onValueChange = callbacks.onBasicPasswordChange,
+                placeholder = stringResource(R.string.knotwork_tools_form_auth_basic_pass_placeholder),
+                isError = false,
+            )
+        }
+        McpAuthSelector.API_KEY -> {
+            OutlinedFormTextField(
+                value = form.apiKeyHeaderName,
+                onValueChange = callbacks.onApiKeyHeaderNameChange,
+                placeholder = stringResource(R.string.knotwork_tools_form_auth_apikey_name_placeholder),
+                isError = false,
+            )
+            OutlinedFormTextField(
+                value = form.apiKeyValue,
+                onValueChange = callbacks.onApiKeyValueChange,
+                placeholder = stringResource(R.string.knotwork_tools_form_auth_apikey_value_placeholder),
+                isError = false,
             )
         }
     }
@@ -858,7 +966,12 @@ fun McpServerConfigContent(
 
             FormSectionLabel(text = stringResource(R.string.knotwork_tools_form_transport_label))
             Row(horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp2)) {
-                McpTransportOption.entries.forEach { option ->
+                // Render the selectable options plus, if the form was loaded
+                // with a non-selectable choice (e.g. an older "Streamable HTTP"
+                // pick), surface that chip too so the user can see what's
+                // persisted instead of being silently downgraded.
+                val visible = McpTransportOption.entries.filter { it.selectable || it == form.transport }
+                visible.forEach { option ->
                     TransportChip(
                         option = option,
                         selected = form.transport == option,
@@ -866,6 +979,23 @@ fun McpServerConfigContent(
                     )
                 }
             }
+
+            FormSectionLabel(text = stringResource(R.string.knotwork_tools_form_auth_label))
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp2),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(state = rememberScrollState()),
+            ) {
+                McpAuthSelector.entries.forEach { option ->
+                    AuthChip(
+                        option = option,
+                        selected = form.authType == option,
+                        onClick = { callbacks.onAuthTypeSelect(option) },
+                    )
+                }
+            }
+            AuthFields(form = form, callbacks = callbacks)
 
             FormSectionLabel(text = stringResource(R.string.knotwork_tools_form_headers_label))
             form.headers.forEachIndexed { index, row ->

@@ -1,6 +1,7 @@
 package ai.agent.android.data.mcp
 
 import ai.agent.android.domain.models.AgentTool
+import ai.agent.android.domain.models.McpAuth
 import ai.agent.android.domain.models.McpServerConfig
 import ai.koog.agents.core.tools.ToolRegistry
 import ai.koog.agents.mcp.McpToolRegistryProvider
@@ -16,6 +17,7 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import org.json.JSONArray
 import org.json.JSONObject
+import java.util.Base64
 import javax.inject.Inject
 
 /**
@@ -58,21 +60,18 @@ class KoogMcpClient : McpClient {
             httpClient = null
             registry = null
 
-            // Configure default request headers up-front so SSE handshake and every
-            // subsequent JSON-RPC request carry them. `Authorization` is the typical
-            // case but the user can supply any header pair.
+            // Compose the final header set: typed [McpAuth] becomes its
+            // canonical request header, then user-supplied `config.headers`
+            // are appended on top (the user wins on conflict — e.g. an
+            // explicit `Authorization` row overrides the typed auth).
+            val composedHeaders = composeHeaders(config = config)
             val client = HttpClient {
-                if (config.headers.isNotEmpty()) {
+                if (composedHeaders.isNotEmpty()) {
                     defaultRequest {
-                        config.headers.forEach { (key, value) ->
-                            // Ktor's `headers.append` rejects setting `Authorization`
-                            // when using basic auth plugins. We bypass with the raw
-                            // builder to keep the contract literal.
-                            headers.append(key, value)
-                        }
-                        // Convenience: when the user supplies a `Authorization` key
-                        // through `headers`, do not also expect them to set Accept.
-                        if (config.headers.keys.none { it.equals(HttpHeaders.Accept, ignoreCase = true) }) {
+                        composedHeaders.forEach { (key, value) -> headers.append(key, value) }
+                        // Convenience: only add the SSE Accept hint when the user
+                        // hasn't already supplied one through custom headers.
+                        if (composedHeaders.keys.none { it.equals(HttpHeaders.Accept, ignoreCase = true) }) {
                             headers.append(HttpHeaders.Accept, "text/event-stream")
                         }
                     }
@@ -158,6 +157,35 @@ class KoogMcpClient : McpClient {
 
         val result = tool.executeUnsafe(args!!)
         tool.encodeResultToStringUnsafe(result!!, serializer)
+    }
+
+    /** Header-composition + auth helpers shared across instances. */
+    companion object {
+        /**
+         * Builds the final request-header map for [config]: typed
+         * [McpAuth] is rendered first, then user-supplied
+         * `config.headers` are overlaid on top (custom rows win on
+         * conflict — that's the documented power-user override).
+         */
+        internal fun composeHeaders(config: McpServerConfig): Map<String, String> {
+            val builder = LinkedHashMap<String, String>()
+            when (val auth = config.auth) {
+                is McpAuth.None -> Unit
+                is McpAuth.Bearer -> if (auth.token.isNotBlank()) {
+                    builder[HttpHeaders.Authorization] = "Bearer ${auth.token}"
+                }
+                is McpAuth.Basic -> {
+                    val credentials = "${auth.username}:${auth.password}"
+                    val encoded = Base64.getEncoder().encodeToString(credentials.toByteArray(Charsets.UTF_8))
+                    builder[HttpHeaders.Authorization] = "Basic $encoded"
+                }
+                is McpAuth.ApiKey -> if (auth.headerName.isNotBlank() && auth.value.isNotBlank()) {
+                    builder[auth.headerName] = auth.value
+                }
+            }
+            config.headers.forEach { (key, value) -> builder[key] = value }
+            return builder
+        }
     }
 }
 

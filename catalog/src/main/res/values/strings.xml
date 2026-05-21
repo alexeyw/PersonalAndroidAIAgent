@@ -218,8 +218,6 @@
     <string name="knotwork_tools_section_mcp">MCP SERVERS</string>
     <!-- Trailing "+ Add MCP" link in the MCP section header. -->
     <string name="knotwork_tools_add_mcp_link">Add MCP</string>
-    <!-- ContentDescription for the trailing trash icon on an MCP server row. -->
-    <string name="knotwork_tools_remove_server_cd">Remove MCP server</string>
     <!-- Outline pill label for a Read-only tool. -->
     <string name="knotwork_tools_pill_readonly">Read only</string>
     <!-- Outline pill label for a Sensitive tool. -->
@@ -237,18 +235,34 @@
     <string name="knotwork_tools_detail_back">Back to tools</string>
     <string name="knotwork_tools_detail_schema">JSON Schema</string>
     <string name="knotwork_tools_detail_schema_error">Schema unavailable — the server returned malformed JSON.</string>
-    <!-- ContentDescription for the trailing refresh icon on an MCP server row. -->
-    <string name="knotwork_tools_refresh_server_cd">Refresh MCP tool list</string>
-    <!-- ContentDescription for the trailing edit pencil on an MCP server row. -->
-    <string name="knotwork_tools_edit_server_cd">Edit MCP server configuration</string>
     <!-- ContentDescription for the expand/collapse chevron on an MCP server row. -->
     <string name="knotwork_tools_expand_server_cd">Toggle MCP tool list</string>
+    <!-- ContentDescription for the overflow menu trigger on an MCP server row. -->
+    <string name="knotwork_tools_row_overflow_cd">MCP server actions</string>
+    <!-- MCP server row overflow menu item: refresh the tool list. -->
+    <string name="knotwork_tools_row_action_refresh">Refresh</string>
+    <!-- MCP server row overflow menu item: edit the server configuration. -->
+    <string name="knotwork_tools_row_action_edit">Edit</string>
+    <!-- MCP server row overflow menu item: remove the server. -->
+    <string name="knotwork_tools_row_action_delete">Remove</string>
     <!-- MCP server form: header for the Display name field. -->
     <string name="knotwork_tools_form_name_label">Display name (optional)</string>
     <!-- MCP server form: placeholder for the Display name field. -->
     <string name="knotwork_tools_form_name_placeholder">e.g. HuggingFace MCP</string>
     <!-- MCP server form: header for the Transport selector. -->
     <string name="knotwork_tools_form_transport_label">Transport</string>
+    <!-- MCP server form: header for the Authentication selector. -->
+    <string name="knotwork_tools_form_auth_label">Authentication</string>
+    <!-- MCP server form: placeholder for the Bearer token input. -->
+    <string name="knotwork_tools_form_auth_bearer_placeholder">Bearer token</string>
+    <!-- MCP server form: placeholder for the Basic auth username input. -->
+    <string name="knotwork_tools_form_auth_basic_user_placeholder">Username</string>
+    <!-- MCP server form: placeholder for the Basic auth password input. -->
+    <string name="knotwork_tools_form_auth_basic_pass_placeholder">Password</string>
+    <!-- MCP server form: placeholder for the API key header name input. -->
+    <string name="knotwork_tools_form_auth_apikey_name_placeholder">Header name (e.g. X-API-Key)</string>
+    <!-- MCP server form: placeholder for the API key value input. -->
+    <string name="knotwork_tools_form_auth_apikey_value_placeholder">Key value</string>
     <!-- MCP server form: header for the Headers section. -->
     <string name="knotwork_tools_form_headers_label">Custom headers</string>
     <!-- MCP server form: label for the "+ Add header" button. -->

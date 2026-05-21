@@ -1,5 +1,6 @@
 package ai.agent.android.data.mcp
 
+import ai.agent.android.domain.models.McpAuth
 import ai.agent.android.domain.models.McpServerConfig
 import ai.koog.agents.core.tools.Tool
 import ai.koog.agents.core.tools.ToolDescriptor
@@ -138,5 +139,61 @@ class KoogMcpClientTest {
         val schema = JSONObject(tools[0].parameters)
         assertTrue(schema.getJSONObject("properties").has("lang"))
         assertTrue(!schema.has("required"))
+    }
+
+    @Test
+    fun `composeHeaders renders Bearer auth as Authorization header`() {
+        val headers = KoogMcpClient.composeHeaders(
+            config = McpServerConfig(url = "https://x/", auth = McpAuth.Bearer(token = "abc")),
+        )
+        assertEquals("Bearer abc", headers["Authorization"])
+    }
+
+    @Test
+    fun `composeHeaders renders Basic auth as base64-encoded Authorization header`() {
+        val headers = KoogMcpClient.composeHeaders(
+            config = McpServerConfig(url = "https://x/", auth = McpAuth.Basic(username = "user", password = "pw")),
+        )
+        // Base64("user:pw") = dXNlcjpwdw==
+        assertEquals("Basic dXNlcjpwdw==", headers["Authorization"])
+    }
+
+    @Test
+    fun `composeHeaders puts ApiKey auth under the requested header name`() {
+        val headers = KoogMcpClient.composeHeaders(
+            config = McpServerConfig(
+                url = "https://x/",
+                auth = McpAuth.ApiKey(headerName = "X-API-Key", value = "secret"),
+            ),
+        )
+        assertEquals("secret", headers["X-API-Key"])
+    }
+
+    @Test
+    fun `composeHeaders lets custom headers override the typed auth`() {
+        // Power-user contract: if you take the trouble to set an explicit
+        // Authorization row in the headers section, it wins over the typed
+        // Bearer above. This allows oddball Authorization schemes the typed
+        // selector doesn't cover (DPoP, MAC, etc.) without a code change.
+        val headers = KoogMcpClient.composeHeaders(
+            config = McpServerConfig(
+                url = "https://x/",
+                auth = McpAuth.Bearer(token = "typed"),
+                headers = mapOf("Authorization" to "Custom override"),
+            ),
+        )
+        assertEquals("Custom override", headers["Authorization"])
+    }
+
+    @Test
+    fun `composeHeaders skips empty Bearer and ApiKey entries`() {
+        val emptyBearer = KoogMcpClient.composeHeaders(
+            config = McpServerConfig(url = "https://x/", auth = McpAuth.Bearer(token = "")),
+        )
+        val emptyApiKey = KoogMcpClient.composeHeaders(
+            config = McpServerConfig(url = "https://x/", auth = McpAuth.ApiKey(headerName = "X-K", value = "")),
+        )
+        assertTrue(emptyBearer.isEmpty())
+        assertTrue(emptyApiKey.isEmpty())
     }
 }

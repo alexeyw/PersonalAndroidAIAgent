@@ -17,14 +17,16 @@ details.
 
 - **Tools — full MCP server configuration** (Phase 22 / Task 10/17) —
   Each MCP server now carries a full [McpServerConfig]: optional
-  display name, transport selection (SSE / Streamable HTTP), and
-  arbitrary request headers (the typical case being
-  `Authorization: Bearer …` for auth-required servers). Adding and
-  editing happen on a dedicated full-screen `McpServerConfigScreen`
-  (route `tools/mcp-config?originalUrl={url}`) — the pencil
-  affordance on each row opens the screen pre-filled, the `+ Add
-  MCP` link opens it blank, and Save / Cancel pop back to the
-  list. KoogMcpClient now configures the Ktor `defaultRequest`
+  display name, transport selection (SSE today; Streamable HTTP
+  hidden from the picker until Koog ships a working transport
+  for it), a typed authentication selector (None / Bearer / Basic
+  / API Key) with per-scheme fields, and arbitrary request headers
+  for advanced overrides. Adding and editing happen on a
+  dedicated full-screen `McpServerConfigScreen` (route
+  `tools/mcp-config?originalUrl={url}`) — the row's overflow ⋮
+  menu (Refresh / Edit / Remove) opens it pre-filled, the
+  `+ Add MCP` link opens it blank, and Save / Cancel pop back to
+  the list. KoogMcpClient now configures the Ktor `defaultRequest`
   block with the user-supplied headers so they reach both the SSE
   handshake and every subsequent JSON-RPC call. Persistence
   switched from a `stringSet` of URLs to a JSON-encoded list of

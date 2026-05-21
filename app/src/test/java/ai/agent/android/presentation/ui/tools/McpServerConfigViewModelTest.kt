@@ -1,10 +1,12 @@
 package ai.agent.android.presentation.ui.tools
 
+import ai.agent.android.domain.models.McpAuth
 import ai.agent.android.domain.models.McpServerConfig
 import ai.agent.android.domain.models.McpTransport
 import ai.agent.android.domain.repositories.McpServerRepository
 import ai.agent.android.domain.repositories.SettingsRepository
 import androidx.lifecycle.SavedStateHandle
+import app.knotwork.design.screens.tools.McpAuthSelector
 import app.knotwork.design.screens.tools.McpHeaderRow
 import app.knotwork.design.screens.tools.McpTransportOption
 import io.mockk.coVerify
@@ -145,6 +147,52 @@ class McpServerConfigViewModelTest {
         coVerify(exactly = 0) { settings.addMcpServer(any()) }
         assertNull(viewModel.events.value)
         assertNotNull(viewModel.form.value.urlError)
+    }
+
+    @Test
+    fun `bearer auth round-trips through edit mode`() = runTest {
+        val url = "https://hf.example/mcp"
+        mcpServersFlow.value = listOf(
+            McpServerConfig(url = url, auth = McpAuth.Bearer(token = "secret")),
+        )
+
+        val viewModel = vm(originalUrl = url)
+        advanceUntilIdle()
+
+        val form = viewModel.form.value
+        assertEquals(McpAuthSelector.BEARER, form.authType)
+        assertEquals("secret", form.bearerToken)
+
+        viewModel.onSubmit()
+        advanceUntilIdle()
+
+        coVerify {
+            settings.updateMcpServer(
+                originalUrl = url,
+                updated = McpServerConfig(url = url, auth = McpAuth.Bearer(token = "secret")),
+            )
+        }
+    }
+
+    @Test
+    fun `api key auth survives add-mode submission`() = runTest {
+        val viewModel = vm()
+        viewModel.onUrlChange(value = "https://api.example/mcp")
+        viewModel.onAuthTypeSelect(option = McpAuthSelector.API_KEY)
+        viewModel.onApiKeyHeaderNameChange(value = "X-API-Key")
+        viewModel.onApiKeyValueChange(value = "v1")
+
+        viewModel.onSubmit()
+        advanceUntilIdle()
+
+        coVerify {
+            settings.addMcpServer(
+                config = McpServerConfig(
+                    url = "https://api.example/mcp",
+                    auth = McpAuth.ApiKey(headerName = "X-API-Key", value = "v1"),
+                ),
+            )
+        }
     }
 
     @Test

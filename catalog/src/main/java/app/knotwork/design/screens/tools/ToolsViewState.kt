@@ -98,14 +98,40 @@ data class McpToolEntry(
  * Transport mode selector shown in the MCP server form. Mirrors
  * `domain.models.McpTransport` to keep the catalog free of app
  * dependencies; the host translates between the two.
+ *
+ * @property selectable `true` for options the user can actually pick
+ * in the UI today. `StreamableHttp` stays in the enum so a previously-
+ * persisted choice survives a round-trip through the form, but it is
+ * filtered out of the visible chip row until the underlying client
+ * supports it (Koog 0.8 ships only SSE; the streamable-HTTP fallback
+ * to SSE was returning `405 Method Not Allowed` against real servers).
  */
-enum class McpTransportOption(val label: String) {
-    SSE(label = "SSE"),
-    StreamableHttp(label = "Streamable HTTP"),
+enum class McpTransportOption(val label: String, val selectable: Boolean) {
+    SSE(label = "SSE", selectable = true),
+    StreamableHttp(label = "Streamable HTTP", selectable = false),
 }
 
 /** One header key/value pair authored in the MCP server form. */
 data class McpHeaderRow(val key: String = "", val value: String = "")
+
+/**
+ * Authentication scheme selector surfaced in the MCP server form.
+ *
+ * @property label user-visible chip label.
+ */
+enum class McpAuthSelector(val label: String) {
+    /** No auth header sent. */
+    NONE(label = "None"),
+
+    /** `Authorization: Bearer <token>`. */
+    BEARER(label = "Bearer"),
+
+    /** `Authorization: Basic <base64(username:password)>`. */
+    BASIC(label = "Basic"),
+
+    /** Custom header carrying an API key (header name supplied by the user). */
+    API_KEY(label = "API key"),
+}
 
 /**
  * State of the inline MCP-server form.
@@ -133,6 +159,12 @@ data class AddMcpServerForm(
     val urlError: String? = null,
     val name: String = "",
     val transport: McpTransportOption = McpTransportOption.SSE,
+    val authType: McpAuthSelector = McpAuthSelector.NONE,
+    val bearerToken: String = "",
+    val basicUsername: String = "",
+    val basicPassword: String = "",
+    val apiKeyHeaderName: String = "",
+    val apiKeyValue: String = "",
     val headers: List<McpHeaderRow> = emptyList(),
     val submitting: Boolean = false,
     val editingUrl: String? = null,
@@ -220,6 +252,12 @@ class McpServerConfigCallbacks(
     val onUrlChange: (String) -> Unit = {},
     val onNameChange: (String) -> Unit = {},
     val onTransportSelect: (McpTransportOption) -> Unit = {},
+    val onAuthTypeSelect: (McpAuthSelector) -> Unit = {},
+    val onBearerTokenChange: (String) -> Unit = {},
+    val onBasicUsernameChange: (String) -> Unit = {},
+    val onBasicPasswordChange: (String) -> Unit = {},
+    val onApiKeyHeaderNameChange: (String) -> Unit = {},
+    val onApiKeyValueChange: (String) -> Unit = {},
     val onHeaderAdd: () -> Unit = {},
     val onHeaderChange: (index: Int, key: String, value: String) -> Unit = { _, _, _ -> },
     val onHeaderRemove: (index: Int) -> Unit = {},
