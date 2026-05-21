@@ -162,8 +162,7 @@ internal fun String.belongsToTab(tab: TabDestination): Boolean = when (tab.route
             this == NavRoutes.PIPELINE_EDIT_WITH_ID
     NavRoutes.TOOLS ->
         this == NavRoutes.TOOLS ||
-            this == NavRoutes.TOOL_DETAIL ||
-            this == NavRoutes.ADD_MCP_SERVER
+            this == NavRoutes.TOOL_DETAIL
     NavRoutes.MORE ->
         this == NavRoutes.MORE ||
             this == NavRoutes.MEMORY ||

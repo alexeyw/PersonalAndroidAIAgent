@@ -23,7 +23,6 @@ class NavRoutesTest {
         NavRoutes.MEMORY,
         NavRoutes.TOOLS,
         NavRoutes.TOOL_DETAIL,
-        NavRoutes.ADD_MCP_SERVER,
         NavRoutes.MONITORING,
         NavRoutes.TASK_MONITOR,
         NavRoutes.SETTINGS,

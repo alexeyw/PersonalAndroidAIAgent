@@ -1,5 +1,7 @@
 package ai.agent.android.presentation.ui.tools
 
+import ai.agent.android.domain.models.McpConnectionStatus
+import ai.agent.android.domain.models.McpTool
 import ai.agent.android.domain.models.ToolRisk
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.derivedStateOf
@@ -16,18 +18,17 @@ import app.knotwork.design.screens.tools.BuiltInToolRisk
 import app.knotwork.design.screens.tools.BuiltInToolRow
 import app.knotwork.design.screens.tools.McpConnectionState
 import app.knotwork.design.screens.tools.McpServerRow
+import app.knotwork.design.screens.tools.McpToolEntry
 import app.knotwork.design.screens.tools.ToolsCallbacks
 import app.knotwork.design.screens.tools.ToolsContent
 import app.knotwork.design.screens.tools.ToolsViewState
 import app.knotwork.design.screens.tools.ToolsVisualState
 
 /**
- * Tools screen — Phase 21 / Task 10 rewrite #2 (mockup-driven).
- *
- * Two-section list: built-in AppFunctions on top with risk pills + Switch
- * toggles, MCP servers below with status dots + delete affordance. The
- * "Add new MCP server URL" form is embedded inline at the bottom of the
- * list, opened via the `+ Add MCP` link in the MCP section header.
+ * Tools screen — two-section list: built-in AppFunctions on top with risk
+ * pills + Switch toggles; MCP servers below with a per-server status dot,
+ * a trailing refresh + delete + expand affordance, and a nested list of
+ * the server's MCP tools when expanded.
  */
 @Suppress("UnusedParameter") // onBack kept for nav-graph compatibility.
 @Composable
@@ -35,7 +36,6 @@ fun ToolsScreen(
     modifier: Modifier = Modifier,
     viewModel: ToolsViewModel = hiltViewModel(),
     onBack: () -> Unit = {},
-    onOpenAddMcpServer: () -> Unit = {},
     onOpenToolDetail: (String) -> Unit = {},
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -58,16 +58,15 @@ fun ToolsScreen(
     }
     val mcpServers by remember(uiState) {
         derivedStateOf {
-            uiState.mcpServers.map { url ->
+            uiState.mcpServers.map { snapshot ->
                 McpServerRow(
-                    id = url,
-                    url = url,
-                    toolCount = 0,
-                    // The repository currently surfaces only the URL set;
-                    // latency + per-server tool-count fetching lands once
-                    // the MCP client wires its handshake.
-                    latencyLabel = "—",
-                    state = McpConnectionState.Connected,
+                    id = snapshot.url,
+                    url = snapshot.url,
+                    toolCount = snapshot.tools.size,
+                    latencyLabel = snapshot.status.toLabel(),
+                    state = snapshot.status.toCatalogState(),
+                    tools = snapshot.tools.map { it.toEntry(disabled = uiState.disabledMcpTools) },
+                    expanded = snapshot.url in uiState.expandedServerUrls,
                 )
             }
         }
@@ -94,6 +93,10 @@ fun ToolsScreen(
         onToolToggle = { id, enabled -> viewModel.toggleLocalTool(toolName = id, isEnabled = enabled) },
         onToolClick = onOpenToolDetail,
         onServerRemove = { serverId -> viewModel.removeMcpServer(url = serverId) },
+        onServerExpandToggle = { serverId -> viewModel.toggleServerExpanded(serverUrl = serverId) },
+        onServerRefresh = { serverId -> viewModel.refreshServer(serverUrl = serverId) },
+        onMcpToolToggle = { id, enabled -> viewModel.toggleMcpTool(toolId = id, isEnabled = enabled) },
+        onMcpToolClick = onOpenToolDetail,
         onAddServerOpen = {
             addFormOpen = true
             addFormUrl = ""
@@ -138,6 +141,32 @@ private fun ToolRisk.toBuiltInToolRisk(): BuiltInToolRisk = when (this) {
     ToolRisk.SENSITIVE -> BuiltInToolRisk.Sensitive
     ToolRisk.DESTRUCTIVE -> BuiltInToolRisk.Destructive
 }
+
+private fun McpConnectionStatus.toCatalogState(): McpConnectionState = when (this) {
+    McpConnectionStatus.Connecting -> McpConnectionState.Syncing
+    McpConnectionStatus.Connected -> McpConnectionState.Connected
+    is McpConnectionStatus.Error -> McpConnectionState.Error
+}
+
+private fun McpConnectionStatus.toLabel(): String = when (this) {
+    McpConnectionStatus.Connecting -> "connecting…"
+    McpConnectionStatus.Connected -> "ok"
+    is McpConnectionStatus.Error -> reason
+}
+
+/**
+ * Projects an [McpTool] to the catalog's [McpToolEntry] for rendering as
+ * a nested row underneath the server header. MCP tools without a server-
+ * declared risk fall back to [BuiltInToolRisk.Sensitive] — mirroring the
+ * blanket policy in `ToolRepository.getRisk`.
+ */
+private fun McpTool.toEntry(disabled: Set<String>): McpToolEntry = McpToolEntry(
+    id = id,
+    name = name,
+    description = description,
+    risk = (risk ?: ToolRisk.SENSITIVE).toBuiltInToolRisk(),
+    enabled = id !in disabled,
+)
 
 /**
  * Trims AppFunction-shaped tool ids (`<pkg>/<FQN>#invoke`) down to the

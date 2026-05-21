@@ -67,9 +67,6 @@ object NavRoutes {
     /** Path-argument key for [TOOL_DETAIL]. */
     const val TOOL_DETAIL_ID_ARG: String = "toolId"
 
-    /** Add-MCP-server modal route. */
-    const val ADD_MCP_SERVER: String = "tools/add-mcp"
-
     /** More tab — landing screen with secondary navigation. */
     const val MORE: String = "more"
 
@@ -122,7 +119,4 @@ object NavRoutes {
 
     /** Console pane sheet — opened from chat (filled in Task 6). */
     const val SHEET_CONSOLE: String = "sheet/console"
-
-    /** Add-MCP-server sheet alias — wired in Task 10 alongside `ToolsScreen`. */
-    const val SHEET_ADD_MCP: String = ADD_MCP_SERVER
 }

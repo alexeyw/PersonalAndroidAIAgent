@@ -185,6 +185,21 @@ interface SettingsRepository {
     suspend fun setDisabledAppFunctions(functions: Set<String>)
 
     /**
+     * A [Flow] of disabled MCP tool ids. Entries match the
+     * `mcp:<sha8(serverUrl)>:<toolName>` ids produced by
+     * `McpServerRepositoryImpl.mcpToolId`. Kept separate from
+     * [disabledAppFunctions] because the two namespaces share no collision
+     * guarantees — disabling `search_tool` (local) and an MCP tool named
+     * `search_tool` are independent decisions.
+     */
+    val disabledMcpTools: Flow<Set<String>>
+
+    /**
+     * Updates the set of disabled MCP tools.
+     */
+    suspend fun setDisabledMcpTools(toolIds: Set<String>)
+
+    /**
      * A [Flow] of per-AppFunction risk overrides, keyed by the AppFunction's
      * tool name. The map is the user's authoritative voice on what risk class a
      * discovered AppFunction should be treated as; when an entry is present it

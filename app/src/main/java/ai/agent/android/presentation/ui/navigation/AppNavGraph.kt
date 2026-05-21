@@ -20,7 +20,6 @@ import ai.agent.android.presentation.ui.settings.provider.ProviderPickerScreen
 import ai.agent.android.presentation.ui.splash.SplashScreen
 import ai.agent.android.presentation.ui.taskmonitor.TaskMonitorScreen
 import ai.agent.android.presentation.ui.taskmonitor.TaskMonitorViewModel
-import ai.agent.android.presentation.ui.tools.AddMcpServerScreen
 import ai.agent.android.presentation.ui.tools.ToolDetailScreen
 import ai.agent.android.presentation.ui.tools.ToolsScreen
 import androidx.compose.foundation.layout.fillMaxSize
@@ -197,7 +196,6 @@ fun AppNavGraph(navController: NavHostController, showOnboarding: Boolean, modif
             ToolsScreen(
                 modifier = Modifier.fillMaxSize(),
                 onBack = { navController.popBackStack() },
-                onOpenAddMcpServer = { navController.navigate(NavRoutes.ADD_MCP_SERVER) },
                 onOpenToolDetail = { toolId ->
                     // AppFunction-shaped tool ids embed `/` and `#` (e.g.
                     // `<pkg>/<FQN>#invoke`). Percent-encode them via
@@ -225,14 +223,6 @@ fun AppNavGraph(navController: NavHostController, showOnboarding: Boolean, modif
                 modifier = Modifier.fillMaxSize(),
             )
         }
-        composable(NavRoutes.ADD_MCP_SERVER) {
-            AddMcpServerScreen(
-                onCancel = { navController.popBackStack() },
-                onSubmitted = { navController.popBackStack() },
-                modifier = Modifier.fillMaxSize(),
-            )
-        }
-
         // ─── More tab and its secondary screens ────────────────────────────
         composable(NavRoutes.MORE) {
             MoreScreen(

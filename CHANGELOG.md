@@ -15,6 +15,27 @@ details.
 
 ### Added
 
+- **Tools — MCP per-tool detail and tool-list fetcher** (Phase 22 /
+  Task 10/17) — Tools surface now drives a real
+  `tools/list` MCP round-trip through the new
+  `McpServerRepository` (data impl: `McpServerRepositoryImpl`).
+  Per-server snapshots in `ToolsUiState` carry the live
+  `McpConnectionStatus` (`Connecting` / `Connected` /
+  `Error(reason)`) and the discovered `McpTool` list — both
+  rendered in the catalog under the expanded server row. Tool
+  list responses are cached for 5 minutes; the trailing refresh
+  icon on every server row force-bypasses the cache. Per-MCP-tool
+  `ToolDetailScreen` now resolves a real
+  `McpTool.inputSchemaJson` instead of the placeholder, and
+  local AppFunction tools render their actual
+  `AgentTool.parameters` (no more cosmetic `{ "...": ... }`
+  stub). New `disabledMcpTools` set in `SettingsRepository`
+  (keyed by `mcp:<sha8(serverUrl)>:<toolName>`) tracks the
+  per-MCP-tool enabled state independently of
+  `disabledAppFunctions`. Standalone `AddMcpServerScreen` route
+  + file deleted — the inline add-form on `ToolsScreen` is the
+  single entry point.
+
 - **Settings — redesign + full backend wiring** (Phase 22 / Task 9/17) —
   Settings was rewritten end-to-end to match the new mockup. New surface
   hosts nine cards: identity (device-id + Keystore probe), system

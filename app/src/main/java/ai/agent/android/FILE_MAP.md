@@ -65,6 +65,7 @@ This file maps the contents of the main application package.
     - `IdentityRepositoryImpl.kt` - Resolves the Settings identity card snapshot (ANDROID_ID → 8-hex device id, AndroidKeyStore probe).
     - `LocalModelRepositoryImpl.kt` - Local model repository implementation; observes the active model file metadata for the Settings local-model card.
     - `LocalPipelineRepositoryImpl.kt` - Local pipeline repository implementation.
+    - `McpServerRepositoryImpl.kt` - Per-server gateway over the raw `McpClient` transport; owns lazy connections, the 5-minute tool-list cache, and per-URL `McpConnectionStatus` flows consumed by `ToolsViewModel`.
     - `MemoryRepositoryImpl.kt` - Memory repository implementation.
     - `MetricsRepositoryImpl.kt` - Metrics repository implementation.
     - `NetworkStateRepositoryImpl.kt` - Network state repository implementation.
@@ -135,6 +136,8 @@ This file maps the contents of the main application package.
     - `DownloadState.kt` - Download state model.
     - `LocalBackend.kt` - Typed enum for the on-device LiteRT execution backend (CPU/GPU/NPU); owns the persisted wire keys via `LocalBackend.key`.
     - `LocalModel.kt` - Domain model for local models.
+    - `McpConnectionStatus.kt` - Sealed lifecycle (`Connecting` / `Connected` / `Error(reason)`) exposed by `McpServerRepository.observeConnectionStatus` and rendered as the per-server status pill.
+    - `McpTool.kt` - Domain model for one tool advertised by an MCP server (`id = "mcp:<sha8(serverUrl)>:<toolName>"`, `serverUrl`, `name`, `description`, `inputSchemaJson`, optional `risk`).
     - `MemoryChunk.kt` - Memory chunk model.
     - `MemorySummary.kt` - Lightweight memory projection (id/text/timestamp) used by `$MEMORY_SUMMARY`.
     - `NetworkState.kt` - Network state model.
@@ -158,6 +161,7 @@ This file maps the contents of the main application package.
     - `ApiKeyRepository.kt` - API key repository interface.
     - `ChatRepository.kt` - Chat repository interface.
     - `LocalToolExecutor.kt` - Strategy interface for executing a single locally-registered agent tool (multibound by name in `LocalToolsModule`).
+    - `McpServerRepository.kt` - Per-server gateway interface (`fetchToolList` with 5-min cache + `forceRefresh`, `observeConnectionStatus`, `disconnect`). Data-layer impl: `McpServerRepositoryImpl`.
     - `ClarificationRepository.kt` - Bridges the agent (suspending until the user answers) and the UI (publishing the pending question, forwarding the reply).
     - `CrashReportingRepository.kt` - Domain gateway for anonymous crash reporting (opt-in). All methods are no-op until `SettingsRepository.crashReportingEnabled` becomes `true`.
     - `LocalModelRepository.kt` - Local model repository interface.
@@ -309,9 +313,8 @@ This file maps the contents of the main application package.
       - `TaskMonitorState.kt` - Task monitor UI state.
       - `TaskMonitorViewModel.kt` - Task monitor ViewModel.
     - `tools/` - Tools screen components.
-      - `ToolsScreen.kt` - Tools UI screen — Phase 21 / Task 10 rewrite, drives catalog `ToolsContent`.
-      - `ToolsUiState.kt` - Tools UI state.
-      - `ToolsViewModel.kt` - Tools ViewModel.
-      - `ToolDetailScreen.kt` - Per-tool detail screen (Phase 21 / Task 10) showing schema preview + enable toggle.
-      - `AddMcpServerScreen.kt` - Add-MCP-server screen with URL validation (Phase 21 / Task 10).
+      - `ToolsScreen.kt` - Tools UI screen — drives catalog `ToolsContent`. Two-section list (built-in AppFunctions / MCP servers with nested expandable tool list, refresh + delete affordances).
+      - `ToolsUiState.kt` - Tools UI state. Carries per-server `McpServerSnapshot` (status + tool list) plus expansion + disabled-MCP-tool sets.
+      - `ToolsViewModel.kt` - Tools ViewModel. Reconciles `SettingsRepository.mcpServerUrls` against per-URL status observers from `McpServerRepository`; persists local + MCP toggle changes; exposes `findMcpTool(id)` lookup.
+      - `ToolDetailScreen.kt` - Per-tool detail screen. Branches on `toolId` prefix: `mcp:…` → resolves `McpTool` via `ToolsViewModel.findMcpTool` and renders the server-supplied JSON Schema verbatim; otherwise renders the real `AgentTool.parameters` for local AppFunctions.
 - `FILE_MAP.md` - This file mapping the current directory structure.

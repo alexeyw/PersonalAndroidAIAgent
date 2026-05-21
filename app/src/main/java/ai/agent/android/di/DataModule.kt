@@ -16,6 +16,7 @@ import ai.agent.android.data.repositories.FirebaseCrashReportingRepositoryImpl
 import ai.agent.android.data.repositories.IdentityRepositoryImpl
 import ai.agent.android.data.repositories.LocalModelRepositoryImpl
 import ai.agent.android.data.repositories.LocalPipelineRepositoryImpl
+import ai.agent.android.data.repositories.McpServerRepositoryImpl
 import ai.agent.android.data.repositories.MemoryRepositoryImpl
 import ai.agent.android.data.repositories.MetricsRepositoryImpl
 import ai.agent.android.data.repositories.NetworkStateRepositoryImpl
@@ -32,6 +33,7 @@ import ai.agent.android.domain.repositories.ClarificationRepository
 import ai.agent.android.domain.repositories.CrashReportingRepository
 import ai.agent.android.domain.repositories.IdentityRepository
 import ai.agent.android.domain.repositories.LocalModelRepository
+import ai.agent.android.domain.repositories.McpServerRepository
 import ai.agent.android.domain.repositories.MemoryRepository
 import ai.agent.android.domain.repositories.MetricsRepository
 import ai.agent.android.domain.repositories.ModelDownloadManager
@@ -136,6 +138,15 @@ abstract class DataModule {
     @Binds
     @Singleton
     abstract fun bindMcpClientFactory(factory: KoogMcpClientFactory): McpClientFactory
+
+    /**
+     * Binds [McpServerRepositoryImpl] to [McpServerRepository] — owns per-server
+     * MCP connections, tool-list caching, and the connection-status flows
+     * consumed by `ToolsViewModel`.
+     */
+    @Binds
+    @Singleton
+    abstract fun bindMcpServerRepository(repository: McpServerRepositoryImpl): McpServerRepository
 
     /**
      * Binds the [MetricsRepositoryImpl] implementation to the [MetricsRepository] interface.

@@ -13,8 +13,8 @@ import kotlinx.coroutines.launch
 
 /**
  * Generic wrapper for every modal bottom-sheet route in the app
- * (`NodeConfigSheet`, `ConsolePane`, `AddMcpServerScreen` — Tasks 6/7/10
- * provide the bodies, this task provides the host).
+ * (`NodeConfigSheet`, `ConsolePane` — Tasks 6/7 provide the bodies,
+ * this task provides the host).
  *
  * Responsibilities:
  *  - Render the Material3 [ModalBottomSheet] with the project's standard

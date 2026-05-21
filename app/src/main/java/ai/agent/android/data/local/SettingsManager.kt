@@ -45,6 +45,7 @@ class SettingsManager @Inject constructor(private val dataStore: DataStore<Prefe
         val TOOL_USAGE_INSTRUCTION = stringPreferencesKey("tool_usage_instruction")
         val MCP_SERVER_URLS = stringSetPreferencesKey("mcp_server_urls")
         val DISABLED_APP_FUNCTIONS = stringSetPreferencesKey("disabled_app_functions")
+        val DISABLED_MCP_TOOLS = stringSetPreferencesKey("disabled_mcp_tools")
         val APP_FUNCTION_RISK_OVERRIDES = stringPreferencesKey("app_function_risk_overrides")
         val CURRENT_CHAT_SESSION_ID = stringPreferencesKey("current_chat_session_id")
         val MAX_MEMORY_CHUNKS_FOR_SEARCH = intPreferencesKey("max_memory_chunks_for_search")
@@ -305,6 +306,25 @@ class SettingsManager @Inject constructor(private val dataStore: DataStore<Prefe
     override suspend fun setDisabledAppFunctions(functions: Set<String>) {
         dataStore.edit { preferences ->
             preferences[PreferencesKeys.DISABLED_APP_FUNCTIONS] = functions
+        }
+    }
+
+    override val disabledMcpTools: Flow<Set<String>> = dataStore.data
+        .catch { exception ->
+            if (exception is IOException) {
+                Timber.e(exception, "Error reading preferences")
+                emit(emptyPreferences())
+            } else {
+                throw exception
+            }
+        }
+        .map { preferences ->
+            preferences[PreferencesKeys.DISABLED_MCP_TOOLS] ?: emptySet()
+        }
+
+    override suspend fun setDisabledMcpTools(toolIds: Set<String>) {
+        dataStore.edit { preferences ->
+            preferences[PreferencesKeys.DISABLED_MCP_TOOLS] = toolIds
         }
     }
 

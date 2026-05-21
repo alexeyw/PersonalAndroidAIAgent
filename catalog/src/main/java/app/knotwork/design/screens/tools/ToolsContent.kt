@@ -26,7 +26,10 @@ import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.DeleteOutline
 import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material.icons.outlined.ExpandLess
+import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material.icons.outlined.MoreVert
+import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.WarningAmber
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
@@ -243,9 +246,17 @@ private fun ToolsList(state: ToolsViewState, callbacks: ToolsCallbacks, padding:
                 },
             )
         }
-        items(items = state.mcpServers, key = { "mcp-${it.id}" }) { server ->
-            McpServerRowView(server = server, callbacks = callbacks)
-            HorizontalDivider(color = KnotworkTheme.extended.divider)
+        state.mcpServers.forEach { server ->
+            item(key = "mcp-${server.id}") {
+                McpServerRowView(server = server, callbacks = callbacks)
+                HorizontalDivider(color = KnotworkTheme.extended.divider)
+            }
+            if (server.expanded) {
+                items(items = server.tools, key = { "mcp-tool-${it.id}" }) { entry ->
+                    McpToolEntryRowView(entry = entry, callbacks = callbacks)
+                    HorizontalDivider(color = KnotworkTheme.extended.divider)
+                }
+            }
         }
         if (state.addServerForm != null) {
             item(key = "add-server-form") {
@@ -391,11 +402,15 @@ private fun McpServerRowView(server: McpServerRow, callbacks: ToolsCallbacks) {
         McpConnectionState.Error -> KnotworkTheme.extended.signalError
         McpConnectionState.Disabled -> KnotworkTheme.extended.onSurfaceMuted
     }
+    val expandable = server.tools.isNotEmpty()
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp3),
         modifier = Modifier
             .fillMaxWidth()
+            .then(
+                if (expandable) Modifier.clickable { callbacks.onServerExpandToggle(server.id) } else Modifier,
+            )
             .padding(
                 horizontal = KnotworkTheme.spacing.sp4,
                 vertical = KnotworkTheme.spacing.sp3,
@@ -423,6 +438,13 @@ private fun McpServerRowView(server: McpServerRow, callbacks: ToolsCallbacks) {
                 color = KnotworkTheme.extended.onSurfaceMuted,
             )
         }
+        IconButton(onClick = { callbacks.onServerRefresh(server.id) }) {
+            Icon(
+                imageVector = Icons.Outlined.Refresh,
+                contentDescription = stringResource(R.string.knotwork_tools_refresh_server_cd),
+                tint = KnotworkTheme.extended.onSurfaceMuted,
+            )
+        }
         IconButton(onClick = { callbacks.onServerRemove(server.id) }) {
             Icon(
                 imageVector = Icons.Outlined.DeleteOutline,
@@ -430,6 +452,86 @@ private fun McpServerRowView(server: McpServerRow, callbacks: ToolsCallbacks) {
                 tint = KnotworkTheme.extended.onSurfaceMuted,
             )
         }
+        if (expandable) {
+            IconButton(onClick = { callbacks.onServerExpandToggle(server.id) }) {
+                Icon(
+                    imageVector = if (server.expanded) {
+                        Icons.Outlined.ExpandLess
+                    } else {
+                        Icons.Outlined.ExpandMore
+                    },
+                    contentDescription = stringResource(R.string.knotwork_tools_expand_server_cd),
+                    tint = KnotworkTheme.extended.onSurfaceMuted,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun McpToolEntryRowView(entry: McpToolEntry, callbacks: ToolsCallbacks) {
+    Row(
+        verticalAlignment = Alignment.Top,
+        horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp3),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { callbacks.onMcpToolClick(entry.id) }
+            .padding(
+                start = KnotworkTheme.spacing.sp8,
+                end = KnotworkTheme.spacing.sp4,
+                top = KnotworkTheme.spacing.sp3,
+                bottom = KnotworkTheme.spacing.sp3,
+            ),
+    ) {
+        Box(
+            contentAlignment = Alignment.Center,
+            modifier = Modifier
+                .size(LeadingTileSize)
+                .clip(KnotworkTheme.shapes.sm)
+                .background(color = KnotworkTheme.extended.surface2),
+        ) {
+            Icon(
+                imageVector = Icons.Outlined.Edit,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.size(LeadingIconSize),
+            )
+        }
+        Column(
+            verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp1),
+            modifier = Modifier.weight(1f),
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp2),
+            ) {
+                Text(
+                    text = entry.name,
+                    style = KnotworkTextStyles.MonoBase.copy(fontWeight = FontWeight.SemiBold),
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false),
+                )
+                RiskOutlinePill(risk = entry.risk)
+            }
+            if (entry.description.isNotBlank()) {
+                Text(
+                    text = entry.description,
+                    style = KnotworkTextStyles.BodyBase,
+                    color = KnotworkTheme.extended.onSurfaceMuted,
+                )
+            }
+        }
+        Switch(
+            checked = entry.enabled,
+            onCheckedChange = { callbacks.onMcpToolToggle(entry.id, it) },
+            colors = SwitchDefaults.colors(
+                checkedThumbColor = MaterialTheme.colorScheme.onPrimary,
+                checkedTrackColor = MaterialTheme.colorScheme.primary,
+                checkedBorderColor = MaterialTheme.colorScheme.primary,
+            ),
+        )
     }
 }
 

@@ -56,6 +56,11 @@ data class BuiltInToolRow(
  * a connected server, `"disabled"` when the user has paused it, or
  * `"…"` while the catalog is still measuring.
  * @property state connection state driving the leading status dot.
+ * @property tools tools advertised by the server. Rendered as a nested list
+ * underneath the server row when [expanded] is `true`.
+ * @property expanded `true` when the user has tapped the server row to
+ * reveal [tools]; `false` keeps the row collapsed and only the header
+ * visible. Defaults to collapsed so the surface stays scannable.
  */
 data class McpServerRow(
     val id: String,
@@ -63,6 +68,30 @@ data class McpServerRow(
     val toolCount: Int,
     val latencyLabel: String,
     val state: McpConnectionState,
+    val tools: List<McpToolEntry> = emptyList(),
+    val expanded: Boolean = false,
+)
+
+/**
+ * One MCP tool entry rendered underneath its server when the server row
+ * is expanded. Mirrors [BuiltInToolRow] visually but is distinct because
+ * MCP tools carry a per-server affiliation (id encoded as
+ * `mcp:<sha8(serverUrl)>:<toolName>`) and surface a remote JSON-Schema in
+ * the detail screen rather than the local AppFunction metadata.
+ *
+ * @property id stable, route-safe identifier; the host serialises this as
+ * the `{toolId}` path argument when navigating to `ToolDetailScreen`.
+ * @property name tool name as advertised by the server.
+ * @property description body text under the title.
+ * @property risk risk tier rendered as the outline pill next to the name.
+ * @property enabled toggle state — wired to the trailing Switch.
+ */
+data class McpToolEntry(
+    val id: String,
+    val name: String,
+    val description: String,
+    val risk: BuiltInToolRisk,
+    val enabled: Boolean,
 )
 
 /**
@@ -104,6 +133,10 @@ class ToolsCallbacks(
     val onToolToggle: (toolId: String, enabled: Boolean) -> Unit = { _, _ -> },
     val onToolClick: (toolId: String) -> Unit = {},
     val onServerRemove: (serverId: String) -> Unit = {},
+    val onServerExpandToggle: (serverId: String) -> Unit = {},
+    val onServerRefresh: (serverId: String) -> Unit = {},
+    val onMcpToolToggle: (toolId: String, enabled: Boolean) -> Unit = { _, _ -> },
+    val onMcpToolClick: (toolId: String) -> Unit = {},
     val onAddServerOpen: () -> Unit = {},
     val onAddServerUrlChange: (String) -> Unit = {},
     val onAddServerSubmit: () -> Unit = {},
