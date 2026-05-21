@@ -5,6 +5,7 @@ import ai.agent.android.data.mcp.McpClientFactory
 import ai.agent.android.data.tools.local.LocalAppFunctionManager
 import ai.agent.android.data.tools.local.SearchTool
 import ai.agent.android.domain.models.AgentTool
+import ai.agent.android.domain.models.McpServerConfig
 import ai.agent.android.domain.models.ToolRisk
 import ai.agent.android.domain.repositories.ApiKeyRepository
 import ai.agent.android.domain.repositories.LocalToolExecutor
@@ -39,8 +40,9 @@ class ToolRepositoryImplTest {
     @Before
     fun setup() {
         every { mcpClientFactory.create() } returns mcpClient
-        every { settingsRepository.mcpServerUrls } returns flowOf(setOf("http://localhost:8080"))
+        every { settingsRepository.mcpServers } returns flowOf(listOf(McpServerConfig(url = "http://localhost:8080")))
         every { settingsRepository.disabledAppFunctions } returns flowOf(emptySet())
+        every { settingsRepository.disabledMcpTools } returns flowOf(emptySet())
         every { settingsRepository.appFunctionRiskOverrides } returns flowOf(emptyMap())
         coEvery { localAppFunctionManager.getAvailableFunctions() } returns
             listOf(AgentTool("get_system_time", "desc", "{}"))
@@ -208,6 +210,43 @@ class ToolRepositoryImplTest {
         assertTrue("Expected IllegalStateException, got $exception", exception is IllegalStateException)
         assertTrue(exception!!.message!!.contains(toolName))
         assertTrue(exception.message!!.contains("denied"))
+    }
+
+    @Test
+    fun `getAvailableTools filters MCP tools listed in disabledMcpTools`() = runTest {
+        // Two MCP tools advertised; only one is in the disabled set. The disabled id matches
+        // McpServerRepositoryImpl.mcpToolId(serverUrl, toolName) — keep the implementations
+        // in sync if the id format ever changes.
+        val serverUrl = "http://localhost:8080"
+        val disabledId = McpServerRepositoryImpl.mcpToolId(serverUrl = serverUrl, toolName = "shell")
+        coEvery { mcpClient.getTools() } returns listOf(
+            AgentTool(name = "search", description = "Web search", parameters = "{}"),
+            AgentTool(name = "shell", description = "Run shell", parameters = "{}"),
+        )
+        every { settingsRepository.disabledMcpTools } returns flowOf(setOf(disabledId))
+
+        val available = repository.getAvailableTools()
+
+        assertTrue("search must remain available", available.any { it.name == "search" })
+        assertTrue("shell must be filtered out", available.none { it.name == "shell" })
+    }
+
+    @Test
+    fun `executeTool throws when MCP tool is disabled`() = runTest {
+        val serverUrl = "http://localhost:8080"
+        val toolName = "shell"
+        val disabledId = McpServerRepositoryImpl.mcpToolId(serverUrl = serverUrl, toolName = toolName)
+        coEvery { mcpClient.getTools() } returns listOf(
+            AgentTool(name = toolName, description = "Run shell", parameters = "{}"),
+        )
+        every { settingsRepository.disabledMcpTools } returns flowOf(setOf(disabledId))
+
+        val exception = runCatching { repository.executeTool(toolName, "{}") }.exceptionOrNull()
+
+        assertTrue("Expected IllegalArgumentException, got $exception", exception is IllegalArgumentException)
+        assertTrue(exception!!.message!!.contains(toolName))
+        assertTrue(exception.message!!.contains("disabled"))
+        coVerify(exactly = 0) { mcpClient.executeTool(any(), any()) }
     }
 
     @Test

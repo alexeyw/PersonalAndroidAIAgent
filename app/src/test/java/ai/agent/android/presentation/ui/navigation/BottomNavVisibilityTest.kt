@@ -68,7 +68,6 @@ class BottomNavVisibilityTest {
     fun `tools deep screens show the bar`() {
         assertExpectations(
             NavRoutes.TOOL_DETAIL to true,
-            NavRoutes.ADD_MCP_SERVER to true,
         )
     }
 

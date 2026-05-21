@@ -1,6 +1,8 @@
 package ai.agent.android.presentation.ui.tools
 
 import ai.agent.android.domain.models.AgentTool
+import ai.agent.android.domain.models.McpConnectionStatus
+import ai.agent.android.domain.models.McpServerConfig
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
@@ -17,26 +19,26 @@ class ToolsScreenTest {
 
     @Test
     fun testToolsScreen_displaysToolsAndMcpServers() {
-        // Mock the ViewModel
         val mockViewModel = mockk<ToolsViewModel>(relaxed = true)
-
-        // Prepare fake state
         val fakeState = MutableStateFlow(
             ToolsUiState(
                 localTools = listOf(AgentTool("MockTool", "MockDescription", "{}")),
-                mcpServers = listOf("http://mockserver.com"),
+                mcpServers = listOf(
+                    McpServerSnapshot(
+                        config = McpServerConfig(url = "http://mockserver.com"),
+                        status = McpConnectionStatus.Connected,
+                        tools = emptyList(),
+                    ),
+                ),
                 disabledAppFunctions = setOf(),
             ),
         )
-
         every { mockViewModel.uiState } returns fakeState
 
-        // Launch UI
         composeTestRule.setContent {
             ToolsScreen(viewModel = mockViewModel)
         }
 
-        // Verify elements
         composeTestRule.onNodeWithText("MockTool").assertIsDisplayed()
         composeTestRule.onNodeWithText("MockDescription").assertIsDisplayed()
         composeTestRule.onNodeWithText("http://mockserver.com").assertIsDisplayed()

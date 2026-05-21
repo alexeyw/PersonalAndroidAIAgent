@@ -38,11 +38,6 @@ class ToolsContentSnapshotTest {
     }
 
     @Test
-    fun tools_default_with_form_light() = snapshot(name = "default_with_form", dark = false) {
-        ToolsContent(state = ToolsPreview.defaultWithForm())
-    }
-
-    @Test
     fun tools_loading_light() = snapshot(name = "loading", dark = false) {
         ToolsContent(state = ToolsPreview.loading())
     }
@@ -64,12 +59,17 @@ class ToolsContentSnapshotTest {
 
     @Test
     fun add_mcp_default_light() = snapshot(name = "add_mcp_default", dark = false) {
-        AddMcpServerContent(state = ToolsPreview.addMcpDefault())
+        McpServerConfigContent(form = ToolsPreview.addMcpDefault())
     }
 
     @Test
     fun add_mcp_invalid_light() = snapshot(name = "add_mcp_invalid", dark = false) {
-        AddMcpServerContent(state = ToolsPreview.addMcpInvalid())
+        McpServerConfigContent(form = ToolsPreview.addMcpInvalid())
+    }
+
+    @Test
+    fun edit_mcp_with_headers_light() = snapshot(name = "edit_mcp_with_headers", dark = false) {
+        McpServerConfigContent(form = ToolsPreview.editMcpWithHeaders())
     }
 
     private fun snapshot(name: String, dark: Boolean, content: @Composable () -> Unit) {
@@ -145,13 +145,6 @@ internal object ToolsPreview {
         mcpServers = servers(),
     )
 
-    fun defaultWithForm(): ToolsViewState = ToolsViewState(
-        visualState = ToolsVisualState.Default,
-        builtInTools = builtIns(),
-        mcpServers = servers(),
-        addServerForm = AddMcpServerForm(url = ""),
-    )
-
     fun error(): ToolsViewState = ToolsViewState(
         visualState = ToolsVisualState.Error,
         errorMessage = "Tool discovery handshake failed: connection refused.",
@@ -183,10 +176,18 @@ internal object ToolsPreview {
         enabled = false,
     )
 
-    fun addMcpDefault(): AddMcpServerViewState = AddMcpServerViewState(url = "https://server.example.com/mcp")
+    fun addMcpDefault(): AddMcpServerForm = AddMcpServerForm(url = "https://server.example.com/mcp")
 
-    fun addMcpInvalid(): AddMcpServerViewState = AddMcpServerViewState(
+    fun addMcpInvalid(): AddMcpServerForm = AddMcpServerForm(
         url = "server.example.com",
         urlError = "URL must start with http:// or https://.",
+    )
+
+    fun editMcpWithHeaders(): AddMcpServerForm = AddMcpServerForm(
+        url = "https://hf.example/mcp",
+        name = "HuggingFace MCP",
+        transport = McpTransportOption.StreamableHttp,
+        headers = listOf(McpHeaderRow(key = "Authorization", value = "Bearer hf_secret")),
+        editingUrl = "https://hf.example/mcp",
     )
 }

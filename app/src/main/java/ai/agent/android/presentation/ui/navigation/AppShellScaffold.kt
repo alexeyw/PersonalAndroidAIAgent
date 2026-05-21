@@ -163,7 +163,7 @@ internal fun String.belongsToTab(tab: TabDestination): Boolean = when (tab.route
     NavRoutes.TOOLS ->
         this == NavRoutes.TOOLS ||
             this == NavRoutes.TOOL_DETAIL ||
-            this == NavRoutes.ADD_MCP_SERVER
+            this == NavRoutes.MCP_SERVER_CONFIG
     NavRoutes.MORE ->
         this == NavRoutes.MORE ||
             this == NavRoutes.MEMORY ||

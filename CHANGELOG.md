@@ -15,6 +15,47 @@ details.
 
 ### Added
 
+- **Tools — full MCP server configuration** (Phase 22 / Task 10/17) —
+  Each MCP server now carries a full [McpServerConfig]: optional
+  display name, transport selection (SSE via Koog's
+  `defaultSseTransport`; Streamable HTTP via the upstream MCP
+  Kotlin SDK's `HttpClient.mcpStreamableHttpTransport` extension —
+  both end-to-end wired against real servers), a typed
+  authentication selector (None / Bearer / Basic / API Key) with
+  per-scheme fields, and arbitrary request headers for advanced
+  overrides. Adding and editing happen on a
+  dedicated full-screen `McpServerConfigScreen` (route
+  `tools/mcp-config?originalUrl={url}`) — the row's overflow ⋮
+  menu (Refresh / Edit / Remove) opens it pre-filled, the
+  `+ Add MCP` link opens it blank, and Save / Cancel pop back to
+  the list. KoogMcpClient now configures the Ktor `defaultRequest`
+  block with the user-supplied headers so they reach both the SSE
+  handshake and every subsequent JSON-RPC call. Persistence
+  switched from a `stringSet` of URLs to a JSON-encoded list of
+  configs in the new `mcp_servers_json` key — the manager one-shot
+  migrates the legacy key on the first read, and writes the new
+  shape on the next mutation.
+- **Tools — MCP per-tool detail and tool-list fetcher** (Phase 22 /
+  Task 10/17) — Tools surface now drives a real
+  `tools/list` MCP round-trip through the new
+  `McpServerRepository` (data impl: `McpServerRepositoryImpl`).
+  Per-server snapshots in `ToolsUiState` carry the live
+  `McpConnectionStatus` (`Connecting` / `Connected` /
+  `Error(reason)`) and the discovered `McpTool` list — both
+  rendered in the catalog under the expanded server row. Tool
+  list responses are cached for 5 minutes; the trailing refresh
+  icon on every server row force-bypasses the cache. Per-MCP-tool
+  `ToolDetailScreen` now resolves a real
+  `McpTool.inputSchemaJson` instead of the placeholder, and
+  local AppFunction tools render their actual
+  `AgentTool.parameters` (no more cosmetic `{ "...": ... }`
+  stub). New `disabledMcpTools` set in `SettingsRepository`
+  (keyed by `mcp:<sha8(serverUrl)>:<toolName>`) tracks the
+  per-MCP-tool enabled state independently of
+  `disabledAppFunctions`. Standalone `AddMcpServerScreen` route
+  + file deleted — the inline add-form on `ToolsScreen` is the
+  single entry point.
+
 - **Settings — redesign + full backend wiring** (Phase 22 / Task 9/17) —
   Settings was rewritten end-to-end to match the new mockup. New surface
   hosts nine cards: identity (device-id + Keystore probe), system

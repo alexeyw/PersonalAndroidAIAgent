@@ -20,7 +20,7 @@ import ai.agent.android.presentation.ui.settings.provider.ProviderPickerScreen
 import ai.agent.android.presentation.ui.splash.SplashScreen
 import ai.agent.android.presentation.ui.taskmonitor.TaskMonitorScreen
 import ai.agent.android.presentation.ui.taskmonitor.TaskMonitorViewModel
-import ai.agent.android.presentation.ui.tools.AddMcpServerScreen
+import ai.agent.android.presentation.ui.tools.McpServerConfigScreen
 import ai.agent.android.presentation.ui.tools.ToolDetailScreen
 import ai.agent.android.presentation.ui.tools.ToolsScreen
 import androidx.compose.foundation.layout.fillMaxSize
@@ -197,7 +197,10 @@ fun AppNavGraph(navController: NavHostController, showOnboarding: Boolean, modif
             ToolsScreen(
                 modifier = Modifier.fillMaxSize(),
                 onBack = { navController.popBackStack() },
-                onOpenAddMcpServer = { navController.navigate(NavRoutes.ADD_MCP_SERVER) },
+                onAddMcpServer = { navController.navigate(NavRoutes.MCP_SERVER_CONFIG_ADD) },
+                onEditMcpServer = { originalUrl ->
+                    navController.navigate(NavRoutes.mcpServerConfigEditRoute(originalUrl = originalUrl))
+                },
                 onOpenToolDetail = { toolId ->
                     // AppFunction-shaped tool ids embed `/` and `#` (e.g.
                     // `<pkg>/<FQN>#invoke`). Percent-encode them via
@@ -225,14 +228,22 @@ fun AppNavGraph(navController: NavHostController, showOnboarding: Boolean, modif
                 modifier = Modifier.fillMaxSize(),
             )
         }
-        composable(NavRoutes.ADD_MCP_SERVER) {
-            AddMcpServerScreen(
+        composable(
+            route = NavRoutes.MCP_SERVER_CONFIG,
+            arguments = listOf(
+                navArgument(NavRoutes.MCP_SERVER_CONFIG_URL_ARG) {
+                    type = NavType.StringType
+                    nullable = true
+                    defaultValue = null
+                },
+            ),
+        ) {
+            McpServerConfigScreen(
+                onDone = { navController.popBackStack() },
                 onCancel = { navController.popBackStack() },
-                onSubmitted = { navController.popBackStack() },
                 modifier = Modifier.fillMaxSize(),
             )
         }
-
         // ─── More tab and its secondary screens ────────────────────────────
         composable(NavRoutes.MORE) {
             MoreScreen(
