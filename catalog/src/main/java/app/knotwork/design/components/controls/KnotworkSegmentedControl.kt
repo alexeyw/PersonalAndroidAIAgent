@@ -69,11 +69,11 @@ fun KnotworkSegmentedControl(
                             },
                         )
                         .clickable(onClick = { onSelect(index) })
-                        .padding(horizontal = KnotworkTheme.spacing.sp3),
+                        .padding(horizontal = KnotworkTheme.spacing.sp2),
                 ) {
                     Text(
                         text = label,
-                        style = KnotworkTextStyles.BodySm.copy(
+                        style = KnotworkTextStyles.LabelMd.copy(
                             fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
                         ),
                         color = if (selected) {
@@ -81,6 +81,9 @@ fun KnotworkSegmentedControl(
                         } else {
                             KnotworkTheme.extended.onSurfaceMuted
                         },
+                        maxLines = 1,
+                        softWrap = false,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                     )
                 }
             }

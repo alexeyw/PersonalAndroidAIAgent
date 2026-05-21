@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -226,7 +227,6 @@ private fun SettingsBody(state: SettingsViewState, callbacks: SettingsCallbacks,
         MemoryCard(state = state.memory, callbacks = callbacks)
         NotificationsCard(state = state.notifications, callbacks = callbacks)
         PrivacyCard(state = state.privacy, callbacks = callbacks)
-        Spacer(modifier = Modifier.height(KnotworkTheme.spacing.sp6))
     }
 }
 
@@ -315,15 +315,16 @@ private fun SystemInstructionsCard(state: SystemInstructionsCardState, callbacks
                 .fillMaxWidth()
                 .testTag(SYSTEM_INSTRUCTIONS_FIELD_TEST_TAG),
         )
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp1),
+        // Variables row is horizontally scrollable so the six default chips
+        // (`$DATE`, `$TIME`, `$LANG`, `$LOCATION`, `$USER`, `$DEVICE`) keep
+        // their natural width regardless of screen size. A non-scrollable
+        // `Row` would force each child to compress on a 360 dp screen and
+        // wrap the label inside the chip ("$LOC ATION").
+        androidx.compose.foundation.lazy.LazyRow(
+            horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp2),
             modifier = Modifier.fillMaxWidth(),
         ) {
-            // Variable chips wrap into multiple rows via a simple horizontal Row +
-            // FlowRow-equivalent (custom layout) — keep it minimal with an
-            // overflowing Row scrollable horizontally so 6 chips always fit.
-            state.variableChips.forEach { placeholder ->
+            items(items = state.variableChips, key = { it }) { placeholder ->
                 KnotworkChip(
                     label = placeholder,
                     style = ChipStyle.Outline,
@@ -381,8 +382,9 @@ private fun RestrictionsCard(state: RestrictionsCardState, callbacks: SettingsCa
         ) {
             Text(
                 text = androidx.compose.ui.res.stringResource(R.string.knotwork_settings_restrictions_approve),
-                style = KnotworkTextStyles.BodyBase,
+                style = KnotworkTextStyles.BodySm.copy(fontWeight = FontWeight.SemiBold),
                 color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 2,
                 modifier = Modifier.weight(1f),
             )
             KnotworkSegmentedControl(
@@ -450,7 +452,7 @@ private fun IconToggleRow(
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = title,
-                style = KnotworkTextStyles.BodyBase.copy(fontWeight = FontWeight.SemiBold),
+                style = KnotworkTextStyles.BodySm.copy(fontWeight = FontWeight.SemiBold),
                 color = MaterialTheme.colorScheme.onSurface,
             )
             Text(
@@ -487,7 +489,7 @@ private fun IconValueRow(icon: ImageVector, title: String, subtitle: String, val
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = title,
-                style = KnotworkTextStyles.BodyBase.copy(fontWeight = FontWeight.SemiBold),
+                style = KnotworkTextStyles.BodySm.copy(fontWeight = FontWeight.SemiBold),
                 color = MaterialTheme.colorScheme.onSurface,
             )
             Text(
@@ -527,7 +529,7 @@ private fun LlmParametersCard(state: LlmParametersCardState, callbacks: Settings
                 Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Text(
                         text = slider.title,
-                        style = KnotworkTextStyles.BodyBase.copy(fontWeight = FontWeight.SemiBold),
+                        style = KnotworkTextStyles.BodySm.copy(fontWeight = FontWeight.SemiBold),
                         color = MaterialTheme.colorScheme.onSurface,
                         modifier = Modifier.weight(1f),
                     )
@@ -599,8 +601,11 @@ private fun LocalModelCard(state: LocalModelCardState, callbacks: SettingsCallba
                     ) {
                         Text(
                             text = modelName,
-                            style = KnotworkTextStyles.BodyBase.copy(fontWeight = FontWeight.SemiBold),
+                            style = KnotworkTextStyles.BodySm.copy(fontWeight = FontWeight.SemiBold),
                             color = MaterialTheme.colorScheme.onSurface,
+                            maxLines = 1,
+                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f, fill = false),
                         )
                         if (state.modelName != null) {
                             ActivePill()
@@ -611,6 +616,8 @@ private fun LocalModelCard(state: LocalModelCardState, callbacks: SettingsCallba
                             text = state.metaLine,
                             style = KnotworkTextStyles.MonoSm,
                             color = KnotworkTheme.extended.onSurfaceMuted,
+                            maxLines = 2,
+                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                         )
                     }
                 }
@@ -647,7 +654,7 @@ private fun LocalModelCard(state: LocalModelCardState, callbacks: SettingsCallba
                         text = androidx.compose.ui.res.stringResource(
                             R.string.knotwork_settings_local_model_backend_title,
                         ),
-                        style = KnotworkTextStyles.BodyBase.copy(fontWeight = FontWeight.SemiBold),
+                        style = KnotworkTextStyles.BodySm.copy(fontWeight = FontWeight.SemiBold),
                         color = MaterialTheme.colorScheme.onSurface,
                     )
                     Text(
@@ -699,7 +706,7 @@ private fun LocalModelCard(state: LocalModelCardState, callbacks: SettingsCallba
                     text = androidx.compose.ui.res.stringResource(
                         R.string.knotwork_settings_local_model_test_title,
                     ),
-                    style = KnotworkTextStyles.BodyBase.copy(fontWeight = FontWeight.SemiBold),
+                    style = KnotworkTextStyles.BodySm.copy(fontWeight = FontWeight.SemiBold),
                     color = MaterialTheme.colorScheme.onSurface,
                 )
                 Text(
@@ -788,7 +795,7 @@ private fun ProviderNavRow(row: ProviderRowState, onClick: () -> Unit) {
             ) {
                 Text(
                     text = row.title,
-                    style = KnotworkTextStyles.BodyBase.copy(fontWeight = FontWeight.SemiBold),
+                    style = KnotworkTextStyles.BodySm.copy(fontWeight = FontWeight.SemiBold),
                     color = MaterialTheme.colorScheme.onSurface,
                 )
                 if (row.isLan) {
@@ -861,7 +868,7 @@ private fun MemoryCard(state: MemoryCardState, callbacks: SettingsCallbacks) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     text = state.autoSummarizeLabel,
-                    style = KnotworkTextStyles.BodyBase.copy(fontWeight = FontWeight.SemiBold),
+                    style = KnotworkTextStyles.BodySm.copy(fontWeight = FontWeight.SemiBold),
                     color = MaterialTheme.colorScheme.onSurface,
                     modifier = Modifier.weight(1f),
                 )
@@ -886,7 +893,7 @@ private fun MemoryCard(state: MemoryCardState, callbacks: SettingsCallbacks) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = state.embeddingTitle,
-                    style = KnotworkTextStyles.BodyBase.copy(fontWeight = FontWeight.SemiBold),
+                    style = KnotworkTextStyles.BodySm.copy(fontWeight = FontWeight.SemiBold),
                     color = MaterialTheme.colorScheme.onSurface,
                 )
                 Text(
@@ -1114,6 +1121,7 @@ private const val ACTIVE_PILL_ALPHA = 0.18f
 /**
  * Relative weight of the trailing segmented control inside the restrictions
  * card's "Approve tool calls" row. The label takes weight 1 and the
- * segmented control takes 1.5 so the three options stay readable.
+ * segmented control takes 2.5 so each of the three options has enough
+ * width for the longest label ("Sensitive +") at the default font scale.
  */
-private const val SEGMENTED_TRAILING_WEIGHT = 1.5f
+private const val SEGMENTED_TRAILING_WEIGHT = 2.5f

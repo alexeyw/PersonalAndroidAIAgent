@@ -56,7 +56,6 @@
             column="13"/>
     </issue>
 
-
     <issue
         id="ConfigurationScreenWidthHeight"
         message="Using Configuration.screenHeightDp instead of LocalWindowInfo.current.containerSize"
@@ -181,29 +180,18 @@
         errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="../catalog/src/main/res/values/strings.xml"
-            line="205"
+            line="204"
             column="13"/>
     </issue>
 
     <issue
         id="UnusedResources"
         message="The resource `R.string.knotwork_settings_restart_required` appears to be unused"
-        errorLine1="    &lt;string name=&quot;knotwork_settings_restart_required&quot;>Changes take effect on restart.&lt;/string>"
+        errorLine1="    &lt;string name=&quot;knotwork_settings_restart_required&quot;>Backend change requires restart.&lt;/string>"
         errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="../catalog/src/main/res/values/strings.xml"
-            line="253"
-            column="13"/>
-    </issue>
-
-    <issue
-        id="UnusedResources"
-        message="The resource `R.string.knotwork_settings_destructive_confirm_message` appears to be unused"
-        errorLine1="    &lt;string name=&quot;knotwork_settings_destructive_confirm_message&quot;>This action cannot be undone.&lt;/string>"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="../catalog/src/main/res/values/strings.xml"
-            line="256"
+            line="285"
             column="13"/>
     </issue>
 
@@ -214,7 +202,7 @@
         errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/res/values/strings_chat.xml"
-            line="124"
+            line="127"
             column="13"/>
     </issue>
 
@@ -225,7 +213,7 @@
         errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/res/values/strings_chat.xml"
-            line="125"
+            line="128"
             column="13"/>
     </issue>
 
@@ -236,7 +224,7 @@
         errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/res/values/strings_chat.xml"
-            line="128"
+            line="131"
             column="13"/>
     </issue>
 

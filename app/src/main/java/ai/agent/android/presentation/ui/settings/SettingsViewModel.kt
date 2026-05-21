@@ -26,6 +26,8 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.update
@@ -94,7 +96,23 @@ class SettingsViewModel @Inject constructor(
     init {
         loadIdentity()
         loadVariableCatalog()
-        observePreferences()
+        // Restart-required baselines MUST be locked in before live observers
+        // start emitting. Reactive DataStore / EncryptedPrefs flows can deliver
+        // a transient seed value (null / default) before the persisted one
+        // settles; capturing the baseline from the first such emission would
+        // race the steady-state value and mis-flag the very next emission as
+        // a "change", surfacing a spurious restart banner on every open. By
+        // gating `observePreferences()` on the completion of the baseline
+        // `.first()` reads we guarantee that — on a fresh VM — baseline ==
+        // persisted == first observed value, so restart-required stays false
+        // until the user actually changes something.
+        viewModelScope.launch {
+            appliedBackend = settingsRepository.localModelBackend.first()
+            hasCapturedBackendBaseline = true
+            appliedOllamaBaseUrl = apiKeyRepository.getOllamaBaseUrl().firstOrNull()
+            hasCapturedOllamaBaseline = true
+            observePreferences()
+        }
     }
 
     // ─── Initial loads ──────────────────────────────────────────────────────
@@ -158,10 +176,6 @@ class SettingsViewModel @Inject constructor(
         }.launchIn(viewModelScope)
 
         settingsRepository.localModelBackend.onEach { value ->
-            if (!hasCapturedBackendBaseline) {
-                appliedBackend = value
-                hasCapturedBackendBaseline = true
-            }
             _uiState.update {
                 it.copy(
                     localModelBackend = value,
@@ -201,10 +215,6 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch {
             combineProviderFlows().collect { summaries ->
                 val ollamaUrl = summaries.ollamaBaseUrl()
-                if (!hasCapturedOllamaBaseline) {
-                    appliedOllamaBaseUrl = ollamaUrl
-                    hasCapturedOllamaBaseline = true
-                }
                 _uiState.update {
                     it.copy(
                         providers = summaries,
