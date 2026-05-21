@@ -59,4 +59,16 @@ interface LocalModelRepository {
      * primary "Browse models" CTA.
      */
     fun observeActiveModelMeta(): Flow<ActiveModelMeta?>
+
+    /**
+     * Returns `true` when a model with the given on-disk [fileName] is
+     * already present in the local database. Used by the onboarding flow
+     * to gate the step-2 download — if the user re-opens onboarding
+     * after a previous install, the matching row immediately renders as
+     * "Installed" and the CTA stays enabled without re-downloading.
+     *
+     * Matching is performed against [LocalModel.name] (the filename the
+     * download manager wrote to disk), case-sensitive.
+     */
+    suspend fun isInstalled(fileName: String): Boolean
 }

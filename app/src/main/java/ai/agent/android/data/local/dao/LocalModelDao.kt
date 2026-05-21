@@ -75,4 +75,15 @@ interface LocalModelDao {
      */
     @Query("UPDATE local_models SET isActive = 1 WHERE id = :id")
     suspend fun activateModelById(id: Long)
+
+    /**
+     * Returns the number of rows whose [LocalModelEntity.name] matches
+     * [fileName] exactly. Used by [LocalModelRepository.isInstalled] to
+     * avoid loading the full table just to test presence.
+     *
+     * @param fileName the on-disk filename to look up.
+     * @return row count (0 when not installed, >= 1 when installed).
+     */
+    @Query("SELECT COUNT(*) FROM local_models WHERE name = :fileName")
+    suspend fun countByName(fileName: String): Int
 }

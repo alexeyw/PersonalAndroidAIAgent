@@ -92,15 +92,49 @@ data class OnboardingDefaultPipelinePreview(
  * @property defaultPipelinePreview compact recap of the bundled default
  * pipeline rendered on step 4. `null` is permitted for snapshot tests
  * that drive earlier steps.
+ * @property downloadProgress current download progress on step 2.
+ * `null` = idle (no download in flight), `0f..1f` = active download
+ * (linear indicator overlays the picked row).
+ * @property downloadError last download / load failure message, or
+ * `null` when nothing has failed since the user last selected a model.
+ * Rendered as an inline banner below the picker.
+ * @property installedModelId stable catalog id of the model that is
+ * already installed (either re-detected on entry or set after a
+ * successful download). When non-`null` on step 2 the picked row shows
+ * an "Installed" pill and the CTA becomes enabled.
+ * @property customDownloadUrl user-supplied URL bound to the
+ * `OnboardingLiteRtModel.CustomUrl` row; ignored for the bundled
+ * presets.
+ * @property isModelWarmed `true` once the host has loaded the model
+ * into the inference engine. Gates the step-4 "Open chat" CTA so the
+ * user cannot land in Chat with a cold handle.
  */
 data class OnboardingViewState(
     val step: OnboardingStep = OnboardingStep.Welcome,
     val liteRtModel: OnboardingLiteRtModel = OnboardingLiteRtModel.Gemma4E2B,
     val configuredCloudProviders: Set<String> = emptySet(),
     val defaultPipelinePreview: OnboardingDefaultPipelinePreview? = null,
+    val downloadProgress: Float? = null,
+    val downloadError: String? = null,
+    val installedModelId: String? = null,
+    val customDownloadUrl: String = "",
+    val isModelWarmed: Boolean = false,
 ) {
-    /** The primary CTA is always enabled — every step has a meaningful action. */
-    val isPrimaryCtaEnabled: Boolean get() = true
+    /**
+     * Primary CTA enablement matrix:
+     *  - Welcome / CloudKeys — always enabled (cloud keys are optional);
+     *  - LiteRtModel — enabled only when the picked model is already
+     *    installed or a download is in flight (so the user can't advance
+     *    without ending up with an active model);
+     *  - Ready — enabled only after the host has warmed the inference
+     *    handle, so chat will work on the first send.
+     */
+    val isPrimaryCtaEnabled: Boolean
+        get() = when (step) {
+            OnboardingStep.Welcome, OnboardingStep.CloudKeys -> true
+            OnboardingStep.LiteRtModel -> installedModelId != null || downloadProgress != null
+            OnboardingStep.Ready -> isModelWarmed
+        }
 
     /** Convenience: are we on the final step? */
     val isFinalStep: Boolean get() = step == OnboardingStep.Ready
@@ -117,6 +151,18 @@ class OnboardingCallbacks(
     val onFinish: () -> Unit = {},
     val onLiteRtModelPick: (OnboardingLiteRtModel) -> Unit = {},
     val onConfigureCloudProvider: (OnboardingCloudProvider) -> Unit = {},
+    /**
+     * Invoked when the user taps the step-2 CTA to begin a model
+     * download. The host (`OnboardingViewModel`) resolves the picked
+     * model to its URL / filename and starts the download stream.
+     */
+    val onStartDownload: () -> Unit = {},
+    /**
+     * Invoked on every character change in the `Custom URL` input. The
+     * host stores the latest value in `customDownloadUrl` and uses it
+     * when [onStartDownload] fires for the `CustomUrl` row.
+     */
+    val onCustomDownloadUrlChanged: (String) -> Unit = {},
 )
 
 /** Convenience factory returning a callbacks bundle that ignores every event. */

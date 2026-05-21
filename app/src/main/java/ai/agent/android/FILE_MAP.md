@@ -100,6 +100,7 @@ This file maps the contents of the main application package.
   - `constants/` - Domain-level constants.
     - `DefaultPrompts.kt` - Default system prompts.
     - `NotificationChannels.kt` - Canonical ids of every Android `NotificationChannel` (foreground service status, approval prompts).
+    - `OnboardingModelCatalog.kt` - Maps the catalog-side `OnboardingLiteRtModel.id` (`gemma_4_e2b` / `gemma_4_e4b`) to the on-disk filename + HuggingFace URL consumed by `OnboardingViewModel.startDownload` and `LocalModelRepository.isInstalled`. Also derives a filename from the user-supplied custom URL row.
     - `PipelineExecutionDefaults.kt` - Engine-level timing and log-size constants consumed by `GraphExecutionEngine` and the LLM-backed node executors (post-emit pause, LiteRT pre-warm delay, node-IO log char limit).
     - `SettingsDefaults.kt` - Default values for every user-tunable preference (sampling params, timeouts, pipeline-step bounds, Ollama context window). Single source of truth shared by `SettingsManager`, `SettingsViewModel`, and the visual orchestrator.
     - `TimeAndIdConstants.kt` - Cross-module numeric constants for time-unit conversion (`MS_PER_SECOND`, `MS_PER_MINUTE`) and the notification-id partition range shared by approval-publish/receive paths.
@@ -229,9 +230,9 @@ This file maps the contents of the main application package.
       - `KnotworkModalRoute.kt` - Generic `ModalBottomSheet` + `PredictiveBackHandler` wrapper reused by every modal-sheet route (`NodeConfigSheet`, `ConsolePane`, `AddMcpServerScreen` — bodies arrive in Tasks 6/7/10).
       - `AppShellScaffold.kt` - Root scaffold: bottom-nav chrome, tab-switch state preservation, root-tab `BackHandler = activity.finish()`, theme-flip crossfade.
       - `AppNavGraph.kt` - The single `NavHost` for the app, hosting splash → onboarding → tabs (Chat / Pipelines nested-graph / Tools / More) + secondary screens + modal-sheet placeholders. Reads `isFirstLaunch` to drive the onboarding gate.
-    - `onboarding/` - First-launch onboarding gate (Phase 21 / Task 4 stub; full pager in Task 10).
-      - `OnboardingScreen.kt` - Single-screen welcome + Get-started CTA; flips `SettingsRepository.isFirstLaunch` once on completion.
-      - `OnboardingViewModel.kt` - Hilt ViewModel; persists `isFirstLaunch = false`.
+    - `onboarding/` - First-launch onboarding gate with the 4-step Knotwork pager (Phase 22 / Task 12 wired the real download / model-load flow on top of the Phase 21 catalog surface).
+      - `OnboardingScreen.kt` - Composable entry: subscribes to `OnboardingViewModel.state`, forwards finish/skip callbacks into the nav-graph, hosts a `SnackbarHost` for the skip-flow hint emitted on `OnboardingViewModel.skipSnackbarEvents`.
+      - `OnboardingViewModel.kt` - Hilt ViewModel orchestrating the download + warm-up flow. Injects `LocalModelRepository`, `ModelDownloadManager`, `LoadModelUseCase`; folds `DownloadState` into the catalog `OnboardingViewState`, persists the freshly-downloaded `LocalModel`, runs `LoadModelUseCase` to warm the inference handle, and emits one-shot snackbar pings on skip. Sets `hasCompletedOnboarding` on finish / skip.
     - `more/` - "More" tab landing screen.
       - `MoreScreen.kt` - Material3 `ListItem` list with Memory / Models / Prompts / Task monitor / Live metrics / Settings / About rows.
     - `about/` - About screen (Phase 21 / Task 4 stub; full body in Task 10).
