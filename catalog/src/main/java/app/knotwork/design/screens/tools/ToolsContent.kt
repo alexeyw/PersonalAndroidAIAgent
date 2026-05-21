@@ -665,6 +665,11 @@ fun ToolDetailContent(
     Scaffold(
         modifier = modifier.fillMaxSize(),
         containerColor = MaterialTheme.colorScheme.surface,
+        // The outer `AppShellScaffold` already absorbs the system navigation
+        // bar (and the in-app bottom-nav strip). Letting this Scaffold default
+        // to `safeDrawing` would double-count the bottom inset and leave a
+        // visible gap under the schema box.
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
             TopAppBar(
                 title = {
