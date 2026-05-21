@@ -13,6 +13,7 @@ import app.knotwork.design.screens.memory.MemoryContent
 import app.knotwork.design.screens.memory.MemoryPreview
 import app.knotwork.design.screens.pipelines.PipelineLibraryContent
 import app.knotwork.design.screens.pipelines.PipelineLibraryPreview
+import app.knotwork.design.screens.tools.ToolDetailContent
 import app.knotwork.design.screens.tools.ToolsContent
 import app.knotwork.design.screens.tools.ToolsPreview
 import app.knotwork.design.theme.KnotworkTheme
@@ -69,6 +70,19 @@ class A11yMatrixSnapshotTest {
         fontScale = LARGEST_FONT_SCALE,
     ) {
         ToolsContent(state = ToolsPreview.default())
+    }
+
+    @Test
+    fun tool_detail_default_font_scale_2() = a11ySnapshot(
+        name = "tool_detail_default",
+        fontScale = LARGEST_FONT_SCALE,
+    ) {
+        // Locks the `ToolDetailScreen` 200 %-fontScale frame so the
+        // `Modifier.horizontalScroll` schema-preview gate (added in Phase 22
+        // / Task 11) keeps long JSON-Schema lines scrollable instead of
+        // wrapping. Captures the layout proof for the spec rule in
+        // `screens/README.md §C4 ToolDetailScreen`.
+        ToolDetailContent(state = ToolsPreview.toolDetailDefault())
     }
 
     @Test
