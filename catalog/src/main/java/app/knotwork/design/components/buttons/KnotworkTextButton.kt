@@ -3,84 +3,93 @@ package app.knotwork.design.components.buttons
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.unit.dp
+import androidx.compose.ui.text.style.TextOverflow
 import app.knotwork.design.theme.KnotworkTheme
-import app.knotwork.design.tokens.KnotworkTextStyles
-
-/** Text-button visual height; touch target stays ≥ 48 dp via `defaultMinSize`. */
-private val TextButtonHeight = 48.dp
-
-/** Diameter of the leading icon when supplied. */
-private val LeadingIconSize = 16.dp
 
 /**
- * Knotwork text button — chrome-less, label-only.
+ * Knotwork **text** button — chrome-less, label-only.
  *
- * Visual contract (see `compose/components/README.md` §Buttons):
- *  - Label `LabelLg`, colour defaults to `extended.onSurface2`.
- *  - When [destructive] is `true`, the label switches to
- *    `extended.riskDestructive` — used inline next to the HITL Sensitive
- *    "Always allow" chip and for "Delete" / "Cancel" affordances inside
- *    bottom sheets.
- *  - Touch target floors at 48 dp, the visual hugs the text.
+ * Mirrors `project_docs/buttons.md § KnotworkTextButton`:
+ *  - Container: `Color.Transparent`.
+ *  - Label: `colorScheme.primary` (or `extended.riskDestructive` when
+ *    [destructive] is `true`).
+ *  - Shape: `KnotworkTheme.shapes.full` (pill) for the press-state
+ *    ripple, so the highlight stays consistent with filled siblings.
+ *  - Touch target floors at 48 × 48 dp via
+ *    `Modifier.minimumInteractiveComponentSize()`.
  *
  * @param text user-visible label.
  * @param onClick invoked on tap; gated to no-op when [enabled] is `false`.
  * @param modifier optional layout modifier applied to the button root.
- * @param enabled when `false`, the button is non-interactive and renders the
- * disabled palette.
- * @param destructive when `true`, recolours the label with
- * `extended.riskDestructive`.
- * @param leadingIcon optional vector rendered before the label (16 dp).
+ * @param size visual tier — see [KnotworkButtonSize].
+ * @param enabled disables interactivity + applies the disabled palette
+ *   when `false`.
+ * @param destructive recolours the label with `extended.riskDestructive`.
+ * @param leadingIcon optional leading glyph.
  */
+@Suppress("LongParameterList") // Brand-stable public API.
 @Composable
 fun KnotworkTextButton(
     text: String,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    size: KnotworkButtonSize = KnotworkButtonSize.Md,
     enabled: Boolean = true,
     destructive: Boolean = false,
     leadingIcon: ImageVector? = null,
 ) {
-    val accent = if (destructive) {
-        KnotworkTheme.extended.riskDestructive
-    } else {
-        KnotworkTheme.extended.onSurface2
+    val accent = when {
+        destructive -> KnotworkTheme.extended.riskDestructive
+        else -> MaterialTheme.colorScheme.primary
     }
+    val visualHeight = KnotworkButtonDefaults.heightFor(size)
     TextButton(
         onClick = onClick,
         enabled = enabled,
-        shape = KnotworkTheme.shapes.md,
+        shape = KnotworkTheme.shapes.full,
         colors = ButtonDefaults.textButtonColors(
             containerColor = Color.Transparent,
             contentColor = accent,
             disabledContainerColor = Color.Transparent,
             disabledContentColor = KnotworkTheme.extended.onSurfaceDim,
         ),
-        modifier = modifier.defaultMinSize(minHeight = TextButtonHeight),
+        contentPadding = KnotworkButtonDefaults.paddingFor(size),
+        modifier = modifier
+            .minimumInteractiveComponentSize()
+            .defaultMinSize(minHeight = visualHeight)
+            .height(visualHeight),
     ) {
         Row(
-            horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp2),
+            horizontalArrangement = Arrangement.spacedBy(KnotworkButtonDefaults.IconGap),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             if (leadingIcon != null) {
                 Icon(
                     imageVector = leadingIcon,
                     contentDescription = null,
-                    modifier = Modifier.size(LeadingIconSize),
+                    modifier = Modifier.size(KnotworkButtonDefaults.iconSizeFor(size)),
                 )
             }
-            Text(text = text, style = KnotworkTextStyles.LabelLg)
+            Text(
+                text = text,
+                style = KnotworkButtonDefaults.textStyleFor(size),
+                maxLines = 1,
+                softWrap = false,
+                overflow = TextOverflow.Ellipsis,
+            )
         }
     }
 }

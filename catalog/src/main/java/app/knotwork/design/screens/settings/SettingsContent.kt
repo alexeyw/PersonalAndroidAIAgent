@@ -919,19 +919,23 @@ private fun MemoryCard(state: MemoryCardState, callbacks: SettingsCallbacks) {
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp2),
         ) {
-            MemoryActionButton(
+            KnotworkSecondaryButton(
                 text = state.exportLabel,
                 onClick = callbacks.onExportMemoryClick,
+                size = app.knotwork.design.components.buttons.KnotworkButtonSize.Sm,
                 modifier = Modifier.weight(1f),
             )
-            MemoryActionButton(
+            KnotworkSecondaryButton(
                 text = state.reembedLabel,
                 onClick = callbacks.onReembedClick,
+                size = app.knotwork.design.components.buttons.KnotworkButtonSize.Sm,
                 modifier = Modifier.weight(1f),
             )
-            MemoryActionButton(
+            KnotworkSecondaryButton(
                 text = state.clearLabel,
                 onClick = callbacks.onClearMemoryClick,
+                size = app.knotwork.design.components.buttons.KnotworkButtonSize.Sm,
+                destructive = true,
                 modifier = Modifier.weight(1f),
             )
         }
@@ -1111,42 +1115,6 @@ private fun DestructiveTypedConfirmDialog(
 // ─── Constants ─────────────────────────────────────────────────────────────
 
 /**
- * Compact outlined action button used by the Memory card's
- * "Export / Re-embed / Clear" trio. Uses a smaller label style and
- * reduced horizontal padding compared to [KnotworkSecondaryButton] so
- * the three buttons fit side-by-side on a 360 dp screen without
- * wrapping labels like "Re-embed". The visual still matches the
- * Knotwork outlined-button treatment (outline-strong border,
- * `extended.onSurface2` text).
- */
-@Composable
-private fun MemoryActionButton(text: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
-    androidx.compose.material3.OutlinedButton(
-        onClick = onClick,
-        shape = KnotworkTheme.shapes.md,
-        border = BorderStroke(width = 1.dp, color = KnotworkTheme.extended.outlineStrong),
-        colors = androidx.compose.material3.ButtonDefaults.outlinedButtonColors(
-            containerColor = androidx.compose.ui.graphics.Color.Transparent,
-            contentColor = KnotworkTheme.extended.onSurface2,
-        ),
-        contentPadding = PaddingValues(
-            horizontal = KnotworkTheme.spacing.sp2,
-            vertical = KnotworkTheme.spacing.sp1,
-        ),
-        modifier = modifier
-            .height(MEMORY_ACTION_BUTTON_HEIGHT),
-    ) {
-        Text(
-            text = text,
-            style = KnotworkTextStyles.LabelMd,
-            maxLines = 1,
-            softWrap = false,
-            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-        )
-    }
-}
-
-/**
  * Compact wrapper around the Material3 [Slider] used by every Settings
  * card. Renders a thinner track + smaller pill-style thumb than the
  * stock control so the slider does not visually dominate the row at
@@ -1238,11 +1206,3 @@ private const val SWITCH_SCALE = 0.78f
 private val COMPACT_SLIDER_THUMB_WIDTH = 4.dp
 private val COMPACT_SLIDER_THUMB_HEIGHT = 18.dp
 private val COMPACT_SLIDER_TRACK_HEIGHT = 4.dp
-
-/**
- * Fixed height of the Memory card's "Export / Re-embed / Clear" trio.
- * Smaller than the catalog `SecondaryButtonHeight` (48 dp) but still
- * inside the touch-target safe zone because the parent Row carries no
- * other interactive overlap.
- */
-private val MEMORY_ACTION_BUTTON_HEIGHT = 44.dp
