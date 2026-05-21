@@ -5,6 +5,7 @@ import ai.agent.android.data.mcp.McpClientFactory
 import ai.agent.android.data.tools.local.LocalAppFunctionManager
 import ai.agent.android.data.tools.local.SearchTool
 import ai.agent.android.domain.models.AgentTool
+import ai.agent.android.domain.models.McpServerConfig
 import ai.agent.android.domain.models.ToolRisk
 import ai.agent.android.domain.repositories.ApiKeyRepository
 import ai.agent.android.domain.repositories.LocalToolExecutor
@@ -39,7 +40,7 @@ class ToolRepositoryImplTest {
     @Before
     fun setup() {
         every { mcpClientFactory.create() } returns mcpClient
-        every { settingsRepository.mcpServerUrls } returns flowOf(setOf("http://localhost:8080"))
+        every { settingsRepository.mcpServers } returns flowOf(listOf(McpServerConfig(url = "http://localhost:8080")))
         every { settingsRepository.disabledAppFunctions } returns flowOf(emptySet())
         every { settingsRepository.disabledMcpTools } returns flowOf(emptySet())
         every { settingsRepository.appFunctionRiskOverrides } returns flowOf(emptyMap())

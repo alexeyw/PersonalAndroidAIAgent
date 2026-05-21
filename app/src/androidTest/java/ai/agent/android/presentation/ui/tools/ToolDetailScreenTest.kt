@@ -3,6 +3,7 @@ package ai.agent.android.presentation.ui.tools
 import ai.agent.android.data.repositories.McpServerRepositoryImpl
 import ai.agent.android.domain.models.AgentTool
 import ai.agent.android.domain.models.McpConnectionStatus
+import ai.agent.android.domain.models.McpServerConfig
 import ai.agent.android.domain.models.McpTool
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -43,7 +44,7 @@ class ToolDetailScreenTest {
             ToolsUiState(
                 mcpServers = listOf(
                     McpServerSnapshot(
-                        url = serverUrl,
+                        config = McpServerConfig(url = serverUrl),
                         status = McpConnectionStatus.Connected,
                         tools = listOf(mcpTool),
                     ),
@@ -73,7 +74,7 @@ class ToolDetailScreenTest {
             ToolsUiState(
                 mcpServers = listOf(
                     McpServerSnapshot(
-                        url = serverUrl,
+                        config = McpServerConfig(url = serverUrl),
                         status = McpConnectionStatus.Error(reason = "handshake failed"),
                         tools = emptyList(),
                     ),

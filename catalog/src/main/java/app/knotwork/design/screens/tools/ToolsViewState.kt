@@ -95,12 +95,50 @@ data class McpToolEntry(
 )
 
 /**
- * State of the inline "Add new MCP server URL" form. Non-null means the
- * form is visible at the bottom of the surface; the host owns the
- * lifecycle.
+ * Transport mode selector shown in the MCP server form. Mirrors
+ * `domain.models.McpTransport` to keep the catalog free of app
+ * dependencies; the host translates between the two.
  */
-data class AddMcpServerForm(val url: String = "", val urlError: String? = null, val submitting: Boolean = false) {
+enum class McpTransportOption(val label: String) {
+    SSE(label = "SSE"),
+    StreamableHttp(label = "Streamable HTTP"),
+}
+
+/** One header key/value pair authored in the MCP server form. */
+data class McpHeaderRow(val key: String = "", val value: String = "")
+
+/**
+ * State of the inline MCP-server form.
+ *
+ * Non-null means the form is visible at the bottom of the surface.
+ * Carries enough state for both Add (when [editingUrl] is null) and
+ * Edit (when [editingUrl] is the original URL of the row being
+ * edited) flows.
+ *
+ * @property url the URL field (required).
+ * @property urlError inline validation error for [url]; null when valid.
+ * @property name optional display label; rendered alongside the URL.
+ * @property transport active transport selection.
+ * @property headers repeating list of header rows ("Authorization",
+ * "Bearer …"). May contain empty rows the user has not finished
+ * filling out.
+ * @property submitting suppresses double-submits while the host is
+ * persisting the change.
+ * @property editingUrl when non-null, the form is in Edit mode; the
+ * host will update the server identified by this URL instead of
+ * appending a new row.
+ */
+data class AddMcpServerForm(
+    val url: String = "",
+    val urlError: String? = null,
+    val name: String = "",
+    val transport: McpTransportOption = McpTransportOption.SSE,
+    val headers: List<McpHeaderRow> = emptyList(),
+    val submitting: Boolean = false,
+    val editingUrl: String? = null,
+) {
     val canSubmit: Boolean get() = url.isNotBlank() && urlError == null && !submitting
+    val isEdit: Boolean get() = editingUrl != null
 }
 
 /**
@@ -133,12 +171,18 @@ class ToolsCallbacks(
     val onToolToggle: (toolId: String, enabled: Boolean) -> Unit = { _, _ -> },
     val onToolClick: (toolId: String) -> Unit = {},
     val onServerRemove: (serverId: String) -> Unit = {},
+    val onServerEdit: (serverId: String) -> Unit = {},
     val onServerExpandToggle: (serverId: String) -> Unit = {},
     val onServerRefresh: (serverId: String) -> Unit = {},
     val onMcpToolToggle: (toolId: String, enabled: Boolean) -> Unit = { _, _ -> },
     val onMcpToolClick: (toolId: String) -> Unit = {},
     val onAddServerOpen: () -> Unit = {},
     val onAddServerUrlChange: (String) -> Unit = {},
+    val onAddServerNameChange: (String) -> Unit = {},
+    val onAddServerTransportSelect: (McpTransportOption) -> Unit = {},
+    val onAddServerHeaderAdd: () -> Unit = {},
+    val onAddServerHeaderChange: (index: Int, key: String, value: String) -> Unit = { _, _, _ -> },
+    val onAddServerHeaderRemove: (index: Int) -> Unit = {},
     val onAddServerSubmit: () -> Unit = {},
     val onAddServerCancel: () -> Unit = {},
     val onErrorRetry: () -> Unit = {},

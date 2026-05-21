@@ -1,5 +1,6 @@
 package ai.agent.android.data.mcp
 
+import ai.agent.android.domain.models.McpServerConfig
 import ai.koog.agents.core.tools.Tool
 import ai.koog.agents.core.tools.ToolDescriptor
 import ai.koog.agents.core.tools.ToolParameterDescriptor
@@ -76,7 +77,7 @@ class KoogMcpClientTest {
         val httpClientField = client.javaClass.getDeclaredField("httpClient")
         httpClientField.isAccessible = true
 
-        val outcome = runCatching { client.connect("http://127.0.0.1:1") }
+        val outcome = runCatching { client.connect(McpServerConfig(url = "http://127.0.0.1:1")) }
 
         assertTrue("Expected connect against unreachable host to fail", outcome.isFailure)
         assertEquals(
@@ -95,7 +96,7 @@ class KoogMcpClientTest {
         httpClientField.isAccessible = true
 
         repeat(3) {
-            runCatching { client.connect("http://127.0.0.1:1") }
+            runCatching { client.connect(McpServerConfig(url = "http://127.0.0.1:1")) }
             assertEquals(
                 "After failed connect #${it + 1} the httpClient field must be null",
                 null,
@@ -112,7 +113,7 @@ class KoogMcpClientTest {
         val httpClientField = client.javaClass.getDeclaredField("httpClient")
         httpClientField.isAccessible = true
 
-        runCatching { client.connect("http://127.0.0.1:1") }
+        runCatching { client.connect(McpServerConfig(url = "http://127.0.0.1:1")) }
         client.disconnect()
 
         assertEquals(null, httpClientField.get(client))

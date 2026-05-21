@@ -15,6 +15,20 @@ details.
 
 ### Added
 
+- **Tools — full MCP server configuration** (Phase 22 / Task 10/17) —
+  Each MCP server now carries a full [McpServerConfig]: optional
+  display name, transport selection (SSE / Streamable HTTP), and
+  arbitrary request headers (the typical case being
+  `Authorization: Bearer …` for auth-required servers). The
+  inline form on the Tools screen lets the user add and edit every
+  field; a new pencil affordance on each server row opens the same
+  form pre-filled. KoogMcpClient now configures the Ktor
+  `defaultRequest` block with the user-supplied headers so they
+  reach both the SSE handshake and every subsequent JSON-RPC call.
+  Persistence switched from a `stringSet` of URLs to a JSON-encoded
+  list of configs in the new `mcp_servers_json` key — the manager
+  one-shot migrates the legacy key on the first read, and writes
+  the new shape on the next mutation.
 - **Tools — MCP per-tool detail and tool-list fetcher** (Phase 22 /
   Task 10/17) — Tools surface now drives a real
   `tools/list` MCP round-trip through the new

@@ -2,6 +2,7 @@ package ai.agent.android.presentation.ui.tools
 
 import ai.agent.android.domain.models.AgentTool
 import ai.agent.android.domain.models.McpConnectionStatus
+import ai.agent.android.domain.models.McpServerConfig
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
@@ -24,7 +25,7 @@ class ToolsScreenTest {
                 localTools = listOf(AgentTool("MockTool", "MockDescription", "{}")),
                 mcpServers = listOf(
                     McpServerSnapshot(
-                        url = "http://mockserver.com",
+                        config = McpServerConfig(url = "http://mockserver.com"),
                         status = McpConnectionStatus.Connected,
                         tools = emptyList(),
                     ),

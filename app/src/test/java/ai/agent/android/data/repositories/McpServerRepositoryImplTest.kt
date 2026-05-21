@@ -4,6 +4,7 @@ import ai.agent.android.data.mcp.McpClient
 import ai.agent.android.data.mcp.McpClientFactory
 import ai.agent.android.domain.models.AgentTool
 import ai.agent.android.domain.models.McpConnectionStatus
+import ai.agent.android.domain.models.McpServerConfig
 import ai.agent.android.domain.models.ToolRisk
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -33,6 +34,7 @@ import org.junit.Test
 class McpServerRepositoryImplTest {
 
     private val url = "https://example.invalid/mcp"
+    private val config = McpServerConfig(url = url)
 
     @Test
     fun `fetchToolList parsesValidResponse and emits Connected status`() = runTest {
@@ -50,7 +52,7 @@ class McpServerRepositoryImplTest {
         coEvery { factory.create() } returns client
         val repo = McpServerRepositoryImpl(clientFactory = factory)
 
-        val result = repo.fetchToolList(serverUrl = url)
+        val result = repo.fetchToolList(config = config)
 
         assertTrue(result.isSuccess)
         val tools = result.getOrThrow()
@@ -73,7 +75,7 @@ class McpServerRepositoryImplTest {
         coEvery { factory.create() } returns client
         val repo = McpServerRepositoryImpl(clientFactory = factory)
 
-        val result = repo.fetchToolList(serverUrl = url)
+        val result = repo.fetchToolList(config = config)
 
         assertTrue(result.isFailure)
         val status = repo.observeConnectionStatus(url).first()
@@ -91,12 +93,12 @@ class McpServerRepositoryImplTest {
         var time = 1_000L
         repo.clockMs = { time }
 
-        repo.fetchToolList(serverUrl = url)
+        repo.fetchToolList(config = config)
         time += 60_000L // 1 minute later — well inside the 5-minute TTL.
-        val cached = repo.fetchToolList(serverUrl = url)
+        val cached = repo.fetchToolList(config = config)
 
         assertTrue(cached.isSuccess)
-        coVerify(exactly = 1) { client.connect(url) }
+        coVerify(exactly = 1) { client.connect(config) }
         coVerify(exactly = 1) { client.getTools() }
     }
 
@@ -109,8 +111,8 @@ class McpServerRepositoryImplTest {
         val repo = McpServerRepositoryImpl(clientFactory = factory)
         repo.clockMs = { 1_000L }
 
-        repo.fetchToolList(serverUrl = url)
-        val refreshed = repo.fetchToolList(serverUrl = url, forceRefresh = true)
+        repo.fetchToolList(config = config)
+        val refreshed = repo.fetchToolList(config = config, forceRefresh = true)
 
         assertTrue(refreshed.isSuccess)
         coVerify(exactly = 2) { client.getTools() }
@@ -124,14 +126,14 @@ class McpServerRepositoryImplTest {
         coEvery { factory.create() } returns client
         val repo = McpServerRepositoryImpl(clientFactory = factory)
 
-        repo.fetchToolList(serverUrl = url)
+        repo.fetchToolList(config = config)
         repo.disconnect(serverUrl = url)
-        repo.fetchToolList(serverUrl = url)
+        repo.fetchToolList(config = config)
 
         coVerify { client.disconnect() }
         // A fresh fetch after disconnect must hit `connect` again because the
         // cache and client entry were dropped.
-        coVerify(exactly = 2) { client.connect(url) }
+        coVerify(exactly = 2) { client.connect(config) }
     }
 
     @Test
@@ -147,14 +149,14 @@ class McpServerRepositoryImplTest {
         repo.clockMs = { 1_000L }
 
         // 1) First fetch succeeds → cache populated, status = Connected.
-        repo.fetchToolList(serverUrl = url)
+        repo.fetchToolList(config = config)
         // 2) Force-refresh fails → status flips to Error, but cache remains.
         coEvery { client.getTools() } throws IllegalStateException("transient")
-        repo.fetchToolList(serverUrl = url, forceRefresh = true)
+        repo.fetchToolList(config = config, forceRefresh = true)
         assertTrue(repo.observeConnectionStatus(url).first() is McpConnectionStatus.Error)
 
         // 3) Non-forced fetch within TTL → cache hit → status must reconcile to Connected.
-        val cached = repo.fetchToolList(serverUrl = url, forceRefresh = false)
+        val cached = repo.fetchToolList(config = config, forceRefresh = false)
         assertTrue(cached.isSuccess)
         assertEquals(McpConnectionStatus.Connected, repo.observeConnectionStatus(url).first())
     }

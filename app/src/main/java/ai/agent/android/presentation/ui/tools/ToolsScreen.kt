@@ -1,7 +1,9 @@
 package ai.agent.android.presentation.ui.tools
 
 import ai.agent.android.domain.models.McpConnectionStatus
+import ai.agent.android.domain.models.McpServerConfig
 import ai.agent.android.domain.models.McpTool
+import ai.agent.android.domain.models.McpTransport
 import ai.agent.android.domain.models.ToolRisk
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.derivedStateOf
@@ -17,18 +19,20 @@ import app.knotwork.design.screens.tools.AddMcpServerForm
 import app.knotwork.design.screens.tools.BuiltInToolRisk
 import app.knotwork.design.screens.tools.BuiltInToolRow
 import app.knotwork.design.screens.tools.McpConnectionState
+import app.knotwork.design.screens.tools.McpHeaderRow
 import app.knotwork.design.screens.tools.McpServerRow
 import app.knotwork.design.screens.tools.McpToolEntry
+import app.knotwork.design.screens.tools.McpTransportOption
 import app.knotwork.design.screens.tools.ToolsCallbacks
 import app.knotwork.design.screens.tools.ToolsContent
 import app.knotwork.design.screens.tools.ToolsViewState
 import app.knotwork.design.screens.tools.ToolsVisualState
 
 /**
- * Tools screen — two-section list: built-in AppFunctions on top with risk
- * pills + Switch toggles; MCP servers below with a per-server status dot,
- * a trailing refresh + delete + expand affordance, and a nested list of
- * the server's MCP tools when expanded.
+ * Tools screen — two-section list (built-in / MCP). The inline add/edit
+ * form surfaces URL + Display name + Transport + arbitrary headers
+ * (typically `Authorization: Bearer …`) so authenticated MCP servers can
+ * be configured end-to-end without leaving the screen.
  */
 @Suppress("UnusedParameter") // onBack kept for nav-graph compatibility.
 @Composable
@@ -39,9 +43,7 @@ fun ToolsScreen(
     onOpenToolDetail: (String) -> Unit = {},
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    var addFormOpen by remember { mutableStateOf(false) }
-    var addFormUrl by remember { mutableStateOf("") }
-    var addFormError by remember { mutableStateOf<String?>(null) }
+    var formState by remember { mutableStateOf<AddMcpServerForm?>(null) }
 
     val builtInTools by remember(uiState) {
         derivedStateOf {
@@ -61,7 +63,7 @@ fun ToolsScreen(
             uiState.mcpServers.map { snapshot ->
                 McpServerRow(
                     id = snapshot.url,
-                    url = snapshot.url,
+                    url = snapshot.config.displayName,
                     toolCount = snapshot.tools.size,
                     latencyLabel = snapshot.status.toLabel(),
                     state = snapshot.status.toCatalogState(),
@@ -82,48 +84,74 @@ fun ToolsScreen(
         visualState = visualState,
         builtInTools = builtInTools,
         mcpServers = mcpServers,
-        addServerForm = if (addFormOpen) {
-            AddMcpServerForm(url = addFormUrl, urlError = addFormError)
-        } else {
-            null
-        },
+        addServerForm = formState,
     )
 
     val callbacks = ToolsCallbacks(
         onToolToggle = { id, enabled -> viewModel.toggleLocalTool(toolName = id, isEnabled = enabled) },
         onToolClick = onOpenToolDetail,
         onServerRemove = { serverId -> viewModel.removeMcpServer(url = serverId) },
+        onServerEdit = { serverId ->
+            val config = viewModel.configFor(url = serverId) ?: return@ToolsCallbacks
+            formState = config.toFormState()
+        },
         onServerExpandToggle = { serverId -> viewModel.toggleServerExpanded(serverUrl = serverId) },
         onServerRefresh = { serverId -> viewModel.refreshServer(serverUrl = serverId) },
         onMcpToolToggle = { id, enabled -> viewModel.toggleMcpTool(toolId = id, isEnabled = enabled) },
         onMcpToolClick = onOpenToolDetail,
         onAddServerOpen = {
-            addFormOpen = true
-            addFormUrl = ""
-            addFormError = null
+            formState = AddMcpServerForm()
         },
         onAddServerUrlChange = { value ->
-            addFormUrl = value
-            addFormError = validateMcpUrl(input = value, requireNonEmpty = false)
+            val current = formState ?: return@ToolsCallbacks
+            formState = current.copy(
+                url = value,
+                urlError = validateMcpUrl(input = value, requireNonEmpty = false),
+            )
             viewModel.onMcpUrlInputChanged(url = value)
         },
+        onAddServerNameChange = { value ->
+            val current = formState ?: return@ToolsCallbacks
+            formState = current.copy(name = value)
+        },
+        onAddServerTransportSelect = { option ->
+            val current = formState ?: return@ToolsCallbacks
+            formState = current.copy(transport = option)
+        },
+        onAddServerHeaderAdd = {
+            val current = formState ?: return@ToolsCallbacks
+            formState = current.copy(headers = current.headers + McpHeaderRow())
+        },
+        onAddServerHeaderChange = { index, key, value ->
+            val current = formState ?: return@ToolsCallbacks
+            if (index !in current.headers.indices) return@ToolsCallbacks
+            formState = current.copy(
+                headers = current.headers.toMutableList().also { it[index] = McpHeaderRow(key = key, value = value) },
+            )
+        },
+        onAddServerHeaderRemove = { index ->
+            val current = formState ?: return@ToolsCallbacks
+            if (index !in current.headers.indices) return@ToolsCallbacks
+            formState = current.copy(
+                headers = current.headers.toMutableList().also { it.removeAt(index) },
+            )
+        },
         onAddServerSubmit = {
-            val error = validateMcpUrl(input = addFormUrl, requireNonEmpty = true)
-            if (error == null) {
-                viewModel.onMcpUrlInputChanged(url = addFormUrl)
-                viewModel.addMcpServer()
-                addFormOpen = false
-                addFormUrl = ""
-                addFormError = null
-            } else {
-                addFormError = error
+            val current = formState ?: return@ToolsCallbacks
+            val error = validateMcpUrl(input = current.url, requireNonEmpty = true)
+            if (error != null) {
+                formState = current.copy(urlError = error)
+                return@ToolsCallbacks
             }
+            val config = current.toDomainConfig()
+            if (current.isEdit) {
+                viewModel.updateMcpServer(originalUrl = current.editingUrl!!, updated = config)
+            } else {
+                viewModel.addMcpServer(config = config)
+            }
+            formState = null
         },
-        onAddServerCancel = {
-            addFormOpen = false
-            addFormUrl = ""
-            addFormError = null
-        },
+        onAddServerCancel = { formState = null },
         onErrorRetry = { /* no-op until ToolRepository surfaces a discovery error. */ },
         onOpenDrawer = { /* drawer ships post-v0.1. */ },
         onTopOverflow = { /* top overflow ships post-v0.1. */ },
@@ -134,6 +162,37 @@ fun ToolsScreen(
         callbacks = callbacks,
         modifier = modifier.testTag(tag = TOOLS_ROOT_TEST_TAG),
     )
+}
+
+private fun McpServerConfig.toFormState(): AddMcpServerForm = AddMcpServerForm(
+    url = url,
+    urlError = null,
+    name = name.orEmpty(),
+    transport = transport.toCatalogOption(),
+    headers = headers.entries.map { McpHeaderRow(key = it.key, value = it.value) },
+    editingUrl = url,
+)
+
+private fun AddMcpServerForm.toDomainConfig(): McpServerConfig {
+    val cleanedHeaders = headers
+        .filter { it.key.isNotBlank() }
+        .associate { it.key.trim() to it.value }
+    return McpServerConfig(
+        url = url.trim(),
+        name = name.trim().takeIf { it.isNotBlank() },
+        transport = transport.toDomain(),
+        headers = cleanedHeaders,
+    )
+}
+
+private fun McpTransportOption.toDomain(): McpTransport = when (this) {
+    McpTransportOption.SSE -> McpTransport.SSE
+    McpTransportOption.StreamableHttp -> McpTransport.STREAMABLE_HTTP
+}
+
+private fun McpTransport.toCatalogOption(): McpTransportOption = when (this) {
+    McpTransport.SSE -> McpTransportOption.SSE
+    McpTransport.STREAMABLE_HTTP -> McpTransportOption.StreamableHttp
 }
 
 private fun ToolRisk.toBuiltInToolRisk(): BuiltInToolRisk = when (this) {
@@ -156,9 +215,7 @@ private fun McpConnectionStatus.toLabel(): String = when (this) {
 
 /**
  * Projects an [McpTool] to the catalog's [McpToolEntry] for rendering as
- * a nested row underneath the server header. MCP tools without a server-
- * declared risk fall back to [BuiltInToolRisk.Sensitive] — mirroring the
- * blanket policy in `ToolRepository.getRisk`.
+ * a nested row underneath the server header.
  */
 private fun McpTool.toEntry(disabled: Set<String>): McpToolEntry = McpToolEntry(
     id = id,
@@ -170,8 +227,7 @@ private fun McpTool.toEntry(disabled: Set<String>): McpToolEntry = McpToolEntry(
 
 /**
  * Trims AppFunction-shaped tool ids (`<pkg>/<FQN>#invoke`) down to the
- * simple class name so the list row reads at a glance. Plain ids
- * (no `/` or `#`) pass through unchanged.
+ * simple class name so the list row reads at a glance.
  */
 private fun String.toFriendlyToolName(): String {
     val afterSlash = substringAfterLast(delimiter = "/")
@@ -180,11 +236,7 @@ private fun String.toFriendlyToolName(): String {
     return simple.ifBlank { this }
 }
 
-/**
- * Cheap URL validation matching the legacy AddMcpServerScreen rules:
- * the URL must be non-empty (when [requireNonEmpty] is true) and start
- * with `http://`, `https://`, or `mcp://` followed by a host.
- */
+/** URL validation: non-empty and starts with `http://`, `https://`, or `mcp://`. */
 private fun validateMcpUrl(input: String, requireNonEmpty: Boolean): String? {
     val trimmed = input.trim()
     if (trimmed.isEmpty()) {

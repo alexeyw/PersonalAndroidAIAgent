@@ -2,13 +2,15 @@ package ai.agent.android.presentation.ui.tools
 
 import ai.agent.android.domain.models.AgentTool
 import ai.agent.android.domain.models.McpConnectionStatus
+import ai.agent.android.domain.models.McpServerConfig
 import ai.agent.android.domain.models.McpTool
 
 /**
  * UI state for the Tools screen.
  *
- * @property mcpServers per-server snapshot for the MCP section: URL,
- * connection status, and the tool list (when the connection succeeded).
+ * @property mcpServers per-server snapshot for the MCP section: full
+ * [McpServerConfig], connection status, and the tool list (when the
+ * connection succeeded).
  * @property newMcpUrlInput current text in the inline "Add MCP server URL"
  * form. Persisted in the ViewModel so the input survives configuration
  * changes; the catalog passes it back through [ToolsUiState] when the
@@ -37,12 +39,15 @@ data class ToolsUiState(
 /**
  * Per-server slice surfaced to the UI.
  *
- * @property url server URL (matches the entry in
- * `SettingsRepository.mcpServerUrls`).
+ * @property config the persisted server configuration. The URL inside
+ * [config] is the stable identity used by every callback and by the
+ * repository's status flow.
  * @property status current connection status from
  * `McpServerRepository.observeConnectionStatus`.
  * @property tools tools advertised by the server on its last successful
  * `tools/list` fetch. Empty while [status] is
  * [McpConnectionStatus.Connecting] or [McpConnectionStatus.Error].
  */
-data class McpServerSnapshot(val url: String, val status: McpConnectionStatus, val tools: List<McpTool>)
+data class McpServerSnapshot(val config: McpServerConfig, val status: McpConnectionStatus, val tools: List<McpTool>) {
+    val url: String get() = config.url
+}

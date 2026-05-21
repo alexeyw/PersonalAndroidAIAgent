@@ -1,6 +1,7 @@
 package ai.agent.android.data.mcp
 
 import ai.agent.android.domain.models.AgentTool
+import ai.agent.android.domain.models.McpServerConfig
 
 /**
  * Interface representing a client for the Model Context Protocol (MCP).
@@ -9,11 +10,15 @@ import ai.agent.android.domain.models.AgentTool
  */
 interface McpClient {
     /**
-     * Connects to the MCP server at the specified URL using Server-Sent Events (SSE).
+     * Connects to the MCP server described by [config]. Implementations honour
+     * [McpServerConfig.headers] (typically `Authorization: Bearer …`) and the
+     * declared transport.
      *
-     * @param url The endpoint URL of the MCP server.
+     * Implementations may downgrade an unsupported transport to a viable default
+     * (Koog 0.8 only ships SSE, so `STREAMABLE_HTTP` falls back to SSE today),
+     * but must never silently drop auth headers.
      */
-    suspend fun connect(url: String)
+    suspend fun connect(config: McpServerConfig)
 
     /**
      * Disconnects from the currently connected MCP server and releases any held resources.

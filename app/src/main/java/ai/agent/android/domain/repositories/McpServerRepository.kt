@@ -1,6 +1,7 @@
 package ai.agent.android.domain.repositories
 
 import ai.agent.android.domain.models.McpConnectionStatus
+import ai.agent.android.domain.models.McpServerConfig
 import ai.agent.android.domain.models.McpTool
 import kotlinx.coroutines.flow.Flow
 
@@ -27,15 +28,16 @@ import kotlinx.coroutines.flow.Flow
 interface McpServerRepository {
 
     /**
-     * Connects (lazily) to [serverUrl], performs an MCP `tools/list` round-trip,
-     * and returns the resulting [McpTool] entries.
+     * Connects (lazily) to the server described by [config], performs an MCP
+     * `tools/list` round-trip, and returns the resulting [McpTool] entries.
      *
      * The status flow returned by [observeConnectionStatus] is updated as a
      * side-effect of this call (`Connecting → Connected` / `Connecting → Error`),
      * so callers do not need to wrap the result in their own error UI — they
      * can simply observe the flow and surface its terminal state.
      *
-     * @param serverUrl exact URL persisted in `SettingsRepository.mcpServerUrls`.
+     * @param config full server configuration (URL + optional headers, name,
+     * transport). Headers reach the underlying `McpClient.connect`.
      * @param forceRefresh when `true`, ignores the cached tool list (if any)
      * and re-issues the round-trip even if the previous response is within
      * the 5-minute TTL.
@@ -43,7 +45,7 @@ interface McpServerRepository {
      * wrapping the underlying exception when the handshake or the `tools/list`
      * call throws. The status flow carries the same outcome.
      */
-    suspend fun fetchToolList(serverUrl: String, forceRefresh: Boolean = false): Result<List<McpTool>>
+    suspend fun fetchToolList(config: McpServerConfig, forceRefresh: Boolean = false): Result<List<McpTool>>
 
     /**
      * Hot stream of the current connection lifecycle for [serverUrl]. The first

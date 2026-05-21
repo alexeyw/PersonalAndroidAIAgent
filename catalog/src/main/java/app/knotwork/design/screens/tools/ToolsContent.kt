@@ -456,6 +456,13 @@ private fun McpServerRowView(server: McpServerRow, callbacks: ToolsCallbacks) {
                 tint = KnotworkTheme.extended.onSurfaceMuted,
             )
         }
+        IconButton(onClick = { callbacks.onServerEdit(server.id) }) {
+            Icon(
+                imageVector = Icons.Outlined.Edit,
+                contentDescription = stringResource(R.string.knotwork_tools_edit_server_cd),
+                tint = KnotworkTheme.extended.onSurfaceMuted,
+            )
+        }
         IconButton(onClick = { callbacks.onServerRemove(server.id) }) {
             Icon(
                 imageVector = Icons.Outlined.DeleteOutline,
@@ -601,6 +608,43 @@ private fun AddServerForm(form: AddMcpServerForm, callbacks: ToolsCallbacks) {
                 color = KnotworkTheme.extended.signalError,
             )
         }
+
+        // Display name (optional).
+        FormSectionLabel(text = stringResource(R.string.knotwork_tools_form_name_label))
+        OutlinedFormTextField(
+            value = form.name,
+            onValueChange = callbacks.onAddServerNameChange,
+            placeholder = stringResource(R.string.knotwork_tools_form_name_placeholder),
+            isError = false,
+        )
+
+        // Transport selector — two segmented options.
+        FormSectionLabel(text = stringResource(R.string.knotwork_tools_form_transport_label))
+        Row(horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp2)) {
+            McpTransportOption.entries.forEach { option ->
+                TransportChip(
+                    option = option,
+                    selected = form.transport == option,
+                    onClick = { callbacks.onAddServerTransportSelect(option) },
+                )
+            }
+        }
+
+        // Custom headers — repeating key/value rows + add button.
+        FormSectionLabel(text = stringResource(R.string.knotwork_tools_form_headers_label))
+        form.headers.forEachIndexed { index, row ->
+            HeaderRow(
+                row = row,
+                onKeyChange = { newKey -> callbacks.onAddServerHeaderChange(index, newKey, row.value) },
+                onValueChange = { newValue -> callbacks.onAddServerHeaderChange(index, row.key, newValue) },
+                onRemove = { callbacks.onAddServerHeaderRemove(index) },
+            )
+        }
+        KnotworkTextButton(
+            text = stringResource(R.string.knotwork_tools_form_headers_add),
+            onClick = callbacks.onAddServerHeaderAdd,
+        )
+
         Row(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier.fillMaxWidth(),
@@ -612,9 +656,114 @@ private fun AddServerForm(form: AddMcpServerForm, callbacks: ToolsCallbacks) {
             )
             Spacer(modifier = Modifier.size(KnotworkTheme.spacing.sp2))
             KnotworkPrimaryButton(
-                text = stringResource(R.string.knotwork_tools_add_form_submit),
+                text = if (form.isEdit) {
+                    stringResource(R.string.knotwork_tools_form_submit_save)
+                } else {
+                    stringResource(R.string.knotwork_tools_add_form_submit)
+                },
                 onClick = callbacks.onAddServerSubmit,
                 enabled = form.canSubmit,
+            )
+        }
+    }
+}
+
+@Composable
+private fun FormSectionLabel(text: String) {
+    Text(
+        text = text,
+        style = KnotworkTextStyles.MonoSm,
+        color = KnotworkTheme.extended.onSurfaceMuted,
+    )
+}
+
+@Composable
+private fun OutlinedFormTextField(
+    value: String,
+    onValueChange: (String) -> Unit,
+    placeholder: String,
+    isError: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(KnotworkTheme.shapes.sm)
+            .border(
+                width = 1.dp,
+                color = if (isError) KnotworkTheme.extended.signalError else KnotworkTheme.extended.outlineStrong,
+                shape = KnotworkTheme.shapes.sm,
+            )
+            .padding(KnotworkTheme.spacing.sp3),
+    ) {
+        BasicTextField(
+            value = value,
+            onValueChange = onValueChange,
+            singleLine = true,
+            textStyle = KnotworkTextStyles.MonoBase.copy(color = MaterialTheme.colorScheme.onSurface),
+            cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+            modifier = Modifier.fillMaxWidth(),
+        )
+        if (value.isEmpty()) {
+            Text(
+                text = placeholder,
+                style = KnotworkTextStyles.MonoBase,
+                color = KnotworkTheme.extended.onSurfaceMuted,
+            )
+        }
+    }
+}
+
+@Composable
+private fun TransportChip(option: McpTransportOption, selected: Boolean, onClick: () -> Unit) {
+    val borderColor = if (selected) MaterialTheme.colorScheme.primary else KnotworkTheme.extended.outlineStrong
+    val labelColor = if (selected) MaterialTheme.colorScheme.primary else KnotworkTheme.extended.onSurfaceMuted
+    Box(
+        modifier = Modifier
+            .clip(KnotworkTheme.shapes.full)
+            .border(width = 1.dp, color = borderColor, shape = KnotworkTheme.shapes.full)
+            .clickable(onClick = onClick)
+            .padding(horizontal = KnotworkTheme.spacing.sp3, vertical = KnotworkTheme.spacing.sp1),
+    ) {
+        Text(
+            text = option.label,
+            style = KnotworkTextStyles.LabelMd,
+            color = labelColor,
+        )
+    }
+}
+
+@Composable
+private fun HeaderRow(
+    row: McpHeaderRow,
+    onKeyChange: (String) -> Unit,
+    onValueChange: (String) -> Unit,
+    onRemove: () -> Unit,
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp2),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        OutlinedFormTextField(
+            value = row.key,
+            onValueChange = onKeyChange,
+            placeholder = stringResource(R.string.knotwork_tools_form_header_key_placeholder),
+            isError = false,
+            modifier = Modifier.weight(1f),
+        )
+        OutlinedFormTextField(
+            value = row.value,
+            onValueChange = onValueChange,
+            placeholder = stringResource(R.string.knotwork_tools_form_header_value_placeholder),
+            isError = false,
+            modifier = Modifier.weight(1f),
+        )
+        IconButton(onClick = onRemove) {
+            Icon(
+                imageVector = Icons.Outlined.DeleteOutline,
+                contentDescription = stringResource(R.string.knotwork_tools_form_header_remove_cd),
+                tint = KnotworkTheme.extended.onSurfaceMuted,
             )
         }
     }

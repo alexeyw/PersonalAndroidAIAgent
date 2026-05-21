@@ -4,6 +4,7 @@ import ai.agent.android.data.mcp.McpClient
 import ai.agent.android.data.mcp.McpClientFactory
 import ai.agent.android.domain.models.AgentTool
 import ai.agent.android.domain.models.McpConnectionStatus
+import ai.agent.android.domain.models.McpServerConfig
 import ai.agent.android.domain.models.McpTool
 import ai.agent.android.domain.repositories.McpServerRepository
 import androidx.annotation.VisibleForTesting
@@ -44,7 +45,8 @@ class McpServerRepositoryImpl @Inject constructor(private val clientFactory: Mcp
     @VisibleForTesting
     internal var clockMs: () -> Long = { System.currentTimeMillis() }
 
-    override suspend fun fetchToolList(serverUrl: String, forceRefresh: Boolean): Result<List<McpTool>> {
+    override suspend fun fetchToolList(config: McpServerConfig, forceRefresh: Boolean): Result<List<McpTool>> {
+        val serverUrl = config.url
         val mutex = mutexes.getOrPut(serverUrl) { Mutex() }
         val flow = statusFlows.getOrPut(serverUrl) { MutableStateFlow(McpConnectionStatus.Connecting) }
         return mutex.withLock {
@@ -64,7 +66,7 @@ class McpServerRepositoryImpl @Inject constructor(private val clientFactory: Mcp
 
             runCatching {
                 val client = clients.getOrPut(serverUrl) { clientFactory.create() }
-                client.connect(serverUrl)
+                client.connect(config)
                 client.getTools().map { agentTool -> agentTool.toMcpTool(serverUrl) }
             }.onSuccess { tools ->
                 caches[serverUrl] = CachedToolList(tools = tools, fetchedAtMs = clockMs())

@@ -2,6 +2,7 @@ package ai.agent.android.presentation.ui.tools
 
 import ai.agent.android.domain.models.AgentTool
 import ai.agent.android.domain.models.McpConnectionStatus
+import ai.agent.android.domain.models.McpServerConfig
 import ai.agent.android.domain.models.McpTool
 import ai.agent.android.domain.repositories.McpServerRepository
 import ai.agent.android.domain.repositories.SettingsRepository
@@ -25,18 +26,6 @@ import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 
-/**
- * Unit tests for [ToolsViewModel]. The VM owns three concerns:
- *
- *  - reconciling `SettingsRepository.mcpServerUrls` against the in-memory
- *    snapshot list (with per-URL status observers),
- *  - persisting toggle changes through `SettingsRepository.disabledAppFunctions`
- *    and `SettingsRepository.disabledMcpTools`,
- *  - exposing a synchronous `findMcpTool(id)` lookup for the detail screen.
- *
- * The tests cover one happy path per concern plus the two main failure
- * states (connection error, attempted fetch on add).
- */
 @OptIn(ExperimentalCoroutinesApi::class)
 class ToolsViewModelTest {
 
@@ -47,7 +36,7 @@ class ToolsViewModelTest {
     private lateinit var viewModel: ToolsViewModel
     private val testDispatcher = StandardTestDispatcher()
 
-    private val mcpServersFlow = MutableStateFlow<Set<String>>(emptySet())
+    private val mcpServersFlow = MutableStateFlow<List<McpServerConfig>>(emptyList())
     private val disabledAppFunctionsFlow = MutableStateFlow<Set<String>>(emptySet())
     private val disabledMcpToolsFlow = MutableStateFlow<Set<String>>(emptySet())
     private val statusFlows = mutableMapOf<String, MutableStateFlow<McpConnectionStatus>>()
@@ -58,7 +47,7 @@ class ToolsViewModelTest {
     @Before
     fun setup() {
         Dispatchers.setMain(testDispatcher)
-        every { settingsRepository.mcpServerUrls } returns mcpServersFlow
+        every { settingsRepository.mcpServers } returns mcpServersFlow
         every { settingsRepository.disabledAppFunctions } returns disabledAppFunctionsFlow
         every { settingsRepository.disabledMcpTools } returns disabledMcpToolsFlow
         coEvery { toolRepository.getAllLocalTools() } returns listOf(
@@ -80,7 +69,7 @@ class ToolsViewModelTest {
 
     @Test
     fun `initial state reflects repository values`() = runTest {
-        mcpServersFlow.value = setOf("http://test.com")
+        mcpServersFlow.value = listOf(McpServerConfig(url = "http://test.com"))
         disabledAppFunctionsFlow.value = setOf("get_system_time")
         advanceUntilIdle()
 
@@ -91,22 +80,33 @@ class ToolsViewModelTest {
     }
 
     @Test
-    fun `addMcpServer trims input persists URL and clears the input`() = runTest {
-        viewModel.onMcpUrlInputChanged("  http://new.com  ")
-        viewModel.addMcpServer()
+    fun `addMcpServer persists the config`() = runTest {
+        val config = McpServerConfig(url = "http://new.com", name = "My MCP")
+
+        viewModel.addMcpServer(config = config)
         advanceUntilIdle()
 
-        coVerify { settingsRepository.addMcpServerUrl(url = "http://new.com") }
-        assertEquals("", viewModel.uiState.value.newMcpUrlInput)
+        coVerify { settingsRepository.addMcpServer(config = config) }
+    }
+
+    @Test
+    fun `updateMcpServer disconnects old client and persists the new config`() = runTest {
+        val url = "https://renamed.example/mcp"
+        mcpServersFlow.value = listOf(McpServerConfig(url = url))
+        advanceUntilIdle()
+        val updated = McpServerConfig(url = url, headers = mapOf("Authorization" to "Bearer x"))
+
+        viewModel.updateMcpServer(originalUrl = url, updated = updated)
+        advanceUntilIdle()
+
+        coVerify { mcpServerRepository.disconnect(serverUrl = url) }
+        coVerify { settingsRepository.updateMcpServer(originalUrl = url, updated = updated) }
     }
 
     @Test
     fun `appearing server snapshot exists before observers and fetches launch`() = runTest {
-        // Regression guard for the reconcile-order race: the snapshot list MUST be
-        // rewritten BEFORE observers / fetches launch, otherwise the status flow's
-        // initial Connecting emission and the fetchToolList result update can race
-        // against the snapshot insertion and be silently overwritten.
         val url = "https://racy.example/mcp"
+        val config = McpServerConfig(url = url)
         val sample = McpTool(
             id = "mcp:cafebabe:tool",
             serverUrl = url,
@@ -115,10 +115,10 @@ class ToolsViewModelTest {
             inputSchemaJson = "{}",
         )
         coEvery {
-            mcpServerRepository.fetchToolList(serverUrl = url, forceRefresh = false)
+            mcpServerRepository.fetchToolList(config = config, forceRefresh = false)
         } returns Result.success(listOf(sample))
 
-        mcpServersFlow.value = setOf(url)
+        mcpServersFlow.value = listOf(config)
         advanceUntilIdle()
 
         val snapshot = viewModel.uiState.value.mcpServers.firstOrNull { it.url == url }
@@ -127,8 +127,9 @@ class ToolsViewModelTest {
     }
 
     @Test
-    fun `appearing server triggers fetchToolList and surfaces tools`() = runTest {
+    fun `appearing server triggers fetchToolList with the persisted config`() = runTest {
         val url = "https://example.com/mcp"
+        val config = McpServerConfig(url = url, headers = mapOf("Authorization" to "Bearer xyz"))
         val sample = McpTool(
             id = "mcp:abcd1234:search",
             serverUrl = url,
@@ -137,13 +138,13 @@ class ToolsViewModelTest {
             inputSchemaJson = "{}",
         )
         coEvery {
-            mcpServerRepository.fetchToolList(serverUrl = url, forceRefresh = false)
+            mcpServerRepository.fetchToolList(config = config, forceRefresh = false)
         } returns Result.success(listOf(sample))
 
-        mcpServersFlow.value = setOf(url)
+        mcpServersFlow.value = listOf(config)
         advanceUntilIdle()
 
-        coVerify { mcpServerRepository.fetchToolList(serverUrl = url, forceRefresh = false) }
+        coVerify { mcpServerRepository.fetchToolList(config = config, forceRefresh = false) }
         val snapshot = viewModel.uiState.value.mcpServers.first()
         assertEquals(url, snapshot.url)
         assertEquals(listOf(sample), snapshot.tools)
@@ -152,7 +153,7 @@ class ToolsViewModelTest {
     @Test
     fun `connection error surfaces in the snapshot status`() = runTest {
         val url = "https://broken.example/mcp"
-        mcpServersFlow.value = setOf(url)
+        mcpServersFlow.value = listOf(McpServerConfig(url = url))
         advanceUntilIdle()
 
         statusFlowFor(url).value = McpConnectionStatus.Error(reason = "boom")
@@ -164,36 +165,37 @@ class ToolsViewModelTest {
     }
 
     @Test
-    fun `removeMcpServer disconnects repository and drops the snapshot`() = runTest {
+    fun `removeMcpServer drops the snapshot`() = runTest {
         val url = "http://old.com"
-        mcpServersFlow.value = setOf(url)
+        mcpServersFlow.value = listOf(McpServerConfig(url = url))
         advanceUntilIdle()
 
         viewModel.removeMcpServer(url = url)
-        mcpServersFlow.value = emptySet()
+        mcpServersFlow.value = emptyList()
         advanceUntilIdle()
 
-        coVerify { settingsRepository.removeMcpServerUrl(url = url) }
+        coVerify { settingsRepository.removeMcpServer(url = url) }
         coVerify { mcpServerRepository.disconnect(serverUrl = url) }
         assertTrue(viewModel.uiState.value.mcpServers.isEmpty())
     }
 
     @Test
-    fun `refreshServer forces a fresh fetchToolList`() = runTest {
+    fun `refreshServer forces a fresh fetchToolList with the persisted config`() = runTest {
         val url = "https://refresh.example/mcp"
-        mcpServersFlow.value = setOf(url)
+        val config = McpServerConfig(url = url, headers = mapOf("X-Test" to "1"))
+        mcpServersFlow.value = listOf(config)
         advanceUntilIdle()
 
         viewModel.refreshServer(serverUrl = url)
         advanceUntilIdle()
 
-        coVerify { mcpServerRepository.fetchToolList(serverUrl = url, forceRefresh = true) }
+        coVerify { mcpServerRepository.fetchToolList(config = config, forceRefresh = true) }
     }
 
     @Test
     fun `toggleServerExpanded flips the membership in expandedServerUrls`() = runTest {
         val url = "https://expand.example/mcp"
-        mcpServersFlow.value = setOf(url)
+        mcpServersFlow.value = listOf(McpServerConfig(url = url))
         advanceUntilIdle()
 
         viewModel.toggleServerExpanded(serverUrl = url)
@@ -225,6 +227,7 @@ class ToolsViewModelTest {
     @Test
     fun `findMcpTool returns the matching tool or null`() = runTest {
         val url = "https://lookup.example/mcp"
+        val config = McpServerConfig(url = url)
         val tool = McpTool(
             id = "mcp:deadbeef:search",
             serverUrl = url,
@@ -233,13 +236,24 @@ class ToolsViewModelTest {
             inputSchemaJson = "{}",
         )
         coEvery {
-            mcpServerRepository.fetchToolList(serverUrl = url, forceRefresh = false)
+            mcpServerRepository.fetchToolList(config = config, forceRefresh = false)
         } returns Result.success(listOf(tool))
 
-        mcpServersFlow.value = setOf(url)
+        mcpServersFlow.value = listOf(config)
         advanceUntilIdle()
 
         assertEquals(tool, viewModel.findMcpTool(toolId = tool.id))
         assertNull(viewModel.findMcpTool(toolId = "mcp:deadbeef:missing"))
+    }
+
+    @Test
+    fun `configFor returns the persisted config or null`() = runTest {
+        val url = "https://lookup.example/mcp"
+        val config = McpServerConfig(url = url, name = "Lookup", headers = mapOf("X-K" to "v"))
+        mcpServersFlow.value = listOf(config)
+        advanceUntilIdle()
+
+        assertEquals(config, viewModel.configFor(url = url))
+        assertNull(viewModel.configFor(url = "https://unknown/"))
     }
 }

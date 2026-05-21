@@ -1,11 +1,13 @@
 package ai.agent.android.data.local
 
 import ai.agent.android.domain.constants.SettingsDefaults
+import ai.agent.android.domain.models.McpTransport
 import ai.agent.android.domain.models.ToolRisk
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.core.stringSetPreferencesKey
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.flow.first
@@ -264,5 +266,55 @@ class SettingsManagerTest {
         val settingsManager = SettingsManager(dataStore)
         val result = settingsManager.pipelineMaxSteps.first()
         assertEquals(50, result)
+    }
+
+    @Test
+    fun `mcpServers migrates legacy MCP_SERVER_URLS stringSet to default configs`() = runTest {
+        // Phase 22 / Task 10 expanded the MCP persistence from a stringSet of URLs to a
+        // JSON-encoded List<McpServerConfig>. Existing installs hold the old key — the
+        // manager must surface them as default configs (no headers, SSE transport)
+        // until the first write replaces the storage shape.
+        val legacyKey = stringSetPreferencesKey("mcp_server_urls")
+        val newJsonKey = stringPreferencesKey("mcp_servers_json")
+        val prefs = mockk<Preferences>()
+        every { prefs[legacyKey] } returns setOf("https://legacy.example/mcp")
+        every { prefs[newJsonKey] } returns null
+        every { dataStore.data } returns flowOf(prefs)
+
+        val result = SettingsManager(dataStore).mcpServers.first()
+
+        assertEquals(1, result.size)
+        assertEquals("https://legacy.example/mcp", result[0].url)
+        assertEquals(null, result[0].name)
+        assertEquals(McpTransport.SSE, result[0].transport)
+        assertTrue(result[0].headers.isEmpty())
+    }
+
+    @Test
+    fun `mcpServers decodes JSON-encoded list with headers and transport`() = runTest {
+        val legacyKey = stringSetPreferencesKey("mcp_server_urls")
+        val newJsonKey = stringPreferencesKey("mcp_servers_json")
+        val prefs = mockk<Preferences>()
+        every { prefs[legacyKey] } returns null
+        every {
+            prefs[newJsonKey]
+        } returns """
+            [
+              {
+                "url":"https://hf.example/mcp",
+                "name":"HuggingFace",
+                "transport":"streamable_http",
+                "headers":{"Authorization":"Bearer secret"}
+              }
+            ]
+        """.trimIndent()
+        every { dataStore.data } returns flowOf(prefs)
+
+        val result = SettingsManager(dataStore).mcpServers.first()
+
+        assertEquals(1, result.size)
+        assertEquals("HuggingFace", result[0].name)
+        assertEquals(McpTransport.STREAMABLE_HTTP, result[0].transport)
+        assertEquals("Bearer secret", result[0].headers["Authorization"])
     }
 }

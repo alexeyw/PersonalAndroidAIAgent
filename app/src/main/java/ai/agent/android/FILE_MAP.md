@@ -137,7 +137,9 @@ This file maps the contents of the main application package.
     - `LocalBackend.kt` - Typed enum for the on-device LiteRT execution backend (CPU/GPU/NPU); owns the persisted wire keys via `LocalBackend.key`.
     - `LocalModel.kt` - Domain model for local models.
     - `McpConnectionStatus.kt` - Sealed lifecycle (`Connecting` / `Connected` / `Error(reason)`) exposed by `McpServerRepository.observeConnectionStatus` and rendered as the per-server status pill.
+    - `McpServerConfig.kt` - Per-server configuration persisted by `SettingsRepository.mcpServers`: URL + optional display name + transport (SSE / Streamable HTTP) + arbitrary headers (typically `Authorization: Bearer …`).
     - `McpTool.kt` - Domain model for one tool advertised by an MCP server (`id = "mcp:<sha8(serverUrl)>:<toolName>"`, `serverUrl`, `name`, `description`, `inputSchemaJson`, optional `risk`).
+    - `McpTransport.kt` - Transport selector backing `McpServerConfig.transport`. Only SSE is end-to-end wired today through Koog 0.8; STREAMABLE_HTTP falls back to SSE until upstream support lands.
     - `MemoryChunk.kt` - Memory chunk model.
     - `MemorySummary.kt` - Lightweight memory projection (id/text/timestamp) used by `$MEMORY_SUMMARY`.
     - `NetworkState.kt` - Network state model.

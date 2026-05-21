@@ -1,5 +1,6 @@
 package ai.agent.android.domain.repositories
 
+import ai.agent.android.domain.models.McpServerConfig
 import ai.agent.android.domain.models.TestProbeResult
 import ai.agent.android.domain.models.ToolApprovalPolicy
 import ai.agent.android.domain.models.ToolRisk
@@ -160,19 +161,31 @@ interface SettingsRepository {
     suspend fun setToolUsageInstruction(instruction: String)
 
     /**
-     * A [Flow] representing the set of connected MCP server URLs.
+     * Configured MCP servers, ordered by user insertion order.
+     *
+     * Each entry carries the URL plus optional display name, transport
+     * choice, and arbitrary request headers (typically `Authorization`).
+     * Implementations migrate legacy URL-only persistence one-shot to
+     * default [McpServerConfig]s on first read.
      */
-    val mcpServerUrls: Flow<Set<String>>
+    val mcpServers: Flow<List<McpServerConfig>>
 
     /**
-     * Adds an MCP server URL.
+     * Persists [config]. If a server with the same URL already exists,
+     * it is replaced in place (preserving order).
      */
-    suspend fun addMcpServerUrl(url: String)
+    suspend fun addMcpServer(config: McpServerConfig)
 
     /**
-     * Removes an MCP server URL.
+     * Replaces the server identified by [originalUrl] with [updated].
+     * If [originalUrl] is not present, behaves the same as [addMcpServer].
+     * The URL inside [updated] may differ from [originalUrl] (edit
+     * scenario); persistence keeps the row at its old position.
      */
-    suspend fun removeMcpServerUrl(url: String)
+    suspend fun updateMcpServer(originalUrl: String, updated: McpServerConfig)
+
+    /** Removes the server identified by [url]. No-op when missing. */
+    suspend fun removeMcpServer(url: String)
 
     /**
      * A [Flow] representing the set of disabled local app function names.

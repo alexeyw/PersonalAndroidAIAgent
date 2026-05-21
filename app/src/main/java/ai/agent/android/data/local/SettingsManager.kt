@@ -3,6 +3,8 @@ package ai.agent.android.data.local
 import ai.agent.android.domain.constants.DefaultPrompts
 import ai.agent.android.domain.constants.SettingsDefaults
 import ai.agent.android.domain.models.LocalBackend
+import ai.agent.android.domain.models.McpServerConfig
+import ai.agent.android.domain.models.McpTransport
 import ai.agent.android.domain.models.TestProbeResult
 import ai.agent.android.domain.models.ToolApprovalPolicy
 import ai.agent.android.domain.models.ToolRisk
@@ -18,6 +20,7 @@ import androidx.datastore.preferences.core.stringSetPreferencesKey
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.map
+import org.json.JSONArray
 import org.json.JSONException
 import org.json.JSONObject
 import timber.log.Timber
@@ -44,6 +47,7 @@ class SettingsManager @Inject constructor(private val dataStore: DataStore<Prefe
         val SYSTEM_PROMPT_PREFIX = stringPreferencesKey("system_prompt_prefix")
         val TOOL_USAGE_INSTRUCTION = stringPreferencesKey("tool_usage_instruction")
         val MCP_SERVER_URLS = stringSetPreferencesKey("mcp_server_urls")
+        val MCP_SERVERS_JSON = stringPreferencesKey("mcp_servers_json")
         val DISABLED_APP_FUNCTIONS = stringSetPreferencesKey("disabled_app_functions")
         val DISABLED_MCP_TOOLS = stringSetPreferencesKey("disabled_mcp_tools")
         val APP_FUNCTION_RISK_OVERRIDES = stringPreferencesKey("app_function_risk_overrides")
@@ -263,7 +267,7 @@ class SettingsManager @Inject constructor(private val dataStore: DataStore<Prefe
         }
     }
 
-    override val mcpServerUrls: Flow<Set<String>> = dataStore.data
+    override val mcpServers: Flow<List<McpServerConfig>> = dataStore.data
         .catch { exception ->
             if (exception is IOException) {
                 Timber.e(exception, "Error reading preferences")
@@ -273,21 +277,97 @@ class SettingsManager @Inject constructor(private val dataStore: DataStore<Prefe
             }
         }
         .map { preferences ->
-            preferences[PreferencesKeys.MCP_SERVER_URLS] ?: emptySet()
+            val json = preferences[PreferencesKeys.MCP_SERVERS_JSON]
+            if (!json.isNullOrBlank()) {
+                decodeMcpServers(json)
+            } else {
+                // Legacy fallback: read the old URL-only key. The first write through
+                // [addMcpServer]/[updateMcpServer]/[removeMcpServer] persists the new
+                // JSON form and the next read short-circuits above.
+                (preferences[PreferencesKeys.MCP_SERVER_URLS] ?: emptySet())
+                    .map { url -> McpServerConfig(url = url) }
+            }
         }
 
-    override suspend fun addMcpServerUrl(url: String) {
+    override suspend fun addMcpServer(config: McpServerConfig) {
         dataStore.edit { preferences ->
-            val currentUrls = preferences[PreferencesKeys.MCP_SERVER_URLS] ?: emptySet()
-            preferences[PreferencesKeys.MCP_SERVER_URLS] = currentUrls + url
+            val current = currentMcpServers(preferences)
+            val without = current.filterNot { it.url == config.url }
+            preferences[PreferencesKeys.MCP_SERVERS_JSON] = encodeMcpServers(without + config)
+            preferences.remove(PreferencesKeys.MCP_SERVER_URLS)
         }
     }
 
-    override suspend fun removeMcpServerUrl(url: String) {
+    override suspend fun updateMcpServer(originalUrl: String, updated: McpServerConfig) {
         dataStore.edit { preferences ->
-            val currentUrls = preferences[PreferencesKeys.MCP_SERVER_URLS] ?: emptySet()
-            preferences[PreferencesKeys.MCP_SERVER_URLS] = currentUrls - url
+            val current = currentMcpServers(preferences)
+            val index = current.indexOfFirst { it.url == originalUrl }
+            val next = if (index >= 0) {
+                current.toMutableList().also { it[index] = updated }
+            } else {
+                current + updated
+            }
+            preferences[PreferencesKeys.MCP_SERVERS_JSON] = encodeMcpServers(next)
+            preferences.remove(PreferencesKeys.MCP_SERVER_URLS)
         }
+    }
+
+    override suspend fun removeMcpServer(url: String) {
+        dataStore.edit { preferences ->
+            val current = currentMcpServers(preferences)
+            preferences[PreferencesKeys.MCP_SERVERS_JSON] = encodeMcpServers(current.filterNot { it.url == url })
+            preferences.remove(PreferencesKeys.MCP_SERVER_URLS)
+        }
+    }
+
+    /** Reads the current persisted list, falling back to the legacy URL-only key. */
+    private fun currentMcpServers(preferences: Preferences): List<McpServerConfig> {
+        val json = preferences[PreferencesKeys.MCP_SERVERS_JSON]
+        if (!json.isNullOrBlank()) return decodeMcpServers(json)
+        return (preferences[PreferencesKeys.MCP_SERVER_URLS] ?: emptySet())
+            .map { url -> McpServerConfig(url = url) }
+    }
+
+    private fun encodeMcpServers(servers: List<McpServerConfig>): String {
+        val array = JSONArray()
+        servers.forEach { config ->
+            val obj = JSONObject()
+                .put("url", config.url)
+                .put("transport", config.transport.wireId)
+            if (!config.name.isNullOrBlank()) obj.put("name", config.name)
+            if (config.headers.isNotEmpty()) {
+                val headers = JSONObject()
+                config.headers.forEach { (k, v) -> headers.put(k, v) }
+                obj.put("headers", headers)
+            }
+            array.put(obj)
+        }
+        return array.toString()
+    }
+
+    private fun decodeMcpServers(json: String): List<McpServerConfig> = try {
+        val array = JSONArray(json)
+        buildList(capacity = array.length()) {
+            for (i in 0 until array.length()) {
+                val obj = array.getJSONObject(i)
+                val url = obj.optString("url").takeIf { it.isNotBlank() } ?: continue
+                val name = obj.optString("name").takeIf { it.isNotBlank() }
+                val transport = McpTransport.fromWireId(obj.optString("transport").takeIf { it.isNotBlank() })
+                val headers = obj.optJSONObject("headers")?.let { headerObj ->
+                    buildMap<String, String> {
+                        val keys = headerObj.keys()
+                        while (keys.hasNext()) {
+                            val key = keys.next()
+                            put(key, headerObj.optString(key))
+                        }
+                    }
+                } ?: emptyMap()
+                add(McpServerConfig(url = url, name = name, transport = transport, headers = headers))
+            }
+        }
+    } catch (e: JSONException) {
+        Timber.w(e, "Failed to decode MCP servers JSON; falling back to empty list")
+        emptyList()
     }
 
     override val disabledAppFunctions: Flow<Set<String>> = dataStore.data

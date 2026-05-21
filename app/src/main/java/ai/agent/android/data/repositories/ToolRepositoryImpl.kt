@@ -103,9 +103,10 @@ class ToolRepositoryImpl @Inject constructor(
     }
 
     private suspend fun syncMcpClients() {
-        val urls = settingsRepository.mcpServerUrls.first()
+        val configs = settingsRepository.mcpServers.first()
+        val urls = configs.mapTo(mutableSetOf()) { it.url }
         val toRemove = mcpClients.keys - urls
-        val toAdd = urls - mcpClients.keys
+        val toAdd = configs.filter { it.url !in mcpClients.keys }
 
         toRemove.forEach { url ->
             try {
@@ -116,11 +117,11 @@ class ToolRepositoryImpl @Inject constructor(
             mcpClients.remove(url)
         }
 
-        toAdd.forEach { url ->
+        toAdd.forEach { config ->
             val client = mcpClientFactory.create()
             try {
-                client.connect(url)
-                mcpClients[url] = client
+                client.connect(config)
+                mcpClients[config.url] = client
             } catch (e: Exception) {
                 // Client failed to connect, we don't add it to the active pool
             }

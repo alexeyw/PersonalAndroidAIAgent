@@ -1,6 +1,7 @@
 package ai.agent.android.presentation.ui.tools
 
 import ai.agent.android.domain.models.McpConnectionStatus
+import ai.agent.android.domain.models.McpServerConfig
 import ai.agent.android.domain.models.McpTool
 import ai.agent.android.domain.repositories.McpServerRepository
 import ai.agent.android.domain.repositories.SettingsRepository
@@ -25,15 +26,13 @@ import javax.inject.Inject
  * Surfaces three streams:
  *
  *  - **Local tools** — loaded once from `ToolRepository.getAllLocalTools`.
- *    The user toggles them via [toggleLocalTool], which writes to
- *    `SettingsRepository.disabledAppFunctions`.
- *  - **MCP servers** — combined from `SettingsRepository.mcpServerUrls`
- *    and the per-URL streams of `McpServerRepository`. Adding a server
- *    immediately triggers a `tools/list` fetch; removing one disconnects
- *    the underlying client.
+ *  - **MCP servers** — combined from `SettingsRepository.mcpServers`
+ *    (full [McpServerConfig] per row) and the per-URL streams of
+ *    `McpServerRepository`. Adding or editing a server immediately
+ *    triggers a `tools/list` fetch with the persisted headers;
+ *    removing one disconnects the underlying client.
  *  - **Disabled MCP tool ids** — separate set in
- *    `SettingsRepository.disabledMcpTools` (kept distinct from the
- *    AppFunction set to avoid namespace collisions).
+ *    `SettingsRepository.disabledMcpTools`.
  */
 @HiltViewModel
 class ToolsViewModel @Inject constructor(
@@ -45,12 +44,6 @@ class ToolsViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(ToolsUiState())
     val uiState: StateFlow<ToolsUiState> = _uiState.asStateFlow()
 
-    /**
-     * Per-URL guards for the lifecycle of the per-server status / fetch
-     * jobs. When a URL is removed from Settings we cancel its observer
-     * and disconnect the repository entry; when a new URL appears we
-     * spin a fresh observer and kick off `fetchToolList`.
-     */
     private val serverObservers = ConcurrentHashMap<String, Job>()
 
     init {
@@ -59,8 +52,8 @@ class ToolsViewModel @Inject constructor(
             _uiState.update { it.copy(localTools = tools) }
         }
 
-        settingsRepository.mcpServerUrls
-            .onEach { urls -> reconcileServerSet(urls) }
+        settingsRepository.mcpServers
+            .onEach { configs -> reconcileServerSet(configs) }
             .launchIn(viewModelScope)
 
         settingsRepository.disabledAppFunctions
@@ -77,37 +70,36 @@ class ToolsViewModel @Inject constructor(
     }
 
     /**
-     * Reconciles [urls] against the in-memory snapshot map: spins up a
-     * status observer for every newly-added URL, cancels the observer and
-     * disconnects the underlying client for every removed URL, and rebuilds
-     * the snapshot list so the UI sees the new order.
-     *
-     * Ordering matters: the snapshot list is rewritten **before** any
-     * observer or fetch coroutine is launched. Both [observeServer] and
-     * [fetchToolsAndUpdate] mutate `_uiState.mcpServers` via `state.map`
-     * lookups keyed by URL — if the snapshot for a freshly-added URL is
-     * not present yet, those async updates are silently dropped.
+     * Reconciles [configs] against the in-memory snapshot map. Snapshots
+     * are inserted FIRST (with `Connecting` placeholder status) so the
+     * async observers / fetches launched immediately after find their
+     * row when they fold updates back into the state. URLs no longer
+     * present in [configs] are cancelled and disconnected.
      */
-    private fun reconcileServerSet(urls: Set<String>) {
+    private fun reconcileServerSet(configs: List<McpServerConfig>) {
+        val urls = configs.mapTo(mutableSetOf()) { it.url }
         val existing = serverObservers.keys.toSet()
         val toRemove = existing - urls
-        val toAdd = urls - existing
+        val toAdd = configs.filter { it.url !in existing }
 
         toRemove.forEach { url ->
             serverObservers.remove(url)?.cancel()
             viewModelScope.launch { mcpServerRepository.disconnect(serverUrl = url) }
         }
 
-        // 1) Snapshot list MUST be rewritten first so concurrent async writes
-        //    from the observers / fetches launched below find their entry.
         _uiState.update { state ->
             val existingByUrl = state.mcpServers.associateBy { it.url }
-            val snapshots = urls.map { url ->
-                existingByUrl[url] ?: McpServerSnapshot(
-                    url = url,
-                    status = McpConnectionStatus.Connecting,
-                    tools = emptyList(),
-                )
+            val snapshots = configs.map { config ->
+                val previous = existingByUrl[config.url]
+                if (previous != null) {
+                    previous.copy(config = config)
+                } else {
+                    McpServerSnapshot(
+                        config = config,
+                        status = McpConnectionStatus.Connecting,
+                        tools = emptyList(),
+                    )
+                }
             }
             state.copy(
                 mcpServers = snapshots,
@@ -115,45 +107,36 @@ class ToolsViewModel @Inject constructor(
             )
         }
 
-        // 2) Observers / fetches are launched only after the snapshots exist.
-        toAdd.forEach { url ->
-            serverObservers[url] = observeServer(url)
-            fetchToolsAndUpdate(serverUrl = url, forceRefresh = false)
+        toAdd.forEach { config ->
+            serverObservers[config.url] = observeServer(config.url)
+            fetchToolsAndUpdate(config = config, forceRefresh = false)
         }
     }
 
-    /**
-     * Starts a coroutine merging the repository's status flow for [url]
-     * into the matching [McpServerSnapshot]. The tool list itself is
-     * updated by [fetchToolsAndUpdate], so this observer is concerned
-     * only with the status field. Returns the [Job] so the caller can
-     * cancel it when the URL is removed.
-     */
     private fun observeServer(url: String): Job = mcpServerRepository.observeConnectionStatus(serverUrl = url)
         .onEach { status -> updateServerStatus(url = url, status = status) }
         .launchIn(viewModelScope)
 
     /**
-     * Launches a `fetchToolList` for [serverUrl] and merges the result
+     * Launches a `fetchToolList` for [config] and merges the result
      * into the snapshot list. Success updates the `tools` field; failure
      * is observed indirectly via the status flow (the repository emits
      * [McpConnectionStatus.Error] on the same code path).
      */
-    private fun fetchToolsAndUpdate(serverUrl: String, forceRefresh: Boolean) {
+    private fun fetchToolsAndUpdate(config: McpServerConfig, forceRefresh: Boolean) {
         viewModelScope.launch {
-            val tools = mcpServerRepository.fetchToolList(serverUrl = serverUrl, forceRefresh = forceRefresh)
+            val tools = mcpServerRepository.fetchToolList(config = config, forceRefresh = forceRefresh)
                 .getOrElse { return@launch }
             _uiState.update { state ->
                 state.copy(
                     mcpServers = state.mcpServers.map { snapshot ->
-                        if (snapshot.url == serverUrl) snapshot.copy(tools = tools) else snapshot
+                        if (snapshot.url == config.url) snapshot.copy(tools = tools) else snapshot
                     },
                 )
             }
         }
     }
 
-    /** Folds a status emission into the snapshot identified by [url]. */
     private fun updateServerStatus(url: String, status: McpConnectionStatus) {
         _uiState.update { state ->
             state.copy(
@@ -170,25 +153,40 @@ class ToolsViewModel @Inject constructor(
     }
 
     /**
-     * Persists the currently entered URL and triggers an immediate
-     * `tools/list` fetch for it. The status observer launched by
-     * [reconcileServerSet] will pick up the result and surface it in
-     * [uiState].
+     * Persists [config] and triggers an immediate `tools/list` fetch.
      */
-    fun addMcpServer() {
-        val url = _uiState.value.newMcpUrlInput.trim()
-        if (url.isNotBlank()) {
-            viewModelScope.launch {
-                settingsRepository.addMcpServerUrl(url = url)
-                _uiState.update { it.copy(newMcpUrlInput = "") }
+    fun addMcpServer(config: McpServerConfig) {
+        if (config.url.isBlank()) return
+        viewModelScope.launch {
+            settingsRepository.addMcpServer(config = config)
+            _uiState.update { it.copy(newMcpUrlInput = "") }
+        }
+    }
+
+    /**
+     * Replaces the persisted server identified by [originalUrl] with
+     * [updated]. When the URL changes, the old client connection is
+     * dropped so the new headers/url take effect on the next fetch.
+     */
+    fun updateMcpServer(originalUrl: String, updated: McpServerConfig) {
+        viewModelScope.launch {
+            if (originalUrl != updated.url) {
+                serverObservers.remove(originalUrl)?.cancel()
+                mcpServerRepository.disconnect(serverUrl = originalUrl)
+            } else {
+                // Drop the cached client so the next fetch reconnects with
+                // the new headers/transport instead of reusing the old
+                // session.
+                mcpServerRepository.disconnect(serverUrl = originalUrl)
             }
+            settingsRepository.updateMcpServer(originalUrl = originalUrl, updated = updated)
         }
     }
 
     /** Removes an MCP server URL and disconnects the underlying client. */
     fun removeMcpServer(url: String) {
         viewModelScope.launch {
-            settingsRepository.removeMcpServerUrl(url = url)
+            settingsRepository.removeMcpServer(url = url)
         }
     }
 
@@ -207,7 +205,8 @@ class ToolsViewModel @Inject constructor(
      * `McpServerRow`.
      */
     fun refreshServer(serverUrl: String) {
-        fetchToolsAndUpdate(serverUrl = serverUrl, forceRefresh = true)
+        val config = _uiState.value.mcpServers.firstOrNull { it.url == serverUrl }?.config ?: return
+        fetchToolsAndUpdate(config = config, forceRefresh = true)
     }
 
     /** Toggles the enabled/disabled state of a local AppFunction. */
@@ -228,11 +227,13 @@ class ToolsViewModel @Inject constructor(
         }
     }
 
+    /** Returns the persisted config for [url], or `null` if unknown. */
+    fun configFor(url: String): McpServerConfig? = _uiState.value.mcpServers.firstOrNull { it.url == url }?.config
+
     /**
      * Resolves an MCP tool by its stable id (matches
      * `McpServerRepositoryImpl.mcpToolId`). Returns `null` if no server
-     * in [uiState] currently advertises a tool with this id (e.g. the
-     * server was removed since navigation, or the cache is empty).
+     * in [uiState] currently advertises a tool with this id.
      */
     fun findMcpTool(toolId: String): McpTool? {
         val servers = _uiState.value.mcpServers

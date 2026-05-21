@@ -1,12 +1,15 @@
 package ai.agent.android.data.mcp
 
 import ai.agent.android.domain.models.AgentTool
+import ai.agent.android.domain.models.McpServerConfig
 import ai.koog.agents.core.tools.ToolRegistry
 import ai.koog.agents.mcp.McpToolRegistryProvider
 import ai.koog.agents.mcp.metadata.McpServerInfo
 import ai.koog.serialization.kotlinx.KotlinxSerializer
 import ai.koog.serialization.kotlinx.toKoogJSONObject
 import io.ktor.client.HttpClient
+import io.ktor.client.plugins.defaultRequest
+import io.ktor.http.HttpHeaders
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
@@ -46,7 +49,7 @@ class KoogMcpClient : McpClient {
      *
      * @param url The endpoint URL of the MCP server.
      */
-    override suspend fun connect(url: String) {
+    override suspend fun connect(config: McpServerConfig) {
         withContext(Dispatchers.IO) {
             // Drop any previous client+registry pair before reattaching. Without this,
             // a second connect() on the same instance would silently leak the prior
@@ -55,10 +58,33 @@ class KoogMcpClient : McpClient {
             httpClient = null
             registry = null
 
-            val client = HttpClient()
+            // Configure default request headers up-front so SSE handshake and every
+            // subsequent JSON-RPC request carry them. `Authorization` is the typical
+            // case but the user can supply any header pair.
+            val client = HttpClient {
+                if (config.headers.isNotEmpty()) {
+                    defaultRequest {
+                        config.headers.forEach { (key, value) ->
+                            // Ktor's `headers.append` rejects setting `Authorization`
+                            // when using basic auth plugins. We bypass with the raw
+                            // builder to keep the contract literal.
+                            headers.append(key, value)
+                        }
+                        // Convenience: when the user supplies a `Authorization` key
+                        // through `headers`, do not also expect them to set Accept.
+                        if (config.headers.keys.none { it.equals(HttpHeaders.Accept, ignoreCase = true) }) {
+                            headers.append(HttpHeaders.Accept, "text/event-stream")
+                        }
+                    }
+                }
+            }
             try {
-                val transport = McpToolRegistryProvider.defaultSseTransport(url, client)
-                val serverInfo = McpServerInfo(url = url, command = "")
+                // Koog 0.8 only ships an SSE transport; `STREAMABLE_HTTP` falls
+                // back to SSE here until the upstream SDK surfaces a dedicated
+                // transport. The user's intent is still persisted so the choice
+                // survives a future client upgrade.
+                val transport = McpToolRegistryProvider.defaultSseTransport(url = config.url, baseClient = client)
+                val serverInfo = McpServerInfo(url = config.url, command = "")
                 registry = McpToolRegistryProvider.fromTransport(transport, serverInfo)
                 // Publish the client into the field only after the transport has been
                 // attached successfully — failure paths must close it locally.
