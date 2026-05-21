@@ -103,7 +103,13 @@ fun KnotworkSecondaryButton(
                         modifier = Modifier.size(LoadingIndicatorSize),
                     )
                 }
-                Text(text = text, style = KnotworkTextStyles.LabelLg)
+                Text(
+                    text = text,
+                    style = KnotworkTextStyles.LabelLg,
+                    maxLines = 1,
+                    softWrap = false,
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                )
             }
             if (loading) {
                 CircularProgressIndicator(
