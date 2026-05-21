@@ -19,8 +19,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Add
@@ -47,6 +49,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.res.stringResource
@@ -68,6 +71,13 @@ private val LeadingIconSize = 18.dp
 private val RiskPillHeight = 22.dp
 private val StatusDotSize = 10.dp
 private val SchemaPreviewHeight = 240.dp
+
+// Material3's default Switch (52×32 dp) dwarfs the Knotwork row title scale.
+// `SettingsContent` shrinks it to ~78 % via `Modifier.scale` so the visual
+// weight matches our 14 sp row titles; the parent Row's `clickable` still
+// guarantees a 48 dp touch target. Keep this in sync with the Settings
+// constant of the same name.
+private const val SWITCH_SCALE = 0.78f
 
 /** Number of section / row skeletons rendered while the surface is loading. */
 private const val LOADING_SECTION_COUNT = 2
@@ -336,7 +346,7 @@ private fun BuiltInToolRowView(tool: BuiltInToolRow, callbacks: ToolsCallbacks) 
             if (tool.description.isNotBlank()) {
                 Text(
                     text = tool.description,
-                    style = KnotworkTextStyles.BodyBase,
+                    style = KnotworkTextStyles.BodySm,
                     color = KnotworkTheme.extended.onSurfaceMuted,
                 )
             }
@@ -349,6 +359,7 @@ private fun BuiltInToolRowView(tool: BuiltInToolRow, callbacks: ToolsCallbacks) 
                 checkedTrackColor = MaterialTheme.colorScheme.primary,
                 checkedBorderColor = MaterialTheme.colorScheme.primary,
             ),
+            modifier = Modifier.scale(SWITCH_SCALE),
         )
     }
 }
@@ -518,7 +529,7 @@ private fun McpToolEntryRowView(entry: McpToolEntry, callbacks: ToolsCallbacks) 
             if (entry.description.isNotBlank()) {
                 Text(
                     text = entry.description,
-                    style = KnotworkTextStyles.BodyBase,
+                    style = KnotworkTextStyles.BodySm,
                     color = KnotworkTheme.extended.onSurfaceMuted,
                 )
             }
@@ -531,6 +542,7 @@ private fun McpToolEntryRowView(entry: McpToolEntry, callbacks: ToolsCallbacks) 
                 checkedTrackColor = MaterialTheme.colorScheme.primary,
                 checkedBorderColor = MaterialTheme.colorScheme.primary,
             ),
+            modifier = Modifier.scale(SWITCH_SCALE),
         )
     }
 }
@@ -652,7 +664,11 @@ fun ToolDetailContent(
     ) { padding ->
         Column(
             verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp3),
-            modifier = Modifier.fillMaxSize().padding(padding).padding(KnotworkTheme.spacing.sp4),
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .verticalScroll(state = rememberScrollState())
+                .padding(KnotworkTheme.spacing.sp4),
         ) {
             Text(
                 text = state.serverDisplayName,
@@ -661,7 +677,7 @@ fun ToolDetailContent(
             )
             Text(
                 text = state.description,
-                style = KnotworkTextStyles.BodyBase,
+                style = KnotworkTextStyles.BodySm,
                 color = MaterialTheme.colorScheme.onSurface,
             )
             if (state.lastUsed != null) {
@@ -678,7 +694,11 @@ fun ToolDetailContent(
                     color = MaterialTheme.colorScheme.onSurface,
                     modifier = Modifier.weight(1f),
                 )
-                Switch(checked = state.enabled, onCheckedChange = callbacks.onToggle)
+                Switch(
+                    checked = state.enabled,
+                    onCheckedChange = callbacks.onToggle,
+                    modifier = Modifier.scale(SWITCH_SCALE),
+                )
             }
             Text(
                 text = stringResource(R.string.knotwork_tools_detail_schema),
