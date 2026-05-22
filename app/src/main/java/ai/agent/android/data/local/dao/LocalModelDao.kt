@@ -86,4 +86,19 @@ interface LocalModelDao {
      */
     @Query("SELECT COUNT(*) FROM local_models WHERE name = :fileName")
     suspend fun countByName(fileName: String): Int
+
+    /**
+     * Returns the first row whose [LocalModelEntity.name] matches
+     * [fileName] exactly. The `LIMIT 1` makes the call deterministic
+     * if the user has somehow ended up with two rows for the same
+     * filename. Used by `OnboardingViewModel` to resolve the on-disk
+     * path of the *picked* model independently of whichever model
+     * currently has `isActive = 1` — picking and activation are
+     * orthogonal.
+     *
+     * @param fileName the on-disk filename to look up.
+     * @return the matching entity, or `null` when no row exists.
+     */
+    @Query("SELECT * FROM local_models WHERE name = :fileName LIMIT 1")
+    suspend fun findByName(fileName: String): LocalModelEntity?
 }

@@ -1,5 +1,6 @@
 package ai.agent.android.presentation.ui.navigation
 
+import ai.agent.android.presentation.state.TransientMessageRelay
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.LocalActivity
 import androidx.compose.animation.AnimatedVisibility
@@ -19,9 +20,13 @@ import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.navigation.NavHostController
@@ -63,7 +68,11 @@ import app.knotwork.design.theme.KnotworkTheme
  * @param content The nav-graph composable to host. Typically `AppNavGraph`.
  */
 @Composable
-fun AppShellScaffold(navController: NavHostController, content: @Composable (innerPadding: PaddingValues) -> Unit) {
+fun AppShellScaffold(
+    navController: NavHostController,
+    transientMessageRelay: TransientMessageRelay,
+    content: @Composable (innerPadding: PaddingValues) -> Unit,
+) {
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute: String? = navBackStackEntry?.destination?.route
     val showBottomNav = shouldShowBottomNav(currentRoute)
@@ -72,6 +81,17 @@ fun AppShellScaffold(navController: NavHostController, content: @Composable (inn
     val isOnTabRoot = TAB_DESTINATIONS.any { it.route == currentRoute }
     BackHandler(enabled = isOnTabRoot) {
         activity?.finish()
+    }
+
+    // Activity-level snackbar host: outlives every NavGraph destination
+    // so messages emitted from a screen that pops itself off the
+    // back-stack (today: onboarding's skip-flow hint) still render
+    // *after* navigation settles on the next destination.
+    val snackbarHostState = remember { SnackbarHostState() }
+    LaunchedEffect(transientMessageRelay) {
+        transientMessageRelay.messages.collect { message ->
+            snackbarHostState.showSnackbar(message = message)
+        }
     }
 
     // Wrap the whole shell in `imePadding()` so the bottom-nav + body slide
@@ -86,6 +106,7 @@ fun AppShellScaffold(navController: NavHostController, content: @Composable (inn
     Scaffold(
         modifier = Modifier.fillMaxSize().imePadding(),
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
+        snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
         bottomBar = {
             AnimatedVisibility(
                 visible = showBottomNav,

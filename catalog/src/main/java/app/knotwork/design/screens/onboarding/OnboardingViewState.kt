@@ -121,18 +121,32 @@ data class OnboardingViewState(
     val isModelWarmed: Boolean = false,
 ) {
     /**
-     * Primary CTA enablement matrix:
-     *  - Welcome / CloudKeys — always enabled (cloud keys are optional);
-     *  - LiteRtModel — enabled only when the picked model is already
-     *    installed or a download is in flight (so the user can't advance
-     *    without ending up with an active model);
-     *  - Ready — enabled only after the host has warmed the inference
-     *    handle, so chat will work on the first send.
+     * Primary CTA enablement matrix. The step-2 CTA serves three roles
+     * depending on download state (the catalog renders distinct labels
+     * for each), so enablement has to follow the matching state:
+     *  - **Welcome / CloudKeys** — always enabled (cloud keys are
+     *    optional);
+     *  - **LiteRtModel — `Continue`** (model already on disk) — enabled
+     *    so the user can advance to step 3;
+     *  - **LiteRtModel — `Downloading…`** (download in flight) —
+     *    disabled, the CTA acts as a non-clickable status indicator and
+     *    re-tapping would be a no-op;
+     *  - **LiteRtModel — `Download {name}`** (no install yet, no
+     *    download in flight) — enabled for the bundled presets (the
+     *    URL is known); for the `CustomUrl` row it depends on whether
+     *    the user typed something in [customDownloadUrl];
+     *  - **Ready** — enabled only after the host has warmed the
+     *    inference handle, so chat will work on the first send.
      */
     val isPrimaryCtaEnabled: Boolean
         get() = when (step) {
             OnboardingStep.Welcome, OnboardingStep.CloudKeys -> true
-            OnboardingStep.LiteRtModel -> installedModelId != null || downloadProgress != null
+            OnboardingStep.LiteRtModel -> when {
+                installedModelId != null -> true
+                downloadProgress != null -> false
+                liteRtModel == OnboardingLiteRtModel.CustomUrl -> customDownloadUrl.isNotBlank()
+                else -> true
+            }
             OnboardingStep.Ready -> isModelWarmed
         }
 

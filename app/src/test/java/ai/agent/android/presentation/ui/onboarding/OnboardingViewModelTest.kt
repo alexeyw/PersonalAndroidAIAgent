@@ -9,18 +9,17 @@ import ai.agent.android.domain.repositories.LocalModelRepository
 import ai.agent.android.domain.repositories.ModelDownloadManager
 import ai.agent.android.domain.repositories.SettingsRepository
 import ai.agent.android.domain.usecases.LoadModelUseCase
+import ai.agent.android.presentation.state.TransientMessageRelay
 import app.knotwork.design.screens.onboarding.OnboardingLiteRtModel
 import app.knotwork.design.screens.onboarding.OnboardingStep
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
-import kotlinx.coroutines.CoroutineScope
+import io.mockk.verify
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.flowOf
-import kotlinx.coroutines.flow.toList
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
@@ -60,6 +59,7 @@ class OnboardingViewModelTest {
     private lateinit var localModelRepository: LocalModelRepository
     private lateinit var downloadManager: ModelDownloadManager
     private lateinit var loadModelUseCase: LoadModelUseCase
+    private lateinit var transientMessageRelay: TransientMessageRelay
 
     @Before
     fun setUp() {
@@ -68,6 +68,7 @@ class OnboardingViewModelTest {
         coEvery { settingsRepository.setHasCompletedOnboarding(any()) } returns Unit
         localModelRepository = mockk(relaxed = true)
         coEvery { localModelRepository.isInstalled(any()) } returns false
+        coEvery { localModelRepository.findByFileName(any()) } returns null
         coEvery { localModelRepository.getActiveModel() } returns null
         coEvery { localModelRepository.insertModel(any()) } returns 1L
         coEvery { localModelRepository.setActiveModel(any()) } returns Unit
@@ -75,6 +76,7 @@ class OnboardingViewModelTest {
         every { downloadManager.downloadModel(any(), any(), any()) } returns flowOf()
         loadModelUseCase = mockk(relaxed = true)
         coEvery { loadModelUseCase.invoke(any()) } returns Result.Success(Unit)
+        transientMessageRelay = mockk(relaxed = true)
     }
 
     @After
@@ -87,6 +89,7 @@ class OnboardingViewModelTest {
         localModelRepository = localModelRepository,
         downloadManager = downloadManager,
         loadModelUseCase = loadModelUseCase,
+        transientMessageRelay = transientMessageRelay,
     )
 
     @Test
@@ -125,14 +128,15 @@ class OnboardingViewModelTest {
 
     @Test
     fun `finishOnboarding loads installed model into inference engine`() = runTest {
-        coEvery { localModelRepository.isInstalled(any()) } returns true
-        coEvery { localModelRepository.getActiveModel() } returns LocalModel(
+        val installedModel = LocalModel(
             id = 7L,
             name = "gemma-4-E2B-it.litertlm",
             path = "/data/model.litertlm",
             size = 0L,
             isActive = true,
         )
+        coEvery { localModelRepository.isInstalled(any()) } returns true
+        coEvery { localModelRepository.findByFileName(any()) } returns installedModel
         val viewModel = newViewModel()
         advanceUntilIdle()
 
@@ -144,30 +148,43 @@ class OnboardingViewModelTest {
     }
 
     @Test
-    fun `cannot advance from step 2 without installed model`() = runTest {
+    fun `step 2 CTA is disabled while a download is in flight`() = runTest {
+        // Suspend-forever flow simulates a long-running download: the
+        // VM marks `downloadProgress = 0f` and never gets a Success,
+        // so the CTA renders "Downloading…" and must stay disabled
+        // (re-tapping would be a no-op anyway, but the visual state
+        // matters).
+        every { downloadManager.downloadModel(any(), any(), any()) } returns kotlinx.coroutines.flow.flow {
+            emit(DownloadState.Pending)
+            // never completes
+            kotlinx.coroutines.awaitCancellation()
+        }
         val viewModel = newViewModel()
         advanceUntilIdle()
 
         viewModel.next() // 1 → 2
+        viewModel.startDownload()
         advanceUntilIdle()
+
         val onStep2 = viewModel.state.value
         assertEquals(OnboardingStep.LiteRtModel, onStep2.step)
         assertNull(onStep2.installedModelId)
-        assertNull(onStep2.downloadProgress)
+        assertEquals(0f, onStep2.downloadProgress)
         assertFalse(onStep2.isPrimaryCtaEnabled)
     }
 
     @Test
     fun `pickLiteRtModel sets installedId when matching file already on disk`() = runTest {
         val e4bFileName = OnboardingModelCatalog.entryById(OnboardingLiteRtModel.Gemma4E4B.id)!!.fileName
-        coEvery { localModelRepository.isInstalled(e4bFileName) } returns true
-        coEvery { localModelRepository.getActiveModel() } returns LocalModel(
+        val e4bModel = LocalModel(
             id = 9L,
             name = e4bFileName,
             path = "/data/e4b.litertlm",
             size = 0L,
-            isActive = true,
+            isActive = false,
         )
+        coEvery { localModelRepository.isInstalled(e4bFileName) } returns true
+        coEvery { localModelRepository.findByFileName(e4bFileName) } returns e4bModel
         val viewModel = newViewModel()
         advanceUntilIdle()
 
@@ -178,6 +195,39 @@ class OnboardingViewModelTest {
         assertEquals(OnboardingLiteRtModel.Gemma4E4B.id, state.installedModelId)
         // No download started since the model is already on disk.
         coVerify(exactly = 0) { downloadManager.downloadModel(any(), any(), any()) }
+        // Warm-up resolved the *picked* model's path (not the active-row
+        // fallback) — guards against the regression flagged in PR review.
+        coVerify(atLeast = 1) { loadModelUseCase.invoke("/data/e4b.litertlm") }
+    }
+
+    @Test
+    fun `pickLiteRtModel warms picked path even when a different model is active`() = runTest {
+        // Active row points at E2B; user picks E4B; warm-up must run on
+        // E4B's path, not the active E2B path.
+        val e4bFileName = OnboardingModelCatalog.entryById(OnboardingLiteRtModel.Gemma4E4B.id)!!.fileName
+        coEvery { localModelRepository.isInstalled(e4bFileName) } returns true
+        coEvery { localModelRepository.findByFileName(e4bFileName) } returns LocalModel(
+            id = 11L,
+            name = e4bFileName,
+            path = "/data/e4b.litertlm",
+            size = 0L,
+            isActive = false,
+        )
+        coEvery { localModelRepository.getActiveModel() } returns LocalModel(
+            id = 1L,
+            name = "gemma-4-E2B-it.litertlm",
+            path = "/data/e2b.litertlm",
+            size = 0L,
+            isActive = true,
+        )
+        val viewModel = newViewModel()
+        advanceUntilIdle()
+
+        viewModel.pickLiteRtModel(OnboardingLiteRtModel.Gemma4E4B)
+        advanceUntilIdle()
+
+        coVerify(atLeast = 1) { loadModelUseCase.invoke("/data/e4b.litertlm") }
+        coVerify(exactly = 0) { loadModelUseCase.invoke("/data/e2b.litertlm") }
     }
 
     @Test
@@ -199,22 +249,30 @@ class OnboardingViewModelTest {
     }
 
     @Test
-    fun `skipOnboarding emits snackbar hint`() = runTest {
+    fun `skipOnboarding posts hint through TransientMessageRelay`() = runTest {
         val viewModel = newViewModel()
-        val received = mutableListOf<String>()
-        val collector = CoroutineScope(testDispatcher).launch {
-            viewModel.skipSnackbarEvents.toList(received)
-        }
-        advanceUntilIdle()
 
         viewModel.skipOnboarding()
         advanceUntilIdle()
 
+        // Posting through the relay (not a per-VM SharedFlow) is what
+        // lets the snackbar survive the back-stack pop that
+        // `onCompleted()` triggers right after this call.
+        verify(exactly = 1) { transientMessageRelay.post(OnboardingViewModel.SKIP_SNACKBAR_MESSAGE) }
         coVerify(exactly = 1) { settingsRepository.setHasCompletedOnboarding(true) }
-        assertTrue(
-            "Expected SKIP_SNACKBAR_MESSAGE in snackbar events, got $received",
-            received.contains(OnboardingViewModel.SKIP_SNACKBAR_MESSAGE),
-        )
-        collector.cancel()
+    }
+
+    @Test
+    fun `step 2 CTA is enabled for a fresh-install preset pick`() = runTest {
+        val viewModel = newViewModel()
+        advanceUntilIdle()
+        viewModel.next() // 1 → 2
+        advanceUntilIdle()
+
+        // Fresh install: no install yet, no download in flight, picked
+        // row is a preset → CTA *must* be enabled so the user can start
+        // the download. Regression guard for the PR-review feedback
+        // about the dead-locked onboarding flow.
+        assertTrue(viewModel.state.value.isPrimaryCtaEnabled)
     }
 }

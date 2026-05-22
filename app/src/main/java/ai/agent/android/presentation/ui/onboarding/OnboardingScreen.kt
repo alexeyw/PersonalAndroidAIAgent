@@ -1,15 +1,10 @@
 package ai.agent.android.presentation.ui.onboarding
 
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.safeDrawingPadding
-import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
@@ -22,9 +17,14 @@ import app.knotwork.design.screens.onboarding.OnboardingContent
  * CloudKeys → Ready`) backed by [OnboardingViewModel].
  *
  * The visual surface lives in `:catalog` (`OnboardingContent`); this
- * screen threads the ViewModel state, forwards finish/skip into the
- * nav-graph, and surfaces the skip-flow snackbar emitted by
- * [OnboardingViewModel.skipSnackbarEvents].
+ * screen threads the ViewModel state and forwards finish/skip into the
+ * nav-graph. The skip-flow snackbar hint is *not* rendered here — the
+ * screen pops off the back-stack on `onCompleted`, so a screen-local
+ * `SnackbarHost` would be unmounted before the snackbar appears. The
+ * VM publishes the hint to
+ * [ai.agent.android.presentation.state.TransientMessageRelay] instead,
+ * and the activity-level host inside `AppShellScaffold` renders it on
+ * top of whichever destination is current after navigation settles.
  *
  * @param onCompleted Pop onboarding off the back-stack and navigate to the
  * Chat tab. Invoked exactly once when the user taps `Open chat` on step 4
@@ -35,10 +35,6 @@ import app.knotwork.design.screens.onboarding.OnboardingContent
 @Composable
 fun OnboardingScreen(onCompleted: () -> Unit, viewModel: OnboardingViewModel = hiltViewModel()) {
     val state by viewModel.state.collectAsStateWithLifecycle()
-    val snackbarHostState = remember { SnackbarHostState() }
-    LaunchedEffect(viewModel) {
-        viewModel.skipSnackbarEvents.collect { message -> snackbarHostState.showSnackbar(message) }
-    }
     val callbacks = remember(viewModel) {
         OnboardingCallbacks(
             onNext = viewModel::next,
@@ -57,22 +53,14 @@ fun OnboardingScreen(onCompleted: () -> Unit, viewModel: OnboardingViewModel = h
             onCustomDownloadUrlChanged = viewModel::onCustomDownloadUrlChanged,
         )
     }
-    Box(
+    OnboardingContent(
+        state = state,
+        callbacks = callbacks,
         modifier = Modifier
             .fillMaxSize()
             .safeDrawingPadding()
             .testTag(tag = ONBOARDING_ROOT_TEST_TAG),
-    ) {
-        OnboardingContent(
-            state = state,
-            callbacks = callbacks,
-            modifier = Modifier.fillMaxSize(),
-        )
-        SnackbarHost(
-            hostState = snackbarHostState,
-            modifier = Modifier.align(Alignment.BottomCenter),
-        )
-    }
+    )
 }
 
 /** Stable test tag for the onboarding screen root — used by instrumented tests. */

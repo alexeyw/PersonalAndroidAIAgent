@@ -10,6 +10,7 @@ import ai.agent.android.domain.repositories.LocalModelRepository
 import ai.agent.android.domain.repositories.ModelDownloadManager
 import ai.agent.android.domain.repositories.SettingsRepository
 import ai.agent.android.domain.usecases.LoadModelUseCase
+import ai.agent.android.presentation.state.TransientMessageRelay
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.knotwork.design.screens.onboarding.OnboardingCloudProvider
@@ -19,11 +20,8 @@ import app.knotwork.design.screens.onboarding.OnboardingStep
 import app.knotwork.design.screens.onboarding.OnboardingViewState
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.launchIn
@@ -62,6 +60,11 @@ import javax.inject.Inject
  * `OnboardingViewState.downloadProgress` / `downloadError`.
  * @property loadModelUseCase warms the LiteRT inference handle as soon
  * as a model is available so chat works on the first send.
+ * @property transientMessageRelay process-wide one-shot snackbar bus.
+ * The skip-flow message has to outlive the `OnboardingScreen`'s
+ * back-stack entry (which is popped the same frame `onCompleted` fires),
+ * so we publish through this singleton; the activity-level host renders
+ * the snackbar after navigation settles on Chat.
  */
 @HiltViewModel
 class OnboardingViewModel @Inject constructor(
@@ -69,6 +72,7 @@ class OnboardingViewModel @Inject constructor(
     private val localModelRepository: LocalModelRepository,
     private val downloadManager: ModelDownloadManager,
     private val loadModelUseCase: LoadModelUseCase,
+    private val transientMessageRelay: TransientMessageRelay,
 ) : ViewModel() {
 
     private val _state: MutableStateFlow<OnboardingViewState> = MutableStateFlow(
@@ -77,15 +81,6 @@ class OnboardingViewModel @Inject constructor(
 
     /** Externally-observable view state passed to `OnboardingContent`. */
     val state: StateFlow<OnboardingViewState> = _state.asStateFlow()
-
-    private val _skipSnackbarEvents: MutableSharedFlow<String> = MutableSharedFlow(extraBufferCapacity = 1)
-
-    /**
-     * One-shot snackbar pings emitted by [skipOnboarding] — gives the
-     * host a chance to surface "You can install a model from Settings →
-     * Models" without coupling the VM to a Snackbar host.
-     */
-    val skipSnackbarEvents: SharedFlow<String> = _skipSnackbarEvents.asSharedFlow()
 
     /** Active download collection — cancelled when a new pick re-arms the flow. */
     private var downloadJob: Job? = null
@@ -193,13 +188,18 @@ class OnboardingViewModel @Inject constructor(
 
     /**
      * Skip button (visible on steps 1-3). Persists `hasCompletedOnboarding
-     * = true` and emits a snackbar hint so the user knows where to
-     * install a model later.
+     * = true` and publishes a snackbar hint through the
+     * [TransientMessageRelay] — the message is rendered by the
+     * activity-level host *after* navigation pops onboarding off the
+     * back-stack, so the user sees the hint on top of the Chat surface
+     * they just landed on.
      */
     fun skipOnboarding() {
+        // Publish the hint *before* the flag flip so the relay tryEmit
+        // happens regardless of how fast the host pops onboarding.
+        transientMessageRelay.post(SKIP_SNACKBAR_MESSAGE)
         viewModelScope.launch {
             settingsRepository.setHasCompletedOnboarding(true)
-            _skipSnackbarEvents.tryEmit(SKIP_SNACKBAR_MESSAGE)
         }
     }
 
@@ -221,12 +221,17 @@ class OnboardingViewModel @Inject constructor(
     private fun checkIfPickedModelAlreadyInstalled(model: OnboardingLiteRtModel) {
         val entry = OnboardingModelCatalog.entryById(model.id) ?: return
         viewModelScope.launch {
-            if (localModelRepository.isInstalled(entry.fileName)) {
-                val activeModel = localModelRepository.getActiveModel()
-                installedModelPath = activeModel?.path
-                _state.update { it.copy(installedModelId = model.id) }
-                scheduleWarmUp()
-            }
+            // Look up the LocalModel row by *filename* (not active-flag).
+            // The user's pick is orthogonal to whichever row currently has
+            // `isActive = 1`: picking model A while model B is active must
+            // still warm A's handle, not B's. Without this the warm-up
+            // either runs on the wrong model or never fires at all (when
+            // no row is active yet), and step 4 stays permanently
+            // disabled.
+            val installed = localModelRepository.findByFileName(entry.fileName) ?: return@launch
+            installedModelPath = installed.path
+            _state.update { it.copy(installedModelId = model.id) }
+            scheduleWarmUp()
         }
     }
 

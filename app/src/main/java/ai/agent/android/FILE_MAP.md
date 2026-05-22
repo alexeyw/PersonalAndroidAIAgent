@@ -217,6 +217,7 @@ This file maps the contents of the main application package.
     - `ApprovalAction.kt` - Typed enum pairing the Approve/Deny notification actions with their wire `Intent.action` strings; owns `fromAction` parsing.
   - `state/` - State management components.
     - `ActiveSessionTracker.kt` - Tracker for active chat session.
+    - `TransientMessageRelay.kt` - `@Singleton` one-shot snackbar bus consumed by the activity-level `SnackbarHost` in `AppShellScaffold`. Used by `OnboardingViewModel.skipOnboarding` to surface the "install a model from Settings → Models" hint *after* navigation pops onboarding off the back-stack.
   - `theme/` - Compose theme definitions.
     - `Theme.kt` - App theme definition. Reads the static fallback palette from `res/values/colors.xml` via `colorResource(...)`; dynamic color (Android 12+) takes precedence on supported devices.
     - `Type.kt` - Typography settings.

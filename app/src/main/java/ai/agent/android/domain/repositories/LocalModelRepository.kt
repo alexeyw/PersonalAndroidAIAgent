@@ -71,4 +71,12 @@ interface LocalModelRepository {
      * download manager wrote to disk), case-sensitive.
      */
     suspend fun isInstalled(fileName: String): Boolean
+
+    /**
+     * Returns the [LocalModel] whose on-disk name matches [fileName]
+     * exactly, or `null` when no such row exists. Independent of the
+     * `isActive` flag — the onboarding flow needs the path of the row
+     * the user *picked*, not the row currently selected as active.
+     */
+    suspend fun findByFileName(fileName: String): LocalModel?
 }
