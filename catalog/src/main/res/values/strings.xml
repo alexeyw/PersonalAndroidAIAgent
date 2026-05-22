@@ -382,6 +382,18 @@
     <string name="knotwork_onboarding_models_recommended">RECOMMENDED</string>
     <!-- Step 2 CTA template: "Download {model name}". -->
     <string name="knotwork_onboarding_models_download_cta">Download %1$s</string>
+    <!-- Step 2 CTA shown while a download is in flight. -->
+    <string name="knotwork_onboarding_models_downloading_cta">Downloading…</string>
+    <!-- Step 2 CTA shown when the picked model is already installed locally. -->
+    <string name="knotwork_onboarding_models_continue_cta">Continue</string>
+    <!-- Step 2 INSTALLED outline pill rendered next to a model that is already on disk. -->
+    <string name="knotwork_onboarding_models_installed">INSTALLED</string>
+    <!-- Step 2 progress label template under the active download row, e.g. "Downloading… 42%". -->
+    <string name="knotwork_onboarding_models_progress">Downloading… %1$d%%</string>
+    <!-- Step 2 custom URL field placeholder. -->
+    <string name="knotwork_onboarding_models_custom_url_placeholder">https://…/model.litertlm</string>
+    <!-- Step 2 custom URL field label. -->
+    <string name="knotwork_onboarding_models_custom_url_label">Model URL</string>
 
     <!-- Step 3 headline. -->
     <string name="knotwork_onboarding_cloud_headline">Add cloud keys later, or skip.</string>
@@ -393,6 +405,11 @@
     <string name="knotwork_onboarding_cloud_configured">Configured</string>
     <!-- Step 3 primary CTA label. -->
     <string name="knotwork_onboarding_cloud_skip_cta">Skip for now</string>
+
+    <!-- Step 4 row caption above the installed-model name. -->
+    <string name="knotwork_onboarding_ready_active_model_label">Active model</string>
+    <!-- Step 4 placeholder shown when the model name is unavailable. -->
+    <string name="knotwork_onboarding_ready_active_model_pending">Loading model…</string>
 
     <!-- Step 4 headline. -->
     <string name="knotwork_onboarding_ready_headline">One default pipeline is bound to your first chat.</string>

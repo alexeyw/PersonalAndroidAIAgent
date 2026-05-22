@@ -18,7 +18,13 @@ import app.knotwork.design.screens.onboarding.OnboardingContent
  *
  * The visual surface lives in `:catalog` (`OnboardingContent`); this
  * screen threads the ViewModel state and forwards finish/skip into the
- * nav-graph.
+ * nav-graph. The skip-flow snackbar hint is *not* rendered here — the
+ * screen pops off the back-stack on `onCompleted`, so a screen-local
+ * `SnackbarHost` would be unmounted before the snackbar appears. The
+ * VM publishes the hint to
+ * [ai.agent.android.presentation.state.TransientMessageRelay] instead,
+ * and the activity-level host inside `AppShellScaffold` renders it on
+ * top of whichever destination is current after navigation settles.
  *
  * @param onCompleted Pop onboarding off the back-stack and navigate to the
  * Chat tab. Invoked exactly once when the user taps `Open chat` on step 4
@@ -43,6 +49,8 @@ fun OnboardingScreen(onCompleted: () -> Unit, viewModel: OnboardingViewModel = h
             },
             onLiteRtModelPick = viewModel::pickLiteRtModel,
             onConfigureCloudProvider = viewModel::markCloudProviderConfigured,
+            onStartDownload = viewModel::startDownload,
+            onCustomDownloadUrlChanged = viewModel::onCustomDownloadUrlChanged,
         )
     }
     OnboardingContent(

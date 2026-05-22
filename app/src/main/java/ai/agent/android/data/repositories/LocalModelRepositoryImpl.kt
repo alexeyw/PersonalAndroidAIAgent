@@ -46,6 +46,14 @@ class LocalModelRepositoryImpl @Inject constructor(private val localModelDao: Lo
         localModelDao.activateModelById(id)
     }
 
+    override suspend fun isInstalled(fileName: String): Boolean = withContext(Dispatchers.IO) {
+        localModelDao.countByName(fileName) > 0
+    }
+
+    override suspend fun findByFileName(fileName: String): LocalModel? = withContext(Dispatchers.IO) {
+        localModelDao.findByName(fileName)?.toDomain()
+    }
+
     override fun observeActiveModelMeta(): Flow<ActiveModelMeta?> = localModelDao.observeActiveModel()
         .map { entity ->
             if (entity == null) {

@@ -15,6 +15,25 @@ details.
 
 ### Added
 
+- **Onboarding — LiteRT model download wiring** (Phase 22 / Task 12/17)
+  — Step 2 of the onboarding pager now actually downloads the picked
+  LiteRT model. The CTA stays disabled until the model is on disk or a
+  download is in flight, so the user can no longer advance into chat
+  with no active model (which previously produced a "LiteRT handle
+  released by system" error on the first send). Re-entering onboarding
+  after a previous install detects the existing file through the new
+  `LocalModelRepository.isInstalled(fileName)` query and surfaces an
+  "Installed" pill on the matching row. Picking *Custom URL…* reveals
+  an inline text field, with on-the-fly filename derivation from the
+  trailing path segment. As soon as a model becomes available the
+  ViewModel runs `LoadModelUseCase` to warm the inference handle, so
+  step 4's "Open chat" CTA becomes enabled the moment the model
+  finishes loading. Skipping onboarding emits a snackbar — "You can
+  install a model from Settings → Models" — so the user knows where to
+  recover the flow later. The bundled preset URLs live in the new
+  `domain/constants/OnboardingModelCatalog.kt` and are shared between
+  the onboarding catalog and the data-layer downloader.
+
 - **Tools — full MCP server configuration** (Phase 22 / Task 10/17) —
   Each MCP server now carries a full [McpServerConfig]: optional
   display name, transport selection (SSE via Koog's
