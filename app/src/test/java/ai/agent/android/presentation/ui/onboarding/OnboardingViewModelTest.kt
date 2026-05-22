@@ -127,7 +127,7 @@ class OnboardingViewModelTest {
     }
 
     @Test
-    fun `finishOnboarding loads installed model into inference engine`() = runTest {
+    fun `finishOnboarding persists hasCompletedOnboarding without re-warming`() = runTest {
         val installedModel = LocalModel(
             id = 7L,
             name = "gemma-4-E2B-it.litertlm",
@@ -139,12 +139,19 @@ class OnboardingViewModelTest {
         coEvery { localModelRepository.findByFileName(any()) } returns installedModel
         val viewModel = newViewModel()
         advanceUntilIdle()
+        // The init-triggered warm-up fires exactly once for the
+        // re-installed model. Track that baseline so we can assert
+        // `finishOnboarding` does not add a second call.
+        coVerify(exactly = 1) { loadModelUseCase.invoke("/data/model.litertlm") }
 
         viewModel.finishOnboarding()
         advanceUntilIdle()
 
         coVerify(exactly = 1) { settingsRepository.setHasCompletedOnboarding(true) }
-        coVerify(atLeast = 1) { loadModelUseCase.invoke("/data/model.litertlm") }
+        // The Ready CTA only enables after `isModelWarmed == true`, so a
+        // second `loadModelUseCase` call from `finishOnboarding` would
+        // be a no-op (the engine early-returns) and merely add noise.
+        coVerify(exactly = 1) { loadModelUseCase.invoke("/data/model.litertlm") }
     }
 
     @Test
@@ -260,6 +267,44 @@ class OnboardingViewModelTest {
         // `onCompleted()` triggers right after this call.
         verify(exactly = 1) { transientMessageRelay.post(OnboardingViewModel.SKIP_SNACKBAR_MESSAGE) }
         coVerify(exactly = 1) { settingsRepository.setHasCompletedOnboarding(true) }
+    }
+
+    @Test
+    fun `rapid pick switch does not resurrect stale install-check result`() = runTest {
+        // Stage a slow lookup for the E2B row and an instant null for E4B.
+        // We pick E2B (slow check suspends), then immediately pick E4B
+        // (cancels the E2B check + flips state). When the E2B suspension
+        // finally completes, the guard must prevent the stale model from
+        // overwriting E4B's empty `installedModelId`.
+        val e2bFileName = OnboardingModelCatalog.entryById(OnboardingLiteRtModel.Gemma4E2B.id)!!.fileName
+        val e4bFileName = OnboardingModelCatalog.entryById(OnboardingLiteRtModel.Gemma4E4B.id)!!.fileName
+        val e2bSuspender = kotlinx.coroutines.CompletableDeferred<LocalModel?>()
+        coEvery { localModelRepository.findByFileName(e2bFileName) } coAnswers { e2bSuspender.await() }
+        coEvery { localModelRepository.findByFileName(e4bFileName) } returns null
+        val viewModel = newViewModel()
+        // The default pick on init is E2B → triggers the suspended lookup.
+
+        viewModel.pickLiteRtModel(OnboardingLiteRtModel.Gemma4E4B)
+        advanceUntilIdle()
+        // Now resolve the slow E2B lookup, simulating the stale resume.
+        e2bSuspender.complete(
+            LocalModel(
+                id = 5L,
+                name = e2bFileName,
+                path = "/data/e2b.litertlm",
+                size = 0L,
+                isActive = false,
+            ),
+        )
+        advanceUntilIdle()
+
+        // E4B is the current pick; the stale E2B resume must not have
+        // marked anything as installed.
+        val state = viewModel.state.value
+        assertEquals(OnboardingLiteRtModel.Gemma4E4B, state.liteRtModel)
+        assertNull(state.installedModelId)
+        // And no warm-up fired on E2B's stale path.
+        coVerify(exactly = 0) { loadModelUseCase.invoke("/data/e2b.litertlm") }
     }
 
     @Test

@@ -81,11 +81,24 @@ object OnboardingModelCatalog {
      * (`custom-model.litertlm`) when the URL is empty / malformed. The
      * function is intentionally tolerant — `OnboardingViewModel` shows
      * a typed error before this is called for blank URLs.
+     *
+     * Edge cases the algorithm covers:
+     *  - Slashless input (`my-model.litertlm`) — falls back to the
+     *    original string instead of the generic name, so a naked
+     *    filename round-trips correctly.
+     *  - Query-string survivors (`…?token=abc`) — drop to the generic
+     *    fallback rather than write a file with a `?` in its name.
+     *  - Missing `.litertlm` suffix — appended so the on-disk file
+     *    matches the engine's expected extension.
      */
     fun fileNameForCustomUrl(url: String): String {
         val trimmed = url.trim().trimEnd('/')
         if (trimmed.isEmpty()) return DEFAULT_CUSTOM_FILE_NAME
-        val lastSegment = trimmed.substringAfterLast(delimiter = '/', missingDelimiterValue = "")
+        // Pass `trimmed` as the missing-delimiter value so slashless
+        // input survives — a naked `my-model.litertlm` is a valid
+        // filename in its own right and should not collapse into the
+        // generic fallback.
+        val lastSegment = trimmed.substringAfterLast(delimiter = '/', missingDelimiterValue = trimmed)
         if (lastSegment.isEmpty() || '?' in lastSegment || '=' in lastSegment) {
             return DEFAULT_CUSTOM_FILE_NAME
         }

@@ -89,6 +89,15 @@ class OnboardingViewModel @Inject constructor(
     private var warmUpJob: Job? = null
 
     /**
+     * Active install-check job — cancelled by the next [pickLiteRtModel]
+     * so a slow `findByFileName` from a stale pick can never overwrite
+     * a newer selection's state. Without this guard, picking A → B
+     * quickly could resume A's check after B is set and incorrectly
+     * mark A as installed (bypassing the download gate).
+     */
+    private var installCheckJob: Job? = null
+
+    /**
      * Resolved absolute path of the currently installed model. Kept
      * outside the catalog view-state because the design-system layer
      * has no business with on-disk paths; the VM passes this into
@@ -120,15 +129,23 @@ class OnboardingViewModel @Inject constructor(
     /**
      * Records the user's LiteRT model pick on step 2 and synchronously
      * re-checks whether the corresponding file is already installed.
+     *
+     * Cancels any in-flight install-check / download / warm-up that
+     * belonged to the previous pick so a race between a slow database
+     * lookup and a rapid A → B → A user switch can never resurrect the
+     * previous selection's state on top of the current one.
      */
     fun pickLiteRtModel(model: OnboardingLiteRtModel) {
+        installCheckJob?.cancel()
         downloadJob?.cancel()
+        warmUpJob?.cancel()
         _state.update {
             it.copy(
                 liteRtModel = model,
                 downloadProgress = null,
                 downloadError = null,
                 installedModelId = null,
+                isModelWarmed = false,
             )
         }
         installedModelPath = null
@@ -165,24 +182,20 @@ class OnboardingViewModel @Inject constructor(
     }
 
     /**
-     * Final-step action — persists the `hasCompletedOnboarding` flag
-     * and warms the inference handle with the installed model before
-     * the host navigates to chat. Both operations run sequentially in
-     * the same coroutine; warm-up failures surface through
-     * `downloadError` so the user sees what went wrong instead of
-     * landing in a broken chat.
+     * Final-step action — persists the `hasCompletedOnboarding` flag.
+     *
+     * Warm-up is intentionally NOT re-triggered here. The catalog
+     * `isPrimaryCtaEnabled` only fires for step `Ready` when
+     * `isModelWarmed == true`, and the only path that flips that flag
+     * is a successful `scheduleWarmUp` (run on install / download
+     * completion). So by the time the user can tap "Open chat", the
+     * inference handle is already loaded with the picked model — a
+     * second `loadModelUseCase` call here would be a redundant no-op
+     * (the engine early-returns when `currentModelPath` matches).
      */
     fun finishOnboarding() {
         viewModelScope.launch {
             settingsRepository.setHasCompletedOnboarding(true)
-            val pathToLoad = installedModelPath ?: return@launch
-            val result = loadModelUseCase(pathToLoad)
-            when (result) {
-                is Result.Success -> _state.update { it.copy(isModelWarmed = true) }
-                is Result.Error -> _state.update {
-                    it.copy(downloadError = result.message ?: GENERIC_LOAD_ERROR)
-                }
-            }
         }
     }
 
@@ -220,15 +233,20 @@ class OnboardingViewModel @Inject constructor(
 
     private fun checkIfPickedModelAlreadyInstalled(model: OnboardingLiteRtModel) {
         val entry = OnboardingModelCatalog.entryById(model.id) ?: return
-        viewModelScope.launch {
+        installCheckJob = viewModelScope.launch {
             // Look up the LocalModel row by *filename* (not active-flag).
             // The user's pick is orthogonal to whichever row currently has
             // `isActive = 1`: picking model A while model B is active must
-            // still warm A's handle, not B's. Without this the warm-up
-            // either runs on the wrong model or never fires at all (when
-            // no row is active yet), and step 4 stays permanently
-            // disabled.
+            // still warm A's handle, not B's.
             val installed = localModelRepository.findByFileName(entry.fileName) ?: return@launch
+            // Re-verify the pick is still current. `pickLiteRtModel`
+            // cancels this job on every change, but cancellation is
+            // cooperative — a coroutine that just resumed from a
+            // suspending call hasn't yet hit its next cancellation point
+            // and could land here with stale `model` data. The
+            // `liteRtModel == model` guard short-circuits that case
+            // without depending on the cancellation timing.
+            if (_state.value.liteRtModel != model) return@launch
             installedModelPath = installed.path
             _state.update { it.copy(installedModelId = model.id) }
             scheduleWarmUp()
