@@ -10,7 +10,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -25,8 +24,6 @@ import app.knotwork.design.screens.onboarding.OnboardingCallbacks
 import app.knotwork.design.screens.onboarding.OnboardingContent
 import app.knotwork.design.screens.onboarding.OnboardingStep
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.collect
-import kotlinx.coroutines.launch
 
 /**
  * Onboarding entry point — 4-step pager (`Welcome → LiteRtModel →
@@ -44,15 +41,21 @@ import kotlinx.coroutines.launch
  *
  * ### Predictive-back handling (Phase 22 / Task 13)
  *
- * On steps 2–4 a system back gesture rewinds the pager one step via
- * [OnboardingViewModel.back] — matching the visual progress segments
- * filling in reverse. On step 1 there is nowhere to rewind to, so the
- * gesture raises a typed-confirm `AlertDialog`; confirming finishes the
- * activity (the user will land back here on next launch because
- * `hasCompletedOnboarding` has not flipped). The host wires
- * [PredictiveBackHandler] so the Android 14+ edge-swipe animates the
- * surface; the trailing `collect { }` keeps the handler alive for the
- * duration of the gesture and the dispatch fires on completion.
+ * On steps 2–4 a committed system back gesture rewinds the pager one
+ * step via [OnboardingViewModel.back] — matching the visual progress
+ * segments filling in reverse. On step 1 there is nowhere to rewind to,
+ * so the gesture raises a typed-confirm `AlertDialog`; confirming
+ * finishes the activity (the user will land back here on next launch
+ * because `hasCompletedOnboarding` has not flipped).
+ *
+ * The dispatch fires only after [PredictiveBackHandler] streams the
+ * gesture to completion: when `collect` returns normally the user
+ * committed; when it throws [CancellationException] the user lifted
+ * before crossing the commit threshold (or another back source took
+ * over) and the back action must NOT run. We deliberately do not wrap
+ * the `collect` in `runCatching` because `kotlin.runCatching` swallows
+ * `CancellationException` along with everything else, which would
+ * collapse the cancel and commit paths into a single dispatch.
  *
  * @param onCompleted Pop onboarding off the back-stack and navigate to the
  * Chat tab. Invoked exactly once when the user taps `Open chat` on step 4
@@ -64,7 +67,6 @@ import kotlinx.coroutines.launch
 fun OnboardingScreen(onCompleted: () -> Unit, viewModel: OnboardingViewModel = hiltViewModel()) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val activity = LocalActivity.current
-    val scope = rememberCoroutineScope()
     var exitConfirmVisible by rememberSaveable { mutableStateOf(value = false) }
 
     val callbacks = remember(viewModel) {
@@ -86,19 +88,25 @@ fun OnboardingScreen(onCompleted: () -> Unit, viewModel: OnboardingViewModel = h
         )
     }
 
-    // PredictiveBackHandler runs *after* the user has fully committed the
-    // back gesture (the trailing `collect {}` keeps the handler alive
-    // during the swipe so Android renders the predictive transition). On
-    // commit we either rewind the pager or raise the exit-confirm dialog
-    // on step 1; cancellation falls through silently.
+    // PredictiveBackHandler streams gesture events while the user is
+    // swiping. The back action must dispatch on commit only — i.e. on
+    // the path where `progress.collect { }` returns normally. When the
+    // user lifts before crossing the commit threshold (or another back
+    // source preempts us) `collect` throws `CancellationException`,
+    // which propagates out of the handler lambda and skips the dispatch
+    // below.
+    //
+    // We deliberately do NOT wrap `collect` in `runCatching` (or any
+    // other catch) — `kotlin.Result` also captures
+    // `CancellationException`, so doing so would collapse the commit
+    // and cancel paths into a single dispatch and accidentally rewind
+    // the pager on every canceled swipe.
     PredictiveBackHandler { progress: Flow<androidx.activity.BackEventCompat> ->
-        runCatching { progress.collect { /* observe to keep the handler alive */ } }
-        scope.launch {
-            if (state.step == OnboardingStep.Welcome) {
-                exitConfirmVisible = true
-            } else {
-                viewModel.back()
-            }
+        progress.collect { /* observe to keep the handler alive */ }
+        if (state.step == OnboardingStep.Welcome) {
+            exitConfirmVisible = true
+        } else {
+            viewModel.back()
         }
     }
 
