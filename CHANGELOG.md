@@ -15,6 +15,31 @@ details.
 
 ### Added
 
+- **Onboarding — design audit & alignment** (Phase 22 / Task 13/17) —
+  the four-step pager now honours every chrome rule called out in the
+  task brief: the `StepHeadline` composable clamps the user's
+  `fontScale` to 1.6× per `decisions.md §14` (via an overridden
+  `LocalDensity` scoped to the headline subtree only, leaving every
+  other text on the screen at the unclamped system value); the
+  step-2 download progress indicator now branches on
+  `KnotworkTheme.a11y.reducedMotion()` and collapses to a static
+  primary-filled bar when the download reaches `≥ 0.99f`, matching
+  the brief "под reduced-motion — статичный full bar"; the system
+  predictive-back gesture is wired through a new
+  `PredictiveBackHandler` in `OnboardingScreen` and rewinds the pager
+  one step on steps 2–4, or raises a typed-confirm "Quit setup?"
+  dialog on step 1; the activity-level `SnackbarHost` (which catches
+  the skip-flow hint after onboarding is popped off the back-stack)
+  now renders every message through `KnotworkSnackbar(variant =
+  Default)` so the skip-hint sits on `extended.surface3` instead of
+  the raw Material3 chrome. Roborazzi baseline grew from 8 → 16 PNGs
+  with new fixtures for step-2 `Downloading`, step-2 `DownloadError`,
+  step-2 `CustomUrlInput`, and step-4 `ModelReady`. Findings logged
+  in `project_docs/ui-audit-phase22.md` (`## Task 13 — Onboarding`);
+  `screens/README.md §C5` rewritten to match the second-pass JSX
+  artboard family that `OnboardingViewState` was designed against,
+  replacing the stale first-pass spec.
+
 - **Onboarding — LiteRT model download wiring** (Phase 22 / Task 12/17)
   — Step 2 of the onboarding pager now actually downloads the picked
   LiteRT model. The CTA stays disabled until the model is on disk or a

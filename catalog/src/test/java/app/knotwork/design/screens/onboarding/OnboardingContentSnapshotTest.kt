@@ -66,6 +66,46 @@ class OnboardingContentSnapshotTest {
         OnboardingContent(state = OnboardingPreview.ready())
     }
 
+    @Test
+    fun onboarding_step2_downloading_light() = snapshot(name = "step2_downloading", dark = false) {
+        OnboardingContent(state = OnboardingPreview.liteRtDownloading())
+    }
+
+    @Test
+    fun onboarding_step2_downloading_dark() = snapshot(name = "step2_downloading", dark = true) {
+        OnboardingContent(state = OnboardingPreview.liteRtDownloading())
+    }
+
+    @Test
+    fun onboarding_step2_download_error_light() = snapshot(name = "step2_download_error", dark = false) {
+        OnboardingContent(state = OnboardingPreview.liteRtDownloadError())
+    }
+
+    @Test
+    fun onboarding_step2_download_error_dark() = snapshot(name = "step2_download_error", dark = true) {
+        OnboardingContent(state = OnboardingPreview.liteRtDownloadError())
+    }
+
+    @Test
+    fun onboarding_step2_custom_url_light() = snapshot(name = "step2_custom_url", dark = false) {
+        OnboardingContent(state = OnboardingPreview.liteRtCustomUrlInput())
+    }
+
+    @Test
+    fun onboarding_step2_custom_url_dark() = snapshot(name = "step2_custom_url", dark = true) {
+        OnboardingContent(state = OnboardingPreview.liteRtCustomUrlInput())
+    }
+
+    @Test
+    fun onboarding_step4_model_ready_light() = snapshot(name = "step4_model_ready", dark = false) {
+        OnboardingContent(state = OnboardingPreview.readyModelReady())
+    }
+
+    @Test
+    fun onboarding_step4_model_ready_dark() = snapshot(name = "step4_model_ready", dark = true) {
+        OnboardingContent(state = OnboardingPreview.readyModelReady())
+    }
+
     private fun snapshot(name: String, dark: Boolean, content: @Composable () -> Unit) {
         composeTestRule.setContent {
             CompositionLocalProvider(LocalKnotworkA11y provides FixedKnotworkA11y(reducedMotion = true)) {
@@ -102,6 +142,42 @@ internal object OnboardingPreview {
         step = OnboardingStep.Ready,
         defaultPipelinePreview = defaultPipelinePreview(),
     )
+
+    /** Step 2 — active download (mid-progress) on the recommended row. */
+    fun liteRtDownloading(): OnboardingViewState = OnboardingViewState(
+        step = OnboardingStep.LiteRtModel,
+        liteRtModel = OnboardingLiteRtModel.Gemma4E2B,
+        downloadProgress = DOWNLOAD_PROGRESS_FIXTURE,
+        defaultPipelinePreview = defaultPipelinePreview(),
+    )
+
+    /** Step 2 — error banner surfaced beneath the picker. */
+    fun liteRtDownloadError(): OnboardingViewState = OnboardingViewState(
+        step = OnboardingStep.LiteRtModel,
+        liteRtModel = OnboardingLiteRtModel.Gemma4E2B,
+        downloadError = DOWNLOAD_ERROR_FIXTURE,
+        defaultPipelinePreview = defaultPipelinePreview(),
+    )
+
+    /** Step 2 — `Custom URL…` row expanded with a populated input field. */
+    fun liteRtCustomUrlInput(): OnboardingViewState = OnboardingViewState(
+        step = OnboardingStep.LiteRtModel,
+        liteRtModel = OnboardingLiteRtModel.CustomUrl,
+        customDownloadUrl = CUSTOM_URL_FIXTURE,
+        defaultPipelinePreview = defaultPipelinePreview(),
+    )
+
+    /** Step 4 — recap with a freshly-installed and warmed model. */
+    fun readyModelReady(): OnboardingViewState = OnboardingViewState(
+        step = OnboardingStep.Ready,
+        installedModelId = OnboardingLiteRtModel.Gemma4E2B.id,
+        isModelWarmed = true,
+        defaultPipelinePreview = defaultPipelinePreview(),
+    )
+
+    private const val DOWNLOAD_PROGRESS_FIXTURE: Float = 0.42f
+    private const val DOWNLOAD_ERROR_FIXTURE: String = "Connection lost. Retry?"
+    private const val CUSTOM_URL_FIXTURE: String = "https://huggingface.co/example/model.task"
 
     private fun defaultPipelinePreview(): OnboardingDefaultPipelinePreview = OnboardingDefaultPipelinePreview(
         nodes = listOf("INPUT", "LITE_RT", "IF", "TOOL", "LITE_RT", "OUTPUT"),
