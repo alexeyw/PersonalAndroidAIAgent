@@ -442,18 +442,40 @@
 
     <!-- Placeholder when the inline pipeline-name field is empty. -->
     <string name="knotwork_editor_name_placeholder">Untitled pipeline</string>
-    <!-- ContentDescription for the Undo icon button. -->
-    <string name="knotwork_editor_action_undo">Undo</string>
-    <!-- ContentDescription for the Redo icon button. -->
-    <string name="knotwork_editor_action_redo">Redo</string>
-    <!-- ContentDescription for the Delete icon button. -->
-    <string name="knotwork_editor_action_delete">Delete selection</string>
-    <!-- ContentDescription for the Auto-layout icon button. -->
-    <string name="knotwork_editor_action_auto_layout">Auto layout</string>
-    <!-- Primary Run button label. -->
+    <!-- ContentDescription for the navigation-up (back) icon button on the editor toolbar. -->
+    <string name="knotwork_editor_action_navigate_up">Back</string>
+    <!-- Primary Run button label (editing state). -->
     <string name="knotwork_editor_action_run">Run</string>
+    <!-- Primary Re-run button label (after a successful run). -->
+    <string name="knotwork_editor_action_rerun">Re-run</string>
     <!-- ContentDescription for the overflow icon button. -->
     <string name="knotwork_editor_action_overflow">More actions</string>
+
+    <!-- ============ Pipeline editor — RunStatusBanner (Phase 22 / Task 14) ============ -->
+
+    <!-- Status label for the live run banner — left-side uppercase tag. -->
+    <string name="knotwork_run_banner_label_running">RUNNING</string>
+    <!-- Status label for the paused-run banner. -->
+    <string name="knotwork_run_banner_label_paused">PAUSED</string>
+    <!-- Status label for the just-completed run banner. -->
+    <string name="knotwork_run_banner_label_done">DONE</string>
+
+    <!-- Step metric while running: e.g. "step 6 / 11". %1$d = current, %2$d = total. -->
+    <string name="knotwork_run_banner_metric_step_of">step %1$d / %2$d</string>
+    <!-- Step metric while running with unknown total: e.g. "step 6". %1$d = current. -->
+    <string name="knotwork_run_banner_metric_step_only">step %1$d</string>
+    <!-- Total step metric in the done banner: e.g. "11 / 11". %1$d, %2$d = same value. -->
+    <string name="knotwork_run_banner_metric_total_steps">%1$d / %2$d</string>
+    <!-- Elapsed-time metric: e.g. "4.2 s". %1$s = pre-formatted seconds with one decimal. -->
+    <string name="knotwork_run_banner_metric_elapsed">%1$s s</string>
+    <!-- Token-count metric: e.g. "2 408 tok". %1$s = pre-formatted integer with thin-space grouping. -->
+    <string name="knotwork_run_banner_metric_tokens">%1$s tok</string>
+
+    <!-- Trailing actions on the run banner. -->
+    <string name="knotwork_run_banner_action_pause">Pause</string>
+    <string name="knotwork_run_banner_action_resume">Resume</string>
+    <string name="knotwork_run_banner_action_stop">Stop</string>
+    <string name="knotwork_run_banner_action_trace">Trace</string>
 
     <!-- ============ Pipeline editor — NodeConfigSheet ============ -->
 

@@ -41,6 +41,13 @@ private const val DRAG_PICKUP_SCALE = 1.04f
 private const val DRAG_PICKUP_DURATION_MS = 100
 
 /**
+ * Opacity applied to non-active nodes while a run is in progress. Tuned by the
+ * mockup-5 reference — low enough to clearly demote them, high enough to keep
+ * the pipeline shape readable so the user follows along visually.
+ */
+private const val DIMMED_ALPHA = 0.40f
+
+/**
  * Wraps the catalog [NodeCard] with editor-only behaviour: drag-to-move, tap-to-select,
  * long-press multi-select, and a hit-target overlay on the outbound port that hands off
  * to connection mode.
@@ -58,6 +65,9 @@ private const val DRAG_PICKUP_DURATION_MS = 100
  * @param error optional validation / runtime error surface.
  * @param ports outbound / inbound port layout.
  * @param reducedMotion reduced-motion flag — pickup / release animations collapse to instant.
+ * @param dimmed `true` for nodes that are NOT the currently-running step during a
+ * live run — drops opacity to ~0.4 so the active node visually pops. Only meaningful
+ * while a run is in progress; the canvas passes `false` outside of run mode.
  * @param onSelect invoked on tap when the node is **not** currently selected. This is the
  * canonical "select this node" entry point — the screen then highlights it via the catalog
  * `NodeCard.selected` flag and re-renders.
@@ -101,6 +111,7 @@ internal fun EditorNode(
     error: NodeError?,
     ports: NodePorts,
     reducedMotion: Boolean,
+    dimmed: Boolean,
     onSelect: () -> Unit,
     onOpenConfig: () -> Unit,
     onLongPress: () -> Unit,
@@ -140,6 +151,7 @@ internal fun EditorNode(
                 scaleX = scale.value * transform.scale
                 scaleY = scale.value * transform.scale
                 transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0f, 0f)
+                alpha = if (dimmed) DIMMED_ALPHA else 1f
             }
             .combinedClickable(
                 interactionSource = remember { MutableInteractionSource() },

@@ -2,6 +2,7 @@ package ai.agent.android.presentation.ui.pipeline.editor.canvas
 
 import ai.agent.android.domain.models.ConnectionModel
 import ai.agent.android.domain.models.NodeModel
+import ai.agent.android.domain.models.NodeType
 import ai.agent.android.presentation.ui.pipeline.editor.config.NodeConfigCodec
 import ai.agent.android.presentation.ui.pipeline.editor.config.NodeTypeMapper
 import ai.agent.android.presentation.ui.pipeline.editor.core.BezierEdge
@@ -26,6 +27,7 @@ import app.knotwork.design.components.pipelineeditor.EvaluationConfig
 import app.knotwork.design.components.pipelineeditor.IntentRouterConfig
 import app.knotwork.design.components.pipelineeditor.NodePorts
 import app.knotwork.design.components.pipelineeditor.OutboundPort
+import app.knotwork.design.components.pipelineeditor.headerTint
 import app.knotwork.design.theme.KnotworkTheme
 
 /**
@@ -168,6 +170,14 @@ internal fun EditorEdges(
     val strokeWidth = with(density) { 2.dp.toPx() }
     val dotRadius = with(density) { 4.dp.toPx() }
     val dotTravelSpeedPx = with(density) { DOT_TRAVEL_SPEED_DP_PER_SEC.dp.toPx() }
+    // Per-source-node hue lookup — used to tint running edges with their source
+    // node's header colour (mockup-5: the active "complex" branch is rendered in
+    // the IF_CONDITION hue). Each domain `NodeType` resolves to its catalog
+    // analogue's header tint; the table is computed once per theme change and
+    // looked up by the source node's type in the draw loop.
+    val hueByNodeType: Map<NodeType, Color> = NodeType.entries.associateWith { domainType ->
+        NodeTypeMapper.toCatalog(domainType).headerTint()
+    }
 
     // Continuous elapsed-time tick (in milliseconds since first frame) drives every running
     // edge's traveling dot. Storing a monotonically increasing scalar — rather than the prior
@@ -212,9 +222,18 @@ internal fun EditorEdges(
                 isRunning -> EDGE_STROKE_RUNNING_FACTOR
                 else -> 1f
             }
+            // Running edges adopt the source node's header hue (mockup-5: the
+            // active branch is tinted in the upstream node's colour). Selected
+            // edges keep the generic accent so the user's deliberate pick stands
+            // apart from the live run signal.
+            val strokeColor = when {
+                isRunning -> hueByNodeType[source.type] ?: accentColor
+                isSelected -> accentColor
+                else -> edgeColor
+            }
             drawPath(
                 path = path,
-                color = if (isRunning || isSelected) accentColor else edgeColor,
+                color = strokeColor,
                 style = Stroke(width = strokeWidth * strokeMultiplier),
             )
             if (isRunning) {

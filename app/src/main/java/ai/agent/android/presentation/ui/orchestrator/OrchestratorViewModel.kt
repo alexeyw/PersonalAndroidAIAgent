@@ -99,8 +99,8 @@ class OrchestratorViewModel @Inject constructor(
     private val _runState = MutableStateFlow(PipelineRunState())
 
     /**
-     * Phase-21 placeholder for the live run state surfaced by the editor's
-     * [ai.agent.android.presentation.ui.pipeline.editor.bars.RunTraceBar].
+     * Live run state surfaced by the editor's `RunStatusBanner` (Phase 22 /
+     * Task 14 — replaces the prior bottom `RunTraceBar`).
      *
      * Wired by [setRunning] / [setActiveRunningNode] today; the real orchestrator
      * integration that drives these fields end-to-end lands post-v0.1 alongside the
@@ -987,7 +987,7 @@ class OrchestratorViewModel @Inject constructor(
     /**
      * Sets (or clears with `null`) the currently-running node id during a pipeline run.
      * Drives both the [app.knotwork.design.components.pipelineeditor.NodeCard]
-     * `running` parameter and the [RunTraceBar] label.
+     * `running` parameter and the toolbar subtitle / run banner labels.
      */
     fun setActiveRunningNode(nodeId: String?) {
         _runState.update { it.copy(activeNodeId = nodeId) }

@@ -1,5 +1,6 @@
 package ai.agent.android.presentation.ui.pipeline.editor.core
 
+import ai.agent.android.domain.models.NodeModel
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
@@ -56,6 +57,22 @@ class EditorState(undoCapacity: Int = EditorUndoRedo.DEFAULT_CAPACITY) {
     /** `true` while a pipeline run is in progress; toggles the bottom bar between validation and trace. */
     var isRunning: Boolean by mutableStateOf(false)
 
+    /**
+     * `true` when the mini-map overlay is visible. Toggled from the overflow
+     * menu. While open the toolbar subtitle switches to the overview wording
+     * (`Overview · 0.42× · 11 nodes`) and the canvas grants the mini-map's
+     * bottom-right anchor first-class real estate.
+     */
+    var miniMapOpen: Boolean by mutableStateOf(false)
+
+    /**
+     * `true` when the canvas renders the dot grid background. Mirrors the
+     * mockup default — visual grid is on initially because the user expects to
+     * see snap-to-grid feedback while dragging. Toggled from the overflow menu
+     * so power users can hide it for a clean visual.
+     */
+    var gridVisible: Boolean by mutableStateOf(true)
+
     /** Node currently open in the [NodeConfigSheet], or `null` when no sheet is up. */
     var configuringNodeId: String? by mutableStateOf(null)
 
@@ -64,6 +81,24 @@ class EditorState(undoCapacity: Int = EditorUndoRedo.DEFAULT_CAPACITY) {
 
     /** Editor's undo/redo stack — bounded to the screen lifetime, never persisted. */
     val undoRedo: EditorUndoRedo = EditorUndoRedo(capacity = undoCapacity)
+
+    /**
+     * Clipboard for Copy / Paste node. Holds a snapshot of every node copied
+     * during the active screen session (cleared on screen destroy). Each entry
+     * captures the source node verbatim — IDs are regenerated on paste so
+     * duplicates can coexist with the originals.
+     */
+    var clipboard: List<NodeModel> by mutableStateOf(emptyList())
+
+    /** `true` while the canvas Find-bar is visible. Toggled from the overflow menu. */
+    var searchOpen: Boolean by mutableStateOf(false)
+
+    /**
+     * Current search query — empty string means "no matches; render everyone
+     * normally". Non-empty drives the [searchHighlightIds] derived set and
+     * (when the user submits) a `transform.centeredOn` jump to the first match.
+     */
+    var searchQuery: String by mutableStateOf("")
 
     /**
      * Holds the canvas Box's `LayoutCoordinates`, captured via

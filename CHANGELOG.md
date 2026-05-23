@@ -15,6 +15,37 @@ details.
 
 ### Added
 
+- **Pipeline editor — design alignment & feature backfill**
+  (Phase 22 / Task 14/17) — closes every divergence the diff document
+  caught between the spec, the production code, and the new designer
+  mockups. The catalog `EditorToolbar` is reshaped to
+  `[← back] [title + subtitle] [primary action] [overflow]`
+  (`EditorPrimaryAction.Run` / `Rerun` / `None` for the primary slot);
+  Undo / Redo / Delete / Auto-layout move into the production-side
+  overflow `DropdownMenu`. The new top-of-canvas `RunStatusBanner`
+  surfaces `Running` (amber + Pause / Stop) and `Done` (green + Trace)
+  variants — replaces the prior bottom `RunTraceBar`. An
+  always-visible right-edge `ZoomRail` (`+ / − / ⤡`) anchors zoom +
+  fit-to-view; a `MiniMap` overlay (270 × 290 dp, `OVERVIEW · 0.42×`
+  header, per-type-hue node bricks + accent viewport rect) drops in
+  from the overflow. A 24 dp `DotGridBackground` lights up under the
+  canvas (toggle from overflow). The empty state becomes a
+  full-hero `EmptyPipelineState` (brand-mark tile + `Start with
+  INPUT` / `From template` CTAs + info pill). The `ValidationBar`
+  gains a header `Auto-fix` action (six recipes registered in
+  `ValidationAutoFix`) + per-row `Go ↗` jumps + severity glyphs.
+  Non-active nodes dim to α 0.40 during a run; running edges adopt
+  the source node's header hue. Copy / Paste node (multi-select
+  Copy button + overflow Paste). Find-node bar (`FilterBar`, opened
+  from overflow). Inline rename via the overflow `Rename node…`
+  dialog. The toolbar subtitle now renders `Editing · nodes N ·
+  edges M` / `N issues · can't run` / `Running · <label>` /
+  `Overview · 0.42× · nodes N`. Two TODO candidates are explicitly
+  deferred to follow-ups: pipeline-as-PNG export (requires
+  FileProvider plumbing) and the sidebar drag-from-palette (overlaps
+  with the radial quick-add menu — best landed alongside broader
+  wide-screen layouts).
+
 - **Onboarding — review follow-up** (Phase 22 / Task 13/17, second
   pass) — three issues caught on a real device after the initial
   audit landed: the Step-2 selected `LiteRtModelRow` background
