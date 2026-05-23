@@ -15,6 +15,22 @@ details.
 
 ### Added
 
+- **Onboarding — review follow-up** (Phase 22 / Task 13/17, second
+  pass) — three issues caught on a real device after the initial
+  audit landed: the Step-2 selected `LiteRtModelRow` background
+  switched from the static `Accent50` palette to
+  `MaterialTheme.colorScheme.primaryContainer` so the model name stays
+  readable in dark theme; the per-step `StepHeadline` / `StepBody`
+  dropped from `Display2xl` / `BodyLg` to `TitleXl` / `BodyBase` so
+  the title + description block no longer eats half the viewport on
+  small phones; Step 3's Configure tap now navigates to the same
+  per-provider API-key editor that Settings uses (via the new
+  `OnboardingScreen.onConfigureProvider` callback wired through
+  `AppNavGraph`), and the `configuredCloudProviders` projection is
+  computed reactively from `ApiKeyRepository` so the "Configured" pill
+  flips on whatever is actually persisted — not on which row the user
+  tapped.
+
 - **Onboarding — design audit & alignment** (Phase 22 / Task 13/17) —
   the four-step pager now honours every chrome rule called out in the
   task brief: the `StepHeadline` composable clamps the user's

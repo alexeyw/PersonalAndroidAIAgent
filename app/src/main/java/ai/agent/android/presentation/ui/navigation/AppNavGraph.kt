@@ -94,6 +94,21 @@ fun AppNavGraph(navController: NavHostController, showOnboarding: Boolean, modif
                         launchSingleTop = true
                     }
                 },
+                onConfigureProvider = { providerWireId ->
+                    // Step 3 cloud-provider tap — navigate to the same
+                    // per-provider API-key editor that Settings uses, so
+                    // the user can actually paste a key. The provider
+                    // detail screen pops back to onboarding on `onBack`;
+                    // the VM observes ApiKeyRepository so the
+                    // "Configured" pill on the row flips on its own
+                    // once a key is persisted.
+                    navController.navigate(
+                        NavRoutes.PROVIDER_DETAIL.replace(
+                            oldValue = "{${NavRoutes.PROVIDER_DETAIL_ID_ARG}}",
+                            newValue = providerWireId,
+                        ),
+                    )
+                },
             )
         }
 

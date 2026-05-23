@@ -60,16 +60,27 @@ import kotlinx.coroutines.flow.Flow
  * @param onCompleted Pop onboarding off the back-stack and navigate to the
  * Chat tab. Invoked exactly once when the user taps `Open chat` on step 4
  * or `Skip` on steps 1-3.
+ * @param onConfigureProvider Navigate to the per-provider API-key editor
+ * for the supplied wire id. Wired by [AppNavGraph] to the
+ * `settings/provider/{providerId}` route. The "Configured" pill on the
+ * step-3 row that the user just tapped becomes truthful when the user
+ * saves a key in the destination screen — the ViewModel observes
+ * `ApiKeyRepository` and recomputes `configuredCloudProviders`
+ * reactively, so no extra state-flip is needed on return.
  * @param viewModel Hilt-injected ViewModel; defaults to [hiltViewModel] so
  * tests can supply a fake.
  */
 @Composable
-fun OnboardingScreen(onCompleted: () -> Unit, viewModel: OnboardingViewModel = hiltViewModel()) {
+fun OnboardingScreen(
+    onCompleted: () -> Unit,
+    onConfigureProvider: (providerId: String) -> Unit,
+    viewModel: OnboardingViewModel = hiltViewModel(),
+) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val activity = LocalActivity.current
     var exitConfirmVisible by rememberSaveable { mutableStateOf(value = false) }
 
-    val callbacks = remember(viewModel) {
+    val callbacks = remember(viewModel, onConfigureProvider) {
         OnboardingCallbacks(
             onNext = viewModel::next,
             onBack = viewModel::back,
@@ -82,7 +93,13 @@ fun OnboardingScreen(onCompleted: () -> Unit, viewModel: OnboardingViewModel = h
                 onCompleted()
             },
             onLiteRtModelPick = viewModel::pickLiteRtModel,
-            onConfigureCloudProvider = viewModel::markCloudProviderConfigured,
+            onConfigureCloudProvider = { provider ->
+                // Drive the per-provider key editor. The VM observes
+                // ApiKeyRepository, so the "Configured" pill flips on
+                // its own once the user saves a key in the destination
+                // screen — no extra ViewModel call is needed on return.
+                onConfigureProvider(provider.id)
+            },
             onStartDownload = viewModel::startDownload,
             onCustomDownloadUrlChanged = viewModel::onCustomDownloadUrlChanged,
         )

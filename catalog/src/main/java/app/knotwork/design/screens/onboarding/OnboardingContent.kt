@@ -262,6 +262,11 @@ private fun StepHeadline(text: String) {
     // 1.6× via an overridden [LocalDensity] for this subtree only — the
     // user's preference still applies up to that ceiling and every other
     // text in the flow keeps the unclamped value.
+    //
+    // Style choice: `TitleXl` (24sp) rather than `Display2xl` (30sp) so the
+    // headline + body block does not eat half the viewport on smaller
+    // phones. Matches the second-pass JSX mockup target of ~28sp at the
+    // upper bound of the Knotwork title scale.
     val systemScale = KnotworkTheme.a11y.fontScale()
     val outer = LocalDensity.current
     val clampedScale = if (systemScale > HEADLINE_FONT_SCALE_CLAMP) {
@@ -274,7 +279,7 @@ private fun StepHeadline(text: String) {
     ) {
         Text(
             text = text,
-            style = KnotworkTextStyles.Display2xl,
+            style = KnotworkTextStyles.TitleXl,
             color = MaterialTheme.colorScheme.onSurface,
         )
     }
@@ -284,7 +289,7 @@ private fun StepHeadline(text: String) {
 private fun StepBody(text: String) {
     Text(
         text = text,
-        style = KnotworkTextStyles.BodyLg,
+        style = KnotworkTextStyles.BodyBase,
         color = KnotworkTheme.extended.onSurfaceMuted,
     )
 }
@@ -384,7 +389,16 @@ private fun LiteRtModelRow(
     downloadProgress: Float?,
     onClick: () -> Unit,
 ) {
-    val containerColor = if (selected) KnotworkPalette.Accent50 else KnotworkTheme.extended.surface1
+    // `Accent50` is a static palette colour that stays light in dark theme,
+    // which collapses contrast against the `onSurface` (light) text. Route
+    // through the theme-aware `primaryContainer` instead (Accent100 in
+    // light, dark brown in dark) so the selected row keeps WCAG-AA
+    // contrast in both themes.
+    val containerColor = if (selected) {
+        MaterialTheme.colorScheme.primaryContainer
+    } else {
+        KnotworkTheme.extended.surface1
+    }
     val borderColor = if (selected) MaterialTheme.colorScheme.primary else Color.Transparent
     Column(
         modifier = Modifier

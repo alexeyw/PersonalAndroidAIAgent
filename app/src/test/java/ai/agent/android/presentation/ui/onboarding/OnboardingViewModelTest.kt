@@ -5,6 +5,7 @@ import ai.agent.android.domain.constants.OnboardingModelCatalog
 import ai.agent.android.domain.models.DownloadState
 import ai.agent.android.domain.models.LocalModel
 import ai.agent.android.domain.models.Result
+import ai.agent.android.domain.repositories.ApiKeyRepository
 import ai.agent.android.domain.repositories.LocalModelRepository
 import ai.agent.android.domain.repositories.ModelDownloadManager
 import ai.agent.android.domain.repositories.SettingsRepository
@@ -60,6 +61,7 @@ class OnboardingViewModelTest {
     private lateinit var downloadManager: ModelDownloadManager
     private lateinit var loadModelUseCase: LoadModelUseCase
     private lateinit var transientMessageRelay: TransientMessageRelay
+    private lateinit var apiKeyRepository: ApiKeyRepository
 
     @Before
     fun setUp() {
@@ -77,6 +79,14 @@ class OnboardingViewModelTest {
         loadModelUseCase = mockk(relaxed = true)
         coEvery { loadModelUseCase.invoke(any()) } returns Result.Success(Unit)
         transientMessageRelay = mockk(relaxed = true)
+        // Default to an empty key set so every test sees an "unconfigured"
+        // cloud surface unless it overrides the stub.
+        apiKeyRepository = mockk(relaxed = true)
+        every { apiKeyRepository.getOpenAIKey() } returns flowOf(null)
+        every { apiKeyRepository.getAnthropicKey() } returns flowOf(null)
+        every { apiKeyRepository.getGoogleKey() } returns flowOf(null)
+        every { apiKeyRepository.getDeepSeekKey() } returns flowOf(null)
+        every { apiKeyRepository.getOllamaBaseUrl() } returns flowOf(null)
     }
 
     @After
@@ -90,6 +100,7 @@ class OnboardingViewModelTest {
         downloadManager = downloadManager,
         loadModelUseCase = loadModelUseCase,
         transientMessageRelay = transientMessageRelay,
+        apiKeyRepository = apiKeyRepository,
     )
 
     @Test
@@ -319,5 +330,24 @@ class OnboardingViewModelTest {
         // the download. Regression guard for the PR-review feedback
         // about the dead-locked onboarding flow.
         assertTrue(viewModel.state.value.isPrimaryCtaEnabled)
+    }
+
+    @Test
+    fun `configuredCloudProviders mirrors ApiKeyRepository contents`() = runTest {
+        // Two providers have credentials, three do not — the
+        // configured-set must contain exactly those two wire ids.
+        every { apiKeyRepository.getOpenAIKey() } returns flowOf("sk-test-openai")
+        every { apiKeyRepository.getAnthropicKey() } returns flowOf("")
+        every { apiKeyRepository.getGoogleKey() } returns flowOf(null)
+        every { apiKeyRepository.getDeepSeekKey() } returns flowOf(null)
+        every { apiKeyRepository.getOllamaBaseUrl() } returns flowOf("http://192.168.1.5:11434")
+
+        val viewModel = newViewModel()
+        advanceUntilIdle()
+
+        val configured = viewModel.state.value.configuredCloudProviders
+        // Anthropic stays out because the key is blank — must mirror
+        // the same `isNullOrBlank` guard the production projection uses.
+        assertEquals(setOf("openai", "ollama"), configured)
     }
 }
