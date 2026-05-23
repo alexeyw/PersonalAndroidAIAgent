@@ -312,11 +312,13 @@ private fun ActionsRow(
 
 /** Formats elapsed seconds as `"4.2"` (1 decimal) to match the mockup wording. */
 private fun formatSeconds(seconds: Float): String {
-    // Use Locale-stable formatting (rounded to 1 decimal); banner copy is "4.2 s",
-    // not a precise telemetry readout.
-    val rounded = (seconds * DECIMAL_FACTOR).toInt() / DECIMAL_FACTOR
-    val intPart = rounded.toInt()
-    val decPart = ((rounded - intPart) * DECIMAL_FACTOR).toInt().coerceIn(0, DECIMAL_MAX)
+    // Use Locale-stable formatting rounded (not truncated) to 1 decimal — banner
+    // copy is "4.2 s", not a precise telemetry readout. `kotlin.math.round` is
+    // banker-free half-up rounding; `(x * 10).toInt()` alone would floor `4.29`
+    // to `4.2` instead of rounding to `4.3`.
+    val roundedTenths = kotlin.math.round(seconds * DECIMAL_FACTOR).toInt()
+    val intPart = roundedTenths / DECIMAL_FACTOR.toInt()
+    val decPart = kotlin.math.abs(roundedTenths % DECIMAL_FACTOR.toInt()).coerceIn(0, DECIMAL_MAX)
     return "$intPart.$decPart"
 }
 
@@ -329,7 +331,10 @@ private fun formatTokens(tokens: Int): String {
     val sb = StringBuilder()
     val rem = s.length % GROUP_DIGITS
     s.forEachIndexed { index, c ->
-        if (index != 0 && (index - rem) % GROUP_DIGITS == 0) sb.append(' ')
+        // U+2009 THIN SPACE — matches the designer mockup's typographic
+        // thousands separator. A regular space (U+0020) would render visibly
+        // wider on most fonts and break the compact `2 408 tok` look.
+        if (index != 0 && (index - rem) % GROUP_DIGITS == 0) sb.append(THIN_SPACE)
         sb.append(c)
     }
     return sign + sb.toString()
@@ -339,6 +344,9 @@ private const val DECIMAL_FACTOR = 10f
 private const val DECIMAL_MAX = 9
 private const val THOUSANDS_GROUP = 1_000
 private const val GROUP_DIGITS = 3
+
+/** Unicode U+2009 — the narrow space used by the designer for thousands grouping. */
+private const val THIN_SPACE: Char = ' '
 
 @Preview(name = "RunStatusBanner — running (light)", widthDp = 720, showBackground = true)
 @Composable

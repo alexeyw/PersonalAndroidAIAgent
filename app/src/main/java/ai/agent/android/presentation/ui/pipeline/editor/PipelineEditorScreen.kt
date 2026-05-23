@@ -518,7 +518,11 @@ fun PipelineEditorScreen(viewModel: OrchestratorViewModel, onBack: () -> Unit) {
                         } else {
                             editor.undoRedo.push(pipeline)
                             val offsetCanvas = CanvasTransform.GRID_PX * 2f
-                            var working = pipeline
+                            // `viewModel.addNode` + `updateNodeFromEditor` propagate through
+                            // the orchestrator's StateFlow; we never need to thread a local
+                            // graph snapshot through the loop because nothing in this block
+                            // reads it after the dispatch. The loop is fire-and-forget per
+                            // node and the next composition re-renders from the fresh VM state.
                             editor.clipboard.forEach { original ->
                                 val newId = viewModel.addNode(
                                     original.type,
@@ -535,7 +539,6 @@ fun PipelineEditorScreen(viewModel: OrchestratorViewModel, onBack: () -> Unit) {
                                         y = original.y + offsetCanvas,
                                     ),
                                 )
-                                working = working
                             }
                         }
                     },
@@ -676,11 +679,16 @@ fun PipelineEditorScreen(viewModel: OrchestratorViewModel, onBack: () -> Unit) {
     // Surface a one-shot hint the first time the user selects an edge, so the toolbar
     // Delete path becomes discoverable. `LaunchedEffect(editor.selectedEdgeId)` fires
     // each time the selected edge changes — including from `null` to an id (tap-select).
+    //
+    // The snackbar call runs in the effect's own coroutine scope (not the outer
+    // `rememberCoroutineScope()`) so that when the user clears or changes their
+    // selection quickly the pending snackbar is cancelled with the effect, instead
+    // of accumulating overlapping toasts via an orphaned outer-scope coroutine.
     val selectedEdge = editor.selectedEdgeId
     val edgeSelectedHint = stringResource(R.string.pipeline_editor_edge_selected_hint)
     LaunchedEffect(selectedEdge) {
         if (selectedEdge != null) {
-            scope.launch { snackbarHostState.showSnackbar(message = edgeSelectedHint) }
+            snackbarHostState.showSnackbar(message = edgeSelectedHint)
         }
     }
 }
