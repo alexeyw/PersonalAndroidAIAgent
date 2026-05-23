@@ -6,6 +6,7 @@ import ai.agent.android.domain.models.AppError
 import ai.agent.android.domain.models.DownloadState
 import ai.agent.android.domain.models.LocalModel
 import ai.agent.android.domain.models.Result
+import ai.agent.android.domain.repositories.ApiKeyRepository
 import ai.agent.android.domain.repositories.LocalModelRepository
 import ai.agent.android.domain.repositories.ModelDownloadManager
 import ai.agent.android.domain.repositories.SettingsRepository
@@ -24,10 +25,12 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import timber.log.Timber
 import javax.inject.Inject
 
 /**
@@ -65,6 +68,11 @@ import javax.inject.Inject
  * back-stack entry (which is popped the same frame `onCompleted` fires),
  * so we publish through this singleton; the activity-level host renders
  * the snackbar after navigation settles on Chat.
+ * @property apiKeyRepository observed reactively to compute
+ * `configuredCloudProviders` from the actual saved credentials — the
+ * "Configured" pill on step 3 follows whichever providers have a
+ * non-empty key (or, for Ollama, a non-empty base URL) instead of just
+ * tracking which rows the user tapped.
  */
 @HiltViewModel
 class OnboardingViewModel @Inject constructor(
@@ -73,6 +81,7 @@ class OnboardingViewModel @Inject constructor(
     private val downloadManager: ModelDownloadManager,
     private val loadModelUseCase: LoadModelUseCase,
     private val transientMessageRelay: TransientMessageRelay,
+    private val apiKeyRepository: ApiKeyRepository,
 ) : ViewModel() {
 
     private val _state: MutableStateFlow<OnboardingViewState> = MutableStateFlow(
@@ -108,6 +117,40 @@ class OnboardingViewModel @Inject constructor(
     /** Initial pick on step 2 — detect re-installs immediately. */
     init {
         checkIfPickedModelAlreadyInstalled(_state.value.liteRtModel)
+        observeConfiguredCloudProviders()
+    }
+
+    /**
+     * Streams the actual saved-key state for every cloud provider and
+     * folds it into [OnboardingViewState.configuredCloudProviders]. The
+     * "Configured" pill on step 3 is then a *truthful* signal — it
+     * reflects what's persisted in `EncryptedSharedPreferences`, not
+     * which row the user happened to tap.
+     *
+     * Per provider:
+     *  - OpenAI / Anthropic / Google / DeepSeek — "configured" when the
+     *    API key flow is non-blank.
+     *  - Ollama — "configured" when the base URL is non-blank (Ollama
+     *    does not use an API key in the same sense).
+     */
+    private fun observeConfiguredCloudProviders() {
+        combine(
+            apiKeyRepository.getOpenAIKey(),
+            apiKeyRepository.getAnthropicKey(),
+            apiKeyRepository.getGoogleKey(),
+            apiKeyRepository.getDeepSeekKey(),
+            apiKeyRepository.getOllamaBaseUrl(),
+        ) { openAi, anthropic, google, deepSeek, ollamaBaseUrl ->
+            buildSet {
+                if (!openAi.isNullOrBlank()) add(OnboardingCloudProvider.OpenAI.id)
+                if (!anthropic.isNullOrBlank()) add(OnboardingCloudProvider.Anthropic.id)
+                if (!google.isNullOrBlank()) add(OnboardingCloudProvider.Google.id)
+                if (!deepSeek.isNullOrBlank()) add(OnboardingCloudProvider.DeepSeek.id)
+                if (!ollamaBaseUrl.isNullOrBlank()) add(OnboardingCloudProvider.Ollama.id)
+            }
+        }
+            .onEach { configured -> _state.update { it.copy(configuredCloudProviders = configured) } }
+            .launchIn(viewModelScope)
     }
 
     /** Advances to the next step. Idempotent at the final step. */
@@ -217,13 +260,22 @@ class OnboardingViewModel @Inject constructor(
     }
 
     /**
-     * Records that the user opened the configure flow for a cloud
-     * provider on step 3. The actual key entry happens in Settings.
+     * Legacy helper preserved for binary compatibility with older
+     * call sites. The production tap path drives navigation via
+     * `OnboardingScreen.onConfigureProvider` and the
+     * `configuredCloudProviders` projection is computed reactively
+     * from [ApiKeyRepository] (see [observeConfiguredCloudProviders])
+     * — so this method intentionally NO LONGER mutates state. We keep
+     * the symbol so any stale-build call site that still references it
+     * compiles, but the state-flip is gone: the "Configured" pill on
+     * step 3 can only flip when a key is actually persisted.
      */
     fun markCloudProviderConfigured(provider: OnboardingCloudProvider) {
-        _state.update { current ->
-            current.copy(configuredCloudProviders = current.configuredCloudProviders + provider.id)
-        }
+        Timber.w(
+            "OnboardingViewModel.markCloudProviderConfigured(${provider.id}) called " +
+                "— this is a no-op since Phase 22 / Task 13. The configured pill " +
+                "is driven by ApiKeyRepository observation, not by tap.",
+        )
     }
 
     /** Legacy alias preserved so existing call sites keep compiling. */

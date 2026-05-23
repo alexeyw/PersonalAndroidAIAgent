@@ -32,6 +32,8 @@ import androidx.compose.ui.res.stringResource
 import androidx.navigation.NavHostController
 import androidx.navigation.NavOptionsBuilder
 import androidx.navigation.compose.currentBackStackEntryAsState
+import app.knotwork.design.components.misc.KnotworkSnackbar
+import app.knotwork.design.components.misc.SnackbarVariant
 import app.knotwork.design.theme.KnotworkTheme
 
 /**
@@ -106,7 +108,15 @@ fun AppShellScaffold(
     Scaffold(
         modifier = Modifier.fillMaxSize().imePadding(),
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
-        snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
+        snackbarHost = {
+            SnackbarHost(hostState = snackbarHostState) { data ->
+                // Render every transient message through the Knotwork-toned
+                // surface so the onboarding skip-flow hint (and every other
+                // activity-level snackbar) sits on `extended.surface3`
+                // instead of the raw Material3 chrome.
+                KnotworkSnackbar(data = data, variant = SnackbarVariant.Default)
+            }
+        },
         bottomBar = {
             AnimatedVisibility(
                 visible = showBottomNav,
