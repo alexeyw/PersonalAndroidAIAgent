@@ -36,6 +36,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.navigation
 import androidx.navigation.navArgument
 import androidx.navigation.navDeepLink
+import timber.log.Timber
 
 /**
  * The single [NavHost] for the whole app.
@@ -102,12 +103,12 @@ fun AppNavGraph(navController: NavHostController, showOnboarding: Boolean, modif
                     // the VM observes ApiKeyRepository so the
                     // "Configured" pill on the row flips on its own
                     // once a key is persisted.
-                    navController.navigate(
-                        NavRoutes.PROVIDER_DETAIL.replace(
-                            oldValue = "{${NavRoutes.PROVIDER_DETAIL_ID_ARG}}",
-                            newValue = providerWireId,
-                        ),
+                    val target = NavRoutes.PROVIDER_DETAIL.replace(
+                        oldValue = "{${NavRoutes.PROVIDER_DETAIL_ID_ARG}}",
+                        newValue = providerWireId,
                     )
+                    Timber.d("Onboarding step 3: navigating to provider detail '$target'")
+                    navController.navigate(target)
                 },
             )
         }

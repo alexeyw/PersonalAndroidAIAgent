@@ -30,6 +30,7 @@ import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import timber.log.Timber
 import javax.inject.Inject
 
 /**
@@ -259,24 +260,22 @@ class OnboardingViewModel @Inject constructor(
     }
 
     /**
-     * Legacy helper preserved for tests that still drive
-     * `configuredCloudProviders` directly. The production path no
-     * longer calls this — the `configuredCloudProviders` projection is
-     * computed reactively from [ApiKeyRepository] (see
-     * [observeConfiguredCloudProviders]), so the "Configured" pill on
-     * step 3 reflects what's actually persisted in
-     * `EncryptedSharedPreferences`.
-     *
-     * Kept rather than removed because the catalog
-     * `OnboardingCallbacks.onConfigureCloudProvider` is still wired —
-     * the host now delegates to the navigation lambda instead and
-     * leaves the configured-set untouched here.
+     * Legacy helper preserved for binary compatibility with older
+     * call sites. The production tap path drives navigation via
+     * `OnboardingScreen.onConfigureProvider` and the
+     * `configuredCloudProviders` projection is computed reactively
+     * from [ApiKeyRepository] (see [observeConfiguredCloudProviders])
+     * — so this method intentionally NO LONGER mutates state. We keep
+     * the symbol so any stale-build call site that still references it
+     * compiles, but the state-flip is gone: the "Configured" pill on
+     * step 3 can only flip when a key is actually persisted.
      */
-    @Suppress("unused") // Retained for binary stability with existing tests / call sites.
     fun markCloudProviderConfigured(provider: OnboardingCloudProvider) {
-        _state.update { current ->
-            current.copy(configuredCloudProviders = current.configuredCloudProviders + provider.id)
-        }
+        Timber.w(
+            "OnboardingViewModel.markCloudProviderConfigured(${provider.id}) called " +
+                "— this is a no-op since Phase 22 / Task 13. The configured pill " +
+                "is driven by ApiKeyRepository observation, not by tap.",
+        )
     }
 
     /** Legacy alias preserved so existing call sites keep compiling. */
