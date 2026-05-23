@@ -221,7 +221,17 @@ fun PipelineEditorScreen(viewModel: OrchestratorViewModel, onBack: () -> Unit) {
         // back to Idle (banner hidden) otherwise. Done / Paused variants land when
         // real run-completion telemetry arrives (out of scope for Phase 22 / Task
         // 14 — engine wiring is tracked separately).
-        val runStatus by remember(runState.isRunning, pipeline.nodes.size) {
+        //
+        // The `remember` key set MUST include every `runState` field the derived
+        // calculation reads, otherwise the banner's step-counter sticks at the
+        // first value seen for a given run. `activeNodeId` in particular changes
+        // mid-run while `isRunning` stays true — leaving it out of the key would
+        // freeze `stepIndex` at the initial node index for the entire run.
+        val runStatus by remember(
+            runState.isRunning,
+            runState.activeNodeId,
+            pipeline.nodes.size,
+        ) {
             derivedStateOf {
                 if (runState.isRunning) {
                     val activeIndex = runState.activeNodeId

@@ -240,10 +240,15 @@ internal fun EditorCanvas(
                 error = errorsByNodeId[node.id],
                 ports = ports,
                 reducedMotion = reducedMotion,
-                // While a run is live, dim every node except the active step so
-                // the user's eye snaps to the running card. Outside of run mode
-                // every node renders at full opacity.
-                dimmed = editor.isRunning && editor.activeRunningNodeId != node.id,
+                // While a run is live AND the orchestrator has reported an
+                // active node, dim every OTHER node so the user's eye snaps to
+                // the running card. Outside of run mode — or while the active
+                // node id is still null (run started but the engine hasn't
+                // emitted the first node tick yet) — every node renders at full
+                // opacity so the canvas stays readable.
+                dimmed = editor.isRunning &&
+                    editor.activeRunningNodeId != null &&
+                    editor.activeRunningNodeId != node.id,
                 onSelect = { editor.toggleSelection(node.id) },
                 onOpenConfig = { onOpenNodeConfig(node.id) },
                 onLongPress = {
