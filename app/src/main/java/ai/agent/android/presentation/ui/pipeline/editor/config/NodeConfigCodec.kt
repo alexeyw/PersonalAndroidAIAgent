@@ -170,7 +170,12 @@ internal object NodeConfigCodec {
             classes = listOf(IntentClass(name = "simple"), IntentClass(name = "complex")),
         )
         CatalogNodeType.IF_CONDITION -> IfConditionConfig(title = title)
-        CatalogNodeType.CLARIFICATION -> ClarificationConfig(title = title)
+        CatalogNodeType.CLARIFICATION -> ClarificationConfig(
+            title = title,
+            questionTemplate = DefaultPrompts
+                .getDefaultPromptForNodeType(DomainNodeType.CLARIFICATION)
+                .orEmpty(),
+        )
         CatalogNodeType.TOOL -> ToolConfig(title = title)
         CatalogNodeType.DECOMPOSITION -> DecompositionConfig(
             title = title,

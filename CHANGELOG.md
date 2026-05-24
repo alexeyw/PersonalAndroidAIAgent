@@ -48,6 +48,26 @@ details.
   instead of guessing whether each edit autosaved. Catalog snapshot
   baselines regenerated to reflect the new toolbar + banner layout.
 
+- **Clarification node — default prompt + library seeds**
+  (Phase 22 / Task 14/17, review fix) — two regressions caught on a
+  fresh Clarification node:
+  - `NodeConfigCodec.defaultFor(CLARIFICATION)` now seeds
+    `questionTemplate` from `DefaultPrompts.getDefaultPromptForNodeType(CLARIFICATION)`.
+    The previous `ClarificationConfig(title = title)` left the
+    prompt blank on every new Clarification node — the user had to
+    type from scratch instead of seeing the registered default.
+  - `GetPromptTemplatesUseCase.seedMissingDefaults` extends the
+    seed set to every prompt-bearing node type
+    (`CLARIFICATION / EVALUATION / LITE_RT / CLOUD / OUTPUT`
+    on top of the existing `INTENT_ROUTER / DECOMPOSITION /
+    SUMMARY / TOOL`). Seed is now **additive** — it inserts only
+    the categories that aren't already in the repository, so
+    existing users who installed before a new category was
+    registered pick up the new entry on the next library open
+    instead of waiting for a DB wipe. Updated `GetPromptTemplatesUseCaseTest`
+    to pin both the "all-present → no-op" and the
+    "Clarification-missing → inserted" paths.
+
 - **App-wide slider — single `KnotworkCompactSlider` atom**
   (Phase 22 / Task 14/17, review polish) — extracted the
   inline `CompactSlider` that the Settings screen had been rolling

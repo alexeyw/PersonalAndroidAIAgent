@@ -1,9 +1,12 @@
 package ai.agent.android.domain.usecases
 
+import ai.agent.android.domain.models.NodeType
 import ai.agent.android.domain.models.PromptTemplate
 import ai.agent.android.domain.repositories.PromptRepository
+import io.mockk.Runs
 import io.mockk.coEvery
 import io.mockk.coVerify
+import io.mockk.just
 import io.mockk.mockk
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.toList
@@ -27,22 +30,53 @@ class GetPromptTemplatesUseCaseTest {
     }
 
     @Test
-    fun `invoke should return flow from repository`() = runTest {
-        // Arrange
-        val expectedPrompts = listOf(
-            PromptTemplate(id = 1, name = "Test1", text = "Text1", category = "Cat1"),
-            PromptTemplate(id = 2, name = "Test2", text = "Text2", category = "Cat2"),
-        )
-        coEvery { repository.getAllPrompts() } returns flowOf(expectedPrompts)
-        coEvery { repository.getPromptsCount() } returns 2
+    fun `invoke streams the repository list downstream`() = runTest {
+        // Arrange — repository already contains every default category, so the
+        // seed step is a no-op and the only side effect we expect is the
+        // downstream collection seeing the same list the repository emits.
+        val populated = NodeType.entries.map { type ->
+            PromptTemplate(name = "Existing ${type.name}", text = "x", category = type.name)
+        }
+        coEvery { repository.getAllPrompts() } returns flowOf(populated)
+        coEvery { repository.savePrompt(any()) } just Runs
 
         // Act
         val result = getPromptTemplatesUseCase().toList()
 
-        // Assert
+        // Assert — exactly one downstream emission carrying the repo payload.
         assertEquals(1, result.size)
-        assertEquals(expectedPrompts, result.first())
-        coVerify(exactly = 1) { repository.getAllPrompts() }
-        coVerify(exactly = 1) { repository.getPromptsCount() }
+        assertEquals(populated, result.first())
+        // Seed didn't fire because every default category was already present.
+        coVerify(exactly = 0) { repository.savePrompt(any()) }
+    }
+
+    @Test
+    fun `invoke seeds missing default categories on first observation`() = runTest {
+        // Arrange — repository is missing CLARIFICATION (mirrors the
+        // user-reported bug). Seed should insert the missing category but
+        // skip the ones already there.
+        val existing = listOf(
+            PromptTemplate(
+                name = "Classifier",
+                text = "x",
+                category = NodeType.INTENT_ROUTER.name,
+            ),
+        )
+        coEvery { repository.getAllPrompts() } returns flowOf(existing)
+        coEvery { repository.savePrompt(any()) } just Runs
+
+        // Act
+        getPromptTemplatesUseCase().toList()
+
+        // Assert — Clarification got seeded (the user-reported gap).
+        coVerify {
+            repository.savePrompt(
+                match { it.category == NodeType.CLARIFICATION.name && it.text.isNotBlank() },
+            )
+        }
+        // …and INTENT_ROUTER (already present) did NOT get re-seeded.
+        coVerify(exactly = 0) {
+            repository.savePrompt(match { it.category == NodeType.INTENT_ROUTER.name })
+        }
     }
 }
