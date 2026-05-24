@@ -5,10 +5,14 @@ package app.knotwork.design.components.pipelineeditor
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AddCircleOutline
 import androidx.compose.material.icons.outlined.AutoStories
@@ -165,17 +169,48 @@ private fun InlineError(failure: ValidationFailure?) {
  */
 @Composable
 private fun VariableChipsRow(onInsert: (String) -> Unit) {
-    val variables = listOf("\$DATE", "\$TIME", "\$TOOLS", "\$MODEL", "\$MEMORY_SUMMARY")
-    FlowRow(
-        modifier = Modifier.fillMaxWidth(),
+    // Full catalog of `PromptVariableProvider` keys exposed in
+    // `app/.../data/prompt/*`. Order mirrors the order users most often reach
+    // for in templates (date / time first, contextual identity last). Add new
+    // keys here when a `PromptVariableProvider` is registered in
+    // `PromptTemplateModule`.
+    val variables = PROMPT_VARIABLE_KEYS
+    // LazyRow with `horizontalScroll`-like behaviour: the chips no longer wrap
+    // to a second row (the previous `FlowRow` was visually noisy and pushed
+    // the slider section down). Keep a clear right-edge padding so the last
+    // chip doesn't kiss the sheet edge.
+    LazyRow(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(VARIABLE_CHIPS_ROW_HEIGHT.dp),
         horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp2),
-        verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp1),
+        contentPadding = PaddingValues(end = KnotworkTheme.spacing.sp2),
     ) {
-        variables.forEach { name ->
+        items(variables) { name ->
             KnotworkChip(label = name, onClick = { onInsert(name) }, style = ChipStyle.Outline)
         }
     }
 }
+
+/**
+ * Variable keys surfaced by the prompt-template engine — kept here as a
+ * snapshot so the catalog stub matches what the `:app` providers register at
+ * runtime. When a new `PromptVariableProvider` lands, add the key here too.
+ */
+private val PROMPT_VARIABLE_KEYS: List<String> = listOf(
+    "\$DATE",
+    "\$TIME",
+    "\$LANG",
+    "\$LOCATION",
+    "\$USER",
+    "\$DEVICE",
+    "\$MODEL",
+    "\$TOOLS",
+    "\$MEMORY_SUMMARY",
+)
+
+/** Fixed row height — chip baseline plus a small breathing budget. */
+private const val VARIABLE_CHIPS_ROW_HEIGHT: Int = 40
 
 /** Single-line title field — shared across every node type. */
 @Composable
@@ -187,9 +222,11 @@ private fun TitleField(title: String, error: ValidationFailure?, onChange: (Stri
             onValueChange = onChange,
             singleLine = true,
             isError = error != null,
-            // Match the per-row TextField textStyle so Title doesn't ride
-            // Material3's default BodyLg while every other field uses BodyBase.
-            textStyle = KnotworkTextStyles.BodyBase,
+            // Phase 22 / Task 14 review pass 3: every field on the sheet
+            // adopts `MonoBase` so identifiers, prompts, model ids, and titles
+            // all read in the same JetBrains Mono face. Mixed body/mono fonts
+            // read as accidentally inconsistent on the sheet.
+            textStyle = KnotworkTextStyles.MonoBase,
             modifier = Modifier.fillMaxWidth(),
         )
         InlineError(failure = error)
@@ -202,8 +239,9 @@ private fun TitleField(title: String, error: ValidationFailure?, onChange: (Stri
  * Layout: `[FieldLabel + optional library button] / [OutlinedTextField] /
  * [InlineError]`. The library button stays in a sibling row above the field
  * (not inside the field's `trailingIcon`) so prompt-bearing fields preserve
- * room for the chips row underneath. Every field uses the same `BodyBase` /
- * `MonoBase` textStyle so the sheet reads as a uniform stack.
+ * room for the chips row underneath. Every field uses `MonoBase` (Phase 22 /
+ * Task 14 review round 3) so the sheet reads as a uniform stack regardless
+ * of which field is prose vs identifier vs prompt.
  */
 @Composable
 @Suppress("LongParameterList") // Adding the optional library hook here keeps every prompt field DRY.
@@ -212,7 +250,6 @@ private fun TextField(
     value: String,
     error: ValidationFailure?,
     singleLine: Boolean,
-    monospace: Boolean,
     onChange: (String) -> Unit,
     libraryCategory: String? = null,
     onPickFromLibrary: PromptLibraryHook? = null,
@@ -248,7 +285,9 @@ private fun TextField(
             onValueChange = onChange,
             singleLine = singleLine,
             isError = error != null,
-            textStyle = if (monospace) KnotworkTextStyles.MonoBase else KnotworkTextStyles.BodyBase,
+            // Same MonoBase rationale as TitleField — the sheet reads as a
+            // uniform mono stack regardless of which field is prose vs ident.
+            textStyle = KnotworkTextStyles.MonoBase,
             modifier = Modifier.fillMaxWidth(),
         )
         InlineError(failure = error)
@@ -288,6 +327,14 @@ private fun FloatSliderField(
             valueRange = range,
             steps = steps,
             colors = settingsParitySliderColors(),
+            // Compact-slider treatment (review round 3): constrain the slider
+            // row to a 28 dp height so the form reads as a tight stack instead
+            // of letting Material3's default 48 dp interactive area inflate
+            // every slider row. Settings parity — same primary thumb /
+            // surface3 inactive palette as `KnotworkParamSlider`.
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(COMPACT_SLIDER_HEIGHT.dp),
         )
         InlineError(failure = error)
     }
@@ -325,10 +372,21 @@ private fun IntSliderField(
             valueRange = range.first.toFloat()..range.last.toFloat(),
             steps = 0,
             colors = settingsParitySliderColors(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(COMPACT_SLIDER_HEIGHT.dp),
         )
         InlineError(failure = error)
     }
 }
+
+/**
+ * Visual height of the compact slider row inside the sheet. 28 dp compresses
+ * the M3 default 48 dp interactive area so the per-slider row matches the
+ * other fields' density. Trade-off: touch target shrinks a bit; acceptable
+ * because the sheet is a form, not a discoverability surface.
+ */
+private const val COMPACT_SLIDER_HEIGHT: Int = 28
 
 /**
  * Slider color palette matching `KnotworkParamSlider` on the Settings screen —
@@ -389,7 +447,6 @@ private fun InputFormBody(
         value = config.inputName,
         error = errors[FieldId.INPUT_NAME],
         singleLine = true,
-        monospace = true,
         onChange = { next -> onChange(config.copy(inputName = next)) },
     )
     TextField(
@@ -397,7 +454,6 @@ private fun InputFormBody(
         value = config.schemaJson.orEmpty(),
         error = errors[FieldId.SCHEMA_JSON],
         singleLine = false,
-        monospace = true,
         onChange = { next -> onChange(config.copy(schemaJson = next.takeIf { it.isNotBlank() })) },
     )
 }
@@ -435,7 +491,6 @@ private fun LiteRtFormBody(
         value = config.systemPrompt,
         error = errors[FieldId.SYSTEM_PROMPT],
         singleLine = false,
-        monospace = true,
         onChange = { next -> onChange(config.copy(systemPrompt = next)) },
         libraryCategory = "LITE_RT",
         onPickFromLibrary = onPickFromLibrary,
@@ -484,20 +539,19 @@ private fun CloudFormBody(
         selected = config.provider,
         onSelect = { next -> onChange(config.copy(provider = next)) },
     )
-    TextField(
-        label = stringResource(R.string.knotwork_node_field_model),
-        value = config.model,
-        error = errors[FieldId.MODEL],
-        singleLine = true,
-        monospace = true,
-        onChange = { next -> onChange(config.copy(model = next)) },
-    )
+    // The cloud-model id field used to live here. Phase 22 / Task 14 review
+    // round 3 removes it from the sheet — cloud-provider model ids are
+    // configured once per provider in Settings → External providers and
+    // shared across every Cloud node, so duplicating the field on every
+    // node confused users. The `CloudConfig.model` field stays on the
+    // data class for backward-compat with persisted JSON (empty string is
+    // the default) — the executor falls back to the provider's configured
+    // model at runtime.
     TextField(
         label = stringResource(R.string.knotwork_node_field_system_prompt),
         value = config.systemPrompt,
         error = errors[FieldId.SYSTEM_PROMPT],
         singleLine = false,
-        monospace = true,
         onChange = { next -> onChange(config.copy(systemPrompt = next)) },
         libraryCategory = "CLOUD",
         onPickFromLibrary = onPickFromLibrary,
@@ -608,7 +662,6 @@ private fun IntentRouterFormBody(
         value = config.classifierPrompt,
         error = errors[FieldId.CLASSIFIER_PROMPT],
         singleLine = false,
-        monospace = true,
         onChange = { next -> onChange(config.copy(classifierPrompt = next)) },
         libraryCategory = "INTENT_ROUTER",
         onPickFromLibrary = onPickFromLibrary,
@@ -650,7 +703,6 @@ private fun IfConditionFormBody(
         value = config.expression,
         error = errors[FieldId.EXPRESSION],
         singleLine = true,
-        monospace = true,
         onChange = { next -> onChange(config.copy(expression = next)) },
     )
     TextField(
@@ -658,7 +710,6 @@ private fun IfConditionFormBody(
         value = config.labelTrue,
         error = errors[FieldId.LABEL_TRUE],
         singleLine = true,
-        monospace = false,
         onChange = { next -> onChange(config.copy(labelTrue = next)) },
     )
     TextField(
@@ -666,7 +717,6 @@ private fun IfConditionFormBody(
         value = config.labelFalse,
         error = errors[FieldId.LABEL_FALSE],
         singleLine = true,
-        monospace = false,
         onChange = { next -> onChange(config.copy(labelFalse = next)) },
     )
 }
@@ -683,7 +733,6 @@ private fun ClarificationFormBody(
         value = config.questionTemplate,
         error = errors[FieldId.QUESTION_TEMPLATE],
         singleLine = false,
-        monospace = true,
         onChange = { next -> onChange(config.copy(questionTemplate = next)) },
         libraryCategory = "CLARIFICATION",
         onPickFromLibrary = onPickFromLibrary,
@@ -701,7 +750,6 @@ private fun ClarificationFormBody(
         value = config.timeoutMs?.toString().orEmpty(),
         error = errors[FieldId.TIMEOUT_OPTIONAL],
         singleLine = true,
-        monospace = true,
         onChange = { next -> onChange(config.copy(timeoutMs = next.toIntOrNull())) },
     )
 }
@@ -1067,7 +1115,6 @@ private fun DecompositionFormBody(
         value = config.planningPrompt,
         error = errors[FieldId.PLANNING_PROMPT],
         singleLine = false,
-        monospace = true,
         onChange = { next -> onChange(config.copy(planningPrompt = next)) },
         libraryCategory = "DECOMPOSITION",
         onPickFromLibrary = onPickFromLibrary,
@@ -1087,7 +1134,6 @@ private fun DecompositionFormBody(
         value = config.outputSchemaJson.orEmpty(),
         error = errors[FieldId.OUTPUT_SCHEMA_JSON],
         singleLine = false,
-        monospace = true,
         onChange = { next -> onChange(config.copy(outputSchemaJson = next.takeIf { it.isNotBlank() })) },
     )
 }
@@ -1103,7 +1149,6 @@ private fun QueueProcessorFormBody(
         value = config.inputList,
         error = errors[FieldId.INPUT_LIST],
         singleLine = true,
-        monospace = true,
         onChange = { next -> onChange(config.copy(inputList = next)) },
     )
     TextField(
@@ -1111,7 +1156,6 @@ private fun QueueProcessorFormBody(
         value = config.itemVariable,
         error = errors[FieldId.ITEM_VARIABLE],
         singleLine = true,
-        monospace = true,
         onChange = { next -> onChange(config.copy(itemVariable = next)) },
     )
     IntSliderField(
@@ -1146,7 +1190,6 @@ private fun EvaluationFormBody(
         value = config.criteriaPrompt,
         error = errors[FieldId.CRITERIA_PROMPT],
         singleLine = false,
-        monospace = true,
         onChange = { next -> onChange(config.copy(criteriaPrompt = next)) },
         libraryCategory = "EVALUATION",
         onPickFromLibrary = onPickFromLibrary,
@@ -1186,7 +1229,6 @@ private fun SummaryFormBody(
             value = config.customPrompt.orEmpty(),
             error = errors[FieldId.CUSTOM_PROMPT],
             singleLine = false,
-            monospace = true,
             onChange = { next -> onChange(config.copy(customPrompt = next.takeIf { it.isNotBlank() })) },
             libraryCategory = "SUMMARY",
             onPickFromLibrary = onPickFromLibrary,

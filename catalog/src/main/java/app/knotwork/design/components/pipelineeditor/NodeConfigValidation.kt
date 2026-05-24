@@ -224,7 +224,11 @@ object NodeConfigValidation {
 
     private fun validateCloud(config: CloudConfig): Map<FieldId, ValidationFailure> {
         val errors = mutableMapOf<FieldId, ValidationFailure>()
-        if (config.model.isBlank()) errors[FieldId.MODEL] = ValidationFailure.REQUIRED
+        // `CloudConfig.model` was removed from the sheet in Phase 22 / Task 14
+        // review round 3 (model ids live once per provider in Settings →
+        // External providers, not per-node). The validator therefore no
+        // longer flags a blank model — the executor falls back to the
+        // provider's configured model at runtime when this field is empty.
         if (config.systemPrompt.isBlank()) errors[FieldId.SYSTEM_PROMPT] = ValidationFailure.REQUIRED
         if (config.temperature !in TEMPERATURE_RANGE) errors[FieldId.TEMPERATURE] = ValidationFailure.OUT_OF_RANGE
         if (config.maxTokens !in MAX_TOKENS_RANGE) errors[FieldId.MAX_TOKENS] = ValidationFailure.OUT_OF_RANGE

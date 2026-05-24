@@ -48,6 +48,48 @@ details.
   instead of guessing whether each edit autosaved. Catalog snapshot
   baselines regenerated to reflect the new toolbar + banner layout.
 
+- **Pipeline editor — polish round 3** (Phase 22 / Task 14/17,
+  second real-device review pass) — six fixes on `NodeConfigSheet`:
+  - Every field on the sheet now uses `KnotworkTextStyles.MonoBase`
+    (Title + plain text fields + identifier fields). The mixed
+    BodyBase / MonoBase stack read as accidentally inconsistent on
+    the same dialog. The `monospace` parameter on `TextField` was
+    removed (every call became `MonoBase`).
+  - `VariableChipsRow` converts to a `LazyRow` with horizontal scroll
+    so chips never wrap to a second row. The full prompt-variable
+    set is now exposed: `$DATE / $TIME / $LANG / $LOCATION / $USER /
+    $DEVICE / $MODEL / $TOOLS / $MEMORY_SUMMARY` (matches every
+    registered `PromptVariableProvider` in the `:app` module).
+  - `CloudFormBody` drops the per-node Model id field — cloud-model
+    ids live once per provider in Settings → External providers and
+    are shared across every Cloud node. `CloudConfig.model` stays on
+    the data class for persisted-JSON backward-compat (executor falls
+    back to the provider's configured model when the field is blank).
+    `NodeConfigValidation.validateCloud` correspondingly stops
+    flagging a blank `model` — the previous rule would have locked
+    Save out forever now that the user can't reach the field.
+  - Sheet sliders shrink to a compact 28 dp height — the M3 default
+    48 dp interactive area was visibly inflating every slider row.
+    Same primary thumb / surface3 inactive palette as
+    `KnotworkParamSlider`; trade-off accepted: the form is a config
+    surface, not a discoverability one.
+  - `NodeContextConfigSection` ("Input Data" checkboxes — Original
+    task / Chat history / Long-term memory / Tool results) is back
+    on every NodeConfigSheet. The catalog `NodeConfigSheet` grew an
+    `extraSection: @Composable (() -> Unit)?` slot (and the
+    production `NodeConfigSheetHost` forwards it) so the
+    domain-coupled section can render between the form body and the
+    Save row without dragging `NodeContextConfig` into the catalog.
+    `EditorState` gains a `workingContextConfig` mirror; Save now
+    stitches it into the persisted `NodeModel.contextConfig`.
+  - Default system prompts restored on every prompt-bearing node
+    type. `NodeConfigCodec.deriveFromLegacy` falls back to
+    `DefaultPrompts.getDefaultPromptForNodeType(node.type)` when
+    `node.systemPrompt` is null/blank — older pipelines that
+    persisted before defaults were wired into `NodeModel`
+    construction now see the registered defaults on first open.
+  - Catalog `pipeline_editor_*` snapshot baselines regenerated.
+
 - **Pipeline editor — polish round 2** (Phase 22 / Task 14/17,
   real-device review pass) — eight more issues:
   - `NodeConfigSheet` Title field now uses `KnotworkTextStyles.BodyBase`

@@ -1,10 +1,12 @@
 package ai.agent.android.presentation.ui.pipeline.editor
 
 import ai.agent.android.R
+import ai.agent.android.domain.models.NodeContextConfig
 import ai.agent.android.domain.models.NodeType
 import ai.agent.android.domain.models.PipelineGraph
 import ai.agent.android.presentation.ui.common.resolve
 import ai.agent.android.presentation.ui.orchestrator.OrchestratorViewModel
+import ai.agent.android.presentation.ui.orchestrator.components.NodeContextConfigSection
 import ai.agent.android.presentation.ui.orchestrator.components.PromptLibraryDialog
 import ai.agent.android.presentation.ui.pipeline.editor.canvas.formatScalePercent
 import ai.agent.android.presentation.ui.pipeline.editor.config.NodeConfigCodec
@@ -180,6 +182,7 @@ fun PipelineEditorScreen(viewModel: OrchestratorViewModel, onBack: () -> Unit) {
             editor.configuringNodeId != null -> {
                 editor.configuringNodeId = null
                 editor.workingConfig = null
+                editor.workingContextConfig = null
             }
             editor.searchOpen -> {
                 // System back is the natural "close search" gesture; the bar's
@@ -408,6 +411,9 @@ fun PipelineEditorScreen(viewModel: OrchestratorViewModel, onBack: () -> Unit) {
                     type = NodeTypeMapper.toCatalog(type),
                     title = type.name,
                 )
+                // Fresh nodes get the all-enabled context config so every
+                // available context block flows into the prompt by default.
+                editor.workingContextConfig = NodeContextConfig.ALL_ENABLED
             },
             onAddConnection = { sourceId, targetId, label ->
                 editor.undoRedo.push(pipeline)
@@ -417,6 +423,7 @@ fun PipelineEditorScreen(viewModel: OrchestratorViewModel, onBack: () -> Unit) {
                 val target = pipeline.nodes.find { it.id == nodeId } ?: return@PipelineEditorContent
                 editor.configuringNodeId = nodeId
                 editor.workingConfig = NodeConfigCodec.decode(target)
+                editor.workingContextConfig = target.contextConfig
             },
             onLongPressEdge = { connectionId -> pendingEdgeDelete = connectionId },
             onStartWithInput = {
@@ -431,6 +438,7 @@ fun PipelineEditorScreen(viewModel: OrchestratorViewModel, onBack: () -> Unit) {
                     type = NodeTypeMapper.toCatalog(NodeType.INPUT),
                     title = NodeType.INPUT.name,
                 )
+                editor.workingContextConfig = NodeContextConfig.ALL_ENABLED
             },
             onFromTemplate = {
                 // Template gallery is tracked separately; surface a hint so the
@@ -659,13 +667,24 @@ fun PipelineEditorScreen(viewModel: OrchestratorViewModel, onBack: () -> Unit) {
                     onCancel = {
                         editor.configuringNodeId = null
                         editor.workingConfig = null
+                        editor.workingContextConfig = null
                     },
                     onSave = { saved ->
                         val mutated = NodeConfigCodec.apply(node, saved)
+                        // Preserve the user's edits to the per-node context
+                        // flags (Original task / Chat history / Long-term
+                        // memory / Tool results) which the catalog
+                        // `NodeConfigSheet` doesn't model — they're tracked
+                        // in `editor.workingContextConfig` and stitched
+                        // back here.
+                        val withContext = editor.workingContextConfig
+                            ?.let { mutated.copy(contextConfig = it) }
+                            ?: mutated
                         editor.undoRedo.push(pipeline)
-                        viewModel.updateNodeFromEditor(node.id, mutated)
+                        viewModel.updateNodeFromEditor(node.id, withContext)
                         editor.configuringNodeId = null
                         editor.workingConfig = null
+                        editor.workingContextConfig = null
                     },
                     availableToolIds = uiState.availableTools.map { it.name },
                     availableModels = uiState.availableLocalModels.map { model ->
@@ -683,6 +702,39 @@ fun PipelineEditorScreen(viewModel: OrchestratorViewModel, onBack: () -> Unit) {
                     },
                     onPickFromLibrary = { category, apply ->
                         pendingLibrary = PendingPromptLibrary(category = category, apply = apply)
+                    },
+                    extraSection = {
+                        // Bind the legacy `NodeContextConfigSection` ("Input
+                        // Data" checkboxes) to `editor.workingContextConfig`
+                        // — the catalog `NodeConfigSheet` doesn't model
+                        // context flags (those are domain-level), so the
+                        // production sheet adds them via the `extraSection`
+                        // slot. Defaults to `ALL_ENABLED` if for any reason
+                        // the per-open initialisation didn't run.
+                        val ctx = editor.workingContextConfig
+                            ?: NodeContextConfig.ALL_ENABLED
+                        NodeContextConfigSection(
+                            originalTask = ctx.originalTask,
+                            chatHistory = ctx.chatHistory,
+                            longTermMemory = ctx.longTermMemory,
+                            toolResults = ctx.toolResults,
+                            onOriginalTaskChange = { next ->
+                                editor.workingContextConfig =
+                                    ctx.copy(originalTask = next)
+                            },
+                            onChatHistoryChange = { next ->
+                                editor.workingContextConfig =
+                                    ctx.copy(chatHistory = next)
+                            },
+                            onLongTermMemoryChange = { next ->
+                                editor.workingContextConfig =
+                                    ctx.copy(longTermMemory = next)
+                            },
+                            onToolResultsChange = { next ->
+                                editor.workingContextConfig =
+                                    ctx.copy(toolResults = next)
+                            },
+                        )
                     },
                 )
             }

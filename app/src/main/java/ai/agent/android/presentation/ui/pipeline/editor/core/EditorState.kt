@@ -1,5 +1,6 @@
 package ai.agent.android.presentation.ui.pipeline.editor.core
 
+import ai.agent.android.domain.models.NodeContextConfig
 import ai.agent.android.domain.models.NodeModel
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Stable
@@ -78,6 +79,15 @@ class EditorState(undoCapacity: Int = EditorUndoRedo.DEFAULT_CAPACITY) {
 
     /** Working [NodeConfig] for the open sheet — mirrors edits before commit. */
     var workingConfig: NodeConfig? by mutableStateOf(null)
+
+    /**
+     * Working [NodeContextConfig] tracked alongside [workingConfig] while the
+     * sheet is open. The catalog `NodeConfigSheet` doesn't model context flags
+     * (those are domain-level), so the production sheet wires its own
+     * `NodeContextConfigSection` via the `extraSection` slot and mirrors the
+     * checkbox state here. Reset to `null` on sheet close.
+     */
+    var workingContextConfig: NodeContextConfig? by mutableStateOf(null)
 
     /** Editor's undo/redo stack — bounded to the screen lifetime, never persisted. */
     val undoRedo: EditorUndoRedo = EditorUndoRedo(capacity = undoCapacity)

@@ -52,6 +52,7 @@ import app.knotwork.design.theme.KnotworkTheme
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
+@Suppress("LongParameterList") // Sheet is the single configuration seam — every input is its own concern.
 fun NodeConfigSheet(
     config: NodeConfig,
     peerTitles: Set<String>,
@@ -61,6 +62,7 @@ fun NodeConfigSheet(
     availableToolIds: List<String> = emptyList(),
     availableModels: List<LocalModelOption> = emptyList(),
     onPickFromLibrary: ((category: String, apply: (String) -> Unit) -> Unit)? = null,
+    extraSection: (@Composable () -> Unit)? = null,
 ) {
     // `skipPartiallyExpanded = true` opens the sheet at its full height immediately
     // (no half-expanded state). Tall configs — IntentRouter with several classes, LiteRt
@@ -79,6 +81,7 @@ fun NodeConfigSheet(
             availableToolIds = availableToolIds,
             availableModels = availableModels,
             onPickFromLibrary = onPickFromLibrary,
+            extraSection = extraSection,
         )
     }
 }
@@ -111,6 +114,7 @@ private fun ScrollableNodeConfigSheetBody(
     availableToolIds: List<String>,
     availableModels: List<LocalModelOption>,
     onPickFromLibrary: ((category: String, apply: (String) -> Unit) -> Unit)?,
+    extraSection: (@Composable () -> Unit)?,
 ) {
     val scrollState = rememberScrollState()
     Column(
@@ -129,6 +133,11 @@ private fun ScrollableNodeConfigSheetBody(
             availableModels = availableModels,
             onPickFromLibrary = onPickFromLibrary,
         )
+        // App-provided section that the catalog isn't allowed to model (e.g.
+        // `NodeContextConfigSection` — depends on a domain `NodeContextConfig`).
+        // Rendered between the form body and the action row so it reads as
+        // part of the configuration without making the catalog atom domain-aware.
+        extraSection?.invoke()
         Spacer(modifier = Modifier.size(KnotworkTheme.spacing.sp2))
         SheetActionRow(
             saveEnabled = errors.isEmpty(),
@@ -151,6 +160,7 @@ private fun ScrollableNodeConfigSheetBody(
  * @param onSave invoked on the Save action when [errors] is empty.
  */
 @Composable
+@Suppress("LongParameterList") // Body mirrors NodeConfigSheet's surface.
 fun NodeConfigSheetBody(
     config: NodeConfig,
     errors: Map<FieldId, ValidationFailure>,
@@ -160,6 +170,7 @@ fun NodeConfigSheetBody(
     availableToolIds: List<String> = emptyList(),
     availableModels: List<LocalModelOption> = emptyList(),
     onPickFromLibrary: ((category: String, apply: (String) -> Unit) -> Unit)? = null,
+    extraSection: (@Composable () -> Unit)? = null,
 ) {
     Column(
         modifier = Modifier
@@ -176,6 +187,7 @@ fun NodeConfigSheetBody(
             availableModels = availableModels,
             onPickFromLibrary = onPickFromLibrary,
         )
+        extraSection?.invoke()
         Spacer(modifier = Modifier.size(KnotworkTheme.spacing.sp2))
         SheetActionRow(saveEnabled = errors.isEmpty(), onCancel = onCancel, onSave = { onSave(config) })
     }
