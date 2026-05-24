@@ -24,10 +24,7 @@ import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Slider
-import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -44,6 +41,7 @@ import app.knotwork.design.R
 import app.knotwork.design.components.buttons.KnotworkTextButton
 import app.knotwork.design.components.chips.ChipStyle
 import app.knotwork.design.components.chips.KnotworkChip
+import app.knotwork.design.components.controls.KnotworkCompactSlider
 import app.knotwork.design.theme.KnotworkTheme
 import app.knotwork.design.tokens.KnotworkTextStyles
 
@@ -321,20 +319,12 @@ private fun FloatSliderField(
                 color = KnotworkTheme.extended.onSurfaceMuted,
             )
         }
-        Slider(
+        KnotworkCompactSlider(
             value = value,
             onValueChange = onChange,
             valueRange = range,
             steps = steps,
-            colors = settingsParitySliderColors(),
-            // Compact-slider treatment (review round 3): constrain the slider
-            // row to a 28 dp height so the form reads as a tight stack instead
-            // of letting Material3's default 48 dp interactive area inflate
-            // every slider row. Settings parity — same primary thumb /
-            // surface3 inactive palette as `KnotworkParamSlider`.
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(COMPACT_SLIDER_HEIGHT.dp),
+            modifier = Modifier.fillMaxWidth(),
         )
         InlineError(failure = error)
     }
@@ -366,42 +356,16 @@ private fun IntSliderField(
         // app when the CLOUD config sheet opens. Continuous + round-on-change gives
         // identical integer increments at user-perceptible drag resolution without
         // the tick-mark blow-up.
-        Slider(
+        KnotworkCompactSlider(
             value = value.toFloat(),
             onValueChange = { next -> onChange(next.toInt()) },
             valueRange = range.first.toFloat()..range.last.toFloat(),
             steps = 0,
-            colors = settingsParitySliderColors(),
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(COMPACT_SLIDER_HEIGHT.dp),
+            modifier = Modifier.fillMaxWidth(),
         )
         InlineError(failure = error)
     }
 }
-
-/**
- * Visual height of the compact slider row inside the sheet. 28 dp compresses
- * the M3 default 48 dp interactive area so the per-slider row matches the
- * other fields' density. Trade-off: touch target shrinks a bit; acceptable
- * because the sheet is a form, not a discoverability surface.
- */
-private const val COMPACT_SLIDER_HEIGHT: Int = 28
-
-/**
- * Slider color palette matching `KnotworkParamSlider` on the Settings screen —
- * primary thumb + primary active track + `surface3` inactive. Keeps the sheet's
- * sliders visually consistent with the rest of the app instead of falling back
- * to the M3 default tonal palette.
- */
-@Composable
-private fun settingsParitySliderColors() = SliderDefaults.colors(
-    thumbColor = MaterialTheme.colorScheme.primary,
-    activeTrackColor = MaterialTheme.colorScheme.primary,
-    inactiveTrackColor = KnotworkTheme.extended.surface3,
-    activeTickColor = MaterialTheme.colorScheme.primary,
-    inactiveTickColor = KnotworkTheme.extended.surface3,
-)
 
 /** Segmented chip row that picks one enum value out of a labelled set. */
 @Composable

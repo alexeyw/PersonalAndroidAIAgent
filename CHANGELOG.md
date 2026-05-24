@@ -48,6 +48,25 @@ details.
   instead of guessing whether each edit autosaved. Catalog snapshot
   baselines regenerated to reflect the new toolbar + banner layout.
 
+- **App-wide slider — single `KnotworkCompactSlider` atom**
+  (Phase 22 / Task 14/17, review polish) — extracted the
+  inline `CompactSlider` that the Settings screen had been rolling
+  privately into a new catalog atom at
+  `components/controls/KnotworkCompactSlider.kt`. Every slider in
+  the app now goes through it: `KnotworkParamSlider` (Settings
+  numeric params), `SettingsContent` (memory auto-summarize),
+  `NodeConfigForms` (LITE_RT / CLOUD / Decomposition /
+  Evaluation / Summary numeric fields). Visual contract — 4 dp
+  pill-shaped thumb (4 × 18 dp) + 4 dp track, primary thumb /
+  active track, `extended.surface3` inactive, no tick marks
+  regardless of `steps`. Result: every slider reads identically
+  regardless of which surface it sits in, instead of the previous
+  mix of Material defaults vs the inline Settings variant vs the
+  per-sheet `Modifier.height(28.dp)` hack. The dropped per-callsite
+  customisation (settings-parity color helper, `COMPACT_SLIDER_*`
+  constants, private Settings `CompactSlider`) is now `dead-code`
+  removed.
+
 - **Pipeline editor — polish round 3** (Phase 22 / Task 14/17,
   second real-device review pass) — six fixes on `NodeConfigSheet`:
   - Every field on the sheet now uses `KnotworkTextStyles.MonoBase`

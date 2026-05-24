@@ -5,13 +5,12 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Slider
-import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
+import app.knotwork.design.components.controls.KnotworkCompactSlider
 import app.knotwork.design.theme.KnotworkTheme
 import app.knotwork.design.tokens.KnotworkTextStyles
 
@@ -74,19 +73,16 @@ fun KnotworkParamSlider(
                 color = MaterialTheme.colorScheme.primary,
             )
         }
-        Slider(
+        // Brand-standard `KnotworkCompactSlider` — same compact pill thumb
+        // and 4 dp track that the inline Settings slider used to roll
+        // privately. Now shared with NodeConfigSheet / future surfaces so
+        // every slider in the app has identical visual density.
+        KnotworkCompactSlider(
             value = value,
             onValueChange = onValueChange,
             valueRange = valueRange,
             steps = steps,
             enabled = enabled,
-            colors = SliderDefaults.colors(
-                thumbColor = MaterialTheme.colorScheme.primary,
-                activeTrackColor = MaterialTheme.colorScheme.primary,
-                inactiveTrackColor = KnotworkTheme.extended.surface3,
-                activeTickColor = MaterialTheme.colorScheme.primary,
-                inactiveTickColor = KnotworkTheme.extended.surface3,
-            ),
         )
     }
 }
