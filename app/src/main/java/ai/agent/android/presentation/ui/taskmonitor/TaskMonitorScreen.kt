@@ -23,7 +23,6 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -40,6 +39,7 @@ import androidx.compose.ui.res.colorResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import app.knotwork.design.components.chips.KnotworkFilterChip
 
 /**
  * Screen displaying the list of active chat sessions and WorkManager background tasks.
@@ -88,10 +88,10 @@ fun TaskMonitorScreen(
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 items(TaskFilterType.entries.toTypedArray()) { filterType ->
-                    FilterChip(
+                    KnotworkFilterChip(
+                        label = stringResource(filterType.displayNameRes),
                         selected = uiState.filter == filterType,
                         onClick = { viewModel.onFilterChanged(filterType) },
-                        label = { Text(stringResource(filterType.displayNameRes)) },
                     )
                 }
             }

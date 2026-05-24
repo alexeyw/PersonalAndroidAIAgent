@@ -19,8 +19,9 @@ see [`docs/user-guide.md`](user-guide.md).
    built-in as a callee-side AppFunction)
 3. [Add a new cloud provider](#3-add-a-new-cloud-provider)
 4. [Add a new prompt variable](#4-add-a-new-prompt-variable)
-5. [Synchronization table — "if you change X, also touch Y"](#5-synchronization-table)
-6. [Quality gate](#6-quality-gate)
+5. [Use input atoms and chip atoms](#5-use-input-atoms-and-chip-atoms)
+6. [Synchronization table — "if you change X, also touch Y"](#6-synchronization-table)
+7. [Quality gate](#7-quality-gate)
 
 ---
 
@@ -520,7 +521,82 @@ can discover the new placeholder.
 
 ---
 
-## 5. Synchronization table
+## 5. Use input atoms and chip atoms
+
+Every text input and chip on screen lives in the Knotwork catalog under
+`catalog/src/main/java/app/knotwork/design/components/controls/` and
+`…/chips/`. The full specification is `inputs-and-chips.md` (sizing,
+spacing, state tables, motion); this section is the quick "which atom
+do I reach for" lookup.
+
+### 5.1 Pick an input atom
+
+| You want to render…                                          | Atom                                                                                  |
+|--------------------------------------------------------------|---------------------------------------------------------------------------------------|
+| Single-line sans text (titles, names, IDs)                   | `KnotworkField` + `KnotworkTextField(size = Sm)`                                       |
+| Single-line monospace (condition / token / URL / JSON)       | `KnotworkField` + `KnotworkTextField(monospace = true)`                                |
+| Multi-line prompt / classes / question template              | `KnotworkField` + `KnotworkTextArea(monospace = true, insertChips = […])`              |
+| Numeric value                                                | `KnotworkTextField(keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal))` |
+| Slider 0..1 / 0..2 (Temperature, Top-p)                      | `KnotworkCompactSlider`                                                                |
+| List of strings (Stop tokens, Quick replies, tag inputs)     | `KnotworkChipsInput`                                                                   |
+| Choose from ≤ 8 mutually exclusive values                    | segmented `KnotworkFilterChip(size = Sm)` row                                          |
+| Choose from > 8 values                                       | catalog dropdown (out of scope for this guide)                                         |
+| Search bar                                                   | `KnotworkTextField(size = Md, search = true)`                                          |
+| Password / API key / token                                   | `KnotworkPasswordField`                                                                |
+| Chat input                                                   | catalog `ChatComposer` (`components/chat/ChatComposer.kt`)                             |
+| Inline rename (toolbar title)                                | `KnotworkTextField(size = Sm)` without external `KnotworkField` wrapper                |
+
+Every atom in the table above already lives behind `KnotworkField` for
+the caps-label + helper row. If you skip the wrapper, **set
+`contentDescription` on the inner `KnotworkTextField`** so TalkBack still
+announces the field.
+
+### 5.2 Pick a chip atom
+
+| You want to render…                                                   | Atom                                                            |
+|-----------------------------------------------------------------------|------------------------------------------------------------------|
+| Single-choice segmented row (Format, Style, Risk gate, yes/no)        | `KnotworkFilterChip(size = Sm)`                                  |
+| Filter bar with counts (All · 24 / Recent · 5 / Mine)                 | `KnotworkFilterChip(size = Sm, trailingCount = …)`               |
+| Quick-reply under a `CLARIFICATION` card or empty-state suggestion    | `KnotworkSuggestionChip(size = Md)`                              |
+| Removable list value (Stop tokens, Quick replies)                     | `KnotworkInputChip` inside `KnotworkChipsInput`                  |
+| `$DATE` / `$TIME` / `$GOAL` insert-token chip                         | `KnotworkVariableChip` (or the `insertChips` strip on `KnotworkTextArea`) |
+| Section header in the chat stream (Today / date)                      | `KnotworkDateChip`                                               |
+| Risk tier badge in HITL prompt or Tools row                           | `RiskPill`                                                       |
+| Run-state badge in pipeline library / run-trace / console             | `StatusPill`                                                     |
+
+The chip family uses the 8 dp `sm` shape by default (the spec
+deliberately diverges from Material 3's pill-shaped filter chip).
+`RiskPill` / `StatusPill` / `KnotworkDateChip` are the three pill-shaped
+exceptions; everything else stays rectangular.
+
+### 5.3 Adding a new variable to the textarea highlight pass
+
+`KnotworkTextArea` highlights any token matching `\$[A-Z_][A-Z0-9_]*`
+out of the box, so a new prompt variable added through the
+`PromptVariableProvider` recipe in §4 is highlighted automatically.
+No extra wiring on the atom side.
+
+### 5.4 Adding a new atom
+
+Catalog atoms live next to their existing siblings in
+`components/controls/` (text inputs) or `components/chips/` (chips and
+pills). The conventions a new atom must follow:
+
+- Read sizes / padding / borders from `KnotworkFieldDefaults` /
+  `KnotworkChipDefaults`; never inline a literal `dp` at the call site.
+- Read colours from `KnotworkTheme.extended` and
+  `MaterialTheme.colorScheme`; never inline a hex value.
+- Touch target ≥ 48 dp via `Modifier.minimumInteractiveComponentSize()`
+  or `Modifier.size(48.dp)` even when the visual is smaller.
+- Pair colour with another signal (icon, label, dot) — never use colour
+  alone (`decisions.md §14`).
+- Ship a snapshot test (`Roborazzi`) that exercises the visual states
+  most likely to regress (default / focused / disabled / error for
+  inputs; off / on / disabled for chips).
+
+---
+
+## 6. Synchronization table
 
 The same change can require updates in multiple places. The table
 below lists the four extension points and every file that must move
@@ -541,7 +617,7 @@ of the existing constants is a candidate for the same edit.
 
 ---
 
-## 6. Quality gate
+## 7. Quality gate
 
 Before pushing any change from the recipes above, run the full quality
 gate locally:

@@ -38,7 +38,6 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
@@ -51,7 +50,6 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.StarBorder
 import androidx.compose.material.icons.filled.StarOutline
-import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.Upload
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AlertDialog
@@ -68,8 +66,6 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.ModalDrawerSheet
 import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.NavigationDrawerItem
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarDuration
@@ -94,7 +90,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
@@ -104,12 +99,17 @@ import androidx.compose.ui.res.dimensionResource
 import androidx.compose.ui.res.integerResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.knotwork.design.components.chat.ChatComposer
+import app.knotwork.design.components.chat.ComposerState
+import app.knotwork.design.components.controls.KnotworkField
+import app.knotwork.design.components.controls.KnotworkTextField
 import com.mikepenz.markdown.m3.Markdown
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -829,12 +829,14 @@ fun ChatDrawerContent(
             onDismissRequest = { sessionToRename = null },
             title = { Text(stringResource(R.string.chat_drawer_rename_chat_title)) },
             text = {
-                OutlinedTextField(
-                    value = renameText,
-                    onValueChange = { renameText = it },
-                    singleLine = true,
-                    label = { Text(stringResource(R.string.chat_drawer_rename_chat_name_label)) },
-                )
+                KnotworkField(
+                    label = stringResource(R.string.chat_drawer_rename_chat_name_label),
+                ) {
+                    KnotworkTextField(
+                        value = renameText,
+                        onValueChange = { renameText = it },
+                    )
+                }
             },
             confirmButton = {
                 Button(
@@ -1112,51 +1114,19 @@ fun ChatInputBar(
     onStopClicked: () -> Unit,
     isGenerating: Boolean,
 ) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(16.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        OutlinedTextField(
-            value = inputText,
-            onValueChange = onInputTextChanged,
-            modifier = Modifier.weight(1f),
-            placeholder = { Text(stringResource(R.string.chat_input_placeholder)) },
-            enabled = !isGenerating,
-            maxLines = 4,
-            // Semi-transparent white container so the input visually
-            // separates from the surrounding bottomBar surface in both
-            // light and dark themes; alpha keeps the underlying colour
-            // hint (e.g. theme accent or scrim) just barely showing
-            // through instead of slamming a solid white plate over it.
-            colors = OutlinedTextFieldDefaults.colors(
-                focusedContainerColor = Color.White.copy(alpha = 0.7f),
-                unfocusedContainerColor = Color.White.copy(alpha = 0.7f),
-                disabledContainerColor = Color.White.copy(alpha = 0.7f),
-            ),
-        )
-        Spacer(modifier = Modifier.width(8.dp))
-        if (isGenerating) {
-            IconButton(onClick = onStopClicked) {
-                Icon(
-                    imageVector = Icons.Default.Stop,
-                    contentDescription = stringResource(R.string.chat_input_stop_cd),
-                    tint = MaterialTheme.colorScheme.error,
-                )
-            }
-        } else {
-            IconButton(
-                onClick = onSendClicked,
-                enabled = inputText.text.isNotBlank(),
-            ) {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Filled.Send,
-                    contentDescription = stringResource(R.string.chat_input_send_cd),
-                )
-            }
-        }
-    }
+    // Adapter: the legacy chat code paths pass `TextFieldValue` upstream
+    // (ViewModel preserves cursor across recompositions), but the Knotwork
+    // catalog `ChatComposer` standardises on `String` — chat input doesn't
+    // need cursor preservation in practice. Wrap the conversion here so the
+    // legacy callers can migrate one screen at a time without rewriting
+    // their state machines.
+    ChatComposer(
+        value = inputText.text,
+        onValueChange = { onInputTextChanged(TextFieldValue(it, selection = TextRange(it.length))) },
+        onSend = onSendClicked,
+        onStop = onStopClicked,
+        state = if (isGenerating) ComposerState.Generating else ComposerState.Idle,
+    )
 }
 
 /**

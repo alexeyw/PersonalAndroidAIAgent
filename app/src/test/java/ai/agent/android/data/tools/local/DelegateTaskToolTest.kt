@@ -4,10 +4,9 @@ import ai.agent.android.data.engine.KoogClientFactory
 import ai.agent.android.domain.engine.TextEmbeddingEngine
 import ai.agent.android.domain.repositories.ApiKeyRepository
 import ai.agent.android.domain.repositories.MemoryRepository
-import ai.koog.prompt.dsl.Prompt
+import ai.koog.prompt.Prompt
 import ai.koog.prompt.executor.clients.LLMClient
 import ai.koog.prompt.llm.LLModel
-import ai.koog.prompt.message.Message
 import ai.koog.prompt.streaming.StreamFrame
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -61,9 +60,10 @@ class DelegateTaskToolTest {
             val mockResponseText = "Here is your hello world app"
             val mockEmbedding = floatArrayOf(0.1f, 0.2f, 0.3f)
 
-            val mockMessageResponse = mockk<Message.Response>()
-            every { mockMessageResponse.content } returns mockResponseText
-
+            // Koog 1.0.0+: `executeStreaming` returns a `Flow<StreamFrame>` — the test
+            // routes the response via `StreamFrame.TextDelta`, not via a mock
+            // `Message.Response` (that class was renamed to `Message.Assistant` and
+            // no longer exposes a plain `.content` accessor anyway).
             coEvery { koogClientFactory.createAnthropicExecutor() } returns mockClient
             coEvery { mockClient.models() } returns emptyList()
             every { mockClient.llmProvider() } returns mockk(relaxed = true)

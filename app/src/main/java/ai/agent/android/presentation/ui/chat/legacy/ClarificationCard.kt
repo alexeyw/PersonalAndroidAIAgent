@@ -25,8 +25,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -45,6 +43,8 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import app.knotwork.design.components.chips.KnotworkSuggestionChip
+import app.knotwork.design.components.controls.KnotworkTextField
 import kotlinx.coroutines.delay
 
 /**
@@ -133,25 +133,23 @@ private fun PendingBody(model: ClarificationCardUiModel, onAnswer: (String) -> U
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             options.forEach { option ->
                 val optionCd = stringResource(R.string.chat_clarification_option_cd, option)
-                OutlinedButton(
+                KnotworkSuggestionChip(
+                    label = option,
                     onClick = { onAnswer(option) },
                     modifier = Modifier.semantics { contentDescription = optionCd },
-                ) {
-                    Text(option)
-                }
+                )
             }
         }
     } else {
         var text by remember(model.id) { mutableStateOf("") }
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-            OutlinedTextField(
+            KnotworkTextField(
                 value = text,
                 onValueChange = { text = it },
                 modifier = Modifier
                     .weight(1f)
                     .testTag("ClarificationInput"),
-                placeholder = { Text(stringResource(R.string.chat_clarification_answer_placeholder)) },
-                singleLine = true,
+                placeholder = stringResource(R.string.chat_clarification_answer_placeholder),
             )
             Spacer(modifier = Modifier.width(8.dp))
             IconButton(

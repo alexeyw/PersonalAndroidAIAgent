@@ -170,7 +170,12 @@ internal object NodeConfigCodec {
             classes = listOf(IntentClass(name = "simple"), IntentClass(name = "complex")),
         )
         CatalogNodeType.IF_CONDITION -> IfConditionConfig(title = title)
-        CatalogNodeType.CLARIFICATION -> ClarificationConfig(title = title)
+        CatalogNodeType.CLARIFICATION -> ClarificationConfig(
+            title = title,
+            questionTemplate = DefaultPrompts
+                .getDefaultPromptForNodeType(DomainNodeType.CLARIFICATION)
+                .orEmpty(),
+        )
         CatalogNodeType.TOOL -> ToolConfig(title = title)
         CatalogNodeType.DECOMPOSITION -> DecompositionConfig(
             title = title,
@@ -221,22 +226,31 @@ internal object NodeConfigCodec {
 
     private fun deriveFromLegacy(node: NodeModel): NodeConfig {
         val title = node.label.ifBlank { node.type.name }
+        // Phase 22 / Task 14 review round 3: when a legacy node persists with
+        // an empty `systemPrompt` (older pipelines created before
+        // `DefaultPrompts.getDefaultPromptForNodeType` was wired into NodeModel
+        // construction), fall back to the registered default prompt instead of
+        // showing an empty field. Users were rightly confused that "standard
+        // prompts disappeared" for these node types.
+        val systemPromptOrDefault = node.systemPrompt
+            ?.takeIf { it.isNotBlank() }
+            ?: DefaultPrompts.getDefaultPromptForNodeType(node.type).orEmpty()
         return when (NodeTypeMapper.toCatalog(node.type)) {
             CatalogNodeType.INPUT -> InputConfig(title = title)
             CatalogNodeType.OUTPUT -> OutputConfig(title = title)
             CatalogNodeType.LITE_RT -> LiteRtConfig(
                 title = title,
-                systemPrompt = node.systemPrompt.orEmpty(),
+                systemPrompt = systemPromptOrDefault,
                 modelId = node.modelPath.orEmpty(),
             )
             CatalogNodeType.CLOUD -> CloudConfig(
                 title = title,
-                systemPrompt = node.systemPrompt.orEmpty(),
+                systemPrompt = systemPromptOrDefault,
                 provider = CloudProviderMapper.toCatalog(DomainCloudProvider.fromId(node.cloudProvider)),
             )
             CatalogNodeType.INTENT_ROUTER -> IntentRouterConfig(
                 title = title,
-                classifierPrompt = node.systemPrompt.orEmpty(),
+                classifierPrompt = systemPromptOrDefault,
             )
             CatalogNodeType.IF_CONDITION -> IfConditionConfig(
                 title = title,
@@ -244,7 +258,7 @@ internal object NodeConfigCodec {
             )
             CatalogNodeType.CLARIFICATION -> ClarificationConfig(
                 title = title,
-                questionTemplate = node.systemPrompt.orEmpty(),
+                questionTemplate = systemPromptOrDefault,
                 timeoutMs = node.clarificationTimeoutMs?.toInt(),
             )
             CatalogNodeType.TOOL -> ToolConfig(
@@ -253,16 +267,16 @@ internal object NodeConfigCodec {
             )
             CatalogNodeType.DECOMPOSITION -> DecompositionConfig(
                 title = title,
-                planningPrompt = node.systemPrompt.orEmpty(),
+                planningPrompt = systemPromptOrDefault,
             )
             CatalogNodeType.QUEUE_PROCESSOR -> QueueProcessorConfig(title = title)
             CatalogNodeType.EVALUATION -> EvaluationConfig(
                 title = title,
-                criteriaPrompt = node.systemPrompt.orEmpty(),
+                criteriaPrompt = systemPromptOrDefault,
             )
             CatalogNodeType.SUMMARY -> SummaryConfig(
                 title = title,
-                customPrompt = node.systemPrompt,
+                customPrompt = systemPromptOrDefault.takeIf { it.isNotBlank() },
             )
         }
     }

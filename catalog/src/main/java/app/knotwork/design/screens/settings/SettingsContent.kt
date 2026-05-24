@@ -46,7 +46,6 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
@@ -73,6 +72,7 @@ import app.knotwork.design.components.buttons.KnotworkSecondaryButton
 import app.knotwork.design.components.buttons.KnotworkTextButton
 import app.knotwork.design.components.chips.ChipStyle
 import app.knotwork.design.components.chips.KnotworkChip
+import app.knotwork.design.components.controls.KnotworkCompactSlider
 import app.knotwork.design.components.controls.KnotworkSegmentedControl
 import app.knotwork.design.components.misc.KnotworkLoader
 import app.knotwork.design.components.misc.KnotworkSectionAction
@@ -551,7 +551,7 @@ private fun LlmParametersCard(state: LlmParametersCardState, callbacks: Settings
                         color = KnotworkTheme.extended.onSurfaceMuted,
                     )
                 }
-                CompactSlider(
+                KnotworkCompactSlider(
                     value = slider.value,
                     onValueChange = { newValue -> callbacks.onSliderChange(slider.id, newValue) },
                     valueRange = slider.valueRange,
@@ -890,7 +890,7 @@ private fun MemoryCard(state: MemoryCardState, callbacks: SettingsCallbacks) {
                     color = KnotworkTheme.extended.onSurfaceMuted,
                 )
             }
-            CompactSlider(
+            KnotworkCompactSlider(
                 value = state.autoSummarizeThreshold.toFloat(),
                 onValueChange = { newValue -> callbacks.onAutoSummarizeChange(newValue.toInt()) },
                 valueRange = 0f..100f,
@@ -1114,53 +1114,6 @@ private fun DestructiveTypedConfirmDialog(
 
 // ─── Constants ─────────────────────────────────────────────────────────────
 
-/**
- * Compact wrapper around the Material3 [Slider] used by every Settings
- * card. Renders a thinner track + smaller pill-style thumb than the
- * stock control so the slider does not visually dominate the row at
- * the design's 14 sp label scale.
- */
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun CompactSlider(
-    value: Float,
-    onValueChange: (Float) -> Unit,
-    valueRange: ClosedFloatingPointRange<Float>,
-    modifier: Modifier = Modifier,
-    steps: Int = 0,
-) {
-    val interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
-    Slider(
-        value = value,
-        onValueChange = onValueChange,
-        valueRange = valueRange,
-        steps = steps,
-        modifier = modifier,
-        interactionSource = interactionSource,
-        thumb = {
-            androidx.compose.material3.SliderDefaults.Thumb(
-                interactionSource = interactionSource,
-                modifier = Modifier.size(
-                    width = COMPACT_SLIDER_THUMB_WIDTH,
-                    height = COMPACT_SLIDER_THUMB_HEIGHT,
-                ),
-                thumbSize = androidx.compose.ui.unit.DpSize(
-                    COMPACT_SLIDER_THUMB_WIDTH,
-                    COMPACT_SLIDER_THUMB_HEIGHT,
-                ),
-            )
-        },
-        track = { sliderState ->
-            androidx.compose.material3.SliderDefaults.Track(
-                sliderState = sliderState,
-                modifier = Modifier.height(COMPACT_SLIDER_TRACK_HEIGHT),
-                drawStopIndicator = null,
-                drawTick = { _, _ -> },
-            )
-        },
-    )
-}
-
 /** Test tag for the scrollable Settings body — used by instrumented tests. */
 const val SETTINGS_BODY_TEST_TAG: String = "settings_body"
 const val IDENTITY_CARD_TEST_TAG: String = "settings_identity_card"
@@ -1197,12 +1150,3 @@ private const val SEGMENTED_TRAILING_WEIGHT = 2.5f
  * because the parent `Row` carries the `clickable` modifier.
  */
 private const val SWITCH_SCALE = 0.78f
-
-/**
- * Compact thumb / track dimensions used by [CompactSlider]. The
- * defaults render a thinner track + smaller pill thumb than the stock
- * Material3 Slider, matching the mockup's "settings slider" treatment.
- */
-private val COMPACT_SLIDER_THUMB_WIDTH = 4.dp
-private val COMPACT_SLIDER_THUMB_HEIGHT = 18.dp
-private val COMPACT_SLIDER_TRACK_HEIGHT = 4.dp

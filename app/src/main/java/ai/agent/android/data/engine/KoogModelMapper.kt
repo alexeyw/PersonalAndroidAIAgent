@@ -102,13 +102,13 @@ object KoogModelMapper {
     }
 
     fun getDeepSeekModelIdList(): List<String> = listOf(
-        DeepSeekModels.DeepSeekChat.id,
-        DeepSeekModels.DeepSeekReasoner.id,
+        DeepSeekModels.DeepSeekV4Flash.id,
+        DeepSeekModels.DeepSeekV4Pro.id,
     )
 
     fun getDeepSeekModel(name: String): LLModel = when (name) {
-        DeepSeekModels.DeepSeekChat.id -> DeepSeekModels.DeepSeekChat
-        DeepSeekModels.DeepSeekReasoner.id -> DeepSeekModels.DeepSeekReasoner
-        else -> DeepSeekModels.DeepSeekChat
+        DeepSeekModels.DeepSeekV4Flash.id -> DeepSeekModels.DeepSeekV4Flash
+        DeepSeekModels.DeepSeekV4Pro.id -> DeepSeekModels.DeepSeekV4Pro
+        else -> DeepSeekModels.DeepSeekV4Flash
     }
 }

@@ -10,7 +10,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AccountTree
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
@@ -32,6 +31,8 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.knotwork.design.components.chips.Status
+import app.knotwork.design.components.controls.KnotworkField
+import app.knotwork.design.components.controls.KnotworkTextField
 import app.knotwork.design.screens.pipelines.PipelineLibraryCallbacks
 import app.knotwork.design.screens.pipelines.PipelineLibraryContent
 import app.knotwork.design.screens.pipelines.PipelineLibraryFab
@@ -278,13 +279,15 @@ private fun PipelineNameDialog(
         onDismissRequest = onDismiss,
         title = { Text(title) },
         text = {
-            OutlinedTextField(
-                value = name,
-                onValueChange = { name = it },
-                label = { Text(stringResource(R.string.orchestrator_library_name_field_label)) },
-                singleLine = true,
+            KnotworkField(
+                label = stringResource(R.string.orchestrator_library_name_field_label),
                 modifier = Modifier.testTag(tag = "pipeline_name_field"),
-            )
+            ) {
+                KnotworkTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                )
+            }
         },
         confirmButton = {
             TextButton(onClick = { onConfirm(name) }, enabled = canConfirm) { Text(confirmLabel) }

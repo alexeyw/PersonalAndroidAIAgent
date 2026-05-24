@@ -461,6 +461,12 @@ dependencies {
     implementation(libs.koog.google)
     implementation(libs.koog.deepseek)
     implementation(libs.koog.ollama)
+    // Runtime SPI provider — see the `koog-http-client-ktor` entry in
+    // `libs.versions.toml` for the rationale. Required for every Koog
+    // prompt-executor since 1.0.0; without it the executors throw
+    // `No KoogHttpClient.Factory provider found on the runtime classpath`
+    // on the first network call.
+    implementation(libs.koog.http.client.ktor)
 
     // Security Crypto
     implementation(libs.androidx.security.crypto)

@@ -5,8 +5,6 @@ import ai.agent.android.domain.models.NodeType
 import ai.agent.android.domain.models.PromptTemplate
 import ai.agent.android.presentation.ui.common.asString
 import ai.agent.android.presentation.ui.components.PromptPreviewBottomSheet
-import ai.agent.android.presentation.ui.components.VariableChipsRow
-import ai.agent.android.presentation.ui.components.insertAtCursor
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -55,11 +53,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.TextRange
-import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.knotwork.design.components.controls.KnotworkField
+import app.knotwork.design.components.controls.KnotworkTextArea
+import app.knotwork.design.components.controls.KnotworkTextField
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -259,10 +258,7 @@ private fun EditPromptDialog(
     onDismiss: () -> Unit,
 ) {
     var name by remember { mutableStateOf(prompt?.name ?: "") }
-    var text by remember {
-        val initial = prompt?.text ?: ""
-        mutableStateOf(TextFieldValue(text = initial, selection = TextRange(initial.length)))
-    }
+    var text by remember { mutableStateOf(prompt?.text ?: "") }
     var category by remember {
         mutableStateOf(
             prompt?.category ?: availableCategories.firstOrNull() ?: NodeType.INTENT_ROUTER.name,
@@ -281,13 +277,9 @@ private fun EditPromptDialog(
         },
         text = {
             Column {
-                OutlinedTextField(
-                    value = name,
-                    onValueChange = { name = it },
-                    label = { Text(stringResource(R.string.prompts_field_name)) },
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true,
-                )
+                KnotworkField(label = stringResource(R.string.prompts_field_name)) {
+                    KnotworkTextField(value = name, onValueChange = { name = it })
+                }
                 Spacer(modifier = Modifier.height(8.dp))
 
                 // Category Dropdown
@@ -326,16 +318,26 @@ private fun EditPromptDialog(
 
                 Spacer(modifier = Modifier.height(8.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    OutlinedTextField(
-                        value = text,
-                        onValueChange = { text = it },
-                        label = { Text(stringResource(R.string.prompts_field_text)) },
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(150.dp),
-                    )
+                    // `KnotworkTextArea` ships variable-aware behaviour out of
+                    // the box: the `insertChips` strip below the field replaces
+                    // the previous `VariableChipsRow` companion and the
+                    // `highlightVariables` pass colours `\$[A-Z_]+` tokens
+                    // inline, so the preview-icon column stays as the only
+                    // adjacent affordance.
+                    KnotworkField(
+                        label = stringResource(R.string.prompts_field_text),
+                        modifier = Modifier.weight(1f),
+                    ) {
+                        KnotworkTextArea(
+                            value = text,
+                            onValueChange = { text = it },
+                            minLines = 4,
+                            maxLines = 8,
+                            insertChips = availableVariables.map { it.trimStart('$') },
+                        )
+                    }
                     IconButton(
-                        onClick = { onPreviewRequested(text.text) },
+                        onClick = { onPreviewRequested(text) },
                         modifier = Modifier.padding(start = 4.dp),
                     ) {
                         Icon(
@@ -344,30 +346,23 @@ private fun EditPromptDialog(
                         )
                     }
                 }
-                VariableChipsRow(
-                    variables = availableVariables,
-                    onChipClick = { token -> text = text.insertAtCursor(token) },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 4.dp),
-                )
             }
         },
         confirmButton = {
             Button(
                 onClick = {
-                    if (name.isNotBlank() && text.text.isNotBlank()) {
+                    if (name.isNotBlank() && text.isNotBlank()) {
                         onSave(
                             PromptTemplate(
                                 id = prompt?.id ?: 0,
                                 name = name,
-                                text = text.text,
+                                text = text,
                                 category = category,
                             ),
                         )
                     }
                 },
-                enabled = name.isNotBlank() && text.text.isNotBlank(),
+                enabled = name.isNotBlank() && text.isNotBlank(),
             ) {
                 Text(stringResource(R.string.common_save))
             }

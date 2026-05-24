@@ -24,7 +24,9 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -94,14 +96,29 @@ sealed interface ComposerState {
  * **Stateless** — `value` is hoisted to the caller; this composable never
  * stores text. The screen ViewModel owns persistence and history.
  *
+ * Trailing action-button state matrix (`inputs-and-chips.md` §5):
+ *
+ * | composer state                                  | icon  | tint     |
+ * |-------------------------------------------------|-------|----------|
+ * | [ComposerState.Idle] && value empty && onMic≠null | mic   | surface3 |
+ * | [ComposerState.Idle] && value non-empty (or no onMic) | send  | primary  |
+ * | [ComposerState.Generating]                       | stop  | primary  |
+ * | [ComposerState.Error]                            | retry | error    |
+ *
  * @param value current input value.
  * @param onValueChange invoked with each keystroke.
- * @param onSend invoked when the user taps the action button in Idle / Error.
+ * @param onSend invoked when the user taps the action button in Idle (with value) / Error.
  * @param onStop invoked when the user taps the action button in Generating.
  * @param state current state of the composer (drives morph + error banner).
  * @param modifier optional layout modifier applied to the composer root.
+ * @param onMic optional voice-input handler. When non-null **and** the
+ *  composer is [ComposerState.Idle] with an empty [value], the trailing
+ *  button shows a microphone icon on the muted `surface3` palette so the
+ *  affordance reads as "press to talk" rather than "press to send". Pass
+ *  `null` to suppress the mic state (the button stays on Send / disabled).
  */
 @Composable
+@Suppress("LongParameterList")
 fun ChatComposer(
     value: String,
     onValueChange: (String) -> Unit,
@@ -109,6 +126,7 @@ fun ChatComposer(
     onStop: () -> Unit,
     state: ComposerState,
     modifier: Modifier = Modifier,
+    onMic: (() -> Unit)? = null,
 ) {
     Column(
         verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp2),
@@ -139,7 +157,13 @@ fun ChatComposer(
                 onValueChange = onValueChange,
                 modifier = Modifier.weight(1f),
             )
-            SendOrStopButton(state = state, onSend = onSend, onStop = onStop)
+            ActionButton(
+                state = state,
+                value = value,
+                onSend = onSend,
+                onStop = onStop,
+                onMic = onMic,
+            )
         }
     }
 }
@@ -190,34 +214,85 @@ private const val COMPOSER_MAX_VISIBLE_LINES = 6
  */
 private val COMPOSER_INPUT_MIN_HEIGHT = 40.dp
 
-/** Send ↔ stop morph powered by `AnimatedContent` (200 ms crossfade). */
+/**
+ * Trailing action button — 200 ms cross-fades between mic / send / stop /
+ * retry depending on the [ComposerState] × [value] cross-product. The
+ * morph respects reduced motion (zero-duration fade when on).
+ */
 @Composable
-private fun SendOrStopButton(state: ComposerState, onSend: () -> Unit, onStop: () -> Unit) {
+@Suppress("LongParameterList")
+private fun ActionButton(
+    state: ComposerState,
+    value: String,
+    onSend: () -> Unit,
+    onStop: () -> Unit,
+    onMic: (() -> Unit)?,
+) {
     val reducedMotion = KnotworkTheme.a11y.reducedMotion()
     val durationMs = if (reducedMotion) 0 else COMPOSER_MORPH_MS
+    val target = resolveActionTarget(state = state, value = value, onMic = onMic)
     AnimatedContent(
-        targetState = state is ComposerState.Generating,
+        targetState = target,
         transitionSpec = {
             fadeIn(androidx.compose.animation.core.tween(durationMs)) togetherWith
                 fadeOut(androidx.compose.animation.core.tween(durationMs))
         },
-        label = "composer_send_stop_morph",
-    ) { isGenerating ->
+        label = "composer_action_morph",
+    ) { current ->
         val icon: ImageVector
         val descriptionRes: Int
         val onClick: () -> Unit
-        if (isGenerating) {
-            icon = Icons.Filled.Pause
-            descriptionRes = R.string.knotwork_composer_stop
-            onClick = onStop
-        } else {
-            icon = Icons.AutoMirrored.Filled.Send
-            descriptionRes = R.string.knotwork_composer_send
-            onClick = onSend
+        val container: Color
+        val content: Color
+        when (current) {
+            ActionTarget.Mic -> {
+                icon = Icons.Filled.Mic
+                descriptionRes = R.string.knotwork_composer_mic
+                onClick = onMic ?: {}
+                container = KnotworkTheme.extended.surface3
+                content = MaterialTheme.colorScheme.onSurface
+            }
+            ActionTarget.Send -> {
+                icon = Icons.AutoMirrored.Filled.Send
+                descriptionRes = R.string.knotwork_composer_send
+                onClick = onSend
+                container = MaterialTheme.colorScheme.primary
+                content = MaterialTheme.colorScheme.onPrimary
+            }
+            ActionTarget.Stop -> {
+                icon = Icons.Filled.Pause
+                descriptionRes = R.string.knotwork_composer_stop
+                onClick = onStop
+                container = MaterialTheme.colorScheme.primary
+                content = MaterialTheme.colorScheme.onPrimary
+            }
+            ActionTarget.Retry -> {
+                icon = Icons.Filled.Refresh
+                descriptionRes = R.string.knotwork_composer_send
+                onClick = onSend
+                container = KnotworkTheme.extended.riskDestructive
+                content = MaterialTheme.colorScheme.onPrimary
+            }
         }
-        ComposerActionButton(icon = icon, contentDescription = stringResource(descriptionRes), onClick = onClick)
+        ComposerActionButton(
+            icon = icon,
+            contentDescription = stringResource(descriptionRes),
+            onClick = onClick,
+            container = container,
+            content = content,
+        )
     }
 }
+
+/** Discrete target state for the trailing action button. */
+private enum class ActionTarget { Mic, Send, Stop, Retry }
+
+private fun resolveActionTarget(state: ComposerState, value: String, onMic: (() -> Unit)?): ActionTarget =
+    when (state) {
+        is ComposerState.Generating -> ActionTarget.Stop
+        is ComposerState.Error -> ActionTarget.Retry
+        is ComposerState.Idle -> if (value.isEmpty() && onMic != null) ActionTarget.Mic else ActionTarget.Send
+    }
 
 /** Diameter of the circular send / stop action button (matches Knotwork primary-button visual height). */
 private val COMPOSER_ACTION_BUTTON_SIZE = 48.dp
@@ -231,7 +306,14 @@ private val COMPOSER_ACTION_ICON_SIZE = 20.dp
  * even though the visual is a tight circle.
  */
 @Composable
-private fun ComposerActionButton(icon: ImageVector, contentDescription: String, onClick: () -> Unit) {
+@Suppress("LongParameterList")
+private fun ComposerActionButton(
+    icon: ImageVector,
+    contentDescription: String,
+    onClick: () -> Unit,
+    container: Color,
+    content: Color,
+) {
     val interactionSource = remember { MutableInteractionSource() }
     Box(
         contentAlignment = Alignment.Center,
@@ -239,7 +321,7 @@ private fun ComposerActionButton(icon: ImageVector, contentDescription: String, 
             .minimumInteractiveComponentSize()
             .size(COMPOSER_ACTION_BUTTON_SIZE)
             .clip(CircleShape)
-            .background(color = MaterialTheme.colorScheme.primary)
+            .background(color = container)
             .clickable(
                 interactionSource = interactionSource,
                 indication = null,
@@ -254,7 +336,7 @@ private fun ComposerActionButton(icon: ImageVector, contentDescription: String, 
         Icon(
             imageVector = icon,
             contentDescription = null,
-            tint = MaterialTheme.colorScheme.onPrimary,
+            tint = content,
             modifier = Modifier.size(COMPOSER_ACTION_ICON_SIZE),
         )
     }

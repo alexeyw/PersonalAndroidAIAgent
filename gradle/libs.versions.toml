@@ -21,13 +21,19 @@ mediapipe = "0.10.35"
 navigationCompose = "2.9.8"
 hiltNavigationCompose = "1.3.0"
 okhttp = "5.3.2"
-koog = "0.8.0"
+koog = "1.0.0"
+# Google / DeepSeek prompt-executor clients and the MCP server module have
+# not promoted past `1.0.0-beta` on Maven Central yet (the rest of
+# Koog 1.0.0 is stable). Pin them separately so a single `koog` bump doesn't
+# fail to resolve. Re-collapse onto `koog` once these three artifacts ship
+# their stable 1.0.0 release.
+koog-preview = "1.0.0-beta"
 appfunctions = "1.0.0-alpha09"
 markdown-renderer = "0.41.0"
 work = "2.11.2"
 hiltWork = "1.3.0"
 gson = "2.14.0"
-json = "20251224"
+json = "20260522"
 sqlcipher = "4.16.0"
 detekt = "2.0.0-alpha.3"
 ktlint = "14.2.0"
@@ -36,7 +42,7 @@ firebaseBom = "34.13.0"
 googleServices = "4.4.4"
 crashlyticsPlugin = "3.0.7"
 coreSplashscreen = "1.2.0"
-roborazzi = "1.61.0"
+roborazzi = "1.63.0"
 robolectric = "4.16.1"
 processPhoenix = "3.0.0"
 
@@ -76,12 +82,24 @@ room-ktx = { group = "androidx.room", name = "room-ktx", version.ref = "room" }
 room-compiler = { group = "androidx.room", name = "room-compiler", version.ref = "room" }
 datastore-preferences = { group = "androidx.datastore", name = "datastore-preferences", version.ref = "datastore" }
 koog-agents = { group = "ai.koog", name = "koog-agents", version.ref = "koog" }
-koog-mcp = { group = "ai.koog", name = "agents-mcp-server", version.ref = "koog" }
+# `agents-mcp` carries the client-side `McpToolRegistryProvider` /
+# `mcpStreamableHttpTransport` the codebase uses. The previous `agents-mcp-server`
+# entry was a misnomer that happened to work in 0.8.0 because the server
+# artifact transitively pulled the client; 1.0.0+ split them, so we now name
+# the client artifact directly.
+koog-mcp = { group = "ai.koog", name = "agents-mcp", version.ref = "koog-preview" }
 koog-openai = { group = "ai.koog", name = "prompt-executor-openai-client", version.ref = "koog" }
 koog-anthropic = { group = "ai.koog", name = "prompt-executor-anthropic-client", version.ref = "koog" }
-koog-google = { group = "ai.koog", name = "prompt-executor-google-client", version.ref = "koog" }
-koog-deepseek = { group = "ai.koog", name = "prompt-executor-deepseek-client", version.ref = "koog" }
+koog-google = { group = "ai.koog", name = "prompt-executor-google-client", version.ref = "koog-preview" }
+koog-deepseek = { group = "ai.koog", name = "prompt-executor-deepseek-client", version.ref = "koog-preview" }
 koog-ollama = { group = "ai.koog", name = "prompt-executor-ollama-client", version.ref = "koog" }
+# Runtime HTTP factory provider — Koog 1.0.0 split the HTTP client into an SPI
+# (`KoogHttpClient.Factory`) that has to be present on the runtime classpath
+# for every prompt-executor to instantiate. Without it the executors throw
+# `IllegalStateException: No KoogHttpClient.Factory provider found on the
+# runtime classpath.` on the first call. The Ktor-backed provider is the
+# canonical default.
+koog-http-client-ktor = { group = "ai.koog", name = "http-client-ktor", version.ref = "koog" }
 androidx-security-crypto = { group = "androidx.security", name = "security-crypto", version.ref = "securityCrypto" }
 androidx-appfunctions = { group = "androidx.appfunctions", name = "appfunctions", version.ref = "appfunctions" }
 androidx-appfunctions-service = { group = "androidx.appfunctions", name = "appfunctions-service", version.ref = "appfunctions" }

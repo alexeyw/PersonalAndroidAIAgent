@@ -23,7 +23,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -39,6 +38,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import app.knotwork.design.components.controls.KnotworkField
+import app.knotwork.design.components.controls.KnotworkPasswordField
+import app.knotwork.design.components.controls.KnotworkTextField
 
 /**
  * Composable screen for managing LLM models. Allows users to view downloaded models,
@@ -90,25 +92,34 @@ fun ModelsScreen(modifier: Modifier = Modifier, viewModel: ModelsViewModel = hil
         ) {
             Spacer(modifier = Modifier.height(16.dp))
 
-            // HuggingFace Auth Token
-            OutlinedTextField(
-                value = uiState.authTokenInput,
-                onValueChange = viewModel::onAuthTokenChanged,
-                label = { Text(stringResource(R.string.models_field_auth_token)) },
-                modifier = Modifier.fillMaxWidth(),
-                enabled = !uiState.isDownloading,
-            )
+            // HuggingFace Auth Token — KnotworkPasswordField masks the token by
+            // default and exposes an eye-toggle for the rare case the user
+            // needs to verify what they pasted.
+            KnotworkField(
+                label = stringResource(R.string.models_field_auth_token),
+            ) {
+                KnotworkPasswordField(
+                    value = uiState.authTokenInput,
+                    onValueChange = viewModel::onAuthTokenChanged,
+                    enabled = !uiState.isDownloading,
+                )
+            }
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            // Custom URL Input
-            OutlinedTextField(
-                value = uiState.customUrlInput,
-                onValueChange = viewModel::onCustomUrlChanged,
-                label = { Text(stringResource(R.string.models_field_custom_url)) },
-                modifier = Modifier.fillMaxWidth(),
-                enabled = !uiState.isDownloading,
-            )
+            // Custom URL Input — monospace so users can pick out path /
+            // query-string components without sans-shaped letter-spacing
+            // tripping them up.
+            KnotworkField(
+                label = stringResource(R.string.models_field_custom_url),
+            ) {
+                KnotworkTextField(
+                    value = uiState.customUrlInput,
+                    onValueChange = viewModel::onCustomUrlChanged,
+                    enabled = !uiState.isDownloading,
+                    monospace = true,
+                )
+            }
 
             Spacer(modifier = Modifier.height(8.dp))
 

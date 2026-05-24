@@ -1,5 +1,7 @@
 package ai.agent.android.presentation.ui.pipeline.editor.core
 
+import kotlin.math.max
+import kotlin.math.min
 import kotlin.math.round
 
 /**
@@ -79,12 +81,66 @@ data class CanvasTransform(val scale: Float = 1f, val offsetX: Float = 0f, val o
         offsetY = viewportH / 2f - y * scale,
     )
 
+    /**
+     * Returns a copy whose viewport tightly frames [bbox] in canvas space, with
+     * [paddingPx] of breathing room on every side. The resulting [scale] is the
+     * largest value (clamped to `[MIN_SCALE, MAX_SCALE]`) that lets the padded
+     * bbox fit inside `(viewportW, viewportH)`; the offset centres the bbox in
+     * the viewport.
+     *
+     * Powers the toolbar's "Fit to view" action and the mini-map's tap-to-jump
+     * behaviour. Degenerate bbox (zero width or height) falls back to a
+     * scale-1.0 centered-on-bbox-center transform.
+     *
+     * @param bbox canvas-space bounds to frame.
+     * @param viewportW viewport width in pixels.
+     * @param viewportH viewport height in pixels.
+     * @param paddingPx screen-space padding to leave around the bbox; pass `0f`
+     *   for an edge-to-edge fit.
+     */
+    fun fitToBounds(bbox: Bounds, viewportW: Float, viewportH: Float, paddingPx: Float): CanvasTransform {
+        if (viewportW <= 0f || viewportH <= 0f) return this
+        val cx = (bbox.minX + bbox.maxX) / 2f
+        val cy = (bbox.minY + bbox.maxY) / 2f
+        val bboxW = bbox.maxX - bbox.minX
+        val bboxH = bbox.maxY - bbox.minY
+        if (bboxW <= 0f || bboxH <= 0f) {
+            // Single-point or zero-dimension bbox: skip the divide-by-zero, just centre.
+            return copy(scale = 1f).centeredOn(cx, cy, viewportW, viewportH)
+        }
+        val availW = max(1f, viewportW - 2f * paddingPx)
+        val availH = max(1f, viewportH - 2f * paddingPx)
+        val rawScale = min(availW / bboxW, availH / bboxH)
+        val targetScale = rawScale.coerceIn(MIN_SCALE, MAX_SCALE)
+        return copy(scale = targetScale).centeredOn(cx, cy, viewportW, viewportH)
+    }
+
+    /**
+     * Returns a copy zoomed by one discrete step around the viewport centre.
+     * Used by the always-visible zoom rail's `+` / `−` buttons.
+     *
+     * `direction > 0` zooms in (`ZOOM_STEP`); `direction < 0` zooms out (`1 /
+     * ZOOM_STEP`). The result is clamped to `[MIN_SCALE, MAX_SCALE]` like every
+     * other zoom path.
+     */
+    fun zoomedOneStep(direction: Int, viewportW: Float, viewportH: Float): CanvasTransform {
+        if (direction == 0) return this
+        val factor = if (direction > 0) ZOOM_STEP else 1f / ZOOM_STEP
+        return zoomedBy(factor, anchorX = viewportW / 2f, anchorY = viewportH / 2f)
+    }
+
     companion object {
         /** Lower bound for [scale] per `node-specs.md` §canvas. */
         const val MIN_SCALE: Float = 0.4f
 
         /** Upper bound for [scale] per `node-specs.md` §canvas. */
         const val MAX_SCALE: Float = 2.0f
+
+        /**
+         * Discrete zoom multiplier per click of the zoom rail's `+` button. Matches
+         * Figma's `√2`-rounded step (1.25× ⇒ four clicks roughly double scale).
+         */
+        const val ZOOM_STEP: Float = 1.25f
 
         /** Canvas-space grid spacing for snap-to-grid (`node-specs.md` §Drag-and-drop). */
         const val GRID_PX: Float = 24f
@@ -94,5 +150,85 @@ data class CanvasTransform(val scale: Float = 1f, val offsetX: Float = 0f, val o
          * commit time and by the auto-layout module so every node position is grid-aligned.
          */
         fun snapToGrid(value: Float): Float = round(value / GRID_PX) * GRID_PX
+    }
+}
+
+/**
+ * Inclusive axis-aligned canvas-space bounds (`minX..maxX × minY..maxY`).
+ *
+ * Used by [CanvasTransform.fitToBounds] to frame an arbitrary set of points
+ * (typically the bbox of every node in the graph plus their card geometry)
+ * inside the viewport.
+ */
+data class Bounds(val minX: Float, val minY: Float, val maxX: Float, val maxY: Float) {
+
+    /** Width of the bbox in canvas-space pixels. Non-negative. */
+    val width: Float get() = max(0f, maxX - minX)
+
+    /** Height of the bbox in canvas-space pixels. Non-negative. */
+    val height: Float get() = max(0f, maxY - minY)
+
+    /** `true` when this bbox has zero area (a single point or an empty selection). */
+    val isEmpty: Boolean get() = width <= 0f || height <= 0f
+
+    companion object {
+        /**
+         * Builds the smallest [Bounds] containing every point in [points]. Returns
+         * `null` when [points] is empty so the caller can short-circuit without
+         * having to pick a sentinel value.
+         */
+        fun of(points: Iterable<Pair<Float, Float>>): Bounds? {
+            var first = true
+            var minX = 0f
+            var minY = 0f
+            var maxX = 0f
+            var maxY = 0f
+            for ((x, y) in points) {
+                if (first) {
+                    minX = x
+                    minY = y
+                    maxX = x
+                    maxY = y
+                    first = false
+                } else {
+                    if (x < minX) minX = x
+                    if (y < minY) minY = y
+                    if (x > maxX) maxX = x
+                    if (y > maxY) maxY = y
+                }
+            }
+            return if (first) null else Bounds(minX, minY, maxX, maxY)
+        }
+
+        /**
+         * Builds the [Bounds] of every node card, treating each node as a rectangle
+         * of `nodeWidth × nodeHeight` rooted at its top-left position. This matches
+         * how [app.knotwork.design.components.pipelineeditor.NodeCard] is laid out
+         * on canvas — `NodeModel.x / y` is the card's top-left.
+         */
+        fun ofNodes(positions: Iterable<Pair<Float, Float>>, nodeWidth: Float, nodeHeight: Float): Bounds? {
+            var first = true
+            var minX = 0f
+            var minY = 0f
+            var maxX = 0f
+            var maxY = 0f
+            for ((x, y) in positions) {
+                val right = x + nodeWidth
+                val bottom = y + nodeHeight
+                if (first) {
+                    minX = x
+                    minY = y
+                    maxX = right
+                    maxY = bottom
+                    first = false
+                } else {
+                    if (x < minX) minX = x
+                    if (y < minY) minY = y
+                    if (right > maxX) maxX = right
+                    if (bottom > maxY) maxY = bottom
+                }
+            }
+            return if (first) null else Bounds(minX, minY, maxX, maxY)
+        }
     }
 }

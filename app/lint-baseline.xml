@@ -169,7 +169,7 @@
         errorLine2="                                  ~~~~~~~~~~~~~~">
         <location
             file="src/main/java/ai/agent/android/presentation/ui/prompts/PromptLibraryScreen.kt"
-            line="74"
+            line="73"
             column="35"/>
     </issue>
 
@@ -180,7 +180,7 @@
         errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="../catalog/src/main/res/values/strings.xml"
-            line="204"
+            line="206"
             column="13"/>
     </issue>
 
@@ -191,7 +191,40 @@
         errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="../catalog/src/main/res/values/strings.xml"
-            line="285"
+            line="329"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.chat_input_placeholder` appears to be unused"
+        errorLine1="    &lt;string name=&quot;chat_input_placeholder&quot;>Ask the agent...&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings_chat.xml"
+            line="54"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.chat_input_stop_cd` appears to be unused"
+        errorLine1="    &lt;string name=&quot;chat_input_stop_cd&quot;>Stop generation&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings_chat.xml"
+            line="55"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.chat_input_send_cd` appears to be unused"
+        errorLine1="    &lt;string name=&quot;chat_input_send_cd&quot;>Send&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings_chat.xml"
+            line="56"
             column="13"/>
     </issue>
 

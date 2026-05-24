@@ -44,7 +44,7 @@ import ai.agent.android.domain.usecases.EvaluateIfConditionUseCase
 import ai.agent.android.domain.usecases.GetContextWindowUseCase
 import ai.agent.android.domain.usecases.LoadModelUseCase
 import ai.agent.android.domain.usecases.RetrieveRelevantMemoryUseCase
-import ai.koog.prompt.dsl.Prompt
+import ai.koog.prompt.Prompt
 import ai.koog.prompt.executor.clients.LLMClient
 import ai.koog.prompt.executor.clients.anthropic.AnthropicModels
 import ai.koog.prompt.llm.LLModel
@@ -946,7 +946,7 @@ class GraphExecutionEngineTest {
 
         // The CLOUD node was invoked with the user's reply embedded in its prompt.
         coVerify { mockAnthropicClient.executeStreaming(any<Prompt>(), any<LLModel>()) }
-        val cloudPromptText = capturedPrompt.captured.messages.joinToString("\n") { it.content }
+        val cloudPromptText = capturedPrompt.captured.messages.joinToString("\n") { it.textContent() }
         assertTrue(
             "Cloud prompt must contain the clarification reply, was: $cloudPromptText",
             cloudPromptText.contains("user reply"),
@@ -1428,7 +1428,7 @@ class GraphExecutionEngineTest {
         // cloud client serialises every prompt message into its own field, so
         // we collapse them into a single string for substring assertions.
         coVerify { mockAnthropicClient.executeStreaming(any<Prompt>(), any<LLModel>()) }
-        val cloudPromptText = capturedCloudPrompt.captured.messages.joinToString("\n") { it.content }
+        val cloudPromptText = capturedCloudPrompt.captured.messages.joinToString("\n") { it.textContent() }
         assertTrue(
             "CLOUD prompt missing Original Task block: $cloudPromptText",
             cloudPromptText.contains("--- Original Task ---") && cloudPromptText.contains("user prompt"),

@@ -11,7 +11,7 @@ import ai.agent.android.domain.repositories.ChatRepository
 import ai.agent.android.domain.repositories.MetricsRepository
 import ai.agent.android.domain.repositories.SettingsRepository
 import ai.agent.android.domain.repositories.ToolRepository
-import ai.koog.prompt.dsl.Prompt
+import ai.koog.prompt.Prompt
 import ai.koog.prompt.executor.clients.LLMClient
 import ai.koog.prompt.executor.clients.anthropic.AnthropicModels
 import ai.koog.prompt.llm.LLModel
@@ -83,7 +83,7 @@ class CloudLlmNodeExecutorTest {
         val assembledContext = "--- Original Task ---\nQ\n\n--- Previous Node Output ---\nU"
         executor.execute(node, assembledContext, "s1", "Q").toList()
 
-        val text = capturedPrompt.captured.messages.joinToString("\n") { it.content }
+        val text = capturedPrompt.captured.messages.joinToString("\n") { it.textContent() }
         assertTrue(text.contains(assembledContext))
         assertFalse(text.contains("RELEVANT LONG-TERM MEMORIES:"))
     }

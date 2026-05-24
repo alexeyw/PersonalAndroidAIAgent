@@ -280,23 +280,29 @@ This file maps the contents of the main application package.
       - `components/` - Orchestrator UI components.
         - `NodeContextConfigSection.kt` - "Input Data" section of the node configuration dialog: five checkboxes mapped to `NodeContextConfig` flags (with `nodeInput` rendered locked-on) plus a hint banner.
         - `PromptLibraryDialog.kt` - Prompt library dialog UI component.
-    - `pipeline/editor/` - Phase 21 / Task 9 — production pipeline editor.
-      - `PipelineEditorScreen.kt` - Stateful entry composable: subscribes to `OrchestratorViewModel` + `runState`, owns the screen-local `EditorState`, hosts the catalog `NodeConfigSheet`, dispatches graph mutations.
-      - `PipelineEditorContent.kt` - Pure-layout content. Vertical stack of `EditorToolbar` (or `MultiSelectToolbar`) + `EditorCanvas` + `ValidationBar` (or `RunTraceBar`).
+    - `pipeline/editor/` - Phase 21 / Task 9 — production pipeline editor (Phase 22 / Task 14 reshapes the toolbar + adds RunStatusBanner, ZoomRail, MiniMap, FilterBar, EmptyPipelineState, DotGridBackground, ValidationAutoFix, copy/paste, search, grid toggle).
+      - `PipelineEditorScreen.kt` - Stateful entry composable: subscribes to `OrchestratorViewModel` + `runState`, owns the screen-local `EditorState`, computes the toolbar subtitle / primary-action variant, hosts the overflow `DropdownMenu` (Undo / Redo / Rename… / Delete / Auto-layout / Mini-map / grid toggle / Find node… / Paste), the catalog `NodeConfigSheet`, the rename dialog, and the run-banner clock.
+      - `PipelineEditorContent.kt` - Pure-layout content. Vertical stack of `EditorToolbar` (or `MultiSelectToolbar`) + `RunStatusBanner` + `EditorCanvas` + `ValidationBar`.
       - `config/NodeConfigCodec.kt` - JSON ↔ catalog `NodeConfig` codec + legacy-field derivation for pre-Phase-21 rows + `defaultFor(type, title)` factory.
       - `config/NodeTypeMapper.kt` - Bridges between domain `NodeType` / `CloudProvider` and the catalog enums (`pipelineeditor.NodeType` / `CloudProvider`).
-      - `core/CanvasTransform.kt` - Pan / pinch-zoom math + `snapToGrid(value)` helper; pure Kotlin.
+      - `core/CanvasTransform.kt` - Pan / pinch-zoom math + `snapToGrid` + `fitToBounds(bbox, viewport, padding)` + `zoomedOneStep(direction, viewport)` + `Bounds` data class with `Bounds.ofNodes(...)`; pure Kotlin.
       - `core/BezierEdge.kt` - Cubic-Bezier control-point math, point-evaluation, arc-length approximation, hit-test; pure Kotlin.
       - `core/AutoLayout.kt` - Sugiyama-style hierarchical layout (longest-path layering + median crossing reduction + grid-snapped coordinates); pure Kotlin.
       - `core/EditorUndoRedo.kt` - Bounded undo / redo snapshot stack (capacity = 50); pure Kotlin.
-      - `core/EditorState.kt` - `@Stable` screen-local state holder (`transform`, `selection`, `multiSelectMode`, `connectionInProgress`, `quickAddAnchor`, `activeRunningNodeId`, `isRunning`, `configuringNodeId`, `workingConfig`, `undoRedo`). `rememberEditorState()` factory.
-      - `canvas/EditorCanvas.kt` - Pinch-zoom + pan + tap / long-press gesture host; composes `EditorEdges` underneath every `EditorNode`; overlays the `QuickAddRadialMenu` when active.
-      - `canvas/EditorNode.kt` - Per-node Compose wrapper around the catalog `NodeCard`. Owns the drag pickup + spring-release animations and routes outbound-port drags to connection mode.
-      - `canvas/EditorEdges.kt` - Single `Canvas` drawing every edge as a cubic Bezier, the preview-edge while a connection is being drawn, and the traveling-dot run-trace animation.
+      - `core/EditorState.kt` - `@Stable` screen-local state holder (`transform`, `selection`, `multiSelectMode`, `connectionInProgress`, `quickAddAnchor`, `activeRunningNodeId`, `isRunning`, `configuringNodeId`, `workingConfig`, `undoRedo`, `miniMapOpen`, `gridVisible`, `clipboard`, `searchOpen`, `searchQuery`). `rememberEditorState()` factory.
+      - `core/MiniMapGeometry.kt` - Pure-Kotlin projection from canvas-space to mini-map pixels (`canvasToMiniX/Y` + inverse + `viewportRect`); used by the `MiniMap` overlay. Unit-tested.
+      - `core/ValidationAutoFix.kt` - Best-effort auto-fix recipe registry for `PipelineValidationError`s (MissingInput / MissingOutput / MultipleInputs / MultipleOutputs / DisconnectedInput / DisconnectedOutput); returns an `AutoFixOutcome`. Drives the `Auto-fix` action on `ValidationBar`. Also owns `PipelineValidationError.focusableNodeId(graph)` for the per-row `Go ↗` button.
+      - `canvas/EditorCanvas.kt` - Pinch-zoom + pan + tap / long-press gesture host; composes `DotGridBackground` (when `gridVisible`), `EditorEdges`, every `EditorNode`, the `EmptyPipelineState`, the `QuickAddRadialMenu`, the `FilterBar` overlay (when `searchOpen`), the `MiniMap` overlay (when `miniMapOpen`), and the `ZoomRail`.
+      - `canvas/EditorNode.kt` - Per-node Compose wrapper around the catalog `NodeCard`. Owns the drag pickup + spring-release animations and routes outbound-port drags to connection mode. `dimmed` parameter drops opacity to 0.40 for non-active nodes during a live run.
+      - `canvas/EditorEdges.kt` - Single `Canvas` drawing every edge as a cubic Bezier, the preview-edge while a connection is being drawn, and the traveling-dot run-trace animation. Running edges adopt the source node's header hue (per-type-tinted active branch).
       - `canvas/QuickAddRadialMenu.kt` - 12-tile radial menu (one per node type) anchored at the long-press point; dispatches `onPick(type)`.
-      - `bars/ValidationBar.kt` - Bottom bar listing `PipelineValidationError`s; tap → `requestFocusNode(nodeId)`.
-      - `bars/RunTraceBar.kt` - Bottom bar shown while a run is active; displays the running node label and a steady indicator dot.
-      - `bars/MultiSelectToolbar.kt` - Top bar that replaces `EditorToolbar` while multi-select is active; surfaces count + Cancel / Delete.
+      - `canvas/DotGridBackground.kt` - Canvas-aligned 24 dp dot grid rendered under nodes; pans + zooms with `transform`; hidden when the projected step falls below 6 px.
+      - `canvas/MiniMap.kt` - Bottom-right mini-map overlay (270 × 290 dp) with `OVERVIEW · 0.42×` header and per-type-hue node bricks + accent viewport rectangle. Exposes `formatScalePercent(scale)`.
+      - `canvas/ZoomRail.kt` - Always-visible right-edge `+` / `−` / `⤡` (fit-to-view) tile stack.
+      - `canvas/FilterBar.kt` - Top-edge `Find node…` bar (opened from overflow). Auto-focuses; submit centres on the first matching node and selects it.
+      - `canvas/EmptyPipelineState.kt` - Empty-canvas hero: brand-mark tile + helper copy + `Start with INPUT` / `From template` CTAs + canvas-geometry info pill.
+      - `bars/ValidationBar.kt` - Bottom bar listing `PipelineValidationError`s. Phase 22 / Task 14 adds a header banner (issue count + `Auto-fix` action), per-row severity glyphs (`Blocker` / `Warning`), and a trailing `Go ↗` button that focuses the offending node when one exists.
+      - `bars/MultiSelectToolbar.kt` - Top bar that replaces `EditorToolbar` while multi-select is active; surfaces count + Cancel / Copy / Delete.
       - `sheet/NodeConfigSheetHost.kt` - Thin adapter exposing the catalog `NodeConfigSheet` (with all 12 per-type forms + validator) to the editor screen.
     - `prompts/` - Prompt Library screen components.
       - `PromptLibraryScreen.kt` - Prompt library UI screen.
