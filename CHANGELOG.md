@@ -15,6 +15,99 @@ details.
 
 ### Added
 
+- **Inputs & chips — design-system alignment** (Phase 22 / Task 14
+  follow-up). Brings every text input and chip on screen onto the
+  canonical Knotwork atom family laid out in
+  `inputs-and-chips.md`. Before this change the catalog had a single
+  `KnotworkChip` (pill-shaped, three styles squeezed into one atom)
+  plus a thin `KnotworkMonoTextArea`; everything else fell back to
+  raw Material 3 `OutlinedTextField` / `FilterChip` / `AssistChip`
+  scattered across 13 production call sites with no shared geometry,
+  caps-label, or focus-state policy. Now:
+  - New catalog atoms under `components/controls/`:
+    - `KnotworkFieldDefaults` + `KnotworkFieldSize { Sm, Md, Lg,
+      Composer }` — single source of truth for heights, paddings,
+      border weights, icon sizes, label / helper / field gaps.
+    - `KnotworkField` — caps-label + optional mono inline hint +
+      helper / error row wrapper. M3 floating label stays off
+      everywhere by design (dense rows + brand-signal cap label).
+    - `KnotworkTextField` — single-line `BasicTextField` with the
+      full 7-state visual table (default / hovered / focused /
+      filled / disabled / readOnly / error), `monospace` flag for
+      tokens / URLs / expressions, and a search-bar variant
+      (pill shape, `surface2`, no border).
+    - `KnotworkTextArea` — multi-line counterpart with
+      length-preserving `VisualTransformation` that recolours
+      `\$[A-Z_]+` tokens accent + underline inline, optional
+      `insertChips` strip that splices the matching `$NAME` at the
+      active cursor position, and `minLines` / `maxLines` controls.
+    - `KnotworkPasswordField` — masks the value behind a `•`
+      transformation by default and offers an eye-toggle trailing
+      icon; flips to mono typography when revealed (long API keys
+      read better in monospace).
+  - New catalog atoms under `components/chips/`:
+    - `KnotworkChipDefaults` + `KnotworkChipSize { Xs, Sm, Md }`.
+    - `KnotworkFilterChip` — selected ↔ unselected toggle on the
+      8 dp `sm` shape (Knotwork deliberately diverges from M3's
+      pill-shaped filter chip), 180 ms cross-fade, optional
+      `trailingCount` and `role` overrides for `Role.Tab` /
+      `Role.Checkbox`.
+    - `KnotworkSuggestionChip` — action-only chip with
+      `surface1` + 1 dp outline so it reads on chat bubbles.
+    - `KnotworkInputChip` + `KnotworkChipsInput` — removable
+      chips inside a `FlowRow` plus an inline `BasicTextField`
+      that commits on Enter / `,` and respects an optional
+      `maxItems` cap (replaces the implicit "Max N items"
+      behaviour that previously had to be reimplemented per
+      caller).
+    - `KnotworkVariableChip` — mono accent-coloured `$VAR`
+      insert chip. Replaces the raw `AssistChip` row that used
+      to back `VariableChipsRow`; the wrapper now forwards to
+      this atom so prompt-variable affordances finally share the
+      brand mono / accent / hollow-border treatment with the
+      `KnotworkTextArea` highlight pass.
+    - `KnotworkDateChip` — non-interactive section-divider pill
+      for the chat stream (Today / Yesterday / locale date).
+  - `RiskPill` and `StatusPill` brought onto the new spec: both
+    drop the filled container for a transparent fill + 1 dp
+    coloured border + leading 6 dp dot + `Mono13` label so they
+    read on every surface (light card, console, chat bubble) and
+    stop creating the contrast-collapse on inverted surfaces that
+    the filled pills hit on the dark theme. `StatusPill` adds
+    `Queued` and `Cancelled` states and pulses the dot on
+    `Running` via an `infiniteRepeatable` tween that collapses to
+    a constant alpha when
+    `KnotworkTheme.a11y.reducedMotion()` is `true`. `Risk.Readonly`
+    label switches from `"Read-only"` to `"Read only"` per spec.
+  - Catalog `ChatComposer` trailing button now models the full
+    4-state matrix from the spec: mic (Idle + empty + `onMic`
+    callback) → send (Idle + non-empty) → stop (Generating) →
+    retry (Error). Container and content colours swap per state
+    (mic uses muted `surface3`, retry uses `riskDestructive`);
+    morph stays at 200 ms and honours reduced motion.
+  - 13 production usage sites migrated to the new family:
+    `ChatHomeScreen` rename sheet, `ChatScreen` rename dialog,
+    `ChatScreen` chat input bar (now wraps the catalog
+    `ChatComposer`), `ClarificationCard` free-form input and the
+    quick-reply chips (which were raw `OutlinedButton`s
+    pretending to be chips), `ModelsScreen` HuggingFace token
+    (now `KnotworkPasswordField` with mask + eye-toggle) and
+    custom-URL field, `PipelineEditorScreen` rename dialog,
+    `PipelineLibraryScreen` pipeline-name dialog,
+    `PromptLibraryScreen` name + text fields (the text field
+    folds in the `VariableChipsRow` companion via the new
+    `insertChips` parameter), `FilterBar` search bar (`Md`
+    pill, leading search icon, `Search` IME action),
+    `ConsoleFullLogSheet` log filter row, `TaskMonitorScreen`
+    task filter row, `VariableChipsRow` (`AssistChip` →
+    `KnotworkVariableChip`), and the catalog
+    `ChatHomeContent` sample-prompt row (`KnotworkChip` →
+    `KnotworkSuggestionChip`).
+  - The legacy `KnotworkChip` becomes `@Deprecated` (pointing at
+    `KnotworkFilterChip`) and is scheduled for removal one
+    iteration later — kept for now so any consumer outside this
+    audit's reach does not break in the middle of the migration.
+
 - **Koog 1.0.0 migration follow-up** — the prior dependency bump
   (`build: update koog, json, and roborazzi versions`) pointed every
   `koog-*` library at version `1.0.0`, but three Koog modules

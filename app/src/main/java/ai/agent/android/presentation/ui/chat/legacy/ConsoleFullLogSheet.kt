@@ -34,7 +34,6 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -60,6 +59,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
+import app.knotwork.design.components.chips.KnotworkFilterChip
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -390,10 +390,10 @@ private fun FilterChipsRow(selected: ConsoleLogFilter, onSelect: (ConsoleLogFilt
     ) {
         ConsoleLogFilter.entries.forEachIndexed { index, value ->
             if (index > 0) Spacer(modifier = Modifier.width(8.dp))
-            FilterChip(
+            KnotworkFilterChip(
+                label = stringResource(value.labelRes),
                 selected = selected == value,
                 onClick = { onSelect(value) },
-                label = { Text(stringResource(value.labelRes)) },
             )
         }
     }

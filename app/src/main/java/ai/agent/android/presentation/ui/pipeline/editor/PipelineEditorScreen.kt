@@ -41,7 +41,6 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
@@ -62,8 +61,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
+import app.knotwork.design.components.controls.KnotworkField
+import app.knotwork.design.components.controls.KnotworkTextField
 import app.knotwork.design.components.pipelineeditor.EditorPrimaryAction
 import app.knotwork.design.components.pipelineeditor.LocalModelOption
 import app.knotwork.design.components.pipelineeditor.RunStatus
@@ -763,23 +763,23 @@ fun PipelineEditorScreen(viewModel: OrchestratorViewModel, onBack: () -> Unit) {
             if (node == null) {
                 pendingRenameNodeId = null
             } else {
-                var renameDraft by remember(renameNodeId) {
-                    mutableStateOf(TextFieldValue(node.label))
-                }
+                var renameDraft by remember(renameNodeId) { mutableStateOf(node.label) }
                 AlertDialog(
                     onDismissRequest = { pendingRenameNodeId = null },
                     title = { Text(text = stringResource(R.string.pipeline_editor_rename_title)) },
                     text = {
-                        OutlinedTextField(
-                            value = renameDraft,
-                            onValueChange = { renameDraft = it },
-                            singleLine = true,
-                            label = { Text(stringResource(R.string.pipeline_editor_rename_field_label)) },
-                        )
+                        KnotworkField(
+                            label = stringResource(R.string.pipeline_editor_rename_field_label),
+                        ) {
+                            KnotworkTextField(
+                                value = renameDraft,
+                                onValueChange = { renameDraft = it },
+                            )
+                        }
                     },
                     confirmButton = {
                         TextButton(onClick = {
-                            val trimmed = renameDraft.text.trim()
+                            val trimmed = renameDraft.trim()
                             if (trimmed.isNotEmpty() && trimmed != node.label) {
                                 editor.undoRedo.push(pipeline)
                                 viewModel.updateNodeFromEditor(node.id, node.copy(label = trimmed))

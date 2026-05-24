@@ -13,20 +13,17 @@ import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
+import app.knotwork.design.components.controls.KnotworkFieldSize
+import app.knotwork.design.components.controls.KnotworkTextField
 import app.knotwork.design.theme.KnotworkTheme
 import app.knotwork.design.tokens.KnotworkTextStyles
 
@@ -36,8 +33,11 @@ import app.knotwork.design.tokens.KnotworkTextStyles
  * type as they type; pressing Enter (`ImeAction.Search`) jumps to the first
  * match.
  *
- * Auto-focuses on first composition so the keyboard appears immediately when
- * the overflow toggle opens the bar.
+ * Migrated to the Knotwork [KnotworkTextField] search variant
+ * (`inputs-and-chips.md` §2) — pill shape, `surface2` container, leading
+ * [Icons.Outlined.Search] glyph baked into the field rather than rendered
+ * as a sibling. Trailing `×` stays as a standalone [IconButton] because it
+ * closes the overlay entirely rather than clearing the query.
  *
  * @param query current query string.
  * @param matchCount number of nodes matching [query] in the live graph.
@@ -56,8 +56,6 @@ internal fun FilterBar(
     onClose: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val focusRequester = remember { FocusRequester() }
-    LaunchedEffect(Unit) { focusRequester.requestFocus() }
     Surface(
         modifier = modifier
             .fillMaxWidth()
@@ -72,23 +70,17 @@ internal fun FilterBar(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp2),
         ) {
-            Icon(
-                imageVector = Icons.Outlined.Search,
-                contentDescription = null,
-                tint = KnotworkTheme.extended.onSurfaceMuted,
-            )
-            OutlinedTextField(
+            KnotworkTextField(
                 value = query,
                 onValueChange = onQueryChange,
-                singleLine = true,
-                placeholder = {
-                    Text(text = stringResource(R.string.pipeline_editor_search_placeholder))
-                },
+                modifier = Modifier.weight(1f),
+                size = KnotworkFieldSize.Md,
+                search = true,
+                placeholder = stringResource(R.string.pipeline_editor_search_placeholder),
+                leadingIcon = Icons.Outlined.Search,
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
                 keyboardActions = KeyboardActions(onSearch = { onSubmit() }),
-                modifier = Modifier
-                    .weight(1f)
-                    .focusRequester(focusRequester),
+                contentDescription = stringResource(R.string.pipeline_editor_search_placeholder),
             )
             if (query.isNotEmpty()) {
                 Text(

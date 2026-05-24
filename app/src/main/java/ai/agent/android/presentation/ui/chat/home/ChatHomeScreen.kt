@@ -32,7 +32,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -55,6 +54,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.knotwork.design.components.buttons.KnotworkPrimaryButton
 import app.knotwork.design.components.buttons.KnotworkTextButton
 import app.knotwork.design.components.chat.ChatContextAction
+import app.knotwork.design.components.controls.KnotworkField
+import app.knotwork.design.components.controls.KnotworkTextField
 import app.knotwork.design.components.misc.KnotworkSnackbar
 import app.knotwork.design.screens.chat.ChatHomeCallbacks
 import app.knotwork.design.screens.chat.ChatHomeContent
@@ -487,13 +488,14 @@ private fun RenameSessionSheetContent(
             style = MaterialTheme.typography.titleMedium,
         )
         Spacer(modifier = Modifier.height(KnotworkTheme.spacing.sp3))
-        OutlinedTextField(
-            value = value,
-            onValueChange = onValueChange,
-            singleLine = true,
-            label = { Text(stringResource(R.string.chat_rename_sheet_label)) },
-            modifier = Modifier.fillMaxWidth(),
-        )
+        KnotworkField(
+            label = stringResource(R.string.chat_rename_sheet_label),
+        ) {
+            KnotworkTextField(
+                value = value,
+                onValueChange = onValueChange,
+            )
+        }
         Spacer(modifier = Modifier.height(KnotworkTheme.spacing.sp3))
         Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterEnd) {
             Row {

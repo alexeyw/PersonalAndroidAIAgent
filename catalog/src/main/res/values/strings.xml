@@ -87,6 +87,8 @@
     <string name="knotwork_composer_send">Send message</string>
     <!-- ContentDescription for the trailing stop button (Generating state). -->
     <string name="knotwork_composer_stop">Stop generating</string>
+    <!-- ContentDescription for the trailing mic button (Idle state with empty input and an onMic callback). -->
+    <string name="knotwork_composer_mic">Voice input</string>
 
     <!-- ============ ConsolePane ============ -->
 

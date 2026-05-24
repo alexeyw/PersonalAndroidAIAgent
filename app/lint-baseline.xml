@@ -57,6 +57,28 @@
     </issue>
 
     <issue
+        id="GradleDependency"
+        message="A newer version of ai.koog:prompt-executor-deepseek-client than 1.0.0-beta-preview7 is available: 1.0.0-beta"
+        errorLine1="koog-preview = &quot;1.0.0-beta-preview7&quot;"
+        errorLine2="               ~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="../gradle/libs.versions.toml"
+            line="30"
+            column="16"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of ai.koog:prompt-executor-google-client than 1.0.0-beta-preview7 is available: 1.0.0-beta"
+        errorLine1="koog-preview = &quot;1.0.0-beta-preview7&quot;"
+        errorLine2="               ~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="../gradle/libs.versions.toml"
+            line="30"
+            column="16"/>
+    </issue>
+
+    <issue
         id="NewerVersionAvailable"
         message="A newer version of ai.koog:agents-mcp than 1.0.0-beta-preview7 is available: 1.0.0-beta"
         errorLine1="koog-preview = &quot;1.0.0-beta-preview7&quot;"
@@ -180,7 +202,7 @@
         errorLine2="                                  ~~~~~~~~~~~~~~">
         <location
             file="src/main/java/ai/agent/android/presentation/ui/prompts/PromptLibraryScreen.kt"
-            line="74"
+            line="73"
             column="35"/>
     </issue>
 
@@ -191,7 +213,7 @@
         errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="../catalog/src/main/res/values/strings.xml"
-            line="204"
+            line="206"
             column="13"/>
     </issue>
 
@@ -202,7 +224,40 @@
         errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="../catalog/src/main/res/values/strings.xml"
-            line="327"
+            line="329"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.chat_input_placeholder` appears to be unused"
+        errorLine1="    &lt;string name=&quot;chat_input_placeholder&quot;>Ask the agent...&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings_chat.xml"
+            line="54"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.chat_input_stop_cd` appears to be unused"
+        errorLine1="    &lt;string name=&quot;chat_input_stop_cd&quot;>Stop generation&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings_chat.xml"
+            line="55"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.chat_input_send_cd` appears to be unused"
+        errorLine1="    &lt;string name=&quot;chat_input_send_cd&quot;>Send&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings_chat.xml"
+            line="56"
             column="13"/>
     </issue>
 

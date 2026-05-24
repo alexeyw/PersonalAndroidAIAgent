@@ -87,7 +87,7 @@ import app.knotwork.design.components.buttons.KnotworkSecondaryButton
 import app.knotwork.design.components.chat.ChatComposer
 import app.knotwork.design.components.chat.ChatContent
 import app.knotwork.design.components.chat.ChatMessage
-import app.knotwork.design.components.chips.KnotworkChip
+import app.knotwork.design.components.chips.KnotworkSuggestionChip
 import app.knotwork.design.components.chips.Risk
 import app.knotwork.design.components.console.ConsolePane
 import app.knotwork.design.components.console.ConsoleSnap
@@ -449,7 +449,7 @@ private fun ChatHomeEmptyBody(state: ChatHomeViewState, callbacks: ChatHomeCallb
                     verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp2),
                 ) {
                     state.samplePrompts.forEach { prompt ->
-                        KnotworkChip(
+                        KnotworkSuggestionChip(
                             label = prompt,
                             onClick = { callbacks.onSamplePrompt(prompt) },
                         )
