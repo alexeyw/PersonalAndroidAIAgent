@@ -48,6 +48,38 @@ details.
   instead of guessing whether each edit autosaved. Catalog snapshot
   baselines regenerated to reflect the new toolbar + banner layout.
 
+- **Pipeline editor — polish round 2** (Phase 22 / Task 14/17,
+  real-device review pass) — eight more issues:
+  - `NodeConfigSheet` Title field now uses `KnotworkTextStyles.BodyBase`
+    instead of Material3's default `bodyLarge` so it no longer reads
+    larger / different from every other field on the sheet.
+  - `NodeConfigSheet` IntentRouter `Add class` auto-names the new
+    class to a unique `class_N` placeholder so Save doesn't disable
+    while the user is mid-rename (blank names used to immediately
+    trigger the `REQUIRED` validator and lock Save out).
+  - `NodeConfigSheet` prompt-library button moved back into a row
+    above the field (sibling of the label, 32 dp tap-target). The
+    earlier `trailingIcon` placement crowded the prompt and was hard
+    to associate with the `VariableChipsRow` underneath.
+  - `VariableChipsRow` extended to every prompt-bearing form
+    (IntentRouter, Clarification, Decomposition, Evaluation, Summary
+    custom-prompt) — previously only LITE_RT and CLOUD surfaced the
+    `$DATE` / `$TIME` / `$TOOLS` / `$MODEL` / `$MEMORY_SUMMARY`
+    chips.
+  - `NodeConfigForms` `FloatSliderField` / `IntSliderField` now apply
+    the same `SliderDefaults.colors` as `KnotworkParamSlider` on the
+    Settings screen (primary thumb + active track, `surface3`
+    inactive). Sheet sliders no longer fall back to M3's tonal
+    palette.
+  - Pipeline editor `BackHandler` learns the `searchOpen` state —
+    system back closes the Find-node bar (and clears its query)
+    instead of falling through to `onBack` and exiting the editor.
+  - `Run` primary action now surfaces a `Preview only` snackbar
+    explaining that the banner is the UI scaffold and that the real
+    `GraphExecutionEngine` wiring lands in a follow-up. Avoids the
+    "I tapped Run, nothing happened" confusion.
+  - Catalog `pipeline_editor_*` snapshot baselines regenerated.
+
 - **NodeConfigSheet — density tightening** (Phase 22 / Task 14/17,
   same review pass) — every per-field label now rides on
   `OutlinedTextField`'s floating-label slot instead of a separate row

@@ -181,6 +181,14 @@ fun PipelineEditorScreen(viewModel: OrchestratorViewModel, onBack: () -> Unit) {
                 editor.configuringNodeId = null
                 editor.workingConfig = null
             }
+            editor.searchOpen -> {
+                // System back is the natural "close search" gesture; the bar's
+                // own × button stays as a discoverable alternative. Without
+                // this branch, system back was falling through to `onBack` and
+                // dragging the user out of the editor entirely.
+                editor.searchOpen = false
+                editor.searchQuery = ""
+            }
             editor.multiSelectMode -> {
                 editor.multiSelectMode = false
                 editor.selection = emptySet()
@@ -229,6 +237,7 @@ fun PipelineEditorScreen(viewModel: OrchestratorViewModel, onBack: () -> Unit) {
         val pasteEmptyMessage = stringResource(R.string.pipeline_editor_overflow_paste_empty)
         val autoFixDoneMessage = stringResource(R.string.pipeline_editor_validation_auto_fix_done)
         val saveDoneMessage = stringResource(R.string.pipeline_editor_save_done)
+        val runPreviewMessage = stringResource(R.string.pipeline_editor_run_preview)
         // Banner shows Running while the orchestrator reports the run is live; falls
         // back to Idle (banner hidden) otherwise. Done / Paused variants land when
         // real run-completion telemetry arrives (out of scope for Phase 22 / Task
@@ -366,8 +375,22 @@ fun PipelineEditorScreen(viewModel: OrchestratorViewModel, onBack: () -> Unit) {
             },
             onNavigateUp = onBack,
             onPrimaryAction = {
+                // Phase 22 / Task 14 ships only the UI-side run banner +
+                // dimming + traveling-dot scaffolding. The real
+                // `GraphExecutionEngine` wiring (actual node execution, token
+                // streaming, tool dispatch, completion-state Done variant)
+                // lands in a follow-up. Until then, `Run` flips the
+                // `isRunning` flag so the user can see the banner / dimming
+                // surfaces, and we surface a snackbar making the preview
+                // status explicit — otherwise users tap Run, see the banner,
+                // and rightly wonder why nothing else happens.
                 viewModel.saveCurrentPipeline()
                 viewModel.setRunning(running = !runState.isRunning)
+                if (runState.isRunning.not()) {
+                    // We just FLIPPED running to true above; in-line snackbar
+                    // makes the "preview only" status discoverable.
+                    scope.launch { snackbarHostState.showSnackbar(runPreviewMessage) }
+                }
             },
             onOverflow = { overflowOpen = true },
             onMoveNode = { nodeId, dxCanvas, dyCanvas ->

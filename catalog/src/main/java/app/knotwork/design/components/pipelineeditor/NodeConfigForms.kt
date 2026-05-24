@@ -20,8 +20,10 @@ import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -179,12 +181,15 @@ private fun VariableChipsRow(onInsert: (String) -> Unit) {
 @Composable
 private fun TitleField(title: String, error: ValidationFailure?, onChange: (String) -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp1)) {
+        FieldLabel(text = stringResource(R.string.knotwork_node_field_title))
         OutlinedTextField(
             value = title,
             onValueChange = onChange,
             singleLine = true,
             isError = error != null,
-            label = { Text(text = stringResource(R.string.knotwork_node_field_title)) },
+            // Match the per-row TextField textStyle so Title doesn't ride
+            // Material3's default BodyLg while every other field uses BodyBase.
+            textStyle = KnotworkTextStyles.BodyBase,
             modifier = Modifier.fillMaxWidth(),
         )
         InlineError(failure = error)
@@ -194,11 +199,11 @@ private fun TitleField(title: String, error: ValidationFailure?, onChange: (Stri
 /**
  * Stringly-typed text field used for most per-type rows.
  *
- * Phase 22 / Task 14 review pass tightened the density: the label rides on the
- * `OutlinedTextField`'s floating-label slot instead of a separate row above
- * (saves ~24 dp per field), and the optional prompt-library button slides
- * into the `trailingIcon` slot (sized to a 32 dp tap target so it doesn't
- * inflate the row).
+ * Layout: `[FieldLabel + optional library button] / [OutlinedTextField] /
+ * [InlineError]`. The library button stays in a sibling row above the field
+ * (not inside the field's `trailingIcon`) so prompt-bearing fields preserve
+ * room for the chips row underneath. Every field uses the same `BodyBase` /
+ * `MonoBase` textStyle so the sheet reads as a uniform stack.
  */
 @Composable
 @Suppress("LongParameterList") // Adding the optional library hook here keeps every prompt field DRY.
@@ -213,28 +218,37 @@ private fun TextField(
     onPickFromLibrary: PromptLibraryHook? = null,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp1)) {
+        // When the field is prompt-bearing AND the screen provided a library
+        // hook, surface a small icon button next to the label so the user can
+        // replace the field with a saved prompt. The button sits in a row with
+        // the label (not inside the field) so the VariableChipsRow below the
+        // field stays visually attached to the prompt area.
+        if (libraryCategory != null && onPickFromLibrary != null) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                FieldLabel(text = label)
+                Spacer(modifier = Modifier.weight(1f))
+                IconButton(
+                    onClick = { onPickFromLibrary(libraryCategory) { picked -> onChange(picked) } },
+                    modifier = Modifier.size(LIBRARY_BUTTON_TARGET_DP.dp),
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.AutoStories,
+                        contentDescription = stringResource(R.string.knotwork_node_action_load_from_library),
+                    )
+                }
+            }
+        } else {
+            FieldLabel(text = label)
+        }
         OutlinedTextField(
             value = value,
             onValueChange = onChange,
             singleLine = singleLine,
             isError = error != null,
             textStyle = if (monospace) KnotworkTextStyles.MonoBase else KnotworkTextStyles.BodyBase,
-            label = { Text(text = label) },
-            trailingIcon = if (libraryCategory != null && onPickFromLibrary != null) {
-                {
-                    IconButton(
-                        onClick = { onPickFromLibrary(libraryCategory) { picked -> onChange(picked) } },
-                        modifier = Modifier.size(TRAILING_ICON_TARGET_DP.dp),
-                    ) {
-                        Icon(
-                            imageVector = Icons.Outlined.AutoStories,
-                            contentDescription = stringResource(R.string.knotwork_node_action_load_from_library),
-                        )
-                    }
-                }
-            } else {
-                null
-            },
             modifier = Modifier.fillMaxWidth(),
         )
         InlineError(failure = error)
@@ -242,11 +256,11 @@ private fun TextField(
 }
 
 /**
- * Compact tap-target for trailing-icon buttons inside form fields. 32 dp
- * keeps the field row shorter than the M3 default 48 dp `IconButton` would
- * (which forced the surrounding `OutlinedTextField` to grow vertically).
+ * Compact tap-target for the prompt-library trigger button next to a field
+ * label. 32 dp keeps the label row tighter than the M3 default 48 dp
+ * `IconButton` (which would otherwise inflate the row to fit the touch area).
  */
-private const val TRAILING_ICON_TARGET_DP: Float = 32f
+private const val LIBRARY_BUTTON_TARGET_DP: Float = 32f
 
 /** Float field rendered as a slider plus the resolved numeric value. */
 @Suppress("LongParameterList") // Slider field has a stable contract; collapsing the params hides intent.
@@ -268,7 +282,13 @@ private fun FloatSliderField(
                 color = KnotworkTheme.extended.onSurfaceMuted,
             )
         }
-        Slider(value = value, onValueChange = onChange, valueRange = range, steps = steps)
+        Slider(
+            value = value,
+            onValueChange = onChange,
+            valueRange = range,
+            steps = steps,
+            colors = settingsParitySliderColors(),
+        )
         InlineError(failure = error)
     }
 }
@@ -304,10 +324,26 @@ private fun IntSliderField(
             onValueChange = { next -> onChange(next.toInt()) },
             valueRange = range.first.toFloat()..range.last.toFloat(),
             steps = 0,
+            colors = settingsParitySliderColors(),
         )
         InlineError(failure = error)
     }
 }
+
+/**
+ * Slider color palette matching `KnotworkParamSlider` on the Settings screen —
+ * primary thumb + primary active track + `surface3` inactive. Keeps the sheet's
+ * sliders visually consistent with the rest of the app instead of falling back
+ * to the M3 default tonal palette.
+ */
+@Composable
+private fun settingsParitySliderColors() = SliderDefaults.colors(
+    thumbColor = MaterialTheme.colorScheme.primary,
+    activeTrackColor = MaterialTheme.colorScheme.primary,
+    inactiveTrackColor = KnotworkTheme.extended.surface3,
+    activeTickColor = MaterialTheme.colorScheme.primary,
+    inactiveTickColor = KnotworkTheme.extended.surface3,
+)
 
 /** Segmented chip row that picks one enum value out of a labelled set. */
 @Composable
@@ -548,7 +584,18 @@ private fun IntentRouterFormBody(
         KnotworkTextButton(
             text = stringResource(R.string.knotwork_node_action_add_class),
             onClick = {
-                val updated = config.classes + IntentClass(name = "")
+                // Auto-name the new class with a unique `class_N` placeholder so
+                // it doesn't start blank. A blank name immediately fails the
+                // `REQUIRED` validation rule and disables Save — locking the user
+                // out of saving until they type a name. The placeholder is also
+                // unique relative to existing names (it walks `N` until it finds
+                // a free slot) so it doesn't trip CLASS_NAME_DUPLICATE either.
+                val existing = config.classes.map { it.name }.toSet()
+                val baseN = config.classes.size + 1
+                val placeholder = generateSequence(baseN) { it + 1 }
+                    .map { "class_$it" }
+                    .first { it !in existing }
+                val updated = config.classes + IntentClass(name = placeholder)
                 onChange(config.copy(classes = updated))
             },
             enabled = canAdd,
@@ -566,6 +613,9 @@ private fun IntentRouterFormBody(
         libraryCategory = "INTENT_ROUTER",
         onPickFromLibrary = onPickFromLibrary,
     )
+    VariableChipsRow(onInsert = { variable ->
+        onChange(config.copy(classifierPrompt = config.classifierPrompt + variable))
+    })
     Column(verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp1)) {
         SegmentedChipRow(
             label = stringResource(R.string.knotwork_node_field_fallback_class),
@@ -638,6 +688,9 @@ private fun ClarificationFormBody(
         libraryCategory = "CLARIFICATION",
         onPickFromLibrary = onPickFromLibrary,
     )
+    VariableChipsRow(onInsert = { variable ->
+        onChange(config.copy(questionTemplate = config.questionTemplate + variable))
+    })
     QuickRepliesField(
         replies = config.quickReplies,
         error = errors[FieldId.QUICK_REPLIES],
@@ -1019,6 +1072,9 @@ private fun DecompositionFormBody(
         libraryCategory = "DECOMPOSITION",
         onPickFromLibrary = onPickFromLibrary,
     )
+    VariableChipsRow(onInsert = { variable ->
+        onChange(config.copy(planningPrompt = config.planningPrompt + variable))
+    })
     IntSliderField(
         label = stringResource(R.string.knotwork_node_field_max_subtasks),
         value = config.maxSubtasks,
@@ -1095,6 +1151,9 @@ private fun EvaluationFormBody(
         libraryCategory = "EVALUATION",
         onPickFromLibrary = onPickFromLibrary,
     )
+    VariableChipsRow(onInsert = { variable ->
+        onChange(config.copy(criteriaPrompt = config.criteriaPrompt + variable))
+    })
     IntSliderField(
         label = stringResource(R.string.knotwork_node_field_max_retries),
         value = config.maxRetries,
@@ -1132,6 +1191,9 @@ private fun SummaryFormBody(
             libraryCategory = "SUMMARY",
             onPickFromLibrary = onPickFromLibrary,
         )
+        VariableChipsRow(onInsert = { variable ->
+            onChange(config.copy(customPrompt = (config.customPrompt.orEmpty() + variable)))
+        })
     }
     IntSliderField(
         label = stringResource(R.string.knotwork_node_field_target_length),

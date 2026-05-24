@@ -103,6 +103,10 @@
     <string name="pipeline_editor_overflow_auto_layout">Auto-layout</string>
     <string name="pipeline_editor_overflow_save">Save pipeline</string>
     <string name="pipeline_editor_save_done">Pipeline saved.</string>
+
+    <!-- Snackbar explaining that Run only surfaces the UI preview today;
+         actual orchestrator wiring lands in a follow-up. -->
+    <string name="pipeline_editor_run_preview">Preview only — the execution engine wires up in a follow-up. Banner reflects the planned UI.</string>
     <string name="pipeline_editor_overflow_toggle_grid_show">Show grid</string>
     <string name="pipeline_editor_overflow_toggle_grid_hide">Hide grid</string>
 
