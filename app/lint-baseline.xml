@@ -57,39 +57,6 @@
     </issue>
 
     <issue
-        id="GradleDependency"
-        message="A newer version of ai.koog:prompt-executor-deepseek-client than 1.0.0-beta-preview7 is available: 1.0.0-beta"
-        errorLine1="koog-preview = &quot;1.0.0-beta-preview7&quot;"
-        errorLine2="               ~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="../gradle/libs.versions.toml"
-            line="30"
-            column="16"/>
-    </issue>
-
-    <issue
-        id="GradleDependency"
-        message="A newer version of ai.koog:prompt-executor-google-client than 1.0.0-beta-preview7 is available: 1.0.0-beta"
-        errorLine1="koog-preview = &quot;1.0.0-beta-preview7&quot;"
-        errorLine2="               ~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="../gradle/libs.versions.toml"
-            line="30"
-            column="16"/>
-    </issue>
-
-    <issue
-        id="NewerVersionAvailable"
-        message="A newer version of ai.koog:agents-mcp than 1.0.0-beta-preview7 is available: 1.0.0-beta"
-        errorLine1="koog-preview = &quot;1.0.0-beta-preview7&quot;"
-        errorLine2="               ~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="../gradle/libs.versions.toml"
-            line="30"
-            column="16"/>
-    </issue>
-
-    <issue
         id="ConfigurationScreenWidthHeight"
         message="Using Configuration.screenHeightDp instead of LocalWindowInfo.current.containerSize"
         errorLine1="        val isCompactConsole = configuration.screenHeightDp &lt;= compactConsoleThresholdDp"
