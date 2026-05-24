@@ -6,6 +6,10 @@
     <string name="pipeline_editor_quick_add_title">Add node</string>
     <string name="pipeline_editor_quick_add_close">Close add-node menu</string>
 
+    <!-- FAB tucked into the canvas bottom-right. Opens the radial quick-add menu
+         anchored at the viewport centre. -->
+    <string name="pipeline_editor_fab_add_node">Add node</string>
+
     <!-- Validation bar -->
     <string name="pipeline_editor_validation_clean">Pipeline is valid</string>
     <plurals name="pipeline_editor_validation_count">
@@ -97,6 +101,8 @@
     <string name="pipeline_editor_overflow_redo">Redo</string>
     <string name="pipeline_editor_overflow_delete">Delete selection</string>
     <string name="pipeline_editor_overflow_auto_layout">Auto-layout</string>
+    <string name="pipeline_editor_overflow_save">Save pipeline</string>
+    <string name="pipeline_editor_save_done">Pipeline saved.</string>
     <string name="pipeline_editor_overflow_toggle_grid_show">Show grid</string>
     <string name="pipeline_editor_overflow_toggle_grid_hide">Hide grid</string>
 

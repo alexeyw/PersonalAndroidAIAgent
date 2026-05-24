@@ -70,50 +70,36 @@ fun RunStatusBanner(
     if (status is RunStatus.Idle) return
     val accent = accentFor(status)
     val background = backgroundTintFor(accent)
+    // Single Surface owns BOTH the background tint AND the accent border so the
+    // two are always the same shape and size. Wrapping the content in a second
+    // Surface (the prior layout) made the border anchor to a fixed-min-height
+    // box that didn't grow with the row content — the border visibly framed a
+    // smaller area than the background tint. Material3 `Surface` accepts a
+    // `border` parameter directly; use it.
     Surface(
         modifier = modifier
             .fillMaxWidth()
             .defaultMinSize(minHeight = BannerMinHeight),
-        color = Color.Transparent,
+        color = background,
+        shape = KnotworkTheme.shapes.md,
+        border = BorderStroke(width = 1.dp, color = accent.copy(alpha = BORDER_ALPHA)),
     ) {
-        Box(
+        Row(
             modifier = Modifier
-                .background(color = background, shape = KnotworkTheme.shapes.md)
-                .background(color = Color.Transparent, shape = KnotworkTheme.shapes.md),
+                .fillMaxWidth()
+                .padding(BannerPadding),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp3),
         ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(BannerPadding),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp3),
-            ) {
-                StatusBadge(
-                    accent = accent,
-                    label = labelFor(status),
-                )
-                MetricsRow(
-                    status = status,
-                    modifier = Modifier.weight(1f),
-                )
-                ActionsRow(
-                    status = status,
-                    onTrace = onTrace,
-                    onPause = onPause,
-                    onResume = onResume,
-                    onStop = onStop,
-                )
-            }
-            // 1 dp accent-tinted border on top so the strip reads as a contained surface
-            // without competing with the toolbar's tonal elevation.
-            Surface(
-                modifier = Modifier.fillMaxWidth(),
-                color = Color.Transparent,
-                border = BorderStroke(width = 1.dp, color = accent.copy(alpha = BORDER_ALPHA)),
-                shape = KnotworkTheme.shapes.md,
-            ) {
-                Box(modifier = Modifier.defaultMinSize(minHeight = BannerMinHeight)) {}
-            }
+            StatusBadge(accent = accent, label = labelFor(status))
+            MetricsRow(status = status, modifier = Modifier.weight(1f))
+            ActionsRow(
+                status = status,
+                onTrace = onTrace,
+                onPause = onPause,
+                onResume = onResume,
+                onStop = onStop,
+            )
         }
     }
 }

@@ -976,12 +976,29 @@ class OrchestratorViewModel @Inject constructor(
     }
 
     /**
-     * Flips the editor's run-trace bar between idle and active. Phase-21 placeholder —
+     * Flips the editor's run banner between idle and active. Phase-21 placeholder —
      * the real run loop lands post-v0.1; until then the editor exposes a debug toggle
-     * so the bar can be exercised end-to-end.
+     * so the banner can be exercised end-to-end.
+     *
+     * Clearing the flag (`running = false`) also wipes [PipelineRunState.activeNodeId]
+     * so the banner / per-node dimming reset cleanly. Without this, a paused-mid-run
+     * `activeNodeId` would leak across runs (and across screen reopens — see
+     * [stopRunAndReset]).
      */
     fun setRunning(running: Boolean) {
-        _runState.update { it.copy(isRunning = running) }
+        _runState.update {
+            if (running) it.copy(isRunning = true) else PipelineRunState()
+        }
+    }
+
+    /**
+     * Fully resets the run banner state. Called from the editor when the user taps
+     * `Stop` on the banner, and from the screen's `DisposableEffect` when the user
+     * leaves the editor — both paths must clear `activeNodeId` and `isRunning`
+     * together, otherwise a stale banner would surface on the next pipeline open.
+     */
+    fun stopRunAndReset() {
+        _runState.value = PipelineRunState()
     }
 
     /**

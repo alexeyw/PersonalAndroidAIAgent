@@ -7,13 +7,13 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Add
-import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -23,6 +23,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import app.knotwork.design.components.buttons.KnotworkButtonSize
 import app.knotwork.design.components.buttons.KnotworkPrimaryButton
 import app.knotwork.design.components.buttons.KnotworkSecondaryButton
 import app.knotwork.design.icons.AppIcons
@@ -49,6 +50,7 @@ import kotlin.math.roundToInt
  *   the template gallery (a placeholder snackbar until the gallery lands).
  * @param modifier optional layout modifier (typically `.fillMaxSize()`).
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun EmptyPipelineState(
     scale: Float,
@@ -80,18 +82,30 @@ internal fun EmptyPipelineState(
                     modifier = Modifier.padding(horizontal = KnotworkTheme.spacing.sp4),
                 )
             }
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp3),
+            // `FlowRow` lets the secondary CTA drop onto a second line when the
+            // narrow-screen layout would otherwise truncate `From template` to
+            // `Fro…`. `KnotworkButtonSize.Sm` shrinks the buttons enough that
+            // both fit side-by-side on most phones. The secondary CTA drops its
+            // leading icon — the label is already self-descriptive and the icon
+            // ate the horizontal budget that caused the truncation.
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(
+                    space = KnotworkTheme.spacing.sp3,
+                    alignment = Alignment.CenterHorizontally,
+                ),
+                verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp2),
+                modifier = Modifier.widthIn(max = MaxContentWidth),
             ) {
                 KnotworkPrimaryButton(
                     text = stringResource(R.string.pipeline_editor_empty_cta_start),
                     onClick = onStartWithInput,
+                    size = KnotworkButtonSize.Sm,
                     leadingIcon = Icons.Outlined.Add,
                 )
                 KnotworkSecondaryButton(
                     text = stringResource(R.string.pipeline_editor_empty_cta_template),
                     onClick = onFromTemplate,
-                    leadingIcon = Icons.Outlined.ContentCopy,
+                    size = KnotworkButtonSize.Sm,
                 )
             }
             InfoPill(scale = scale)

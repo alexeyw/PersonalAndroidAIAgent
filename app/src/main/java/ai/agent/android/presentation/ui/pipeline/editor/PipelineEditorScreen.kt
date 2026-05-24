@@ -10,6 +10,7 @@ import ai.agent.android.presentation.ui.pipeline.editor.canvas.formatScalePercen
 import ai.agent.android.presentation.ui.pipeline.editor.config.NodeConfigCodec
 import ai.agent.android.presentation.ui.pipeline.editor.config.NodeTypeMapper
 import ai.agent.android.presentation.ui.pipeline.editor.core.AutoLayout
+import ai.agent.android.presentation.ui.pipeline.editor.core.Bounds
 import ai.agent.android.presentation.ui.pipeline.editor.core.CanvasTransform
 import ai.agent.android.presentation.ui.pipeline.editor.core.EditorState
 import ai.agent.android.presentation.ui.pipeline.editor.core.ValidationAutoFix
@@ -32,6 +33,7 @@ import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.GridOff
 import androidx.compose.material.icons.outlined.GridOn
 import androidx.compose.material.icons.outlined.Map
+import androidx.compose.material.icons.outlined.Save
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
@@ -43,6 +45,7 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
@@ -128,6 +131,14 @@ fun PipelineEditorScreen(viewModel: OrchestratorViewModel, onBack: () -> Unit) {
     LaunchedEffect(runState) {
         editor.isRunning = runState.isRunning
         editor.activeRunningNodeId = runState.activeNodeId
+    }
+    // Reset run state on screen leave so the banner doesn't stick around when
+    // the user navigates back to the library or switches pipelines. The
+    // OrchestratorViewModel is scoped to the `pipelines` nested nav-graph
+    // (shared with the library), so its StateFlow survives the editor screen
+    // and would otherwise re-render the banner on the next open.
+    DisposableEffect(viewModel) {
+        onDispose { viewModel.stopRunAndReset() }
     }
     LaunchedEffect(runState.isRunning) {
         if (runState.isRunning) {
@@ -217,6 +228,7 @@ fun PipelineEditorScreen(viewModel: OrchestratorViewModel, onBack: () -> Unit) {
         val autoFixNoneMessage = stringResource(R.string.pipeline_editor_validation_auto_fix_none)
         val pasteEmptyMessage = stringResource(R.string.pipeline_editor_overflow_paste_empty)
         val autoFixDoneMessage = stringResource(R.string.pipeline_editor_validation_auto_fix_done)
+        val saveDoneMessage = stringResource(R.string.pipeline_editor_save_done)
         // Banner shows Running while the orchestrator reports the run is live; falls
         // back to Idle (banner hidden) otherwise. Done / Paused variants land when
         // real run-completion telemetry arrives (out of scope for Phase 22 / Task
@@ -274,12 +286,46 @@ fun PipelineEditorScreen(viewModel: OrchestratorViewModel, onBack: () -> Unit) {
                 }
             }
         }
-        val onAutoLayoutClick: () -> Unit = {
+        val onAutoLayoutClick: () -> Unit = autoLayoutClick@{
             editor.undoRedo.push(pipeline)
             val result = AutoLayout.compute(pipeline)
+            if (result.positions.isEmpty()) return@autoLayoutClick
+            // `AutoLayout.compute` emits coordinates anchored at the canvas
+            // origin (`(0, 0)` for the seed layer); without an offset the
+            // re-laid graph lands in the upper-left corner of the canvas
+            // regardless of where the user was looking, which reads as "the
+            // editor swallowed my nodes". Translate the freshly computed bbox
+            // so its centre lands on the centre of the previously occupied
+            // bbox — the user stays put visually and the layout simply
+            // tightens around their viewport.
+            val originalBbox = Bounds.ofNodes(
+                positions = pipeline.nodes.map { it.x to it.y },
+                nodeWidth = NODE_CARD_WIDTH_PX,
+                nodeHeight = NODE_CARD_HEIGHT_PX,
+            )
+            val computedBbox = Bounds.ofNodes(
+                positions = result.positions.values.toList(),
+                nodeWidth = NODE_CARD_WIDTH_PX,
+                nodeHeight = NODE_CARD_HEIGHT_PX,
+            )
+            val dx = if (originalBbox != null && computedBbox != null) {
+                (originalBbox.minX + originalBbox.maxX) / 2f -
+                    (computedBbox.minX + computedBbox.maxX) / 2f
+            } else {
+                0f
+            }
+            val dy = if (originalBbox != null && computedBbox != null) {
+                (originalBbox.minY + originalBbox.maxY) / 2f -
+                    (computedBbox.minY + computedBbox.maxY) / 2f
+            } else {
+                0f
+            }
             val nextNodes = pipeline.nodes.map { node ->
                 val pos = result.positions[node.id] ?: return@map node
-                node.copy(x = pos.first, y = pos.second)
+                node.copy(
+                    x = CanvasTransform.snapToGrid(pos.first + dx),
+                    y = CanvasTransform.snapToGrid(pos.second + dy),
+                )
             }
             viewModel.replaceCurrentPipeline(pipeline.copy(nodes = nextNodes))
         }
@@ -304,7 +350,11 @@ fun PipelineEditorScreen(viewModel: OrchestratorViewModel, onBack: () -> Unit) {
                 scope.launch { snackbarHostState.showSnackbar("Resume arrives with the real run engine.") }
             },
             onRunStop = {
-                viewModel.setRunning(running = false)
+                // Fully reset isRunning + activeNodeId so the banner / per-node
+                // dimming clear together. Using `stopRunAndReset` (not
+                // `setRunning(false)`) so a paused-mid-run `activeNodeId` doesn't
+                // leak across the next run.
+                viewModel.stopRunAndReset()
             },
             onRunTrace = {
                 // Trace navigation will jump to the console pane (Chat home).
@@ -412,6 +462,24 @@ fun PipelineEditorScreen(viewModel: OrchestratorViewModel, onBack: () -> Unit) {
                 expanded = overflowOpen,
                 onDismissRequest = { overflowOpen = false },
             ) {
+                // Explicit Save sits at the top of the overflow so the action is
+                // discoverable. Most graph mutations currently update the in-memory
+                // `currentPipeline` via `replaceCurrentPipeline` but don't persist
+                // to disk; this item is the user's reliable "write to disk" lever.
+                // Pressing Run also persists (via `saveCurrentPipeline` in the
+                // primary-action callback) — the explicit Save just removes the
+                // "did anything actually persist?" guesswork.
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.pipeline_editor_overflow_save)) },
+                    onClick = {
+                        overflowOpen = false
+                        viewModel.saveCurrentPipeline()
+                        scope.launch { snackbarHostState.showSnackbar(saveDoneMessage) }
+                    },
+                    leadingIcon = {
+                        Icon(Icons.Outlined.Save, contentDescription = null)
+                    },
+                )
                 DropdownMenuItem(
                     text = { Text(stringResource(R.string.pipeline_editor_overflow_undo)) },
                     onClick = {
@@ -754,3 +822,11 @@ private const val RUN_BANNER_TICK_MS: Long = 100L
 
 /** Nanoseconds per second — for the run-banner clock arithmetic. */
 private const val NANOS_PER_SECOND: Float = 1_000_000_000f
+
+/**
+ * Canvas-space NodeCard width / height. Mirrors the catalog `NodeCardWidth = 168
+ * dp` and `NodeCardMaxHeight = 96 dp`. Used by the auto-layout post-translate so
+ * the bbox math matches what the canvas actually paints.
+ */
+private const val NODE_CARD_WIDTH_PX: Float = 168f
+private const val NODE_CARD_HEIGHT_PX: Float = 96f

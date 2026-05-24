@@ -1,9 +1,10 @@
 package ai.agent.android.presentation.ui.pipeline.editor.canvas
 
 import ai.agent.android.R
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
@@ -11,11 +12,15 @@ import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.OpenInFull
 import androidx.compose.material.icons.outlined.Remove
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
+import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import app.knotwork.design.theme.KnotworkTheme
 
@@ -31,6 +36,12 @@ import app.knotwork.design.theme.KnotworkTheme
  * The composable is stateless; the caller passes the live transform-derived
  * enable flags ([canZoomIn] / [canZoomOut]) so the icons grey out at the
  * scale-range boundaries instead of becoming silent no-ops.
+ *
+ * **Tile sizing.** Phase 22 / Task 14 review caught that `IconButton` enforces
+ * a 48 dp minimum interactive size that overrode the 40 dp tile constraint —
+ * adjacent tiles visibly overlapped. The rail now uses `Surface + clickable +
+ * Icon` directly so the 40 dp tile size is respected. The 4 dp inter-tile gap
+ * lands cleanly.
  *
  * @param onZoomIn invoked when the `+` tile is tapped.
  * @param onZoomOut invoked when the `−` tile is tapped.
@@ -55,7 +66,7 @@ fun ZoomRail(
 ) {
     Column(
         modifier = modifier,
-        verticalArrangement = Arrangement.spacedBy(4.dp),
+        verticalArrangement = Arrangement.spacedBy(TileGap),
     ) {
         ZoomTile(
             icon = Icons.Outlined.Add,
@@ -78,25 +89,36 @@ fun ZoomRail(
     }
 }
 
-/** One 40 dp square tile shared by the three rail entries. */
+/**
+ * One 40 dp square tile shared by the three rail entries. Implemented as
+ * `Surface + clickable + Icon` (not `IconButton`) so the 40 dp tile constraint
+ * survives Material3's 48 dp minimum-interactive-component enforcement.
+ */
 @Composable
 private fun ZoomTile(icon: ImageVector, contentDescription: String, enabled: Boolean, onClick: () -> Unit) {
     val borderColor = if (enabled) KnotworkTheme.extended.outlineStrong else KnotworkTheme.extended.divider
     val tint = if (enabled) KnotworkTheme.extended.onSurface2 else KnotworkTheme.extended.onSurfaceDim
-    IconButton(
-        onClick = onClick,
-        enabled = enabled,
+    Surface(
         modifier = Modifier
             .size(TileSize)
-            .background(color = KnotworkTheme.extended.surface1, shape = KnotworkTheme.shapes.md)
-            .border(width = 1.dp, color = borderColor, shape = KnotworkTheme.shapes.md),
+            .semantics(mergeDescendants = true) {
+                this.contentDescription = contentDescription
+                onClick(label = contentDescription, action = null)
+            }
+            .clickable(enabled = enabled, onClick = onClick),
+        color = KnotworkTheme.extended.surface1,
+        shape = KnotworkTheme.shapes.md,
+        border = BorderStroke(width = 1.dp, color = borderColor),
     ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = contentDescription,
-            tint = tint,
-        )
+        Box(contentAlignment = Alignment.Center) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = tint,
+            )
+        }
     }
 }
 
 private val TileSize = 40.dp
+private val TileGap = 4.dp

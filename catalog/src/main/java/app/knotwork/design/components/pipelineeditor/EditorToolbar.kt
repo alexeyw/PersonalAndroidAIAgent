@@ -14,9 +14,7 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
-import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.outlined.MoreVert
-import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -29,6 +27,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import app.knotwork.design.R
+import app.knotwork.design.components.buttons.KnotworkButtonSize
 import app.knotwork.design.components.buttons.KnotworkIconButton
 import app.knotwork.design.components.buttons.KnotworkPrimaryButton
 import app.knotwork.design.theme.KnotworkTheme
@@ -117,18 +116,23 @@ fun EditorToolbar(
                 subtitle = subtitle,
                 modifier = Modifier.weight(1f),
             )
+            // Compact primary action: `KnotworkButtonSize.Sm` keeps the
+            // button below the toolbar height; the leading icon is dropped on
+            // narrow screens so the title + subtitle stack keeps room. The
+            // semantics (`contentDescription`) carry the action verbatim so
+            // TalkBack still announces "Run" / "Re-run".
             when (primaryAction) {
                 EditorPrimaryAction.Run -> KnotworkPrimaryButton(
                     text = stringResource(R.string.knotwork_editor_action_run),
                     onClick = onPrimaryAction,
                     enabled = primaryActionEnabled,
-                    leadingIcon = Icons.Filled.PlayArrow,
+                    size = KnotworkButtonSize.Sm,
                 )
                 EditorPrimaryAction.Rerun -> KnotworkPrimaryButton(
                     text = stringResource(R.string.knotwork_editor_action_rerun),
                     onClick = onPrimaryAction,
                     enabled = primaryActionEnabled,
-                    leadingIcon = Icons.Outlined.Refresh,
+                    size = KnotworkButtonSize.Sm,
                 )
                 EditorPrimaryAction.None -> Unit
             }

@@ -15,6 +15,41 @@ details.
 
 ### Added
 
+- **Pipeline editor — review follow-up** (Phase 22 / Task 14/17,
+  second pass) — eight issues caught on a real device after the
+  initial alignment landed: the `RunStatusBanner` now uses a single
+  Material `Surface` with a `border` parameter so the inner border
+  and the outer background tint always paint the same rectangle (the
+  prior two-Surface layering left the border framing a smaller box
+  than the background); `Stop` on the banner calls a new
+  `OrchestratorViewModel.stopRunAndReset()` that wipes both
+  `isRunning` and `activeNodeId`, and a screen-level `DisposableEffect`
+  fires the same reset on screen leave so the banner can no longer
+  follow the user back to the library or into another pipeline; the
+  `ZoomRail` tiles dropped `IconButton` for `Surface + clickable +
+  Icon` so the 40 dp tile size survives Material3's 48 dp
+  minimum-interactive-component enforcement (tiles no longer overlap);
+  `AutoLayout` post-translates the freshly-computed bbox so its
+  centroid lands on the centroid of the previously occupied area —
+  the re-laid graph stays where the user was looking instead of
+  landing in the upper-left corner; a `FloatingActionButton` with `+`
+  now sits in the bottom-right corner of the canvas (hidden behind
+  the mini-map) and opens the radial quick-add menu at the viewport
+  centre, honouring the empty-state's "Tap + to drop your first node"
+  promise; the toolbar primary `Run` / `Re-run` button shrunk to the
+  `Sm` size variant and dropped its leading icon so the title +
+  subtitle stack has horizontal room to breathe (no more
+  `Running · ste…` truncation); the empty-state CTAs wrap via
+  `FlowRow` and use the `Sm` button size so `From template` no longer
+  truncates to `Fro…`; the overflow `DropdownMenu` gained an
+  explicit `Save pipeline` item that calls
+  `OrchestratorViewModel.saveCurrentPipeline` and surfaces a snackbar
+  on completion, so the user has a reliable "write to disk" lever
+  instead of guessing whether each edit autosaved. Catalog snapshot
+  baselines regenerated to reflect the new toolbar + banner layout.
+  `NodeConfigSheet` density redesign is documented as a follow-up in
+  the diff.
+
 - **Pipeline editor — design alignment & feature backfill**
   (Phase 22 / Task 14/17) — closes every divergence the diff document
   caught between the spec, the production code, and the new designer

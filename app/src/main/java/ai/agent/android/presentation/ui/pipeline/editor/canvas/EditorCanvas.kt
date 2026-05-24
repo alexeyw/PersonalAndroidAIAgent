@@ -1,5 +1,6 @@
 package ai.agent.android.presentation.ui.pipeline.editor.canvas
 
+import ai.agent.android.R
 import ai.agent.android.domain.models.NodeModel
 import ai.agent.android.domain.models.NodeType
 import ai.agent.android.domain.models.PipelineGraph
@@ -13,6 +14,10 @@ import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Add
+import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -28,6 +33,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import app.knotwork.design.components.pipelineeditor.NodeError
@@ -388,6 +394,31 @@ internal fun EditorCanvas(
                 },
                 modifier = Modifier.align(Alignment.TopStart),
             )
+        }
+
+        // Floating `+` button anchored bottom-right. Tap opens the same radial
+        // quick-add menu the long-press-on-canvas gesture surfaces, but anchored
+        // at the viewport centre so the user always has a discoverable way to
+        // drop the first node — the empty-state helper text literally promises
+        // "Tap + to drop your first node". Hidden when the mini-map is open so
+        // the two bottom-right overlays don't collide.
+        if (!editor.miniMapOpen) {
+            FloatingActionButton(
+                onClick = {
+                    val cx = viewportSize.first / 2f
+                    val cy = viewportSize.second / 2f
+                    editor.quickAddAnchor = cx to cy
+                },
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(KnotworkTheme.spacing.sp4),
+                shape = KnotworkTheme.shapes.full,
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.Add,
+                    contentDescription = stringResource(R.string.pipeline_editor_fab_add_node),
+                )
+            }
         }
 
         // Mini-map overlay anchored to the bottom-right corner. Renders only when
