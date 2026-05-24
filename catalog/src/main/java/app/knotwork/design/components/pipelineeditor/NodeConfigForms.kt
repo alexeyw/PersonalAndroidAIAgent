@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AddCircleOutline
 import androidx.compose.material.icons.outlined.AutoStories
@@ -32,6 +33,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.dp
 import app.knotwork.design.R
 import app.knotwork.design.components.buttons.KnotworkTextButton
 import app.knotwork.design.components.chips.ChipStyle
@@ -87,7 +89,11 @@ object NodeConfigForms {
     ) {
         Column(
             modifier = Modifier.fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp3),
+            // Sheet density tightening (Phase 22 / Task 14 review): inter-field
+            // gap dropped sp3 → sp2 so a 3-4 field form fits a phone viewport
+            // without scroll. Per-form `Column` arrangements keep their own
+            // tighter sp1 internal spacing.
+            verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp2),
         ) {
             TitleField(
                 title = config.title,
@@ -173,19 +179,27 @@ private fun VariableChipsRow(onInsert: (String) -> Unit) {
 @Composable
 private fun TitleField(title: String, error: ValidationFailure?, onChange: (String) -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp1)) {
-        FieldLabel(text = stringResource(R.string.knotwork_node_field_title))
         OutlinedTextField(
             value = title,
             onValueChange = onChange,
             singleLine = true,
             isError = error != null,
+            label = { Text(text = stringResource(R.string.knotwork_node_field_title)) },
             modifier = Modifier.fillMaxWidth(),
         )
         InlineError(failure = error)
     }
 }
 
-/** Stringly-typed text field used for most per-type rows. */
+/**
+ * Stringly-typed text field used for most per-type rows.
+ *
+ * Phase 22 / Task 14 review pass tightened the density: the label rides on the
+ * `OutlinedTextField`'s floating-label slot instead of a separate row above
+ * (saves ~24 dp per field), and the optional prompt-library button slides
+ * into the `trailingIcon` slot (sized to a 32 dp tap target so it doesn't
+ * inflate the row).
+ */
 @Composable
 @Suppress("LongParameterList") // Adding the optional library hook here keeps every prompt field DRY.
 private fun TextField(
@@ -199,39 +213,40 @@ private fun TextField(
     onPickFromLibrary: PromptLibraryHook? = null,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp1)) {
-        // When the field is prompt-bearing and the screen provided a library hook,
-        // render a small icon button next to the label so users can replace the field
-        // contents with a saved prompt. Other (non-prompt) fields just show the label.
-        if (libraryCategory != null && onPickFromLibrary != null) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                FieldLabel(text = label)
-                Spacer(modifier = Modifier.weight(1f))
-                IconButton(
-                    onClick = { onPickFromLibrary(libraryCategory) { picked -> onChange(picked) } },
-                ) {
-                    Icon(
-                        imageVector = Icons.Outlined.AutoStories,
-                        contentDescription = stringResource(R.string.knotwork_node_action_load_from_library),
-                    )
-                }
-            }
-        } else {
-            FieldLabel(text = label)
-        }
         OutlinedTextField(
             value = value,
             onValueChange = onChange,
             singleLine = singleLine,
             isError = error != null,
             textStyle = if (monospace) KnotworkTextStyles.MonoBase else KnotworkTextStyles.BodyBase,
+            label = { Text(text = label) },
+            trailingIcon = if (libraryCategory != null && onPickFromLibrary != null) {
+                {
+                    IconButton(
+                        onClick = { onPickFromLibrary(libraryCategory) { picked -> onChange(picked) } },
+                        modifier = Modifier.size(TRAILING_ICON_TARGET_DP.dp),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.AutoStories,
+                            contentDescription = stringResource(R.string.knotwork_node_action_load_from_library),
+                        )
+                    }
+                }
+            } else {
+                null
+            },
             modifier = Modifier.fillMaxWidth(),
         )
         InlineError(failure = error)
     }
 }
+
+/**
+ * Compact tap-target for trailing-icon buttons inside form fields. 32 dp
+ * keeps the field row shorter than the M3 default 48 dp `IconButton` would
+ * (which forced the surrounding `OutlinedTextField` to grow vertically).
+ */
+private const val TRAILING_ICON_TARGET_DP: Float = 32f
 
 /** Float field rendered as a slider plus the resolved numeric value. */
 @Suppress("LongParameterList") // Slider field has a stable contract; collapsing the params hides intent.

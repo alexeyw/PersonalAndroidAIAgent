@@ -17,6 +17,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import app.knotwork.design.R
+import app.knotwork.design.components.buttons.KnotworkButtonSize
 import app.knotwork.design.components.buttons.KnotworkPrimaryButton
 import app.knotwork.design.components.buttons.KnotworkTextButton
 import app.knotwork.design.components.chips.ChipStyle
@@ -116,8 +117,8 @@ private fun ScrollableNodeConfigSheetBody(
         modifier = Modifier
             .fillMaxWidth()
             .verticalScroll(scrollState)
-            .padding(horizontal = KnotworkTheme.spacing.sp4, vertical = KnotworkTheme.spacing.sp3),
-        verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp3),
+            .padding(horizontal = KnotworkTheme.spacing.sp3, vertical = KnotworkTheme.spacing.sp2),
+        verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp2),
     ) {
         SheetHeader(type = config.type)
         NodeConfigForms.Body(
@@ -163,8 +164,8 @@ fun NodeConfigSheetBody(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = KnotworkTheme.spacing.sp4, vertical = KnotworkTheme.spacing.sp3),
-        verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp3),
+            .padding(horizontal = KnotworkTheme.spacing.sp3, vertical = KnotworkTheme.spacing.sp2),
+        verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp2),
     ) {
         SheetHeader(type = config.type)
         NodeConfigForms.Body(
@@ -211,6 +212,7 @@ private fun SheetActionRow(
             text = stringResource(R.string.knotwork_node_config_action_save),
             onClick = onSave,
             enabled = saveEnabled,
+            size = KnotworkButtonSize.Sm,
         )
     }
 }

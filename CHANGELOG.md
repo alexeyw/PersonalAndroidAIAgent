@@ -47,8 +47,19 @@ details.
   on completion, so the user has a reliable "write to disk" lever
   instead of guessing whether each edit autosaved. Catalog snapshot
   baselines regenerated to reflect the new toolbar + banner layout.
-  `NodeConfigSheet` density redesign is documented as a follow-up in
-  the diff.
+
+- **NodeConfigSheet — density tightening** (Phase 22 / Task 14/17,
+  same review pass) — every per-field label now rides on
+  `OutlinedTextField`'s floating-label slot instead of a separate row
+  above (saves ~24 dp per field across 12 forms). The optional
+  prompt-library button moves into the field's `trailingIcon` slot at
+  a compact 32 dp tap target so the row no longer inflates to fit a
+  48 dp `IconButton`. Sheet body padding drops `sp4 → sp3` horizontal
+  + `sp3 → sp2` vertical; inter-field gap drops `sp3 → sp2`. The Save
+  primary CTA shrinks to `KnotworkButtonSize.Sm` so the sticky action
+  row matches the toolbar's `Run` button density. The catalog
+  `pipeline_editor_*` snapshot baselines were regenerated to reflect
+  the tighter sheet.
 
 - **Pipeline editor — design alignment & feature backfill**
   (Phase 22 / Task 14/17) — closes every divergence the diff document
