@@ -101,7 +101,7 @@ class DelegateTaskTool @Inject constructor(
                     )
 
                     CloudProvider.DEEPSEEK -> KoogModelMapper.getDeepSeekModel(
-                        apiKeyRepository.getDeepSeekModel().first() ?: DeepSeekModels.DeepSeekChat.id,
+                        apiKeyRepository.getDeepSeekModel().first() ?: DeepSeekModels.DeepSeekV4Flash.id,
                     )
 
                     CloudProvider.OLLAMA -> LLModel(

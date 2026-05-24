@@ -4,6 +4,7 @@ import ai.agent.android.domain.engine.CloudLlmClientFactory
 import ai.agent.android.domain.models.CloudProvider
 import ai.agent.android.domain.repositories.ApiKeyRepository
 import ai.agent.android.domain.repositories.SettingsRepository
+import ai.koog.http.client.ktor.KtorKoogHttpClient
 import ai.koog.prompt.executor.clients.LLMClient
 import ai.koog.prompt.executor.clients.anthropic.AnthropicLLMClient
 import ai.koog.prompt.executor.clients.deepseek.DeepSeekLLMClient
@@ -29,6 +30,24 @@ class KoogClientFactory @Inject constructor(
     private val apiKeyRepository: ApiKeyRepository,
     private val settingsRepository: SettingsRepository,
 ) : CloudLlmClientFactory {
+
+    /**
+     * Shared Ktor-backed HTTP factory used by every cloud client.
+     *
+     * Why explicit instead of SPI auto-discovery: Koog 1.0.0 declares
+     * `KoogHttpClient.Factory` as a JVM ServiceLoader SPI, but the Maven
+     * Central publish of `http-client-ktor-android-1.0.0` omits the
+     * `META-INF/services/ai.koog.http.client.KoogHttpClient$Factory` registration
+     * file (the Factory class is present, the registration is not). On the
+     * first cloud call the default code path therefore throws
+     * `IllegalStateException: No KoogHttpClient.Factory provider found on the
+     * runtime classpath`. Constructing the Ktor factory directly bypasses the
+     * SPI lookup entirely — the same workaround the Koog error message
+     * suggests ("…or pass a KoogHttpClient.Factory explicitly"). Re-collapse
+     * to the no-arg secondary constructor once Koog ships an AAR with the
+     * services file restored.
+     */
+    private val httpClientFactory = KtorKoogHttpClient.Factory()
 
     /**
      * Provider-keyed dispatch used by domain-side consumers. Exhaustive on
@@ -61,7 +80,7 @@ class KoogClientFactory @Inject constructor(
         if (isLocalOnlyMode()) return null
         val key = apiKeyRepository.getOpenAIKey().firstOrNull()
         if (key.isNullOrBlank()) return null
-        return OpenAILLMClient(apiKey = key)
+        return OpenAILLMClient(apiKey = key, httpClientFactory = httpClientFactory)
     }
 
     /**
@@ -73,7 +92,7 @@ class KoogClientFactory @Inject constructor(
         if (isLocalOnlyMode()) return null
         val key = apiKeyRepository.getAnthropicKey().firstOrNull()
         if (key.isNullOrBlank()) return null
-        return AnthropicLLMClient(apiKey = key)
+        return AnthropicLLMClient(apiKey = key, httpClientFactory = httpClientFactory)
     }
 
     /**
@@ -85,7 +104,7 @@ class KoogClientFactory @Inject constructor(
         if (isLocalOnlyMode()) return null
         val key = apiKeyRepository.getGoogleKey().firstOrNull()
         if (key.isNullOrBlank()) return null
-        return GoogleLLMClient(apiKey = key)
+        return GoogleLLMClient(apiKey = key, httpClientFactory = httpClientFactory)
     }
 
     /**
@@ -97,7 +116,7 @@ class KoogClientFactory @Inject constructor(
         if (isLocalOnlyMode()) return null
         val key = apiKeyRepository.getDeepSeekKey().firstOrNull()
         if (key.isNullOrBlank()) return null
-        return DeepSeekLLMClient(apiKey = key)
+        return DeepSeekLLMClient(apiKey = key, httpClientFactory = httpClientFactory)
     }
 
     /**
@@ -107,7 +126,7 @@ class KoogClientFactory @Inject constructor(
     suspend fun createOllamaExecutor(): LLMClient? {
         val url = apiKeyRepository.getOllamaBaseUrl().firstOrNull()
         if (url.isNullOrBlank()) return null
-        return OllamaClient(baseUrl = url)
+        return OllamaClient(httpClientFactory = httpClientFactory, baseUrl = url)
     }
 
     /**

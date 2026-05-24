@@ -15,6 +15,64 @@ details.
 
 ### Added
 
+- **Koog 1.0.0 migration follow-up** — the prior dependency bump
+  (`build: update koog, json, and roborazzi versions`) pointed every
+  `koog-*` library at version `1.0.0`, but three Koog modules
+  (`agents-mcp-server`, `prompt-executor-google-client`,
+  `prompt-executor-deepseek-client`) have not promoted past
+  `1.0.0-beta-preview7` on Maven Central yet — so the build failed
+  to resolve. Plus the major bump renamed two DeepSeek model
+  constants and the MCP client / prompt types moved between
+  packages, breaking the source set. Fixes:
+  - `koog-preview = "1.0.0-beta-preview7"` introduced as a separate
+    version ref so the three unpromoted artifacts can pin to the
+    latest beta without holding back the rest of the Koog stack
+    (re-collapse onto `koog` once they ship 1.0.0 stable).
+  - `koog-mcp` library entry switched from `agents-mcp-server`
+    (server-only since 1.0.0; the misnaming used to work in 0.8.0
+    via a transitive client dep) to `agents-mcp`, which is the
+    actual client artifact carrying `McpToolRegistryProvider` /
+    `mcpStreamableHttpTransport`.
+  - `DeepSeekModels.DeepSeekChat` → `DeepSeekV4Flash`,
+    `DeepSeekModels.DeepSeekReasoner` → `DeepSeekV4Pro` —
+    `KoogModelMapper`, `KoogCloudLlmModelResolver`, and
+    `DelegateTaskTool` updated to the new identifiers. Persisted
+    user model ids fall back to `DeepSeekV4Flash` via
+    `getDeepSeekModel`'s `else` branch.
+  - Test source set migrated to the new Koog 1.0 prompt API:
+    `ai.koog.prompt.dsl.Prompt` → `ai.koog.prompt.Prompt`,
+    `Message.content` → `Message.textContent()` (the base
+    `Message` interface now exposes `parts: List<MessagePart>` and
+    a default `textContent()` extractor; `Message.Response` was
+    renamed to `Message.Assistant`). `DelegateTaskToolTest`,
+    `GraphExecutionEngineTest`, `CloudLlmNodeExecutorTest` were
+    updated; the dead `Message.Response` mock that
+    `DelegateTaskToolTest` carried was deleted (response flows
+    through `StreamFrame.TextDelta` anyway).
+  - Runtime `KoogHttpClient.Factory` lookup fixed. Koog 1.0.0
+    declares the HTTP client as a JVM `ServiceLoader` SPI, but the
+    `http-client-ktor-android-1.0.0` AAR published to Maven Central
+    omits the `META-INF/services/ai.koog.http.client.KoogHttpClient$Factory`
+    registration file (the `KtorKoogHttpClient$Factory` class itself
+    is present, the SPI descriptor is not). The default `LLMClient`
+    secondary constructors therefore threw
+    `IllegalStateException: No KoogHttpClient.Factory provider
+    found on the runtime classpath` on the first cloud call,
+    crashing the app at startup. `KoogClientFactory` now constructs
+    a single `KtorKoogHttpClient.Factory()` instance and passes it
+    explicitly to every cloud / Ollama `LLMClient` constructor
+    (`OpenAILLMClient`, `AnthropicLLMClient`, `GoogleLLMClient`,
+    `DeepSeekLLMClient`, `OllamaClient`), bypassing the broken SPI
+    lookup. `app/build.gradle.kts` already pulls in
+    `libs.koog.http.client.ktor` so the factory class is on the
+    runtime classpath; remove the explicit-factory plumbing once
+    Koog ships an AAR with the services descriptor restored.
+  - Lint baseline absorbs a Koog-version false-positive
+    (`NewerVersionAvailable` claims `1.0.0-beta` is newer than
+    `1.0.0-beta-preview7` for `agents-mcp`; Maven Central only
+    publishes the `…-previewN` series and `-preview7` is the
+    latest). Re-baseline together with the next genuine bump.
+
 - **Pipeline editor — review follow-up** (Phase 22 / Task 14/17,
   second pass) — eight issues caught on a real device after the
   initial alignment landed: the `RunStatusBanner` now uses a single
