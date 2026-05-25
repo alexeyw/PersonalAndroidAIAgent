@@ -27,6 +27,7 @@ import androidx.compose.material.icons.outlined.Bolt
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.DeleteOutline
 import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material.icons.outlined.KeyboardArrowDown
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -536,7 +537,7 @@ fun PromptEditorSheetBody(
             onValueChange = callbacks.onEditorNameChange,
         )
         FieldLabel(label = strings.categoryLabel)
-        EditorTextField(
+        CategoryDropdown(
             value = state.category,
             placeholder = strings.categoryPlaceholder,
             onValueChange = callbacks.onEditorCategoryChange,
@@ -590,6 +591,73 @@ private fun FieldLabel(label: String) {
         style = KnotworkTextStyles.LabelSm,
         color = KnotworkTheme.extended.onSurfaceMuted,
     )
+}
+
+/**
+ * Read-only field whose tap opens a `DropdownMenu` listing the 12
+ * catalog `NodeType` values. Used for the prompt category field so
+ * users can only pick a valid node type instead of typing free-form
+ * text that wouldn't match any node in the editor.
+ */
+@Composable
+private fun CategoryDropdown(value: String, placeholder: String, onValueChange: (String) -> Unit) {
+    val expanded = androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(value = false) }
+    val nodeTypes = app.knotwork.design.components.pipelineeditor.NodeType.entries
+    Box(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(KnotworkTheme.shapes.md)
+                .background(color = KnotworkTheme.extended.surface2)
+                .clickable(
+                    onClick = { expanded.value = true },
+                    role = androidx.compose.ui.semantics.Role.DropdownList,
+                )
+                .padding(horizontal = KnotworkTheme.spacing.sp3, vertical = KnotworkTheme.spacing.sp3),
+        ) {
+            Text(
+                text = value.ifEmpty { placeholder },
+                style = KnotworkTextStyles.BodyBase,
+                color = if (value.isEmpty()) {
+                    KnotworkTheme.extended.onSurfaceMuted
+                } else {
+                    MaterialTheme.colorScheme.onSurface
+                },
+                modifier = Modifier.weight(1f),
+            )
+            Icon(
+                imageVector = Icons.Outlined.KeyboardArrowDown,
+                contentDescription = null,
+                tint = KnotworkTheme.extended.onSurfaceMuted,
+            )
+        }
+        androidx.compose.material3.DropdownMenu(
+            expanded = expanded.value,
+            onDismissRequest = { expanded.value = false },
+            containerColor = KnotworkTheme.extended.surface1,
+        ) {
+            nodeTypes.forEach { nodeType ->
+                val tint = nodeType.headerTint()
+                androidx.compose.material3.DropdownMenuItem(
+                    text = {
+                        Text(
+                            text = nodeType.name,
+                            // Mono-small so the dropdown items echo the
+                            // category pill + tab typography on the
+                            // prompt cards.
+                            style = KnotworkTextStyles.MonoSm,
+                            color = tint,
+                        )
+                    },
+                    onClick = {
+                        expanded.value = false
+                        onValueChange(nodeType.name)
+                    },
+                )
+            }
+        }
+    }
 }
 
 @Composable
