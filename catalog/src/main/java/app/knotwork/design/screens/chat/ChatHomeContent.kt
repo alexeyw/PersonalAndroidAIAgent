@@ -151,7 +151,11 @@ fun ChatHomeContent(
     Box(modifier = modifier.fillMaxSize()) {
         Scaffold(
             containerColor = MaterialTheme.colorScheme.surface,
-            topBar = { ChatHomeTopBar(state = state, callbacks = callbacks) },
+            topBar = {
+                app.knotwork.design.components.topbar.KnotworkTopAppBarShell {
+                    ChatHomeTopBar(state = state, callbacks = callbacks)
+                }
+            },
             bottomBar = { ChatHomeBottomBar(state = state, callbacks = callbacks) },
             // The outer `AppShellScaffold` already accounts for the system
             // navigation bar and the in-app bottom nav via its own inner

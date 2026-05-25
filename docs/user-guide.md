@@ -677,6 +677,85 @@ on-device encoder. The action trio:
 
 ---
 
+## More tab
+
+The **More** tab is the landing page for every secondary surface.
+Each row carries a live counter (memory chunks, active model name,
+prompt categories, active-task count + a numeric badge, app
+version), and a footer pill summarises the privacy state — when the
+agent has not made any outbound LLM or MCP call for a minute, the
+pill reads `on-device · no network calls in last N m`; an in-flight
+cloud call flips the indicator to `online · cloud enabled`. The
+window resets when the process is recreated.
+
+## Managing local models
+
+Open **More → Models** to install, activate, or remove on-device
+LLMs.
+
+- The top **Active** card highlights the model currently loaded into
+  inference memory. Its mono subtitle shows size, accelerator
+  backend, and execution backend.
+- The **HuggingFace** section lets you paste a personal access token
+  (kept in `EncryptedSharedPreferences`) so gated repositories can be
+  downloaded. The `+ Paste` button reads the system clipboard.
+- The **Custom model URL** field accepts a direct link to any
+  `.litertlm`, `.task`, or `.gguf` file. Tap `Get` to start
+  downloading.
+- The **Available presets** list shows curated models, each row in
+  one of three states: `Get` (not downloaded), progress bar with
+  cancel-X (downloading), or `✓ ON DISK` (ready to activate).
+
+## Prompt library
+
+**More → Prompt library** stores reusable system prompts grouped by
+node type. The screen opens on the first category tab; tap any tab
+to switch. Each card has:
+
+- A category chip on the left and the prompt name in bold.
+- A multi-line preview with `$VARIABLE` tokens highlighted inline so
+  you can see at a glance which runtime values the prompt depends
+  on.
+- Edit (pencil) and Delete (trash) icons in the row header.
+- A footer with `used by N pipelines` and a `Duplicate` action.
+
+The FAB at the bottom-right opens the editor sheet. Inside, you can
+edit the name and category and tap any chip in the `INSERT` row to
+append the matching `$VARIABLE` to the prompt body. Save persists
+the change immediately; the next pipeline run picks it up.
+
+## Active tasks
+
+**More → Active tasks** lists everything the agent is running right
+now plus completed history. Filter chips at the top scope the list
+to `All`, `Active`, `Background`, or `Completed`. Each row shows
+the task title, a mono subtitle with the pipeline stage, a status
+pill (Queued / Running / Success / Failed / Cancelled), and an
+inline cancel button on running background work. Tap any row to
+open a bottom sheet with the task details and an `Open chat` shortcut
+for session-bound tasks.
+
+## Live metrics
+
+**More → Live metrics** surfaces the orchestrator's performance
+counters and the most recent system log lines. The header three-cell
+grid shows last inference time (ms), tokens-per-second, and the
+total tokens processed since process start. Under it sit the
+session-wide totals and a per-node-type breakdown. When the device
+enters power-saving mode, a warning banner appears above the grid
+to flag that the agent has paused background work.
+
+## About
+
+**More → About** shows the app's brand mark, version / build /
+commit, the open-source license name (Apache 2.0), a hand-curated
+acknowledgments list of the libraries that ship inside the app, and
+a short privacy summary. Tap `Open license text` to load the
+license verbatim in your browser, or `Read privacy policy` for the
+detailed privacy stance.
+
+---
+
 ## Troubleshooting
 
 ### The model fails to load with "out of memory"

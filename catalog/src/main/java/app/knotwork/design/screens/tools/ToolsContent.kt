@@ -142,7 +142,11 @@ fun ToolsContent(
     Scaffold(
         modifier = modifier.fillMaxSize(),
         containerColor = MaterialTheme.colorScheme.surface,
-        topBar = { ToolsTopBar(state = state, callbacks = callbacks) },
+        topBar = {
+            app.knotwork.design.components.topbar.KnotworkTopAppBarShell {
+                ToolsTopBar(state = state, callbacks = callbacks)
+            }
+        },
         // The outer `AppShellScaffold` already absorbs both the system
         // navigation bar and the in-app bottom-nav strip via its own
         // inner padding. Letting this Scaffold default to `safeDrawing`

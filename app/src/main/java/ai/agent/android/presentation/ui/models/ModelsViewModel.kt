@@ -9,6 +9,7 @@ import ai.agent.android.domain.repositories.SettingsRepository
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -42,9 +43,25 @@ class ModelsViewModel @Inject constructor(
      */
     val uiState: StateFlow<ModelsUiState> = _uiState.asStateFlow()
 
+    /**
+     * Reference to the currently in-flight download collection job. Held so
+     * [cancelDownload] can interrupt it; nulled out when the download
+     * terminates (Success / Error / cancellation).
+     */
+    private var downloadJob: Job? = null
+
     init {
         observeDownloadedModels()
         observeAuthToken()
+        observeBackend()
+    }
+
+    private fun observeBackend() {
+        settingsRepository.localModelBackend
+            .onEach { key ->
+                _uiState.update { it.copy(localBackendKey = key) }
+            }
+            .launchIn(viewModelScope)
     }
 
     private fun observeDownloadedModels() {
@@ -101,15 +118,25 @@ class ModelsViewModel @Inject constructor(
 
         val authToken = _uiState.value.authTokenInput.takeIf { it.isNotBlank() }
 
+        // Defence-in-depth: even though `isDownloading` blocks the second
+        // entry above, any stale `downloadJob` from a finished collection
+        // is cancelled here before we overwrite the reference. Without
+        // this, a job that finished its terminal Success / Error frame
+        // but is still inside an unrelated tear-down step could keep
+        // emitting after the new flow takes over, interleaving updates
+        // into `_uiState` and leaking resources.
+        downloadJob?.cancel()
+
         _uiState.update {
             it.copy(
                 isDownloading = true,
                 downloadProgress = 0,
                 downloadError = null,
+                activeDownloadFileName = fileName,
             )
         }
 
-        downloadManager.downloadModel(url, fileName, authToken)
+        downloadJob = downloadManager.downloadModel(url, fileName, authToken)
             .onEach { state ->
                 when (state) {
                     is DownloadState.Pending -> {
@@ -123,6 +150,7 @@ class ModelsViewModel @Inject constructor(
                             it.copy(
                                 isDownloading = false,
                                 downloadProgress = null,
+                                activeDownloadFileName = null,
                             )
                         }
                         // Save the downloaded model metadata to the local database
@@ -143,6 +171,7 @@ class ModelsViewModel @Inject constructor(
                                 isDownloading = false,
                                 downloadProgress = null,
                                 downloadError = state.error,
+                                activeDownloadFileName = null,
                             )
                         }
                     }
@@ -156,6 +185,7 @@ class ModelsViewModel @Inject constructor(
                         downloadError = AndroidModelDownloadManager.DownloadError(
                             e.message ?: "Unknown error occurred",
                         ),
+                        activeDownloadFileName = null,
                     )
                 }
             }
@@ -170,6 +200,34 @@ class ModelsViewModel @Inject constructor(
     fun setActiveModel(modelId: Long) {
         viewModelScope.launch {
             localModelRepository.setActiveModel(modelId)
+        }
+    }
+
+    /**
+     * Cancels the currently in-flight download (if any). The download manager
+     * has no native cancellation API, so the collection job is interrupted
+     * instead — partial files are not cleaned up, but the UI returns to the
+     * idle state immediately.
+     */
+    fun cancelDownload() {
+        downloadJob?.cancel()
+        downloadJob = null
+        _uiState.update {
+            it.copy(
+                isDownloading = false,
+                downloadProgress = null,
+                activeDownloadFileName = null,
+            )
+        }
+    }
+
+    /**
+     * Removes the model with the given id from the local store. Called from
+     * the per-row overflow menu on the Models screen.
+     */
+    fun deleteModel(modelId: Long) {
+        viewModelScope.launch {
+            localModelRepository.deleteModelById(modelId)
         }
     }
 

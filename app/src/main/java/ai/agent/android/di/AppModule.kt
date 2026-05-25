@@ -21,6 +21,7 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.preferencesDataStoreFile
 import androidx.room.Room
 import androidx.work.WorkManager
+import com.google.firebase.FirebaseApp
 import com.google.firebase.analytics.FirebaseAnalytics
 import com.google.firebase.crashlytics.FirebaseCrashlytics
 import dagger.Module
@@ -184,20 +185,48 @@ object AppModule {
      * auto-collection is disabled by manifest meta-data — actual
      * upload only happens once the user opts in via
      * [ai.agent.android.domain.repositories.CrashReportingRepository.setEnabled].
+     *
+     * Defensively initialises [FirebaseApp] if it hasn't been by
+     * `FirebaseInitProvider` yet. The `ProcessPhoenix.triggerRebirth`
+     * restart spawns a transient `:phoenix` sub-process whose Hilt
+     * graph is constructed before the Firebase ContentProvider has had
+     * a chance to fire — without this guard the process crashes with
+     * `IllegalStateException: Default FirebaseApp is not initialized`
+     * and the restart silently fails.
      */
     @Provides
     @Singleton
-    fun provideFirebaseCrashlytics(): FirebaseCrashlytics = FirebaseCrashlytics.getInstance()
+    fun provideFirebaseCrashlytics(@ApplicationContext appContext: Context): FirebaseCrashlytics {
+        ensureFirebaseInitialised(context = appContext)
+        return FirebaseCrashlytics.getInstance()
+    }
 
     /**
      * Provides the Firebase Analytics singleton. Analytics is required as
      * a transitive dependency of Crashlytics; both opt-in flags toggle
      * together inside `FirebaseCrashReportingRepositoryImpl`.
+     *
+     * Shares the same `:phoenix`-process resilience as
+     * [provideFirebaseCrashlytics].
      */
     @Provides
     @Singleton
-    fun provideFirebaseAnalytics(@ApplicationContext appContext: Context): FirebaseAnalytics =
-        FirebaseAnalytics.getInstance(appContext)
+    fun provideFirebaseAnalytics(@ApplicationContext appContext: Context): FirebaseAnalytics {
+        ensureFirebaseInitialised(context = appContext)
+        return FirebaseAnalytics.getInstance(appContext)
+    }
+
+    /**
+     * Idempotent helper that calls [FirebaseApp.initializeApp] when no
+     * default app has been registered yet. `initializeApp(Context)` is a
+     * no-op the second time around, so this is safe to call from every
+     * Firebase provider without churn.
+     */
+    private fun ensureFirebaseInitialised(context: Context) {
+        if (FirebaseApp.getApps(context).isEmpty()) {
+            runCatching { FirebaseApp.initializeApp(context) }
+        }
+    }
 
     /**
      * Provides the singleton instance of ApprovalNotifier.

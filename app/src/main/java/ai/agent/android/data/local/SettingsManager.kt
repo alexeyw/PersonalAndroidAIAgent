@@ -55,6 +55,16 @@ class SettingsManager @Inject constructor(private val dataStore: DataStore<Prefe
         val CURRENT_CHAT_SESSION_ID = stringPreferencesKey("current_chat_session_id")
         val MAX_MEMORY_CHUNKS_FOR_SEARCH = intPreferencesKey("max_memory_chunks_for_search")
         val LOCAL_MODEL_BACKEND = stringPreferencesKey("local_model_backend")
+
+        /**
+         * Sentinel persisted right before a non-CPU LiteRT backend init is
+         * attempted and cleared when the init returns successfully. If a
+         * subsequent cold-start still sees this key set, the previous attempt
+         * crashed the process during native init (e.g. GPU/NPU dispatch
+         * library missing) — `LiteRTLlmEngine.initialize` then falls back
+         * to CPU automatically.
+         */
+        val LAST_INIT_BACKEND_ATTEMPT = stringPreferencesKey("last_init_backend_attempt")
         val TOOL_CALL_TIMEOUT_MS = androidx.datastore.preferences.core.longPreferencesKey("tool_call_timeout_ms")
         val PIPELINE_MAX_STEPS = intPreferencesKey("pipeline_max_steps")
         val MEMORY_SUMMARY_DEFAULT_LIMIT = intPreferencesKey("memory_summary_default_limit")
@@ -601,6 +611,27 @@ class SettingsManager @Inject constructor(private val dataStore: DataStore<Prefe
     override suspend fun setLocalModelBackend(backend: String) {
         dataStore.edit { preferences ->
             preferences[PreferencesKeys.LOCAL_MODEL_BACKEND] = backend
+        }
+    }
+
+    override val lastInitBackendAttempt: Flow<String?> = dataStore.data
+        .catch { exception ->
+            if (exception is IOException) {
+                Timber.e(exception, "Error reading preferences")
+                emit(emptyPreferences())
+            } else {
+                throw exception
+            }
+        }
+        .map { preferences -> preferences[PreferencesKeys.LAST_INIT_BACKEND_ATTEMPT] }
+
+    override suspend fun setLastInitBackendAttempt(backendKey: String?) {
+        dataStore.edit { preferences ->
+            if (backendKey == null) {
+                preferences.remove(PreferencesKeys.LAST_INIT_BACKEND_ATTEMPT)
+            } else {
+                preferences[PreferencesKeys.LAST_INIT_BACKEND_ATTEMPT] = backendKey
+            }
         }
     }
 

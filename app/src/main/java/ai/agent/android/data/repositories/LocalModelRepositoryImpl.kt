@@ -21,9 +21,25 @@ import javax.inject.Singleton
 @Singleton
 class LocalModelRepositoryImpl @Inject constructor(private val localModelDao: LocalModelDao) : LocalModelRepository {
 
-    override fun getAllModels(): Flow<List<LocalModel>> = localModelDao.getAllModels().map { entities ->
-        entities.map { it.toDomain() }
-    }
+    override fun getAllModels(): Flow<List<LocalModel>> = localModelDao.getAllModels()
+        .map { entities ->
+            entities.map { entity ->
+                val domain = entity.toDomain()
+                // The download manager doesn't push the real content-length
+                // through to the local store, so rows that landed via
+                // `ModelsViewModel.startDownload` carry `size = 0L`.
+                // Patch the size by querying the on-disk file length here
+                // so the UI reads the actual footprint (Models subtitle,
+                // active-card meta, More-tab counter).
+                if (domain.size > 0L) {
+                    domain
+                } else {
+                    val onDiskSize = runCatching { File(domain.path).length() }.getOrDefault(defaultValue = 0L)
+                    if (onDiskSize > 0L) domain.copy(size = onDiskSize) else domain
+                }
+            }
+        }
+        .flowOn(Dispatchers.IO)
 
     override suspend fun getActiveModel(): LocalModel? = withContext(Dispatchers.IO) {
         localModelDao.getActiveModel()?.toDomain()

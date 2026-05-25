@@ -72,6 +72,25 @@ configured it.
   (Chunks · Size · Threads · Avg score + Export / Re-embed / Clear),
   test-backend probe metrics, and a long-running-task notification
   channel.
+- **Local model manager** with an inline Active card, HuggingFace
+  token + custom URL download fields, and preset rows showing live
+  download progress / on-disk status.
+- **Prompt library** — `ScrollableTabRow` of categories, per-card
+  edit / delete / duplicate actions, inline `$VAR` highlighting in
+  the body, and a `ModalBottomSheet` editor with `INSERT` chip row.
+- **Task monitor** — filterable list of WorkManager background tasks
+  and live chat sessions with swipe-to-cancel and a detail bottom
+  sheet on row tap.
+- **Live metrics** screen surfacing inference time, tokens-per-second,
+  total tokens, per-node-type breakdown, and recent system logs;
+  shows a power-saving banner when the system is throttling.
+- **More tab** with live counters per row (memory chunks, active
+  model, prompt categories, active task count + badge) and a footer
+  privacy pill (`on-device · no network calls in last N m`) driven
+  by a new `NetworkActivityTracker`.
+- **About** screen with brand mark, version / build / commit info,
+  hand-maintained acknowledgments list, and Open license / Read
+  privacy policy links.
 - Agent-initiated clarifications: the agent can ask the user a question
   mid-pipeline and wait for the reply (human-in-the-loop).
 - Multi-session chats with a priority task queue and a redesigned chat

@@ -43,26 +43,28 @@ import app.knotwork.design.tokens.KnotworkTextStyles
 fun ProviderPickerScreen(onPick: (ProviderId) -> Unit, onBack: () -> Unit) {
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = {
-                    Text(
-                        text = stringResource(R.string.settings_provider_picker_title),
-                        style = KnotworkTextStyles.TitleLg,
-                        color = MaterialTheme.colorScheme.onSurface,
-                    )
-                },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = stringResource(R.string.common_back),
+            app.knotwork.design.components.topbar.KnotworkTopAppBarShell {
+                TopAppBar(
+                    title = {
+                        Text(
+                            text = stringResource(R.string.settings_provider_picker_title),
+                            style = KnotworkTextStyles.TitleLg,
+                            color = MaterialTheme.colorScheme.onSurface,
                         )
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface,
-                ),
-            )
+                    },
+                    navigationIcon = {
+                        IconButton(onClick = onBack) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = stringResource(R.string.common_back),
+                            )
+                        }
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = MaterialTheme.colorScheme.surface,
+                    ),
+                )
+            }
         },
     ) { padding ->
         Column(

@@ -19,6 +19,7 @@ import ai.agent.android.data.repositories.LocalPipelineRepositoryImpl
 import ai.agent.android.data.repositories.McpServerRepositoryImpl
 import ai.agent.android.data.repositories.MemoryRepositoryImpl
 import ai.agent.android.data.repositories.MetricsRepositoryImpl
+import ai.agent.android.data.repositories.NetworkActivityTrackerImpl
 import ai.agent.android.data.repositories.NetworkStateRepositoryImpl
 import ai.agent.android.data.repositories.PowerStateRepositoryImpl
 import ai.agent.android.data.repositories.PromptRepositoryImpl
@@ -37,6 +38,7 @@ import ai.agent.android.domain.repositories.McpServerRepository
 import ai.agent.android.domain.repositories.MemoryRepository
 import ai.agent.android.domain.repositories.MetricsRepository
 import ai.agent.android.domain.repositories.ModelDownloadManager
+import ai.agent.android.domain.repositories.NetworkActivityTracker
 import ai.agent.android.domain.repositories.NetworkStateRepository
 import ai.agent.android.domain.repositories.PipelineRepository
 import ai.agent.android.domain.repositories.PowerStateRepository
@@ -168,6 +170,15 @@ abstract class DataModule {
     @Binds
     @Singleton
     abstract fun bindNetworkStateRepository(repository: NetworkStateRepositoryImpl): NetworkStateRepository
+
+    /**
+     * Binds [NetworkActivityTrackerImpl] to [NetworkActivityTracker]. Records every outbound
+     * cloud-LLM and MCP call so the More tab can render the "no network calls in last N m"
+     * privacy indicator.
+     */
+    @Binds
+    @Singleton
+    abstract fun bindNetworkActivityTracker(tracker: NetworkActivityTrackerImpl): NetworkActivityTracker
 
     /**
      * Binds the [TaskQueueManagerImpl] implementation to the [TaskQueueManager] interface.

@@ -62,4 +62,9 @@ data class TaskMonitorState(
     val tasks: List<TaskItem> = emptyList(),
     val filter: TaskFilterType = TaskFilterType.ALL,
     val isLoading: Boolean = true,
+    /**
+     * `id` of the task whose details bottom sheet is currently open, or
+     * `null` if the sheet is dismissed.
+     */
+    val detailTaskId: String? = null,
 )

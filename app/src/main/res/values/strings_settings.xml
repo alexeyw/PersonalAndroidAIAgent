@@ -87,13 +87,15 @@
     <string name="notifications_long_running_body" tools:ignore="PluralsCandidate">Still running · %1$d s elapsed.</string>
 
     <!-- About expansion -->
-    <string name="about_section_app">App</string>
-    <string name="about_section_commit">Commit</string>
+    <string name="about_section_app">Version</string>
     <string name="about_section_license">License</string>
     <string name="about_section_acknowledgments">Acknowledgments</string>
     <string name="about_section_privacy_policy">Privacy policy</string>
-    <string name="about_acknowledgments_body">Built with Jetpack Compose, LiteRT-LM (Google Edge AI), Koog, AppFunctions, Hilt, Room and Coroutines. Open-source dependencies are listed in the project repository.</string>
     <string name="about_privacy_policy_body">All inference and memory live on-device by default. Crash reporting is opt-in. API keys are stored in the Android Keystore. No analytics SDKs are bundled.</string>
+    <string name="about_tagline">An on-device AI agent for Android</string>
+    <string name="about_build_format">Build %1$d · %2$s</string>
+    <string name="about_open_license_cta">Open license text</string>
+    <string name="about_open_privacy_cta">Read privacy policy</string>
 
     <!-- Provider picker / detail -->
     <string name="settings_provider_picker_title">Add provider</string>

@@ -15,6 +15,73 @@ details.
 
 ### Added
 
+- **Knotwork conversion of the remaining screens** (Phase 22 / Task 15).
+  Splash, Models, Prompt library, Task monitor, Live metrics, More, and
+  About now share the catalog-driven Compose surface used by the §C1–C8
+  screens. Each app-side screen is a slim mapper that folds its
+  `UiState` into a catalog `*ViewState` and renders the matching
+  `*Content` composable; design changes from now on live in the
+  `:catalog` module. Specifically:
+  - **Splash** — new `SplashContent` with `KnotworkLogo(Lg)` brand
+    hero, `LinearProgressIndicator` on `KnotworkTheme.extended.surface2`
+    track, status label and `KnotworkPrimaryButton` Retry on error.
+  - **Models** — inline-section layout that matches the design mockup:
+    accent-tinted Active card → HuggingFace token field with `+ Paste`
+    clipboard action → Custom URL field with `Get` button → preset list
+    with three per-row variants (Idle / Downloading / OnDisk).
+    `ModelsViewModel` gained `cancelDownload()` (cancels the in-flight
+    job) and `deleteModel(id)`; `ModelsUiState` adds the
+    `activeDownloadFileName` field so the progress row binds to the
+    matching preset.
+  - **Prompt library** — `ScrollableTabRow` of category tabs +
+    accent-stripe cards with inline `$VAR` highlighting + footer
+    `used by N pipelines · Duplicate` action. Editor moved into a
+    `ModalBottomSheet` (`PromptEditorSheetBody`) with Name / Category /
+    Prompt text / `INSERT` chip row. New VM methods:
+    `selectCategory`, `openEditor(id?)`, `closeEditor`, per-field
+    setters, `saveEditor`, `duplicatePrompt`.
+  - **Task monitor** — `KnotworkFilterChip` row + per-task rows with
+    leading icon tile, `StatusPill` trailing, optional cancel button,
+    and a `TaskMonitorDetailSheetBody` `ModalBottomSheet` opened on
+    row tap. `TaskMonitorViewModel` adds `openDetails(id)` /
+    `closeDetails()`.
+  - **Live metrics** — `MonitoringContent` renders the power-saving
+    banner, a 3-cell `KnotworkStatCell` grid (Inference time / tokens
+    per second / total tokens), total execution line, per-node-type
+    breakdown, and recent-logs lazy column. The original
+    `MonitoringViewModel` is unchanged; the screen consumes its
+    existing state through a pure-Kotlin mapper.
+  - **More** — landing tab is now stateful: `MoreViewModel` aggregates
+    live counters from `MemoryRepository.observeStats`,
+    `LocalModelRepository.getAllModels`, `PromptRepository.getAllPrompts`,
+    `TaskQueueManager.activeSessionsState`, and the new
+    `NetworkActivityTracker.lastOutboundAt` flow. Renders seven rows on
+    `KnotworkNavListRow` with subtitle counters and an active-tasks
+    badge, plus a footer privacy pill (`on-device · no network calls
+    in last N m`).
+  - **About** — full body: `KnotworkLogo(Lg)` hero, version / build /
+    commit card, license card with an `Open license text` CTA, hand-
+    maintained acknowledgments list (15 key dependencies), and a
+    privacy summary card with a `Read privacy policy` CTA.
+- **`NetworkActivityTracker`** (`domain/repositories/` + `data/repositories/`).
+  Singleton timestamp of the most recent outbound LLM / MCP call.
+  Recorded by `CloudLlmNodeExecutor` immediately before each
+  `executeStreaming` call and by `KoogMcpClient.connect` /
+  `executeTool`. Drives the More tab privacy pill — distinct from
+  `NetworkStateRepository`, which only reflects connectivity. The
+  value resets on process recreation, which matches the indicator's
+  "since you opened the app" semantics.
+- **`KnotworkLogo`** (`components/brand/`) — purely vector brand mark
+  (rounded square frame + inner diamond) in three sizes (`Sm` 32 dp,
+  `Md` 64 dp, `Lg` 128 dp). Stroke width is a fixed fraction of the
+  canvas side so all sizes look visually identical.
+- **`KnotworkNavListRow`** (`components/lists/`) — 72 dp tall
+  navigation row with a 48 dp leading icon tile, title (`TitleMd`),
+  optional mono subtitle, optional trailing slot (badge / status
+  pill), and a permanent chevron-right glyph. Backbone of the More
+  tab and a candidate for the secondary surfaces that still use
+  Material 3 `ListItem`.
+
 - **Inputs & chips — design-system alignment** (Phase 22 / Task 14
   follow-up). Brings every text input and chip on screen onto the
   canonical Knotwork atom family laid out in

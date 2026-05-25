@@ -7,7 +7,6 @@ import ai.agent.android.domain.models.ActiveModelMeta
 import ai.agent.android.domain.models.LocalBackend
 import ai.agent.android.domain.models.ProviderId
 import ai.agent.android.domain.models.ToolApprovalPolicy
-import android.content.Intent
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -108,7 +107,14 @@ fun SettingsScreen(
         onExportClick = { exportLauncher.launch(exportFilename) },
         onRestart = {
             viewModel.acknowledgeRestart()
-            ProcessPhoenix.triggerRebirth(context.applicationContext, Intent())
+            // No-arg overload — ProcessPhoenix resolves the app's launcher
+            // intent via PackageManager. The two-arg form requires an
+            // intent that already resolves to a concrete component, and
+            // a bare `Intent()` does not, so PhoenixActivity blew up with
+            // `ActivityNotFoundException` and the :phoenix process died
+            // before it could kill the original (visible to the user as
+            // "Restart only quits the app").
+            ProcessPhoenix.triggerRebirth(context.applicationContext)
         },
     )
 

@@ -35,6 +35,21 @@ data class ModelsUiState(
     val downloadError: AppError? = null,
     val customUrlInput: String = "",
     val authTokenInput: String = "",
+    /**
+     * Filename of the in-flight download (e.g. `gemma-4-E4B-it.litertlm`), or
+     * `null` if no download is active. Lets the UI render the per-preset
+     * progress on the *right* row instead of attaching the bar to the field
+     * section.
+     */
+    val activeDownloadFileName: String? = null,
+    /**
+     * Wire key of the active local-model backend
+     * ([ai.agent.android.domain.models.LocalBackend.key]) — `cpu` /
+     * `gpu` / `npu`. Read from `SettingsRepository.localModelBackend`
+     * and rendered as part of the per-model meta line. Defaults to
+     * `cpu` until the first observation lands.
+     */
+    val localBackendKey: String = "cpu",
 )
 
 /**
