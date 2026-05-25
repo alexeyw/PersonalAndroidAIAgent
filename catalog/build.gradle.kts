@@ -112,6 +112,11 @@ dependencies {
     implementation(libs.androidx.compose.material.icons.extended)
     implementation(libs.androidx.compose.ui.tooling.preview)
 
+    // Markdown renderer for catalog-side themed `Markdown(...)` factories
+    // (`MarkdownTheme.kt`). `api` so consumers using the themed
+    // typography / color factories don't have to redeclare the dep.
+    api(libs.markdown.m3)
+
     debugImplementation(libs.androidx.compose.ui.tooling)
 
     testImplementation(libs.junit)

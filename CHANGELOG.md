@@ -57,8 +57,14 @@ details.
     renderer. `ChatHomeViewModel.chatMessageToRow` now emits
     `ChatContent.Markdown` for agent / tool rows and keeps
     `ChatContent.Text` for user rows. Plain-text fallback is the
-    default when no renderer is supplied so the catalog stays free
-    of any markdown library.
+    default when no renderer is supplied. The new catalog
+    `MarkdownTheme.kt` exposes Knotwork-themed
+    `knotworkMarkdownTypography()` / `knotworkMarkdownColor()`
+    factories that flow `KnotworkTextStyles` headings (collapsed
+    from the M3 display tier into `TitleXl → BodySm`), `MonoBase`
+    code, and `extended.surface{1,2,3}` / `divider` backgrounds
+    through the m3 renderer. `:catalog` now declares `markdown-m3`
+    as an `api` dependency.
   - **F3** — Drawer selected-thread contrast in dark theme. The
     selected row's background switched from the static
     `KnotworkPalette.Accent50` to `MaterialTheme.colorScheme.primaryContainer`
