@@ -187,17 +187,26 @@ private fun PromptsTopBar(
 private fun PromptsCategoryTabs(state: PromptLibraryViewState, callbacks: PromptLibraryCallbacks) {
     val selectedIndex = state.categories.indexOf(state.selectedCategory).coerceAtLeast(0)
     if (state.categories.isEmpty()) return
+    // Indicator tint follows the currently-selected node type so the
+    // underline reads as "this is the IF_CONDITION view" instead of a
+    // generic accent — matches the per-node colour applied to the
+    // card's top accent strip and category pill.
+    val selectedTint = if (selectedIndex in state.categories.indices) {
+        categoryTint(category = state.categories[selectedIndex])
+    } else {
+        MaterialTheme.colorScheme.primary
+    }
     ScrollableTabRow(
         selectedTabIndex = selectedIndex,
         containerColor = MaterialTheme.colorScheme.surface,
-        contentColor = MaterialTheme.colorScheme.primary,
+        contentColor = selectedTint,
         edgePadding = KnotworkTheme.spacing.sp4,
         indicator = { tabPositions ->
             if (selectedIndex < tabPositions.size) {
                 TabRowDefaults.SecondaryIndicator(
                     modifier = Modifier
                         .tabIndicatorOffsetSafe(tabPositions[selectedIndex]),
-                    color = MaterialTheme.colorScheme.primary,
+                    color = selectedTint,
                 )
             }
         },
@@ -209,9 +218,13 @@ private fun PromptsCategoryTabs(state: PromptLibraryViewState, callbacks: Prompt
                 text = {
                     Text(
                         text = category,
-                        style = KnotworkTextStyles.LabelLg,
+                        // Mono small so category labels (`IF_CONDITION`,
+                        // `INTENT_ROUTER`, …) keep an even character
+                        // grid identical to the in-card pill — matches
+                        // the design mockup.
+                        style = KnotworkTextStyles.MonoSm,
                         color = if (index == selectedIndex) {
-                            MaterialTheme.colorScheme.primary
+                            selectedTint
                         } else {
                             KnotworkTheme.extended.onSurfaceMuted
                         },
@@ -305,6 +318,10 @@ private fun PromptCard(
     onDelete: () -> Unit,
     onDuplicate: () -> Unit,
 ) {
+    // Card accent + chip share the same node-type hue from the
+    // catalog palette so a card visually echoes the matching node on
+    // the editor canvas (CLARIFICATION → green, CLOUD → blue, …).
+    val categoryTint = categoryTint(category = prompt.category)
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -315,7 +332,7 @@ private fun PromptCard(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(CardAccentStrip)
-                .background(color = MaterialTheme.colorScheme.primary),
+                .background(color = categoryTint),
         )
         Column(
             modifier = Modifier.padding(
@@ -324,14 +341,6 @@ private fun PromptCard(
             ),
             verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp2),
         ) {
-            // Title row: category tag + name + edit/delete actions.
-            // Tag uses the smallest chip size and a manual surface to
-            // keep the row height compact — the previous M3 `KnotworkChip`
-            // wrapper added 32 dp of padding that pushed the title off
-            // the right edge. Tag tint is the node-type hue from the
-            // editor palette so a category at a glance reads as the same
-            // colour as the corresponding node card in the editor.
-            val categoryTint = categoryTint(category = prompt.category)
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(
                     modifier = Modifier
@@ -341,7 +350,10 @@ private fun PromptCard(
                 ) {
                     Text(
                         text = prompt.category,
-                        style = KnotworkTextStyles.LabelSm,
+                        // Mono small to match the tab labels — both
+                        // surfaces read as the same `IF_CONDITION`
+                        // typographic gesture (per `prompts` mockup).
+                        style = KnotworkTextStyles.MonoSm,
                         color = categoryTint,
                     )
                 }
