@@ -116,16 +116,46 @@ configured it.
 
 ## Screenshots
 
-> Placeholder images — real screenshots will land alongside the first
-> tagged pre-release.
+Every image below is captured at 1080 × 2400 from a Roborazzi baseline
+(`./gradlew :catalog:recordRoborazziDebug --tests "*HeroSnapshotTest*"`),
+which means the README and the design-system regression suite are
+guaranteed to stay in sync. Hover over (or tap) an image to see the dark
+variant via your browser's `prefers-color-scheme`.
 
-| Chat screen | Pipeline editor |
-|---|---|
-| ![Screenshot TODO — chat](docs/screenshots/TODO.png) | ![Screenshot TODO — pipeline editor](docs/screenshots/TODO.png) |
-
-| Pipeline library | Browser pipeline editor |
-|---|---|
-| ![Screenshot TODO — pipeline library](docs/screenshots/TODO.png) | ![Screenshot TODO — browser editor](docs/screenshots/TODO.png) |
+<table>
+  <tr>
+    <td align="center">
+      <picture>
+        <source media="(prefers-color-scheme: dark)" srcset="docs/images/hero-pipeline-editor-dark.png">
+        <img alt="Pipeline editor — typed nodes per type" src="docs/images/hero-pipeline-editor.png" width="270">
+      </picture>
+      <br><sub><b>Pipeline editor</b> — typed nodes (input · output · LiteRT · cloud · intent router · if · clarify · …)</sub>
+    </td>
+    <td align="center">
+      <picture>
+        <source media="(prefers-color-scheme: dark)" srcset="docs/images/hero-pipeline-library-dark.png">
+        <img alt="Pipeline library — saved pipelines" src="docs/images/hero-pipeline-library.png" width="270">
+      </picture>
+      <br><sub><b>Pipeline library</b> — saved pipelines + import-from-browser-editor JSON</sub>
+    </td>
+  </tr>
+  <tr>
+    <td align="center">
+      <picture>
+        <source media="(prefers-color-scheme: dark)" srcset="docs/images/hero-tools-dark.png">
+        <img alt="Tools — built-in AppFunctions and expanded MCP server" src="docs/images/hero-tools.png" width="270">
+      </picture>
+      <br><sub><b>Tools</b> — built-in AppFunctions + MCP servers with per-tool risk + toggle</sub>
+    </td>
+    <td align="center">
+      <picture>
+        <source media="(prefers-color-scheme: dark)" srcset="docs/images/hero-settings-dark.png">
+        <img alt="Settings — identity, system instructions, restrictions, LLM parameters" src="docs/images/hero-settings.png" width="270">
+      </picture>
+      <br><sub><b>Settings</b> — identity card, system instructions with <code>$VARIABLE</code> chips, restrictions, LLM params</sub>
+    </td>
+  </tr>
+</table>
 
 ## Requirements
 

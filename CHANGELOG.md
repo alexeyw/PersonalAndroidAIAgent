@@ -28,10 +28,19 @@ details.
   to land before Play Store submission), R8 keep-rules rationale,
   bundle / size measurement instructions, and the v0.1.0 APK-size
   breakdown.
-- **README hero shots regenerated at 1080 × 2400 from a new Roborazzi
-  baseline** (`HeroSnapshotTest`). Light + dark variants land in
-  `docs/images/hero-chat-home{,-dark}.png` and are wired up via a
-  `<picture>` block that honours `prefers-color-scheme`.
+- **README hero + screenshot grid regenerated at 1080 × 2400 from new
+  Roborazzi baselines** (one `HeroSnapshotTest` per surface). Five
+  surfaces × light + dark = 10 PNGs total, all wired through `<picture>`
+  blocks that honour `prefers-color-scheme`:
+  - `hero-chat-home{,-dark}.png` — README hero (Idle chat).
+  - `hero-pipeline-editor{,-dark}.png` — vertical stack of NodeCards
+    per node type, clipped from `PipelineEditorCatalogContent`.
+  - `hero-pipeline-library{,-dark}.png` — populated pipeline library
+    (`PipelineLibraryPreview.populated()`).
+  - `hero-tools{,-dark}.png` — built-in AppFunctions + an expanded
+    MCP server (`ToolsPreview.defaultExpanded()`).
+  - `hero-settings{,-dark}.png` — populated Settings stack
+    (`SettingsPreview.default()`).
 
 ### Changed
 
