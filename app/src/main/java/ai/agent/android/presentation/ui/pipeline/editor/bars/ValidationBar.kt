@@ -29,6 +29,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import app.knotwork.design.components.buttons.KnotworkTextButton
 import app.knotwork.design.theme.KnotworkTheme
 import app.knotwork.design.tokens.KnotworkTextStyles
 
@@ -140,9 +141,11 @@ private fun HeaderBanner(issueCount: Int, autoFixApplicable: Boolean, onAutoFix:
             color = MaterialTheme.colorScheme.error,
             modifier = Modifier.weight(1f),
         )
-        TextButton(onClick = onAutoFix, enabled = autoFixApplicable) {
-            Text(text = stringResource(R.string.pipeline_editor_validation_auto_fix))
-        }
+        KnotworkTextButton(
+            text = stringResource(R.string.pipeline_editor_validation_auto_fix),
+            onClick = onAutoFix,
+            enabled = autoFixApplicable,
+        )
     }
 }
 

@@ -24,6 +24,14 @@ import app.knotwork.design.components.console.ConsoleVarRow
  * Mirrors `compose/screens/README.md §C1 · Chat (home)`.
  */
 enum class ChatHomeVisualState {
+    /**
+     * Cold-start state — emitted before the chat repository delivers its
+     * first message snapshot. Rendered as a centred progress indicator with
+     * no placeholder copy so the user never sees the empty-state hero flash
+     * for a frame on every launch. Phase 22 / Task 16 follow-up F4.
+     */
+    Loading,
+
     /** No messages in the active thread; empty-state surface visible. */
     Empty,
 

@@ -525,8 +525,11 @@
     <string name="knotwork_node_field_tool_auto">Auto (let the agent pick)</string>
     <string name="knotwork_node_field_tool_custom">Custom tool id…</string>
     <string name="knotwork_node_field_model_active_suffix">%1$s · active</string>
-    <string name="knotwork_node_field_model_placeholder">Select a model</string>
     <string name="knotwork_node_field_model_custom">Custom path…</string>
+    <!-- LITE_RT model picker — sentinel meaning "use whichever model is
+         currently active at execute time" (empty `modelId`). Phase 22 / Task
+         16 follow-up F8. -->
+    <string name="knotwork_node_field_model_active">Active model</string>
 
     <!-- Validation messages. -->
     <string name="knotwork_node_validation_title_empty">Title must not be empty</string>
@@ -548,8 +551,10 @@
     <string name="knotwork_chat_home_action_overflow">More chat options</string>
     <!-- TopAppBar star/favorite action contentDescription. -->
     <string name="knotwork_chat_home_action_favorite">Toggle favorite</string>
-    <!-- TopAppBar subtitle: pipeline name only — formatted "Pipeline · {name}". -->
-    <string name="knotwork_chat_home_topbar_pipeline">Pipeline · %1$s</string>
+    <!-- TopAppBar subtitle: pipeline name only — the "Pipeline · " prefix was
+         dropped in Phase 22 / Task 16 follow-up F1 so the token counter fits
+         on a single line at the default font scale. -->
+    <string name="knotwork_chat_home_topbar_pipeline">%1$s</string>
     <!-- TopAppBar subtitle: token usage — formatted "1.4k / 8k tok". -->
     <string name="knotwork_chat_home_topbar_tokens">%1$s / %2$s tok</string>
     <!-- TopAppBar accessibility hint for the title row triple-tap state picker (debug builds only). -->

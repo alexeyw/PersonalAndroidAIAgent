@@ -164,7 +164,9 @@ private fun SettingsTopBar(state: SettingsViewState, onBack: () -> Unit, onSearc
                 if (subtitle.isNotBlank()) {
                     Text(
                         text = subtitle,
-                        style = KnotworkTextStyles.LabelSm,
+                        // Mono secondary text matches the cloud-provider rows
+                        // (Phase 22 / Task 16 follow-up F5).
+                        style = KnotworkTextStyles.MonoSm,
                         color = KnotworkTheme.extended.onSurfaceMuted,
                     )
                 }
@@ -382,7 +384,8 @@ private fun SystemInstructionsCard(state: SystemInstructionsCardState, callbacks
             if (helper.isNotBlank()) {
                 Text(
                     text = helper,
-                    style = KnotworkTextStyles.BodySm,
+                    // Mono secondary text — F5.
+                    style = KnotworkTextStyles.MonoSm,
                     color = KnotworkTheme.extended.onSurfaceMuted,
                     modifier = Modifier.weight(1f),
                 )
@@ -396,7 +399,7 @@ private fun SystemInstructionsCard(state: SystemInstructionsCardState, callbacks
                     state.characterLimit,
                     state.approximateTokens,
                 ),
-                style = KnotworkTextStyles.LabelSm,
+                style = KnotworkTextStyles.MonoSm,
                 color = KnotworkTheme.extended.onSurfaceMuted,
             )
         }
@@ -499,7 +502,8 @@ private fun IconToggleRow(
             )
             Text(
                 text = subtitle,
-                style = KnotworkTextStyles.BodySm,
+                // Mono secondary text — F5.
+                style = KnotworkTextStyles.MonoSm,
                 color = KnotworkTheme.extended.onSurfaceMuted,
             )
         }
@@ -542,7 +546,8 @@ private fun IconValueRow(icon: ImageVector, title: String, subtitle: String, val
             )
             Text(
                 text = subtitle,
-                style = KnotworkTextStyles.BodySm,
+                // Mono secondary text — F5.
+                style = KnotworkTextStyles.MonoSm,
                 color = KnotworkTheme.extended.onSurfaceMuted,
             )
         }
@@ -707,7 +712,8 @@ private fun LocalModelCard(state: LocalModelCardState, callbacks: SettingsCallba
                     )
                     Text(
                         text = state.backendLabel,
-                        style = KnotworkTextStyles.BodySm,
+                        // Mono secondary text — F5.
+                        style = KnotworkTextStyles.MonoSm,
                         color = KnotworkTheme.extended.onSurfaceMuted,
                     )
                 }
@@ -759,7 +765,10 @@ private fun LocalModelCard(state: LocalModelCardState, callbacks: SettingsCallba
                 )
                 Text(
                     text = state.testProbeText,
-                    style = KnotworkTextStyles.BodySm,
+                    // Switched to MonoSm so the Test backend metadata line
+                    // matches the cloud-provider rows and similar Settings
+                    // secondary text (Phase 22 / Task 16 follow-up F5).
+                    style = KnotworkTextStyles.MonoSm,
                     color = if (state.testProbeIsError) {
                         KnotworkTheme.extended.signalError
                     } else {
@@ -770,6 +779,10 @@ private fun LocalModelCard(state: LocalModelCardState, callbacks: SettingsCallba
             KnotworkSecondaryButton(
                 text = androidx.compose.ui.res.stringResource(R.string.knotwork_settings_local_model_test_run),
                 onClick = callbacks.onTestBackendClick,
+                // Match the small-size memory-section buttons (Export /
+                // Clear / Reset) instead of the default Md tier so the row
+                // chrome stays tight (Phase 22 / Task 16 follow-up F6).
+                size = app.knotwork.design.components.buttons.KnotworkButtonSize.Sm,
             )
         }
     }
@@ -994,7 +1007,8 @@ private fun MemoryCard(state: MemoryCardState, callbacks: SettingsCallbacks) {
                     Box(modifier = Modifier.size(KnotworkTheme.spacing.sp4)) { KnotworkLoader() }
                     Text(
                         text = "Re-embedding · $progress %",
-                        style = KnotworkTextStyles.BodySm,
+                        // Mono secondary text — F5.
+                        style = KnotworkTextStyles.MonoSm,
                         color = KnotworkTheme.extended.onSurfaceMuted,
                     )
                 }

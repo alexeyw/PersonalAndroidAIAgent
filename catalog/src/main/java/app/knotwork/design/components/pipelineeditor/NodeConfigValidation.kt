@@ -212,7 +212,10 @@ object NodeConfigValidation {
 
     private fun validateLiteRt(config: LiteRtConfig): Map<FieldId, ValidationFailure> {
         val errors = mutableMapOf<FieldId, ValidationFailure>()
-        if (config.modelId.isBlank()) errors[FieldId.MODEL_ID] = ValidationFailure.REQUIRED
+        // `modelId.isBlank()` means "use the currently-active model" — a
+        // valid first-class choice (Phase 22 / Task 16 follow-up F8). No
+        // REQUIRED error in that case; the executor resolves the model at
+        // run-time through `LoadModelUseCase`'s null fallback.
         if (config.systemPrompt.isBlank()) errors[FieldId.SYSTEM_PROMPT] = ValidationFailure.REQUIRED
         if (config.temperature !in TEMPERATURE_RANGE) errors[FieldId.TEMPERATURE] = ValidationFailure.OUT_OF_RANGE
         if (config.topP !in TOP_P_RANGE) errors[FieldId.TOP_P] = ValidationFailure.OUT_OF_RANGE

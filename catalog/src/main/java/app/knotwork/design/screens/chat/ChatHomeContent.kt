@@ -50,6 +50,7 @@ import androidx.compose.material.icons.outlined.Menu
 import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.outlined.StarBorder
 import androidx.compose.material3.BottomSheetDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -140,6 +141,11 @@ private const val CONSOLE_DRAG_HANDLE_ALPHA = 0.30f
  * @param state immutable visual snapshot — see [ChatHomeViewState].
  * @param callbacks bundle of one-shot event handlers; defaults to no-op.
  * @param modifier optional layout modifier applied to the screen root.
+ * @param markdownRenderer optional renderer applied to every
+ *   `ChatContent.Markdown` body. The catalog stays free of any markdown
+ *   library — the app supplies the renderer (typically
+ *   `com.mikepenz.markdown.m3.Markdown { source -> Markdown(content = source) }`).
+ *   When `null` the body falls back to plain text. Phase 22 / Task 16 follow-up F2.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -147,6 +153,7 @@ fun ChatHomeContent(
     state: ChatHomeViewState,
     modifier: Modifier = Modifier,
     callbacks: ChatHomeCallbacks = noopChatHomeCallbacks(),
+    markdownRenderer: (@Composable (String) -> Unit)? = null,
 ) {
     Box(modifier = modifier.fillMaxSize()) {
         Scaffold(
@@ -167,7 +174,12 @@ fun ChatHomeContent(
             contentWindowInsets = WindowInsets(0, 0, 0, 0),
             modifier = Modifier.fillMaxSize(),
         ) { padding ->
-            ChatHomeBody(state = state, callbacks = callbacks, padding = padding)
+            ChatHomeBody(
+                state = state,
+                callbacks = callbacks,
+                padding = padding,
+                markdownRenderer = markdownRenderer,
+            )
         }
         // Drawer slide-in honours `animations.md §Chat` — 280 ms emphasised
         // slide + fade enter; reduced-motion collapses to an 80 ms crossfade
@@ -393,10 +405,39 @@ private fun splitAgentStatusTag(text: String): Pair<String?, String> {
 
 /** Body LazyColumn — empty state, idle conversation, or trailing loader/clarification/HITL/error. */
 @Composable
-private fun ChatHomeBody(state: ChatHomeViewState, callbacks: ChatHomeCallbacks, padding: PaddingValues) {
+private fun ChatHomeBody(
+    state: ChatHomeViewState,
+    callbacks: ChatHomeCallbacks,
+    padding: PaddingValues,
+    markdownRenderer: (@Composable (String) -> Unit)?,
+) {
     when (state.visualState) {
+        ChatHomeVisualState.Loading -> ChatHomeLoadingBody(padding = padding)
         ChatHomeVisualState.Empty -> ChatHomeEmptyBody(state = state, callbacks = callbacks, padding = padding)
-        else -> ChatHomeMessageList(state = state, callbacks = callbacks, padding = padding)
+        else -> ChatHomeMessageList(
+            state = state,
+            callbacks = callbacks,
+            padding = padding,
+            markdownRenderer = markdownRenderer,
+        )
+    }
+}
+
+/**
+ * Cold-start body — a centred [CircularProgressIndicator] on the chat
+ * surface. Renders before the chat repository delivers its first snapshot
+ * so the user never sees the [ChatHomeEmptyBody] hero flash for a frame
+ * on every app launch (Phase 22 / Task 16 follow-up F4).
+ */
+@Composable
+private fun ChatHomeLoadingBody(padding: PaddingValues) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(padding),
+        contentAlignment = Alignment.Center,
+    ) {
+        CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
     }
 }
 
@@ -536,7 +577,12 @@ private fun SamplePromptCard(card: ChatHomeSamplePromptCard, onClick: () -> Unit
  * (loader, HITL card, clarification card, error tile).
  */
 @Composable
-private fun ChatHomeMessageList(state: ChatHomeViewState, callbacks: ChatHomeCallbacks, padding: PaddingValues) {
+private fun ChatHomeMessageList(
+    state: ChatHomeViewState,
+    callbacks: ChatHomeCallbacks,
+    padding: PaddingValues,
+    markdownRenderer: (@Composable (String) -> Unit)?,
+) {
     // Compose the Scaffold-provided insets with the surface's own 16dp
     // horizontal padding into a single `contentPadding` value. Applying
     // them via `Modifier.padding` would shrink the LazyColumn's
@@ -568,6 +614,7 @@ private fun ChatHomeMessageList(state: ChatHomeViewState, callbacks: ChatHomeCal
                 onClarificationReply = callbacks.onClarificationReply,
                 onErrorRetry = callbacks.onErrorRetry,
                 onContextAction = { action -> callbacks.onMessageContextAction(row.id, action) },
+                markdownRenderer = markdownRenderer,
             )
         }
         if (state.visualState == ChatHomeVisualState.Generating) {
@@ -767,10 +814,26 @@ private fun DrawerNewChatPill(onClick: () -> Unit) {
 
 @Composable
 private fun ChatHomeDrawerThreadRow(row: ChatHomeThreadRow, onClick: () -> Unit, onEdit: () -> Unit) {
-    val rowBg = if (row.active || row.selected) {
-        app.knotwork.design.tokens.KnotworkPalette.Accent50
+    // Pair the selected-row background and the on-row text colour through the
+    // Material3 colour scheme so the contrast stays WCAG-AA in both themes.
+    // The previous `KnotworkPalette.Accent50` was a static tan that washed out
+    // against `onSurface` on dark theme (mirror of the onboarding row fix that
+    // landed in Phase 22 / Task 13 post-review feedback).
+    val selected = row.active || row.selected
+    val rowBg = if (selected) {
+        MaterialTheme.colorScheme.primaryContainer
     } else {
         Color.Transparent
+    }
+    val rowFg = if (selected) {
+        MaterialTheme.colorScheme.onPrimaryContainer
+    } else {
+        MaterialTheme.colorScheme.onSurface
+    }
+    val rowSubtitleFg = if (selected) {
+        MaterialTheme.colorScheme.onPrimaryContainer
+    } else {
+        KnotworkTheme.extended.onSurfaceMuted
     }
     val dotColor = if (row.active) {
         MaterialTheme.colorScheme.primary
@@ -810,7 +873,7 @@ private fun ChatHomeDrawerThreadRow(row: ChatHomeThreadRow, onClick: () -> Unit,
                     style = KnotworkTextStyles.TitleMd.copy(
                         fontWeight = FontWeight.SemiBold,
                     ),
-                    color = MaterialTheme.colorScheme.onSurface,
+                    color = rowFg,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
@@ -818,7 +881,7 @@ private fun ChatHomeDrawerThreadRow(row: ChatHomeThreadRow, onClick: () -> Unit,
             Text(
                 text = row.subtitle,
                 style = KnotworkTextStyles.MonoSm,
-                color = KnotworkTheme.extended.onSurfaceMuted,
+                color = rowSubtitleFg,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )

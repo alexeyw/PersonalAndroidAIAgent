@@ -667,6 +667,12 @@ private fun EditorTextField(
     onValueChange: (String) -> Unit,
     multiline: Boolean = false,
 ) {
+    // Multi-line bodies render in mono (matches the Settings system-instructions
+    // card — Phase 22 / Task 16 follow-up F7) so prompt sources read with the
+    // same monospaced rhythm everywhere they're edited. The single-line Name
+    // field keeps the proportional [BodyBase] face — it's a display label, not
+    // a code-like payload.
+    val textStyle = if (multiline) KnotworkTextStyles.MonoSm else KnotworkTextStyles.BodyBase
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -678,14 +684,14 @@ private fun EditorTextField(
             value = value,
             onValueChange = onValueChange,
             singleLine = !multiline,
-            textStyle = KnotworkTextStyles.BodyBase.copy(color = MaterialTheme.colorScheme.onSurface),
+            textStyle = textStyle.copy(color = MaterialTheme.colorScheme.onSurface),
             cursorBrush = androidx.compose.ui.graphics.SolidColor(MaterialTheme.colorScheme.primary),
             modifier = Modifier.fillMaxWidth(),
         )
         if (value.isEmpty()) {
             Text(
                 text = placeholder,
-                style = KnotworkTextStyles.BodyBase,
+                style = textStyle,
                 color = KnotworkTheme.extended.onSurfaceMuted,
             )
         }

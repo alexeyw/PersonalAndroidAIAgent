@@ -214,7 +214,9 @@ class ChatHomeViewModelTest {
         assertEquals(ChatRole.User, rows[0].role)
         assertEquals(ChatRole.Assistant, rows[1].role)
         assertEquals("hi", (rows[0].content as ChatContent.Text).text)
-        assertEquals("hello", (rows[1].content as ChatContent.Text).text)
+        // Phase 22 / Task 16 follow-up F2 — agent rows now carry Markdown
+        // content so the host-supplied markdown renderer formats them.
+        assertEquals("hello", (rows[1].content as ChatContent.Markdown).source)
         assertEquals(ChatHomeUiState.Idle, viewModel.state.value)
     }
 
@@ -259,7 +261,7 @@ class ChatHomeViewModelTest {
         val state = viewModel.state.value
         assertTrue("Expected Error, got $state", state is ChatHomeUiState.Error)
         assertEquals(
-            ChatHomeViewModel.LOAD_MODEL_FIRST_MESSAGE,
+            ChatHomeViewModel.MODEL_NOT_LOADED_MESSAGE,
             (state as ChatHomeUiState.Error).message,
         )
         coVerify(exactly = 0) { agentOrchestratorUseCase(any(), any(), any()) }
@@ -826,6 +828,9 @@ class ChatHomeViewModelTest {
         assertEquals("Gemma 2B", row.metadata.model)
         assertNotNull(row.metadata.timestamp)
         assertTrue(row.id.startsWith("a-"))
+        // Phase 22 / Task 16 follow-up F2 — agent rows carry Markdown so the
+        // host-supplied renderer formats headings, lists, code fences, etc.
+        assertEquals("ok", (row.content as ChatContent.Markdown).source)
     }
 
     // -----------------------------------------------------------------

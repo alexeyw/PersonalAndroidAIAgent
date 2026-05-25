@@ -7,6 +7,7 @@ import ai.agent.android.domain.models.ChatSession
 import ai.agent.android.domain.models.ClarificationRequest
 import ai.agent.android.domain.models.ConsoleEvent
 import ai.agent.android.domain.models.LocalModel
+import ai.agent.android.domain.models.Result
 import ai.agent.android.domain.models.Role
 import ai.agent.android.domain.models.ToolRisk
 import ai.agent.android.domain.repositories.ChatRepository
@@ -112,7 +113,7 @@ class ChatHomeViewModel @Inject constructor(
     private val _composerValue: MutableStateFlow<String> = MutableStateFlow("")
     private val _pendingTypedConfirm: MutableStateFlow<String> = MutableStateFlow("")
     private val _messages: MutableStateFlow<List<ChatHomeMessageRow>> = MutableStateFlow(emptyList())
-    private val _state: MutableStateFlow<ChatHomeUiState> = MutableStateFlow(ChatHomeUiState.Empty)
+    private val _state: MutableStateFlow<ChatHomeUiState> = MutableStateFlow(ChatHomeUiState.Loading)
     private val _consoleSearchQuery: MutableStateFlow<String?> = MutableStateFlow(null)
     private val _consoleFilter: MutableStateFlow<ConsoleFilter> = MutableStateFlow(ConsoleFilter.allOn)
     private val _pipelineName: MutableStateFlow<String?> = MutableStateFlow(null)
@@ -134,6 +135,12 @@ class ChatHomeViewModel @Inject constructor(
     private val _installedModels: MutableStateFlow<List<LocalModel>> = MutableStateFlow(emptyList())
     private val _activeModelId: MutableStateFlow<Long?> = MutableStateFlow(null)
     private val _availablePipelines: MutableStateFlow<List<PipelineSummary>> = MutableStateFlow(emptyList())
+
+    // Running approximate token count for the in-flight LLM stream. Reset on
+    // each new send / Completed / Error and surfaced through the agent
+    // status pill so the user sees forward progress during long generations
+    // (Phase 22 / Task 16 follow-up F9).
+    private val _streamingTokens: MutableStateFlow<Int> = MutableStateFlow(0)
     private val _exportEvents: MutableSharedFlow<ChatExportPayload> = MutableSharedFlow(extraBufferCapacity = 1)
     private val _importErrorEvents: MutableSharedFlow<String> = MutableSharedFlow(extraBufferCapacity = 1)
 
@@ -172,6 +179,14 @@ class ChatHomeViewModel @Inject constructor(
 
     /** Configured context-window cap propagated from [SettingsRepository.maxContextLength]. */
     val tokensMax: StateFlow<Int> = _tokensMax.asStateFlow()
+
+    /**
+     * Running approximate count of tokens produced by the in-flight LLM
+     * stream. Surfaced through the agent status pill as `generating · N tok`
+     * so users see forward progress on long generations (Phase 22 / Task 16
+     * follow-up F9). Zero outside of [ChatHomeUiState.Generating].
+     */
+    val streamingTokens: StateFlow<Int> = _streamingTokens.asStateFlow()
 
     /**
      * One-shot signal raised when the pipeline bound to the active chat
@@ -357,7 +372,12 @@ class ChatHomeViewModel @Inject constructor(
         if (draft.isEmpty()) return
         if (_state.value is ChatHomeUiState.Generating) return
         if (!llmInferenceEngine.isInitialized) {
-            _state.value = ChatHomeUiState.Error(LOAD_MODEL_FIRST_MESSAGE)
+            // Surface the error with copy that matches what Retry actually
+            // does — Retry attempts to load the active model in-place
+            // through `retryAfterError`, not "open Settings and load it
+            // there". If no active model is registered the load fails and
+            // the error message switches to the Settings-redirect copy.
+            _state.value = ChatHomeUiState.Error(MODEL_NOT_LOADED_MESSAGE)
             return
         }
         _composerValue.value = ""
@@ -367,6 +387,10 @@ class ChatHomeViewModel @Inject constructor(
         val pipelineId = sessions.firstOrNull { it.id == sessionId }?.pipelineId
 
         _state.value = ChatHomeUiState.Generating
+        // Reset the streaming token counter at the start of every run so the
+        // pill displays "generating · 0 tok" → "generating · N tok" rather
+        // than carrying over the previous response's final count.
+        _streamingTokens.value = 0
         clearPendingApprovalAndClarification()
         // Fresh run = fresh cumulative log upstream; the baseline carried
         // over from a previous run's mid-stream Clear no longer applies
@@ -383,6 +407,39 @@ class ChatHomeViewModel @Inject constructor(
                     _state.value = ChatHomeUiState.Error(error.message ?: UNKNOWN_ERROR_FALLBACK)
                 }
                 .collect { orchestratorState -> handleOrchestratorState(orchestratorState) }
+        }
+    }
+
+    /**
+     * Handles the Retry CTA on the chat error tile. The previous behaviour
+     * simply flipped to Idle, which on the "model not loaded" branch
+     * meant the user had to manually open Settings → Models → load —
+     * Retry never actually did anything. Now Retry actively tries to
+     * recover:
+     *
+     *  - If the inference engine isn't initialised, runs
+     *    `LoadModelUseCase()` (null path = active model). Success settles
+     *    to the resting state; failure flips back to Error with copy that
+     *    explicitly redirects to Settings (typically "no active model
+     *    registered" — only Settings can fix that).
+     *  - Otherwise the engine is healthy and Retry collapses to "clear
+     *    error → resting state", same as the prior behaviour.
+     */
+    fun retryAfterError() {
+        if (llmInferenceEngine.isInitialized) {
+            _state.value = restingState()
+            return
+        }
+        // Surface a transient "loading…" hint via the generating state — the
+        // catalog renders the same composer affordance and the user sees
+        // forward motion. Reset back to Error / resting on the load result.
+        _state.value = ChatHomeUiState.Generating
+        viewModelScope.launch {
+            val outcome = loadModelUseCase()
+            _state.value = when (outcome) {
+                is Result.Success -> restingState()
+                is Result.Error -> ChatHomeUiState.Error(outcome.message ?: NO_ACTIVE_MODEL_MESSAGE)
+            }
         }
     }
 
@@ -730,6 +787,9 @@ class ChatHomeViewModel @Inject constructor(
         if (sessionId.isBlank()) {
             _messages.value = emptyList()
             _tokensUsed.value = 0
+            // No session to load — settle Loading to Empty so the surface
+            // renders the empty-state hero instead of spinning forever.
+            rebalanceRestingState()
             return
         }
         messagesJob = viewModelScope.launch {
@@ -757,6 +817,10 @@ class ChatHomeViewModel @Inject constructor(
     private fun rebalanceRestingState() {
         _state.update { current ->
             when {
+                // Cold-start: first message emission settles Loading into the
+                // matching resting state (Empty if no messages, Idle if any).
+                current is ChatHomeUiState.Loading ->
+                    if (_messages.value.isEmpty()) ChatHomeUiState.Empty else ChatHomeUiState.Idle
                 current is ChatHomeUiState.Empty && _messages.value.isNotEmpty() -> ChatHomeUiState.Idle
                 current is ChatHomeUiState.Idle && _messages.value.isEmpty() -> ChatHomeUiState.Empty
                 else -> current
@@ -772,12 +836,21 @@ class ChatHomeViewModel @Inject constructor(
             is AgentOrchestratorState.ConsoleLog -> handleConsoleLog(state.events)
             is AgentOrchestratorState.PipelineTrace -> handlePipelineTrace(state.steps)
             is AgentOrchestratorState.NodeIO -> handleNodeIo(state)
+            is AgentOrchestratorState.Thinking ->
+                // Approximate-token estimate from the cumulative partial text
+                // length divided by `TOKEN_CHARS_PER_TOKEN`. Same heuristic
+                // we use for the chat-level token meter (Phase 22 / F9).
+                _streamingTokens.value = state.partialText.length / TOKEN_CHARS_PER_TOKEN
+            is AgentOrchestratorState.Answering ->
+                _streamingTokens.value = state.partialText.length / TOKEN_CHARS_PER_TOKEN
             is AgentOrchestratorState.Completed -> {
                 clearPendingApprovalAndClarification()
+                _streamingTokens.value = 0
                 _state.value = if (_messages.value.isEmpty()) ChatHomeUiState.Empty else ChatHomeUiState.Idle
             }
             is AgentOrchestratorState.Error -> {
                 clearPendingApprovalAndClarification()
+                _streamingTokens.value = 0
                 _state.value = ChatHomeUiState.Error(state.message)
             }
             // Intermediate states keep `Generating` while the request is in flight.
@@ -1264,15 +1337,23 @@ class ChatHomeViewModel @Inject constructor(
 
         /**
          * User-facing message surfaced when [sendMessage] is invoked
-         * while no LLM model is loaded. Kept here as a constant rather
-         * than read from `strings_errors.xml` so the VM stays free of
-         * `Context`/`Resources` dependencies; the screen layer will swap
-         * this for a localised string once Phase 22 / Task 5 audits
-         * surface localisation (the equivalent error in legacy chat
-         * lives under `errors_chat_load_model_first`).
+         * while no LLM model is loaded. The Retry CTA on the resulting
+         * error tile triggers [retryAfterError], which attempts to load
+         * the active model in-place rather than redirecting to Settings.
+         * Copy reflects that: "Tap Retry to load the active model".
          */
-        const val LOAD_MODEL_FIRST_MESSAGE: String =
-            "Please load a model in Settings before sending a message."
+        const val MODEL_NOT_LOADED_MESSAGE: String =
+            "No model is loaded. Tap Retry to load the active model."
+
+        /**
+         * User-facing message surfaced when [retryAfterError] tries to
+         * load the model but `LoadModelUseCase` can't find an active one
+         * (no models installed, or the registered active model file is
+         * missing). At that point only Settings → Models can fix the
+         * problem, so the copy redirects there.
+         */
+        const val NO_ACTIVE_MODEL_MESSAGE: String =
+            "No active model. Open Settings → Models to install or activate one."
 
         /** Rough chars-per-token divisor used for the v0.1 token counter (`text.length / 4`). */
         const val TOKEN_CHARS_PER_TOKEN: Int = 4
@@ -1351,10 +1432,19 @@ class ChatHomeViewModel @Inject constructor(
                 ChatRole.Tool -> "t"
             }
             val rowId = message.id?.let { "$idPrefix-$it" } ?: "$idPrefix-${UUID.randomUUID()}"
+            // Agent + tool bubbles can carry markdown (headings / lists / code
+            // fences from the LLM); surface as `ChatContent.Markdown` so the
+            // host-supplied renderer formats them. User input never carries
+            // intentional markdown — stick with plain text to avoid e.g. a
+            // stray `#` turning into a heading. Phase 22 / Task 16 follow-up F2.
+            val content = when (role) {
+                ChatRole.Assistant, ChatRole.Tool -> ChatContent.Markdown(message.content)
+                else -> ChatContent.Text(message.content)
+            }
             return ChatHomeMessageRow(
                 id = rowId,
                 role = role,
-                content = ChatContent.Text(message.content),
+                content = content,
                 metadata = metadata,
             )
         }

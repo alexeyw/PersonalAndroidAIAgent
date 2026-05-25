@@ -6,8 +6,8 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
 import app.knotwork.design.components.chips.KnotworkVariableChip
+import app.knotwork.design.theme.KnotworkTheme
 
 /**
  * Horizontal scrollable row of [KnotworkVariableChip]s exposing the prompt
@@ -33,8 +33,11 @@ import app.knotwork.design.components.chips.KnotworkVariableChip
 fun VariableChipsRow(variables: List<String>, onChipClick: (String) -> Unit, modifier: Modifier = Modifier) {
     LazyRow(
         modifier = modifier,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        contentPadding = PaddingValues(horizontal = 4.dp, vertical = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp2),
+        contentPadding = PaddingValues(
+            horizontal = KnotworkTheme.spacing.sp1,
+            vertical = KnotworkTheme.spacing.sp1,
+        ),
     ) {
         items(items = variables, key = { it }) { token ->
             val bare = token.trimStart('$')

@@ -289,6 +289,7 @@ internal object ChatHomePreview {
  * being persisted across renames.
  */
 internal fun ChatHomeVisualState.snapshotTag(): String = when (this) {
+    ChatHomeVisualState.Loading -> "loading"
     ChatHomeVisualState.Empty -> "empty"
     ChatHomeVisualState.Idle -> "idle"
     ChatHomeVisualState.Generating -> "generating"

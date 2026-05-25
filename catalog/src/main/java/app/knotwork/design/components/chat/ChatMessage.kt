@@ -124,6 +124,7 @@ fun ChatMessage(
     onTypedConfirmChange: (String) -> Unit = {},
     allowOnceEnabled: Boolean = true,
     onClarificationReply: (String) -> Unit = {},
+    markdownRenderer: (@Composable (String) -> Unit)? = null,
 ) {
     when (role) {
         ChatRole.System -> SystemMessage(content = content, metadata = metadata, modifier = modifier)
@@ -140,6 +141,7 @@ fun ChatMessage(
             onTypedConfirmChange = onTypedConfirmChange,
             allowOnceEnabled = allowOnceEnabled,
             onClarificationReply = onClarificationReply,
+            markdownRenderer = markdownRenderer,
             modifier = modifier,
         )
         ChatRole.Assistant, ChatRole.Tool -> BubbleMessage(
@@ -155,6 +157,7 @@ fun ChatMessage(
             onTypedConfirmChange = onTypedConfirmChange,
             allowOnceEnabled = allowOnceEnabled,
             onClarificationReply = onClarificationReply,
+            markdownRenderer = markdownRenderer,
             modifier = modifier,
         )
     }
@@ -176,6 +179,7 @@ private fun BubbleMessage(
     onTypedConfirmChange: (String) -> Unit,
     allowOnceEnabled: Boolean,
     onClarificationReply: (String) -> Unit,
+    markdownRenderer: (@Composable (String) -> Unit)?,
     modifier: Modifier,
 ) {
     val containerSize = LocalWindowInfo.current.containerSize
@@ -206,6 +210,7 @@ private fun BubbleMessage(
                 onTypedConfirmChange = onTypedConfirmChange,
                 allowOnceEnabled = allowOnceEnabled,
                 onClarificationReply = onClarificationReply,
+                markdownRenderer = markdownRenderer,
             )
             // Clarification / HITL confirmation cards are self-contained
             // panels with their own internal status indicators; rendering
@@ -303,6 +308,7 @@ private fun BubbleBody(
     onTypedConfirmChange: (String) -> Unit,
     allowOnceEnabled: Boolean,
     onClarificationReply: (String) -> Unit,
+    markdownRenderer: (@Composable (String) -> Unit)?,
 ) {
     when (content) {
         is ChatContent.Text -> TextBubble(
@@ -310,9 +316,10 @@ private fun BubbleBody(
             text = content.text,
             onContextAction = onContextAction,
         )
-        is ChatContent.Markdown -> TextBubble(
+        is ChatContent.Markdown -> MarkdownBubble(
             role = role,
-            text = content.source,
+            source = content.source,
+            renderer = markdownRenderer,
             onContextAction = onContextAction,
         )
         is ChatContent.Error -> ErrorTile(
@@ -339,22 +346,62 @@ private fun BubbleBody(
 /** Text bubble + long-press context menu — the bread-and-butter chat-message variant. */
 @Composable
 private fun TextBubble(role: ChatRole, text: String, onContextAction: ((ChatContextAction) -> Unit)?) {
-    val (bubbleColor, textColor, shape) = when (role) {
-        ChatRole.User -> Triple(
-            KnotworkTheme.extended.chatUserBg,
-            // chatUserBg is the Accent100 container shade, so the matching
-            // foreground is `onPrimaryContainer` (Accent800 in light,
-            // Accent200 in dark). Using `onPrimary` here would land almost-
-            // white text on almost-white background in light theme and
-            // almost-black text on almost-black background in dark theme.
-            MaterialTheme.colorScheme.onPrimaryContainer,
-            ChatBubbleShapes.User,
-        )
-        else -> Triple(
-            KnotworkTheme.extended.chatBotBg,
-            MaterialTheme.colorScheme.onSurface,
-            ChatBubbleShapes.Assistant,
-        )
+    val textColor = chatBubbleTextColor(role)
+    ChatBubbleChrome(role = role, onContextAction = onContextAction) {
+        Text(text = text, style = KnotworkTextStyles.BodyBase, color = textColor)
+    }
+}
+
+/**
+ * Renders [ChatContent.Markdown] through the host-supplied [renderer]. When
+ * [renderer] is `null` the catalog falls back to plain text so the bubble
+ * still reads correctly without forcing every catalog consumer to pull in
+ * a markdown library (Phase 22 / Task 16 follow-up F2).
+ */
+@Composable
+private fun MarkdownBubble(
+    role: ChatRole,
+    source: String,
+    renderer: (@Composable (String) -> Unit)?,
+    onContextAction: ((ChatContextAction) -> Unit)?,
+) {
+    if (renderer == null) {
+        TextBubble(role = role, text = source, onContextAction = onContextAction)
+        return
+    }
+    ChatBubbleChrome(role = role, onContextAction = onContextAction) {
+        renderer(source)
+    }
+}
+
+/** Resolves the per-role text colour used by [TextBubble]. */
+@Composable
+private fun chatBubbleTextColor(role: ChatRole): androidx.compose.ui.graphics.Color = when (role) {
+    // chatUserBg is the Accent100 container shade, so the matching
+    // foreground is `onPrimaryContainer` (Accent800 in light,
+    // Accent200 in dark). Using `onPrimary` here would land almost-
+    // white text on almost-white background in light theme and
+    // almost-black text on almost-black background in dark theme.
+    ChatRole.User -> MaterialTheme.colorScheme.onPrimaryContainer
+    else -> MaterialTheme.colorScheme.onSurface
+}
+
+/**
+ * Bubble chrome shared by [TextBubble] and [MarkdownBubble] — handles the
+ * role-keyed background / shape, the long-press press-scale animation,
+ * and the context-action [DropdownMenu]. The bubble body is supplied as a
+ * composable slot so plain text and rendered-markdown variants stay in
+ * lockstep on chrome changes.
+ */
+@Composable
+private fun ChatBubbleChrome(
+    role: ChatRole,
+    onContextAction: ((ChatContextAction) -> Unit)?,
+    body: @Composable () -> Unit,
+) {
+    val (bubbleColor, shape) = when (role) {
+        ChatRole.User -> KnotworkTheme.extended.chatUserBg to ChatBubbleShapes.User
+        else -> KnotworkTheme.extended.chatBotBg to ChatBubbleShapes.Assistant
     }
     val haptic = LocalHapticFeedback.current
     val interactionSource = remember { MutableInteractionSource() }
@@ -396,7 +443,7 @@ private fun TextBubble(role: ChatRole, text: String, onContextAction: ((ChatCont
                 .then(clickableModifier)
                 .padding(horizontal = KnotworkTheme.spacing.sp3, vertical = KnotworkTheme.spacing.sp2),
         ) {
-            Text(text = text, style = KnotworkTextStyles.BodyBase, color = textColor)
+            body()
         }
         if (onContextAction != null) {
             DropdownMenu(

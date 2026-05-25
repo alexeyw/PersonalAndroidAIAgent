@@ -4,6 +4,9 @@ import ai.agent.android.presentation.state.TransientMessageRelay
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.LocalActivity
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
@@ -118,10 +121,35 @@ fun AppShellScaffold(
             }
         },
         bottomBar = {
+            // Bind the bottom-nav slide to `KnotworkTheme.motion.dur3` (`easeStd`)
+            // so the duration rides the design-system token rather than the
+            // Compose internal default. Reduced-motion collapses the transition
+            // to an instant swap per `decisions.md §14` — Material's slide spec
+            // is not respected by the system `TRANSITION_ANIMATION_SCALE`, so an
+            // explicit gate is the only way to honour the user preference.
+            val reduceMotion = KnotworkTheme.a11y.reducedMotion()
+            val durationMs = KnotworkTheme.motion.dur3
+            val easing = KnotworkTheme.motion.easeStd
+            val enter = if (reduceMotion) {
+                EnterTransition.None
+            } else {
+                slideInVertically(
+                    animationSpec = tween(durationMillis = durationMs, easing = easing),
+                    initialOffsetY = { it },
+                ) + fadeIn(animationSpec = tween(durationMillis = durationMs, easing = easing))
+            }
+            val exit = if (reduceMotion) {
+                ExitTransition.None
+            } else {
+                slideOutVertically(
+                    animationSpec = tween(durationMillis = durationMs, easing = easing),
+                    targetOffsetY = { it },
+                ) + fadeOut(animationSpec = tween(durationMillis = durationMs, easing = easing))
+            }
             AnimatedVisibility(
                 visible = showBottomNav,
-                enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
-                exit = slideOutVertically(targetOffsetY = { it }) + fadeOut(),
+                enter = enter,
+                exit = exit,
             ) {
                 AppBottomNavigationBar(
                     currentRoute = currentRoute,

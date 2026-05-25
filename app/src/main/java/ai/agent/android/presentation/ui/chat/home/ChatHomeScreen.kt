@@ -56,10 +56,13 @@ import app.knotwork.design.components.buttons.KnotworkTextButton
 import app.knotwork.design.components.chat.ChatContextAction
 import app.knotwork.design.components.controls.KnotworkField
 import app.knotwork.design.components.controls.KnotworkTextField
+import app.knotwork.design.components.knotworkMarkdownColor
+import app.knotwork.design.components.knotworkMarkdownTypography
 import app.knotwork.design.components.misc.KnotworkSnackbar
 import app.knotwork.design.screens.chat.ChatHomeCallbacks
 import app.knotwork.design.screens.chat.ChatHomeContent
 import app.knotwork.design.theme.KnotworkTheme
+import com.mikepenz.markdown.m3.Markdown
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -106,6 +109,7 @@ fun ChatHomeScreen(
     val pipelineName by viewModel.pipelineName.collectAsStateWithLifecycle()
     val tokensUsed by viewModel.tokensUsed.collectAsStateWithLifecycle()
     val tokensMax by viewModel.tokensMax.collectAsStateWithLifecycle()
+    val streamingTokens by viewModel.streamingTokens.collectAsStateWithLifecycle()
     val pendingTool by viewModel.pendingTool.collectAsStateWithLifecycle()
     val pendingClarification by viewModel.pendingClarification.collectAsStateWithLifecycle()
     val consoleLogs by viewModel.consoleLines.collectAsStateWithLifecycle()
@@ -216,6 +220,7 @@ fun ChatHomeScreen(
         pendingClarification = pendingClarification,
         favorite = favorite,
         threads = threadRows,
+        streamingTokens = streamingTokens,
     )
 
     val callbacks = ChatHomeCallbacks(
@@ -254,7 +259,7 @@ fun ChatHomeScreen(
         onHitlReject = viewModel::rejectTool,
         onHitlTypedConfirmChange = viewModel::onTypedConfirmChange,
         onClarificationReply = viewModel::submitClarificationReply,
-        onErrorRetry = { viewModel.forceState(ChatHomeUiState.Idle) },
+        onErrorRetry = viewModel::retryAfterError,
         onTitleTripleTap = { debugPickerExpanded = true },
         onToggleFavorite = viewModel::toggleFavoriteCurrent,
         onEditThread = { threadId ->
@@ -306,7 +311,30 @@ fun ChatHomeScreen(
             .fillMaxSize()
             .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal)),
     ) {
-        ChatHomeContent(state = viewState, callbacks = callbacks)
+        // Pull the Knotwork-themed markdown bindings once per recomposition
+        // so the renderer lambda below doesn't re-resolve composition locals
+        // on every emit. `knotworkMarkdownTypography` / `…Color` ride
+        // `KnotworkTextStyles` + `KnotworkTheme.extended.surface{1,2,3}`,
+        // matching markdown headings, body, code surfaces, and tables to the
+        // surrounding chat surface tokens.
+        val markdownTypography = knotworkMarkdownTypography()
+        val markdownColors = knotworkMarkdownColor()
+        ChatHomeContent(
+            state = viewState,
+            callbacks = callbacks,
+            // Catalog stays free of any markdown dependency on the screen
+            // side; the app wires the `com.mikepenz.markdown.m3.Markdown`
+            // renderer here so agent bubbles get the Knotwork-themed
+            // typography + colors for headings, lists, and code fences
+            // (Phase 22 / Task 16 follow-up F2).
+            markdownRenderer = { source ->
+                Markdown(
+                    content = source,
+                    typography = markdownTypography,
+                    colors = markdownColors,
+                )
+            },
+        )
         SnackbarHost(
             hostState = snackbarHostState,
             modifier = Modifier
