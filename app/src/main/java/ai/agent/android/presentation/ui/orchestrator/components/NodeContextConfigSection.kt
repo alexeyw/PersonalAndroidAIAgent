@@ -107,7 +107,7 @@ fun NodeContextConfigSection(
         )
 
         Surface(
-            tonalElevation = 1.dp,
+            tonalElevation = KnotworkTheme.elevation.el1,
             shape = KnotworkTheme.shapes.sm,
             modifier = Modifier
                 .fillMaxWidth()
