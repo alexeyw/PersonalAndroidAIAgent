@@ -109,6 +109,15 @@ class ModelsViewModel @Inject constructor(
 
         val authToken = _uiState.value.authTokenInput.takeIf { it.isNotBlank() }
 
+        // Defence-in-depth: even though `isDownloading` blocks the second
+        // entry above, any stale `downloadJob` from a finished collection
+        // is cancelled here before we overwrite the reference. Without
+        // this, a job that finished its terminal Success / Error frame
+        // but is still inside an unrelated tear-down step could keep
+        // emitting after the new flow takes over, interleaving updates
+        // into `_uiState` and leaking resources.
+        downloadJob?.cancel()
+
         _uiState.update {
             it.copy(
                 isDownloading = true,

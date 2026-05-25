@@ -3,6 +3,9 @@ package ai.agent.android.presentation.ui.more
 import ai.agent.android.BuildConfig
 import ai.agent.android.domain.engine.TaskQueueManager
 import ai.agent.android.domain.models.AgentOrchestratorState
+import ai.agent.android.domain.models.LocalModel
+import ai.agent.android.domain.models.MemoryStats
+import ai.agent.android.domain.models.PromptTemplate
 import ai.agent.android.domain.repositories.LocalModelRepository
 import ai.agent.android.domain.repositories.MemoryRepository
 import ai.agent.android.domain.repositories.NetworkActivityTracker
@@ -10,9 +13,12 @@ import ai.agent.android.domain.repositories.PromptRepository
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.stateIn
 import java.util.Locale
 import javax.inject.Inject
@@ -42,14 +48,41 @@ class MoreViewModel @Inject constructor(
         promptRepository.getAllPrompts(),
         taskQueueManager.activeSessionsState,
         networkActivityTracker.lastOutboundAt,
-    ) { memStats, models, prompts, activeSessions, lastNetwork ->
+        // Independent wall-clock ticker so the footer privacy pill
+        // transitions (`online · cloud enabled` → `on-device · no
+        // network calls in last N m` → minute-increment) fire even
+        // when no upstream data flow emits. Without this tick the
+        // status text would stay stuck on whatever it was at the last
+        // memory / model / prompt / task / network-activity emission.
+        statusTicker(),
+    ) { values -> reduceUiState(values = values) }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(STATE_STOP_TIMEOUT_MS),
+        initialValue = MoreUiState(),
+    )
+
+    /**
+     * Reduces the 6 positional values produced by [combine] into a
+     * [MoreUiState]. Pulled out into a dedicated function so the
+     * unchecked-cast suppressions for each positional slot stay
+     * confined to a single tight scope (and so the `combine` lambda
+     * itself stays readable).
+     */
+    @Suppress("UNCHECKED_CAST", "MagicNumber")
+    private fun reduceUiState(values: Array<Any?>): MoreUiState {
+        val memStats = values[0] as MemoryStats
+        val models = values[1] as List<LocalModel>
+        val prompts = values[2] as List<PromptTemplate>
+        val activeSessions = values[3] as Map<*, AgentOrchestratorState>
+        val lastNetwork = values[4] as Long?
+        val now = values[5] as Long
         val active = models.firstOrNull { it.isActive }
         val runningCount = activeSessions.values.count {
             it is AgentOrchestratorState.Thinking ||
                 it is AgentOrchestratorState.Answering
         }
         val queuedCount = activeSessions.values.count { it is AgentOrchestratorState.Idle }
-        MoreUiState(
+        return MoreUiState(
             memorySubtitle = formatMemoryStats(memStats.chunkCount, memStats.totalBytes),
             modelsSubtitle = if (active != null) "${active.name} · active" else "no model installed",
             promptsSubtitle = formatPromptsStats(prompts.map { it.category }.distinct().size, prompts.size),
@@ -60,15 +93,30 @@ class MoreViewModel @Inject constructor(
             },
             tasksBadge = runningCount,
             aboutSubtitle = "v${BuildConfig.VERSION_NAME} · build ${BuildConfig.VERSION_CODE}",
-            networkStatusText = formatNetworkStatus(System.currentTimeMillis(), lastNetwork),
+            networkStatusText = formatNetworkStatus(now, lastNetwork),
             networkStatusOk = lastNetwork == null ||
-                (System.currentTimeMillis() - lastNetwork) > FRESH_NETWORK_WINDOW_MS,
+                (now - lastNetwork) > FRESH_NETWORK_WINDOW_MS,
         )
-    }.stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(STATE_STOP_TIMEOUT_MS),
-        initialValue = MoreUiState(),
-    )
+    }
+
+    /**
+     * Wall-clock heartbeat used as an independent input to [uiState]'s
+     * `combine`. Emits the current epoch-ms immediately on subscription
+     * and again every [STATUS_TICK_INTERVAL_MS], so the `networkStatus`
+     * formatter — which is a pure function of `(now, lastOutboundAt)` —
+     * re-runs at least once per minute even when no upstream data flow
+     * fires.
+     *
+     * `SharingStarted.WhileSubscribed` (configured on the resulting
+     * `stateIn`) guarantees this ticker stops as soon as the UI
+     * unsubscribes, so a backgrounded More tab does not burn cycles.
+     */
+    private fun statusTicker(): Flow<Long> = flow {
+        while (true) {
+            emit(System.currentTimeMillis())
+            delay(STATUS_TICK_INTERVAL_MS)
+        }
+    }
 
     private companion object {
         /**
@@ -77,6 +125,13 @@ class MoreViewModel @Inject constructor(
          * (warn). 60 s ≈ "in this session".
          */
         const val FRESH_NETWORK_WINDOW_MS: Long = 60_000L
+
+        /**
+         * Ticker period for the wall-clock heartbeat that drives the
+         * footer privacy-pill transitions. 60 s matches the minute
+         * granularity of the rendered text ("in last N m").
+         */
+        const val STATUS_TICK_INTERVAL_MS: Long = 60_000L
 
         /** WhileSubscribed grace period — see TaskMonitorViewModel. */
         const val STATE_STOP_TIMEOUT_MS: Long = 5_000L
