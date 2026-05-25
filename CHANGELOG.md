@@ -42,6 +42,70 @@ details.
     pending a `trailingIcon` slot on the catalog button (filed as
     Minor in the audit doc).
 
+- **Phase 22 / Task 16 post-merge fixes (F1–F10).** Ten review
+  findings landed in the same PR by user request. Roborazzi
+  baselines for `chat_home_*`, `settings_*`, and
+  `prompts_editor_*` were re-recorded.
+  - **F1** — `ChatHomeContent` TopAppBar subtitle drops the
+    `Pipeline · ` prefix (`knotwork_chat_home_topbar_pipeline`) so
+    the token counter fits on a single line at the default font
+    scale.
+  - **F2** — Markdown rendering restored. Catalog `ChatMessage` /
+    `ChatHomeContent` gained an optional
+    `markdownRenderer: @Composable (String) -> Unit` slot;
+    `ChatHomeScreen` wires the `com.mikepenz.markdown.m3.Markdown`
+    renderer. `ChatHomeViewModel.chatMessageToRow` now emits
+    `ChatContent.Markdown` for agent / tool rows and keeps
+    `ChatContent.Text` for user rows. Plain-text fallback is the
+    default when no renderer is supplied so the catalog stays free
+    of any markdown library.
+  - **F3** — Drawer selected-thread contrast in dark theme. The
+    selected row's background switched from the static
+    `KnotworkPalette.Accent50` to `MaterialTheme.colorScheme.primaryContainer`
+    paired with `onPrimaryContainer` text, mirroring the
+    onboarding Step-2 fix; light theme retains WCAG-AA contrast.
+  - **F4** — Eliminated the empty-chat hero flash on cold start.
+    Added `ChatHomeUiState.Loading` / `ChatHomeVisualState.Loading`,
+    the VM starts in `Loading`, and the catalog renders a centred
+    `CircularProgressIndicator` until the first chat snapshot
+    arrives. `rebalanceRestingState` settles `Loading → Empty / Idle`
+    on the first emission.
+  - **F5** — Settings secondary text (non-SemiBold subtitles on
+    `onSurfaceMuted`) switched from `BodySm` / `LabelSm` to
+    `MonoSm` to match the cloud-provider rows. Touches the
+    Identity card, params helper, system-instructions counter,
+    local-model backend label, Test backend probe line, and
+    memory re-embedding progress.
+  - **F6** — Test backend `Run` action shrunk to
+    `KnotworkButtonSize.Sm`, matching the Memory section's Export /
+    Clear / Reset buttons.
+  - **F7** — Prompt library editor `EditorTextField` renders the
+    multi-line prompt body in `KnotworkTextStyles.MonoSm`, matching
+    the Settings → System instructions field. The Name field keeps
+    the proportional `BodyBase` face.
+  - **F8** — LITE_RT node "Active model" sentinel. Blank
+    `LiteRtConfig.modelId` is now the explicit "use the currently-
+    active model at execute time" choice — surfaced as a new
+    `Active model` dropdown item, the codec persists `modelPath =
+    null` on the domain row, and `LoadModelUseCase` centralises
+    the blank-coerce so every executor (LITE_RT / Output / Summary
+    / Clarification / Tool / System) honours the sentinel. The
+    validator no longer flags blank `modelId` as REQUIRED. The
+    earlier `LaunchedEffect` that eagerly froze the active id into
+    the field on open was removed.
+  - **F9** — Streaming token counter in the agent status pill. New
+    `ChatHomeViewModel.streamingTokens` flow derives an approximate
+    count from `AgentOrchestratorState.Thinking` / `Answering`
+    `partialText.length`. The catalog status string composes as
+    `generating · N tok` while non-zero, resets on each new send /
+    Completed / Error.
+  - **F10** — Restored `systemPrompt` field on the OUTPUT node form.
+    Catalog `OutputConfig` gained the field; `OutputFormBody`
+    renders the same `TextField` + variable chips pattern as
+    LITE_RT / CLOUD; the codec encodes / decodes the field and
+    syncs it onto `NodeModel.systemPrompt` (legacy rows surface
+    their persisted prompt instead of silently clearing).
+
 ### Added
 
 - **Knotwork conversion of the remaining screens** (Phase 22 / Task 15).

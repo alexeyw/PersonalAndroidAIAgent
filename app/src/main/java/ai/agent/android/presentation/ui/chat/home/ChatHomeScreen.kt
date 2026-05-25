@@ -60,6 +60,7 @@ import app.knotwork.design.components.misc.KnotworkSnackbar
 import app.knotwork.design.screens.chat.ChatHomeCallbacks
 import app.knotwork.design.screens.chat.ChatHomeContent
 import app.knotwork.design.theme.KnotworkTheme
+import com.mikepenz.markdown.m3.Markdown
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -106,6 +107,7 @@ fun ChatHomeScreen(
     val pipelineName by viewModel.pipelineName.collectAsStateWithLifecycle()
     val tokensUsed by viewModel.tokensUsed.collectAsStateWithLifecycle()
     val tokensMax by viewModel.tokensMax.collectAsStateWithLifecycle()
+    val streamingTokens by viewModel.streamingTokens.collectAsStateWithLifecycle()
     val pendingTool by viewModel.pendingTool.collectAsStateWithLifecycle()
     val pendingClarification by viewModel.pendingClarification.collectAsStateWithLifecycle()
     val consoleLogs by viewModel.consoleLines.collectAsStateWithLifecycle()
@@ -216,6 +218,7 @@ fun ChatHomeScreen(
         pendingClarification = pendingClarification,
         favorite = favorite,
         threads = threadRows,
+        streamingTokens = streamingTokens,
     )
 
     val callbacks = ChatHomeCallbacks(
@@ -306,7 +309,15 @@ fun ChatHomeScreen(
             .fillMaxSize()
             .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal)),
     ) {
-        ChatHomeContent(state = viewState, callbacks = callbacks)
+        ChatHomeContent(
+            state = viewState,
+            callbacks = callbacks,
+            // Catalog stays free of any markdown dependency; the app wires
+            // the `com.mikepenz.markdown.m3.Markdown` renderer here so agent
+            // bubbles get the m3 typography treatment for headings, lists,
+            // and code fences (Phase 22 / Task 16 follow-up F2).
+            markdownRenderer = { source -> Markdown(content = source) },
+        )
         SnackbarHost(
             hostState = snackbarHostState,
             modifier = Modifier

@@ -71,11 +71,18 @@ data class InputConfig(
  * @property title display title.
  * @property description optional one-line note.
  * @property format output rendering format.
+ * @property systemPrompt optional system prompt sent to the model that
+ *   formats the final response. When blank the node forwards the upstream
+ *   text verbatim (the engine wraps a non-blank prompt around the LLM
+ *   call). Supports `$DATE` / `$TIME` / `$TOOLS` / `$MODEL` /
+ *   `$MEMORY_SUMMARY` variables. Phase 22 / Task 16 follow-up F10 restored
+ *   this field after the catalog redesign dropped it.
  */
 data class OutputConfig(
     override val title: String,
     override val description: String? = null,
     val format: OutputFormat = OutputFormat.PLAIN_TEXT,
+    val systemPrompt: String = "",
 ) : NodeConfig {
     override val type: NodeType get() = NodeType.OUTPUT
 }

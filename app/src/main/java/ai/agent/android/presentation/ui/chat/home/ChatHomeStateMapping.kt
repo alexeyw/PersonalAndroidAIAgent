@@ -69,6 +69,7 @@ fun ChatHomeUiState.toViewState(
     pendingTool: HitlPending? = null,
     pendingClarification: ClarificationRequest? = null,
     threads: List<ChatHomeThreadRow> = emptyList(),
+    streamingTokens: Int = 0,
 ): ChatHomeViewState {
     val consoleState = ChatHomeConsoleState(
         snap = consoleSnap,
@@ -80,6 +81,18 @@ fun ChatHomeUiState.toViewState(
         searchQuery = consoleSearchQuery,
     )
     return when (this) {
+        is ChatHomeUiState.Loading -> ChatHomeViewState(
+            visualState = ChatHomeVisualState.Loading,
+            threadTitle = threadTitle,
+            modelName = modelName,
+            composerValue = composerValue,
+            pipelineName = pipelineName,
+            tokensUsed = tokensUsed,
+            tokensMax = tokensMax,
+            favorite = favorite,
+            console = consoleState,
+        )
+
         is ChatHomeUiState.Empty -> ChatHomeViewState(
             visualState = ChatHomeVisualState.Empty,
             threadTitle = threadTitle,
@@ -119,7 +132,10 @@ fun ChatHomeUiState.toViewState(
             tokensUsed = tokensUsed,
             tokensMax = tokensMax,
             favorite = favorite,
-            agentStatusLine = fixtures.statusGenerating,
+            // Append the running token count so the pill reads
+            // "generating · 42 tok" — gives the user visible progress on
+            // long generations (Phase 22 / Task 16 follow-up F9).
+            agentStatusLine = formatGeneratingStatus(fixtures.statusGenerating, streamingTokens),
             console = consoleState,
         )
 
@@ -416,3 +432,15 @@ internal fun debugConsoleSnapForId(id: String): ConsoleSnap? = when (id) {
     DebugStateIds.CONSOLE_FULL -> ConsoleSnap.Full
     else -> null
 }
+
+/**
+ * Composes the agent status pill text for the Generating state, appending
+ * the running token count when non-zero ("generating" → "generating · 42 tok").
+ * Phase 22 / Task 16 follow-up F9.
+ *
+ * @param baseLabel the locale-resolved "generating" string from
+ *   [ChatHomeFixtures.statusGenerating].
+ * @param tokens approximate streamed-token count.
+ */
+internal fun formatGeneratingStatus(baseLabel: String, tokens: Int): String =
+    if (tokens > 0) "$baseLabel · $tokens tok" else baseLabel

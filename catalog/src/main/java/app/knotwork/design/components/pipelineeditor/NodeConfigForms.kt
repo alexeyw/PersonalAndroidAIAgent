@@ -106,7 +106,7 @@ object NodeConfigForms {
             )
             when (config) {
                 is InputConfig -> InputFormBody(config, errors, onChange)
-                is OutputConfig -> OutputFormBody(config, onChange)
+                is OutputConfig -> OutputFormBody(config, onChange, onPickFromLibrary)
                 is LiteRtConfig -> LiteRtFormBody(config, errors, onChange, availableModels, onPickFromLibrary)
                 is CloudConfig -> CloudFormBody(config, errors, onChange, onPickFromLibrary)
                 is IntentRouterConfig -> IntentRouterFormBody(config, errors, onChange, onPickFromLibrary)
@@ -423,7 +423,11 @@ private fun InputFormBody(
 }
 
 @Composable
-private fun OutputFormBody(config: OutputConfig, onChange: (NodeConfig) -> Unit) {
+private fun OutputFormBody(
+    config: OutputConfig,
+    onChange: (NodeConfig) -> Unit,
+    onPickFromLibrary: PromptLibraryHook?,
+) {
     SegmentedChipRow(
         label = stringResource(R.string.knotwork_node_field_format),
         values = listOf(
@@ -434,6 +438,23 @@ private fun OutputFormBody(config: OutputConfig, onChange: (NodeConfig) -> Unit)
         selected = config.format,
         onSelect = { next -> onChange(config.copy(format = next)) },
     )
+    // Optional system prompt — when blank the executor forwards the
+    // upstream text verbatim; when set the LLM wraps the upstream payload
+    // through this template. Phase 22 / Task 16 follow-up F10.
+    TextField(
+        label = stringResource(R.string.knotwork_node_field_system_prompt),
+        value = config.systemPrompt,
+        // OUTPUT's systemPrompt is optional — blank means "echo upstream
+        // verbatim" — so the field never carries a validation error.
+        error = null,
+        singleLine = false,
+        onChange = { next -> onChange(config.copy(systemPrompt = next)) },
+        libraryCategory = "OUTPUT",
+        onPickFromLibrary = onPickFromLibrary,
+    )
+    VariableChipsRow(onInsert = { variable ->
+        onChange(config.copy(systemPrompt = config.systemPrompt + variable))
+    })
 }
 
 @Composable
@@ -875,15 +896,20 @@ private fun ToolPicker(
 /**
  * Local model selector for [LiteRtFormBody]. Mirrors [ToolPicker] but feeds off the
  * installed-models registry instead of the tool registry: when [availableModels] is
- * non-empty, surfaces an `ExposedDropdownMenu` with the currently-active model badged
- * `· active` at the top, every other model below, and a trailing "Custom path…" entry
- * that reveals a free-text input for paths not in the registry (e.g., a sideloaded
+ * non-empty, surfaces an `ExposedDropdownMenu` with the "Active model" sentinel
+ * pinned at the top (empty [LiteRtConfig.modelId]), every registered model below
+ * (active one badged `· active`), and a trailing "Custom path…" entry that
+ * reveals a free-text input for paths not in the registry (e.g., a sideloaded
  * `.tflite` the user hasn't added to the LocalModelRepository yet).
  *
- * Default selection rule when the user opens a fresh LiteRt node: if [LiteRtConfig.modelId]
- * is blank and an active model is registered, the picker pre-fills the field with the
- * active model's id on first open via [LaunchedEffect]. This satisfies the validator's
- * REQUIRED check immediately and makes the "use the active model" path one tap to Save.
+ * **Active sentinel.** Phase 22 / Task 16 follow-up F8 introduced the rule that
+ * an empty [LiteRtConfig.modelId] means "resolve to whichever model is active
+ * at execute time". Previously the picker eagerly wrote the current active id
+ * into the field on open via `LaunchedEffect`, which froze the pipeline to that
+ * specific id even after the user switched the active model in Settings; the
+ * pipeline would then error out with "Model file not found". With the explicit
+ * sentinel the empty value is the persisted choice — the executor's
+ * `LoadModelUseCase(modelPath = null)` path picks up the current active model.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -893,21 +919,11 @@ private fun ModelPicker(
     availableModels: List<LocalModelOption>,
     onChange: (NodeConfig) -> Unit,
 ) {
-    val activeModelId = remember(availableModels) { availableModels.firstOrNull { it.isActive }?.id }
-    // Auto-pick the active model on first open if the field is blank. This is a render-
-    // time write but it's idempotent (once modelId is non-blank the condition stops
-    // firing) and guarded against the no-active-model case.
-    LaunchedEffect(config.modelId, activeModelId) {
-        if (config.modelId.isBlank() && !activeModelId.isNullOrBlank()) {
-            onChange(config.copy(modelId = activeModelId))
-        }
-    }
-
     Column(verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp1)) {
         FieldLabel(text = stringResource(R.string.knotwork_node_field_model))
         var menuExpanded by remember { mutableStateOf(false) }
         val customLabel = stringResource(R.string.knotwork_node_field_model_custom)
-        val placeholder = stringResource(R.string.knotwork_node_field_model_placeholder)
+        val activeLabel = stringResource(R.string.knotwork_node_field_model_active)
         val activeSuffixFmt = stringResource(R.string.knotwork_node_field_model_active_suffix)
         // Custom mode mirrors ToolPicker: tracks whether the user is editing a path that
         // isn't in `availableModels`. The catalog NodeConfig schema only has
@@ -918,9 +934,11 @@ private fun ModelPicker(
             )
         }
         // Render the registered model in the dropdown anchor; fall back to the raw id
-        // for custom paths; fall back to the placeholder for a blank field.
+        // for custom paths; for a blank field render the "Active model" sentinel
+        // label instead of a placeholder so the choice reads as a real selection.
         val matchedModel = availableModels.firstOrNull { it.id == config.modelId }
         val selectedLabel = when {
+            config.modelId.isBlank() -> activeLabel
             matchedModel != null -> {
                 if (matchedModel.isActive) {
                     activeSuffixFmt.format(matchedModel.displayName)
@@ -929,7 +947,7 @@ private fun ModelPicker(
                 }
             }
             customMode || config.modelId.isNotBlank() -> config.modelId.ifBlank { customLabel }
-            else -> placeholder
+            else -> activeLabel
         }
 
         if (availableModels.isNotEmpty()) {
@@ -955,8 +973,16 @@ private fun ModelPicker(
                     expanded = menuExpanded,
                     onDismissRequest = { menuExpanded = false },
                 ) {
-                    // Active model surfaces at the top with a badge so the canonical
-                    // "just use the model you already have loaded" path is one tap.
+                    // Sentinel: blank `modelId` resolves to the live active
+                    // model at execute time (Phase 22 / Task 16 follow-up F8).
+                    DropdownMenuItem(
+                        text = { Text(text = activeLabel, style = KnotworkTextStyles.MonoBase) },
+                        onClick = {
+                            customMode = false
+                            onChange(config.copy(modelId = ""))
+                            menuExpanded = false
+                        },
+                    )
                     availableModels.sortedByDescending { it.isActive }.forEach { option ->
                         DropdownMenuItem(
                             text = {

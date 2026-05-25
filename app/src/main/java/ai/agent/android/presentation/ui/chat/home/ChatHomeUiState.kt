@@ -16,6 +16,15 @@ import app.knotwork.design.components.chips.Risk
  */
 sealed interface ChatHomeUiState {
 
+    /**
+     * Cold-start sentinel emitted before the chat repository finishes
+     * delivering the first message snapshot. Distinct from [Empty]: while
+     * `Loading`, the surface shows a centered progress indicator (no empty
+     * placeholder copy) so users don't see the "no messages yet" hero flash
+     * for a frame on every app launch. Phase 22 / Task 16 follow-up F4.
+     */
+    data object Loading : ChatHomeUiState
+
     /** No messages in the active thread; empty state with sample-prompt chips. */
     data object Empty : ChatHomeUiState
 
