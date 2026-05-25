@@ -7,7 +7,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -17,6 +16,7 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -54,6 +54,7 @@ import androidx.compose.ui.unit.dp
 import app.knotwork.design.components.buttons.KnotworkTextButton
 import app.knotwork.design.components.chips.KnotworkChip
 import app.knotwork.design.components.misc.EmptyState
+import app.knotwork.design.components.pipelineeditor.headerTint
 import app.knotwork.design.theme.KnotworkTheme
 import app.knotwork.design.tokens.KnotworkTextStyles
 
@@ -327,18 +328,21 @@ private fun PromptCard(
             // Tag uses the smallest chip size and a manual surface to
             // keep the row height compact — the previous M3 `KnotworkChip`
             // wrapper added 32 dp of padding that pushed the title off
-            // the right edge.
+            // the right edge. Tag tint is the node-type hue from the
+            // editor palette so a category at a glance reads as the same
+            // colour as the corresponding node card in the editor.
+            val categoryTint = categoryTint(category = prompt.category)
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(
                     modifier = Modifier
                         .clip(KnotworkTheme.shapes.full)
-                        .background(color = MaterialTheme.colorScheme.primary.copy(alpha = 0.18f))
+                        .background(color = categoryTint.copy(alpha = 0.20f))
                         .padding(horizontal = KnotworkTheme.spacing.sp2, vertical = KnotworkTheme.spacing.sp1),
                 ) {
                     Text(
                         text = prompt.category,
                         style = KnotworkTextStyles.LabelSm,
-                        color = MaterialTheme.colorScheme.primary,
+                        color = categoryTint,
                     )
                 }
                 Text(
@@ -376,6 +380,21 @@ private fun PromptCard(
             }
         }
     }
+}
+
+/**
+ * Resolve the node-type hue tint for a category label by parsing it back
+ * into a `NodeType` and reading the `headerTint()` palette colour.
+ *
+ * Returns the canonical Knotwork primary as a fallback when the category
+ * is unrecognised (e.g. legacy / user-typed strings).
+ */
+@Composable
+private fun categoryTint(category: String): androidx.compose.ui.graphics.Color {
+    val nodeType = runCatching {
+        app.knotwork.design.components.pipelineeditor.NodeType.valueOf(category.trim().uppercase())
+    }.getOrNull()
+    return nodeType?.headerTint() ?: MaterialTheme.colorScheme.primary
 }
 
 /**
@@ -518,11 +537,16 @@ fun PromptEditorSheetBody(
             multiline = true,
         )
         FieldLabel(label = strings.insertLabel)
-        FlowRow(
+        // Horizontal LazyRow per design feedback — variable list scrolls
+        // sideways so the chip row stays single-line on every phone width
+        // even with the full `$DATE / $DEVICE / $LANG / $USER / $TZ /
+        // $MODEL / $MEMORY_SUMMARY / …` catalog.
+        LazyRow(
             horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp2),
-            verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp2),
+            contentPadding = PaddingValues(horizontal = KnotworkTheme.spacing.sp1),
+            modifier = Modifier.fillMaxWidth(),
         ) {
-            availableVariables.forEach { token ->
+            items(items = availableVariables, key = { it }) { token ->
                 KnotworkChip(label = token, onClick = { callbacks.onEditorVariableInsert(token) })
             }
         }

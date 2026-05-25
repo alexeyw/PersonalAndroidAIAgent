@@ -53,6 +53,15 @@ class ModelsViewModel @Inject constructor(
     init {
         observeDownloadedModels()
         observeAuthToken()
+        observeBackend()
+    }
+
+    private fun observeBackend() {
+        settingsRepository.localModelBackend
+            .onEach { key ->
+                _uiState.update { it.copy(localBackendKey = key) }
+            }
+            .launchIn(viewModelScope)
     }
 
     private fun observeDownloadedModels() {

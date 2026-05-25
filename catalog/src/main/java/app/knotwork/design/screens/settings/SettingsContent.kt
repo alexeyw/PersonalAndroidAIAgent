@@ -109,7 +109,11 @@ fun SettingsContent(
     Box(modifier = modifier.fillMaxSize()) {
         Scaffold(
             containerColor = MaterialTheme.colorScheme.surface,
-            topBar = { SettingsTopBar(state = state, onBack = callbacks.onBack, onSearch = callbacks.onSearchClick) },
+            topBar = {
+                app.knotwork.design.components.topbar.KnotworkTopAppBarShell {
+                    SettingsTopBar(state = state, onBack = callbacks.onBack, onSearch = callbacks.onSearchClick)
+                }
+            },
             // The outer `AppShellScaffold` already applies the system /
             // bottom-nav insets for the whole shell. Letting this catalog
             // Scaffold replay them would double-count the bottom inset and

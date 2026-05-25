@@ -122,11 +122,12 @@ internal fun ModelsUiState.toViewState(subtitleFormat: String): ModelsViewState 
         downloadedModels.size,
         totalSizeLabel,
     )
+    val backendLabel = backendDisplayLabel(localBackendKey)
     val active = activeModel?.let { model ->
         ActiveModelRow(
             id = model.id,
             displayName = model.name,
-            meta = model.toMetaLine(),
+            meta = model.toMetaLine(backendLabel = backendLabel),
         )
     }
     val downloadingName = activeDownloadFileName
@@ -139,7 +140,8 @@ internal fun ModelsUiState.toViewState(subtitleFormat: String): ModelsViewState 
                 metaLine = null,
             )
             onDisk -> PresetStatus.OnDisk(
-                sizeMeta = downloadedModels.firstOrNull { it.name == fileName }?.toMetaLine(),
+                sizeMeta = downloadedModels.firstOrNull { it.name == fileName }
+                    ?.toMetaLine(backendLabel = backendLabel),
             )
             else -> PresetStatus.Idle()
         }
@@ -161,12 +163,25 @@ internal fun ModelsUiState.toViewState(subtitleFormat: String): ModelsViewState 
     )
 }
 
-private fun LocalModel.toMetaLine(): String {
-    // Drop the size prefix when the DownloadManager hasn't populated
-    // it yet — keeps the active-card meta from rendering as "0 GB ·
-    // NPU · LiteRT" for freshly-downloaded models.
+private fun LocalModel.toMetaLine(backendLabel: String): String {
+    // Drop the size prefix when the on-disk file is unreadable so we
+    // don't render a misleading "0 GB" — the size is enriched from the
+    // file system by `LocalModelRepositoryImpl.getAllModels()`.
     val prefix = if (size > 0L) "${size.toGigabytesLabel()} · " else ""
-    return "${prefix}NPU · LiteRT"
+    return "$prefix$backendLabel · LiteRT"
+}
+
+/**
+ * Human-readable label for the [ai.agent.android.domain.models.LocalBackend]
+ * wire key persisted in settings. Falls back to upper-casing the raw key
+ * for forward-compatibility with backend ids that haven't been added to
+ * the typed enum yet.
+ */
+private fun backendDisplayLabel(key: String): String = when (key.lowercase()) {
+    "cpu" -> "CPU"
+    "gpu" -> "GPU"
+    "npu" -> "NPU"
+    else -> key.uppercase()
 }
 
 private fun String.toPresetId(): String = this

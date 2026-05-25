@@ -116,6 +116,7 @@ data class MemoryViewState(
 
 @Suppress("LongParameterList")
 class MemoryCallbacks(
+    val onBack: () -> Unit = {},
     val onSearchQueryChange: (String) -> Unit = {},
     val onSortChange: (MemorySortMode) -> Unit = {},
     val onEntryClick: (String) -> Unit = {},

@@ -586,4 +586,7 @@
     <!-- Content description for the agent-status pill above the composer — tapping it opens the console pane. -->
     <string name="knotwork_chat_home_agent_status_open_console_cd">Open console</string>
 
+    <!-- Common content descriptions shared across catalog screens. -->
+    <string name="knotwork_common_back">Back</string>
+
 </resources>

@@ -51,7 +51,6 @@ import androidx.compose.ui.unit.dp
 import app.knotwork.design.components.buttons.KnotworkButtonSize
 import app.knotwork.design.components.buttons.KnotworkPrimaryButton
 import app.knotwork.design.components.buttons.KnotworkSecondaryButton
-import app.knotwork.design.components.buttons.KnotworkTextButton
 import app.knotwork.design.components.misc.EmptyState
 import app.knotwork.design.theme.KnotworkTheme
 import app.knotwork.design.tokens.KnotworkTextStyles
@@ -247,13 +246,10 @@ private fun ModelsBody(
             )
         }
         item(key = "presets-section") {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                SectionHeader(label = strings.presetsSection, modifier = Modifier.weight(1f))
-                KnotworkTextButton(text = strings.presetsAll, onClick = callbacks.onOverflowMenu)
-            }
+            // "All ↗" link from the original mockup is intentionally
+            // hidden until we have a destination to send users to —
+            // a no-op button is worse UX than no button.
+            SectionHeader(label = strings.presetsSection)
         }
         items(items = state.presets, key = { it.id }) { preset ->
             PresetCard(preset = preset, strings = strings, callbacks = callbacks)

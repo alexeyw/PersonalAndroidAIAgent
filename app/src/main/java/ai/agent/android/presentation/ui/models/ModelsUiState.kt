@@ -42,6 +42,14 @@ data class ModelsUiState(
      * section.
      */
     val activeDownloadFileName: String? = null,
+    /**
+     * Wire key of the active local-model backend
+     * ([ai.agent.android.domain.models.LocalBackend.key]) — `cpu` /
+     * `gpu` / `npu`. Read from `SettingsRepository.localModelBackend`
+     * and rendered as part of the per-model meta line. Defaults to
+     * `cpu` until the first observation lands.
+     */
+    val localBackendKey: String = "cpu",
 )
 
 /**

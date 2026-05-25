@@ -36,13 +36,8 @@ import java.util.Locale
  * catalog [MemoryViewState], and forwards events back to the VM. The
  * legacy `Chat history` tab is dropped per Task 10 scope.
  */
-@Suppress("UnusedParameter") // onBack kept for nav-graph compatibility until the catalog surface lands its back arrow.
 @Composable
-fun MemoryScreen(
-    viewModel: MemoryViewModel = hiltViewModel(),
-    onOpenChat: () -> Unit = {},
-    onBack: () -> Unit = {},
-) {
+fun MemoryScreen(viewModel: MemoryViewModel = hiltViewModel(), onOpenChat: () -> Unit = {}, onBack: () -> Unit = {}) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
     var searchQuery by remember { mutableStateOf("") }
@@ -102,6 +97,7 @@ fun MemoryScreen(
     )
 
     val callbacks = MemoryCallbacks(
+        onBack = onBack,
         onSearchQueryChange = { searchQuery = it },
         onSortChange = { sortMode = it },
         onEntryClick = { id -> expandedEntryId = id.toLongOrNull() },
