@@ -9,8 +9,13 @@ architecture, see [`architecture.md`](architecture.md); for recipes on
 extending the agent with new node types, tools, or cloud providers,
 see [`extending.md`](extending.md).
 
-Screenshots in this guide are placeholders until the first tagged
-pre-release ships with real captures.
+Marketing-style hero shots of the main surfaces (chat home, pipeline
+editor, pipeline library, tools, settings) live under
+[`docs/images/`](images/) and are rendered in the project README.
+Inline per-flow screenshots in this guide are placeholders pending a
+device-capture pass — the agent's surfaces are evolving fast enough
+between phases that hand-curated guide screenshots tend to go stale
+before the next release ships.
 
 ---
 
@@ -62,7 +67,11 @@ If the source you are downloading from requires authentication, paste
 your token into the **HuggingFace Auth Token** field above the URL
 input. The field is masked and is used only for the download request.
 
-![Screenshot TODO — models screen](screenshots/TODO.png)
+<!-- TODO: device capture of the Models screen. The hero shots under
+     `docs/images/` cover chat / pipeline-editor / pipeline-library /
+     tools / settings; Models / Memory / Onboarding still need a
+     dedicated pass. -->
+
 
 ### 2. Download a model
 
@@ -107,11 +116,11 @@ now built on the Knotwork design system and shows, top to bottom:
 - A **message list** with user and assistant bubbles, inline tool
   invocations, and any clarification or HITL confirmation card the
   agent surfaced for the current run.
-- A pinned **composer** at the bottom — type a message, attach a file
-  with the paperclip, or dictate with the microphone. The send button
-  morphs into a stop button while the agent is generating.
+- A pinned **composer** at the bottom — type a message or dictate with
+  the microphone. The send button morphs into a **stop** button while
+  the agent is generating, and into a **retry** button after an error.
 
-The surface adapts to nine deterministic visual states, all reachable
+The surface adapts to eight deterministic visual states, all reachable
 from the same screen:
 
 | State            | When it appears                                                 |
@@ -124,8 +133,12 @@ from the same screen:
 | Clarification    | The assistant asks you for more details before continuing.      |
 | Error            | The model or network failed; an inline tile + retry appears.    |
 | Drawer Open      | The thread list slides in as an alt-nav drawer over the chat.   |
-| Console Expanded | The agent console rises from the bottom over the chat surface.  |
 | Dark             | A cross-cutting variant — every state respects the system theme. |
+
+The **console pane** (see the [Console](#console) section) is rendered
+as a bottom-sheet *overlay* on top of any of the above states — it is
+not a chat state in its own right and stays mounted across state
+transitions while it is open.
 
 **Debug builds** expose a state picker reachable by triple-tapping the
 title row, which flips between every documented state for visual QA.
@@ -187,19 +200,9 @@ history is portable to any app that handles JSON or plain text.
   available chat is auto-selected, or a fresh unbound chat is created
   if none remain.
 
-### Saving and filtering messages
+### Copying a message
 
-You can mark individual messages as favourites so they stay easy to
-find later.
-
-- **Save / Unsave** — long-press a message bubble and choose **Save**
-  (or **Unsave** to remove the mark). A small star appears on saved
-  bubbles.
-- **Show only saved messages** — toggle the star icon in the chat
-  screen's top bar. While the filter is on, only saved messages are
-  rendered; toggle it again to see the full conversation.
-
-You can also long-press a message to copy its text to the clipboard.
+Long-press any message bubble to copy its text to the clipboard.
 
 ---
 
@@ -210,51 +213,65 @@ your request — which pipeline node is running, which tools were
 called, which memory chunks were retrieved, and any errors that
 occurred.
 
-### Mini-console (collapsed)
+### Agent-status pill
 
-A small strip sits just above the input field on the chat screen and
-always shows the most recent agent events:
+Just above the message composer sits a single-line **status pill**
+formatted as `[TAG]  body`. It reflects the agent's current activity
+without flooding the chat — for example:
 
-- The last three events on a typical screen, or the last event on a
-  compact viewport.
-- Each line is formatted as `[TAG] message`, where the tag indicates
-  the event type (for example, `[NODE]`, `[TOOL]`, `[MEMORY]`,
-  `[ERROR]`).
-- When the agent needs your approval to run a sensitive or
-  destructive tool, the mini-console shows inline **Approve** and
-  **Deny** buttons in place of the latest event.
+| Pill body                          | When you see it                     |
+|------------------------------------|-------------------------------------|
+| `[NODE]  idle · ready`             | The agent is waiting for input.     |
+| `[NODE]  generating · streaming`   | A response is being produced.       |
+| `[TOOL]  awaiting approval`        | The HITL card is on screen.         |
+| `[NODE]  waiting on clarification` | A clarification card is on screen.  |
+| `[NODE]  error · see message`      | The latest run failed (see banner). |
 
-Tap anywhere on the strip to open the full log.
+Tapping the pill opens the **console pane** — a bottom sheet that
+covers most of the screen with the full chronological event log.
 
-![Screenshot TODO — mini console](screenshots/TODO.png)
+### Console pane
 
-### Full log (expanded)
+The console pane is independent of the chat state — it stays open
+across `Generating → HitlConfirm → Clarification` transitions, so you
+can watch the agent while it works without losing your place.
 
-The full log opens as a bottom sheet covering most of the screen. It
-shows every event from the current session in chronological order,
-with millisecond timestamps.
+The pane has three tabs:
 
-At the top of the sheet is a row of filter chips:
+- **Console log** — every `[TAG] message` event from the current
+  session in chronological order with millisecond timestamps. A row
+  of filter chips at the top lets you narrow to **All / Nodes / Tools
+  / Memory / Errors**.
+- **Pipeline trace** — a structured view of the pipeline run as a tree
+  of node spans (name, duration, status). Useful for understanding
+  *why* a particular branch fired or a node was skipped.
+- **Node I/O** — per-node input / output text plus the values of every
+  `$VARIABLE` resolved during the run, so you can diff what the agent
+  actually saw.
 
-| Chip      | Shows                                                 |
-|-----------|-------------------------------------------------------|
-| **All**     | Every event in the session.                         |
-| **Nodes**   | Pipeline-node execution events only.                |
-| **Tools**   | Tool invocations and their results only.            |
-| **Memory**  | Long-term memory reads and writes only.             |
-| **Errors**  | Error events only.                                  |
+Three actions are available at the pane footer:
 
-Two actions are available in the sheet:
+- **Copy line** — long-press a single console row.
+- **Copy all** — copies the full plain-text dump of the active tab to
+  the clipboard, regardless of which filter chip is active.
+- **Clear console** — wipes the on-screen log baseline for the current
+  session after a destructive confirmation dialog. The underlying chat
+  messages and the saved pipeline trace are not affected.
 
-- **Clear** — wipes the on-screen log for the current session after
-  a confirmation dialog. The underlying chat messages are not
-  affected.
-- **Copy all** — copies the full plain-text dump of the log to the
-  clipboard, regardless of which filter chip is active.
+The active tab is persisted between runs, so the pane re-opens to the
+tab you used last. The pane auto-scrolls to the latest event as long as
+you are pinned to the bottom; if you scroll up to read older events,
+auto-scroll pauses so you do not lose your place.
 
-The sheet auto-scrolls to the latest event as long as you are pinned
-to the bottom; if you scroll up to read older events, auto-scroll
-pauses so you do not lose your place.
+### Approving a tool call
+
+If the agent needs your approval to run a sensitive or destructive
+tool, the chat shifts into the **HitlConfirm** state — a card appears
+inline in the message stream with the tool name, the typed arguments,
+a colour-coded risk pill (`READ` / `SENS` / `DEST`), and **Approve** /
+**Deny** buttons. Destructive tools also require typing the literal
+tool name as a typed-confirm gate before the **Approve** button is
+enabled.
 
 ---
 
@@ -293,7 +310,9 @@ Tap the **+** button (floating action button) to create a new
 pipeline. New pipelines start as a minimal `INPUT → OUTPUT` graph so
 that they are valid immediately.
 
-![Screenshot TODO — pipeline library](screenshots/TODO.png)
+For a marketing-style preview of this screen see
+[`docs/images/hero-pipeline-library.png`](images/hero-pipeline-library.png)
+(dark variant: [`hero-pipeline-library-dark.png`](images/hero-pipeline-library-dark.png)).
 
 ### Binding a pipeline to a chat
 
@@ -442,8 +461,9 @@ the app's import flow, so there is no manual conversion step.
 1. Move the exported JSON file onto the Android device (USB, cloud
    drive, email — anything that puts it in a place the system file
    picker can reach).
-2. Open the app's **Pipelines** screen and load any pipeline to open
-   the **Visual Orchestrator**.
+2. Open the app's **Pipelines** screen — the **Import JSON** affordance
+   sits in the *From browser editor* footer at the bottom of the
+   library list.
 3. Tap **Import JSON**. The system file picker opens; pick the file
    you exported from the browser editor.
 4. The imported pipeline is saved into the library and becomes the
@@ -471,7 +491,9 @@ Each tool has a switch on the Tools screen. Turn a tool off to hide
 it from the agent for the next run; turn it on to make it available
 again.
 
-![Screenshot TODO — tools screen](screenshots/TODO.png)
+For a marketing-style preview of this screen see
+[`docs/images/hero-tools.png`](images/hero-tools.png)
+(dark variant: [`hero-tools-dark.png`](images/hero-tools-dark.png)).
 
 ### Risk levels and human-in-the-loop
 
@@ -778,13 +800,13 @@ model fails:
 Without an NPU or a usable GPU, the local model runs on CPU only,
 which is noticeably slower (especially for the first few tokens):
 
-- Open **Settings → Local Model Settings** and tap **Test Backend**
-  to confirm which backend the model is actually using.
+- Open **Settings → Local model** and tap **Test backend** to confirm
+  which backend the model is actually using.
 - Try a smaller model from the **Models** screen — even a 1B-2B
   parameter model can be substantially faster than a 7B+ one on
   CPU.
-- Lower **Max Context Length** in **Settings → LLM Parameters**.
-  Shorter contexts mean less work per token.
+- Lower **Max context** in **Settings → LLM parameters**. Shorter
+  contexts mean less work per token.
 
 ### A tool says it is unavailable
 

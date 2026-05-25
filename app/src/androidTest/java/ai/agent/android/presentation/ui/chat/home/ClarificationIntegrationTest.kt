@@ -18,9 +18,7 @@ import org.junit.Rule
 import org.junit.Test
 
 /**
- * Instrumented UI tests covering the chat-home clarification card. Ports
- * the legacy [ai.agent.android.presentation.ui.chat.legacy.ClarificationCardTest]
- * happy paths onto the Phase 22 chat-home surface.
+ * Instrumented UI tests covering the chat-home clarification card.
  */
 class ClarificationIntegrationTest {
 

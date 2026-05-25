@@ -21,9 +21,7 @@ import org.junit.Test
 
 /**
  * Instrumented UI tests covering the chat-home HITL confirmation card
- * rendered inline in the assistant message stream. Ports the legacy
- * [ai.agent.android.presentation.ui.chat.legacy.ApprovalBannerTest]
- * coverage onto the Phase 22 chat-home surface.
+ * rendered inline in the assistant message stream.
  *
  * Each test wires [ChatHomeContent] directly with a synthetic view state
  * holding one trailing [ChatContent.Confirmation] row and a callbacks

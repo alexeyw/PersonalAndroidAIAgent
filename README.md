@@ -9,11 +9,15 @@
 > plans tasks, and takes real actions across Android — without requiring an
 > internet connection.
 
-![Pipeline editor — hero](docs/images/hero-pipeline-editor.png)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/hero-chat-home-dark.png">
+  <img alt="On-Device AI Agent — chat home" src="docs/images/hero-chat-home.png" width="540">
+</picture>
 
-> The Knotwork pipeline editor — drag-and-drop graph of typed nodes (input,
-> local LLM, cloud LLM, tools, routing, output) that processes every chat
-> message end-to-end on-device.
+> The Knotwork chat surface — every message is processed end-to-end on-device
+> by a user-editable pipeline of typed nodes (input, local LLM, cloud LLM,
+> tools, routing, output). The drag-and-drop pipeline editor lives one tap
+> away under the **Pipelines** tab.
 
 ## Pre-release notice
 
@@ -112,16 +116,46 @@ configured it.
 
 ## Screenshots
 
-> Placeholder images — real screenshots will land alongside the first
-> tagged pre-release.
+Every image below is captured at 1080 × 2400 from a Roborazzi baseline
+(`./gradlew :catalog:recordRoborazziDebug --tests "*HeroSnapshotTest*"`),
+which means the README and the design-system regression suite are
+guaranteed to stay in sync. Hover over (or tap) an image to see the dark
+variant via your browser's `prefers-color-scheme`.
 
-| Chat screen | Pipeline editor |
-|---|---|
-| ![Screenshot TODO — chat](docs/screenshots/TODO.png) | ![Screenshot TODO — pipeline editor](docs/screenshots/TODO.png) |
-
-| Pipeline library | Browser pipeline editor |
-|---|---|
-| ![Screenshot TODO — pipeline library](docs/screenshots/TODO.png) | ![Screenshot TODO — browser editor](docs/screenshots/TODO.png) |
+<table>
+  <tr>
+    <td align="center">
+      <picture>
+        <source media="(prefers-color-scheme: dark)" srcset="docs/images/hero-pipeline-editor-dark.png">
+        <img alt="Pipeline editor — typed nodes per type" src="docs/images/hero-pipeline-editor.png" width="270">
+      </picture>
+      <br><sub><b>Pipeline editor</b> — typed nodes (input · output · LiteRT · cloud · intent router · if · clarify · …)</sub>
+    </td>
+    <td align="center">
+      <picture>
+        <source media="(prefers-color-scheme: dark)" srcset="docs/images/hero-pipeline-library-dark.png">
+        <img alt="Pipeline library — saved pipelines" src="docs/images/hero-pipeline-library.png" width="270">
+      </picture>
+      <br><sub><b>Pipeline library</b> — saved pipelines + import-from-browser-editor JSON</sub>
+    </td>
+  </tr>
+  <tr>
+    <td align="center">
+      <picture>
+        <source media="(prefers-color-scheme: dark)" srcset="docs/images/hero-tools-dark.png">
+        <img alt="Tools — built-in AppFunctions and expanded MCP server" src="docs/images/hero-tools.png" width="270">
+      </picture>
+      <br><sub><b>Tools</b> — built-in AppFunctions + MCP servers with per-tool risk + toggle</sub>
+    </td>
+    <td align="center">
+      <picture>
+        <source media="(prefers-color-scheme: dark)" srcset="docs/images/hero-settings-dark.png">
+        <img alt="Settings — identity, system instructions, restrictions, LLM parameters" src="docs/images/hero-settings.png" width="270">
+      </picture>
+      <br><sub><b>Settings</b> — identity card, system instructions with <code>$VARIABLE</code> chips, restrictions, LLM params</sub>
+    </td>
+  </tr>
+</table>
 
 ## Requirements
 
@@ -175,6 +209,7 @@ After installing:
 - Code style — [docs/code-style.md](docs/code-style.md).
 - Testing strategy and coverage — [docs/testing.md](docs/testing.md).
 - API & integration conventions — [docs/api-conventions.md](docs/api-conventions.md).
+- Release-build playbook (R8, signing, AAB, APK size) — [docs/release.md](docs/release.md).
 - Contributing guide — [CONTRIBUTING.md](CONTRIBUTING.md).
 - Code of Conduct — [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md).
 - Security policy and threat model — [SECURITY.md](SECURITY.md).

@@ -401,8 +401,10 @@ DataStore, never in `local.properties`, never committed to git.
 
 ### 3.5. Add a Settings section
 
-The Settings screen renders the six Knotwork sections (Appearance,
-Models, Privacy, Memory, MCP, About) through the catalog
+The Settings screen renders nine Knotwork cards — *identity*, *system
+instructions*, *restrictions*, *LLM parameters*, *local model*,
+*external providers*, *memory*, *notifications*, *privacy* — through
+the catalog
 [`SettingsContent`](../catalog/src/main/java/app/knotwork/design/screens/settings/SettingsContent.kt).
 Each row arrives as a `SettingsRowState` and is mapped to a Compose
 control via the `rowContent` lambda in
@@ -411,8 +413,8 @@ control via the `rowContent` lambda in
 To add a new provider:
 
 1. Allocate a stable `ROW_ID_<PROVIDER>` constant inside `SettingsScreen.kt`.
-2. Append a `row(ROW_ID_<PROVIDER>, "<Name>")` line under the **Models**
-   block in `buildViewState`.
+2. Append a `row(ROW_ID_<PROVIDER>, "<Name>")` line under the
+   **External providers** block in `buildViewState`.
 3. Wire a `when` branch in the `rowContent` lambda that delegates to the
    catalog
    [`KnotworkProviderRow`](../catalog/src/main/java/app/knotwork/design/screens/settings/KnotworkProviderRow.kt).
@@ -495,10 +497,11 @@ directly — no further wiring is needed.
 ### 4.3. Mirror the variable into the browser editor
 
 Add the key to the `PROMPT_VARIABLES` array in
-[`pipeline-editor.html`](../pipeline-editor.html) (around line 901):
+[`pipeline-editor.html`](../pipeline-editor.html). The current set is:
 
 ```js
-const PROMPT_VARIABLES = ['DATE', 'TIME', 'TOOLS', 'MODEL', 'MEMORY_SUMMARY', 'WEATHER'];
+const PROMPT_VARIABLES = ['DATE', 'TIME', 'TOOLS', 'MODEL', 'MEMORY_SUMMARY', 'LANG', 'LOCATION', 'USER', 'DEVICE', 'WEATHER'];
+//                                                                                                                  ^^^^^^^ your new key
 ```
 
 This drives the clickable chips above the `systemPrompt` textarea. If
@@ -508,8 +511,8 @@ work), but users will not see it in the autocomplete chips.
 ### 4.4. Document the variable
 
 Add a row to the "Variables in system prompts" table in
-[`docs/user-guide.md`](user-guide.md) (around line 247) so end users
-can discover the new placeholder.
+[`docs/user-guide.md`](user-guide.md) so end users can discover the
+new placeholder.
 
 ### 4.5. Tests
 

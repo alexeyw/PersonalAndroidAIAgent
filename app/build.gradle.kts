@@ -87,17 +87,26 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            // Phase 22 / Task 17 — R8 in full mode + resource shrinking.
+            // Keep rules for reflection-heavy code paths (Koog, Ktor,
+            // kotlinx.serialization, MediaPipe / LiteRT JNI, SQLCipher,
+            // AppFunctions KSP-generated wrappers) live in
+            // `proguard-rules.pro`; AGP appends the standard
+            // `proguard-android-optimize.txt` from the Android SDK.
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
             )
-            // Phase 21 / Task 11/11 — until a release keystore is provisioned,
-            // sign the release variant with the debug keystore so
-            // `./gradlew :app:assembleRelease` produces an installable APK we
-            // can measure for size and smoke-test on device. v0.1.0 ships
-            // unsigned for production use; a real `signingConfigs.release`
-            // block lands when the keystore is in place.
+            // v0.1.0 ships signed with the debug keystore. A real
+            // `signingConfigs.release` block (with `keyAlias` / `keyPassword`
+            // sourced from `local.properties` or environment variables) is
+            // intentionally deferred: the Play Store submission lands in a
+            // separate task once the production keystore is provisioned,
+            // tracked in `docs/release.md`. Installing the GitHub-Release
+            // APK on a developer device still works with the debug signing
+            // identity.
             signingConfig = signingConfigs.getByName("debug")
             // Strip non-arm64 ABIs from the release APK. With `minSdk = 36`
             // (Android 16) every supported device is 64-bit; shipping
@@ -127,6 +136,16 @@ android {
     packaging {
         resources {
             excludes += "META-INF/*"
+            // Phase 22 / Task 17 — Jansi (transitive via Koog → log adapter)
+            // ships pre-built native binaries for Windows / Mac / Linux that
+            // are dead weight on Android. Stripping them shaves ~430 KB off
+            // the release APK without touching runtime behaviour (the
+            // ANSI-escape rendering only runs on JVM hosts).
+            excludes += "org/fusesource/jansi/internal/native/Windows/**"
+            excludes += "org/fusesource/jansi/internal/native/Mac/**"
+            excludes += "org/fusesource/jansi/internal/native/Linux/**"
+            excludes += "org/fusesource/jansi/internal/native/FreeBSD/**"
+            excludes += "META-INF/native-image/jansi/**"
         }
     }
 
