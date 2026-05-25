@@ -3,6 +3,7 @@
 package app.knotwork.design.screens.prompts
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -12,10 +13,13 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Add
@@ -57,10 +61,10 @@ import app.knotwork.design.tokens.KnotworkTextStyles
 private val CardAccentStrip = 2.dp
 
 /** Side length of the leading icon tile on the editor-sheet header. */
-private val EditorHeaderTile = 40.dp
+private val EditorHeaderTile = 32.dp
 
 /** Inner glyph size on the editor-sheet header. */
-private val EditorHeaderGlyph = 22.dp
+private val EditorHeaderGlyph = 18.dp
 
 /** Side length of the FAB icon. */
 private val FabIconSize = 24.dp
@@ -84,7 +88,13 @@ fun PromptLibraryContent(
     Scaffold(
         modifier = modifier.fillMaxSize(),
         containerColor = MaterialTheme.colorScheme.surface,
-        topBar = { PromptsTopBar(state = state, strings = strings, callbacks = callbacks) },
+        contentWindowInsets = androidx.compose.foundation.layout.WindowInsets(left = 0, top = 0, right = 0, bottom = 0),
+        topBar = {
+            androidx.compose.foundation.layout.Column {
+                PromptsTopBar(state = state, strings = strings, callbacks = callbacks)
+                androidx.compose.material3.HorizontalDivider(color = KnotworkTheme.extended.divider)
+            }
+        },
         floatingActionButton = {
             if (state.visualState != PromptLibraryVisualState.Loading) {
                 FloatingActionButton(
@@ -307,42 +317,50 @@ private fun PromptCard(
                 .background(color = MaterialTheme.colorScheme.primary),
         )
         Column(
-            modifier = Modifier.padding(KnotworkTheme.spacing.sp4),
+            modifier = Modifier.padding(
+                horizontal = KnotworkTheme.spacing.sp3,
+                vertical = KnotworkTheme.spacing.sp3,
+            ),
             verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp2),
         ) {
+            // Title row: category tag + name + edit/delete actions.
+            // Tag uses the smallest chip size and a manual surface to
+            // keep the row height compact — the previous M3 `KnotworkChip`
+            // wrapper added 32 dp of padding that pushed the title off
+            // the right edge.
             Row(verticalAlignment = Alignment.CenterVertically) {
-                KnotworkChip(
-                    label = prompt.category,
-                    onClick = null,
-                )
+                Box(
+                    modifier = Modifier
+                        .clip(KnotworkTheme.shapes.full)
+                        .background(color = MaterialTheme.colorScheme.primary.copy(alpha = 0.18f))
+                        .padding(horizontal = KnotworkTheme.spacing.sp2, vertical = KnotworkTheme.spacing.sp1),
+                ) {
+                    Text(
+                        text = prompt.category,
+                        style = KnotworkTextStyles.LabelSm,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                }
                 Text(
                     text = prompt.name,
-                    style = KnotworkTextStyles.TitleMd,
+                    style = KnotworkTextStyles.BodyBase,
                     color = MaterialTheme.colorScheme.onSurface,
                     modifier = Modifier
                         .weight(1f)
-                        .padding(start = KnotworkTheme.spacing.sp3),
+                        .padding(start = KnotworkTheme.spacing.sp2),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
-                IconButton(onClick = onEdit) {
-                    Icon(
-                        imageVector = Icons.Outlined.Edit,
-                        contentDescription = strings.editCd,
-                        tint = KnotworkTheme.extended.onSurface2,
-                    )
-                }
-                IconButton(onClick = onDelete) {
-                    Icon(
-                        imageVector = Icons.Outlined.DeleteOutline,
-                        contentDescription = strings.deleteCd,
-                        tint = KnotworkTheme.extended.onSurface2,
-                    )
-                }
+                CompactIconButton(icon = Icons.Outlined.Edit, contentDescription = strings.editCd, onClick = onEdit)
+                CompactIconButton(
+                    icon = Icons.Outlined.DeleteOutline,
+                    contentDescription = strings.deleteCd,
+                    onClick = onDelete,
+                )
             }
             Text(
                 text = highlightVariables(text = prompt.body, variables = variables),
-                style = KnotworkTextStyles.BodyBase,
+                style = KnotworkTextStyles.BodySm,
                 color = MaterialTheme.colorScheme.onSurface,
                 maxLines = 4,
                 overflow = TextOverflow.Ellipsis,
@@ -350,13 +368,40 @@ private fun PromptCard(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     text = strings.usedByFormat.format(prompt.usedByCount),
-                    style = KnotworkTextStyles.MonoSm,
+                    style = KnotworkTextStyles.Caption,
                     color = KnotworkTheme.extended.onSurfaceMuted,
                     modifier = Modifier.weight(1f),
                 )
                 KnotworkTextButton(text = strings.duplicate, onClick = onDuplicate)
             }
         }
+    }
+}
+
+/**
+ * Compact 32-dp `IconButton` used for the per-row edit / delete actions
+ * on the Prompt cards. The Material 3 default of 48 dp would push the
+ * title off the right edge on common phone widths.
+ */
+@Composable
+private fun CompactIconButton(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    contentDescription: String,
+    onClick: () -> Unit,
+) {
+    Box(
+        modifier = Modifier
+            .size(size = 32.dp)
+            .clip(KnotworkTheme.shapes.sm)
+            .clickable(onClick = onClick, role = androidx.compose.ui.semantics.Role.Button),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = contentDescription,
+            tint = KnotworkTheme.extended.onSurface2,
+            modifier = Modifier.size(size = 18.dp),
+        )
     }
 }
 
@@ -408,10 +453,17 @@ fun PromptEditorSheetBody(
     modifier: Modifier = Modifier,
 ) {
     Column(
+        // `verticalScroll` keeps the prompt body and trailing action row
+        // reachable inside the bottom sheet even when the multi-line
+        // prompt text and the variable chip row push the form past the
+        // sheet viewport (especially with `imePadding` adding the
+        // keyboard inset).
         modifier = modifier
             .fillMaxWidth()
-            .padding(KnotworkTheme.spacing.sp4),
-        verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp4),
+            .verticalScroll(state = rememberScrollState())
+            .imePadding()
+            .padding(horizontal = KnotworkTheme.spacing.sp4, vertical = KnotworkTheme.spacing.sp3),
+        verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp3),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Box(
@@ -432,7 +484,7 @@ fun PromptEditorSheetBody(
             }
             Text(
                 text = if (state.id == null) strings.titleNew else strings.titleEdit,
-                style = KnotworkTextStyles.TitleLg,
+                style = KnotworkTextStyles.TitleMd,
                 color = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier
                     .weight(1f)

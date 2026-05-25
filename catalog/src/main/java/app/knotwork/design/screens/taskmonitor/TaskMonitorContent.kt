@@ -72,7 +72,13 @@ fun TaskMonitorContent(
     Scaffold(
         modifier = modifier.fillMaxSize(),
         containerColor = MaterialTheme.colorScheme.surface,
-        topBar = { TopBar(strings = strings, callbacks = callbacks) },
+        contentWindowInsets = androidx.compose.foundation.layout.WindowInsets(left = 0, top = 0, right = 0, bottom = 0),
+        topBar = {
+            androidx.compose.foundation.layout.Column {
+                TopBar(strings = strings, callbacks = callbacks)
+                androidx.compose.material3.HorizontalDivider(color = KnotworkTheme.extended.divider)
+            }
+        },
     ) { padding ->
         Column(modifier = Modifier.fillMaxSize().padding(padding)) {
             if (state.visualState != TaskMonitorVisualState.Loading &&

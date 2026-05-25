@@ -106,11 +106,21 @@ private fun readClipboard(context: Context): String {
  * @param subtitleFormat localised `"%1$d active · %2$d on disk · %3$s"` template.
  */
 internal fun ModelsUiState.toViewState(subtitleFormat: String): ModelsViewState {
-    val totalSizeGb = downloadedModels.sumOf { it.size }.toGigabytesLabel()
+    // Sum of `LocalModel.size` is unreliable because the download manager
+    // doesn't currently report content-length back to the local store,
+    // so freshly-downloaded entries land with `size = 0L`. Render a dash
+    // instead of a misleading `0 GB` whenever at least one model is on
+    // disk but the totals look empty.
+    val sumBytes = downloadedModels.sumOf { it.size }
+    val totalSizeLabel = if (downloadedModels.isNotEmpty() && sumBytes == 0L) {
+        "—"
+    } else {
+        sumBytes.toGigabytesLabel()
+    }
     val subtitle = subtitleFormat.format(
         if (activeModel != null) 1 else 0,
         downloadedModels.size,
-        totalSizeGb,
+        totalSizeLabel,
     )
     val active = activeModel?.let { model ->
         ActiveModelRow(
@@ -152,8 +162,11 @@ internal fun ModelsUiState.toViewState(subtitleFormat: String): ModelsViewState 
 }
 
 private fun LocalModel.toMetaLine(): String {
-    val sizeLabel = size.toGigabytesLabel()
-    return "$sizeLabel · NPU · LiteRT"
+    // Drop the size prefix when the DownloadManager hasn't populated
+    // it yet — keeps the active-card meta from rendering as "0 GB ·
+    // NPU · LiteRT" for freshly-downloaded models.
+    val prefix = if (size > 0L) "${size.toGigabytesLabel()} · " else ""
+    return "${prefix}NPU · LiteRT"
 }
 
 private fun String.toPresetId(): String = this

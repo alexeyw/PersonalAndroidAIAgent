@@ -25,7 +25,6 @@ import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.DeveloperBoard
 import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.MoreVert
-import androidx.compose.material.icons.outlined.NorthEast
 import androidx.compose.material.icons.outlined.VpnKey
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -49,6 +48,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import app.knotwork.design.components.buttons.KnotworkButtonSize
 import app.knotwork.design.components.buttons.KnotworkPrimaryButton
 import app.knotwork.design.components.buttons.KnotworkSecondaryButton
 import app.knotwork.design.components.buttons.KnotworkTextButton
@@ -57,10 +57,10 @@ import app.knotwork.design.theme.KnotworkTheme
 import app.knotwork.design.tokens.KnotworkTextStyles
 
 /** Side length of the leading chip-style icon tile on Active card / preset rows. */
-private val LeadingTileSize = 48.dp
+private val LeadingTileSize = 40.dp
 
 /** Inner glyph size on the leading tile. */
-private val LeadingGlyphSize = 24.dp
+private val LeadingGlyphSize = 20.dp
 
 /** Diameter of the green "active" status dot. */
 private val ActiveDotSize = 8.dp
@@ -88,7 +88,13 @@ fun ModelsContent(
     Scaffold(
         modifier = modifier.fillMaxSize(),
         containerColor = MaterialTheme.colorScheme.surface,
-        topBar = { ModelsTopBar(state = state, strings = strings, callbacks = callbacks) },
+        contentWindowInsets = androidx.compose.foundation.layout.WindowInsets(left = 0, top = 0, right = 0, bottom = 0),
+        topBar = {
+            androidx.compose.foundation.layout.Column {
+                ModelsTopBar(state = state, strings = strings, callbacks = callbacks)
+                androidx.compose.material3.HorizontalDivider(color = KnotworkTheme.extended.divider)
+            }
+        },
     ) { padding ->
         when (state.visualState) {
             ModelsVisualState.Loading -> ModelsLoading(padding = padding)
@@ -211,10 +217,10 @@ private fun ModelsBody(
         contentPadding = PaddingValues(
             start = KnotworkTheme.spacing.sp4,
             end = KnotworkTheme.spacing.sp4,
-            top = KnotworkTheme.spacing.sp3,
-            bottom = KnotworkTheme.spacing.sp6,
+            top = KnotworkTheme.spacing.sp2,
+            bottom = KnotworkTheme.spacing.sp4,
         ),
-        verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp3),
+        verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp2),
     ) {
         state.active?.let { active ->
             item(key = "active") {
@@ -287,7 +293,7 @@ private fun ActiveModelCard(active: ActiveModelRow, strings: ModelsStrings, onCl
             .clip(KnotworkTheme.shapes.md)
             .background(color = KnotworkTheme.extended.surface3)
             .clickable(onClick = onClick, role = Role.Button)
-            .padding(KnotworkTheme.spacing.sp4),
+            .padding(horizontal = KnotworkTheme.spacing.sp3, vertical = KnotworkTheme.spacing.sp3),
     ) {
         LeadingChipTile(background = MaterialTheme.colorScheme.surface)
         Column(
@@ -360,11 +366,12 @@ private fun AuthTokenField(state: ModelsViewState, strings: ModelsStrings, callb
         onChange = callbacks.onAuthTokenChange,
         masked = true,
         trailing = {
+            // Sm size so the inline action stays compact and matches the
+            // mockup's chip-style "+ Paste" affordance.
             KnotworkPrimaryButton(
                 text = strings.hfPaste,
                 onClick = callbacks.onAuthTokenPaste,
-                leadingIcon = null,
-                modifier = Modifier,
+                size = KnotworkButtonSize.Sm,
             )
         },
     )
@@ -385,11 +392,14 @@ private fun CustomUrlRow(state: ModelsViewState, strings: ModelsStrings, callbac
             masked = false,
             modifier = Modifier.weight(1f),
         )
+        // Sm size matches the inline mockup: the action chip is anchored
+        // to the field row, not a standalone full-width CTA.
         KnotworkPrimaryButton(
             text = strings.customUrlGet,
             onClick = callbacks.onCustomUrlSubmit,
             enabled = state.customUrlEnabled && state.customUrl.isNotBlank(),
             leadingIcon = Icons.Outlined.Download,
+            size = KnotworkButtonSize.Sm,
         )
     }
 }
@@ -459,8 +469,8 @@ private fun PresetCard(preset: PresetRow, strings: ModelsStrings, callbacks: Mod
             .clip(KnotworkTheme.shapes.md)
             .background(color = tint)
             .clickable(onClick = { callbacks.onPresetOpen(preset.id) }, role = Role.Button)
-            .padding(KnotworkTheme.spacing.sp4),
-        verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp2),
+            .padding(horizontal = KnotworkTheme.spacing.sp3, vertical = KnotworkTheme.spacing.sp2),
+        verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp1),
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
@@ -473,14 +483,14 @@ private fun PresetCard(preset: PresetRow, strings: ModelsStrings, callbacks: Mod
             ) {
                 Text(
                     text = preset.name,
-                    style = KnotworkTextStyles.TitleMd,
+                    style = KnotworkTextStyles.BodyBase,
                     color = MaterialTheme.colorScheme.onSurface,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
                 Text(
                     text = preset.source,
-                    style = KnotworkTextStyles.MonoSm,
+                    style = KnotworkTextStyles.Caption,
                     color = KnotworkTheme.extended.onSurfaceMuted,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
@@ -514,11 +524,15 @@ private fun PresetCard(preset: PresetRow, strings: ModelsStrings, callbacks: Mod
 
 @Composable
 private fun PresetTrailing(preset: PresetRow, strings: ModelsStrings, callbacks: ModelsCallbacks) {
+    // Per-row trailing actions stay at Sm size so the preset cards keep
+    // their list-row proportions and "Get" / "✓ ON DISK" don't dominate
+    // the title block.
     when (preset.status) {
         is PresetStatus.Idle -> KnotworkPrimaryButton(
             text = strings.presetGet,
             onClick = { callbacks.onPresetDownload(preset.id) },
             leadingIcon = Icons.Outlined.Download,
+            size = KnotworkButtonSize.Sm,
         )
         is PresetStatus.Downloading -> IconButton(onClick = { callbacks.onPresetCancelDownload(preset.id) }) {
             Icon(
@@ -530,7 +544,7 @@ private fun PresetTrailing(preset: PresetRow, strings: ModelsStrings, callbacks:
         is PresetStatus.OnDisk -> KnotworkSecondaryButton(
             text = strings.presetOnDisk,
             onClick = { callbacks.onPresetOpen(preset.id) },
-            leadingIcon = Icons.Outlined.NorthEast,
+            size = KnotworkButtonSize.Sm,
         )
     }
 }

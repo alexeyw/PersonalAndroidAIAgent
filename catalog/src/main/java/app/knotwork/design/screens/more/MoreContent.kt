@@ -50,7 +50,13 @@ fun MoreContent(
     androidx.compose.material3.Scaffold(
         modifier = modifier.fillMaxSize(),
         containerColor = MaterialTheme.colorScheme.surface,
-        topBar = { TopBar(strings = strings, onSearch = onSearch) },
+        contentWindowInsets = androidx.compose.foundation.layout.WindowInsets(left = 0, top = 0, right = 0, bottom = 0),
+        topBar = {
+            Column {
+                TopBar(strings = strings, onSearch = onSearch)
+                HorizontalDivider(color = KnotworkTheme.extended.divider)
+            }
+        },
         bottomBar = {
             if (!state.networkStatus.isNullOrBlank()) {
                 Footer(text = state.networkStatus, ok = state.networkStatusOk)
