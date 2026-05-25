@@ -35,6 +35,13 @@ data class ModelsUiState(
     val downloadError: AppError? = null,
     val customUrlInput: String = "",
     val authTokenInput: String = "",
+    /**
+     * Filename of the in-flight download (e.g. `gemma-4-E4B-it.litertlm`), or
+     * `null` if no download is active. Lets the UI render the per-preset
+     * progress on the *right* row instead of attaching the bar to the field
+     * section.
+     */
+    val activeDownloadFileName: String? = null,
 )
 
 /**

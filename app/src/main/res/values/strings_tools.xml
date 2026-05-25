@@ -7,19 +7,4 @@
     <string name="tools_remove_server_cd">Remove Server</string>
     <string name="tools_new_mcp_label">Add New MCP Server URL</string>
     <string name="tools_add_server">Add Server</string>
-
-    <!-- Prompt library -->
-    <string name="prompts_screen_title">Prompt Library</string>
-    <string name="prompts_add_prompt_cd">Add Prompt</string>
-    <string name="prompts_empty_category">No prompts in this category.</string>
-    <string name="prompts_no_prompts">No prompts available.</string>
-    <string name="prompts_dialog_new_title">New Prompt</string>
-    <string name="prompts_dialog_edit_title">Edit Prompt</string>
-    <string name="prompts_field_name">Name</string>
-    <string name="prompts_field_category">Category (Node Type)</string>
-    <string name="prompts_field_text">Prompt Text</string>
-    <string name="prompts_select_category_cd">Select Category</string>
-    <string name="prompts_preview_cd">Preview prompt</string>
-    <string name="prompts_card_edit_cd">Edit</string>
-    <string name="prompts_card_delete_cd">Delete</string>
 </resources>

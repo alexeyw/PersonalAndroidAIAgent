@@ -32,6 +32,7 @@ class TaskMonitorViewModel @Inject constructor(
 ) : ViewModel() {
 
     private val _filter = MutableStateFlow(TaskFilterType.ACTIVE)
+    private val _detailTaskId = MutableStateFlow<String?>(value = null)
 
     private val workInfosFlow = workManager.getWorkInfosFlow(
         WorkQuery.Builder.fromStates(
@@ -54,7 +55,8 @@ class TaskMonitorViewModel @Inject constructor(
         workInfosFlow,
         taskQueueManager.activeSessionsState,
         _filter,
-    ) { sessions, workInfos, activeSessionsMap, filter ->
+        _detailTaskId,
+    ) { sessions, workInfos, activeSessionsMap, filter, detailId ->
         val sessionTasks = sessions.mapNotNull { session ->
             val orchestratorState = activeSessionsMap[session.id] ?: AgentOrchestratorState.Idle
 
@@ -128,6 +130,7 @@ class TaskMonitorViewModel @Inject constructor(
             tasks = filteredTasks,
             filter = filter,
             isLoading = false,
+            detailTaskId = detailId,
         )
     }.stateIn(
         scope = viewModelScope,
@@ -168,6 +171,16 @@ class TaskMonitorViewModel @Inject constructor(
             settingsRepository.setCurrentChatSessionId(sessionId)
             onComplete()
         }
+    }
+
+    /** Opens the row-detail bottom sheet for the given task id. */
+    fun openDetails(taskId: String) {
+        _detailTaskId.value = taskId
+    }
+
+    /** Closes the row-detail bottom sheet without affecting task state. */
+    fun closeDetails() {
+        _detailTaskId.value = null
     }
 
     private companion object {

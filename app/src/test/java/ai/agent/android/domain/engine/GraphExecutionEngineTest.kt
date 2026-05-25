@@ -37,6 +37,7 @@ import ai.agent.android.domain.repositories.ClarificationRepository
 import ai.agent.android.domain.repositories.CrashReportingRepository
 import ai.agent.android.domain.repositories.LocalModelRepository
 import ai.agent.android.domain.repositories.MetricsRepository
+import ai.agent.android.domain.repositories.NetworkActivityTracker
 import ai.agent.android.domain.repositories.SettingsRepository
 import ai.agent.android.domain.repositories.ToolRepository
 import ai.agent.android.domain.services.ApprovalNotifier
@@ -76,6 +77,7 @@ class GraphExecutionEngineTest {
     private lateinit var approvalNotifier: ApprovalNotifier
     private lateinit var koogClientFactory: KoogClientFactory
     private lateinit var cloudLlmModelResolver: KoogCloudLlmModelResolver
+    private lateinit var networkActivityTracker: NetworkActivityTracker
     private lateinit var evaluateIfConditionUseCase: EvaluateIfConditionUseCase
     private lateinit var loadModelUseCase: LoadModelUseCase
     private lateinit var clarificationRepository: ClarificationRepository
@@ -101,6 +103,7 @@ class GraphExecutionEngineTest {
         approvalNotifier = mockk(relaxed = true)
         koogClientFactory = mockk()
         cloudLlmModelResolver = mockk()
+        networkActivityTracker = mockk(relaxed = true)
         evaluateIfConditionUseCase = mockk()
         loadModelUseCase = mockk()
         crashReportingRepository = mockk(relaxed = true)
@@ -151,6 +154,7 @@ class GraphExecutionEngineTest {
             metricsRepository,
             koogClientFactory,
             cloudLlmModelResolver,
+            networkActivityTracker,
         )
 
         val systemNodeExecutor = SystemNodeExecutor(
@@ -826,6 +830,7 @@ class GraphExecutionEngineTest {
                 metricsRepository,
                 koogClientFactory,
                 cloudLlmModelResolver,
+                networkActivityTracker,
             ),
             SystemNodeExecutor(llmEngine, loadModelUseCase, chatRepository),
             QueueProcessorNodeExecutor(),
@@ -998,6 +1003,7 @@ class GraphExecutionEngineTest {
                     metricsRepository,
                     koogClientFactory,
                     cloudLlmModelResolver,
+                    networkActivityTracker,
                 ),
                 SystemNodeExecutor(llmEngine, loadModelUseCase, chatRepository),
                 QueueProcessorNodeExecutor(),

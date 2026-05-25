@@ -1,32 +1,26 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <!-- Monitoring -->
-    <string name="monitoring_screen_title">Monitoring &amp; Tasks</string>
     <string name="monitoring_power_saving_title">Power Saving Mode Active</string>
     <string name="monitoring_power_saving_text">Battery is low. Agent model is unloaded and background tasks are paused.</string>
-    <string name="monitoring_metrics_title">Resource Consumption</string>
-    <string name="monitoring_metric_inference_time">Inference Time</string>
-    <string name="monitoring_metric_inference_time_value">%1$d ms</string>
-    <string name="monitoring_metric_speed">Speed</string>
-    <string name="monitoring_metric_speed_value">%1$.1f tokens/s</string>
-    <string name="monitoring_metric_total_tokens">Total Tokens</string>
-    <string name="monitoring_metric_total_tokens_value">%1$d</string>
     <string name="monitoring_section_session_aggregates">Session aggregates</string>
-    <string name="monitoring_total_execution_time">Total execution time: %1$d ms</string>
     <string name="monitoring_section_time_per_node">Time per node type</string>
-    <string name="monitoring_node_row">• %1$s: %2$d ms</string>
     <string name="monitoring_section_logs">System Actions &amp; Logs</string>
     <string name="monitoring_no_recent_actions">No recent actions found.</string>
-    <string name="monitoring_log_timestamp">[%1$s]</string>
+    <string name="monitoring_screen_title">Live metrics</string>
+    <string name="monitoring_empty_title">No metrics yet</string>
+    <string name="monitoring_empty_subtitle">Run a pipeline to populate the live metrics here.</string>
+    <string name="monitoring_error_title">Couldn\'t load metrics</string>
 
     <!-- Task monitor -->
-    <string name="taskmonitor_screen_title">Active Tasks</string>
-    <string name="taskmonitor_empty">No tasks found.</string>
-    <string name="taskmonitor_status">Status: %1$s</string>
-    <string name="taskmonitor_stage">Stage: %1$s</string>
-    <string name="taskmonitor_open_chat">Open Chat</string>
+    <string name="taskmonitor_screen_title">Active tasks</string>
+    <string name="taskmonitor_empty_title">No tasks running</string>
+    <string name="taskmonitor_empty_subtitle">Background tasks and active chat sessions appear here.</string>
+    <string name="taskmonitor_error_title">Couldn\'t load tasks</string>
+    <string name="taskmonitor_open_chat">Open chat</string>
     <string name="taskmonitor_filter_all">All</string>
     <string name="taskmonitor_filter_active">Active</string>
     <string name="taskmonitor_filter_background">Background</string>
     <string name="taskmonitor_filter_completed">Completed</string>
+    <string name="taskmonitor_detail_no_logs">No log lines captured yet.</string>
 </resources>

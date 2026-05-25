@@ -68,6 +68,7 @@ This file maps the contents of the main application package.
     - `McpServerRepositoryImpl.kt` - Per-server gateway over the raw `McpClient` transport; owns lazy connections, the 5-minute tool-list cache, and per-URL `McpConnectionStatus` flows consumed by `ToolsViewModel`.
     - `MemoryRepositoryImpl.kt` - Memory repository implementation.
     - `MetricsRepositoryImpl.kt` - Metrics repository implementation.
+    - `NetworkActivityTrackerImpl.kt` - Records `System.currentTimeMillis()` on every outbound cloud-LLM and MCP call. Drives the More tab footer privacy pill via `NetworkActivityTracker.lastOutboundAt`.
     - `NetworkStateRepositoryImpl.kt` - Network state repository implementation.
     - `PowerStateRepositoryImpl.kt` - Power state repository implementation.
     - `ToolRepositoryImpl.kt` - Tool repository implementation.
@@ -172,6 +173,7 @@ This file maps the contents of the main application package.
     - `MemoryRepository.kt` - Memory repository interface.
     - `MetricsRepository.kt` - Metrics repository interface.
     - `ModelDownloadManager.kt` - Model download manager interface.
+    - `NetworkActivityTracker.kt` - Domain interface tracking the timestamp of the most recent outbound LLM / MCP call. Used by the More tab privacy footer to compute "no network calls in last N m" without observing connectivity.
     - `NetworkStateRepository.kt` - Network state repository interface.
     - `PipelineRepository.kt` - Pipeline repository interface.
     - `PowerStateRepository.kt` - Power state repository interface.
@@ -236,8 +238,8 @@ This file maps the contents of the main application package.
       - `OnboardingViewModel.kt` - Hilt ViewModel orchestrating the download + warm-up flow. Injects `LocalModelRepository`, `ModelDownloadManager`, `LoadModelUseCase`; folds `DownloadState` into the catalog `OnboardingViewState`, persists the freshly-downloaded `LocalModel`, runs `LoadModelUseCase` to warm the inference handle, and emits one-shot snackbar pings on skip. Sets `hasCompletedOnboarding` on finish / skip.
     - `more/` - "More" tab landing screen.
       - `MoreScreen.kt` - Material3 `ListItem` list with Memory / Models / Prompts / Task monitor / Live metrics / Settings / About rows.
-    - `about/` - About screen (Phase 21 / Task 4 stub; full body in Task 10).
-      - `AboutScreen.kt` - App name + version (`BuildConfig.VERSION_NAME`) + license name.
+    - `about/` - About screen (Phase 22 / Task 15 — full Knotwork redesign on top of `AboutContent`: hero brand mark + version / license / acknowledgments / privacy cards).
+      - `AboutScreen.kt` - Slim wrapper around the catalog `AboutContent`. Owns the 15-entry hand-maintained acknowledgments list and the `ACTION_VIEW` intents for License / Privacy CTAs.
     - `chat/` - Chat surface (Phase 21 / Task 8: the redesigned `home/` package is the production surface; `legacy/` keeps the original implementation while orchestrator integration is pending).
       - `home/` - Redesigned Knotwork chat home (Phase 21 / Task 8). Wired to `CHAT_TAB` via `AppNavGraph`.
         - `ChatHomeScreen.kt` - Stateful entry composable: subscribes to `ChatHomeViewModel`, maps `ChatHomeUiState → ChatHomeViewState`, surfaces the deleted-pipeline fallback Snackbar, threads the debug state picker, owns IME / navigation-bar insets. Phase 22 / Task 4 added the new-thread / rename / model-picker `ModalBottomSheet`s, the TopAppBar overflow `DropdownMenu` (Export / Delete / Clear console), the `ActivityResultContracts.OpenDocument` import launcher, and the `Intent.ACTION_SEND` share-sheet for chat export. Takes `onOpenSettings` / `onOpenModels` lambdas wired by `AppNavGraph`.
@@ -265,12 +267,12 @@ This file maps the contents of the main application package.
       - `MemoryScreen.kt` - Memory UI screen.
       - `MemoryUiState.kt` - Memory UI state.
       - `MemoryViewModel.kt` - Memory ViewModel.
-    - `models/` - Models screen components.
-      - `ModelsScreen.kt` - Models UI screen.
-      - `ModelsUiState.kt` - Models UI state.
-      - `ModelsViewModel.kt` - Models ViewModel.
+    - `models/` - Models screen components (Phase 22 / Task 15 — Knotwork redesign with inline Active card + HF auth + Custom URL + Presets list).
+      - `ModelsScreen.kt` - Slim mapper. Folds `ModelsUiState` into the catalog `ModelsViewState` (Active card / HF auth section / Custom URL / Presets list with Idle / Downloading / OnDisk variants).
+      - `ModelsUiState.kt` - Models UI state. Adds `activeDownloadFileName: String?` so the catalog can render the in-flight progress on the matching preset row.
+      - `ModelsViewModel.kt` - Models ViewModel. Adds `cancelDownload` (cancels the active download job) and `deleteModel`.
     - `monitoring/` - Monitoring screen components.
-      - `MonitoringScreen.kt` - Monitoring UI screen.
+      - `MonitoringScreen.kt` - Slim mapper. Folds `MonitoringUiState` into the catalog `MonitoringViewState` and renders `MonitoringContent` (Phase 22 / Task 15).
       - `MonitoringUiState.kt` - Monitoring UI state.
       - `MonitoringViewModel.kt` - Monitoring ViewModel.
     - `orchestrator/` - Pipeline library + shared orchestrator ViewModel (the canvas surface moved to `pipeline/editor/` in Phase 21 / Task 9).
@@ -304,14 +306,18 @@ This file maps the contents of the main application package.
       - `bars/ValidationBar.kt` - Bottom bar listing `PipelineValidationError`s. Phase 22 / Task 14 adds a header banner (issue count + `Auto-fix` action), per-row severity glyphs (`Blocker` / `Warning`), and a trailing `Go ↗` button that focuses the offending node when one exists.
       - `bars/MultiSelectToolbar.kt` - Top bar that replaces `EditorToolbar` while multi-select is active; surfaces count + Cancel / Copy / Delete.
       - `sheet/NodeConfigSheetHost.kt` - Thin adapter exposing the catalog `NodeConfigSheet` (with all 12 per-type forms + validator) to the editor screen.
-    - `prompts/` - Prompt Library screen components.
-      - `PromptLibraryScreen.kt` - Prompt library UI screen.
-      - `PromptLibraryUiState.kt` - Prompt library UI state.
-      - `PromptLibraryViewModel.kt` - Prompt library ViewModel.
-    - `splash/` - Cold-start splash / loading screen.
-      - `SplashScreen.kt` - Compose splash UI: app name, determinate `LinearProgressIndicator`, status label, inline error + Retry button. Calls `onInitialized` once initialization reaches `InitStage.Done` so the activity can navigate to `home`.
+    - `prompts/` - Prompt Library screen components (Phase 22 / Task 15 — Knotwork redesign with `ScrollableTabRow` + per-card actions + `ModalBottomSheet` editor).
+      - `PromptLibraryScreen.kt` - Slim mapper. Folds `PromptLibraryUiState` into the catalog `PromptLibraryViewState`, hosts the editor `ModalBottomSheet` with `PromptEditorSheetBody`.
+      - `PromptLibraryUiState.kt` - Prompt library UI state. Adds `selectedCategory: String?`, `editorDraft: PromptEditorDraft?`.
+      - `PromptLibraryViewModel.kt` - Prompt library ViewModel. Adds `selectCategory`, `openEditor(id?)`, `closeEditor`, per-field editor setters, `saveEditor`, `duplicatePrompt`.
+    - `splash/` - Cold-start splash / loading screen (Phase 22 / Task 15 wired to the Knotwork `SplashContent` catalog surface).
+      - `SplashScreen.kt` - Slim mapper. Folds `SplashUiState` into `SplashViewState` (Initializing / Loading / Error) and renders `SplashContent`.
       - `SplashUiState.kt` - Render state of `SplashScreen` (message, progressFraction, isDone, errorMessage).
       - `SplashViewModel.kt` - Hilt ViewModel that subscribes to `AppInitializationUseCase`, folds each `InitProgress` into `SplashUiState`, and exposes `retry()` to re-run the pipeline after a fatal failure.
+    - `more/` - "More" tab landing screen (Phase 22 / Task 15 — Knotwork-converted, now stateful with live counters + footer privacy pill).
+      - `MoreScreen.kt` - Slim mapper. Subscribes to `MoreViewModel.uiState`, builds the `MoreViewState`, renders `MoreContent`.
+      - `MoreUiState.kt` - Pre-formatted display strings for each row subtitle + the footer pill (memory chunks, active model, prompt categories, active task counts, network status).
+      - `MoreViewModel.kt` - Aggregates the live counters from `MemoryRepository.observeStats`, `LocalModelRepository.getAllModels`, `PromptRepository.getAllPrompts`, `TaskQueueManager.activeSessionsState`, and `NetworkActivityTracker.lastOutboundAt`. Owns the pure-Kotlin formatters (`formatMemoryStats`, `formatPromptsStats`, `formatNetworkStatus`).
     - `settings/` - Settings screen components. Phase 22 / Task 9 redesigned the surface end-to-end: nine cards (identity / system instructions / restrictions / LLM parameters / local model / external providers / memory / notifications / privacy) drive the catalog `SettingsContent`.
       - `SettingsScreen.kt` - Slim mapper. Translates `SettingsUiState` into the catalog `SettingsViewState`, hosts the SAF launcher for memory export, the `ProcessPhoenix.triggerRebirth` restart hook, and the `SnackbarHost`.
       - `SettingsUiState.kt` - Per-card state slices (identity, system instructions + variable chip catalog, restrictions, LLM params, local model + active-model meta, providers, memory stats, notifications, privacy, restart-required flag, destructive-action staging).
@@ -319,10 +325,10 @@ This file maps the contents of the main application package.
       - `provider/` - Standalone provider editor reached from the External providers nav-rows.
         - `ProviderDetailScreen.kt` - Hosts `KnotworkProviderRow` for the selected provider. Routes through `ProviderDetailViewModel` to `ApiKeyRepository`.
         - `ProviderPickerScreen.kt` - "+ Add provider" picker — full-screen list of the 5 known providers.
-    - `taskmonitor/` - Task monitoring screen components.
-      - `TaskMonitorScreen.kt` - Task monitor UI screen.
-      - `TaskMonitorState.kt` - Task monitor UI state.
-      - `TaskMonitorViewModel.kt` - Task monitor ViewModel.
+    - `taskmonitor/` - Task monitoring screen (Phase 22 / Task 15 — Knotwork-converted; swipe-to-cancel + detail `ModalBottomSheet`).
+      - `TaskMonitorScreen.kt` - Slim mapper. Folds `TaskMonitorState` into the catalog `TaskMonitorViewState` (filter chips + rows + optional `TaskMonitorDetail`), hosts the detail bottom sheet, wires `openDetails` / `closeDetails`.
+      - `TaskMonitorState.kt` - Task monitor UI state. Adds `detailTaskId: String?` for the bottom-sheet host.
+      - `TaskMonitorViewModel.kt` - Task monitor ViewModel. `openDetails` / `closeDetails` toggle the detail sheet via a private `_detailTaskId` flow combined into the unified state.
     - `tools/` - Tools screen components.
       - `ToolsScreen.kt` - Tools UI screen — drives catalog `ToolsContent`. Two-section list (built-in AppFunctions / MCP servers with nested expandable tool list, refresh + delete affordances).
       - `ToolsUiState.kt` - Tools UI state. Carries per-server `McpServerSnapshot` (status + tool list) plus expansion + disabled-MCP-tool sets.

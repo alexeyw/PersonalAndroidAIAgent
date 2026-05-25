@@ -1,0 +1,76 @@
+package app.knotwork.design.screens.about
+
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onRoot
+import androidx.test.ext.junit.runners.AndroidJUnit4
+import app.knotwork.design.a11y.FixedKnotworkA11y
+import app.knotwork.design.a11y.LocalKnotworkA11y
+import app.knotwork.design.theme.KnotworkTheme
+import com.github.takahirom.roborazzi.captureRoboImage
+import org.junit.Rule
+import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.annotation.Config
+import org.robolectric.annotation.GraphicsMode
+
+@RunWith(AndroidJUnit4::class)
+@GraphicsMode(GraphicsMode.Mode.NATIVE)
+@Config(sdk = [36], qualifiers = "w360dp-h760dp-xhdpi")
+class AboutContentSnapshotTest {
+    @get:Rule
+    val composeTestRule = createComposeRule()
+
+    @Test
+    fun about_default_light() = snapshot(name = "default", dark = false) {
+        AboutContent(state = AboutPreview.default())
+    }
+
+    @Test
+    fun about_default_dark() = snapshot(name = "default", dark = true) {
+        AboutContent(state = AboutPreview.default())
+    }
+
+    private fun snapshot(name: String, dark: Boolean, content: @Composable () -> Unit) {
+        composeTestRule.setContent {
+            CompositionLocalProvider(LocalKnotworkA11y provides FixedKnotworkA11y(reducedMotion = true)) {
+                KnotworkTheme(darkTheme = dark) { content() }
+            }
+        }
+        val themeTag = if (dark) "dark" else "light"
+        composeTestRule.onRoot().captureRoboImage(
+            filePath = "src/test/snapshots/about_${name}_$themeTag.png",
+        )
+    }
+}
+
+internal object AboutPreview {
+    fun default(): AboutViewState = AboutViewState(
+        appName = "Knotwork Agent",
+        tagline = "An on-device AI agent for Android",
+        versionLine = "Version 0.1.0",
+        buildLine = "Build 1 · debug",
+        commitSha = "abc1234",
+        licenseName = "Apache 2.0",
+        acknowledgments = listOf(
+            AcknowledgmentEntry(name = "Jetpack Compose", license = "Apache 2.0"),
+            AcknowledgmentEntry(name = "Kotlin Coroutines", license = "Apache 2.0"),
+            AcknowledgmentEntry(name = "Hilt", license = "Apache 2.0"),
+            AcknowledgmentEntry(name = "Room", license = "Apache 2.0"),
+            AcknowledgmentEntry(name = "Koog", license = "Apache 2.0"),
+            AcknowledgmentEntry(name = "LiteRT-LM", license = "Apache 2.0"),
+            AcknowledgmentEntry(name = "Retrofit", license = "Apache 2.0"),
+            AcknowledgmentEntry(name = "Coil", license = "Apache 2.0"),
+            AcknowledgmentEntry(name = "Roborazzi", license = "Apache 2.0"),
+            AcknowledgmentEntry(name = "MockK", license = "Apache 2.0"),
+            AcknowledgmentEntry(name = "SQLCipher", license = "BSD-3-Clause"),
+            AcknowledgmentEntry(name = "Firebase Crashlytics", license = "Apache 2.0"),
+            AcknowledgmentEntry(name = "MediaPipe", license = "Apache 2.0"),
+            AcknowledgmentEntry(name = "Timber", license = "Apache 2.0"),
+            AcknowledgmentEntry(name = "ProcessPhoenix", license = "Apache 2.0"),
+        ),
+        privacyBody = "All sensitive data is processed locally via LiteRT. " +
+            "Cloud providers are opt-in. Crash reporting is opt-in and never includes prompts or memory content.",
+    )
+}

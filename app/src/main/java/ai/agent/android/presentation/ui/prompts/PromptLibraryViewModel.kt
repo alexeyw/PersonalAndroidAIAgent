@@ -129,6 +129,108 @@ class PromptLibraryViewModel @Inject constructor(
         _uiState.update { it.copy(errorMessage = null) }
     }
 
+    /** Selects [category] as the active tab on the library screen. */
+    fun selectCategory(category: String) {
+        _uiState.update { it.copy(selectedCategory = category) }
+    }
+
+    /**
+     * Opens the bottom-sheet editor.
+     *
+     * @param promptId `null` to start a fresh draft; non-null to edit an
+     * existing template.
+     */
+    fun openEditor(promptId: Long?) {
+        val draft = if (promptId == null) {
+            PromptEditorDraft(category = _uiState.value.selectedCategory.orEmpty())
+        } else {
+            val source = _uiState.value.promptTemplates.firstOrNull { it.id == promptId }
+                ?: return
+            PromptEditorDraft(id = source.id, name = source.name, category = source.category, body = source.text)
+        }
+        _uiState.update { it.copy(editorDraft = draft) }
+    }
+
+    /** Closes the bottom-sheet editor without persisting changes. */
+    fun closeEditor() {
+        _uiState.update { it.copy(editorDraft = null) }
+    }
+
+    /** Updates the editor draft's Name field. */
+    fun onEditorNameChange(value: String) {
+        _uiState.update { state -> state.copy(editorDraft = state.editorDraft?.copy(name = value)) }
+    }
+
+    /** Updates the editor draft's Category field. */
+    fun onEditorCategoryChange(value: String) {
+        _uiState.update { state -> state.copy(editorDraft = state.editorDraft?.copy(category = value)) }
+    }
+
+    /** Updates the editor draft's Body field. */
+    fun onEditorBodyChange(value: String) {
+        _uiState.update { state -> state.copy(editorDraft = state.editorDraft?.copy(body = value)) }
+    }
+
+    /** Appends [token] at the end of the editor body (poor-man's "insert at cursor"). */
+    fun onEditorVariableInsert(token: String) {
+        _uiState.update { state ->
+            val draft = state.editorDraft ?: return@update state
+            val separator = if (draft.body.isEmpty() || draft.body.last().isWhitespace()) "" else " "
+            state.copy(editorDraft = draft.copy(body = draft.body + separator + token))
+        }
+    }
+
+    /** Persists the editor draft via [savePromptTemplateUseCase] and closes the sheet on success. */
+    fun saveEditor() {
+        val draft = _uiState.value.editorDraft ?: return
+        val template = PromptTemplate(
+            id = draft.id ?: 0L,
+            name = draft.name,
+            text = draft.body,
+            category = draft.category,
+        )
+        viewModelScope.launch {
+            try {
+                savePromptTemplateUseCase(template)
+                _uiState.update { it.copy(editorDraft = null) }
+            } catch (e: Exception) {
+                _uiState.update {
+                    it.copy(
+                        errorMessage =
+                        e.message?.let { msg -> UiText.Dynamic(msg) } ?: UiText(R.string.errors_generic_unexpected),
+                    )
+                }
+            }
+        }
+    }
+
+    /**
+     * Creates a duplicate of the given prompt with a `(copy)` suffix. The
+     * suffix matches the English-only project convention.
+     */
+    fun duplicatePrompt(id: Long) {
+        val source = _uiState.value.promptTemplates.firstOrNull { it.id == id } ?: return
+        viewModelScope.launch {
+            try {
+                savePromptTemplateUseCase(
+                    PromptTemplate(
+                        id = 0L,
+                        name = source.name + " (copy)",
+                        text = source.text,
+                        category = source.category,
+                    ),
+                )
+            } catch (e: Exception) {
+                _uiState.update {
+                    it.copy(
+                        errorMessage =
+                        e.message?.let { msg -> UiText.Dynamic(msg) } ?: UiText(R.string.errors_generic_unexpected),
+                    )
+                }
+            }
+        }
+    }
+
     private companion object {
         /**
          * See `OrchestratorViewModel.computeAvailableVariables` for the rationale: a

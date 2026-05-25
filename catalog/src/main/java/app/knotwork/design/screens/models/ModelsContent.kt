@@ -1,0 +1,567 @@
+@file:Suppress("MatchingDeclarationName") // Hosts ModelsContent + private helpers.
+
+package app.knotwork.design.screens.models
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
+import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.DeveloperBoard
+import androidx.compose.material.icons.outlined.Download
+import androidx.compose.material.icons.outlined.MoreVert
+import androidx.compose.material.icons.outlined.NorthEast
+import androidx.compose.material.icons.outlined.VpnKey
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ProgressIndicatorDefaults
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import app.knotwork.design.components.buttons.KnotworkPrimaryButton
+import app.knotwork.design.components.buttons.KnotworkSecondaryButton
+import app.knotwork.design.components.buttons.KnotworkTextButton
+import app.knotwork.design.components.misc.EmptyState
+import app.knotwork.design.theme.KnotworkTheme
+import app.knotwork.design.tokens.KnotworkTextStyles
+
+/** Side length of the leading chip-style icon tile on Active card / preset rows. */
+private val LeadingTileSize = 48.dp
+
+/** Inner glyph size on the leading tile. */
+private val LeadingGlyphSize = 24.dp
+
+/** Diameter of the green "active" status dot. */
+private val ActiveDotSize = 8.dp
+
+/** Height of the determinate download progress bar shown on a downloading preset. */
+private val ProgressBarHeight = 3.dp
+
+/**
+ * Stateless Knotwork Models surface. Mirrors the Models mockup
+ * (Active card → HF auth → Custom URL → Available presets).
+ *
+ * @param state immutable view state — drives loader / empty / default / error layouts.
+ * @param modifier optional layout modifier applied to the root scaffold.
+ * @param strings localised display strings (TopAppBar title + section labels + CTAs).
+ * @param callbacks one-shot callback bundle.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun ModelsContent(
+    state: ModelsViewState,
+    modifier: Modifier = Modifier,
+    strings: ModelsStrings = ModelsStrings(),
+    callbacks: ModelsCallbacks = noopModelsCallbacks(),
+) {
+    Scaffold(
+        modifier = modifier.fillMaxSize(),
+        containerColor = MaterialTheme.colorScheme.surface,
+        topBar = { ModelsTopBar(state = state, strings = strings, callbacks = callbacks) },
+    ) { padding ->
+        when (state.visualState) {
+            ModelsVisualState.Loading -> ModelsLoading(padding = padding)
+            ModelsVisualState.Empty -> ModelsEmpty(padding = padding, strings = strings, callbacks = callbacks)
+            ModelsVisualState.Error -> ModelsError(
+                padding = padding,
+                state = state,
+                strings = strings,
+                callbacks = callbacks,
+            )
+            ModelsVisualState.Default -> ModelsBody(
+                padding = padding,
+                state = state,
+                strings = strings,
+                callbacks = callbacks,
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ModelsTopBar(state: ModelsViewState, strings: ModelsStrings, callbacks: ModelsCallbacks) {
+    TopAppBar(
+        title = {
+            Column {
+                Text(
+                    text = strings.title,
+                    style = KnotworkTextStyles.TitleLg,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                if (state.subtitle.isNotEmpty()) {
+                    Text(
+                        text = state.subtitle,
+                        style = KnotworkTextStyles.MonoSm,
+                        color = KnotworkTheme.extended.onSurfaceMuted,
+                    )
+                }
+            }
+        },
+        navigationIcon = {
+            IconButton(onClick = callbacks.onBack) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Outlined.ArrowBack,
+                    contentDescription = strings.backCd,
+                    tint = MaterialTheme.colorScheme.onSurface,
+                )
+            }
+        },
+        actions = {
+            IconButton(onClick = callbacks.onOverflowMenu) {
+                Icon(
+                    imageVector = Icons.Outlined.MoreVert,
+                    contentDescription = strings.overflowCd,
+                    tint = MaterialTheme.colorScheme.onSurface,
+                )
+            }
+        },
+        colors = TopAppBarDefaults.topAppBarColors(
+            containerColor = MaterialTheme.colorScheme.surface,
+            titleContentColor = MaterialTheme.colorScheme.onSurface,
+        ),
+    )
+}
+
+@Composable
+private fun ModelsLoading(padding: PaddingValues) {
+    Box(
+        modifier = Modifier.fillMaxSize().padding(padding),
+        contentAlignment = Alignment.Center,
+    ) {
+        CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
+    }
+}
+
+@Composable
+private fun ModelsEmpty(padding: PaddingValues, strings: ModelsStrings, callbacks: ModelsCallbacks) {
+    Box(
+        modifier = Modifier.fillMaxSize().padding(padding),
+        contentAlignment = Alignment.Center,
+    ) {
+        EmptyState(
+            title = strings.emptyTitle,
+            subtitle = strings.emptySubtitle,
+            ctaLabel = strings.emptyCta,
+            onCtaClick = callbacks.onCustomUrlSubmit,
+        )
+    }
+}
+
+@Composable
+private fun ModelsError(
+    padding: PaddingValues,
+    state: ModelsViewState,
+    strings: ModelsStrings,
+    callbacks: ModelsCallbacks,
+) {
+    Box(
+        modifier = Modifier.fillMaxSize().padding(padding).padding(KnotworkTheme.spacing.sp6),
+        contentAlignment = Alignment.Center,
+    ) {
+        EmptyState(
+            title = strings.errorTitle,
+            subtitle = state.errorMessage.orEmpty(),
+            ctaLabel = strings.errorRetry,
+            onCtaClick = callbacks.onRetry,
+        )
+    }
+}
+
+@Composable
+private fun ModelsBody(
+    padding: PaddingValues,
+    state: ModelsViewState,
+    strings: ModelsStrings,
+    callbacks: ModelsCallbacks,
+) {
+    LazyColumn(
+        modifier = Modifier.fillMaxSize().padding(padding),
+        contentPadding = PaddingValues(
+            start = KnotworkTheme.spacing.sp4,
+            end = KnotworkTheme.spacing.sp4,
+            top = KnotworkTheme.spacing.sp3,
+            bottom = KnotworkTheme.spacing.sp6,
+        ),
+        verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp3),
+    ) {
+        state.active?.let { active ->
+            item(key = "active") {
+                ActiveModelCard(active = active, strings = strings, onClick = callbacks.onActiveOpen)
+            }
+        }
+        item(key = "hf-section") {
+            SectionHeader(label = strings.hfSection, trailing = strings.hfOptional)
+        }
+        item(key = "hf-field") {
+            AuthTokenField(state = state, strings = strings, callbacks = callbacks)
+        }
+        item(key = "custom-section") {
+            SectionHeader(label = strings.customUrlSection)
+        }
+        item(key = "custom-field") {
+            CustomUrlRow(state = state, strings = strings, callbacks = callbacks)
+        }
+        item(key = "format-hint") {
+            Text(
+                text = strings.formatHint,
+                style = KnotworkTextStyles.MonoSm,
+                color = KnotworkTheme.extended.onSurfaceMuted,
+            )
+        }
+        item(key = "presets-section") {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                SectionHeader(label = strings.presetsSection, modifier = Modifier.weight(1f))
+                KnotworkTextButton(text = strings.presetsAll, onClick = callbacks.onOverflowMenu)
+            }
+        }
+        items(items = state.presets, key = { it.id }) { preset ->
+            PresetCard(preset = preset, strings = strings, callbacks = callbacks)
+        }
+    }
+}
+
+@Composable
+private fun SectionHeader(label: String, modifier: Modifier = Modifier, trailing: String? = null) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = modifier.fillMaxWidth(),
+    ) {
+        Text(
+            text = label,
+            style = KnotworkTextStyles.LabelSm,
+            color = KnotworkTheme.extended.onSurfaceMuted,
+            modifier = Modifier.weight(1f),
+        )
+        if (trailing != null) {
+            Text(
+                text = trailing,
+                style = KnotworkTextStyles.LabelSm,
+                color = KnotworkTheme.extended.onSurfaceMuted,
+            )
+        }
+    }
+}
+
+@Composable
+private fun ActiveModelCard(active: ActiveModelRow, strings: ModelsStrings, onClick: () -> Unit) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp3),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(KnotworkTheme.shapes.md)
+            .background(color = KnotworkTheme.extended.surface3)
+            .clickable(onClick = onClick, role = Role.Button)
+            .padding(KnotworkTheme.spacing.sp4),
+    ) {
+        LeadingChipTile(background = MaterialTheme.colorScheme.surface)
+        Column(
+            verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp1),
+            modifier = Modifier.weight(1f),
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = strings.activeBadge,
+                    style = KnotworkTextStyles.LabelSm,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                Box(
+                    modifier = Modifier
+                        .padding(start = KnotworkTheme.spacing.sp1)
+                        .size(ActiveDotSize)
+                        .background(color = KnotworkTheme.extended.signalSuccess, shape = KnotworkTheme.shapes.full),
+                )
+            }
+            Text(
+                text = active.displayName,
+                style = KnotworkTextStyles.MonoBase,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                text = active.meta,
+                style = KnotworkTextStyles.MonoSm,
+                color = KnotworkTheme.extended.onSurfaceMuted,
+            )
+        }
+        Icon(
+            imageVector = Icons.AutoMirrored.Outlined.KeyboardArrowRight,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurface,
+        )
+    }
+}
+
+@Composable
+private fun LeadingChipTile(background: Color) {
+    Box(
+        modifier = Modifier
+            .size(LeadingTileSize)
+            .background(color = background, shape = KnotworkTheme.shapes.sm),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            imageVector = Icons.Outlined.DeveloperBoard,
+            contentDescription = null,
+            tint = KnotworkTheme.extended.onSurface2,
+            modifier = Modifier.size(LeadingGlyphSize),
+        )
+    }
+}
+
+@Composable
+private fun AuthTokenField(state: ModelsViewState, strings: ModelsStrings, callbacks: ModelsCallbacks) {
+    InlineFieldRow(
+        leadingIcon = {
+            Icon(
+                imageVector = Icons.Outlined.VpnKey,
+                contentDescription = null,
+                tint = KnotworkTheme.extended.onSurfaceMuted,
+            )
+        },
+        value = state.authToken,
+        placeholder = strings.hfPlaceholder,
+        onChange = callbacks.onAuthTokenChange,
+        masked = true,
+        trailing = {
+            KnotworkPrimaryButton(
+                text = strings.hfPaste,
+                onClick = callbacks.onAuthTokenPaste,
+                leadingIcon = null,
+                modifier = Modifier,
+            )
+        },
+    )
+}
+
+@Composable
+private fun CustomUrlRow(state: ModelsViewState, strings: ModelsStrings, callbacks: ModelsCallbacks) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp2),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        InlineFieldRow(
+            leadingIcon = null,
+            value = state.customUrl,
+            placeholder = strings.customUrlPlaceholder,
+            onChange = callbacks.onCustomUrlChange,
+            masked = false,
+            modifier = Modifier.weight(1f),
+        )
+        KnotworkPrimaryButton(
+            text = strings.customUrlGet,
+            onClick = callbacks.onCustomUrlSubmit,
+            enabled = state.customUrlEnabled && state.customUrl.isNotBlank(),
+            leadingIcon = Icons.Outlined.Download,
+        )
+    }
+}
+
+@Composable
+@Suppress("LongParameterList") // Private layout helper; collapsing hurts call-site clarity.
+private fun InlineFieldRow(
+    leadingIcon: (@Composable () -> Unit)?,
+    value: String,
+    placeholder: String,
+    onChange: (String) -> Unit,
+    masked: Boolean,
+    modifier: Modifier = Modifier,
+    trailing: (@Composable () -> Unit)? = null,
+) {
+    val transformation: VisualTransformation = if (masked && value.isNotEmpty()) {
+        PasswordVisualTransformation()
+    } else {
+        VisualTransformation.None
+    }
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp2),
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(KnotworkTheme.shapes.md)
+            .background(color = KnotworkTheme.extended.surface2)
+            .border(
+                width = 1.dp,
+                color = KnotworkTheme.extended.outlineStrong,
+                shape = KnotworkTheme.shapes.md,
+            )
+            .padding(horizontal = KnotworkTheme.spacing.sp3, vertical = KnotworkTheme.spacing.sp2),
+    ) {
+        if (leadingIcon != null) leadingIcon()
+        Box(modifier = Modifier.weight(1f)) {
+            BasicTextField(
+                value = value,
+                onValueChange = onChange,
+                singleLine = true,
+                visualTransformation = transformation,
+                textStyle = KnotworkTextStyles.MonoBase.copy(color = MaterialTheme.colorScheme.onSurface),
+                cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                modifier = Modifier.fillMaxWidth(),
+            )
+            if (value.isEmpty()) {
+                Text(
+                    text = placeholder,
+                    style = KnotworkTextStyles.MonoBase,
+                    color = KnotworkTheme.extended.onSurfaceMuted,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+        if (trailing != null) trailing()
+    }
+}
+
+@Composable
+private fun PresetCard(preset: PresetRow, strings: ModelsStrings, callbacks: ModelsCallbacks) {
+    val isDownloading = preset.status is PresetStatus.Downloading
+    val tint = if (isDownloading) KnotworkTheme.extended.surface3 else KnotworkTheme.extended.surface1
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(KnotworkTheme.shapes.md)
+            .background(color = tint)
+            .clickable(onClick = { callbacks.onPresetOpen(preset.id) }, role = Role.Button)
+            .padding(KnotworkTheme.spacing.sp4),
+        verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp2),
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp3),
+        ) {
+            LeadingChipTile(background = MaterialTheme.colorScheme.surface)
+            Column(
+                verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp1),
+                modifier = Modifier.weight(1f),
+            ) {
+                Text(
+                    text = preset.name,
+                    style = KnotworkTextStyles.TitleMd,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    text = preset.source,
+                    style = KnotworkTextStyles.MonoSm,
+                    color = KnotworkTheme.extended.onSurfaceMuted,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            PresetTrailing(preset = preset, strings = strings, callbacks = callbacks)
+        }
+        if (preset.status is PresetStatus.Downloading) {
+            LinearProgressIndicator(
+                progress = { preset.status.progress / 100f },
+                modifier = Modifier.fillMaxWidth().height(ProgressBarHeight),
+                color = MaterialTheme.colorScheme.primary,
+                trackColor = KnotworkTheme.extended.surface1,
+                strokeCap = ProgressIndicatorDefaults.LinearStrokeCap,
+            )
+            Text(
+                text = preset.status.metaLine ?: "${preset.status.progress}%",
+                style = KnotworkTextStyles.MonoSm,
+                color = MaterialTheme.colorScheme.primary,
+            )
+        }
+        if (preset.status is PresetStatus.OnDisk && preset.status.sizeMeta != null) {
+            Text(
+                text = preset.status.sizeMeta,
+                style = KnotworkTextStyles.MonoSm,
+                color = KnotworkTheme.extended.onSurfaceMuted,
+            )
+        }
+    }
+}
+
+@Composable
+private fun PresetTrailing(preset: PresetRow, strings: ModelsStrings, callbacks: ModelsCallbacks) {
+    when (preset.status) {
+        is PresetStatus.Idle -> KnotworkPrimaryButton(
+            text = strings.presetGet,
+            onClick = { callbacks.onPresetDownload(preset.id) },
+            leadingIcon = Icons.Outlined.Download,
+        )
+        is PresetStatus.Downloading -> IconButton(onClick = { callbacks.onPresetCancelDownload(preset.id) }) {
+            Icon(
+                imageVector = Icons.Outlined.Close,
+                contentDescription = strings.presetCancelCd,
+                tint = KnotworkTheme.extended.onSurfaceMuted,
+            )
+        }
+        is PresetStatus.OnDisk -> KnotworkSecondaryButton(
+            text = strings.presetOnDisk,
+            onClick = { callbacks.onPresetOpen(preset.id) },
+            leadingIcon = Icons.Outlined.NorthEast,
+        )
+    }
+}
+
+/**
+ * Localised string bundle threaded into `ModelsContent`. Kept as a `data
+ * class` with English defaults so design-side previews compile without
+ * resource lookups; the app-side mapper passes localised values.
+ */
+@Suppress("LongParameterList") // Hand-tuned default-arg list keeps catalog previews terse.
+data class ModelsStrings(
+    val title: String = "Models",
+    val backCd: String = "Back",
+    val overflowCd: String = "More options",
+    val activeBadge: String = "ACTIVE",
+    val hfSection: String = "HUGGINGFACE",
+    val hfOptional: String = "optional",
+    val hfPlaceholder: String = "Tap to paste hf_… token",
+    val hfPaste: String = "+ Paste",
+    val customUrlSection: String = "CUSTOM MODEL URL",
+    val customUrlPlaceholder: String = "https://huggingface.co/…/model",
+    val customUrlGet: String = "Get",
+    val formatHint: String = ".litertlm · .task · .gguf (experimental)",
+    val presetsSection: String = "AVAILABLE PRESETS",
+    val presetsAll: String = "All ↗",
+    val presetGet: String = "Get",
+    val presetOnDisk: String = "✓ ON DISK",
+    val presetCancelCd: String = "Cancel download",
+    val emptyTitle: String = "No models installed",
+    val emptySubtitle: String = "Add a model from the presets list or paste a custom URL.",
+    val emptyCta: String = "Add model",
+    val errorTitle: String = "Couldn't load models",
+    val errorRetry: String = "Retry",
+)

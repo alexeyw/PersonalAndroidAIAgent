@@ -9,6 +9,7 @@ import ai.agent.android.domain.repositories.SettingsRepository
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -41,6 +42,13 @@ class ModelsViewModel @Inject constructor(
      * The current UI state of the Models screen.
      */
     val uiState: StateFlow<ModelsUiState> = _uiState.asStateFlow()
+
+    /**
+     * Reference to the currently in-flight download collection job. Held so
+     * [cancelDownload] can interrupt it; nulled out when the download
+     * terminates (Success / Error / cancellation).
+     */
+    private var downloadJob: Job? = null
 
     init {
         observeDownloadedModels()
@@ -106,10 +114,11 @@ class ModelsViewModel @Inject constructor(
                 isDownloading = true,
                 downloadProgress = 0,
                 downloadError = null,
+                activeDownloadFileName = fileName,
             )
         }
 
-        downloadManager.downloadModel(url, fileName, authToken)
+        downloadJob = downloadManager.downloadModel(url, fileName, authToken)
             .onEach { state ->
                 when (state) {
                     is DownloadState.Pending -> {
@@ -123,6 +132,7 @@ class ModelsViewModel @Inject constructor(
                             it.copy(
                                 isDownloading = false,
                                 downloadProgress = null,
+                                activeDownloadFileName = null,
                             )
                         }
                         // Save the downloaded model metadata to the local database
@@ -143,6 +153,7 @@ class ModelsViewModel @Inject constructor(
                                 isDownloading = false,
                                 downloadProgress = null,
                                 downloadError = state.error,
+                                activeDownloadFileName = null,
                             )
                         }
                     }
@@ -156,6 +167,7 @@ class ModelsViewModel @Inject constructor(
                         downloadError = AndroidModelDownloadManager.DownloadError(
                             e.message ?: "Unknown error occurred",
                         ),
+                        activeDownloadFileName = null,
                     )
                 }
             }
@@ -170,6 +182,34 @@ class ModelsViewModel @Inject constructor(
     fun setActiveModel(modelId: Long) {
         viewModelScope.launch {
             localModelRepository.setActiveModel(modelId)
+        }
+    }
+
+    /**
+     * Cancels the currently in-flight download (if any). The download manager
+     * has no native cancellation API, so the collection job is interrupted
+     * instead — partial files are not cleaned up, but the UI returns to the
+     * idle state immediately.
+     */
+    fun cancelDownload() {
+        downloadJob?.cancel()
+        downloadJob = null
+        _uiState.update {
+            it.copy(
+                isDownloading = false,
+                downloadProgress = null,
+                activeDownloadFileName = null,
+            )
+        }
+    }
+
+    /**
+     * Removes the model with the given id from the local store. Called from
+     * the per-row overflow menu on the Models screen.
+     */
+    fun deleteModel(modelId: Long) {
+        viewModelScope.launch {
+            localModelRepository.deleteModelById(modelId)
         }
     }
 

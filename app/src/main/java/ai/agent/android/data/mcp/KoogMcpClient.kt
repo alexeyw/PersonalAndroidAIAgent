@@ -4,6 +4,7 @@ import ai.agent.android.domain.models.AgentTool
 import ai.agent.android.domain.models.McpAuth
 import ai.agent.android.domain.models.McpServerConfig
 import ai.agent.android.domain.models.McpTransport
+import ai.agent.android.domain.repositories.NetworkActivityTracker
 import ai.koog.agents.core.tools.ToolRegistry
 import ai.koog.agents.mcp.McpToolRegistryProvider
 import ai.koog.agents.mcp.metadata.McpServerInfo
@@ -29,7 +30,7 @@ import javax.inject.Inject
  * It manages the underlying Ktor HttpClient and the Koog ToolRegistry.
  */
 @OptIn(ai.koog.agents.core.tools.annotations.InternalAgentToolsApi::class)
-class KoogMcpClient : McpClient {
+class KoogMcpClient(private val networkActivityTracker: NetworkActivityTracker? = null) : McpClient {
     private var registry: ToolRegistry? = null
 
     // The HTTP client is recreated on every [connect] so the same client instance can be
@@ -63,6 +64,10 @@ class KoogMcpClient : McpClient {
      * cannot accumulate across failed connects.
      */
     override suspend fun connect(config: McpServerConfig) {
+        // Outbound HTTP traffic is about to start — surface it to the privacy indicator
+        // *before* the network handshake so the timestamp reflects intent even if the
+        // call fails downstream.
+        networkActivityTracker?.recordOutbound()
         withContext(Dispatchers.IO) {
             // Drop any previous client+registry pair before reattaching. Without this,
             // a second connect() on the same instance would silently leak the prior
@@ -161,6 +166,7 @@ class KoogMcpClient : McpClient {
      * @throws IllegalArgumentException if the tool is not found.
      */
     override suspend fun executeTool(name: String, arguments: String): String = withContext(Dispatchers.IO) {
+        networkActivityTracker?.recordOutbound()
         val tool = registry?.getToolOrNull(name)
             ?: throw IllegalArgumentException("Tool $name not found")
 
@@ -206,11 +212,14 @@ class KoogMcpClient : McpClient {
  * Factory class for creating [KoogMcpClient] instances.
  * Injected via Hilt for dependency management.
  */
-class KoogMcpClientFactory @Inject constructor() : McpClientFactory {
+class KoogMcpClientFactory @Inject constructor(private val networkActivityTracker: NetworkActivityTracker) :
+    McpClientFactory {
     /**
-     * Creates a new instance of [KoogMcpClient].
+     * Creates a new instance of [KoogMcpClient]. Each instance carries the
+     * shared [NetworkActivityTracker] so MCP traffic surfaces in the More
+     * tab's privacy indicator.
      *
      * @return A new [McpClient] implementation.
      */
-    override fun create(): McpClient = KoogMcpClient()
+    override fun create(): McpClient = KoogMcpClient(networkActivityTracker = networkActivityTracker)
 }

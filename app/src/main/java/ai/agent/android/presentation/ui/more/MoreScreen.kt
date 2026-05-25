@@ -1,43 +1,31 @@
 package ai.agent.android.presentation.ui.more
 
 import ai.agent.android.R
-import androidx.annotation.StringRes
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.ListItem
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Bolt
+import androidx.compose.material.icons.outlined.History
+import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.outlined.Memory
+import androidx.compose.material.icons.outlined.Psychology
+import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import app.knotwork.design.screens.more.MoreContent
+import app.knotwork.design.screens.more.MoreRow
+import app.knotwork.design.screens.more.MoreStrings
+import app.knotwork.design.screens.more.MoreViewState
 
 /**
- * Landing screen of the "More" bottom-nav tab.
- *
- * Per `decisions.md §12`, secondary destinations (Memory / Models / Task
- * Monitor / Settings / About) sit under this tab — moving them off the
- * top-level surface keeps the four-tab IA the design system targets.
- *
- * Phase 21 / Task 4 keeps the body as a plain Material3 [ListItem] list so
- * we don't pre-commit to the Knotwork list-row design; Task 10's "Other
- * screens" pass swaps these rows for the Knotwork list-row primitive
- * (defined in Task 5) and bumps the leading icons to the Knotwork glyph
- * set.
- *
- * Navigation callbacks (one per row) keep the screen agnostic of route
- * literals — every consumer in
- * [AppNavGraph][ai.agent.android.presentation.ui.navigation.AppNavGraph]
- * passes a lambda that invokes `navController.navigate(NavRoutes.X)`.
+ * Landing screen of the "More" bottom-nav tab. Renders the Knotwork
+ * [MoreContent] surface with seven navigation rows, live counters, and a
+ * footer status pill summarising recent outbound network activity.
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MoreScreen(
     onNavigateToMemory: () -> Unit,
@@ -47,45 +35,109 @@ fun MoreScreen(
     onNavigateToSettings: () -> Unit,
     onNavigateToPrompts: () -> Unit,
     onNavigateToAbout: () -> Unit,
+    viewModel: MoreViewModel = hiltViewModel(),
 ) {
-    Scaffold(
-        topBar = {
-            TopAppBar(title = { Text(stringResource(R.string.nav_tab_more)) })
-        },
-    ) { innerPadding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding)
-                .verticalScroll(rememberScrollState())
-                .testTag(MORE_ROOT_TEST_TAG),
-        ) {
-            MoreRow(R.string.more_row_memory, "more_row_memory", onNavigateToMemory)
-            HorizontalDivider()
-            MoreRow(R.string.more_row_models, "more_row_models", onNavigateToModels)
-            HorizontalDivider()
-            MoreRow(R.string.more_row_prompts, "more_row_prompts", onNavigateToPrompts)
-            HorizontalDivider()
-            MoreRow(R.string.more_row_task_monitor, "more_row_task_monitor", onNavigateToTaskMonitor)
-            HorizontalDivider()
-            MoreRow(R.string.more_row_monitoring, "more_row_monitoring", onNavigateToMonitoring)
-            HorizontalDivider()
-            MoreRow(R.string.more_row_settings, "more_row_settings", onNavigateToSettings)
-            HorizontalDivider()
-            MoreRow(R.string.more_row_about, "more_row_about", onNavigateToAbout)
-        }
-    }
-}
-
-@Composable
-private fun MoreRow(@StringRes titleRes: Int, tag: String, onClick: () -> Unit) {
-    ListItem(
-        headlineContent = { Text(stringResource(titleRes)) },
-        modifier = Modifier
-            .clickable(onClick = onClick)
-            .testTag(tag),
+    val uiState by viewModel.uiState.collectAsState()
+    val state = uiState.toViewState(
+        titleMemory = stringResource(R.string.more_row_memory),
+        titleModels = stringResource(R.string.more_row_models),
+        titlePrompts = stringResource(R.string.more_row_prompts),
+        titleTasks = stringResource(R.string.more_row_task_monitor),
+        titleMetrics = stringResource(R.string.more_row_monitoring),
+        titleSettings = stringResource(R.string.more_row_settings),
+        titleAbout = stringResource(R.string.more_row_about),
+        onMemory = onNavigateToMemory,
+        onModels = onNavigateToModels,
+        onPrompts = onNavigateToPrompts,
+        onTasks = onNavigateToTaskMonitor,
+        onMetrics = onNavigateToMonitoring,
+        onSettings = onNavigateToSettings,
+        onAbout = onNavigateToAbout,
+    )
+    MoreContent(
+        state = state,
+        modifier = Modifier.testTag(MORE_ROOT_TEST_TAG),
+        strings = MoreStrings(
+            title = stringResource(R.string.nav_tab_more),
+            subtitle = stringResource(R.string.more_subtitle),
+            searchCd = stringResource(R.string.more_search_cd),
+        ),
     )
 }
+
+/** Build the catalog view state from the live UI state + localized labels. */
+@Suppress("LongParameterList") // Mapper bundles localised strings + navigation lambdas.
+internal fun MoreUiState.toViewState(
+    titleMemory: String,
+    titleModels: String,
+    titlePrompts: String,
+    titleTasks: String,
+    titleMetrics: String,
+    titleSettings: String,
+    titleAbout: String,
+    onMemory: () -> Unit,
+    onModels: () -> Unit,
+    onPrompts: () -> Unit,
+    onTasks: () -> Unit,
+    onMetrics: () -> Unit,
+    onSettings: () -> Unit,
+    onAbout: () -> Unit,
+): MoreViewState = MoreViewState(
+    rows = listOf(
+        MoreRow(
+            id = "memory",
+            title = titleMemory,
+            subtitle = memorySubtitle,
+            icon = Icons.Outlined.Psychology,
+            onClick = onMemory,
+        ),
+        MoreRow(
+            id = "models",
+            title = titleModels,
+            subtitle = modelsSubtitle,
+            icon = Icons.Outlined.Memory,
+            onClick = onModels,
+        ),
+        MoreRow(
+            id = "prompts",
+            title = titlePrompts,
+            subtitle = promptsSubtitle,
+            icon = Icons.Outlined.Tune,
+            onClick = onPrompts,
+        ),
+        MoreRow(
+            id = "tasks",
+            title = titleTasks,
+            subtitle = tasksSubtitle,
+            icon = Icons.Outlined.History,
+            badge = tasksBadge,
+            onClick = onTasks,
+        ),
+        MoreRow(
+            id = "metrics",
+            title = titleMetrics,
+            subtitle = metricsSubtitle,
+            icon = Icons.Outlined.Bolt,
+            onClick = onMetrics,
+        ),
+        MoreRow(
+            id = "settings",
+            title = titleSettings,
+            subtitle = settingsSubtitle,
+            icon = Icons.Outlined.Settings,
+            onClick = onSettings,
+        ),
+        MoreRow(
+            id = "about",
+            title = titleAbout,
+            subtitle = aboutSubtitle,
+            icon = Icons.Outlined.Info,
+            onClick = onAbout,
+        ),
+    ),
+    networkStatus = networkStatusText.takeIf { it.isNotEmpty() },
+    networkStatusOk = networkStatusOk,
+)
 
 /** Stable test tag for the More screen root — used by instrumented tests. */
 const val MORE_ROOT_TEST_TAG: String = "more_root"
