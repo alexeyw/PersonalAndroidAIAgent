@@ -1453,9 +1453,7 @@ class ChatHomeViewModel @Inject constructor(
 
 /**
  * Minimal pipeline summary used by [ChatHomeViewModel] to resolve the
- * TopAppBar subtitle and the deleted-pipeline fallback. Mirrors the
- * legacy `chat.legacy.PipelineSummary` so the same shape is available
- * after the legacy package is deleted in Phase 22 / Task 17.
+ * TopAppBar subtitle and the deleted-pipeline fallback.
  *
  * @property id stable identifier of the pipeline.
  * @property name display name of the pipeline.

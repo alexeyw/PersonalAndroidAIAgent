@@ -15,12 +15,7 @@
     <string name="errors_generic_invalid_json">invalid JSON</string>
 
     <!-- Chat feature -->
-    <string name="errors_chat_model_init_failure">Model Error: %1$s. Please check your model settings.</string>
     <string name="errors_chat_pipeline_removed">The pipeline was deleted. Default pipeline is used now.</string>
-    <string name="errors_chat_load_model_first">Please load a model in Settings before sending a message.</string>
-    <string name="errors_chat_export_failed">Failed to export chat: %1$s</string>
-    <string name="errors_chat_import_failed">Failed to import chat: %1$s</string>
-    <string name="errors_chat_file_unreadable">Could not read selected file</string>
 
     <!-- Orchestrator feature -->
     <string name="errors_orchestrator_cycle_detected">Cannot connect: Cycle detected</string>

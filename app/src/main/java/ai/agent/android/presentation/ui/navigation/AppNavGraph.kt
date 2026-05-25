@@ -114,12 +114,6 @@ fun AppNavGraph(navController: NavHostController, showOnboarding: Boolean, modif
         }
 
         // ─── Chat tab ──────────────────────────────────────────────────────
-        // Phase 21 / Task 8: the user-facing surface is now `ChatHomeScreen`
-        // backed by a stub `ChatHomeViewModel` driving the 9-state matrix
-        // from `compose/screens/README.md §C1`. The orchestrator/runtime
-        // wiring (real chat backend) is captured in the legacy
-        // `chat.legacy.*` files and re-attaches to this screen in a
-        // follow-up task after v0.1.
         composable(NavRoutes.CHAT_TAB) {
             val chatHomeViewModel: ChatHomeViewModel = hiltViewModel()
             ChatHomeScreen(

@@ -9,11 +9,15 @@
 > plans tasks, and takes real actions across Android — without requiring an
 > internet connection.
 
-![Pipeline editor — hero](docs/images/hero-pipeline-editor.png)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/hero-chat-home-dark.png">
+  <img alt="On-Device AI Agent — chat home" src="docs/images/hero-chat-home.png" width="540">
+</picture>
 
-> The Knotwork pipeline editor — drag-and-drop graph of typed nodes (input,
-> local LLM, cloud LLM, tools, routing, output) that processes every chat
-> message end-to-end on-device.
+> The Knotwork chat surface — every message is processed end-to-end on-device
+> by a user-editable pipeline of typed nodes (input, local LLM, cloud LLM,
+> tools, routing, output). The drag-and-drop pipeline editor lives one tap
+> away under the **Pipelines** tab.
 
 ## Pre-release notice
 

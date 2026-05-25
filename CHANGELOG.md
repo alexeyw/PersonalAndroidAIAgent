@@ -13,7 +13,47 @@ details.
 
 ## [Unreleased]
 
+### Added
+
+- **R8 minification + resource shrinking on the release build** (Phase 22 /
+  Task 17). `buildTypes.release` now sets `isMinifyEnabled = true` /
+  `isShrinkResources = true`, and `app/proguard-rules.pro` carries keep
+  rules for every reflection-driven subsystem (kotlinx.serialization, Gson,
+  MediaPipe / LiteRT JNI, SQLCipher, Koog + Ktor, AppFunctions KSP-generated
+  inventories / invokers, Hilt, Room) plus `-dontwarn` blocks for the
+  OpenTelemetry incubator + AutoValue symbols Koog pulls in transitively.
+  Each section is documented inline with a one-line rationale.
+- **`docs/release.md`** — single-page release playbook covering variant
+  matrix, signing posture (current debug-keystore vs. the production block
+  to land before Play Store submission), R8 keep-rules rationale,
+  bundle / size measurement instructions, and the v0.1.0 APK-size
+  breakdown.
+- **README hero shots regenerated at 1080 × 2400 from a new Roborazzi
+  baseline** (`HeroSnapshotTest`). Light + dark variants land in
+  `docs/images/hero-chat-home{,-dark}.png` and are wired up via a
+  `<picture>` block that honours `prefers-color-scheme`.
+
 ### Changed
+
+- **Jansi non-Android native binaries excluded from the release APK**
+  (Phase 22 / Task 17). `android.packaging.resources` drops
+  `org/fusesource/jansi/internal/native/{Windows,Mac,Linux,FreeBSD}/**` and
+  `META-INF/native-image/jansi/**` — Jansi ships through Koog's logger and
+  only its ANSI-escape rendering runs on JVM hosts. Saves ~430 KB on the
+  release artefact.
+
+### Removed
+
+- **Legacy chat surface** (`presentation/ui/chat/legacy/`) — 13 production
+  files + paired tests (2 unit tests, 4 instrumented tests). The
+  redesigned `chat/home/` package has been the production surface since
+  Phase 21 / Task 8 and absorbed every behaviour that mattered
+  (orchestrator core, HITL, Clarification, console pane, chat export);
+  the legacy package was kept around as a reference while wiring landed,
+  and is now removed so future grep / FILE_MAP / file-tree audits stay
+  honest. Stale docstring + comment references in `ChatHomeViewModel`,
+  `ChatExportPayload`, `AppNavGraph`, `HitlIntegrationTest`, and
+  `ClarificationIntegrationTest` are cleaned up alongside the deletion.
 
 - **Global UI audit on Knotwork-converted screens** (Phase 22 / Task 16).
   Swept `app/src/main/` for design-system violations across hex colours,
