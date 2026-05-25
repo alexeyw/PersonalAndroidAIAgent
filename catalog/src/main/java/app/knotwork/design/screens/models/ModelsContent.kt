@@ -50,7 +50,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import app.knotwork.design.components.buttons.KnotworkButtonSize
 import app.knotwork.design.components.buttons.KnotworkPrimaryButton
-import app.knotwork.design.components.buttons.KnotworkSecondaryButton
 import app.knotwork.design.components.misc.EmptyState
 import app.knotwork.design.theme.KnotworkTheme
 import app.knotwork.design.tokens.KnotworkTextStyles
@@ -238,6 +237,15 @@ private fun ModelsBody(
         item(key = "custom-field") {
             CustomUrlRow(state = state, strings = strings, callbacks = callbacks)
         }
+        state.customDownload?.let { downloading ->
+            // In-flight progress for a non-preset custom URL download.
+            // Rendered as a standalone progress row directly under the
+            // Custom URL field so the user can see something is
+            // happening even before the model lands on disk.
+            item(key = "custom-progress") {
+                CustomDownloadRow(downloading = downloading, strings = strings, callbacks = callbacks)
+            }
+        }
         item(key = "format-hint") {
             Text(
                 text = strings.formatHint,
@@ -254,6 +262,62 @@ private fun ModelsBody(
         items(items = state.presets, key = { it.id }) { preset ->
             PresetCard(preset = preset, strings = strings, callbacks = callbacks)
         }
+        if (state.downloadedRows.isNotEmpty()) {
+            item(key = "downloaded-section") {
+                SectionHeader(label = strings.downloadedSection)
+            }
+            items(items = state.downloadedRows, key = { "downloaded:${it.id}" }) { row ->
+                PresetCard(preset = row, strings = strings, callbacks = callbacks)
+            }
+        }
+    }
+}
+
+/**
+ * Standalone progress row rendered under the Custom URL field for the
+ * in-flight download of a non-preset model URL.
+ */
+@Composable
+private fun CustomDownloadRow(
+    downloading: PresetStatus.Downloading,
+    strings: ModelsStrings,
+    callbacks: ModelsCallbacks,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(KnotworkTheme.shapes.md)
+            .background(color = KnotworkTheme.extended.surface3)
+            .padding(horizontal = KnotworkTheme.spacing.sp3, vertical = KnotworkTheme.spacing.sp2),
+        verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp1),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = strings.customDownloadLabel,
+                style = KnotworkTextStyles.BodyBase,
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.weight(1f),
+            )
+            IconButton(onClick = { callbacks.onCustomDownloadCancel() }) {
+                Icon(
+                    imageVector = Icons.Outlined.Close,
+                    contentDescription = strings.presetCancelCd,
+                    tint = KnotworkTheme.extended.onSurfaceMuted,
+                )
+            }
+        }
+        LinearProgressIndicator(
+            progress = { downloading.progress / 100f },
+            modifier = Modifier.fillMaxWidth().height(ProgressBarHeight),
+            color = MaterialTheme.colorScheme.primary,
+            trackColor = KnotworkTheme.extended.surface1,
+            strokeCap = ProgressIndicatorDefaults.LinearStrokeCap,
+        )
+        Text(
+            text = downloading.metaLine ?: "${downloading.progress}%",
+            style = KnotworkTextStyles.MonoSm,
+            color = MaterialTheme.colorScheme.primary,
+        )
     }
 }
 
@@ -464,7 +528,7 @@ private fun PresetCard(preset: PresetRow, strings: ModelsStrings, callbacks: Mod
             .fillMaxWidth()
             .clip(KnotworkTheme.shapes.md)
             .background(color = tint)
-            .clickable(onClick = { callbacks.onPresetOpen(preset.id) }, role = Role.Button)
+            .clickable(onClick = { callbacks.onPresetActivate(preset.id) }, role = Role.Button)
             .padding(horizontal = KnotworkTheme.spacing.sp3, vertical = KnotworkTheme.spacing.sp2),
         verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp1),
     ) {
@@ -508,9 +572,14 @@ private fun PresetCard(preset: PresetRow, strings: ModelsStrings, callbacks: Mod
                 color = MaterialTheme.colorScheme.primary,
             )
         }
-        if (preset.status is PresetStatus.OnDisk && preset.status.sizeMeta != null) {
+        val sizeMeta = when (val status = preset.status) {
+            is PresetStatus.OnDisk -> status.sizeMeta
+            is PresetStatus.Active -> status.sizeMeta
+            else -> null
+        }
+        if (sizeMeta != null) {
             Text(
-                text = preset.status.sizeMeta,
+                text = sizeMeta,
                 style = KnotworkTextStyles.MonoSm,
                 color = KnotworkTheme.extended.onSurfaceMuted,
             )
@@ -537,11 +606,29 @@ private fun PresetTrailing(preset: PresetRow, strings: ModelsStrings, callbacks:
                 tint = KnotworkTheme.extended.onSurfaceMuted,
             )
         }
-        is PresetStatus.OnDisk -> KnotworkSecondaryButton(
-            text = strings.presetOnDisk,
-            onClick = { callbacks.onPresetOpen(preset.id) },
+        is PresetStatus.OnDisk -> KnotworkPrimaryButton(
+            // Clearly-labelled Activate button — the old `✓ ON DISK`
+            // pill was confused for a status badge and users couldn't
+            // tell it was the activation affordance.
+            text = strings.presetActivate,
+            onClick = { callbacks.onPresetActivate(preset.id) },
             size = KnotworkButtonSize.Sm,
         )
+        is PresetStatus.Active -> Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp1),
+        ) {
+            Text(
+                text = strings.activeBadge,
+                style = KnotworkTextStyles.LabelSm,
+                color = KnotworkTheme.extended.signalSuccess,
+            )
+            Box(
+                modifier = Modifier
+                    .size(ActiveDotSize)
+                    .background(color = KnotworkTheme.extended.signalSuccess, shape = KnotworkTheme.shapes.full),
+            )
+        }
     }
 }
 
@@ -563,11 +650,12 @@ data class ModelsStrings(
     val customUrlSection: String = "CUSTOM MODEL URL",
     val customUrlPlaceholder: String = "https://huggingface.co/…/model",
     val customUrlGet: String = "Get",
+    val customDownloadLabel: String = "Downloading custom model…",
     val formatHint: String = ".litertlm · .task · .gguf (experimental)",
     val presetsSection: String = "AVAILABLE PRESETS",
-    val presetsAll: String = "All ↗",
+    val downloadedSection: String = "DOWNLOADED MODELS",
     val presetGet: String = "Get",
-    val presetOnDisk: String = "✓ ON DISK",
+    val presetActivate: String = "Activate",
     val presetCancelCd: String = "Cancel download",
     val emptyTitle: String = "No models installed",
     val emptySubtitle: String = "Add a model from the presets list or paste a custom URL.",

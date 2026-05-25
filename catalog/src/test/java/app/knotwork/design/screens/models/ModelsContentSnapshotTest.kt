@@ -87,7 +87,8 @@ internal object ModelsPreview {
             id = "gemma_4_e2b",
             name = "Gemma-4-E2B-it",
             source = "huggingface.co/litert-community/gemma-4-E2B-it…",
-            status = PresetStatus.OnDisk(sizeMeta = "1.4 GB · NPU · QNN · 4 K ctx"),
+            // Active variant — exercises the inline ACTIVE badge.
+            status = PresetStatus.Active(sizeMeta = "1.4 GB · NPU · LiteRT"),
         ),
         PresetRow(
             id = "phi_3_mini",
@@ -104,7 +105,15 @@ internal object ModelsPreview {
         customUrl = "https://huggingface.co/litert-community/model.litertlm",
         customUrlEnabled = true,
         presets = presets(),
-        subtitle = "1 active · 2 on disk · 3.3 GB",
+        downloadedRows = listOf(
+            PresetRow(
+                id = "custom-llama.litertlm",
+                name = "custom-llama.litertlm",
+                source = "downloads",
+                status = PresetStatus.OnDisk(sizeMeta = "2.6 GB · NPU · LiteRT"),
+            ),
+        ),
+        subtitle = "1 active · 3 on disk · 5.9 GB",
     )
 
     fun empty(): ModelsViewState = ModelsViewState(

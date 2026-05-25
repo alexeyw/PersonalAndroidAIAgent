@@ -79,11 +79,21 @@ fun ModelsScreen(modifier: Modifier = Modifier, viewModel: ModelsViewModel = hil
                 }
             },
             onPresetCancelDownload = { viewModel.cancelDownload() },
-            onPresetOpen = { presetId ->
-                uiState.downloadedModels.find { it.name.toPresetId() == presetId }?.let { model ->
-                    viewModel.setActiveModel(model.id)
-                }
+            onPresetActivate = { presetId ->
+                // The presetId is the dotless filename derived in `toPresetId()`.
+                // Match against downloaded models (preset list shares the same
+                // id convention) AND the dedicated downloadedRows entries
+                // (custom downloads use the raw filename as id).
+                uiState.downloadedModels
+                    .firstOrNull { it.name.toPresetId() == presetId || it.name == presetId }
+                    ?.let { viewModel.setActiveModel(it.id) }
             },
+            onPresetDelete = { presetId ->
+                uiState.downloadedModels
+                    .firstOrNull { it.name.toPresetId() == presetId || it.name == presetId }
+                    ?.let { viewModel.deleteModel(it.id) }
+            },
+            onCustomDownloadCancel = { viewModel.cancelDownload() },
             onActiveOpen = {},
             onOverflowMenu = {},
             onRetry = {},
@@ -131,34 +141,68 @@ internal fun ModelsUiState.toViewState(subtitleFormat: String): ModelsViewState 
         )
     }
     val downloadingName = activeDownloadFileName
-    val presets = availablePresets.map { preset ->
-        val fileName = preset.url.substringAfterLast(delimiter = "/")
-        val onDisk = downloadedModels.any { it.name == fileName }
-        val status: PresetStatus = when {
+
+    fun statusFor(fileName: String, presetSize: Long? = null): PresetStatus {
+        val matchingModel = downloadedModels.firstOrNull { it.name == fileName }
+        return when {
             downloadingName == fileName -> PresetStatus.Downloading(
                 progress = downloadProgress ?: 0,
                 metaLine = null,
             )
-            onDisk -> PresetStatus.OnDisk(
-                sizeMeta = downloadedModels.firstOrNull { it.name == fileName }
-                    ?.toMetaLine(backendLabel = backendLabel),
+            matchingModel != null && matchingModel.isActive -> PresetStatus.Active(
+                sizeMeta = matchingModel.toMetaLine(backendLabel = backendLabel),
             )
-            else -> PresetStatus.Idle()
+            matchingModel != null -> PresetStatus.OnDisk(
+                sizeMeta = matchingModel.toMetaLine(backendLabel = backendLabel),
+            )
+            else -> PresetStatus.Idle(
+                sizeMeta = presetSize?.takeIf { it > 0L }?.toGigabytesLabel(),
+            )
         }
+    }
+
+    // Curated presets retain their canonical id derived from the URL slug.
+    val presets = availablePresets.map { preset ->
+        val fileName = preset.url.substringAfterLast(delimiter = "/")
         PresetRow(
             id = preset.url.toPresetId(),
             name = preset.name,
             source = preset.url.toShortSource(),
-            status = status,
+            status = statusFor(fileName = fileName),
         )
     }
+    // Models on disk that are NOT part of the curated preset list — i.e.
+    // custom URL downloads. The id is the raw filename so the activate
+    // / delete lambdas can resolve them.
+    val presetFileNames = availablePresets.map { it.url.substringAfterLast(delimiter = "/") }.toSet()
+    val downloadedRows = downloadedModels
+        .filter { it.name !in presetFileNames }
+        .map { model ->
+            PresetRow(
+                id = model.name,
+                name = model.name,
+                source = model.path.substringBeforeLast(delimiter = "/").substringAfterLast(delimiter = "/"),
+                status = statusFor(fileName = model.name),
+            )
+        }
+    // Surfaces the in-flight progress for a non-preset (custom URL)
+    // download as a separate row near the URL field. Without this the
+    // Get button would just go disabled with no visible feedback.
+    val customDownload: PresetStatus.Downloading? = when {
+        !isDownloading -> null
+        downloadingName != null && downloadingName in presetFileNames -> null
+        else -> PresetStatus.Downloading(progress = downloadProgress ?: 0, metaLine = null)
+    }
+
     return ModelsViewState(
         visualState = ModelsVisualState.Default,
         active = active,
         authToken = authTokenInput,
         customUrl = customUrlInput,
         customUrlEnabled = !isDownloading,
+        customDownload = customDownload,
         presets = presets,
+        downloadedRows = downloadedRows,
         subtitle = subtitle,
     )
 }
@@ -230,11 +274,12 @@ private fun modelsStrings(): LocalisedModelsStrings = LocalisedModelsStrings(
         customUrlSection = stringResource(R.string.models_section_custom_url),
         customUrlPlaceholder = stringResource(R.string.models_field_url_placeholder),
         customUrlGet = stringResource(R.string.models_action_get),
+        customDownloadLabel = stringResource(R.string.models_custom_download_label),
         formatHint = stringResource(R.string.models_hint_formats),
         presetsSection = stringResource(R.string.models_section_available_presets),
-        presetsAll = stringResource(R.string.models_action_all),
+        downloadedSection = stringResource(R.string.models_section_downloaded_v2),
         presetGet = stringResource(R.string.models_preset_get),
-        presetOnDisk = stringResource(R.string.models_preset_on_disk),
+        presetActivate = stringResource(R.string.models_preset_activate),
         presetCancelCd = stringResource(R.string.models_preset_cancel_cd),
         emptyTitle = stringResource(R.string.models_empty_title),
         emptySubtitle = stringResource(R.string.models_empty_subtitle),

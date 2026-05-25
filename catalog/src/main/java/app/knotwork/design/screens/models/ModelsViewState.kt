@@ -33,7 +33,7 @@ data class ActiveModelRow(val id: Long, val displayName: String, val meta: Strin
 /** Per-preset row content. */
 data class PresetRow(val id: String, val name: String, val source: String, val status: PresetStatus)
 
-/** Trailing state of a [PresetRow]. Discriminates the three documented variants. */
+/** Trailing state of a [PresetRow]. Discriminates the four documented variants. */
 sealed interface PresetStatus {
     /** Not yet downloaded — trailing `↓ Get` button. */
     data class Idle(val sizeMeta: String? = null) : PresetStatus
@@ -48,8 +48,18 @@ sealed interface PresetStatus {
      */
     data class Downloading(val progress: Int, val metaLine: String? = null) : PresetStatus
 
-    /** Already saved locally — trailing `✓ ON DISK` pill. */
+    /**
+     * Saved locally but not the currently active model — trailing
+     * `Activate` button that flips the row to [Active] on tap.
+     */
     data class OnDisk(val sizeMeta: String? = null) : PresetStatus
+
+    /**
+     * Saved locally **and** currently active — trailing `ACTIVE` pill
+     * with a status dot, no button. Exactly one row per [ModelsViewState]
+     * should carry this status.
+     */
+    data class Active(val sizeMeta: String? = null) : PresetStatus
 }
 
 /**
@@ -62,7 +72,14 @@ sealed interface PresetStatus {
  * @property customUrl user-supplied URL for direct download.
  * @property customUrlEnabled toggles the `Get` button availability when
  * a download is already in flight.
+ * @property customDownload optional in-flight progress row rendered
+ * directly under the Custom URL field when the user-supplied download
+ * does not match any [presets] entry (e.g. a custom HuggingFace URL).
+ * `null` when no custom download is active.
  * @property presets list of available preset model rows.
+ * @property downloadedRows on-disk models that are **not** in [presets]
+ * — i.e. custom downloads. Rendered as a dedicated "Downloaded models"
+ * section so the user can find and activate them.
  * @property subtitle TopAppBar subtitle (e.g. `"1 active · 2 on disk · 3.3 GB"`).
  * @property errorMessage user-visible error when [visualState] is [ModelsVisualState.Error].
  */
@@ -72,7 +89,9 @@ data class ModelsViewState(
     val authToken: String = "",
     val customUrl: String = "",
     val customUrlEnabled: Boolean = true,
+    val customDownload: PresetStatus.Downloading? = null,
     val presets: List<PresetRow> = emptyList(),
+    val downloadedRows: List<PresetRow> = emptyList(),
     val subtitle: String = "",
     val errorMessage: String? = null,
 ) {
@@ -93,7 +112,9 @@ class ModelsCallbacks(
     val onCustomUrlSubmit: () -> Unit = {},
     val onPresetDownload: (String) -> Unit = {},
     val onPresetCancelDownload: (String) -> Unit = {},
-    val onPresetOpen: (String) -> Unit = {},
+    val onPresetActivate: (String) -> Unit = {},
+    val onPresetDelete: (String) -> Unit = {},
+    val onCustomDownloadCancel: () -> Unit = {},
     val onActiveOpen: () -> Unit = {},
     val onOverflowMenu: () -> Unit = {},
     val onRetry: () -> Unit = {},

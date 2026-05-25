@@ -15,10 +15,11 @@
     <string name="models_action_get">Get</string>
     <string name="models_hint_formats">.litertlm · .task · .gguf (experimental)</string>
     <string name="models_section_available_presets">AVAILABLE PRESETS</string>
-    <string name="models_action_all">All ↗</string>
     <string name="models_preset_get">Get</string>
-    <string name="models_preset_on_disk">✓ ON DISK</string>
+    <string name="models_preset_activate">Activate</string>
     <string name="models_preset_cancel_cd">Cancel download</string>
+    <string name="models_section_downloaded_v2">DOWNLOADED MODELS</string>
+    <string name="models_custom_download_label">Downloading custom model…</string>
     <string name="models_active_badge">ACTIVE</string>
     <string name="models_empty_title">No models installed</string>
     <string name="models_empty_subtitle">Add a model from the presets list or paste a custom URL.</string>
