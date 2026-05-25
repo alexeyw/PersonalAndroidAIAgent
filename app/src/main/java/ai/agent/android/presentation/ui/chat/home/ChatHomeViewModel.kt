@@ -7,6 +7,7 @@ import ai.agent.android.domain.models.ChatSession
 import ai.agent.android.domain.models.ClarificationRequest
 import ai.agent.android.domain.models.ConsoleEvent
 import ai.agent.android.domain.models.LocalModel
+import ai.agent.android.domain.models.Result
 import ai.agent.android.domain.models.Role
 import ai.agent.android.domain.models.ToolRisk
 import ai.agent.android.domain.repositories.ChatRepository
@@ -371,7 +372,12 @@ class ChatHomeViewModel @Inject constructor(
         if (draft.isEmpty()) return
         if (_state.value is ChatHomeUiState.Generating) return
         if (!llmInferenceEngine.isInitialized) {
-            _state.value = ChatHomeUiState.Error(LOAD_MODEL_FIRST_MESSAGE)
+            // Surface the error with copy that matches what Retry actually
+            // does — Retry attempts to load the active model in-place
+            // through `retryAfterError`, not "open Settings and load it
+            // there". If no active model is registered the load fails and
+            // the error message switches to the Settings-redirect copy.
+            _state.value = ChatHomeUiState.Error(MODEL_NOT_LOADED_MESSAGE)
             return
         }
         _composerValue.value = ""
@@ -401,6 +407,39 @@ class ChatHomeViewModel @Inject constructor(
                     _state.value = ChatHomeUiState.Error(error.message ?: UNKNOWN_ERROR_FALLBACK)
                 }
                 .collect { orchestratorState -> handleOrchestratorState(orchestratorState) }
+        }
+    }
+
+    /**
+     * Handles the Retry CTA on the chat error tile. The previous behaviour
+     * simply flipped to Idle, which on the "model not loaded" branch
+     * meant the user had to manually open Settings → Models → load —
+     * Retry never actually did anything. Now Retry actively tries to
+     * recover:
+     *
+     *  - If the inference engine isn't initialised, runs
+     *    `LoadModelUseCase()` (null path = active model). Success settles
+     *    to the resting state; failure flips back to Error with copy that
+     *    explicitly redirects to Settings (typically "no active model
+     *    registered" — only Settings can fix that).
+     *  - Otherwise the engine is healthy and Retry collapses to "clear
+     *    error → resting state", same as the prior behaviour.
+     */
+    fun retryAfterError() {
+        if (llmInferenceEngine.isInitialized) {
+            _state.value = restingState()
+            return
+        }
+        // Surface a transient "loading…" hint via the generating state — the
+        // catalog renders the same composer affordance and the user sees
+        // forward motion. Reset back to Error / resting on the load result.
+        _state.value = ChatHomeUiState.Generating
+        viewModelScope.launch {
+            val outcome = loadModelUseCase()
+            _state.value = when (outcome) {
+                is Result.Success -> restingState()
+                is Result.Error -> ChatHomeUiState.Error(outcome.message ?: NO_ACTIVE_MODEL_MESSAGE)
+            }
         }
     }
 
@@ -1298,15 +1337,23 @@ class ChatHomeViewModel @Inject constructor(
 
         /**
          * User-facing message surfaced when [sendMessage] is invoked
-         * while no LLM model is loaded. Kept here as a constant rather
-         * than read from `strings_errors.xml` so the VM stays free of
-         * `Context`/`Resources` dependencies; the screen layer will swap
-         * this for a localised string once Phase 22 / Task 5 audits
-         * surface localisation (the equivalent error in legacy chat
-         * lives under `errors_chat_load_model_first`).
+         * while no LLM model is loaded. The Retry CTA on the resulting
+         * error tile triggers [retryAfterError], which attempts to load
+         * the active model in-place rather than redirecting to Settings.
+         * Copy reflects that: "Tap Retry to load the active model".
          */
-        const val LOAD_MODEL_FIRST_MESSAGE: String =
-            "Please load a model in Settings before sending a message."
+        const val MODEL_NOT_LOADED_MESSAGE: String =
+            "No model is loaded. Tap Retry to load the active model."
+
+        /**
+         * User-facing message surfaced when [retryAfterError] tries to
+         * load the model but `LoadModelUseCase` can't find an active one
+         * (no models installed, or the registered active model file is
+         * missing). At that point only Settings → Models can fix the
+         * problem, so the copy redirects there.
+         */
+        const val NO_ACTIVE_MODEL_MESSAGE: String =
+            "No active model. Open Settings → Models to install or activate one."
 
         /** Rough chars-per-token divisor used for the v0.1 token counter (`text.length / 4`). */
         const val TOKEN_CHARS_PER_TOKEN: Int = 4

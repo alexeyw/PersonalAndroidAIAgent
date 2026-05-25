@@ -259,7 +259,7 @@ fun ChatHomeScreen(
         onHitlReject = viewModel::rejectTool,
         onHitlTypedConfirmChange = viewModel::onTypedConfirmChange,
         onClarificationReply = viewModel::submitClarificationReply,
-        onErrorRetry = { viewModel.forceState(ChatHomeUiState.Idle) },
+        onErrorRetry = viewModel::retryAfterError,
         onTitleTripleTap = { debugPickerExpanded = true },
         onToggleFavorite = viewModel::toggleFavoriteCurrent,
         onEditThread = { threadId ->

@@ -261,7 +261,7 @@ class ChatHomeViewModelTest {
         val state = viewModel.state.value
         assertTrue("Expected Error, got $state", state is ChatHomeUiState.Error)
         assertEquals(
-            ChatHomeViewModel.LOAD_MODEL_FIRST_MESSAGE,
+            ChatHomeViewModel.MODEL_NOT_LOADED_MESSAGE,
             (state as ChatHomeUiState.Error).message,
         )
         coVerify(exactly = 0) { agentOrchestratorUseCase(any(), any(), any()) }
