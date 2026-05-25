@@ -589,9 +589,6 @@ private fun PresetCard(preset: PresetRow, strings: ModelsStrings, callbacks: Mod
 
 @Composable
 private fun PresetTrailing(preset: PresetRow, strings: ModelsStrings, callbacks: ModelsCallbacks) {
-    // Per-row trailing actions stay at Sm size so the preset cards keep
-    // their list-row proportions and "Get" / "✓ ON DISK" don't dominate
-    // the title block.
     when (preset.status) {
         is PresetStatus.Idle -> KnotworkPrimaryButton(
             text = strings.presetGet,
@@ -606,13 +603,11 @@ private fun PresetTrailing(preset: PresetRow, strings: ModelsStrings, callbacks:
                 tint = KnotworkTheme.extended.onSurfaceMuted,
             )
         }
-        is PresetStatus.OnDisk -> KnotworkPrimaryButton(
-            // Clearly-labelled Activate button — the old `✓ ON DISK`
-            // pill was confused for a status badge and users couldn't
-            // tell it was the activation affordance.
-            text = strings.presetActivate,
-            onClick = { callbacks.onPresetActivate(preset.id) },
-            size = KnotworkButtonSize.Sm,
+        is PresetStatus.OnDisk -> PresetOverflowMenu(
+            preset = preset,
+            strings = strings,
+            callbacks = callbacks,
+            includeActivate = true,
         )
         is PresetStatus.Active -> Row(
             verticalAlignment = Alignment.CenterVertically,
@@ -627,6 +622,76 @@ private fun PresetTrailing(preset: PresetRow, strings: ModelsStrings, callbacks:
                 modifier = Modifier
                     .size(ActiveDotSize)
                     .background(color = KnotworkTheme.extended.signalSuccess, shape = KnotworkTheme.shapes.full),
+            )
+            // Active row still needs a Delete affordance — the activate
+            // entry is hidden because the row is already active.
+            PresetOverflowMenu(
+                preset = preset,
+                strings = strings,
+                callbacks = callbacks,
+                includeActivate = false,
+            )
+        }
+    }
+}
+
+/**
+ * Three-dot overflow menu rendered as the trailing affordance for an
+ * on-disk model row. Replaces the earlier full-width `Activate` button
+ * that was crowding the title.
+ *
+ * @param includeActivate when `true`, the dropdown surfaces the Activate
+ * action; the Active row passes `false` because activating the
+ * already-active model is a no-op.
+ */
+@Composable
+private fun PresetOverflowMenu(
+    preset: PresetRow,
+    strings: ModelsStrings,
+    callbacks: ModelsCallbacks,
+    includeActivate: Boolean,
+) {
+    val expanded = androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(value = false) }
+    Box {
+        IconButton(onClick = { expanded.value = true }) {
+            Icon(
+                imageVector = Icons.Outlined.MoreVert,
+                contentDescription = strings.rowMenuCd,
+                tint = KnotworkTheme.extended.onSurfaceMuted,
+            )
+        }
+        androidx.compose.material3.DropdownMenu(
+            expanded = expanded.value,
+            onDismissRequest = { expanded.value = false },
+            containerColor = KnotworkTheme.extended.surface1,
+        ) {
+            if (includeActivate) {
+                androidx.compose.material3.DropdownMenuItem(
+                    text = {
+                        Text(
+                            text = strings.presetActivate,
+                            style = KnotworkTextStyles.BodyBase,
+                            color = MaterialTheme.colorScheme.onSurface,
+                        )
+                    },
+                    onClick = {
+                        expanded.value = false
+                        callbacks.onPresetActivate(preset.id)
+                    },
+                )
+            }
+            androidx.compose.material3.DropdownMenuItem(
+                text = {
+                    Text(
+                        text = strings.presetDelete,
+                        style = KnotworkTextStyles.BodyBase,
+                        color = KnotworkTheme.extended.signalError,
+                    )
+                },
+                onClick = {
+                    expanded.value = false
+                    callbacks.onPresetDelete(preset.id)
+                },
             )
         }
     }
@@ -656,7 +721,9 @@ data class ModelsStrings(
     val downloadedSection: String = "DOWNLOADED MODELS",
     val presetGet: String = "Get",
     val presetActivate: String = "Activate",
+    val presetDelete: String = "Delete",
     val presetCancelCd: String = "Cancel download",
+    val rowMenuCd: String = "Model actions",
     val emptyTitle: String = "No models installed",
     val emptySubtitle: String = "Add a model from the presets list or paste a custom URL.",
     val emptyCta: String = "Add model",

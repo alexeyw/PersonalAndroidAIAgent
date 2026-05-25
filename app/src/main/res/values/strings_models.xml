@@ -17,7 +17,9 @@
     <string name="models_section_available_presets">AVAILABLE PRESETS</string>
     <string name="models_preset_get">Get</string>
     <string name="models_preset_activate">Activate</string>
+    <string name="models_preset_delete">Delete</string>
     <string name="models_preset_cancel_cd">Cancel download</string>
+    <string name="models_row_menu_cd">Model actions</string>
     <string name="models_section_downloaded_v2">DOWNLOADED MODELS</string>
     <string name="models_custom_download_label">Downloading custom model…</string>
     <string name="models_active_badge">ACTIVE</string>
