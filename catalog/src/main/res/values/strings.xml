@@ -297,7 +297,6 @@
     <string name="knotwork_settings_section_notifications">Notifications</string>
     <string name="knotwork_settings_section_privacy">Privacy</string>
 
-    <string name="knotwork_settings_system_instructions_insert">Insert variable</string>
     <string name="knotwork_settings_system_instructions_counter" tools:ignore="PluralsCandidate">%1$d / %2$d chars · ≈ %3$d tok</string>
 
     <string name="knotwork_settings_restrictions_approve">Approve tool calls</string>

@@ -301,20 +301,52 @@ private fun IdentityCard(state: IdentityCardState?) {
 @Composable
 private fun SystemInstructionsCard(state: SystemInstructionsCardState, callbacks: SettingsCallbacks) {
     SettingsSection(
+        // The trailing "+ Insert variable" link was a stub that did
+        // nothing visible — the real entry point is the chip row below
+        // the field, which inserts at the end of the text. Dropped to
+        // avoid the dead affordance.
         title = androidx.compose.ui.res.stringResource(R.string.knotwork_settings_section_system_instructions),
-        trailing = {
-            KnotworkSectionAction(
-                label = androidx.compose.ui.res.stringResource(
-                    R.string.knotwork_settings_system_instructions_insert,
-                ),
-                icon = Icons.Outlined.Add,
-                onClick = callbacks.onInsertVariableClick,
-            )
-        },
     ) {
+        // Use a locally-remembered TextFieldValue (text + selection +
+        // composition) instead of binding the field directly to
+        // `state.value`. The host writes every keystroke into the
+        // DataStore-backed Flow which re-emits and re-pushes the
+        // string here; without the local cache the cursor jumps to
+        // end after every character and the user can't edit mid-text
+        // or delete cleanly with the IME's backspace.
+        var fieldValue by androidx.compose.runtime.remember {
+            androidx.compose.runtime.mutableStateOf(
+                androidx.compose.ui.text.input.TextFieldValue(
+                    text = state.value,
+                    selection = androidx.compose.ui.text.TextRange(state.value.length),
+                ),
+            )
+        }
+        // Sync FROM the external Flow only when the persisted value
+        // actually drifts from what the local field already shows —
+        // typically because the user tapped a `$VARIABLE` chip and
+        // the VM appended the placeholder at the end. The selection
+        // is moved to the end so the cursor follows the inserted
+        // token.
+        androidx.compose.runtime.LaunchedEffect(state.value) {
+            if (state.value != fieldValue.text) {
+                fieldValue = androidx.compose.ui.text.input.TextFieldValue(
+                    text = state.value,
+                    selection = androidx.compose.ui.text.TextRange(state.value.length),
+                )
+            }
+        }
         OutlinedTextField(
-            value = state.value,
-            onValueChange = callbacks.onSystemInstructionsChange,
+            value = fieldValue,
+            onValueChange = { next ->
+                fieldValue = next
+                // Notify the host only when the text content changed —
+                // selection-only changes (cursor moves) don't need to
+                // round-trip through DataStore.
+                if (next.text != state.value) {
+                    callbacks.onSystemInstructionsChange(next.text)
+                }
+            },
             placeholder = { Text(state.placeholder, style = KnotworkTextStyles.MonoSm) },
             textStyle = KnotworkTextStyles.MonoSm,
             minLines = SYSTEM_INSTRUCTIONS_MIN_LINES,
