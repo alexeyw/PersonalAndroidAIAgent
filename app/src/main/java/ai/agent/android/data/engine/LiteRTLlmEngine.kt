@@ -14,6 +14,7 @@ import com.google.ai.edge.litertlm.Conversation
 import com.google.ai.edge.litertlm.Engine
 import com.google.ai.edge.litertlm.EngineConfig
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
@@ -85,11 +86,44 @@ class LiteRTLlmEngine @Inject constructor(
             unload()
 
             val maxTokens = settingsRepository.maxContextLength.first()
-            val backendStr = settingsRepository.localModelBackend.first()
+            val configuredKey = settingsRepository.localModelBackend.first()
+            val configured = LocalBackend.fromKey(configuredKey) ?: LocalBackend.CPU
 
-            // Unknown / corrupted keys fall back to CPU, matching the prior `else` branch
-            // and the default returned by SettingsManager.
-            val backend = when (LocalBackend.fromKey(backendStr) ?: LocalBackend.CPU) {
+            // Crash-recovery: if the previous attempt crashed the process
+            // mid-init with this exact backend (sentinel still set), force
+            // CPU and reset the persisted backend so subsequent restarts
+            // are stable. The native LiteRT dispatch failure ("No dispatch
+            // library found …" for GPU / NPU on devices that don't ship
+            // one) can SIGABRT before Kotlin try/catch fires, so we have
+            // to gate the attempt before it starts.
+            val previousAttempt = settingsRepository.lastInitBackendAttempt.first()
+            val resolved = if (
+                configured != LocalBackend.CPU &&
+                previousAttempt == configured.key
+            ) {
+                Timber.w(
+                    "LiteRT backend '%s' crashed during previous init — falling back to CPU.",
+                    configured.key,
+                )
+                settingsRepository.setLocalModelBackend(LocalBackend.CPU.key)
+                settingsRepository.setLastInitBackendAttempt(null)
+                LocalBackend.CPU
+            } else {
+                configured
+            }
+
+            // Drop the breadcrumb before invoking the native engine.
+            // Cleared after a successful init (and after the recovery
+            // path above forces CPU). CPU is intentionally not gated:
+            // the CPU backend ships in-process and cannot fail to find
+            // its dispatch library.
+            if (resolved != LocalBackend.CPU) {
+                settingsRepository.setLastInitBackendAttempt(resolved.key)
+            } else {
+                settingsRepository.setLastInitBackendAttempt(null)
+            }
+
+            val backend = when (resolved) {
                 LocalBackend.GPU -> Backend.GPU()
                 LocalBackend.NPU -> Backend.NPU()
                 LocalBackend.CPU -> Backend.CPU()
@@ -110,12 +144,23 @@ class LiteRTLlmEngine @Inject constructor(
                 initialize()
             }
             _currentModelPath = modelPath
+            // Init succeeded — clear the crash-recovery breadcrumb so the
+            // next launch trusts the persisted backend.
+            settingsRepository.setLastInitBackendAttempt(null)
             Timber.i("LiteRT-LM Engine successfully initialized with $modelPath")
 
             Result.Success(Unit)
-        } catch (e: Exception) {
+        } catch (e: Throwable) {
+            // Catch `Throwable` (not just `Exception`) so JVM-side
+            // `Error`s thrown by the LiteRT JNI layer (e.g.
+            // `UnsatisfiedLinkError`, `AssertionError`) also land here
+            // instead of escaping to the default uncaught-exception
+            // handler and killing the process. The crash-recovery
+            // breadcrumb stays set on disk so the next cold-start
+            // auto-falls back to CPU.
             Timber.e(e, "Failed to initialize LiteRTLlmEngine")
             _currentModelPath = null
+            if (e is CancellationException) throw e
             Result.Error(
                 error = LlmSystemError,
                 message = e.localizedMessage ?: "Unknown initialization error",

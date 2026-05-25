@@ -294,6 +294,25 @@ interface SettingsRepository {
     suspend fun setLocalModelBackend(backend: String)
 
     /**
+     * Sentinel emitted by [setLastInitBackendAttempt] right before a
+     * non-CPU LiteRT backend init is attempted. Cleared on successful init.
+     *
+     * Used as a crash-recovery breadcrumb: if a cold-start observes this
+     * key still set to a non-CPU backend, the previous LiteRT init
+     * crashed mid-flight (typically a missing GPU/NPU dispatch library
+     * killing the process via SIGABRT before Kotlin try/catch can fire).
+     * `LiteRTLlmEngine.initialize` then forces CPU and clears the
+     * persisted backend so subsequent restarts are stable.
+     */
+    val lastInitBackendAttempt: Flow<String?>
+
+    /**
+     * Updates the crash-recovery breadcrumb. Pass `null` to clear it on
+     * successful init.
+     */
+    suspend fun setLastInitBackendAttempt(backendKey: String?)
+
+    /**
      * A [Flow] representing the timeout in milliseconds for tool approval requests.
      * After this duration without a user response, the approval is considered timed out.
      */

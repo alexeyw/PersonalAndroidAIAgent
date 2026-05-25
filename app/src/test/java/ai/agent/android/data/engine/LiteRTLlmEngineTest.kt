@@ -36,6 +36,10 @@ class LiteRTLlmEngineTest {
         settingsRepository = mockk(relaxed = true)
         every { settingsRepository.maxContextLength } returns flowOf(4096)
         every { settingsRepository.localModelBackend } returns flowOf("CPU")
+        // Crash-recovery breadcrumb stub: empty / `null` means no prior
+        // attempt crashed mid-init, which is the desired baseline for
+        // every test in this suite.
+        every { settingsRepository.lastInitBackendAttempt } returns flowOf(null)
 
         mockkConstructor(Engine::class)
         every { anyConstructed<Engine>().initialize() } returns Unit
