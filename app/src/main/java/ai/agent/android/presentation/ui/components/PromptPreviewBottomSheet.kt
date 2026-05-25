@@ -38,6 +38,7 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
+import app.knotwork.design.theme.KnotworkTheme
 
 /**
  * Bottom sheet displaying a prompt with `$VARIABLES` already substituted.
@@ -71,7 +72,7 @@ fun PromptPreviewBottomSheet(segments: List<PromptSegment>?, onDismiss: () -> Un
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 24.dp, vertical = 16.dp)
+                .padding(horizontal = KnotworkTheme.spacing.sp6, vertical = KnotworkTheme.spacing.sp4)
                 .verticalScroll(rememberScrollState()),
         ) {
             Text(
@@ -82,14 +83,14 @@ fun PromptPreviewBottomSheet(segments: List<PromptSegment>?, onDismiss: () -> Un
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(120.dp)
-                        .padding(top = 12.dp),
+                        .height(LoadingPlaceholderHeight)
+                        .padding(top = KnotworkTheme.spacing.sp3),
                     contentAlignment = Alignment.Center,
                 ) {
                     CircularProgressIndicator()
                 }
             } else {
-                PreviewBody(segments = segments, modifier = Modifier.padding(top = 12.dp))
+                PreviewBody(segments = segments, modifier = Modifier.padding(top = KnotworkTheme.spacing.sp3))
             }
         }
     }
@@ -233,3 +234,9 @@ private fun buildInlineContent(
  * with the same key still need separate slots.
  */
 private fun unknownInlineId(index: Int): String = "prompt_unknown_$index"
+
+// Height of the loading-spinner container before segments resolve. Off the
+// `KnotworkSpacing` 4 dp scale on purpose — sized to host a centred
+// `CircularProgressIndicator` with a vertical-rhythm match against the
+// surrounding `bodyMedium` line height.
+private val LoadingPlaceholderHeight = 120.dp

@@ -10,7 +10,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.unit.dp
+import app.knotwork.design.theme.KnotworkTheme
 
 /**
  * Triple-tap state picker rendered as a `DropdownMenu` anchored to the
@@ -34,7 +34,10 @@ fun ChatHomeDebugStatePicker(expanded: Boolean, onDismiss: () -> Unit, onPick: (
             text = stringResource(app.knotwork.design.R.string.knotwork_chat_home_debug_picker_title),
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+            modifier = Modifier.padding(
+                horizontal = KnotworkTheme.spacing.sp4,
+                vertical = KnotworkTheme.spacing.sp2,
+            ),
         )
         DebugStateRows.entries.forEach { row ->
             DropdownMenuItem(

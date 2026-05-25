@@ -13,6 +13,35 @@ details.
 
 ## [Unreleased]
 
+### Changed
+
+- **Global UI audit on Knotwork-converted screens** (Phase 22 / Task 16).
+  Swept `app/src/main/` for design-system violations across hex colours,
+  shape / typography / dp / motion tokens, theme single-source, and
+  component reuse. One Block-grade and eight Major findings were
+  closed in this PR; the full triage and the deferred TalkBack + dynamic-
+  type release-smoke checklists landed in `project_docs/ui-audit-phase22.md`
+  under the new `## Task 16` section.
+  - `NodeContextConfigSection.kt` swaps the hint `Surface` shape from
+    `RoundedCornerShape(8.dp)` to `KnotworkTheme.shapes.sm` and rebinds
+    paddings to spacing tokens.
+  - `PromptPreviewBottomSheet.kt`, `VariableChipsRow.kt`,
+    `PromptLibraryDialog.kt`, `PipelineLibraryScreen.kt`, and
+    `ChatHomeDebugStatePicker.kt` rebind every on-scale dp literal
+    (`4 / 8 / 12 / 16 / 24`) to the matching `KnotworkTheme.spacing.*`
+    token. Off-scale intentional values (`120 dp` loading container,
+    `2 dp` checkbox-row vertical rhythm) are now private vals with a
+    KDoc documenting the intent.
+  - `AppShellScaffold.kt` ties the bottom-nav slide-in to
+    `KnotworkTheme.motion.dur3` + `easeStd` and collapses to
+    `EnterTransition.None / ExitTransition.None` under
+    `KnotworkTheme.a11y.reducedMotion()`.
+  - `ValidationBar.kt` Auto-fix header action migrated from raw M3
+    `TextButton` to `KnotworkTextButton` for catalog typography +
+    accent. The per-row `Go ↗` action stays on raw `TextButton`
+    pending a `trailingIcon` slot on the catalog button (filed as
+    Minor in the audit doc).
+
 ### Added
 
 - **Knotwork conversion of the remaining screens** (Phase 22 / Task 15).

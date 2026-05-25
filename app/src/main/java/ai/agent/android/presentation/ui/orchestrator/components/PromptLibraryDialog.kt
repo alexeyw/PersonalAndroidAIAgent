@@ -23,7 +23,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.dp
+import app.knotwork.design.theme.KnotworkTheme
 
 /**
  * Dialog displaying a list of available prompt templates to choose from.
@@ -75,7 +75,7 @@ fun PromptLibraryDialog(
                                     onPromptSelected(prompt.text)
                                     onDismissRequest()
                                 }
-                                .padding(vertical = 8.dp),
+                                .padding(vertical = KnotworkTheme.spacing.sp2),
                         ) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Text(
@@ -95,7 +95,7 @@ fun PromptLibraryDialog(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 maxLines = 2,
                                 overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier.padding(top = 4.dp),
+                                modifier = Modifier.padding(top = KnotworkTheme.spacing.sp1),
                             )
                         }
                         Divider()

@@ -6,7 +6,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.selection.toggleable
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -18,6 +17,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import app.knotwork.design.theme.KnotworkTheme
 
 /**
  * Renders the "Input Data" section of the node configuration dialog: a header,
@@ -67,7 +67,7 @@ fun NodeContextConfigSection(
             text = stringResource(R.string.orchestrator_context_section_title),
             style = MaterialTheme.typography.titleSmall,
             fontWeight = FontWeight.Bold,
-            modifier = Modifier.padding(top = 12.dp, bottom = 4.dp),
+            modifier = Modifier.padding(top = KnotworkTheme.spacing.sp3, bottom = KnotworkTheme.spacing.sp1),
         )
 
         ContextFlagRow(
@@ -108,16 +108,16 @@ fun NodeContextConfigSection(
 
         Surface(
             tonalElevation = 1.dp,
-            shape = RoundedCornerShape(8.dp),
+            shape = KnotworkTheme.shapes.sm,
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(top = 8.dp),
+                .padding(top = KnotworkTheme.spacing.sp2),
         ) {
             Text(
                 text = stringResource(R.string.orchestrator_context_hint),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(8.dp),
+                modifier = Modifier.padding(KnotworkTheme.spacing.sp2),
             )
         }
     }
@@ -158,11 +158,11 @@ private fun ContextFlagRow(
                 role = Role.Checkbox,
                 onValueChange = onCheckedChange,
             )
-            .padding(vertical = 2.dp)
+            .padding(vertical = ContextRowVerticalPadding)
     } else {
         Modifier
             .fillMaxWidth()
-            .padding(vertical = 2.dp)
+            .padding(vertical = ContextRowVerticalPadding)
     }
     Row(
         verticalAlignment = Alignment.CenterVertically,
@@ -176,7 +176,7 @@ private fun ContextFlagRow(
             onCheckedChange = null,
             enabled = enabled,
         )
-        Column(modifier = Modifier.padding(start = 4.dp)) {
+        Column(modifier = Modifier.padding(start = KnotworkTheme.spacing.sp1)) {
             Text(
                 text = label,
                 style = MaterialTheme.typography.bodyMedium,
@@ -190,3 +190,10 @@ private fun ContextFlagRow(
         }
     }
 }
+
+// Off-scale micro-padding for checkbox-row vertical rhythm. The Knotwork
+// spacing scale starts at 4 dp (`sp1`); the checkbox-row stack needs a
+// tighter 2 dp gap so the five rows pack visually without sliding into
+// `Checkbox` touch-target overlap. Captured as a private constant rather
+// than an inline `2.dp` so the intent is searchable.
+private val ContextRowVerticalPadding = 2.dp
