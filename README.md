@@ -209,6 +209,7 @@ After installing:
 - Code style — [docs/code-style.md](docs/code-style.md).
 - Testing strategy and coverage — [docs/testing.md](docs/testing.md).
 - API & integration conventions — [docs/api-conventions.md](docs/api-conventions.md).
+- Release-build playbook (R8, signing, AAB, APK size) — [docs/release.md](docs/release.md).
 - Contributing guide — [CONTRIBUTING.md](CONTRIBUTING.md).
 - Code of Conduct — [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md).
 - Security policy and threat model — [SECURITY.md](SECURITY.md).

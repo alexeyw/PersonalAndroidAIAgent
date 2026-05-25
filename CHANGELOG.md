@@ -44,6 +44,25 @@ details.
 
 ### Changed
 
+- **Public documentation actualised against the post-legacy code state**
+  (Phase 22 / Task 17 follow-up). Removed references to deleted legacy
+  classes (`ChatScreen` / `ChatViewModel` / `ChatUiState`), retired the
+  "Saving and filtering messages" feature description, rewrote the
+  **Console** section to describe the agent-status pill + independent
+  `ModalBottomSheet` console pane that replaced the legacy mini-console /
+  full-log split, dropped the orphaned `screenshots/TODO.png` placeholders
+  in `docs/user-guide.md`, fixed the chat life-of-a-message sequence
+  diagram in `docs/architecture.md` to use the `ChatHome*` names, updated
+  the **Settings** section of `docs/extending.md` to list all nine cards
+  (was: six), refreshed the `PROMPT_VARIABLES` example in
+  `docs/extending.md` + `pipeline-editor.html` to include the four new
+  variables (`LANG / LOCATION / USER / DEVICE`) that landed in Phase 22 /
+  Task 9, corrected the SDK install requirement in `CONTRIBUTING.md`
+  (compileSdk is API 37, not API 36), wired `docs/release.md` into
+  `README.md`, `CONTRIBUTING.md` (Further reading + Build & test), and
+  `docs/architecture.md` (Further reading), and removed the stale
+  duplicate `more/` block in `FILE_MAP.md`.
+
 - **Jansi non-Android native binaries excluded from the release APK**
   (Phase 22 / Task 17). `android.packaging.resources` drops
   `org/fusesource/jansi/internal/native/{Windows,Mac,Linux,FreeBSD}/**` and

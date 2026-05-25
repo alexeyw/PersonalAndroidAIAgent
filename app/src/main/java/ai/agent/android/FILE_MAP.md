@@ -236,8 +236,6 @@ This file maps the contents of the main application package.
     - `onboarding/` - First-launch onboarding gate with the 4-step Knotwork pager (Phase 22 / Task 12 wired the real download / model-load flow on top of the Phase 21 catalog surface).
       - `OnboardingScreen.kt` - Composable entry: subscribes to `OnboardingViewModel.state`, forwards finish/skip callbacks into the nav-graph, hosts a `SnackbarHost` for the skip-flow hint emitted on `OnboardingViewModel.skipSnackbarEvents`.
       - `OnboardingViewModel.kt` - Hilt ViewModel orchestrating the download + warm-up flow. Injects `LocalModelRepository`, `ModelDownloadManager`, `LoadModelUseCase`; folds `DownloadState` into the catalog `OnboardingViewState`, persists the freshly-downloaded `LocalModel`, runs `LoadModelUseCase` to warm the inference handle, and emits one-shot snackbar pings on skip. Sets `hasCompletedOnboarding` on finish / skip.
-    - `more/` - "More" tab landing screen.
-      - `MoreScreen.kt` - Material3 `ListItem` list with Memory / Models / Prompts / Task monitor / Live metrics / Settings / About rows.
     - `about/` - About screen (Phase 22 / Task 15 — full Knotwork redesign on top of `AboutContent`: hero brand mark + version / license / acknowledgments / privacy cards).
       - `AboutScreen.kt` - Slim wrapper around the catalog `AboutContent`. Owns the 15-entry hand-maintained acknowledgments list and the `ACTION_VIEW` intents for License / Privacy CTAs.
     - `chat/` - Chat surface — production surface lives in `home/`.
