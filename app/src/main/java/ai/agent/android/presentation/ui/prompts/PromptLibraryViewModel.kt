@@ -44,6 +44,17 @@ class PromptLibraryViewModel @Inject constructor(
         loadPrompts()
     }
 
+    /**
+     * Re-runs the prompt-template load flow and clears the previous
+     * `errorMessage`. Wired to the catalog `PromptLibraryContent`
+     * error-state Retry CTA so a failed load (or a failed save / delete
+     * surfaced via [errorMessage]) is recoverable in-place.
+     */
+    fun retry() {
+        _uiState.update { it.copy(errorMessage = null) }
+        loadPrompts()
+    }
+
     private fun loadPrompts() {
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true) }

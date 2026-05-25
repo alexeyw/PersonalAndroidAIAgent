@@ -43,10 +43,17 @@ fun TaskMonitorScreen(
         onRowClick = viewModel::openDetails,
         onRowCancel = viewModel::onCancelTaskClicked,
         onDetailDismiss = viewModel::closeDetails,
-        onDetailOpenChat = { sessionId ->
-            viewModel.onOpenChatClicked(sessionId) {
-                viewModel.closeDetails()
-                onNavigateToChat(sessionId)
+        onDetailOpenChat = { taskId ->
+            // The catalog already gates the CTA visibility on
+            // `canOpenChat`; this guard is a defence-in-depth so a
+            // mistaken host invocation can't write an invalid
+            // currentChatSessionId for a background WorkManager UUID.
+            val task = uiState.tasks.firstOrNull { it.id == taskId }
+            if (task?.type == TaskType.SESSION) {
+                viewModel.onOpenChatClicked(taskId) {
+                    viewModel.closeDetails()
+                    onNavigateToChat(taskId)
+                }
             }
         },
         onRetry = {},
@@ -78,6 +85,10 @@ internal fun TaskMonitorState.toViewState(): TaskMonitorViewState {
                 subtitle = task.pipelineStage,
                 status = task.status.toCatalog(),
                 logs = emptyList(),
+                // Open-chat navigation is only valid for chat-session
+                // tasks; background WorkManager rows carry a UUID id
+                // that does not resolve to a chat.
+                canOpenChat = task.type == TaskType.SESSION,
             )
         }
     }

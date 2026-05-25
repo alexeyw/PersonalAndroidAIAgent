@@ -52,6 +52,11 @@ data class TaskMonitorRow(
  * Detail payload populating the `ModalBottomSheet` opened on row tap.
  *
  * @property logs human-readable log lines (mono).
+ * @property canOpenChat `true` when the [id] addresses a chat session
+ * — drives the visibility of the `Open chat` CTA in the detail sheet.
+ * `false` for background WorkManager tasks whose id is a `UUID`,
+ * because navigating to a chat with that id would write an invalid
+ * `currentChatSessionId` and route to a non-existent screen.
  */
 data class TaskMonitorDetail(
     val id: String,
@@ -59,6 +64,7 @@ data class TaskMonitorDetail(
     val subtitle: String?,
     val status: TaskRowStatus,
     val logs: List<String>,
+    val canOpenChat: Boolean = false,
 )
 
 /**

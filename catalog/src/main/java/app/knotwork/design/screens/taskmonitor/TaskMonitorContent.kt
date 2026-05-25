@@ -301,11 +301,16 @@ fun TaskMonitorDetailSheetBody(
                 onClick = callbacks.onDetailDismiss,
                 modifier = Modifier.weight(1f),
             )
-            KnotworkPrimaryButton(
-                text = strings.detailOpenChat,
-                onClick = { callbacks.onDetailOpenChat(detail.id) },
-                modifier = Modifier.weight(1f),
-            )
+            if (detail.canOpenChat) {
+                // Only sessions have a chat to open; background tasks
+                // (WorkManager UUIDs) hide the CTA to avoid routing the
+                // app to a non-existent chat id.
+                KnotworkPrimaryButton(
+                    text = strings.detailOpenChat,
+                    onClick = { callbacks.onDetailOpenChat(detail.id) },
+                    modifier = Modifier.weight(1f),
+                )
+            }
         }
     }
 }

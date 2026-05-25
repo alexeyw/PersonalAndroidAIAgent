@@ -2,6 +2,7 @@ package ai.agent.android.presentation.ui.prompts
 
 import ai.agent.android.R
 import ai.agent.android.domain.models.NodeType
+import ai.agent.android.presentation.ui.common.asString
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -37,10 +38,14 @@ fun PromptLibraryScreen(
     val uiState by viewModel.uiState.collectAsState()
     val strings = promptLibraryStrings()
     val editorStrings = promptEditorStrings()
-    val viewState = remember(uiState, strings.subtitleFormat, strings.usedByFormat) {
+    val resolvedErrorMessage = uiState.errorMessage?.asString()
+    val genericErrorMessage = stringResource(R.string.errors_generic_unexpected)
+    val viewState = remember(uiState, strings.subtitleFormat, strings.usedByFormat, resolvedErrorMessage) {
         uiState.toViewState(
             subtitleFormat = strings.subtitleFormat,
             usedByFormat = strings.usedByFormat,
+            resolvedErrorMessage = resolvedErrorMessage,
+            fallbackErrorMessage = genericErrorMessage,
         )
     }
     val callbacks = PromptLibraryCallbacks(
@@ -57,7 +62,7 @@ fun PromptLibraryScreen(
         onEditorVariableInsert = viewModel::onEditorVariableInsert,
         onEditorSave = viewModel::saveEditor,
         onEditorCancel = viewModel::closeEditor,
-        onRetry = {},
+        onRetry = viewModel::retry,
     )
 
     PromptLibraryContent(
@@ -88,13 +93,29 @@ fun PromptLibraryScreen(
  * Maps the app-side [PromptLibraryUiState] onto the catalog
  * [PromptLibraryViewState] consumed by `PromptLibraryContent`.
  *
+ * Branch order: a non-null [errorMessage] always wins over the
+ * "empty prompts" branch — otherwise a failed initial load with no
+ * cached prompts would hide behind a misleading empty state and the
+ * Retry CTA would never be reachable.
+ *
  * @param subtitleFormat localised `"%1$d categories · %2$d prompts"` template.
  * @param usedByFormat localised `"used by %1$d pipelines"` template
  * (currently unused — the catalog applies its own formatting from
  * `usedByCount`).
+ * @param resolvedErrorMessage pre-resolved `errorMessage.asString()`
+ * value (mappers cannot call `@Composable` resolvers themselves), or
+ * `null` when no error is in flight.
+ * @param fallbackErrorMessage generic localised error string used as
+ * the rendered subtitle when [errorMessage] is non-null but resolves
+ * to an empty payload.
  */
 @Suppress("UNUSED_PARAMETER") // usedByFormat reserved for future per-row count formatting.
-internal fun PromptLibraryUiState.toViewState(subtitleFormat: String, usedByFormat: String): PromptLibraryViewState {
+internal fun PromptLibraryUiState.toViewState(
+    subtitleFormat: String,
+    usedByFormat: String,
+    resolvedErrorMessage: String?,
+    fallbackErrorMessage: String,
+): PromptLibraryViewState {
     val categories = if (promptTemplates.isEmpty()) {
         NodeType.entries.map { it.name }
     } else {
@@ -123,12 +144,19 @@ internal fun PromptLibraryUiState.toViewState(subtitleFormat: String, usedByForm
         )
     }
     val visualState = when {
+        // Errors take precedence over both Loading and Empty — without
+        // this order, a failed initial load with no cached prompts is
+        // rendered as Empty, hiding the real failure and the Retry CTA.
+        errorMessage != null -> PromptLibraryVisualState.Error
         isLoading -> PromptLibraryVisualState.Loading
         promptTemplates.isEmpty() -> PromptLibraryVisualState.Empty
-        errorMessage != null -> PromptLibraryVisualState.Error
         else -> PromptLibraryVisualState.Default
     }
-    val errorText = if (visualState == PromptLibraryVisualState.Error) "" else null
+    val errorText = if (visualState == PromptLibraryVisualState.Error) {
+        resolvedErrorMessage?.takeIf { it.isNotBlank() } ?: fallbackErrorMessage
+    } else {
+        null
+    }
     return PromptLibraryViewState(
         visualState = visualState,
         categories = categories,
