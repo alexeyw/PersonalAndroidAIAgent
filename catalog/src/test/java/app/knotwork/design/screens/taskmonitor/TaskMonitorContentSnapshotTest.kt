@@ -108,5 +108,9 @@ internal object TaskMonitorPreview {
             "12:04:05 [TOOL] calendar_lookup → empty 09:00-12:00",
             "12:04:11 [TOOL] flight_search → 12 options",
         ),
+        // Session-style task — exercises the visible Open chat CTA;
+        // the background-task variant with the CTA hidden is exercised
+        // indirectly via the default-state list snapshot.
+        canOpenChat = true,
     )
 }
