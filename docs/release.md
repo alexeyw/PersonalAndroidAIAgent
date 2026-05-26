@@ -11,7 +11,7 @@ should be runnable verbatim from a clean checkout.
 | `debug`    | no       | no               | Android debug key   | `app-debug.apk`   |
 | `release`  | yes (R8) | yes              | Android debug key * | `app-release.apk` / `app-release.aab` |
 
-\* See §3 below — v0.1.0 ships signed with the debug keystore. A production
+\* See §3 below — v0.2.0 ships signed with the debug keystore. A production
 keystore is not yet provisioned; the GitHub-Release APK is suitable for
 sideloading on a developer device but **not** acceptable for Play Store
 upload.
@@ -42,7 +42,7 @@ keeps every ABI.
 
 ## 3. Signing (current state vs. production target)
 
-### Current state — v0.1.0
+### Current state — v0.2.0
 
 `buildTypes.release.signingConfig = signingConfigs.getByName("debug")`.
 The Android debug keystore lives at `~/.android/debug.keystore` and is
@@ -147,7 +147,7 @@ If R8 starts stripping something at runtime, drop a new section into
 `proguard-rules.pro` rather than scattering rules across the file, and
 include a one-line comment on the symptom that triggered the keep.
 
-## 5. APK size breakdown — v0.1.0
+## 5. APK size breakdown — v0.2.0
 
 `app-release.apk` measures **59 MB on disk** (~62 MB uncompressed inside
 the APK container). The 30 MB target from the original phase plan is
@@ -175,7 +175,7 @@ What we already did to keep this in check:
 - **R8 full mode + resource shrinking.** Saves ~2 MB on DEX vs. unminified.
 - **Strip Jansi non-Android natives.** `org/fusesource/jansi/internal/native/{Windows,Mac,Linux,FreeBSD}/**` and `META-INF/native-image/jansi/**` are dropped via the `android.packaging.resources` exclude list — Jansi ships through Koog's logger and only its ANSI-escape rendering runs on JVM hosts.
 
-Future wins (left out of scope for v0.1.0):
+Future wins (left out of scope for v0.2.0):
 
 - **Move the universal-sentence-encoder model to a first-run download.** Wins ~6 MB; complicates first-run UX. Tracked separately.
 - **Per-ABI dynamic feature module for LiteRT GPU.** Only devices that actually use the GPU delegate would download `libLiteRtClGlAccelerator.so`. Wins ~2.6 MB; requires App Bundle delivery (already in place) plus split-install plumbing.

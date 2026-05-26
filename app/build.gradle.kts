@@ -54,8 +54,8 @@ android {
         applicationId = "ai.agent.android"
         minSdk = 36
         targetSdk = 37
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = 2
+        versionName = "0.2.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -99,7 +99,7 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
             )
-            // v0.1.0 ships signed with the debug keystore. A real
+            // v0.2.0 ships signed with the debug keystore. A real
             // `signingConfigs.release` block (with `keyAlias` / `keyPassword`
             // sourced from `local.properties` or environment variables) is
             // intentionally deferred: the Play Store submission lands in a

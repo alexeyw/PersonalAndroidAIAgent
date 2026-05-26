@@ -13,6 +13,13 @@ details.
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-05-25
+
+Ships Phase 22 end-to-end: every Knotwork-redesigned screen wired to its
+real backend, MCP routing hardened against config-edit / disabled /
+flaky-provider regressions, R8-minified release variant, and a fresh set
+of README hero shots regenerated from new Roborazzi baselines.
+
 ### Fixed
 
 - **MCP routing — three regressions in `ToolRepositoryImpl`** (Phase 22 /
@@ -78,7 +85,7 @@ details.
 - **`docs/release.md`** — single-page release playbook covering variant
   matrix, signing posture (current debug-keystore vs. the production block
   to land before Play Store submission), R8 keep-rules rationale,
-  bundle / size measurement instructions, and the v0.1.0 APK-size
+  bundle / size measurement instructions, and the v0.2.0 APK-size
   breakdown.
 - **README hero + screenshot grid regenerated at 1080 × 2400 from new
   Roborazzi baselines** (one `HeroSnapshotTest` per surface). Five
@@ -1745,5 +1752,6 @@ that produced the initial 0.1.0 snapshot.
 - **Master key**: `EncryptedSharedPreferences` is rooted in the Android
   Keystore, so the master key is hardware-backed where available.
 
-[Unreleased]: https://github.com/alexeyw/PersonalAndroidAIAgent/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/alexeyw/PersonalAndroidAIAgent/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/alexeyw/PersonalAndroidAIAgent/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/alexeyw/PersonalAndroidAIAgent/releases/tag/v0.1.0

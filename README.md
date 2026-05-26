@@ -1,7 +1,7 @@
 # On-Device AI Agent for Android
 
 [![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
-![Version](https://img.shields.io/badge/version-0.1.0-orange.svg)
+![Version](https://img.shields.io/badge/version-0.2.0-orange.svg)
 ![Android API](https://img.shields.io/badge/Android-API%2036%2B-3DDC84.svg?logo=android)
 <!-- ![Build](https://img.shields.io/badge/build-pending-lightgrey.svg) — enabled once CI is wired up. -->
 
@@ -21,7 +21,7 @@
 
 ## Pre-release notice
 
-This project is currently at **version 0.1.0** and is published for review and
+This project is currently at **version 0.2.0** and is published for review and
 experimentation. Expect rough edges:
 
 - There are no stability guarantees for the public surface (Kotlin APIs,
