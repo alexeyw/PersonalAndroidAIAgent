@@ -10,6 +10,7 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.test.platform.app.InstrumentationRegistry
+import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
 
@@ -84,7 +85,7 @@ class PipelineEditorRadialMenuTest {
         composeTestRule.onNodeWithText("Cloud").performClick()
         composeTestRule.waitForIdle()
 
-        assert(picked == NodeType.CLOUD) { "expected NodeType.CLOUD, got $picked" }
+        assertEquals(NodeType.CLOUD, picked)
     }
 
     @Test
@@ -106,6 +107,6 @@ class PipelineEditorRadialMenuTest {
             .performClick()
         composeTestRule.waitForIdle()
 
-        assert(dismissCount == 1) { "expected onDismiss once, got $dismissCount" }
+        assertEquals(1, dismissCount)
     }
 }

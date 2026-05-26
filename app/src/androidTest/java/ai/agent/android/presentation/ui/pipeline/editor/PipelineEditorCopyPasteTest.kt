@@ -13,6 +13,8 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.test.platform.app.InstrumentationRegistry
 import io.mockk.verify
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Rule
 import org.junit.Test
 import app.knotwork.design.R as KnotworkR
@@ -78,13 +80,9 @@ class PipelineEditorCopyPasteTest {
             .performClick()
         composeTestRule.waitForIdle()
 
-        val clipboardIds: List<String> = editor.clipboard.map(NodeModel::id)
-        assert(clipboardIds.toSet() == selected) {
-            "expected clipboard=$selected, got $clipboardIds"
-        }
-        assert(!editor.multiSelectMode) {
-            "expected multi-select to clear after copy"
-        }
+        val clipboardIds: Set<String> = editor.clipboard.map(NodeModel::id).toSet()
+        assertEquals(selected, clipboardIds)
+        assertFalse("expected multi-select to clear after copy", editor.multiSelectMode)
     }
 
     @Test

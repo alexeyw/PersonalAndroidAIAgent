@@ -14,6 +14,8 @@ import app.knotwork.design.components.pipelineeditor.NodeConfig
 import app.knotwork.design.components.pipelineeditor.NodeConfigSheetBody
 import app.knotwork.design.components.pipelineeditor.OutputConfig
 import app.knotwork.design.components.pipelineeditor.ToolConfig
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Rule
 import org.junit.Test
 import app.knotwork.design.R as KnotworkR
@@ -152,10 +154,8 @@ class PipelineEditorNodeConfigSheetTest {
         composeTestRule.waitForIdle()
 
         val mutated = latest as? InputConfig
-        assert(mutated != null) { "expected onChange to fire with an InputConfig" }
-        assert(mutated?.inputName == "user.email") {
-            "expected inputName=user.email, got ${mutated?.inputName}"
-        }
+        assertNotNull("expected onChange to fire with an InputConfig", mutated)
+        assertEquals("user.email", mutated?.inputName)
     }
 
     @Test
@@ -177,7 +177,7 @@ class PipelineEditorNodeConfigSheetTest {
         composeTestRule.onNodeWithText(saveLabel).performClick()
         composeTestRule.waitForIdle()
 
-        assert(saved == initial) { "expected saved=$initial, got $saved" }
+        assertEquals(initial, saved)
     }
 
     @Test
@@ -199,6 +199,6 @@ class PipelineEditorNodeConfigSheetTest {
         composeTestRule.onNodeWithText(cancelLabel).performClick()
         composeTestRule.waitForIdle()
 
-        assert(cancelCount == 1) { "expected onCancel once, got $cancelCount" }
+        assertEquals(1, cancelCount)
     }
 }

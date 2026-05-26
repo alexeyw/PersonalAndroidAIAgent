@@ -10,6 +10,7 @@ import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.test.platform.app.InstrumentationRegistry
+import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
 
@@ -99,7 +100,7 @@ class PipelineEditorValidationBarTest {
             .performClick()
         composeTestRule.waitForIdle()
 
-        assert(autoFixCount == 1) { "expected onAutoFix once, got $autoFixCount" }
+        assertEquals(1, autoFixCount)
     }
 
     @Test
@@ -129,8 +130,6 @@ class PipelineEditorValidationBarTest {
             .performClick()
         composeTestRule.waitForIdle()
 
-        assert(focused == unconnectedInputId) {
-            "expected $unconnectedInputId, got $focused"
-        }
+        assertEquals(unconnectedInputId, focused)
     }
 }

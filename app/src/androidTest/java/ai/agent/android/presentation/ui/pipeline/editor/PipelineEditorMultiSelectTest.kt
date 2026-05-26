@@ -9,6 +9,7 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.test.platform.app.InstrumentationRegistry
+import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
 
@@ -64,7 +65,7 @@ class PipelineEditorMultiSelectTest {
             .performClick()
         composeTestRule.waitForIdle()
 
-        assert(cancelCount == 1) { "expected onCancel once, got $cancelCount" }
+        assertEquals(1, cancelCount)
     }
 
     @Test
@@ -86,7 +87,7 @@ class PipelineEditorMultiSelectTest {
             .performClick()
         composeTestRule.waitForIdle()
 
-        assert(copyCount == 1) { "expected onCopy once, got $copyCount" }
+        assertEquals(1, copyCount)
     }
 
     @Test
@@ -108,6 +109,6 @@ class PipelineEditorMultiSelectTest {
             .performClick()
         composeTestRule.waitForIdle()
 
-        assert(deleteCount == 1) { "expected onDelete once, got $deleteCount" }
+        assertEquals(1, deleteCount)
     }
 }

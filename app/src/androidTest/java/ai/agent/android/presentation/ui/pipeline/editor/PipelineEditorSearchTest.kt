@@ -10,6 +10,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextReplacement
 import androidx.test.platform.app.InstrumentationRegistry
+import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
 
@@ -68,7 +69,7 @@ class PipelineEditorSearchTest {
             .performTextReplacement("router")
         composeTestRule.waitForIdle()
 
-        assert(latest == "router") { "expected query=router, got $latest" }
+        assertEquals("router", latest)
     }
 
     @Test
@@ -106,6 +107,6 @@ class PipelineEditorSearchTest {
         composeTestRule.onNodeWithContentDescription(closeCd).performClick()
         composeTestRule.waitForIdle()
 
-        assert(closeCount == 1) { "expected onClose once, got $closeCount" }
+        assertEquals(1, closeCount)
     }
 }
