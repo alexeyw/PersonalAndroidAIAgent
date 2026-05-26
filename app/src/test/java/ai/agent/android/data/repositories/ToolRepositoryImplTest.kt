@@ -525,6 +525,49 @@ class ToolRepositoryImplTest {
     }
 
     @Test
+    fun `executeTool dispatches MCP tool exactly once when settings persists duplicate server URLs`() = runTest {
+        // Regression: switching the MCP dispatch loop from
+        // ConcurrentHashMap.entries (implicit URL-key dedup) to the raw
+        // persisted list let a duplicate-URL row in settings (which
+        // SettingsManager.updateMcpServer can produce by replacing-by-index
+        // without checking for collisions) execute the same tool twice on
+        // the same connected client per call — catastrophic for non-
+        // idempotent side effects. distinctMcpConfigs() now keeps only the
+        // first occurrence of each URL before iteration.
+        val toolName = "shared_tool"
+        val url = "http://duplicated:8080"
+        every { settingsRepository.mcpServers } returns flowOf(
+            listOf(McpServerConfig(url = url), McpServerConfig(url = url)),
+        )
+        coEvery { mcpClient.getTools() } returns
+            listOf(AgentTool(name = toolName, description = "T", parameters = "{}"))
+        coEvery { mcpClient.executeTool(toolName, any()) } returns "once"
+
+        val result = repository.executeTool(toolName, "{}")
+
+        assertEquals("once", result)
+        coVerify(exactly = 1) { mcpClient.executeTool(toolName, "{}") }
+        coVerify(exactly = 1) { mcpClient.connect(any()) }
+    }
+
+    @Test
+    fun `getAvailableTools deduplicates tools when settings persists duplicate server URLs`() = runTest {
+        // Sibling regression: a duplicated URL row also produced duplicate
+        // entries in the advertised tool catalogue, which would inflate the
+        // agent's prompt and confuse the LLM's tool-selection pass.
+        val url = "http://duplicated:8080"
+        val mcpTool = AgentTool(name = "shared_tool", description = "T", parameters = "{}")
+        every { settingsRepository.mcpServers } returns flowOf(
+            listOf(McpServerConfig(url = url), McpServerConfig(url = url)),
+        )
+        coEvery { mcpClient.getTools() } returns listOf(mcpTool)
+
+        val result = repository.getAvailableTools()
+
+        assertEquals(1, result.count { it.name == "shared_tool" })
+    }
+
+    @Test
     fun `executeTool rethrows last execute error when every advertising provider fails`() = runTest {
         // When nobody can serve the call, the agent gets a concrete cause
         // (network error / 5xx / parse failure) instead of a generic

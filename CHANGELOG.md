@@ -43,7 +43,16 @@ details.
     **`settingsRepository.mcpServers`** order instead of the
     non-deterministic `ConcurrentHashMap.entries`, so multi-provider
     probe order is both predictable and matches the priority the user
-    actually configured in Settings.
+    actually configured in Settings. The new helper
+    `distinctMcpConfigs()` deduplicates the list by URL (keep-first)
+    before iteration — defensive measure against a known issue in
+    `SettingsManager.updateMcpServer`, which replaces by index without
+    checking for collisions and can persist `[B, B]` after the user
+    edits server A's URL to match an existing server B's URL. Without
+    the dedup, a duplicate-URL row would trigger a duplicate
+    `executeTool` call against the same connected client (risky for
+    non-idempotent tool side effects) and emit duplicate tools from
+    `getAvailableTools`.
 
 ### Added
 

@@ -139,8 +139,25 @@ class ToolRepositoryImpl @Inject constructor(
      * Connection failures (network down, bad auth) are swallowed — the
      * URL is left out of the pool so the next sync attempt retries.
      */
+    /**
+     * Reads the persisted MCP server list and **deduplicates by URL**, keeping
+     * the first occurrence. Defensive measure against a known issue in
+     * [ai.agent.android.data.local.SettingsManager.updateMcpServer], which
+     * replaces by index without checking for collisions: editing server A's
+     * URL to match an existing server B can persist `[B, B]`. Before the
+     * Phase 22 / Task 17 follow-up that swapped the iteration source from
+     * `ConcurrentHashMap.entries` to the persisted list, that duplication was
+     * masked because the map keyed by URL implicitly absorbed it. The list
+     * iteration is now the source of truth for ordering, so the dedup must
+     * happen here — otherwise a duplicate URL would trigger a duplicate
+     * `executeTool` call against the same connected client (catastrophic for
+     * non-idempotent tools) and emit duplicate tools from `getAvailableTools`.
+     */
+    private suspend fun distinctMcpConfigs(): List<McpServerConfig> =
+        settingsRepository.mcpServers.first().distinctBy { it.url }
+
     private suspend fun syncMcpClients() {
-        val configs = settingsRepository.mcpServers.first()
+        val configs = distinctMcpConfigs()
         val persistedUrls = configs.mapTo(mutableSetOf()) { it.url }
 
         // Disconnect + drop servers that disappeared from settings entirely.
@@ -220,7 +237,7 @@ class ToolRepositoryImpl @Inject constructor(
      */
     override suspend fun getAvailableTools(): List<AgentTool> {
         syncMcpClients()
-        val configs = settingsRepository.mcpServers.first()
+        val configs = distinctMcpConfigs()
         val disabledLocal = settingsRepository.disabledAppFunctions.first()
         val disabledMcp = settingsRepository.disabledMcpTools.first()
         val availableLocal = getAllLocalTools().filter { it.name !in disabledLocal }
@@ -318,7 +335,7 @@ class ToolRepositoryImpl @Inject constructor(
      */
     private suspend fun executeMcpTool(name: String, arguments: String): String {
         syncMcpClients()
-        val configs = settingsRepository.mcpServers.first()
+        val configs = distinctMcpConfigs()
         val disabledMcp = settingsRepository.disabledMcpTools.first()
         var sawDisabled = false
         var lastExecutionError: Throwable? = null
@@ -372,8 +389,9 @@ class ToolRepositoryImpl @Inject constructor(
 
         syncMcpClients()
         // Walk in persisted-config order for the same determinism reasons as
-        // executeMcpTool / getAvailableTools.
-        for (config in settingsRepository.mcpServers.first()) {
+        // executeMcpTool / getAvailableTools. distinctMcpConfigs() defends
+        // against a duplicate-URL row that updateMcpServer can persist.
+        for (config in distinctMcpConfigs()) {
             val entry = mcpClients[config.url] ?: continue
             val isMcpTool = runCatching { entry.client.getTools().any { it.name == toolName } }
                 .getOrDefault(false)
