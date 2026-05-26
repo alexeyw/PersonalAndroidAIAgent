@@ -6,6 +6,7 @@ import ai.agent.android.data.tools.local.LocalAppFunctionManager
 import ai.agent.android.data.tools.local.SearchTool
 import ai.agent.android.domain.models.AgentTool
 import ai.agent.android.domain.models.CloudProvider
+import ai.agent.android.domain.models.McpServerConfig
 import ai.agent.android.domain.models.ToolRisk
 import ai.agent.android.domain.repositories.ApiKeyRepository
 import ai.agent.android.domain.repositories.LocalToolExecutor
@@ -35,7 +36,26 @@ class ToolRepositoryImpl @Inject constructor(
     private val localToolExecutors: Map<String, @JvmSuppressWildcards LocalToolExecutor>,
 ) : ToolRepository {
 
-    private val mcpClients = ConcurrentHashMap<String, McpClient>()
+    /**
+     * Active MCP connection pool keyed by the server URL.
+     *
+     * Each entry carries the live [McpClient] **and** the [McpServerConfig]
+     * it was connected with so that [syncMcpClients] can detect non-URL
+     * changes (auth tier swap, transport switch, custom-header edits) and
+     * tear-down + reconnect on the next call. Keying only by URL would
+     * silently keep a stale connection alive after the user updated
+     * credentials in Settings → External providers, and every subsequent
+     * tool call would fail with the old auth until the process restarted.
+     */
+    private val mcpClients = ConcurrentHashMap<String, ConnectedClient>()
+
+    /**
+     * Snapshot of a live MCP connection: the [client] that owns the
+     * socket / SSE stream and the [config] it was [McpClient.connect]ed
+     * with. The pair is the equality unit [syncMcpClients] compares
+     * against the latest persisted settings.
+     */
+    private data class ConnectedClient(val client: McpClient, val config: McpServerConfig)
 
     private suspend fun getBuiltinTools(): List<AgentTool> {
         val availableModels = mutableListOf<CloudProvider>()
@@ -102,28 +122,60 @@ class ToolRepositoryImpl @Inject constructor(
         return baseTools
     }
 
+    /**
+     * Reconciles the [mcpClients] pool against [SettingsRepository.mcpServers].
+     *
+     * Three cases per persisted config (keyed by URL):
+     *  1. **Absent** from the pool → factory-build a client, [McpClient.connect],
+     *     store under the URL together with the config snapshot.
+     *  2. **Present with an equal config** → keep the existing connection;
+     *     no work is done so steady-state polling stays cheap.
+     *  3. **Present with a changed config** (auth, transport, headers, or
+     *     display name edited in Settings → External providers) →
+     *     [McpClient.disconnect] the stale client and reconnect from scratch
+     *     so the new credentials / transport take effect immediately.
+     *
+     * URLs no longer in the persisted set are disconnected and removed.
+     * Connection failures (network down, bad auth) are swallowed — the
+     * URL is left out of the pool so the next sync attempt retries.
+     */
     private suspend fun syncMcpClients() {
         val configs = settingsRepository.mcpServers.first()
-        val urls = configs.mapTo(mutableSetOf()) { it.url }
-        val toRemove = mcpClients.keys - urls
-        val toAdd = configs.filter { it.url !in mcpClients.keys }
+        val persistedUrls = configs.mapTo(mutableSetOf()) { it.url }
 
-        toRemove.forEach { url ->
+        // Disconnect + drop servers that disappeared from settings entirely.
+        (mcpClients.keys.toSet() - persistedUrls).forEach { url ->
             try {
-                mcpClients[url]?.disconnect()
+                mcpClients[url]?.client?.disconnect()
             } catch (e: Exception) {
-                // Ignore disconnect errors
+                Timber.w(e, "MCP disconnect of removed server %s failed; dropping from pool anyway", url)
             }
             mcpClients.remove(url)
         }
 
-        toAdd.forEach { config ->
+        // For every persisted config: keep unchanged entries, (re)connect the rest.
+        configs.forEach { config ->
+            val existing = mcpClients[config.url]
+            if (existing != null && existing.config == config) {
+                return@forEach
+            }
+            if (existing != null) {
+                // Config changed (auth / transport / headers / display name) — tear
+                // down the stale connection so the next reconnect actually applies
+                // the new settings instead of holding the old auth.
+                try {
+                    existing.client.disconnect()
+                } catch (e: Exception) {
+                    Timber.w(e, "MCP disconnect of stale config for %s failed; reconnecting anyway", config.url)
+                }
+                mcpClients.remove(config.url)
+            }
             val client = mcpClientFactory.create()
             try {
                 client.connect(config)
-                mcpClients[config.url] = client
+                mcpClients[config.url] = ConnectedClient(client = client, config = config)
             } catch (e: Exception) {
-                // Client failed to connect, we don't add it to the active pool
+                Timber.w(e, "MCP connect to %s failed; will retry on next sync", config.url)
             }
         }
     }
@@ -168,14 +220,20 @@ class ToolRepositoryImpl @Inject constructor(
      */
     override suspend fun getAvailableTools(): List<AgentTool> {
         syncMcpClients()
+        val configs = settingsRepository.mcpServers.first()
         val disabledLocal = settingsRepository.disabledAppFunctions.first()
         val disabledMcp = settingsRepository.disabledMcpTools.first()
         val availableLocal = getAllLocalTools().filter { it.name !in disabledLocal }
 
-        val mcpTools = mcpClients.entries.flatMap { (url, client) ->
+        // Walk persisted-config order, not `mcpClients.entries`. ConcurrentHashMap
+        // iteration is non-deterministic; the user's ordering in Settings →
+        // External providers must dictate the probe order so multi-provider
+        // routing stays predictable.
+        val mcpTools = configs.flatMap { config ->
+            val entry = mcpClients[config.url] ?: return@flatMap emptyList()
             try {
-                client.getTools().filter { tool ->
-                    McpServerRepositoryImpl.mcpToolId(serverUrl = url, toolName = tool.name) !in disabledMcp
+                entry.client.getTools().filter { tool ->
+                    McpServerRepositoryImpl.mcpToolId(serverUrl = config.url, toolName = tool.name) !in disabledMcp
                 }
             } catch (e: Exception) {
                 emptyList()
@@ -229,30 +287,65 @@ class ToolRepositoryImpl @Inject constructor(
     }
 
     /**
-     * MCP-side dispatch for [executeTool]. Iterates over every active MCP client
-     * and, for the first one that advertises [name], either rejects the call
-     * (when the tool's `mcp:<sha8(url)>:<name>` id is in
-     * [SettingsRepository.disabledMcpTools]) or forwards it to the client.
+     * MCP-side dispatch for [executeTool]. Walks every active MCP client and
+     * forwards the call to the first one that successfully executes [name].
      *
-     * Errors thrown from `getTools()` on a single client are swallowed so the
-     * loop can fall through to other clients — but disabled-tool rejections
-     * are surfaced to the caller, otherwise the gate would silently fail open.
+     * The walk is resilient by design — `disabledMcpTools` is scoped per
+     * server (id = `mcp:<sha8(serverUrl)>:<toolName>`), and two servers can
+     * advertise the same tool name. The loop therefore:
+     *
+     *  - **Skips** providers that do not advertise [name] (silent `continue`).
+     *  - **Skips** providers whose per-server `mcpId` is in
+     *    [SettingsRepository.disabledMcpTools]; tracks that fact via
+     *    `sawDisabled` so the loop can keep probing other providers — a
+     *    sibling server with the same tool name and a non-disabled `mcpId`
+     *    still gets a chance to run.
+     *  - **Keeps going** when an advertising provider throws on execute;
+     *    the failure is remembered as `lastExecutionError` so the agent
+     *    can still get the canonical error shape if every remaining
+     *    provider also fails.
+     *
+     * Post-loop decision:
+     *
+     *  - If at least one advertising provider threw → re-throw the most
+     *    recent failure (preserves the cloud / network error the caller
+     *    actually needs to see, instead of a generic "not found").
+     *  - Else if every advertising provider was disabled → throw the
+     *    `is disabled` message so the HITL gate / Settings UI can guide
+     *    the user to re-enable the tool.
+     *  - Else (no provider advertised the name at all) → throw
+     *    `not found across active providers`.
      */
     private suspend fun executeMcpTool(name: String, arguments: String): String {
         syncMcpClients()
+        val configs = settingsRepository.mcpServers.first()
         val disabledMcp = settingsRepository.disabledMcpTools.first()
-        for ((url, client) in mcpClients) {
-            val advertised = runCatching { client.getTools().any { it.name == name } }.getOrDefault(false)
+        var sawDisabled = false
+        var lastExecutionError: Throwable? = null
+        // Walk in user-controlled order (Settings → External providers). Skipping
+        // `mcpClients.entries` for ConcurrentHashMap's non-deterministic iteration
+        // means multi-provider routing is now both deterministic and matches the
+        // priority the user actually configured.
+        for (config in configs) {
+            val entry = mcpClients[config.url] ?: continue
+            val advertised = runCatching { entry.client.getTools().any { it.name == name } }
+                .getOrDefault(false)
             if (!advertised) continue
-            val mcpId = McpServerRepositoryImpl.mcpToolId(serverUrl = url, toolName = name)
+            val mcpId = McpServerRepositoryImpl.mcpToolId(serverUrl = config.url, toolName = name)
             if (mcpId in disabledMcp) {
-                throw IllegalArgumentException("Tool $name is disabled")
+                sawDisabled = true
+                continue
             }
-            val executed = runCatching { client.executeTool(name, arguments) }.getOrNull()
-            if (executed != null) return executed
-            // Execution failure on the only advertising client → fall through to the
-            // outer "not found" error so the agent gets a consistent failure shape.
-            break
+            runCatching { entry.client.executeTool(name, arguments) }
+                .onSuccess { return it }
+                .onFailure { error ->
+                    Timber.w(error, "MCP execute of %s on %s failed; trying other providers", name, config.url)
+                    lastExecutionError = error
+                }
+        }
+        lastExecutionError?.let { throw it }
+        if (sawDisabled) {
+            throw IllegalArgumentException("Tool $name is disabled")
         }
         throw IllegalArgumentException("Tool $name not found across active providers")
     }
@@ -278,8 +371,12 @@ class ToolRepositoryImpl @Inject constructor(
         }
 
         syncMcpClients()
-        for (client in mcpClients.values) {
-            val isMcpTool = runCatching { client.getTools().any { it.name == toolName } }.getOrDefault(false)
+        // Walk in persisted-config order for the same determinism reasons as
+        // executeMcpTool / getAvailableTools.
+        for (config in settingsRepository.mcpServers.first()) {
+            val entry = mcpClients[config.url] ?: continue
+            val isMcpTool = runCatching { entry.client.getTools().any { it.name == toolName } }
+                .getOrDefault(false)
             if (isMcpTool) {
                 return ToolRisk.SENSITIVE
             }
