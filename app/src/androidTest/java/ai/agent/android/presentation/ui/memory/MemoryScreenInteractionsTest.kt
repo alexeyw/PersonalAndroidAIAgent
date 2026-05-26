@@ -9,6 +9,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.test.platform.app.InstrumentationRegistry
 import io.mockk.verify
+import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
 import app.knotwork.design.R as KnotworkR
@@ -151,9 +152,14 @@ class MemoryScreenInteractionsTest {
 
         composeTestRule.onNodeWithText(text = emptyCtaLabel).performClick()
 
-        assert(value = openChatTaps == 1) {
-            "Empty-state CTA should forward exactly one tap to onOpenChat; observed $openChatTaps"
-        }
+        // Use JUnit assertions (not Kotlin `assert`) so the check is
+        // always enforced — Android instrumentation runs do not enable
+        // `-ea` by default, which would silently skip a Kotlin assert.
+        assertEquals(
+            "Empty-state CTA should forward exactly one tap to onOpenChat",
+            1,
+            openChatTaps,
+        )
     }
 
     private companion object {

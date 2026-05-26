@@ -11,6 +11,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.test.platform.app.InstrumentationRegistry
 import io.mockk.verify
+import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
 import app.knotwork.design.R as KnotworkR
@@ -106,8 +107,13 @@ class ToolsScreenLocalToolsTest {
         // `onOpenToolDetail` is the lambda the navigation graph wires to
         // the tool-detail destination; the row's clickable forwards the
         // raw tool id (here equal to the simple name) to it.
-        assert(value = opened == listOf("search_tool")) {
-            "Expected onOpenToolDetail to receive [search_tool]; observed $opened"
-        }
+        //
+        // JUnit assertion — Kotlin `assert` is a no-op without `-ea`,
+        // which Android instrumentation runs do not enable.
+        assertEquals(
+            "onOpenToolDetail should receive exactly [search_tool]",
+            listOf("search_tool"),
+            opened,
+        )
     }
 }

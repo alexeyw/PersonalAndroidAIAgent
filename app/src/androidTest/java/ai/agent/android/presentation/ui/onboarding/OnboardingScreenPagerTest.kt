@@ -9,6 +9,7 @@ import androidx.test.platform.app.InstrumentationRegistry
 import app.knotwork.design.screens.onboarding.OnboardingStep
 import app.knotwork.design.screens.onboarding.OnboardingViewState
 import io.mockk.verify
+import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
 import app.knotwork.design.R as KnotworkR
@@ -80,9 +81,9 @@ class OnboardingScreenPagerTest {
         composeTestRule.onNodeWithText(text = skipLabel).performClick()
 
         verify(exactly = 1) { vm.skipOnboarding() }
-        assert(value = completed == 1) {
-            "onCompleted should fire exactly once on skip; observed $completed"
-        }
+        // JUnit assertion — Kotlin `assert` is a no-op without `-ea`,
+        // which Android instrumentation runs do not enable.
+        assertEquals("onCompleted should fire exactly once on skip", 1, completed)
     }
 
     @Test
@@ -117,8 +118,6 @@ class OnboardingScreenPagerTest {
         composeTestRule.onNodeWithText(text = openChatLabel).performClick()
 
         verify(exactly = 1) { vm.finishOnboarding() }
-        assert(value = completed == 1) {
-            "onCompleted should fire exactly once on finish; observed $completed"
-        }
+        assertEquals("onCompleted should fire exactly once on finish", 1, completed)
     }
 }
