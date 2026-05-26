@@ -39,7 +39,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         TraceStepEntity::class,
     ],
     version = 23,
-    exportSchema = false,
+    exportSchema = true,
 )
 @TypeConverters(Converters::class)
 abstract class AppDatabase : RoomDatabase() {

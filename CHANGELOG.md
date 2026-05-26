@@ -15,6 +15,32 @@ details.
 
 ### Tests
 
+- **Room DAO + migration regression suite** (Phase 23 / Task 3). Brought the
+  in-memory `Room.inMemoryDatabaseBuilder` coverage on `data.local.dao` up to
+  every public method on `ChatDao` (including `Upsert`, `renameSession`,
+  `setSessionStarred`, single-column `UPDATE`s, `getDisplayMessagesBySessionId`
+  `isFinal` filter, `getStarredMessages`, `getRecentMessagesByRole` ordering +
+  limit), `LocalModelDao` (`observeActiveModel` Flow, `updateModel`,
+  `deleteModelById`, `countByName`, `findByName` happy / miss /
+  duplicate-name determinism), and `MemoryDao` (`insertMemory` rowId,
+  `getRecentMemories` / `getRecentMemorySummaries` projection, `deleteMemoryById`,
+  `deleteAllMemories` ignoring pin state, `observeChunkCount` /
+  `observeTotalBytes` Flows). Added `PipelineDaoTest` (`@Transaction`-backed
+  `getAllPipelines` / `getPipelineById`, `savePipelineTransaction` atomicity,
+  scoped `deleteNodesForPipeline` / `deleteConnectionsForPipeline`,
+  FK cascade on `deletePipelineById`, `NodeContextConfig` TypeConverter +
+  nullable `config_json` round-trip), `PromptTemplateDaoTest` (`category, name
+  ASC` ordering, `REPLACE` conflict, scoped delete, count), and
+  `TraceStepDaoTest` (per-session `timestamp ASC` order, `durationMs` /
+  `tokenCount` round-trip, scoped delete, FK cascade from `chat_sessions`).
+  Added `AppDatabaseMigrationTest` — direct invocation of every
+  `MIGRATION_17_18 … MIGRATION_22_23` against a real on-disk SQLite file via
+  `FrameworkSQLiteOpenHelperFactory`, plus a chained `migrateAll_17_to_23`
+  end-to-end run. `@Database(exportSchema = true)` + `room.schemaLocation` ksp
+  arg + `app/schemas/` committed wire the v23 schema snapshot in for Room's
+  runtime validation; future schema bumps must commit the new `N.json`
+  alongside the migration. Added `androidx.room:room-testing` to
+  `androidTestImplementation`.
 - **`LocalAppFunctionManager` unit-test suite + extra codec edge cases**
   (Phase 23 / Task 2). 29 JVM tests for `LocalAppFunctionManager` cover the
   pure JSON-Schema generator (all supported and unsupported parameter types,
