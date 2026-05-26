@@ -3,12 +3,14 @@ package ai.agent.android.presentation.ui.tools
 import ai.agent.android.domain.models.McpAuth
 import ai.agent.android.domain.models.McpServerConfig
 import ai.agent.android.domain.models.McpTransport
+import ai.agent.android.domain.models.UpdateMcpServerResult
 import ai.agent.android.domain.repositories.McpServerRepository
 import ai.agent.android.domain.repositories.SettingsRepository
 import androidx.lifecycle.SavedStateHandle
 import app.knotwork.design.screens.tools.McpAuthSelector
 import app.knotwork.design.screens.tools.McpHeaderRow
 import app.knotwork.design.screens.tools.McpTransportOption
+import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
@@ -193,6 +195,51 @@ class McpServerConfigViewModelTest {
                 ),
             )
         }
+    }
+
+    @Test
+    fun `onSubmit in edit mode renders inline error when SettingsRepository returns UrlCollision`() = runTest {
+        val originalUrl = "https://current.example/mcp"
+        val collidingUrl = "https://existing.example/mcp"
+        mcpServersFlow.value = listOf(
+            McpServerConfig(url = originalUrl, name = "Current"),
+            McpServerConfig(url = collidingUrl, name = "Existing"),
+        )
+        coEvery { settings.updateMcpServer(originalUrl = originalUrl, updated = any()) } returns
+            UpdateMcpServerResult.UrlCollision(
+                collidingUrl = collidingUrl,
+                collidingDisplayName = "Existing",
+            )
+
+        val viewModel = vm(originalUrl = originalUrl)
+        advanceUntilIdle()
+        // User edits the URL to collide with the other server.
+        viewModel.onUrlChange(value = collidingUrl)
+
+        viewModel.onSubmit()
+        advanceUntilIdle()
+
+        // Saved is NOT emitted — form must stay open with the inline error.
+        assertNull(viewModel.events.value)
+        val form = viewModel.form.value
+        assertNotNull(form.urlError)
+        assertTrue(
+            "Collision error must call out the colliding server by name; got: ${form.urlError}",
+            form.urlError!!.contains("Existing"),
+        )
+        // submitting flag is released so the Save button is interactive again.
+        assertEquals(false, form.submitting)
+    }
+
+    @Test
+    fun `formatCollisionMessage falls back to URL when colliding row has no display name`() {
+        val msg = McpServerConfigViewModel.formatCollisionMessage(
+            UpdateMcpServerResult.UrlCollision(
+                collidingUrl = "https://anonymous.example/mcp",
+                collidingDisplayName = null,
+            ),
+        )
+        assertTrue(msg.contains("https://anonymous.example/mcp"))
     }
 
     @Test

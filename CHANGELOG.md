@@ -13,6 +13,54 @@ details.
 
 ## [Unreleased]
 
+### Fixed
+
+- **MCP routing — three regressions in `ToolRepositoryImpl`** (Phase 22 /
+  Task 17 follow-up).
+  - `syncMcpClients` now keys the pool by the full `McpServerConfig`
+    (not just the URL) and tears the connection down + reconnects when
+    any of auth / transport / headers / display name change for an
+    already-connected server. Previously a credentials edit in
+    **Settings → External providers** for an existing endpoint was a
+    silent no-op, and every subsequent `getAvailableTools` /
+    `executeTool` kept using the stale auth until the process restarted.
+  - `executeMcpTool` no longer throws on the first advertising provider
+    whose per-server `mcpId` is in `disabledMcpTools`. Since the gate is
+    scoped per server (id = `mcp:<sha8(serverUrl)>:<toolName>`), two
+    servers can advertise the same tool name and only one's id can be
+    disabled — the loop now flags `sawDisabled = true` and keeps
+    probing, so the enabled sibling still gets a chance to execute.
+  - `executeMcpTool` no longer `break`s out of the loop when an
+    advertising provider's `executeTool` throws. The failure is
+    remembered as `lastExecutionError` and the loop falls through to
+    the remaining providers; if every advertising provider also fails,
+    the **most recent failure is re-thrown** (preserves the actual
+    network / 5xx / parse error instead of the generic "not found").
+    Restores multi-provider resilience — one flaky server can no longer
+    eclipse a healthy sibling.
+  - Plus: the MCP dispatch loop in `executeMcpTool` /
+    `getAvailableTools` / `getRisk` now walks the persisted
+    **`settingsRepository.mcpServers`** order instead of the
+    non-deterministic `ConcurrentHashMap.entries`, so multi-provider
+    probe order is both predictable and matches the priority the user
+    actually configured in Settings. The new helper
+    `distinctMcpConfigs()` deduplicates the list by URL (keep-first)
+    before iteration — defensive measure that pairs with the
+    persistence-side fix below.
+- **`SettingsManager.updateMcpServer` no longer silently produces
+  `[B, B]` when the user edits server A's URL to match an existing
+  server B's URL.** The method now reads the persisted list
+  pre-write, delegates the check to the pure
+  `McpServerCollisionCheck.detectCollision` helper, and returns a typed
+  `UpdateMcpServerResult.UrlCollision(collidingUrl,
+  collidingDisplayName)` instead of writing. `SettingsRepository`'s
+  signature changes from `Unit` to `UpdateMcpServerResult` and
+  `McpServerConfigViewModel.onSubmit` surfaces the collision as an
+  inline `urlError` on the URL field ("A server with this URL already
+  exists: \"<name>\"") — the form stays open with `submitting = false`
+  so the user can fix the value and resubmit. Add-mode (`addMcpServer`)
+  is unchanged.
+
 ### Added
 
 - **R8 minification + resource shrinking on the release build** (Phase 22 /

@@ -3,6 +3,7 @@ package ai.agent.android.presentation.ui.tools
 import ai.agent.android.domain.models.McpAuth
 import ai.agent.android.domain.models.McpServerConfig
 import ai.agent.android.domain.models.McpTransport
+import ai.agent.android.domain.models.UpdateMcpServerResult
 import ai.agent.android.domain.repositories.McpServerRepository
 import ai.agent.android.domain.repositories.SettingsRepository
 import androidx.lifecycle.SavedStateHandle
@@ -112,8 +113,10 @@ class McpServerConfigViewModel @Inject constructor(
 
     /**
      * Persists the current form. On invalid URL, surfaces the error in
-     * the form state and stays open. On success, emits [Event.Saved]
-     * so the host can `popBackStack`.
+     * the form state and stays open. On a URL collision with another
+     * persisted server (Edit mode only), surfaces the collision message
+     * and stays open. On success, emits [Event.Saved] so the host can
+     * `popBackStack`.
      */
     fun onSubmit() {
         val current = _form.value
@@ -123,17 +126,28 @@ class McpServerConfigViewModel @Inject constructor(
             return
         }
         viewModelScope.launch {
-            _form.update { it.copy(submitting = true) }
+            _form.update { it.copy(submitting = true, urlError = null) }
             val config = current.toDomain()
             if (originalUrl != null) {
                 // Drop the cached client so the next fetch reconnects with the
                 // new headers/transport/URL instead of reusing the old session.
                 mcpServerRepository.disconnect(serverUrl = originalUrl)
-                settingsRepository.updateMcpServer(originalUrl = originalUrl, updated = config)
+                val outcome = settingsRepository.updateMcpServer(originalUrl = originalUrl, updated = config)
+                when (outcome) {
+                    is UpdateMcpServerResult.Success -> _events.value = Event.Saved
+                    is UpdateMcpServerResult.UrlCollision -> {
+                        _form.update {
+                            it.copy(
+                                submitting = false,
+                                urlError = formatCollisionMessage(outcome),
+                            )
+                        }
+                    }
+                }
             } else {
                 settingsRepository.addMcpServer(config = config)
+                _events.value = Event.Saved
             }
-            _events.value = Event.Saved
         }
     }
 
@@ -155,6 +169,16 @@ class McpServerConfigViewModel @Inject constructor(
         private const val URL_SCHEME_REQUIRED_MESSAGE =
             "URL must start with http://, https:// or mcp://."
         private const val URL_HOST_REQUIRED_MESSAGE = "URL needs a host name."
+
+        /**
+         * Renders a [UpdateMcpServerResult.UrlCollision] into the inline
+         * error string shown beneath the URL field. Falls back to the
+         * URL itself when the colliding row has no display name set.
+         */
+        internal fun formatCollisionMessage(collision: UpdateMcpServerResult.UrlCollision): String {
+            val label = collision.collidingDisplayName ?: collision.collidingUrl
+            return "A server with this URL already exists: \"$label\"."
+        }
 
         /**
          * Validates [input]. When [requireNonEmpty] is `true`, an empty
