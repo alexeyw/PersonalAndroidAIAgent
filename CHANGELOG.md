@@ -15,6 +15,36 @@ details.
 
 ### Tests
 
+- **Compose `androidTest` coverage for `presentation.ui.chat.home`**
+  (Phase 23 / Task 6). Extended the existing
+  `createComposeRule()` + mocked `ChatHomeViewModel` pattern with a shared
+  `mockChatHomeViewModel` factory (exposes mutable `StateFlow` handles so
+  tests drive `Idle → Generating → Idle`, HITL approve, Clarification
+  clear, etc. without re-stubbing). Added `ChatHomeSendFlowTest`
+  (composer Send dispatches `sendMessage()`; Generating renders the
+  loader bubble + Stop affordance; flip back to Idle restores Send;
+  Error renders the retry tile and routes to `retryAfterError()`),
+  `ChatHomeHitlScreenFlowTest` (Sensitive Allow / Reject → `approveTool`
+  / `rejectTool`; Destructive typed-confirm gate stays disabled until
+  the magic word lands; live `pendingTool` tool name renders end-to-end),
+  `ChatHomeClarificationFlowTest` (live `pendingClarification` question
+  + quick-reply chips render; chip tap dispatches
+  `submitClarificationReply(label)`; clearing `pendingClarification` +
+  flipping back to Idle removes the card), `ChatHomeConsolePaneTest`
+  (Logs/Vars/Traces tab switching, source-filter chip toggle,
+  search-bar input forwarding, header Search / Clear icons routing into
+  the VM, Clear-confirm AlertDialog Confirm/Cancel, long-press
+  "Copy line" round-trip into a fake `LocalClipboardManager`), and
+  `ChatHomeDrawerTest` (DrawerOpen renders threads + footer rows,
+  thread tap dispatches `selectThread` + `closeDrawer`, New chat opens
+  the pipeline-picker `ModalBottomSheet`, picking + Create dispatches
+  `createNewSessionWithPipeline(id)`, composer Send affordance remains
+  present in HITL / Clarification / ConsoleExpanded states as a
+  structural IME-overlap stand-in). Caveats spelled out in test KDoc:
+  the 5 s Clarification timeout watchdog runs via `delay` inside the
+  VM and is exercised by JVM unit tests; real soft-keyboard IME overlap
+  needs screenshot coverage and is out of scope. Refactored the
+  existing `ChatHomeOverflowMenuTest` onto the shared factory.
 - **Robolectric coverage for `presentation.notifications` + `presentation.receivers`**
   (Phase 23 / Task 5). Added `ApprovalNotificationManagerTest` (risk-based
   channel routing: `AGENT_APPROVAL_DESTRUCTIVE` vs `AGENT_APPROVAL` with
