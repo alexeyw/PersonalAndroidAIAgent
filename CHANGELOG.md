@@ -15,6 +15,25 @@ details.
 
 ### Tests
 
+- **`LocalAppFunctionManager` unit-test suite + extra codec edge cases**
+  (Phase 23 / Task 2). 29 JVM tests for `LocalAppFunctionManager` cover the
+  pure JSON-Schema generator (all supported and unsupported parameter types,
+  description handling, required-array emission), discovery via
+  `mockkObject(AppFunctionManager.Companion)` (empty manager → empty list +
+  cache clear, `SENSITIVE` risk tagging, JSON-schema population per tool,
+  description propagation), qualified-name dedup across packages (`pkg.a/foo`
+  + `pkg.b/foo`), cache + re-discovery semantics for `isDiscovered` /
+  `getParametersMetadata` / `getTargetPackageName`, `executeFunction`
+  unavailable-manager error path, and the extracted `wrapInvocationError`
+  helper (`AppFunctionException` → `IllegalStateException` with cause;
+  others pass through). Two `AppFunctionDataCodecTest` gap-fillers also
+  added: extra-field warning recurses through `SetObject` payloads, and a
+  missing required field inside a `SetObjectList` item raises the same
+  `IllegalArgumentException` as a top-level miss. Coverage of
+  `data.tools.local` rises from **27.7 %** to **74.5 %**; the remaining gap
+  is the `invokeByName` happy path that constructs `AppFunctionData`
+  (Android-stub `Bundle` reference makes it unreachable from JVM tests —
+  covered by `AppFunctionsEndToEndTest`).
 - **`data.tools.local.executors` unit-test suite** (Phase 23 / Task 1).
   Added GWT-style JUnit + MockK coverage for `DelegateTaskExecutor`,
   `ScheduleTaskExecutor`, and `SearchToolExecutor` — happy path, JSON

@@ -103,12 +103,25 @@ class LocalAppFunctionManager(private val context: Context, private val codec: A
             )
             val response = executeFunction(request)
             codec.decode(response)
-        }.getOrElse { e ->
-            if (e is AppFunctionException) {
-                throw IllegalStateException("AppFunction $name failed: ${e.message}", e)
-            }
-            throw e
+        }.getOrElse { e -> throw wrapInvocationError(name, e) }
+    }
+
+    /**
+     * Maps a raw invocation failure into the exception type the caller path (typically
+     * `ToolRepositoryImpl`) expects.
+     *
+     * [AppFunctionException]s from the system are wrapped into [IllegalStateException] with the
+     * original cause preserved, so callers do not have to depend on the `androidx.appfunctions`
+     * exception hierarchy. Every other throwable propagates unchanged. Extracted as an
+     * `internal` helper so the JVM unit-test classpath can verify the mapping without
+     * constructing an `AppFunctionData` payload (its `init` block reaches into Android stubs
+     * that are only present in instrumented tests).
+     */
+    internal fun wrapInvocationError(name: String, error: Throwable): Throwable {
+        if (error is AppFunctionException) {
+            return IllegalStateException("AppFunction $name failed: ${error.message}", error)
         }
+        return error
     }
 
     /**
@@ -209,17 +222,17 @@ class LocalAppFunctionManager(private val context: Context, private val codec: A
         val parameters: List<AppFunctionParameterMetadata>,
     )
 
-    private companion object {
+    internal companion object {
         /**
          * Builds the qualified AppFunction name used throughout the caller-side path
          * (`AgentTool.name`, [discoveredCache] key, and the value the agent's LLM sees
          * in `$TOOLS`). The qualified form disambiguates AppFunctions whose un-qualified
          * `id` collides across packages.
          */
-        fun qualify(packageName: String, id: String): String = "$packageName/$id"
+        internal fun qualify(packageName: String, id: String): String = "$packageName/$id"
     }
 
-    private fun generateJsonSchema(parameters: List<AppFunctionParameterMetadata>): String {
+    internal fun generateJsonSchema(parameters: List<AppFunctionParameterMetadata>): String {
         val root = JSONObject()
         root.put("type", "object")
 
@@ -241,7 +254,7 @@ class LocalAppFunctionManager(private val context: Context, private val codec: A
         return root.toString()
     }
 
-    private fun mapTypeToJsonSchema(dataType: AppFunctionDataTypeMetadata, description: String?): JSONObject {
+    internal fun mapTypeToJsonSchema(dataType: AppFunctionDataTypeMetadata, description: String?): JSONObject {
         val schema = JSONObject()
 
         if (description != null) {
