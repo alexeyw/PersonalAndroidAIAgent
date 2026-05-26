@@ -9,6 +9,7 @@ import ai.agent.android.domain.models.McpTransport
 import ai.agent.android.domain.models.TestProbeResult
 import ai.agent.android.domain.models.ToolApprovalPolicy
 import ai.agent.android.domain.models.ToolRisk
+import ai.agent.android.domain.models.UpdateMcpServerResult
 import ai.agent.android.domain.repositories.SettingsRepository
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
@@ -20,6 +21,7 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import org.json.JSONArray
 import org.json.JSONException
@@ -309,7 +311,18 @@ class SettingsManager @Inject constructor(private val dataStore: DataStore<Prefe
         }
     }
 
-    override suspend fun updateMcpServer(originalUrl: String, updated: McpServerConfig) {
+    override suspend fun updateMcpServer(originalUrl: String, updated: McpServerConfig): UpdateMcpServerResult {
+        // Read the current list once outside `edit { … }` so the collision
+        // check can short-circuit *before* opening the write transaction.
+        // DataStore serialises edits, so a concurrent write between this
+        // read and the edit would only widen the window for a duplicate
+        // to slip in by milliseconds — and the next call still detects
+        // it. The user-visible bug is the silent collision; a transient
+        // race is acceptable here.
+        val snapshot = mcpServers.first()
+        McpServerCollisionCheck
+            .detectCollision(currentList = snapshot, originalUrl = originalUrl, newUrl = updated.url)
+            ?.let { return it }
         dataStore.edit { preferences ->
             val current = currentMcpServers(preferences)
             val index = current.indexOfFirst { it.url == originalUrl }
@@ -321,6 +334,7 @@ class SettingsManager @Inject constructor(private val dataStore: DataStore<Prefe
             preferences[PreferencesKeys.MCP_SERVERS_JSON] = encodeMcpServers(next)
             preferences.remove(PreferencesKeys.MCP_SERVER_URLS)
         }
+        return UpdateMcpServerResult.Success
     }
 
     override suspend fun removeMcpServer(url: String) {

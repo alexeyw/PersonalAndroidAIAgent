@@ -45,14 +45,21 @@ details.
     probe order is both predictable and matches the priority the user
     actually configured in Settings. The new helper
     `distinctMcpConfigs()` deduplicates the list by URL (keep-first)
-    before iteration — defensive measure against a known issue in
-    `SettingsManager.updateMcpServer`, which replaces by index without
-    checking for collisions and can persist `[B, B]` after the user
-    edits server A's URL to match an existing server B's URL. Without
-    the dedup, a duplicate-URL row would trigger a duplicate
-    `executeTool` call against the same connected client (risky for
-    non-idempotent tool side effects) and emit duplicate tools from
-    `getAvailableTools`.
+    before iteration — defensive measure that pairs with the
+    persistence-side fix below.
+- **`SettingsManager.updateMcpServer` no longer silently produces
+  `[B, B]` when the user edits server A's URL to match an existing
+  server B's URL.** The method now reads the persisted list
+  pre-write, delegates the check to the pure
+  `McpServerCollisionCheck.detectCollision` helper, and returns a typed
+  `UpdateMcpServerResult.UrlCollision(collidingUrl,
+  collidingDisplayName)` instead of writing. `SettingsRepository`'s
+  signature changes from `Unit` to `UpdateMcpServerResult` and
+  `McpServerConfigViewModel.onSubmit` surfaces the collision as an
+  inline `urlError` on the URL field ("A server with this URL already
+  exists: \"<name>\"") — the form stays open with `submitting = false`
+  so the user can fix the value and resubmit. Add-mode (`addMcpServer`)
+  is unchanged.
 
 ### Added
 

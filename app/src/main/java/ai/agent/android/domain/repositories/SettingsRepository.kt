@@ -4,6 +4,7 @@ import ai.agent.android.domain.models.McpServerConfig
 import ai.agent.android.domain.models.TestProbeResult
 import ai.agent.android.domain.models.ToolApprovalPolicy
 import ai.agent.android.domain.models.ToolRisk
+import ai.agent.android.domain.models.UpdateMcpServerResult
 import kotlinx.coroutines.flow.Flow
 
 /**
@@ -181,8 +182,13 @@ interface SettingsRepository {
      * If [originalUrl] is not present, behaves the same as [addMcpServer].
      * The URL inside [updated] may differ from [originalUrl] (edit
      * scenario); persistence keeps the row at its old position.
+     *
+     * Refuses to persist with [UpdateMcpServerResult.UrlCollision] when
+     * `updated.url` matches the URL of a different existing row. Without
+     * this guard, replacing by index would silently produce a `[B, B]`
+     * list and lose the original server's auth / headers / display name.
      */
-    suspend fun updateMcpServer(originalUrl: String, updated: McpServerConfig)
+    suspend fun updateMcpServer(originalUrl: String, updated: McpServerConfig): UpdateMcpServerResult
 
     /** Removes the server identified by [url]. No-op when missing. */
     suspend fun removeMcpServer(url: String)
