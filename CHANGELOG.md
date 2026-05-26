@@ -15,6 +15,41 @@ details.
 
 ### Tests
 
+- **Compose `androidTest` coverage for the remaining `presentation.ui`
+  surfaces — Memory / Settings / Tools / Onboarding / Prompt Library**
+  (Phase 23 / Task 8). Each screen gets a shared
+  `mock<Screen>ViewModel` factory (relaxed MockK VM + mutable state-flow
+  handles so tests drive transitions without re-stubbing) and 2–6 test
+  classes under
+  `app/src/androidTest/java/ai/agent/android/presentation/ui/<screen>/`.
+  Coverage: `MemoryScreenSearchTest` (200 ms debounce gated by
+  `mainClock.advanceTimeBy`), `MemoryScreenInteractionsTest` (row pin /
+  edit-commit which exercises the re-embedding call site / delete /
+  pinned-glyph rendering / empty-state CTA);
+  `SettingsScreenRestartRequiredTest` (banner test-tag visibility),
+  `SettingsScreenDestructiveConfirmTest` (typed-confirm dialog,
+  Confirm button gated on the resource keyword),
+  `SettingsScreenTogglesTest` (LazyColumn scroll-to + Notifications
+  toggle wiring); `ToolsScreenLocalToolsTest` (risk-pill rendering for
+  all three `ToolRisk` levels, Switch tap invokes `toggleLocalTool`,
+  row tap routes to `onOpenToolDetail`), `ToolsScreenMcpServersTest`
+  (Connecting → Connected subtitle flip, expand-chevron toggle,
+  overflow Refresh action); `OnboardingScreenPagerTest` (Welcome
+  headline render, Continue CTA forwards to `next`, top-bar Skip
+  invokes `skipOnboarding` + `onCompleted`, Ready step suppresses Skip
+  and finishes via the primary CTA), `OnboardingScreenDownloadGateTest`
+  (LiteRtModel CTA matrix across no-install / in-flight / installed,
+  Ready step CTA gated on `isModelWarmed`); `PromptLibraryScreenListTest`
+  (category-filtered list, tab-tap forwards to `selectCategory`, FAB
+  opens a new draft, per-card Edit / Delete / Duplicate icons fire
+  their VM hooks), `PromptLibraryScreenEditorTest` (bottom-sheet
+  visibility on a non-null draft, prefilled fields, Save / Cancel
+  dispatch). All factories follow the Phase 23 / Task 6 + Task 7
+  pattern (`createComposeRule()` + relaxed MockK VM); no production
+  code changes were required. Note: `SettingsUiState` does not expose
+  the "pending change" or "ValidationError" surfaces mentioned in the
+  task brief, so those branches are deliberately out-of-scope.
+
 - **Compose `androidTest` coverage for `presentation.ui.pipeline.editor`**
   (Phase 23 / Task 7). Twelve test files mirroring the Phase 23 / Task 6
   chat-home pattern: `createComposeRule()` + a shared
