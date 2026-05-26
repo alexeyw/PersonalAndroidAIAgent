@@ -42,6 +42,12 @@ plugins {
 // `AppFunctionsEndToEndTest` comes back empty.
 ksp {
     arg("appfunctions:aggregateAppFunctions", "true")
+    // Phase 23 / Task 3/9 — export the Room schema for every version so that
+    // `MigrationTestHelper` can validate migrations against frozen JSON
+    // snapshots in `app/schemas/`. The corresponding `exportSchema = true`
+    // flag is set on the `@Database` annotation. Every future schema bump
+    // must commit the newly generated `N.json` alongside the migration.
+    arg("room.schemaLocation", "$projectDir/schemas")
 }
 
 android {
@@ -131,6 +137,14 @@ android {
 
     testOptions {
         unitTests.isReturnDefaultValues = true
+    }
+
+    // Phase 23 / Task 3/9 — expose the exported Room schemas to the
+    // androidTest classpath so `MigrationTestHelper` (which reads them from
+    // `assets/`) can validate every migration step against the frozen
+    // snapshots in `app/schemas/`.
+    sourceSets {
+        getByName("androidTest").assets.srcDir("$projectDir/schemas")
     }
 
     packaging {
@@ -532,6 +546,7 @@ dependencies {
     debugImplementation(libs.androidx.compose.ui.tooling)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
     androidTestImplementation(libs.mockk.android)
+    androidTestImplementation(libs.room.testing)
 }
 
 // Phase 20 / Task 6/7: install the :tools-probe debug APK alongside the agent's test
