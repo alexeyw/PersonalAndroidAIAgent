@@ -324,7 +324,10 @@ kover {
                     "ai.agent.android.data.tools.local.LocalAppFunctionManager",
                     "ai.agent.android.data.tools.local.SearchTool*",
                     "ai.agent.android.data.tools.local.DelegateTaskTool*",
-                    "ai.agent.android.data.tools.local.executors.*",
+                    // NOTE: `data.tools.local.executors.*` are pure JSON-arg
+                    // parsers that delegate to the (excluded) Android-runtime
+                    // tools above — they are JVM-unit-testable and covered by
+                    // `*ExecutorTest`s under `data/tools/local/executors/`.
                     // Firebase Crashlytics glue: the repository impl and the
                     // Timber tree thinly wrap `FirebaseCrashlytics` /
                     // `FirebaseAnalytics` singletons which need the Android

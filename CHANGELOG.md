@@ -13,6 +13,19 @@ details.
 
 ## [Unreleased]
 
+### Tests
+
+- **`data.tools.local.executors` unit-test suite** (Phase 23 / Task 1).
+  Added GWT-style JUnit + MockK coverage for `DelegateTaskExecutor`,
+  `ScheduleTaskExecutor`, and `SearchToolExecutor` — happy path, JSON
+  default branches (`targetModel` → `anthropic`, `intervalHours` /
+  `delayMinutes` → `0`, `lang` → `en`), blank-query short-circuit,
+  malformed / missing-field JSON, and downstream-exception propagation.
+  The package was excluded from Kover reporting up to now; the
+  exclusion was lifted in `app/build.gradle.kts` so the new tests
+  surface as `100% line coverage` (21/21) and any future regression in
+  the local-tool argument-parsing contract is caught by the build gate.
+
 ## [0.2.0] - 2026-05-25
 
 Ships Phase 22 end-to-end: every Knotwork-redesigned screen wired to its
