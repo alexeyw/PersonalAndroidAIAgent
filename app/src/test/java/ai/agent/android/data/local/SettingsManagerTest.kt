@@ -2,22 +2,32 @@ package ai.agent.android.data.local
 
 import ai.agent.android.domain.constants.SettingsDefaults
 import ai.agent.android.domain.models.McpAuth
+import ai.agent.android.domain.models.McpServerConfig
 import ai.agent.android.domain.models.McpTransport
 import ai.agent.android.domain.models.ToolRisk
+import ai.agent.android.domain.models.UpdateMcpServerResult
 import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import io.mockk.every
 import io.mockk.mockk
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
+import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.TemporaryFolder
 import java.io.IOException
 
 /**
@@ -26,6 +36,17 @@ import java.io.IOException
 class SettingsManagerTest {
 
     private val dataStore = mockk<DataStore<Preferences>>()
+
+    /**
+     * Backs the `updateMcpServer` write-path integration tests below with a
+     * **real** file-backed `PreferenceDataStore` so the assertions can
+     * round-trip through `dataStore.edit { … }` and observe the persisted
+     * state. The existing read-only tests (above) keep their lighter mock-
+     * based pattern; mocking the `edit { … }` extension is hairy in mockk
+     * and a temp-file DataStore is the most faithful integration target.
+     */
+    @get:Rule
+    val tempFolder: TemporaryFolder = TemporaryFolder()
 
     // private val settingsManager = SettingsManager(dataStore)
     private val isFirstLaunchKey = booleanPreferencesKey("is_first_launch")
@@ -361,5 +382,106 @@ class SettingsManagerTest {
         val result = SettingsManager(dataStore).mcpServers.first()
 
         assertEquals(McpAuth.ApiKey(headerName = "X-API-Key", value = "v1"), result.single().auth)
+    }
+
+    // ───────────────────────────────────────────────────────────────────
+    // updateMcpServer integration tests (real PreferenceDataStore).
+    //
+    // The collision-detection logic itself is pure-tested in
+    // McpServerCollisionCheckTest; the cases below verify that the
+    // SettingsManager method actually dispatches to it AND skips the
+    // dataStore.edit { … } write when a collision is detected — the part
+    // that matters for "persists nothing" semantics.
+    // ───────────────────────────────────────────────────────────────────
+
+    private fun freshManagerWithRealDataStore(): Pair<SettingsManager, CoroutineScope> {
+        val file = tempFolder.newFile("settings-manager-mcp-${System.nanoTime()}.preferences_pb")
+        // Files created by JUnit's TemporaryFolder start as empty 0-byte files,
+        // which DataStore would treat as a corrupt preferences blob and throw on
+        // first read. Delete the file so DataStore can create it from scratch
+        // on the first write.
+        file.delete()
+        val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+        val ds = PreferenceDataStoreFactory.create(scope = scope, produceFile = { file })
+        return SettingsManager(ds) to scope
+    }
+
+    @Test
+    fun `updateMcpServer returns UrlCollision when new url matches another existing row`() = runTest {
+        val (manager, scope) = freshManagerWithRealDataStore()
+        try {
+            manager.addMcpServer(McpServerConfig(url = "http://a", name = "Server A"))
+            manager.addMcpServer(McpServerConfig(url = "http://b", name = "Server B"))
+
+            val result = manager.updateMcpServer(
+                originalUrl = "http://a",
+                updated = McpServerConfig(url = "http://b", name = "About to overwrite B"),
+            )
+
+            // Typed result carries the colliding row's identity for the UI.
+            assertTrue(
+                "Expected UrlCollision, got $result",
+                result is UpdateMcpServerResult.UrlCollision,
+            )
+            val collision = result as UpdateMcpServerResult.UrlCollision
+            assertEquals("http://b", collision.collidingUrl)
+            assertEquals("Server B", collision.collidingDisplayName)
+
+            // Persistence MUST be untouched — A still has its original name,
+            // B still has its original name, no duplicate row sneaked in.
+            val onDisk = manager.mcpServers.first()
+            assertEquals(2, onDisk.size)
+            assertEquals("http://a", onDisk[0].url)
+            assertEquals("Server A", onDisk[0].name)
+            assertEquals("http://b", onDisk[1].url)
+            assertEquals("Server B", onDisk[1].name)
+            assertNotEquals("About to overwrite B", onDisk[1].name)
+        } finally {
+            scope.cancel()
+        }
+    }
+
+    @Test
+    fun `updateMcpServer succeeds when new url matches its own current url (no-op edit)`() = runTest {
+        val (manager, scope) = freshManagerWithRealDataStore()
+        try {
+            manager.addMcpServer(McpServerConfig(url = "http://a", name = "Original"))
+
+            // Same URL, renamed display label — the canonical "rename only" edit
+            // path. Must not trip the collision guard.
+            val result = manager.updateMcpServer(
+                originalUrl = "http://a",
+                updated = McpServerConfig(url = "http://a", name = "Renamed"),
+            )
+
+            assertEquals(UpdateMcpServerResult.Success, result)
+            val onDisk = manager.mcpServers.first()
+            assertEquals(1, onDisk.size)
+            assertEquals("http://a", onDisk[0].url)
+            assertEquals("Renamed", onDisk[0].name)
+        } finally {
+            scope.cancel()
+        }
+    }
+
+    @Test
+    fun `updateMcpServer succeeds and persists when the new url is unique`() = runTest {
+        val (manager, scope) = freshManagerWithRealDataStore()
+        try {
+            manager.addMcpServer(McpServerConfig(url = "http://a", name = "Server A"))
+
+            val result = manager.updateMcpServer(
+                originalUrl = "http://a",
+                updated = McpServerConfig(url = "http://c", name = "Server C"),
+            )
+
+            assertEquals(UpdateMcpServerResult.Success, result)
+            val onDisk = manager.mcpServers.first()
+            assertEquals(1, onDisk.size)
+            assertEquals("http://c", onDisk[0].url)
+            assertEquals("Server C", onDisk[0].name)
+        } finally {
+            scope.cancel()
+        }
     }
 }

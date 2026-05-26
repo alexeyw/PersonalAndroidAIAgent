@@ -59,7 +59,11 @@ details.
   inline `urlError` on the URL field ("A server with this URL already
   exists: \"<name>\"") — the form stays open with `submitting = false`
   so the user can fix the value and resubmit. Add-mode (`addMcpServer`)
-  is unchanged.
+  is unchanged. Integration tests in `SettingsManagerTest` use a real
+  file-backed `PreferenceDataStore` (over a `TemporaryFolder`) to
+  prove the `dataStore.edit { … }` write actually does not happen on
+  collision and that the no-op rename (`newUrl == originalUrl`) still
+  persists cleanly.
 
 ### Added
 
