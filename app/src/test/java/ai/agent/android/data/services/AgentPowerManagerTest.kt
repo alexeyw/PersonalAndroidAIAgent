@@ -77,6 +77,75 @@ class AgentPowerManagerTest {
     }
 
     @Test
+    fun `when low-battery state then charging transition occurs, should unload only once`() = runTest {
+        val powerManager = AgentPowerManager(
+            scope = backgroundScope,
+            powerStateRepository = powerStateRepository,
+            engine = engine,
+            workManager = workManager,
+        )
+
+        every { engine.isInitialized } returns true
+
+        powerManager.startObserving()
+        kotlinx.coroutines.yield()
+
+        // First trigger: low battery + not charging.
+        powerStateFlow.value = PowerState(isBatteryLow = true, isCharging = false)
+        kotlinx.coroutines.yield()
+        // Charging starts; `isBatteryLow && !isCharging` is false so the policy
+        // branch is skipped. `engine.unload()` must NOT be called a second time.
+        powerStateFlow.value = PowerState(isBatteryLow = true, isCharging = true)
+        kotlinx.coroutines.yield()
+
+        verify(exactly = 1) { engine.unload() }
+        verify(exactly = 0) { workManager.cancelAllWork() }
+    }
+
+    @Test
+    fun `when same low-battery state is re-emitted, StateFlow dedupes and unload still fires only once`() = runTest {
+        val powerManager = AgentPowerManager(
+            scope = backgroundScope,
+            powerStateRepository = powerStateRepository,
+            engine = engine,
+            workManager = workManager,
+        )
+
+        every { engine.isInitialized } returns true
+
+        powerManager.startObserving()
+        kotlinx.coroutines.yield()
+
+        powerStateFlow.value = PowerState(isBatteryLow = true, isCharging = false)
+        kotlinx.coroutines.yield()
+        // Identical value — StateFlow filters duplicates by `equals`, so the collector
+        // does not re-run. Guards against accidental policy re-triggers.
+        powerStateFlow.value = PowerState(isBatteryLow = true, isCharging = false)
+        kotlinx.coroutines.yield()
+
+        verify(exactly = 1) { engine.unload() }
+    }
+
+    @Test
+    fun `given low battery but engine never initialized then unload is never invoked`() = runTest {
+        val powerManager = AgentPowerManager(
+            scope = backgroundScope,
+            powerStateRepository = powerStateRepository,
+            engine = engine,
+            workManager = workManager,
+        )
+
+        every { engine.isInitialized } returns false
+
+        powerManager.startObserving()
+        kotlinx.coroutines.yield()
+        powerStateFlow.value = PowerState(isBatteryLow = true, isCharging = false)
+        kotlinx.coroutines.yield()
+
+        verify(exactly = 0) { engine.unload() }
+    }
+
+    @Test
     fun `when battery is ok and not charging, should NOT unload engine`() = runTest {
         val powerManager = AgentPowerManager(
             scope = backgroundScope,

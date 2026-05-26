@@ -71,17 +71,26 @@ incidental (a `companion object` constant) and not a meaningful target.
 | `data.network`                            | 92.7%    | 38 / 41         |
 | `data.prompt`                             | 86.8%    | 33 / 38         |
 | `data.repositories`                       | 83.1%    | 301 / 362       |
-| `data.services`                           | 44.0%    | 62 / 141        |
+| `data.services`                           | 99.4%    | 171 / 172       |
 | `data.tools.local`                        | 27.7%    | 39 / 141        |
 | `data.tools.local.executors`              | 0.0%     | 0 / 24          |
 
-The notable holes here — `data.services` (foreground service / WorkManager
-glue), `data.tools.local` (tool implementations), `data.tools.local.executors`
-(LocalToolExecutor multibinding strategies), and `data.local.dao` (Room DAO
-interfaces themselves) — are dominated by Android-runtime-bound code that is
-hard to exercise with plain JVM unit tests. They are explicit candidates for
-either Robolectric / instrumented coverage or for refactoring extractions in
-later phases.
+The notable holes here — `data.tools.local` (tool implementations),
+`data.tools.local.executors` (LocalToolExecutor multibinding strategies),
+and `data.local.dao` (Room DAO interfaces themselves) — are dominated by
+Android-runtime-bound code that is hard to exercise with plain JVM unit
+tests. They are explicit candidates for either Robolectric / instrumented
+coverage or for refactoring extractions in later phases.
+
+`data.services` was the largest of these holes (44.0% at the original
+baseline) until Phase 23 / Task 4/9 — `AgentForegroundService`,
+`AgentWorker`, `AgentIdleManager`, `AgentPowerManager`, and
+`LongRunningTaskNotifierImpl` are now exercised by Robolectric tests under
+`app/src/test/java/ai/agent/android/data/services/`. The corresponding
+`ai.agent.android.data.services.*` entry was removed from the Kover
+exclusion list. The line-count rose to 172 (from 141) because the new
+suite makes a few previously-unreachable branches reachable to the
+instrumentation.
 
 ### `presentation/` — 25.5% (1 197 / 4 687 lines)
 
@@ -219,8 +228,10 @@ above, adds the Android-runtime-bound classes that the JVM unit-test
 pipeline cannot exercise — `App.kt`, `MainActivity`, all `*Screen`
 Composables, `presentation.ui.*.components.*`, `presentation.theme`,
 `presentation.notifications`, `presentation.receivers`,
-`presentation.state`, `data.services.*`, parts of `data.tools.local.*`,
-and `data.local.dao.*`.
+`presentation.state`, parts of `data.tools.local.*`, and
+`data.local.dao.*`. (Phase 23 / Task 4/9 lifted the previous
+`data.services.*` exclusion — that package is now covered by Robolectric
+tests; see the per-package row above.)
 
 After these exclusions the **current** aggregate LINE coverage (May 2026)
 is ~80 %. The 70 % floor leaves a 10 pp buffer for in-flight refactors.

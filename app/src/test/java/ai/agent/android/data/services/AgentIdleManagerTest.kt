@@ -121,6 +121,69 @@ class AgentIdleManagerTest {
     }
 
     @Test
+    fun `given no startObserving when state changes then unload is never called`() = runTest(testDispatcher) {
+        idleManager = AgentIdleManager(
+            scope = CoroutineScope(testDispatcher),
+            engine = llmEngine,
+            agentState = stateFlow,
+            idleTimeoutMs = 1000L,
+        )
+        // Deliberately skip startObserving().
+        stateFlow.value = AgentOrchestratorState.Idle
+        advanceTimeBy(5000L)
+
+        verify(exactly = 0) { llmEngine.unload() }
+    }
+
+    @Test
+    fun `given Loading state when emitted then idle timer is not started`() = runTest(testDispatcher) {
+        idleManager = AgentIdleManager(
+            scope = CoroutineScope(testDispatcher),
+            engine = llmEngine,
+            agentState = stateFlow,
+            idleTimeoutMs = 1000L,
+        )
+        idleManager.startObserving()
+
+        // Loading is not in the idle set — timer must NOT fire.
+        stateFlow.value = AgentOrchestratorState.Loading
+        advanceTimeBy(5000L)
+
+        verify(exactly = 0) { llmEngine.unload() }
+    }
+
+    @Test
+    fun `given Error state when emitted then idle timer starts and unloads`() = runTest(testDispatcher) {
+        idleManager = AgentIdleManager(
+            scope = CoroutineScope(testDispatcher),
+            engine = llmEngine,
+            agentState = stateFlow,
+            idleTimeoutMs = 1000L,
+        )
+        idleManager.startObserving()
+
+        stateFlow.value = AgentOrchestratorState.Error("boom")
+        advanceTimeBy(1100L)
+
+        verify(exactly = 1) { llmEngine.unload() }
+    }
+
+    @Test
+    fun `given default constructor when instantiated then the default idleTimeoutMs is 5 minutes`() {
+        // Locks the documented default — bumping it requires updating the KDoc on
+        // `AgentIdleManager.DEFAULT_IDLE_TIMEOUT_MINUTES` and this assertion together.
+        val withDefault = AgentIdleManager(
+            scope = CoroutineScope(testDispatcher),
+            engine = llmEngine,
+            agentState = stateFlow,
+        )
+        val field = AgentIdleManager::class.java.getDeclaredField("idleTimeoutMs")
+        field.isAccessible = true
+        val resolved = field.getLong(withDefault)
+        org.junit.Assert.assertEquals(5L * 60_000L, resolved)
+    }
+
+    @Test
     fun `concurrent idle timers do not call unload more than once via Mutex`() = runTest(testDispatcher) {
         // Defect 2 regression guard: replacing `synchronized(engine)` with `Mutex.withLock`
         // must still serialise the unload path. We force several rapid Idle→Active→Idle
