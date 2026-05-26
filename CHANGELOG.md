@@ -15,6 +15,28 @@ details.
 
 ### Tests
 
+- **Robolectric coverage for `data.services`** (Phase 23 / Task 4). Added
+  `AgentForegroundServiceTest` (channel registration with `IMPORTANCE_LOW`,
+  `startForeground` notification with `FLAG_ONGOING_EVENT`, wake-lock
+  acquire/release across `Thinking` / `ExecutingTool` / `Idle` / `Error`
+  states, `onDestroy` engine close-on-`isInitialized`, `onStartCommand`
+  `START_STICKY` idempotency, `onBind` null contract), rewrote
+  `AgentWorkerTest` on top of `TestListenableWorkerBuilder` + a manual
+  `WorkerFactory` (covers null/blank input, happy path, stream-completes-
+  with-`Error`-is-still-success, retry-on-exception, stage-only emissions,
+  public key contract), extended `AgentIdleManagerTest` (no-`startObserving`
+  silence, `Loading` no-op, `Error` triggers, 5-minute default timeout),
+  extended `AgentPowerManagerTest` (low-battery → charging transition
+  fires once, duplicate-`StateFlow`-emission dedup, never-initialized engine
+  short-circuit), and added `LongRunningTaskNotifierImplTest`
+  (`LONG_RUNNING_TASKS` channel registration, opt-out gate, `POST_NOTIFICATIONS`
+  permission gate, channel-id and stable per-pipeline notification-id
+  contract, empty-flow defaults-to-disabled). The previous
+  `ai.agent.android.data.services.*` Kover exclusion is gone — package
+  coverage rose from **44.0 %** to **99.4 % LINE** (171 / 172). Pinned
+  Robolectric runtime SDK to 36 via `app/src/test/resources/robolectric.properties`
+  and enabled `unitTests.isIncludeAndroidResources = true` so `getString`
+  on notifier strings resolves against the real merged resources.
 - **Room DAO + migration regression suite** (Phase 23 / Task 3). Brought the
   in-memory `Room.inMemoryDatabaseBuilder` coverage on `data.local.dao` up to
   every public method on `ChatDao` (including `Upsert`, `renameSession`,

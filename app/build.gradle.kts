@@ -137,6 +137,12 @@ android {
 
     testOptions {
         unitTests.isReturnDefaultValues = true
+        // Phase 23 / Task 4/9 — Robolectric needs the merged Android resources
+        // and assets on the JVM unit-test classpath (string lookups in
+        // `LongRunningTaskNotifierImpl`, drawables resolved by NotificationCompat
+        // builders). Without this flag Robolectric falls back to its own minimal
+        // resource table and `context.getString(R.string.…)` returns a placeholder.
+        unitTests.isIncludeAndroidResources = true
     }
 
     // Phase 23 / Task 3/9 — expose the exported Room schemas to the
@@ -326,10 +332,12 @@ kover {
                     "ai.agent.android.presentation.notifications.*",
                     "ai.agent.android.presentation.receivers.*",
                     "ai.agent.android.presentation.state.*",
-                    // Background-execution glue (Foreground service / WorkManager
-                    // worker / power & idle managers) — runs only on a real
-                    // Android process; not unit-testable from the JVM.
-                    "ai.agent.android.data.services.*",
+                    // Phase 23 / Task 4/9 — `data.services.*` is now covered by
+                    // Robolectric tests (`AgentForegroundServiceTest`,
+                    // `AgentWorkerTest`, `AgentIdleManagerTest`,
+                    // `AgentPowerManagerTest`, `LongRunningTaskNotifierImplTest`).
+                    // The exclusion that was here while the package waited for
+                    // Robolectric coverage has been lifted.
                     // Tool-execution Android glue (AppFunctions service, search
                     // tool HTTP client, delegate-task LLM bridge) needs either
                     // an Android runtime or live LLM/HTTP fixtures.
@@ -539,6 +547,10 @@ dependencies {
     testImplementation(libs.mockk)
     testImplementation(libs.coroutines.test)
     testImplementation(libs.work.testing)
+    // Phase 23 / Task 4/9 — Robolectric is needed for the foreground service,
+    // notification builder, and Doze (`ShadowPowerManager`) paths under
+    // `data.services`. The version is pinned in `gradle/libs.versions.toml`.
+    testImplementation(libs.robolectric)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(platform(libs.androidx.compose.bom))
