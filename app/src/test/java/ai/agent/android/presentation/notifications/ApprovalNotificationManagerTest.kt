@@ -1,0 +1,271 @@
+package ai.agent.android.presentation.notifications
+
+import ai.agent.android.R
+import ai.agent.android.domain.constants.NotificationChannels
+import ai.agent.android.domain.constants.TimeAndIdConstants
+import ai.agent.android.domain.models.ToolRisk
+import ai.agent.android.presentation.receivers.AgentApprovalReceiver
+import ai.agent.android.presentation.receivers.ApprovalAction
+import ai.agent.android.presentation.state.ActiveSessionTracker
+import android.app.Notification
+import android.app.NotificationManager
+import android.app.PendingIntent
+import android.content.Context
+import androidx.core.app.NotificationCompat
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertTrue
+import org.junit.Before
+import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.RuntimeEnvironment
+import org.robolectric.Shadows
+
+/**
+ * Robolectric coverage for [ApprovalNotificationManager] — the Human-in-the-loop
+ * gate that surfaces tool-approval prompts in the system shade when the user is
+ * not actively viewing the requesting chat session.
+ *
+ * The manager owns three risk-sensitive decisions (channel id, small icon, title)
+ * plus the action-button `PendingIntent`s consumed by [AgentApprovalReceiver];
+ * every one of those decisions is asserted against the real Android framework
+ * objects via Robolectric (mockk-only would force fragile reflection over
+ * `PendingIntent` extras and `Notification.actions`).
+ */
+@RunWith(RobolectricTestRunner::class)
+class ApprovalNotificationManagerTest {
+
+    private lateinit var context: Context
+    private lateinit var activeSessionTracker: ActiveSessionTracker
+    private lateinit var manager: ApprovalNotificationManager
+
+    @Before
+    fun setup() {
+        context = RuntimeEnvironment.getApplication()
+        activeSessionTracker = ActiveSessionTracker()
+        manager = ApprovalNotificationManager(context, activeSessionTracker)
+    }
+
+    private fun notificationManager(): NotificationManager =
+        context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+
+    private fun expectedNotificationId(sessionId: String): Int = ApprovalNotificationManager.NOTIFICATION_ID +
+        sessionId.hashCode() % TimeAndIdConstants.NOTIFICATION_ID_RANGE
+
+    @Test
+    fun `given DESTRUCTIVE risk when sendApprovalRequest then posts on destructive channel with destructive title`() {
+        manager.sendApprovalRequest("s1", "delete_file", "{\"path\":\"/x\"}", ToolRisk.DESTRUCTIVE)
+
+        val shadow = Shadows.shadowOf(notificationManager())
+        assertEquals(1, shadow.size())
+        val notification = shadow.allNotifications.first()
+        assertEquals(NotificationChannels.AGENT_APPROVAL_DESTRUCTIVE, notification.channelId)
+        assertEquals(
+            context.getString(R.string.approval_notification_title_destructive),
+            notification.extras.getString(NotificationCompat.EXTRA_TITLE),
+        )
+
+        val channel = notificationManager().getNotificationChannel(NotificationChannels.AGENT_APPROVAL_DESTRUCTIVE)
+        assertNotNull("Destructive channel must be registered on first send", channel)
+        assertEquals(NotificationManager.IMPORTANCE_HIGH, channel.importance)
+    }
+
+    @Test
+    fun `given SENSITIVE risk when sendApprovalRequest then posts on sensitive channel with sensitive title`() {
+        manager.sendApprovalRequest("s1", "send_email", "{\"to\":\"x\"}", ToolRisk.SENSITIVE)
+
+        val shadow = Shadows.shadowOf(notificationManager())
+        assertEquals(1, shadow.size())
+        val notification = shadow.allNotifications.first()
+        assertEquals(NotificationChannels.AGENT_APPROVAL, notification.channelId)
+        assertEquals(
+            context.getString(R.string.approval_notification_title_sensitive),
+            notification.extras.getString(NotificationCompat.EXTRA_TITLE),
+        )
+
+        val channel = notificationManager().getNotificationChannel(NotificationChannels.AGENT_APPROVAL)
+        assertNotNull("Sensitive channel must be registered on first send", channel)
+        assertEquals(NotificationManager.IMPORTANCE_HIGH, channel.importance)
+    }
+
+    @Test
+    fun `given READ_ONLY risk when sendApprovalRequest then routes to the sensitive channel`() {
+        // READ_ONLY shares the SENSITIVE channel by design — only DESTRUCTIVE is
+        // split out so the user can tune visibility for irreversible actions.
+        manager.sendApprovalRequest("s1", "search_tool", "{\"q\":\"x\"}", ToolRisk.READ_ONLY)
+
+        val notification = Shadows.shadowOf(notificationManager()).allNotifications.first()
+        assertEquals(NotificationChannels.AGENT_APPROVAL, notification.channelId)
+    }
+
+    @Test
+    fun `given two sends in a row when sendApprovalRequest then both channels exist exactly once each`() {
+        manager.sendApprovalRequest("s1", "t1", "{}", ToolRisk.SENSITIVE)
+        manager.sendApprovalRequest("s2", "t2", "{}", ToolRisk.DESTRUCTIVE)
+
+        // createNotificationChannel is idempotent; the call sites should not
+        // produce duplicates regardless of how many times sendApprovalRequest fires.
+        val channels = notificationManager().notificationChannels
+            .map { it.id }
+            .filter {
+                it == NotificationChannels.AGENT_APPROVAL || it == NotificationChannels.AGENT_APPROVAL_DESTRUCTIVE
+            }
+        assertEquals(
+            "Both approval channels must be registered exactly once",
+            setOf(NotificationChannels.AGENT_APPROVAL, NotificationChannels.AGENT_APPROVAL_DESTRUCTIVE),
+            channels.toSet(),
+        )
+        assertEquals(2, channels.size)
+    }
+
+    @Test
+    fun `given active session matches sessionId when sendApprovalRequest then nothing is posted`() {
+        activeSessionTracker.setActiveSessionId("s1")
+
+        manager.sendApprovalRequest("s1", "delete_file", "{}", ToolRisk.DESTRUCTIVE)
+
+        assertEquals(
+            "Notification must be suppressed when the user is on the matching chat screen",
+            0,
+            Shadows.shadowOf(notificationManager()).size(),
+        )
+    }
+
+    @Test
+    fun `given active session differs from sessionId when sendApprovalRequest then notification is posted`() {
+        activeSessionTracker.setActiveSessionId("other-session")
+
+        manager.sendApprovalRequest("s1", "send_email", "{}", ToolRisk.SENSITIVE)
+
+        assertEquals(1, Shadows.shadowOf(notificationManager()).size())
+    }
+
+    @Test
+    fun `given any send when actions are inspected then Approve and Deny pending intents carry the right extras`() {
+        manager.sendApprovalRequest("session-42", "delete_file", "{\"path\":\"/x\"}", ToolRisk.DESTRUCTIVE)
+
+        val notification = Shadows.shadowOf(notificationManager()).allNotifications.first()
+        val actions = notification.actions
+        assertNotNull("Notification must expose Approve/Deny actions", actions)
+        assertEquals("Notification must expose exactly two actions", 2, actions.size)
+
+        val approveAction = actions[0]
+        val denyAction = actions[1]
+
+        assertEquals(context.getString(R.string.chat_thought_approve), approveAction.title.toString())
+        assertEquals(context.getString(R.string.chat_thought_deny), denyAction.title.toString())
+
+        val approveIntent = Shadows.shadowOf(approveAction.actionIntent).savedIntent
+        val denyIntent = Shadows.shadowOf(denyAction.actionIntent).savedIntent
+
+        assertEquals(ApprovalAction.APPROVE.action, approveIntent.action)
+        assertEquals(ApprovalAction.DENY.action, denyIntent.action)
+        assertEquals("session-42", approveIntent.getStringExtra("sessionId"))
+        assertEquals("session-42", denyIntent.getStringExtra("sessionId"))
+
+        // Both PendingIntents target AgentApprovalReceiver.
+        assertEquals(
+            AgentApprovalReceiver::class.java.name,
+            approveIntent.component?.className,
+        )
+        assertEquals(
+            AgentApprovalReceiver::class.java.name,
+            denyIntent.component?.className,
+        )
+    }
+
+    @Test
+    fun `given any send when PendingIntents are inspected then both carry FLAG_IMMUTABLE`() {
+        manager.sendApprovalRequest("session-immutable", "delete_file", "{}", ToolRisk.DESTRUCTIVE)
+
+        val notification = Shadows.shadowOf(notificationManager()).allNotifications.first()
+        notification.actions.forEach { action ->
+            val flags = Shadows.shadowOf(action.actionIntent).flags
+            // Robolectric's ShadowPendingIntent exposes the creation flags via getFlags();
+            // FLAG_IMMUTABLE is mandatory on API 31+ and the manager always sets it.
+            assertTrue(
+                "Action ${action.title} must use an immutable PendingIntent",
+                (flags and PendingIntent.FLAG_IMMUTABLE) != 0,
+            )
+        }
+    }
+
+    @Test
+    fun `given two different session ids when sendApprovalRequest then notification ids differ`() {
+        // Use ids whose hashes land in different buckets of NOTIFICATION_ID_RANGE.
+        val sessionA = "alpha"
+        val sessionB = "beta"
+        // Sanity-check the precondition for the assertion below — if hashes collide
+        // mod NOTIFICATION_ID_RANGE the test would assert nothing useful.
+        val idA = expectedNotificationId(sessionA)
+        val idB = expectedNotificationId(sessionB)
+        assertNotEquals("Precondition: chosen session ids must hash to distinct slots", idA, idB)
+
+        manager.sendApprovalRequest(sessionA, "t", "{}", ToolRisk.SENSITIVE)
+        manager.sendApprovalRequest(sessionB, "t", "{}", ToolRisk.SENSITIVE)
+
+        val shadow = Shadows.shadowOf(notificationManager())
+        assertEquals("Distinct sessions must produce distinct notifications", 2, shadow.size())
+    }
+
+    @Test
+    fun `given same session id twice when sendApprovalRequest then notification id is stable`() {
+        manager.sendApprovalRequest("same", "t", "{}", ToolRisk.SENSITIVE)
+        manager.sendApprovalRequest("same", "t", "{}", ToolRisk.SENSITIVE)
+
+        // The second post must replace the first via stable id, not stack.
+        assertEquals(1, Shadows.shadowOf(notificationManager()).size())
+    }
+
+    @Test
+    fun `given any send when content is inspected then BigTextStyle carries tool and args`() {
+        manager.sendApprovalRequest("s1", "delete_file", "{\"path\":\"/var/log\"}", ToolRisk.DESTRUCTIVE)
+
+        val notification = Shadows.shadowOf(notificationManager()).allNotifications.first()
+        val bigText = notification.extras.getCharSequence(NotificationCompat.EXTRA_BIG_TEXT)?.toString()
+        assertNotNull("BigTextStyle must be applied", bigText)
+        assertEquals(
+            context.getString(R.string.approval_notification_big_text, "delete_file", "{\"path\":\"/var/log\"}"),
+            bigText,
+        )
+        val contentText = notification.extras.getCharSequence(NotificationCompat.EXTRA_TEXT)?.toString()
+        assertEquals(
+            context.getString(R.string.approval_notification_text, "delete_file"),
+            contentText,
+        )
+    }
+
+    @Test
+    fun `given any send when notification flags are inspected then auto-cancel is set`() {
+        manager.sendApprovalRequest("s1", "t", "{}", ToolRisk.SENSITIVE)
+
+        val notification = Shadows.shadowOf(notificationManager()).allNotifications.first()
+        assertEquals(
+            "Notification must auto-cancel on tap",
+            Notification.FLAG_AUTO_CANCEL,
+            notification.flags and Notification.FLAG_AUTO_CANCEL,
+        )
+        // High-priority surface so heads-up appears on pre-API-26 devices. On
+        // modern Android channel importance (asserted per-risk above) supersedes
+        // this — the field is deprecated but the builder still sets it.
+        @Suppress("DEPRECATION")
+        val notificationPriority = notification.priority
+        assertEquals(NotificationCompat.PRIORITY_HIGH, notificationPriority)
+    }
+
+    @Test
+    fun `given any send when posted then notification id matches the documented partition formula`() {
+        val sessionId = "deterministic-id"
+        manager.sendApprovalRequest(sessionId, "t", "{}", ToolRisk.SENSITIVE)
+
+        val expectedId = expectedNotificationId(sessionId)
+        // The manager and `AgentApprovalReceiver` must agree on this id derivation —
+        // if they ever diverge, the receiver cannot cancel the notification it answers.
+        assertNotNull(
+            "Notification must be posted at the documented slot",
+            Shadows.shadowOf(notificationManager()).getNotification(expectedId),
+        )
+    }
+}

@@ -15,6 +15,24 @@ details.
 
 ### Tests
 
+- **Robolectric coverage for `presentation.notifications` + `presentation.receivers`**
+  (Phase 23 / Task 5). Added `ApprovalNotificationManagerTest` (risk-based
+  channel routing: `AGENT_APPROVAL_DESTRUCTIVE` vs `AGENT_APPROVAL` with
+  `READ_ONLY` sharing the `SENSITIVE` channel, `IMPORTANCE_HIGH` per channel,
+  idempotent channel registration across repeat sends, active-session
+  suppression vs. cross-session post, Approve / Deny `PendingIntent` extras
+  + `FLAG_IMMUTABLE`, stable-vs-distinct notification ids on the
+  `NOTIFICATION_ID + hash % NOTIFICATION_ID_RANGE` partition, `BigTextStyle`
+  + auto-cancel + `PRIORITY_HIGH`) and `AgentApprovalReceiverTest`
+  (`APPROVE` → `resumeWithApproval(true)`, `DENY` → `resumeWithApproval(false)`,
+  unknown / null action skip the orchestrator, missing `sessionId` extra
+  short-circuits before cancelling, notification cancellation at the
+  partitioned slot, dedup-free repeat delivery). Used the same Hilt-bypass
+  reflection trick as `AgentForegroundServiceTest` so `@AndroidEntryPoint`
+  doesn't require a `HiltTestApplication` runner. The previous
+  `ai.agent.android.presentation.notifications.*` and
+  `ai.agent.android.presentation.receivers.*` Kover exclusions are gone —
+  both packages now show **100 % LINE** in `koverHtmlReportDebug`.
 - **Robolectric coverage for `data.services`** (Phase 23 / Task 4). Added
   `AgentForegroundServiceTest` (channel registration with `IMPORTANCE_LOW`,
   `startForeground` notification with `FLAG_ONGOING_EVENT`, wake-lock
