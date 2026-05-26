@@ -2,7 +2,7 @@ package ai.agent.android.presentation.ui.chat.home
 
 import ai.agent.android.domain.models.ToolRisk
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -146,6 +146,13 @@ class ChatHomeHitlScreenFlowTest {
         // The live HITL row surfaces the actual tool name passed via
         // `pendingTool` — verifying that proves the VM → card wiring works
         // end-to-end and the screen isn't silently using the fixture row.
-        composeTestRule.onNodeWithText("calendar.create_event").assertIsDisplayed()
+        // `liveHitlRow` (ChatHomeStateMapping.kt) intentionally falls back to
+        // `summary = pending.toolName` when the agent did not attach a
+        // human-readable summary, so the toolName legitimately appears in
+        // both the card title and the summary line — the assertCountEquals
+        // pins that fallback contract.
+        composeTestRule
+            .onAllNodesWithText("calendar.create_event")
+            .assertCountEquals(2)
     }
 }

@@ -93,8 +93,14 @@ private fun java.util.UUID.shortHex(): String = toString().take(8)
  */
 internal object PipelineEditorTestFixtures {
 
-    /** Empty pipeline (no nodes, no connections) — drives the `EmptyPipelineState` hero. */
-    fun emptyPipeline(name: String = "Empty pipeline"): PipelineGraph = PipelineGraph(
+    /**
+     * Empty pipeline (no nodes, no connections) — drives the
+     * `EmptyPipelineState` hero. The default name is intentionally distinct
+     * from the hero's "Empty pipeline" title (R.string.pipeline_editor_empty_title);
+     * otherwise `onNodeWithText("Empty pipeline")` would match both the
+     * toolbar pipeline name and the hero title.
+     */
+    fun emptyPipeline(name: String = "Untitled empty fixture"): PipelineGraph = PipelineGraph(
         id = "pipeline-empty",
         name = name,
     )

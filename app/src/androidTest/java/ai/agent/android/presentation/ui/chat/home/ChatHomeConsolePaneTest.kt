@@ -82,7 +82,9 @@ class ChatHomeConsolePaneTest {
         )
         setContentWithConsoleOpen(viewModel)
 
-        composeTestRule.onNodeWithText("VARS").performClick()
+        // FullTabStrip renders the tab label as `ConsoleTab.entries[i].name`
+        // verbatim — PascalCase, not uppercase. See catalog ConsolePane.kt.
+        composeTestRule.onNodeWithText(ConsoleTab.Vars.name).performClick()
         composeTestRule.waitForIdle()
 
         verify(exactly = 1) { viewModel.onConsoleTabChange(ConsoleTab.Vars) }
@@ -95,7 +97,7 @@ class ChatHomeConsolePaneTest {
         )
         setContentWithConsoleOpen(viewModel)
 
-        composeTestRule.onNodeWithText("TRACES").performClick()
+        composeTestRule.onNodeWithText(ConsoleTab.Traces.name).performClick()
         composeTestRule.waitForIdle()
 
         verify(exactly = 1) { viewModel.onConsoleTabChange(ConsoleTab.Traces) }

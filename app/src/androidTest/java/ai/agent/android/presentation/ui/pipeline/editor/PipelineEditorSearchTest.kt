@@ -4,6 +4,7 @@ import ai.agent.android.R
 import ai.agent.android.presentation.ui.pipeline.editor.canvas.FilterBar
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
@@ -64,8 +65,14 @@ class PipelineEditorSearchTest {
             }
         }
 
+        // KnotworkTextField applies `contentDescription` on the outer
+        // wrapper Box, while the editable `BasicTextField` is a child
+        // semantics node carrying the `SetText` / `RequestFocus` actions
+        // — `performTextReplacement` requires the latter, so we target
+        // the unique text-input node directly. There is only one
+        // text field in `FilterBar`, so the matcher is unambiguous.
         composeTestRule
-            .onNodeWithContentDescription(placeholder)
+            .onNode(matcher = hasSetTextAction())
             .performTextReplacement("router")
         composeTestRule.waitForIdle()
 

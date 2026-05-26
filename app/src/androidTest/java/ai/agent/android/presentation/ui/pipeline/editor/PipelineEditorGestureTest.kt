@@ -87,11 +87,19 @@ class PipelineEditorGestureTest {
         // `down` produces a sustained drag gesture; `up` releases at the
         // final position, at which point `EditorNode.onDragEnd` rounds to
         // the nearest grid step and calls `viewModel.moveNode(id, dx, dy)`.
+        //
+        // The three fixture nodes are stacked along the X axis at
+        // canvas-x ∈ {0, 240, 480}. A horizontal drag can cross from the
+        // middle card's hit-rect into the right card's when the test
+        // viewport scales the canvas down, which then makes the OUTPUT
+        // node capture the drag instead of LITE_RT. A vertical drag has
+        // no neighbour to collide with, so the gesture stays on the
+        // intended source node.
         composeTestRule
             .onNodeWithText(pipeline.nodes[1].label)
             .performTouchInput {
                 down(center)
-                moveBy(Offset(x = 96f, y = 0f))
+                moveBy(Offset(x = 0f, y = 96f))
                 up()
             }
         composeTestRule.waitForIdle()
@@ -99,8 +107,8 @@ class PipelineEditorGestureTest {
         verify {
             vm.moveNode(
                 nodeId = pipeline.nodes[1].id,
-                deltaX = match<Float> { it != 0f },
-                deltaY = any(),
+                deltaX = any(),
+                deltaY = match<Float> { it != 0f },
             )
         }
     }
