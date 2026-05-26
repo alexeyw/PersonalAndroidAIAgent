@@ -9,8 +9,13 @@ architecture, see [`architecture.md`](architecture.md); for recipes on
 extending the agent with new node types, tools, or cloud providers,
 see [`extending.md`](extending.md).
 
-Screenshots in this guide are placeholders until the first tagged
-pre-release ships with real captures.
+Marketing-style hero shots of the main surfaces (chat home, pipeline
+editor, pipeline library, tools, settings) live under
+[`docs/images/`](images/) and are rendered in the project README.
+Inline per-flow screenshots in this guide are placeholders pending a
+device-capture pass — the agent's surfaces are evolving fast enough
+between phases that hand-curated guide screenshots tend to go stale
+before the next release ships.
 
 ---
 
@@ -62,7 +67,11 @@ If the source you are downloading from requires authentication, paste
 your token into the **HuggingFace Auth Token** field above the URL
 input. The field is masked and is used only for the download request.
 
-![Screenshot TODO — models screen](screenshots/TODO.png)
+<!-- TODO: device capture of the Models screen. The hero shots under
+     `docs/images/` cover chat / pipeline-editor / pipeline-library /
+     tools / settings; Models / Memory / Onboarding still need a
+     dedicated pass. -->
+
 
 ### 2. Download a model
 
@@ -107,11 +116,11 @@ now built on the Knotwork design system and shows, top to bottom:
 - A **message list** with user and assistant bubbles, inline tool
   invocations, and any clarification or HITL confirmation card the
   agent surfaced for the current run.
-- A pinned **composer** at the bottom — type a message, attach a file
-  with the paperclip, or dictate with the microphone. The send button
-  morphs into a stop button while the agent is generating.
+- A pinned **composer** at the bottom — type a message or dictate with
+  the microphone. The send button morphs into a **stop** button while
+  the agent is generating, and into a **retry** button after an error.
 
-The surface adapts to nine deterministic visual states, all reachable
+The surface adapts to eight deterministic visual states, all reachable
 from the same screen:
 
 | State            | When it appears                                                 |
@@ -124,8 +133,12 @@ from the same screen:
 | Clarification    | The assistant asks you for more details before continuing.      |
 | Error            | The model or network failed; an inline tile + retry appears.    |
 | Drawer Open      | The thread list slides in as an alt-nav drawer over the chat.   |
-| Console Expanded | The agent console rises from the bottom over the chat surface.  |
 | Dark             | A cross-cutting variant — every state respects the system theme. |
+
+The **console pane** (see the [Console](#console) section) is rendered
+as a bottom-sheet *overlay* on top of any of the above states — it is
+not a chat state in its own right and stays mounted across state
+transitions while it is open.
 
 **Debug builds** expose a state picker reachable by triple-tapping the
 title row, which flips between every documented state for visual QA.
@@ -135,17 +148,36 @@ The picker is not present in release builds.
 
 Open the side drawer from the chat screen (tap the menu icon, or
 swipe from the left edge). The drawer lists every chat under
-**Chat Sessions**. The currently active session is highlighted.
+**SESSIONS**. The currently active session is highlighted; favorited
+chats are sorted to the top with a small leading star glyph.
 
-- **New chat** — tap **New Chat** at the top of the drawer. The new
-  session uses the default pipeline unless you explicitly attach a
-  different one (see [Pipelines](#pipelines)).
+- **New chat** — tap **New chat** at the top of the drawer. A bottom
+  sheet opens with the available pipelines (pre-selected to the one
+  currently bound to your active chat); confirm to create a fresh
+  session. If no pipelines exist, the new chat inherits the default
+  pipeline automatically.
 - **Switch chat** — tap any row in the list. The chat screen updates
   immediately.
 - **Rename chat** — tap the pencil icon next to a session row. A
-  dialog titled **Rename Chat** opens with a **Chat Name** field.
+  bottom sheet titled **Rename chat** opens with the current name
+  pre-filled; **Save** persists the new name.
+- **Favorite chat** — tap the star icon in the chat top bar to favorite
+  the active chat. Favorited chats persist across restarts and sort to
+  the top of the drawer.
 
-![Screenshot TODO — chat drawer](screenshots/TODO.png)
+### Switching models from the chat top bar
+
+Tap the model label under the chat title to open a model-picker bottom
+sheet listing every locally installed LiteRT model. Picking a model
+activates it and reloads the inference engine. If no models are
+installed, the sheet shows **Open Models** that takes you directly to
+the Models screen.
+
+### Settings shortcut
+
+The drawer footer carries a **Settings** entry that deep-links to the
+Settings screen. Use it whenever the chat surface needs a quick jump
+to API keys, sampling parameters, or appearance toggles.
 
 ### Exporting and importing chat history
 
@@ -153,28 +185,24 @@ The app uses standard Android share and file-picker intents, so chat
 history is portable to any app that handles JSON or plain text.
 
 - **Export** — from the chat screen's top-bar overflow menu (`⋮`)
-  choose **Export Chat**. The Android **Share Sheet** opens with a
+  choose **Export chat**. The Android **Share Sheet** opens with a
   JSON payload containing the full message history. Choose any
   destination that accepts JSON (Files, email, a messenger, a
   cloud-drive app, and so on).
-- **Import** — open the drawer and tap **Import Chat**. The system
-  file picker opens, filtered to `application/json` and `text/plain`.
-  Selecting a previously exported file creates a new chat session
-  with the imported messages.
+- **Import** — open the drawer and tap **Import chat**. The system
+  file picker opens, filtered to `application/json`. Selecting a
+  previously exported file creates a new chat session with the
+  imported messages and switches to it immediately. Malformed files
+  surface an inline error via the chat snackbar.
+- **Delete chat** — from the same overflow menu choose **Delete chat**.
+  A destructive confirmation dialog appears; once confirmed the
+  conversation (and every message in it) is removed. The next
+  available chat is auto-selected, or a fresh unbound chat is created
+  if none remain.
 
-### Saving and filtering messages
+### Copying a message
 
-You can mark individual messages as favourites so they stay easy to
-find later.
-
-- **Save / Unsave** — long-press a message bubble and choose **Save**
-  (or **Unsave** to remove the mark). A small star appears on saved
-  bubbles.
-- **Show only saved messages** — toggle the star icon in the chat
-  screen's top bar. While the filter is on, only saved messages are
-  rendered; toggle it again to see the full conversation.
-
-You can also long-press a message to copy its text to the clipboard.
+Long-press any message bubble to copy its text to the clipboard.
 
 ---
 
@@ -185,51 +213,65 @@ your request — which pipeline node is running, which tools were
 called, which memory chunks were retrieved, and any errors that
 occurred.
 
-### Mini-console (collapsed)
+### Agent-status pill
 
-A small strip sits just above the input field on the chat screen and
-always shows the most recent agent events:
+Just above the message composer sits a single-line **status pill**
+formatted as `[TAG]  body`. It reflects the agent's current activity
+without flooding the chat — for example:
 
-- The last three events on a typical screen, or the last event on a
-  compact viewport.
-- Each line is formatted as `[TAG] message`, where the tag indicates
-  the event type (for example, `[NODE]`, `[TOOL]`, `[MEMORY]`,
-  `[ERROR]`).
-- When the agent needs your approval to run a sensitive or
-  destructive tool, the mini-console shows inline **Approve** and
-  **Deny** buttons in place of the latest event.
+| Pill body                          | When you see it                     |
+|------------------------------------|-------------------------------------|
+| `[NODE]  idle · ready`             | The agent is waiting for input.     |
+| `[NODE]  generating · streaming`   | A response is being produced.       |
+| `[TOOL]  awaiting approval`        | The HITL card is on screen.         |
+| `[NODE]  waiting on clarification` | A clarification card is on screen.  |
+| `[NODE]  error · see message`      | The latest run failed (see banner). |
 
-Tap anywhere on the strip to open the full log.
+Tapping the pill opens the **console pane** — a bottom sheet that
+covers most of the screen with the full chronological event log.
 
-![Screenshot TODO — mini console](screenshots/TODO.png)
+### Console pane
 
-### Full log (expanded)
+The console pane is independent of the chat state — it stays open
+across `Generating → HitlConfirm → Clarification` transitions, so you
+can watch the agent while it works without losing your place.
 
-The full log opens as a bottom sheet covering most of the screen. It
-shows every event from the current session in chronological order,
-with millisecond timestamps.
+The pane has three tabs:
 
-At the top of the sheet is a row of filter chips:
+- **Console log** — every `[TAG] message` event from the current
+  session in chronological order with millisecond timestamps. A row
+  of filter chips at the top lets you narrow to **All / Nodes / Tools
+  / Memory / Errors**.
+- **Pipeline trace** — a structured view of the pipeline run as a tree
+  of node spans (name, duration, status). Useful for understanding
+  *why* a particular branch fired or a node was skipped.
+- **Node I/O** — per-node input / output text plus the values of every
+  `$VARIABLE` resolved during the run, so you can diff what the agent
+  actually saw.
 
-| Chip      | Shows                                                 |
-|-----------|-------------------------------------------------------|
-| **All**     | Every event in the session.                         |
-| **Nodes**   | Pipeline-node execution events only.                |
-| **Tools**   | Tool invocations and their results only.            |
-| **Memory**  | Long-term memory reads and writes only.             |
-| **Errors**  | Error events only.                                  |
+Three actions are available at the pane footer:
 
-Two actions are available in the sheet:
+- **Copy line** — long-press a single console row.
+- **Copy all** — copies the full plain-text dump of the active tab to
+  the clipboard, regardless of which filter chip is active.
+- **Clear console** — wipes the on-screen log baseline for the current
+  session after a destructive confirmation dialog. The underlying chat
+  messages and the saved pipeline trace are not affected.
 
-- **Clear** — wipes the on-screen log for the current session after
-  a confirmation dialog. The underlying chat messages are not
-  affected.
-- **Copy all** — copies the full plain-text dump of the log to the
-  clipboard, regardless of which filter chip is active.
+The active tab is persisted between runs, so the pane re-opens to the
+tab you used last. The pane auto-scrolls to the latest event as long as
+you are pinned to the bottom; if you scroll up to read older events,
+auto-scroll pauses so you do not lose your place.
 
-The sheet auto-scrolls to the latest event as long as you are pinned
-to the bottom; if you scroll up to read older events, auto-scroll
-pauses so you do not lose your place.
+### Approving a tool call
+
+If the agent needs your approval to run a sensitive or destructive
+tool, the chat shifts into the **HitlConfirm** state — a card appears
+inline in the message stream with the tool name, the typed arguments,
+a colour-coded risk pill (`READ` / `SENS` / `DEST`), and **Approve** /
+**Deny** buttons. Destructive tools also require typing the literal
+tool name as a typed-confirm gate before the **Approve** button is
+enabled.
 
 ---
 
@@ -268,7 +310,9 @@ Tap the **+** button (floating action button) to create a new
 pipeline. New pipelines start as a minimal `INPUT → OUTPUT` graph so
 that they are valid immediately.
 
-![Screenshot TODO — pipeline library](screenshots/TODO.png)
+For a marketing-style preview of this screen see
+[`docs/images/hero-pipeline-library.png`](images/hero-pipeline-library.png)
+(dark variant: [`hero-pipeline-library-dark.png`](images/hero-pipeline-library-dark.png)).
 
 ### Binding a pipeline to a chat
 
@@ -364,7 +408,7 @@ Built-in variables:
 | `$TIME`            | Current device-local time (`HH:mm`, 24-hour).            |
 | `$TOOLS`           | The active tools list, one `name — description` per line.|
 | `$MODEL`           | The display name of the currently active local model.    |
-| `$MEMORY_SUMMARY`  | A numbered list of recent long-term memory entries.      |
+| `$MEMORY_SUMMARY`  | A numbered list of recent long-term memory entries. The default upper bound is configurable from **Settings → Memory → Memory summary default limit** (1–50). |
 
 When you edit a system prompt in a node's configuration dialog, a
 row of chips beneath the prompt field shows every available variable.
@@ -417,8 +461,9 @@ the app's import flow, so there is no manual conversion step.
 1. Move the exported JSON file onto the Android device (USB, cloud
    drive, email — anything that puts it in a place the system file
    picker can reach).
-2. Open the app's **Pipelines** screen and load any pipeline to open
-   the **Visual Orchestrator**.
+2. Open the app's **Pipelines** screen — the **Import JSON** affordance
+   sits in the *From browser editor* footer at the bottom of the
+   library list.
 3. Tap **Import JSON**. The system file picker opens; pick the file
    you exported from the browser editor.
 4. The imported pipeline is saved into the library and becomes the
@@ -446,7 +491,9 @@ Each tool has a switch on the Tools screen. Turn a tool off to hide
 it from the agent for the next run; turn it on to make it available
 again.
 
-![Screenshot TODO — tools screen](screenshots/TODO.png)
+For a marketing-style preview of this screen see
+[`docs/images/hero-tools.png`](images/hero-tools.png)
+(dark variant: [`hero-tools-dark.png`](images/hero-tools-dark.png)).
 
 ### Risk levels and human-in-the-loop
 
@@ -546,85 +593,188 @@ chat history or memory.
 
 ## Settings
 
-The **Settings** screen groups every user-tunable knob into clearly
-labelled sections.
+The **Settings** screen groups every user-tunable knob into nine
+cards. The top bar carries the app version, channel and build date
+plus a magnifying-glass action for in-settings search.
+
+### Identity
+
+An avatar + label confirm the device identity is anonymous and
+local. The meta line shows the truncated device id and whether your
+API keys live in the Android Keystore (hardware-backed) or — on
+constrained devices — in encrypted preferences.
 
 ### System Instructions
 
-A multi-line **System Prompt Prefix** field. Anything you type here
-is prepended to every system prompt the agent sends, regardless of
-which pipeline runs.
+A monospaced multi-line field whose content is prepended to every
+system prompt the agent sends. Tap a chip to insert one of the
+built-in variables (`$DATE`, `$TIME`, `$LANG`, `$LOCATION`,
+`$USER`, `$DEVICE`) — they expand fresh on every prompt render.
+The counter shows live character usage against the 4 000-character
+limit.
 
-### Restrictions
+### Restrictions · Human-in-the-loop
 
-- **Human-in-the-loop** — when on, every tool call requires your
-  approval, not just sensitive or destructive ones (see
-  [Tools and MCP](#tools-and-mcp)).
+- **Approve tool calls** — segmented control switching between
+  `All` (prompt for every call), `Sensitive +` (only sensitive or
+  destructive tools — recommended default), and `Never` (no
+  prompts at all; reserved for known-safe pipelines).
+- **Block destructive tools** — when on, destructive tools are
+  refused outright rather than going through the HITL prompt.
+  Useful when the agent runs unattended.
+- **Block network from local model** — when on, every cloud
+  provider returns `null` to the inference pipeline and only the
+  on-device LiteRT engine plus LAN-local Ollama remain reachable.
+- **Cap autonomous steps** — upper bound on planner iterations
+  per user message; the agent pauses for guidance when the cap is
+  hit.
 
 ### LLM Parameters
 
-These knobs control how the on-device model generates text:
+The "Reset to defaults" action restores every slider in this card.
 
-- **Temperature** (0.0 – 2.0) — higher values produce more varied,
-  creative output; lower values stay closer to the most likely
-  token.
-- **Top-K** (1 – 100) — limits sampling to the K most likely tokens
-  at each step.
-- **Top-P** (0.0 – 1.0) — nucleus sampling threshold. The model
-  considers the smallest set of tokens whose probabilities add up
-  to P.
-- **Max Context Length** (512 – 8192) — maximum number of tokens
-  the model keeps in its working window.
-- **Max Steps** (5 – 100) — upper bound on how many pipeline
-  iterations the agent is allowed to run for a single message. Use
-  it to cap runaway loops.
+- **Temperature** (0.0 – 2.0) — higher values produce more varied
+  output.
+- **Top-K** (1 – 100) — keeps only the K most likely tokens.
+- **Top-P** (0.0 – 1.0) — nucleus sampling threshold.
+- **Repetition penalty** (1.0 – 2.0) — `1.0` is neutral; higher
+  values discourage the model from repeating recent tokens.
+- **Max context** (512 – 8 192) — working window in tokens.
+- **Max steps** (5 – 100) — pipeline-iteration cap (same value
+  as Restrictions → Cap autonomous steps; the two surfaces share
+  the underlying preference).
 
-### Local Model Settings
+### Local Model
 
-- **Inference Backend** — drop-down that selects the engine used to
-  run the local model.
-- **Test Backend** — runs a tiny inference probe and shows a toast
-  with the result. Use it after switching backends to make sure
-  acceleration is wired up.
-
-### Privacy
-
-- **Opt-in Crash Reporting** — when on, anonymous crash reports are
-  forwarded to Firebase Crashlytics so problems can be diagnosed.
-  The first time you enable it, the app shows a dialog explaining
-  exactly what is and is not collected; you must explicitly confirm
-  to opt in.
-
-  Crash reporting transmits stack traces, device model, Android
-  version, app version/build, and the identifiers of the active
-  pipeline and model. It **never** transmits the contents of chat
-  messages, model prompts or replies, memory chunks, tool inputs or
-  outputs, or any value stored in encrypted preferences. Debug
-  builds disable crash reporting entirely regardless of the toggle.
-  Full details are in [SECURITY.md](../SECURITY.md).
+- Active-model card showing name, file size, context window,
+  quantization and download date. Tap **Change** to pick a
+  different model; **Manage** opens the full Models browser.
+- **Inference backend** — drop-down picking the engine (NPU
+  preferred, falls back to GPU then CPU).
+- **Test backend** — runs a fixed prompt-probe and persists the
+  measurement (`Last probe · N tok in T s · K tok/s`) so the row
+  keeps the metric across navigation. Changing the backend
+  surfaces a restart banner — tap **Restart** to apply the
+  change immediately.
 
 ### External Providers
 
-Each optional cloud provider (**OpenAI**, **Anthropic**, **Google**,
-**DeepSeek**) has its own subsection with two fields:
+Each provider — **OpenAI**, **Anthropic**, **Google**,
+**DeepSeek**, **Ollama** — collapses to a single row showing the
+masked key fingerprint and selected model. Tap the row to open
+the standalone provider editor. The Ollama row additionally
+carries a **LAN** pill plus the base URL. Use **+ Add provider**
+to surface an unconfigured provider's editor without scrolling.
+Leaving every cloud row blank keeps the agent fully offline.
 
-- **API Key** — masked password field. Keys are stored in
-  encrypted shared preferences and are never written to plain
-  storage, logs, or chat exports.
-- **Model** — drop-down that selects the default model identifier
-  the agent uses when it dispatches a request to that provider.
+### Memory
 
-A separate **Ollama (Local Network Models)** subsection adds three
-fields:
+Four-cell stat grid — **Chunks / Size / Threads / Avg score** —
+plus an **Auto-summarize threshold** slider (`%` of the memory
+context budget) and an **Embedding model** row identifying the
+on-device encoder. The action trio:
 
-- **Ollama Base URL** (for example, `http://localhost:11434`).
-- **Ollama Model** (for example, `mistral`).
-- **Ollama Context Window** (numeric, used to clamp the prompt
-  size sent to Ollama).
+- **Export base** — opens a SAF picker; saves the entire memory
+  table as a JSON blob.
+- **Re-embed** — re-runs the embedder over every chunk; an inline
+  progress bar tracks completion.
+- **Clear** — opens a typed-confirm dialog ("type `yes` to
+  confirm"); on confirm wipes every chunk, pinned included.
 
-Leaving every cloud provider blank is fine — the agent runs fully
-offline on the local LiteRT model and hides any tools that require
-cloud reasoning.
+### Notifications
+
+- **Long-running tasks** — when on, a low-importance system
+  notification fires when a backgrounded pipeline run exceeds the
+  long-running threshold.
+
+### Privacy
+
+- **Send anonymous crash reports** — forwards stack traces +
+  device meta + active pipeline / model identifiers to Firebase
+  Crashlytics. Off by default; debug builds never report. Full
+  policy in [SECURITY.md](../SECURITY.md).
+- **Reset all settings** — typed-confirm dialog that restores
+  every preference to defaults (API keys, downloaded models, and
+  memory are untouched).
+
+---
+
+## More tab
+
+The **More** tab is the landing page for every secondary surface.
+Each row carries a live counter (memory chunks, active model name,
+prompt categories, active-task count + a numeric badge, app
+version), and a footer pill summarises the privacy state — when the
+agent has not made any outbound LLM or MCP call for a minute, the
+pill reads `on-device · no network calls in last N m`; an in-flight
+cloud call flips the indicator to `online · cloud enabled`. The
+window resets when the process is recreated.
+
+## Managing local models
+
+Open **More → Models** to install, activate, or remove on-device
+LLMs.
+
+- The top **Active** card highlights the model currently loaded into
+  inference memory. Its mono subtitle shows size, accelerator
+  backend, and execution backend.
+- The **HuggingFace** section lets you paste a personal access token
+  (kept in `EncryptedSharedPreferences`) so gated repositories can be
+  downloaded. The `+ Paste` button reads the system clipboard.
+- The **Custom model URL** field accepts a direct link to any
+  `.litertlm`, `.task`, or `.gguf` file. Tap `Get` to start
+  downloading.
+- The **Available presets** list shows curated models, each row in
+  one of three states: `Get` (not downloaded), progress bar with
+  cancel-X (downloading), or `✓ ON DISK` (ready to activate).
+
+## Prompt library
+
+**More → Prompt library** stores reusable system prompts grouped by
+node type. The screen opens on the first category tab; tap any tab
+to switch. Each card has:
+
+- A category chip on the left and the prompt name in bold.
+- A multi-line preview with `$VARIABLE` tokens highlighted inline so
+  you can see at a glance which runtime values the prompt depends
+  on.
+- Edit (pencil) and Delete (trash) icons in the row header.
+- A footer with `used by N pipelines` and a `Duplicate` action.
+
+The FAB at the bottom-right opens the editor sheet. Inside, you can
+edit the name and category and tap any chip in the `INSERT` row to
+append the matching `$VARIABLE` to the prompt body. Save persists
+the change immediately; the next pipeline run picks it up.
+
+## Active tasks
+
+**More → Active tasks** lists everything the agent is running right
+now plus completed history. Filter chips at the top scope the list
+to `All`, `Active`, `Background`, or `Completed`. Each row shows
+the task title, a mono subtitle with the pipeline stage, a status
+pill (Queued / Running / Success / Failed / Cancelled), and an
+inline cancel button on running background work. Tap any row to
+open a bottom sheet with the task details and an `Open chat` shortcut
+for session-bound tasks.
+
+## Live metrics
+
+**More → Live metrics** surfaces the orchestrator's performance
+counters and the most recent system log lines. The header three-cell
+grid shows last inference time (ms), tokens-per-second, and the
+total tokens processed since process start. Under it sit the
+session-wide totals and a per-node-type breakdown. When the device
+enters power-saving mode, a warning banner appears above the grid
+to flag that the agent has paused background work.
+
+## About
+
+**More → About** shows the app's brand mark, version / build /
+commit, the open-source license name (Apache 2.0), a hand-curated
+acknowledgments list of the libraries that ship inside the app, and
+a short privacy summary. Tap `Open license text` to load the
+license verbatim in your browser, or `Read privacy policy` for the
+detailed privacy stance.
 
 ---
 
@@ -650,13 +800,13 @@ model fails:
 Without an NPU or a usable GPU, the local model runs on CPU only,
 which is noticeably slower (especially for the first few tokens):
 
-- Open **Settings → Local Model Settings** and tap **Test Backend**
-  to confirm which backend the model is actually using.
+- Open **Settings → Local model** and tap **Test backend** to confirm
+  which backend the model is actually using.
 - Try a smaller model from the **Models** screen — even a 1B-2B
   parameter model can be substantially faster than a 7B+ one on
   CPU.
-- Lower **Max Context Length** in **Settings → LLM Parameters**.
-  Shorter contexts mean less work per token.
+- Lower **Max context** in **Settings → LLM parameters**. Shorter
+  contexts mean less work per token.
 
 ### A tool says it is unavailable
 

@@ -58,6 +58,41 @@ class AppDatabaseMigrationTest {
     }
 
     @Test
+    fun `MIGRATION_21_22 targets versions 21 to 22`() {
+        val migration = AppDatabase.MIGRATION_21_22
+
+        assertEquals(21, migration.startVersion)
+        assertEquals(22, migration.endVersion)
+    }
+
+    @Test
+    fun `MIGRATION_21_22 adds isStarred column to chat_sessions with default 0`() {
+        val db = mockk<SupportSQLiteDatabase>(relaxed = true)
+        val sqlSlot = slot<String>()
+
+        AppDatabase.MIGRATION_21_22.migrate(db)
+
+        verify(exactly = 1) { db.execSQL(capture(sqlSlot)) }
+        val sql = sqlSlot.captured.uppercase()
+        assertTrue(
+            "Expected ALTER TABLE on chat_sessions, got: ${sqlSlot.captured}",
+            sql.contains("ALTER TABLE") && sql.contains("CHAT_SESSIONS"),
+        )
+        assertTrue(
+            "Expected the new isStarred column, got: ${sqlSlot.captured}",
+            sql.contains("ISSTARRED"),
+        )
+        assertTrue(
+            "Column must be NOT NULL so existing rows keep working: ${sqlSlot.captured}",
+            sql.contains("NOT NULL"),
+        )
+        assertTrue(
+            "Migration must default to 0 (favorited only after the user opts in): ${sqlSlot.captured}",
+            sql.contains("DEFAULT 0"),
+        )
+    }
+
+    @Test
     fun `MIGRATION_17_18 default JSON parses to ALL_ENABLED`() {
         val db = mockk<SupportSQLiteDatabase>(relaxed = true)
         val sqlSlot = slot<String>()

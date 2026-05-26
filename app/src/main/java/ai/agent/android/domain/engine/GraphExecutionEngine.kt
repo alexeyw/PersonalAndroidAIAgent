@@ -293,6 +293,22 @@ class GraphExecutionEngine @Inject constructor(
                         tokenCount = nodeTokenCount,
                     )
                     emit(AgentOrchestratorState.PipelineTrace(traceSteps.toList()))
+                    // Surface the per-node I/O pair for the Vars tab of the
+                    // chat-home console pane (Phase 22 / Task 3/17). INPUT
+                    // is skipped (its input is the raw user prompt already
+                    // surfaced as the latest chat row) and OUTPUT is skipped
+                    // (already terminal; emitting after the `Completed` of
+                    // OUTPUT would shift the terminal state away from the
+                    // tail of the flow — same rule applied to the `✓`
+                    // console event upstream).
+                    emit(
+                        AgentOrchestratorState.NodeIO(
+                            nodeId = currentNode.id,
+                            nodeType = currentNode.type.name,
+                            input = executorInput,
+                            output = outputText,
+                        ),
+                    )
                 }
 
                 if (currentNode.type == NodeType.OUTPUT) {

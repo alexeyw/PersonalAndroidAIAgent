@@ -1,7 +1,6 @@
 package ai.agent.android.presentation.ui.chat.home
 
 import app.knotwork.design.components.chips.Risk
-import app.knotwork.design.components.console.ConsoleSnap
 
 /**
  * Sealed UI state for the redesigned chat home (`compose/screens/README.md
@@ -16,6 +15,15 @@ import app.knotwork.design.components.console.ConsoleSnap
  * via `KnotworkTheme`) and is therefore not modelled as a separate state.
  */
 sealed interface ChatHomeUiState {
+
+    /**
+     * Cold-start sentinel emitted before the chat repository finishes
+     * delivering the first message snapshot. Distinct from [Empty]: while
+     * `Loading`, the surface shows a centered progress indicator (no empty
+     * placeholder copy) so users don't see the "no messages yet" hero flash
+     * for a frame on every app launch. Phase 22 / Task 16 follow-up F4.
+     */
+    data object Loading : ChatHomeUiState
 
     /** No messages in the active thread; empty state with sample-prompt chips. */
     data object Empty : ChatHomeUiState
@@ -49,11 +57,4 @@ sealed interface ChatHomeUiState {
 
     /** Alternate nav drawer over the chat surface. */
     data object DrawerOpen : ChatHomeUiState
-
-    /**
-     * Console pane expanded over the chat surface.
-     *
-     * @property snap snap position the pane should adopt on first render.
-     */
-    data class ConsoleExpanded(val snap: ConsoleSnap) : ChatHomeUiState
 }

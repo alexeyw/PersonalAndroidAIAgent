@@ -1,5 +1,6 @@
 package ai.agent.android.presentation.ui.navigation
 
+import ai.agent.android.domain.models.ProviderId
 import ai.agent.android.presentation.ui.about.AboutScreen
 import ai.agent.android.presentation.ui.chat.home.ChatHomeScreen
 import ai.agent.android.presentation.ui.chat.home.ChatHomeViewModel
@@ -14,10 +15,12 @@ import ai.agent.android.presentation.ui.orchestrator.PipelineLibraryScreen
 import ai.agent.android.presentation.ui.pipeline.editor.PipelineEditorScreen
 import ai.agent.android.presentation.ui.prompts.PromptLibraryScreen
 import ai.agent.android.presentation.ui.settings.SettingsScreen
+import ai.agent.android.presentation.ui.settings.provider.ProviderDetailScreen
+import ai.agent.android.presentation.ui.settings.provider.ProviderPickerScreen
 import ai.agent.android.presentation.ui.splash.SplashScreen
 import ai.agent.android.presentation.ui.taskmonitor.TaskMonitorScreen
 import ai.agent.android.presentation.ui.taskmonitor.TaskMonitorViewModel
-import ai.agent.android.presentation.ui.tools.AddMcpServerScreen
+import ai.agent.android.presentation.ui.tools.McpServerConfigScreen
 import ai.agent.android.presentation.ui.tools.ToolDetailScreen
 import ai.agent.android.presentation.ui.tools.ToolsScreen
 import androidx.compose.foundation.layout.fillMaxSize
@@ -33,6 +36,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.navigation
 import androidx.navigation.navArgument
 import androidx.navigation.navDeepLink
+import timber.log.Timber
 
 /**
  * The single [NavHost] for the whole app.
@@ -91,19 +95,32 @@ fun AppNavGraph(navController: NavHostController, showOnboarding: Boolean, modif
                         launchSingleTop = true
                     }
                 },
+                onConfigureProvider = { providerWireId ->
+                    // Step 3 cloud-provider tap — navigate to the same
+                    // per-provider API-key editor that Settings uses, so
+                    // the user can actually paste a key. The provider
+                    // detail screen pops back to onboarding on `onBack`;
+                    // the VM observes ApiKeyRepository so the
+                    // "Configured" pill on the row flips on its own
+                    // once a key is persisted.
+                    val target = NavRoutes.PROVIDER_DETAIL.replace(
+                        oldValue = "{${NavRoutes.PROVIDER_DETAIL_ID_ARG}}",
+                        newValue = providerWireId,
+                    )
+                    Timber.d("Onboarding step 3: navigating to provider detail '$target'")
+                    navController.navigate(target)
+                },
             )
         }
 
         // ─── Chat tab ──────────────────────────────────────────────────────
-        // Phase 21 / Task 8: the user-facing surface is now `ChatHomeScreen`
-        // backed by a stub `ChatHomeViewModel` driving the 9-state matrix
-        // from `compose/screens/README.md §C1`. The orchestrator/runtime
-        // wiring (real chat backend) is captured in the legacy
-        // `chat.legacy.*` files and re-attaches to this screen in a
-        // follow-up task after v0.1.
         composable(NavRoutes.CHAT_TAB) {
             val chatHomeViewModel: ChatHomeViewModel = hiltViewModel()
-            ChatHomeScreen(viewModel = chatHomeViewModel)
+            ChatHomeScreen(
+                viewModel = chatHomeViewModel,
+                onOpenSettings = { navController.navigate(NavRoutes.SETTINGS) },
+                onOpenModels = { navController.navigate(NavRoutes.MODELS) },
+            )
         }
         composable(
             route = NavRoutes.CHAT_WITH_THREAD,
@@ -124,7 +141,11 @@ fun AppNavGraph(navController: NavHostController, showOnboarding: Boolean, modif
                     chatHomeViewModel.selectThread(threadId)
                 }
             }
-            ChatHomeScreen(viewModel = chatHomeViewModel)
+            ChatHomeScreen(
+                viewModel = chatHomeViewModel,
+                onOpenSettings = { navController.navigate(NavRoutes.SETTINGS) },
+                onOpenModels = { navController.navigate(NavRoutes.MODELS) },
+            )
         }
 
         // ─── Pipelines tab (nested graph) ──────────────────────────────────
@@ -186,7 +207,10 @@ fun AppNavGraph(navController: NavHostController, showOnboarding: Boolean, modif
             ToolsScreen(
                 modifier = Modifier.fillMaxSize(),
                 onBack = { navController.popBackStack() },
-                onOpenAddMcpServer = { navController.navigate(NavRoutes.ADD_MCP_SERVER) },
+                onAddMcpServer = { navController.navigate(NavRoutes.MCP_SERVER_CONFIG_ADD) },
+                onEditMcpServer = { originalUrl ->
+                    navController.navigate(NavRoutes.mcpServerConfigEditRoute(originalUrl = originalUrl))
+                },
                 onOpenToolDetail = { toolId ->
                     // AppFunction-shaped tool ids embed `/` and `#` (e.g.
                     // `<pkg>/<FQN>#invoke`). Percent-encode them via
@@ -214,14 +238,22 @@ fun AppNavGraph(navController: NavHostController, showOnboarding: Boolean, modif
                 modifier = Modifier.fillMaxSize(),
             )
         }
-        composable(NavRoutes.ADD_MCP_SERVER) {
-            AddMcpServerScreen(
+        composable(
+            route = NavRoutes.MCP_SERVER_CONFIG,
+            arguments = listOf(
+                navArgument(NavRoutes.MCP_SERVER_CONFIG_URL_ARG) {
+                    type = NavType.StringType
+                    nullable = true
+                    defaultValue = null
+                },
+            ),
+        ) {
+            McpServerConfigScreen(
+                onDone = { navController.popBackStack() },
                 onCancel = { navController.popBackStack() },
-                onSubmitted = { navController.popBackStack() },
                 modifier = Modifier.fillMaxSize(),
             )
         }
-
         // ─── More tab and its secondary screens ────────────────────────────
         composable(NavRoutes.MORE) {
             MoreScreen(
@@ -266,7 +298,60 @@ fun AppNavGraph(navController: NavHostController, showOnboarding: Boolean, modif
             SettingsScreen(
                 modifier = Modifier.fillMaxSize(),
                 onBack = { navController.popBackStack() },
+                onOpenModels = { navController.navigate(NavRoutes.MODELS) },
+                onOpenProvider = { providerId ->
+                    val wireId = providerId.cloudProvider.id
+                    navController.navigate(
+                        NavRoutes.PROVIDER_DETAIL.replace(
+                            oldValue = "{${NavRoutes.PROVIDER_DETAIL_ID_ARG}}",
+                            newValue = wireId,
+                        ),
+                    )
+                },
+                onOpenAddProvider = { navController.navigate(NavRoutes.ADD_PROVIDER) },
+                onOpenSearch = { navController.navigate(NavRoutes.SETTINGS_SEARCH) },
             )
+        }
+        composable(
+            route = NavRoutes.PROVIDER_DETAIL,
+            arguments = listOf(
+                navArgument(NavRoutes.PROVIDER_DETAIL_ID_ARG) {
+                    type = NavType.StringType
+                    nullable = false
+                },
+            ),
+        ) { entry ->
+            val wireId = entry.arguments?.getString(NavRoutes.PROVIDER_DETAIL_ID_ARG).orEmpty()
+            val providerId = ProviderId.entries.firstOrNull { it.cloudProvider.id == wireId }
+                ?: ProviderId.OpenAi
+            ProviderDetailScreen(
+                providerId = providerId,
+                onBack = { navController.popBackStack() },
+            )
+        }
+        composable(NavRoutes.ADD_PROVIDER) {
+            // v0.1: Add provider goes through the same picker as the
+            // detail screen — surface a minimal list-style picker that
+            // forwards to the per-provider detail route. The richer
+            // bottom-sheet picker is a follow-up.
+            ProviderPickerScreen(
+                onPick = { providerId ->
+                    val wireId = providerId.cloudProvider.id
+                    navController.navigate(
+                        NavRoutes.PROVIDER_DETAIL.replace(
+                            oldValue = "{${NavRoutes.PROVIDER_DETAIL_ID_ARG}}",
+                            newValue = wireId,
+                        ),
+                    ) {
+                        popUpTo(NavRoutes.SETTINGS)
+                    }
+                },
+                onBack = { navController.popBackStack() },
+            )
+        }
+        composable(NavRoutes.SETTINGS_SEARCH) {
+            // Placeholder until the search-in-settings sheet lands.
+            KnotworkModalRoute(onDismiss = { navController.popBackStack() }) { _ -> }
         }
         composable(NavRoutes.PROMPTS) {
             PromptLibraryScreen(

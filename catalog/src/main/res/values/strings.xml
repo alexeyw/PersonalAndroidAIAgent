@@ -82,15 +82,13 @@
     <!-- ============ ChatComposer ============ -->
 
     <!-- Placeholder for the multiline composer input. -->
-    <string name="knotwork_composer_placeholder">Message…</string>
-    <!-- ContentDescription for the leading attach-file icon button. -->
-    <string name="knotwork_composer_attach">Attach file</string>
-    <!-- ContentDescription for the leading voice-input icon button. -->
-    <string name="knotwork_composer_voice">Start voice input</string>
+    <string name="knotwork_composer_placeholder">Message the agent…</string>
     <!-- ContentDescription for the trailing send button (Idle / Error states). -->
     <string name="knotwork_composer_send">Send message</string>
     <!-- ContentDescription for the trailing stop button (Generating state). -->
     <string name="knotwork_composer_stop">Stop generating</string>
+    <!-- ContentDescription for the trailing mic button (Idle state with empty input and an onMic callback). -->
+    <string name="knotwork_composer_mic">Voice input</string>
 
     <!-- ============ ConsolePane ============ -->
 
@@ -222,8 +220,6 @@
     <string name="knotwork_tools_section_mcp">MCP SERVERS</string>
     <!-- Trailing "+ Add MCP" link in the MCP section header. -->
     <string name="knotwork_tools_add_mcp_link">Add MCP</string>
-    <!-- ContentDescription for the trailing trash icon on an MCP server row. -->
-    <string name="knotwork_tools_remove_server_cd">Remove MCP server</string>
     <!-- Outline pill label for a Read-only tool. -->
     <string name="knotwork_tools_pill_readonly">Read only</string>
     <!-- Outline pill label for a Sensitive tool. -->
@@ -241,22 +237,99 @@
     <string name="knotwork_tools_detail_back">Back to tools</string>
     <string name="knotwork_tools_detail_schema">JSON Schema</string>
     <string name="knotwork_tools_detail_schema_error">Schema unavailable — the server returned malformed JSON.</string>
+    <!-- ContentDescription for the expand/collapse chevron on an MCP server row. -->
+    <string name="knotwork_tools_expand_server_cd">Toggle MCP tool list</string>
+    <!-- ContentDescription for the overflow menu trigger on an MCP server row. -->
+    <string name="knotwork_tools_row_overflow_cd">MCP server actions</string>
+    <!-- MCP server row overflow menu item: refresh the tool list. -->
+    <string name="knotwork_tools_row_action_refresh">Refresh</string>
+    <!-- MCP server row overflow menu item: edit the server configuration. -->
+    <string name="knotwork_tools_row_action_edit">Edit</string>
+    <!-- MCP server row overflow menu item: remove the server. -->
+    <string name="knotwork_tools_row_action_delete">Remove</string>
+    <!-- MCP server form: header for the Display name field. -->
+    <string name="knotwork_tools_form_name_label">Display name (optional)</string>
+    <!-- MCP server form: placeholder for the Display name field. -->
+    <string name="knotwork_tools_form_name_placeholder">e.g. HuggingFace MCP</string>
+    <!-- MCP server form: header for the Transport selector. -->
+    <string name="knotwork_tools_form_transport_label">Transport</string>
+    <!-- MCP server form: header for the Authentication selector. -->
+    <string name="knotwork_tools_form_auth_label">Authentication</string>
+    <!-- MCP server form: placeholder for the Bearer token input. -->
+    <string name="knotwork_tools_form_auth_bearer_placeholder">Bearer token</string>
+    <!-- MCP server form: placeholder for the Basic auth username input. -->
+    <string name="knotwork_tools_form_auth_basic_user_placeholder">Username</string>
+    <!-- MCP server form: placeholder for the Basic auth password input. -->
+    <string name="knotwork_tools_form_auth_basic_pass_placeholder">Password</string>
+    <!-- MCP server form: placeholder for the API key header name input. -->
+    <string name="knotwork_tools_form_auth_apikey_name_placeholder">Header name (e.g. X-API-Key)</string>
+    <!-- MCP server form: placeholder for the API key value input. -->
+    <string name="knotwork_tools_form_auth_apikey_value_placeholder">Key value</string>
+    <!-- MCP server form: header for the Headers section. -->
+    <string name="knotwork_tools_form_headers_label">Custom headers</string>
+    <!-- MCP server form: label for the "+ Add header" button. -->
+    <string name="knotwork_tools_form_headers_add">+ Add header</string>
+    <!-- MCP server form: placeholder for a header key. -->
+    <string name="knotwork_tools_form_header_key_placeholder">Authorization</string>
+    <!-- MCP server form: placeholder for a header value. -->
+    <string name="knotwork_tools_form_header_value_placeholder">Bearer …</string>
+    <!-- MCP server form: ContentDescription for the trailing remove icon on a header row. -->
+    <string name="knotwork_tools_form_header_remove_cd">Remove header</string>
+    <!-- MCP server form: submit label when the form is in Edit mode. -->
+    <string name="knotwork_tools_form_submit_save">Save</string>
+    <!-- MCP server config screen title in Add mode. -->
+    <string name="knotwork_tools_form_title_add">Add MCP server</string>
+    <!-- MCP server config screen title in Edit mode. -->
+    <string name="knotwork_tools_form_title_edit">Edit MCP server</string>
 
-    <!-- ============ Settings screen ============ -->
+    <!-- ============ Settings screen (Phase 22 / Task 9 redesign) ============ -->
 
     <string name="knotwork_settings_title">Settings</string>
-    <string name="knotwork_settings_section_appearance">Appearance</string>
-    <string name="knotwork_settings_section_models">Models</string>
-    <string name="knotwork_settings_section_privacy">Privacy</string>
+    <string name="knotwork_settings_back">Back</string>
+    <string name="knotwork_settings_search_cd">Search settings</string>
+
+    <string name="knotwork_settings_section_system_instructions">System instructions</string>
+    <string name="knotwork_settings_section_restrictions">Restrictions · Human-in-the-loop</string>
+    <string name="knotwork_settings_section_llm">LLM parameters</string>
+    <string name="knotwork_settings_section_local_model">Local model</string>
+    <string name="knotwork_settings_section_providers">External providers</string>
     <string name="knotwork_settings_section_memory">Memory</string>
-    <string name="knotwork_settings_section_mcp">MCP</string>
-    <string name="knotwork_settings_section_about">About</string>
-    <string name="knotwork_settings_restart_required">Changes take effect on restart.</string>
+    <string name="knotwork_settings_section_notifications">Notifications</string>
+    <string name="knotwork_settings_section_privacy">Privacy</string>
+
+    <string name="knotwork_settings_system_instructions_counter" tools:ignore="PluralsCandidate">%1$d / %2$d chars · ≈ %3$d tok</string>
+
+    <string name="knotwork_settings_restrictions_approve">Approve tool calls</string>
+    <string name="knotwork_settings_restrictions_block_destructive">Block destructive tools</string>
+    <string name="knotwork_settings_restrictions_block_network">Block network from local model</string>
+    <string name="knotwork_settings_restrictions_cap_steps">Cap autonomous steps</string>
+
+    <string name="knotwork_settings_llm_reset">Reset to defaults</string>
+
+    <string name="knotwork_settings_local_model_manage">Manage</string>
+    <string name="knotwork_settings_local_model_change">Change</string>
+    <string name="knotwork_settings_local_model_active_pill">Active</string>
+    <string name="knotwork_settings_local_model_empty">No model installed</string>
+    <string name="knotwork_settings_local_model_backend_title">Inference backend</string>
+    <string name="knotwork_settings_local_model_test_title">Test backend</string>
+    <string name="knotwork_settings_local_model_test_run">Run</string>
+
+    <string name="knotwork_settings_providers_add">Add provider</string>
+    <string name="knotwork_settings_providers_lan">LAN</string>
+    <string name="knotwork_settings_providers_not_configured">Not configured · tap to add API key</string>
+
+    <string name="knotwork_settings_notifications_long_running">Long-running tasks</string>
+    <string name="knotwork_settings_notifications_long_running_subtitle">Ping when a pipeline runs &gt; 8 s in background.</string>
+
+    <string name="knotwork_settings_crash_reporting_label">Send anonymous crash reports</string>
+    <string name="knotwork_settings_crash_reporting_hint">Help improve stability by sharing anonymous crash data.</string>
+    <string name="knotwork_settings_reset_button">Reset all settings</string>
+
+    <string name="knotwork_settings_restart_required">Backend change requires restart.</string>
     <string name="knotwork_settings_restart_action">Restart</string>
-    <string name="knotwork_settings_destructive_confirm_title">Are you sure?</string>
-    <string name="knotwork_settings_destructive_confirm_message">This action cannot be undone.</string>
-    <string name="knotwork_settings_destructive_confirm_yes">Confirm</string>
-    <string name="knotwork_settings_destructive_confirm_cancel">Cancel</string>
+
+    <string name="knotwork_settings_destructive_confirm">Confirm</string>
+    <string name="knotwork_settings_destructive_cancel">Cancel</string>
 
     <!-- ============ Memory screen ============ -->
 
@@ -278,6 +351,8 @@
     <string name="knotwork_memory_detail_edit">Edit</string>
     <string name="knotwork_memory_detail_delete">Delete</string>
     <string name="knotwork_memory_detail_pin">Pin to top</string>
+    <string name="knotwork_memory_detail_unpin">Unpin</string>
+    <string name="knotwork_memory_pinned_cd">Pinned</string>
     <string name="knotwork_memory_detail_close">Close</string>
 
     <!-- ============ Onboarding pager ============ -->
@@ -308,6 +383,18 @@
     <string name="knotwork_onboarding_models_recommended">RECOMMENDED</string>
     <!-- Step 2 CTA template: "Download {model name}". -->
     <string name="knotwork_onboarding_models_download_cta">Download %1$s</string>
+    <!-- Step 2 CTA shown while a download is in flight. -->
+    <string name="knotwork_onboarding_models_downloading_cta">Downloading…</string>
+    <!-- Step 2 CTA shown when the picked model is already installed locally. -->
+    <string name="knotwork_onboarding_models_continue_cta">Continue</string>
+    <!-- Step 2 INSTALLED outline pill rendered next to a model that is already on disk. -->
+    <string name="knotwork_onboarding_models_installed">INSTALLED</string>
+    <!-- Step 2 progress label template under the active download row, e.g. "Downloading… 42%". -->
+    <string name="knotwork_onboarding_models_progress">Downloading… %1$d%%</string>
+    <!-- Step 2 custom URL field placeholder. -->
+    <string name="knotwork_onboarding_models_custom_url_placeholder">https://…/model.litertlm</string>
+    <!-- Step 2 custom URL field label. -->
+    <string name="knotwork_onboarding_models_custom_url_label">Model URL</string>
 
     <!-- Step 3 headline. -->
     <string name="knotwork_onboarding_cloud_headline">Add cloud keys later, or skip.</string>
@@ -319,6 +406,11 @@
     <string name="knotwork_onboarding_cloud_configured">Configured</string>
     <!-- Step 3 primary CTA label. -->
     <string name="knotwork_onboarding_cloud_skip_cta">Skip for now</string>
+
+    <!-- Step 4 row caption above the installed-model name. -->
+    <string name="knotwork_onboarding_ready_active_model_label">Active model</string>
+    <!-- Step 4 placeholder shown when the model name is unavailable. -->
+    <string name="knotwork_onboarding_ready_active_model_pending">Loading model…</string>
 
     <!-- Step 4 headline. -->
     <string name="knotwork_onboarding_ready_headline">One default pipeline is bound to your first chat.</string>
@@ -338,22 +430,53 @@
     <!-- Step 4 CTA label. -->
     <string name="knotwork_onboarding_ready_cta">Open chat</string>
 
+    <!-- Step 1 system-back exit-confirm dialog title (Phase 22 / Task 13). -->
+    <string name="knotwork_onboarding_exit_title">Quit setup?</string>
+    <!-- Step 1 system-back exit-confirm dialog body. -->
+    <string name="knotwork_onboarding_exit_body">You can finish setup the next time you open the app.</string>
+    <!-- Step 1 system-back exit-confirm dialog primary action. -->
+    <string name="knotwork_onboarding_exit_confirm">Quit</string>
+    <!-- Step 1 system-back exit-confirm dialog dismiss action. -->
+    <string name="knotwork_onboarding_exit_cancel">Cancel</string>
+
     <!-- ============ Pipeline editor — EditorToolbar ============ -->
 
     <!-- Placeholder when the inline pipeline-name field is empty. -->
     <string name="knotwork_editor_name_placeholder">Untitled pipeline</string>
-    <!-- ContentDescription for the Undo icon button. -->
-    <string name="knotwork_editor_action_undo">Undo</string>
-    <!-- ContentDescription for the Redo icon button. -->
-    <string name="knotwork_editor_action_redo">Redo</string>
-    <!-- ContentDescription for the Delete icon button. -->
-    <string name="knotwork_editor_action_delete">Delete selection</string>
-    <!-- ContentDescription for the Auto-layout icon button. -->
-    <string name="knotwork_editor_action_auto_layout">Auto layout</string>
-    <!-- Primary Run button label. -->
+    <!-- ContentDescription for the navigation-up (back) icon button on the editor toolbar. -->
+    <string name="knotwork_editor_action_navigate_up">Back</string>
+    <!-- Primary Run button label (editing state). -->
     <string name="knotwork_editor_action_run">Run</string>
+    <!-- Primary Re-run button label (after a successful run). -->
+    <string name="knotwork_editor_action_rerun">Re-run</string>
     <!-- ContentDescription for the overflow icon button. -->
     <string name="knotwork_editor_action_overflow">More actions</string>
+
+    <!-- ============ Pipeline editor — RunStatusBanner (Phase 22 / Task 14) ============ -->
+
+    <!-- Status label for the live run banner — left-side uppercase tag. -->
+    <string name="knotwork_run_banner_label_running">RUNNING</string>
+    <!-- Status label for the paused-run banner. -->
+    <string name="knotwork_run_banner_label_paused">PAUSED</string>
+    <!-- Status label for the just-completed run banner. -->
+    <string name="knotwork_run_banner_label_done">DONE</string>
+
+    <!-- Step metric while running: e.g. "step 6 / 11". %1$d = current, %2$d = total. -->
+    <string name="knotwork_run_banner_metric_step_of">step %1$d / %2$d</string>
+    <!-- Step metric while running with unknown total: e.g. "step 6". %1$d = current. -->
+    <string name="knotwork_run_banner_metric_step_only">step %1$d</string>
+    <!-- Total step metric in the done banner: e.g. "11 / 11". %1$d, %2$d = same value. -->
+    <string name="knotwork_run_banner_metric_total_steps">%1$d / %2$d</string>
+    <!-- Elapsed-time metric: e.g. "4.2 s". %1$s = pre-formatted seconds with one decimal. -->
+    <string name="knotwork_run_banner_metric_elapsed">%1$s s</string>
+    <!-- Token-count metric: e.g. "2 408 tok". %1$s = pre-formatted integer with thin-space grouping. -->
+    <string name="knotwork_run_banner_metric_tokens">%1$s tok</string>
+
+    <!-- Trailing actions on the run banner. -->
+    <string name="knotwork_run_banner_action_pause">Pause</string>
+    <string name="knotwork_run_banner_action_resume">Resume</string>
+    <string name="knotwork_run_banner_action_stop">Stop</string>
+    <string name="knotwork_run_banner_action_trace">Trace</string>
 
     <!-- ============ Pipeline editor — NodeConfigSheet ============ -->
 
@@ -402,8 +525,11 @@
     <string name="knotwork_node_field_tool_auto">Auto (let the agent pick)</string>
     <string name="knotwork_node_field_tool_custom">Custom tool id…</string>
     <string name="knotwork_node_field_model_active_suffix">%1$s · active</string>
-    <string name="knotwork_node_field_model_placeholder">Select a model</string>
     <string name="knotwork_node_field_model_custom">Custom path…</string>
+    <!-- LITE_RT model picker — sentinel meaning "use whichever model is
+         currently active at execute time" (empty `modelId`). Phase 22 / Task
+         16 follow-up F8. -->
+    <string name="knotwork_node_field_model_active">Active model</string>
 
     <!-- Validation messages. -->
     <string name="knotwork_node_validation_title_empty">Title must not be empty</string>
@@ -425,8 +551,10 @@
     <string name="knotwork_chat_home_action_overflow">More chat options</string>
     <!-- TopAppBar star/favorite action contentDescription. -->
     <string name="knotwork_chat_home_action_favorite">Toggle favorite</string>
-    <!-- TopAppBar subtitle: pipeline name only — formatted "Pipeline · {name}". -->
-    <string name="knotwork_chat_home_topbar_pipeline">Pipeline · %1$s</string>
+    <!-- TopAppBar subtitle: pipeline name only — the "Pipeline · " prefix was
+         dropped in Phase 22 / Task 16 follow-up F1 so the token counter fits
+         on a single line at the default font scale. -->
+    <string name="knotwork_chat_home_topbar_pipeline">%1$s</string>
     <!-- TopAppBar subtitle: token usage — formatted "1.4k / 8k tok". -->
     <string name="knotwork_chat_home_topbar_tokens">%1$s / %2$s tok</string>
     <!-- TopAppBar accessibility hint for the title row triple-tap state picker (debug builds only). -->
@@ -443,6 +571,8 @@
     <string name="knotwork_chat_home_drawer_new_thread">New chat</string>
     <!-- Drawer per-row edit/rename icon contentDescription. -->
     <string name="knotwork_chat_home_drawer_edit_cd">Rename thread</string>
+    <!-- Drawer per-row starred glyph contentDescription. -->
+    <string name="knotwork_chat_home_drawer_starred_cd">Starred</string>
     <!-- Drawer footer entry: import a chat from JSON / text. -->
     <string name="knotwork_chat_home_drawer_import_title">Import chat</string>
     <string name="knotwork_chat_home_drawer_import_subtitle">From JSON / text</string>
@@ -457,5 +587,10 @@
     <string name="knotwork_chat_home_error_retry">Retry</string>
     <!-- Debug state picker label (visible only in debug builds). -->
     <string name="knotwork_chat_home_debug_picker_title">Debug state</string>
+    <!-- Content description for the agent-status pill above the composer — tapping it opens the console pane. -->
+    <string name="knotwork_chat_home_agent_status_open_console_cd">Open console</string>
+
+    <!-- Common content descriptions shared across catalog screens. -->
+    <string name="knotwork_common_back">Back</string>
 
 </resources>

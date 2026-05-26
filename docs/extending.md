@@ -19,8 +19,9 @@ see [`docs/user-guide.md`](user-guide.md).
    built-in as a callee-side AppFunction)
 3. [Add a new cloud provider](#3-add-a-new-cloud-provider)
 4. [Add a new prompt variable](#4-add-a-new-prompt-variable)
-5. [Synchronization table — "if you change X, also touch Y"](#5-synchronization-table)
-6. [Quality gate](#6-quality-gate)
+5. [Use input atoms and chip atoms](#5-use-input-atoms-and-chip-atoms)
+6. [Synchronization table — "if you change X, also touch Y"](#6-synchronization-table)
+7. [Quality gate](#7-quality-gate)
 
 ---
 
@@ -400,11 +401,36 @@ DataStore, never in `local.properties`, never committed to git.
 
 ### 3.5. Add a Settings section
 
-Add a UI block to
-[`SettingsScreen`](../app/src/main/java/ai/agent/android/presentation/ui/settings/SettingsScreen.kt)
-that lets the user paste the API key and select a default model. Reuse
-the existing `ProviderSettingsSection` shape so the new entry is
-visually consistent with OpenAI / Anthropic / etc.
+The Settings screen renders nine Knotwork cards — *identity*, *system
+instructions*, *restrictions*, *LLM parameters*, *local model*,
+*external providers*, *memory*, *notifications*, *privacy* — through
+the catalog
+[`SettingsContent`](../catalog/src/main/java/app/knotwork/design/screens/settings/SettingsContent.kt).
+Each row arrives as a `SettingsRowState` and is mapped to a Compose
+control via the `rowContent` lambda in
+[`SettingsScreen`](../app/src/main/java/ai/agent/android/presentation/ui/settings/SettingsScreen.kt).
+
+To add a new provider:
+
+1. Allocate a stable `ROW_ID_<PROVIDER>` constant inside `SettingsScreen.kt`.
+2. Append a `row(ROW_ID_<PROVIDER>, "<Name>")` line under the
+   **External providers** block in `buildViewState`.
+3. Wire a `when` branch in the `rowContent` lambda that delegates to the
+   catalog
+   [`KnotworkProviderRow`](../catalog/src/main/java/app/knotwork/design/screens/settings/KnotworkProviderRow.kt).
+   For cloud providers, leave the `ollama` parameter `null`; for
+   network-local providers, supply an `OllamaProviderInputs` bundle with
+   the base-URL and context-window fields.
+4. Extend `SettingsViewModel` with `updateXxxKey` / `updateXxxModel`
+   methods that flush through `ApiKeyRepository`. Wrap the model picker
+   in `markPending(ROW_ID_<PROVIDER>)` + `clearPending(...)` so the
+   per-row `KnotworkLoader` spins during the async DataStore write.
+
+The catalog composables that power this screen:
+
+- `KnotworkProviderRow` — collapsible provider card.
+- `KnotworkParamSlider` — branded labelled slider.
+- `KnotworkMonoTextArea` — multi-line mono text input.
 
 ### 3.6. Tests
 
@@ -471,10 +497,11 @@ directly — no further wiring is needed.
 ### 4.3. Mirror the variable into the browser editor
 
 Add the key to the `PROMPT_VARIABLES` array in
-[`pipeline-editor.html`](../pipeline-editor.html) (around line 901):
+[`pipeline-editor.html`](../pipeline-editor.html). The current set is:
 
 ```js
-const PROMPT_VARIABLES = ['DATE', 'TIME', 'TOOLS', 'MODEL', 'MEMORY_SUMMARY', 'WEATHER'];
+const PROMPT_VARIABLES = ['DATE', 'TIME', 'TOOLS', 'MODEL', 'MEMORY_SUMMARY', 'LANG', 'LOCATION', 'USER', 'DEVICE', 'WEATHER'];
+//                                                                                                                  ^^^^^^^ your new key
 ```
 
 This drives the clickable chips above the `systemPrompt` textarea. If
@@ -484,8 +511,8 @@ work), but users will not see it in the autocomplete chips.
 ### 4.4. Document the variable
 
 Add a row to the "Variables in system prompts" table in
-[`docs/user-guide.md`](user-guide.md) (around line 247) so end users
-can discover the new placeholder.
+[`docs/user-guide.md`](user-guide.md) so end users can discover the
+new placeholder.
 
 ### 4.5. Tests
 
@@ -497,7 +524,82 @@ can discover the new placeholder.
 
 ---
 
-## 5. Synchronization table
+## 5. Use input atoms and chip atoms
+
+Every text input and chip on screen lives in the Knotwork catalog under
+`catalog/src/main/java/app/knotwork/design/components/controls/` and
+`…/chips/`. The full specification is `inputs-and-chips.md` (sizing,
+spacing, state tables, motion); this section is the quick "which atom
+do I reach for" lookup.
+
+### 5.1 Pick an input atom
+
+| You want to render…                                          | Atom                                                                                  |
+|--------------------------------------------------------------|---------------------------------------------------------------------------------------|
+| Single-line sans text (titles, names, IDs)                   | `KnotworkField` + `KnotworkTextField(size = Sm)`                                       |
+| Single-line monospace (condition / token / URL / JSON)       | `KnotworkField` + `KnotworkTextField(monospace = true)`                                |
+| Multi-line prompt / classes / question template              | `KnotworkField` + `KnotworkTextArea(monospace = true, insertChips = […])`              |
+| Numeric value                                                | `KnotworkTextField(keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal))` |
+| Slider 0..1 / 0..2 (Temperature, Top-p)                      | `KnotworkCompactSlider`                                                                |
+| List of strings (Stop tokens, Quick replies, tag inputs)     | `KnotworkChipsInput`                                                                   |
+| Choose from ≤ 8 mutually exclusive values                    | segmented `KnotworkFilterChip(size = Sm)` row                                          |
+| Choose from > 8 values                                       | catalog dropdown (out of scope for this guide)                                         |
+| Search bar                                                   | `KnotworkTextField(size = Md, search = true)`                                          |
+| Password / API key / token                                   | `KnotworkPasswordField`                                                                |
+| Chat input                                                   | catalog `ChatComposer` (`components/chat/ChatComposer.kt`)                             |
+| Inline rename (toolbar title)                                | `KnotworkTextField(size = Sm)` without external `KnotworkField` wrapper                |
+
+Every atom in the table above already lives behind `KnotworkField` for
+the caps-label + helper row. If you skip the wrapper, **set
+`contentDescription` on the inner `KnotworkTextField`** so TalkBack still
+announces the field.
+
+### 5.2 Pick a chip atom
+
+| You want to render…                                                   | Atom                                                            |
+|-----------------------------------------------------------------------|------------------------------------------------------------------|
+| Single-choice segmented row (Format, Style, Risk gate, yes/no)        | `KnotworkFilterChip(size = Sm)`                                  |
+| Filter bar with counts (All · 24 / Recent · 5 / Mine)                 | `KnotworkFilterChip(size = Sm, trailingCount = …)`               |
+| Quick-reply under a `CLARIFICATION` card or empty-state suggestion    | `KnotworkSuggestionChip(size = Md)`                              |
+| Removable list value (Stop tokens, Quick replies)                     | `KnotworkInputChip` inside `KnotworkChipsInput`                  |
+| `$DATE` / `$TIME` / `$GOAL` insert-token chip                         | `KnotworkVariableChip` (or the `insertChips` strip on `KnotworkTextArea`) |
+| Section header in the chat stream (Today / date)                      | `KnotworkDateChip`                                               |
+| Risk tier badge in HITL prompt or Tools row                           | `RiskPill`                                                       |
+| Run-state badge in pipeline library / run-trace / console             | `StatusPill`                                                     |
+
+The chip family uses the 8 dp `sm` shape by default (the spec
+deliberately diverges from Material 3's pill-shaped filter chip).
+`RiskPill` / `StatusPill` / `KnotworkDateChip` are the three pill-shaped
+exceptions; everything else stays rectangular.
+
+### 5.3 Adding a new variable to the textarea highlight pass
+
+`KnotworkTextArea` highlights any token matching `\$[A-Z_][A-Z0-9_]*`
+out of the box, so a new prompt variable added through the
+`PromptVariableProvider` recipe in §4 is highlighted automatically.
+No extra wiring on the atom side.
+
+### 5.4 Adding a new atom
+
+Catalog atoms live next to their existing siblings in
+`components/controls/` (text inputs) or `components/chips/` (chips and
+pills). The conventions a new atom must follow:
+
+- Read sizes / padding / borders from `KnotworkFieldDefaults` /
+  `KnotworkChipDefaults`; never inline a literal `dp` at the call site.
+- Read colours from `KnotworkTheme.extended` and
+  `MaterialTheme.colorScheme`; never inline a hex value.
+- Touch target ≥ 48 dp via `Modifier.minimumInteractiveComponentSize()`
+  or `Modifier.size(48.dp)` even when the visual is smaller.
+- Pair colour with another signal (icon, label, dot) — never use colour
+  alone (`decisions.md §14`).
+- Ship a snapshot test (`Roborazzi`) that exercises the visual states
+  most likely to regress (default / focused / disabled / error for
+  inputs; off / on / disabled for chips).
+
+---
+
+## 6. Synchronization table
 
 The same change can require updates in multiple places. The table
 below lists the four extension points and every file that must move
@@ -518,7 +620,7 @@ of the existing constants is a candidate for the same edit.
 
 ---
 
-## 6. Quality gate
+## 7. Quality gate
 
 Before pushing any change from the recipes above, run the full quality
 gate locally:

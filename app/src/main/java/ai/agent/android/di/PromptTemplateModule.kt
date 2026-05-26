@@ -1,10 +1,14 @@
 package ai.agent.android.di
 
 import ai.agent.android.data.prompt.DateVariableProvider
+import ai.agent.android.data.prompt.DeviceVariableProvider
+import ai.agent.android.data.prompt.LangVariableProvider
+import ai.agent.android.data.prompt.LocationVariableProvider
 import ai.agent.android.data.prompt.MemorySummaryVariableProvider
 import ai.agent.android.data.prompt.ModelVariableProvider
 import ai.agent.android.data.prompt.TimeVariableProvider
 import ai.agent.android.data.prompt.ToolsVariableProvider
+import ai.agent.android.data.prompt.UserVariableProvider
 import ai.agent.android.domain.prompt.PromptVariableProvider
 import dagger.Binds
 import dagger.Module
@@ -78,4 +82,36 @@ abstract class PromptTemplateModule {
     @Binds
     @IntoSet
     abstract fun bindMemorySummaryVariableProvider(impl: MemorySummaryVariableProvider): PromptVariableProvider
+
+    /**
+     * Contributes [LangVariableProvider] — resolves `$LANG` to the device's
+     * current BCP-47 language tag (e.g. `en-US`).
+     */
+    @Binds
+    @IntoSet
+    abstract fun bindLangVariableProvider(impl: LangVariableProvider): PromptVariableProvider
+
+    /**
+     * Contributes [LocationVariableProvider] — resolves `$LOCATION` to the
+     * device's coarse region (Locale country code, e.g. `US`).
+     */
+    @Binds
+    @IntoSet
+    abstract fun bindLocationVariableProvider(impl: LocationVariableProvider): PromptVariableProvider
+
+    /**
+     * Contributes [UserVariableProvider] — resolves `$USER` to the
+     * identity card's display name (currently the literal "Anonymous").
+     */
+    @Binds
+    @IntoSet
+    abstract fun bindUserVariableProvider(impl: UserVariableProvider): PromptVariableProvider
+
+    /**
+     * Contributes [DeviceVariableProvider] — resolves `$DEVICE` to a short
+     * "manufacturer · model · Android version" descriptor.
+     */
+    @Binds
+    @IntoSet
+    abstract fun bindDeviceVariableProvider(impl: DeviceVariableProvider): PromptVariableProvider
 }

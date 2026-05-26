@@ -20,6 +20,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.WarningAmber
@@ -85,7 +86,11 @@ fun MemoryContent(
     Box(modifier = modifier.fillMaxSize()) {
         Scaffold(
             containerColor = MaterialTheme.colorScheme.surface,
-            topBar = { MemoryTopBar() },
+            topBar = {
+                app.knotwork.design.components.topbar.KnotworkTopAppBarShell {
+                    MemoryTopBar(onBack = callbacks.onBack)
+                }
+            },
             modifier = Modifier.fillMaxSize(),
         ) { padding ->
             MemoryBody(state = state, callbacks = callbacks, padding = padding)
@@ -106,7 +111,7 @@ fun MemoryContent(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun MemoryTopBar() {
+private fun MemoryTopBar(onBack: () -> Unit) {
     TopAppBar(
         title = {
             Text(
@@ -114,6 +119,15 @@ private fun MemoryTopBar() {
                 style = KnotworkTextStyles.TitleLg,
                 color = MaterialTheme.colorScheme.onSurface,
             )
+        },
+        navigationIcon = {
+            androidx.compose.material3.IconButton(onClick = onBack) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Outlined.ArrowBack,
+                    contentDescription = stringResource(R.string.knotwork_common_back),
+                    tint = MaterialTheme.colorScheme.onSurface,
+                )
+            }
         },
         colors = TopAppBarDefaults.topAppBarColors(
             containerColor = MaterialTheme.colorScheme.surface,
@@ -296,6 +310,7 @@ private fun MemoryList(state: MemoryViewState, callbacks: MemoryCallbacks, showS
                 modifier = Modifier.animateItem(
                     placementSpec = tween(durationMillis = placementDuration),
                 ),
+                isPinned = row.isPinned,
             )
         }
         if (showSkeleton) {
@@ -373,7 +388,10 @@ private fun MemoryDetailOverlay(detail: MemoryEntryDetail, editing: Boolean, cal
                         verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp1),
                     ) {
                         detail.tags.forEach { tag ->
-                            KnotworkChip(label = tag, style = ChipStyle.Outline)
+                            // `screens/README.md §C6` calls for `KnotworkChip(Tonal)` in
+                            // the detail sheet (filled accent), distinct from the
+                            // outline-style chips on `MemoryEntryRow` list items.
+                            KnotworkChip(label = tag, style = ChipStyle.Tonal)
                         }
                     }
                 }
@@ -392,7 +410,13 @@ private fun MemoryDetailOverlay(detail: MemoryEntryDetail, editing: Boolean, cal
                         onClick = { callbacks.onEntryEditRequest(detail.id) },
                     )
                     KnotworkTextButton(
-                        text = stringResource(R.string.knotwork_memory_detail_pin),
+                        text = stringResource(
+                            if (detail.isPinned) {
+                                R.string.knotwork_memory_detail_unpin
+                            } else {
+                                R.string.knotwork_memory_detail_pin
+                            },
+                        ),
                         onClick = { callbacks.onEntryPin(detail.id) },
                     )
                     Spacer(modifier = Modifier.weight(1f))

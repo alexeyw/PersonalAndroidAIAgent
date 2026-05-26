@@ -2,6 +2,7 @@ package ai.agent.android.presentation.ui
 
 import ai.agent.android.data.services.AgentForegroundService
 import ai.agent.android.domain.repositories.SettingsRepository
+import ai.agent.android.presentation.state.TransientMessageRelay
 import ai.agent.android.presentation.theme.AndroidAIAgentTheme
 import ai.agent.android.presentation.ui.navigation.AppNavGraph
 import ai.agent.android.presentation.ui.navigation.AppShellScaffold
@@ -34,6 +35,8 @@ import javax.inject.Inject
 class MainActivity : ComponentActivity() {
 
     @Inject lateinit var settingsRepository: SettingsRepository
+
+    @Inject lateinit var transientMessageRelay: TransientMessageRelay
 
     private val requestPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission(),
@@ -97,7 +100,10 @@ class MainActivity : ComponentActivity() {
                 val hasCompletedOnboarding by settingsRepository.hasCompletedOnboarding
                     .collectAsState(initial = false)
 
-                AppShellScaffold(navController = navController) { innerPadding ->
+                AppShellScaffold(
+                    navController = navController,
+                    transientMessageRelay = transientMessageRelay,
+                ) { innerPadding ->
                     AppNavGraph(
                         navController = navController,
                         showOnboarding = !hasCompletedOnboarding,

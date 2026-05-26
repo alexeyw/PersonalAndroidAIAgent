@@ -20,6 +20,26 @@ data class PromptLibraryUiState(
     val errorMessage: UiText? = null,
     val availableVariables: List<String> = emptyList(),
     val previewState: PromptPreviewState = PromptPreviewState.Hidden,
+    /** Currently-selected category tab; `null` means "first available". */
+    val selectedCategory: String? = null,
+    /** Editor draft when the bottom sheet is open; `null` when closed. */
+    val editorDraft: PromptEditorDraft? = null,
+)
+
+/**
+ * Working copy of the prompt being edited in the bottom sheet. Lives on
+ * the UI state (not the catalog ViewState) so it survives configuration
+ * changes — the catalog `PromptEditorState` is recomputed from this
+ * each render.
+ *
+ * @property id `null` for a new prompt draft, non-null when editing an
+ * existing template.
+ */
+data class PromptEditorDraft(
+    val id: Long? = null,
+    val name: String = "",
+    val category: String = "",
+    val body: String = "",
 )
 
 /**

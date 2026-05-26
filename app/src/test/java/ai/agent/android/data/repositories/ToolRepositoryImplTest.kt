@@ -5,6 +5,8 @@ import ai.agent.android.data.mcp.McpClientFactory
 import ai.agent.android.data.tools.local.LocalAppFunctionManager
 import ai.agent.android.data.tools.local.SearchTool
 import ai.agent.android.domain.models.AgentTool
+import ai.agent.android.domain.models.McpAuth
+import ai.agent.android.domain.models.McpServerConfig
 import ai.agent.android.domain.models.ToolRisk
 import ai.agent.android.domain.repositories.ApiKeyRepository
 import ai.agent.android.domain.repositories.LocalToolExecutor
@@ -39,8 +41,9 @@ class ToolRepositoryImplTest {
     @Before
     fun setup() {
         every { mcpClientFactory.create() } returns mcpClient
-        every { settingsRepository.mcpServerUrls } returns flowOf(setOf("http://localhost:8080"))
+        every { settingsRepository.mcpServers } returns flowOf(listOf(McpServerConfig(url = "http://localhost:8080")))
         every { settingsRepository.disabledAppFunctions } returns flowOf(emptySet())
+        every { settingsRepository.disabledMcpTools } returns flowOf(emptySet())
         every { settingsRepository.appFunctionRiskOverrides } returns flowOf(emptyMap())
         coEvery { localAppFunctionManager.getAvailableFunctions() } returns
             listOf(AgentTool("get_system_time", "desc", "{}"))
@@ -211,6 +214,43 @@ class ToolRepositoryImplTest {
     }
 
     @Test
+    fun `getAvailableTools filters MCP tools listed in disabledMcpTools`() = runTest {
+        // Two MCP tools advertised; only one is in the disabled set. The disabled id matches
+        // McpServerRepositoryImpl.mcpToolId(serverUrl, toolName) — keep the implementations
+        // in sync if the id format ever changes.
+        val serverUrl = "http://localhost:8080"
+        val disabledId = McpServerRepositoryImpl.mcpToolId(serverUrl = serverUrl, toolName = "shell")
+        coEvery { mcpClient.getTools() } returns listOf(
+            AgentTool(name = "search", description = "Web search", parameters = "{}"),
+            AgentTool(name = "shell", description = "Run shell", parameters = "{}"),
+        )
+        every { settingsRepository.disabledMcpTools } returns flowOf(setOf(disabledId))
+
+        val available = repository.getAvailableTools()
+
+        assertTrue("search must remain available", available.any { it.name == "search" })
+        assertTrue("shell must be filtered out", available.none { it.name == "shell" })
+    }
+
+    @Test
+    fun `executeTool throws when MCP tool is disabled`() = runTest {
+        val serverUrl = "http://localhost:8080"
+        val toolName = "shell"
+        val disabledId = McpServerRepositoryImpl.mcpToolId(serverUrl = serverUrl, toolName = toolName)
+        coEvery { mcpClient.getTools() } returns listOf(
+            AgentTool(name = toolName, description = "Run shell", parameters = "{}"),
+        )
+        every { settingsRepository.disabledMcpTools } returns flowOf(setOf(disabledId))
+
+        val exception = runCatching { repository.executeTool(toolName, "{}") }.exceptionOrNull()
+
+        assertTrue("Expected IllegalArgumentException, got $exception", exception is IllegalArgumentException)
+        assertTrue(exception!!.message!!.contains(toolName))
+        assertTrue(exception.message!!.contains("disabled"))
+        coVerify(exactly = 0) { mcpClient.executeTool(any(), any()) }
+    }
+
+    @Test
     fun `executeTool throws when AppFunction is disabled`() = runTest {
         val toolName = "get_system_time"
         every { settingsRepository.disabledAppFunctions } returns flowOf(setOf(toolName))
@@ -363,5 +403,196 @@ class ToolRepositoryImplTest {
         }
 
         assertTrue(true) // Should reach here without exceptions
+    }
+
+    // ───────────────────────────────────────────────────────────────────
+    // Phase 22 / Task 17 follow-up: MCP routing fixes (3 regressions).
+    // ───────────────────────────────────────────────────────────────────
+
+    @Test
+    fun `sync reconnects mcp client when auth changes for the same url`() = runTest {
+        // Regression: syncMcpClients used to key the pool only by URL, so an
+        // auth edit (None → Bearer) for an already-connected server was a
+        // no-op and every subsequent tool call kept using stale credentials
+        // until the process restarted.
+        val url = "http://localhost:8080"
+        val initial = McpServerConfig(url = url, auth = McpAuth.None)
+        val updated = McpServerConfig(url = url, auth = McpAuth.Bearer(token = "fresh-token"))
+        every { settingsRepository.mcpServers } returns flowOf(listOf(initial))
+        coEvery { mcpClient.getTools() } returns emptyList()
+
+        // First sync via getAvailableTools — should connect once with the
+        // None config.
+        repository.getAvailableTools()
+        coVerify(exactly = 1) { mcpClient.connect(initial) }
+        coVerify(exactly = 0) { mcpClient.disconnect() }
+
+        // Persisted config now carries Bearer auth. Next sync MUST disconnect
+        // the stale client and reconnect with the fresh credentials.
+        every { settingsRepository.mcpServers } returns flowOf(listOf(updated))
+
+        repository.getAvailableTools()
+
+        coVerify(exactly = 1) { mcpClient.disconnect() }
+        coVerify(exactly = 1) { mcpClient.connect(updated) }
+    }
+
+    @Test
+    fun `executeTool falls through to next provider when first server has the tool disabled`() = runTest {
+        // Regression: disabledMcpTools is scoped per server
+        // (id = mcp:<sha8(url)>:<toolName>); two servers can advertise the
+        // same tool name and only one's mcpId can be in the disabled set.
+        // The old loop threw immediately on the first disabled hit, robbing
+        // the enabled sibling of a chance to execute.
+        val urlA = "http://server-a:8080"
+        val urlB = "http://server-b:8080"
+        val toolName = "shared_tool"
+        val configA = McpServerConfig(url = urlA)
+        val configB = McpServerConfig(url = urlB)
+        val clientB: McpClient = mockk(relaxed = true)
+        every { settingsRepository.mcpServers } returns flowOf(listOf(configA, configB))
+        every { mcpClientFactory.create() } returnsMany listOf(mcpClient, clientB)
+        coEvery { mcpClient.getTools() } returns
+            listOf(AgentTool(name = toolName, description = "A", parameters = "{}"))
+        coEvery { clientB.getTools() } returns
+            listOf(AgentTool(name = toolName, description = "B", parameters = "{}"))
+        coEvery { clientB.executeTool(toolName, any()) } returns "from-B"
+        val disabledIdA = McpServerRepositoryImpl.mcpToolId(serverUrl = urlA, toolName = toolName)
+        every { settingsRepository.disabledMcpTools } returns flowOf(setOf(disabledIdA))
+
+        val result = repository.executeTool(toolName, "{}")
+
+        assertEquals("from-B", result)
+        coVerify(exactly = 0) { mcpClient.executeTool(toolName, any()) }
+        coVerify(exactly = 1) { clientB.executeTool(toolName, "{}") }
+    }
+
+    @Test
+    fun `executeTool throws disabled when every advertising provider has the tool disabled`() = runTest {
+        // After the routing rewrite, sawDisabled must still produce the
+        // "is disabled" failure shape when nobody else can run the tool.
+        val urlA = "http://server-a:8080"
+        val urlB = "http://server-b:8080"
+        val toolName = "shared_tool"
+        val clientB: McpClient = mockk(relaxed = true)
+        every { settingsRepository.mcpServers } returns
+            flowOf(listOf(McpServerConfig(url = urlA), McpServerConfig(url = urlB)))
+        every { mcpClientFactory.create() } returnsMany listOf(mcpClient, clientB)
+        coEvery { mcpClient.getTools() } returns
+            listOf(AgentTool(name = toolName, description = "A", parameters = "{}"))
+        coEvery { clientB.getTools() } returns
+            listOf(AgentTool(name = toolName, description = "B", parameters = "{}"))
+        every { settingsRepository.disabledMcpTools } returns flowOf(
+            setOf(
+                McpServerRepositoryImpl.mcpToolId(serverUrl = urlA, toolName = toolName),
+                McpServerRepositoryImpl.mcpToolId(serverUrl = urlB, toolName = toolName),
+            ),
+        )
+
+        val exception = runCatching { repository.executeTool(toolName, "{}") }.exceptionOrNull()
+
+        assertTrue(exception is IllegalArgumentException)
+        assertTrue(exception!!.message!!.contains(toolName))
+        assertTrue(exception.message!!.contains("disabled"))
+        coVerify(exactly = 0) { mcpClient.executeTool(any(), any()) }
+        coVerify(exactly = 0) { clientB.executeTool(any(), any()) }
+    }
+
+    @Test
+    fun `executeTool falls through to next provider when first server execute throws`() = runTest {
+        // Regression: a single break inside the for-loop blew up
+        // multi-provider resilience — one flaky server made every other
+        // healthy provider unreachable. The fix is to keep walking.
+        val urlA = "http://flaky:8080"
+        val urlB = "http://healthy:8080"
+        val toolName = "shared_tool"
+        val clientB: McpClient = mockk(relaxed = true)
+        every { settingsRepository.mcpServers } returns
+            flowOf(listOf(McpServerConfig(url = urlA), McpServerConfig(url = urlB)))
+        every { mcpClientFactory.create() } returnsMany listOf(mcpClient, clientB)
+        coEvery { mcpClient.getTools() } returns
+            listOf(AgentTool(name = toolName, description = "A", parameters = "{}"))
+        coEvery { clientB.getTools() } returns
+            listOf(AgentTool(name = toolName, description = "B", parameters = "{}"))
+        coEvery { mcpClient.executeTool(toolName, any()) } throws RuntimeException("flaky upstream")
+        coEvery { clientB.executeTool(toolName, any()) } returns "from-B"
+
+        val result = repository.executeTool(toolName, "{}")
+
+        assertEquals("from-B", result)
+        coVerify(exactly = 1) { mcpClient.executeTool(toolName, "{}") }
+        coVerify(exactly = 1) { clientB.executeTool(toolName, "{}") }
+    }
+
+    @Test
+    fun `executeTool dispatches MCP tool exactly once when settings persists duplicate server URLs`() = runTest {
+        // Regression: switching the MCP dispatch loop from
+        // ConcurrentHashMap.entries (implicit URL-key dedup) to the raw
+        // persisted list let a duplicate-URL row in settings (which
+        // SettingsManager.updateMcpServer can produce by replacing-by-index
+        // without checking for collisions) execute the same tool twice on
+        // the same connected client per call — catastrophic for non-
+        // idempotent side effects. distinctMcpConfigs() now keeps only the
+        // first occurrence of each URL before iteration.
+        val toolName = "shared_tool"
+        val url = "http://duplicated:8080"
+        every { settingsRepository.mcpServers } returns flowOf(
+            listOf(McpServerConfig(url = url), McpServerConfig(url = url)),
+        )
+        coEvery { mcpClient.getTools() } returns
+            listOf(AgentTool(name = toolName, description = "T", parameters = "{}"))
+        coEvery { mcpClient.executeTool(toolName, any()) } returns "once"
+
+        val result = repository.executeTool(toolName, "{}")
+
+        assertEquals("once", result)
+        coVerify(exactly = 1) { mcpClient.executeTool(toolName, "{}") }
+        coVerify(exactly = 1) { mcpClient.connect(any()) }
+    }
+
+    @Test
+    fun `getAvailableTools deduplicates tools when settings persists duplicate server URLs`() = runTest {
+        // Sibling regression: a duplicated URL row also produced duplicate
+        // entries in the advertised tool catalogue, which would inflate the
+        // agent's prompt and confuse the LLM's tool-selection pass.
+        val url = "http://duplicated:8080"
+        val mcpTool = AgentTool(name = "shared_tool", description = "T", parameters = "{}")
+        every { settingsRepository.mcpServers } returns flowOf(
+            listOf(McpServerConfig(url = url), McpServerConfig(url = url)),
+        )
+        coEvery { mcpClient.getTools() } returns listOf(mcpTool)
+
+        val result = repository.getAvailableTools()
+
+        assertEquals(1, result.count { it.name == "shared_tool" })
+    }
+
+    @Test
+    fun `executeTool rethrows last execute error when every advertising provider fails`() = runTest {
+        // When nobody can serve the call, the agent gets a concrete cause
+        // (network error / 5xx / parse failure) instead of a generic
+        // "not found across active providers" — which would mislead the
+        // operator into thinking the tool was never registered.
+        val urlA = "http://server-a:8080"
+        val urlB = "http://server-b:8080"
+        val toolName = "shared_tool"
+        val clientB: McpClient = mockk(relaxed = true)
+        every { settingsRepository.mcpServers } returns
+            flowOf(listOf(McpServerConfig(url = urlA), McpServerConfig(url = urlB)))
+        every { mcpClientFactory.create() } returnsMany listOf(mcpClient, clientB)
+        coEvery { mcpClient.getTools() } returns
+            listOf(AgentTool(name = toolName, description = "A", parameters = "{}"))
+        coEvery { clientB.getTools() } returns
+            listOf(AgentTool(name = toolName, description = "B", parameters = "{}"))
+        coEvery { mcpClient.executeTool(toolName, any()) } throws RuntimeException("first-failure")
+        coEvery { clientB.executeTool(toolName, any()) } throws IllegalStateException("last-failure")
+
+        val exception = runCatching { repository.executeTool(toolName, "{}") }.exceptionOrNull()
+
+        assertTrue(
+            "Expected the last execute failure to be rethrown, got $exception",
+            exception is IllegalStateException,
+        )
+        assertEquals("last-failure", exception!!.message)
     }
 }

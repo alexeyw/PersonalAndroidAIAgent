@@ -38,7 +38,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         PromptTemplateEntity::class,
         TraceStepEntity::class,
     ],
-    version = 21,
+    version = 23,
     exportSchema = false,
 )
 @TypeConverters(Converters::class)
@@ -300,6 +300,46 @@ abstract class AppDatabase : RoomDatabase() {
         val MIGRATION_20_21 = object : Migration(20, 21) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE `pipeline_nodes` ADD COLUMN `config_json` TEXT")
+            }
+        }
+
+        /**
+         * Migration from version 21 to 22 (Phase 22 / Task 4 — Chat home
+         * secondary affordances).
+         *
+         * Adds the `isStarred` column to `chat_sessions` so the drawer can
+         * surface favorited chats at the top of the list. Backfilled to `0`
+         * for every existing row — the legacy chat surface had no
+         * session-level favorite affordance, so no historical data needs to
+         * be carried over.
+         *
+         * Distinct from the message-level `isStarred` introduced in
+         * `MIGRATION_19_20` on `chat_messages`.
+         */
+        val MIGRATION_21_22 = object : Migration(21, 22) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "ALTER TABLE `chat_sessions` ADD COLUMN `isStarred` INTEGER NOT NULL DEFAULT 0",
+                )
+            }
+        }
+
+        /**
+         * Migration from version 22 to 23 (Phase 22 / Task 6 — Memory edit +
+         * pin persistence).
+         *
+         * Adds the `isPinned` column to `memory_chunks` so users can mark a
+         * memory chunk as pinned. Pinned rows sort ahead of unpinned rows on
+         * the memory surface and are exempt from future `compactMemory()`
+         * passes. Backfilled to `0` for every existing row — before this
+         * migration the schema had no notion of pinning, so no historical
+         * data needs to be carried over.
+         */
+        val MIGRATION_22_23 = object : Migration(22, 23) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "ALTER TABLE `memory_chunks` ADD COLUMN `isPinned` INTEGER NOT NULL DEFAULT 0",
+                )
             }
         }
     }

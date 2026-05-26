@@ -3,15 +3,12 @@ package ai.agent.android.presentation.ui.memory
 import ai.agent.android.domain.models.MemoryChunk
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
@@ -27,7 +24,6 @@ import app.knotwork.design.screens.memory.MemoryVisualState
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -40,16 +36,9 @@ import java.util.Locale
  * catalog [MemoryViewState], and forwards events back to the VM. The
  * legacy `Chat history` tab is dropped per Task 10 scope.
  */
-@Suppress("UnusedParameter") // onBack kept for nav-graph compatibility until the catalog surface lands its back arrow.
 @Composable
-fun MemoryScreen(
-    viewModel: MemoryViewModel = hiltViewModel(),
-    onOpenChat: () -> Unit = {},
-    onBack: () -> Unit = {},
-) {
+fun MemoryScreen(viewModel: MemoryViewModel = hiltViewModel(), onOpenChat: () -> Unit = {}, onBack: () -> Unit = {}) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    val snackbarHostState = remember { SnackbarHostState() }
-    val scope = rememberCoroutineScope()
 
     var searchQuery by remember { mutableStateOf("") }
     val debouncedQuery = rememberDebouncedString(input = searchQuery, debounceMs = MEMORY_SEARCH_DEBOUNCE_MS)
@@ -60,14 +49,14 @@ fun MemoryScreen(
     val allRows by remember(uiState.vectorMemories) {
         derivedStateOf { uiState.vectorMemories.map { it.toMemoryRow() } }
     }
-    val filteredRows by remember(allRows, debouncedQuery, sortMode) {
+    val displayRows by remember(allRows, debouncedQuery, sortMode) {
         derivedStateOf {
             val byFilter = if (debouncedQuery.isBlank()) {
                 allRows
             } else {
                 allRows.filter { it.body.contains(debouncedQuery, ignoreCase = true) }
             }
-            when (sortMode) {
+            val sorted = when (sortMode) {
                 // Higher id == newer entry. Sorting descending by id approximates
                 // "newest first" without paying for a per-row timestamp parse.
                 MemorySortMode.Recent -> byFilter.sortedByDescending { it.id.toLongOrNull() ?: 0L }
@@ -80,6 +69,10 @@ fun MemoryScreen(
                     compareBy(String.CASE_INSENSITIVE_ORDER) { it.title },
                 )
             }
+            // Pinned rows always float to the top; the selected sort decides
+            // the order within each partition. `sortedByDescending` is stable
+            // so the upstream `sorted` ordering survives the partition.
+            sorted.sortedByDescending { it.isPinned }
         }
     }
 
@@ -97,13 +90,14 @@ fun MemoryScreen(
 
     val viewState = MemoryViewState(
         visualState = visualState,
-        entries = if (visualState == MemoryVisualState.Searching) filteredRows else allRows,
+        entries = displayRows,
         searchQuery = searchQuery,
         sortMode = sortMode,
         expandedEntry = expandedDetail,
     )
 
     val callbacks = MemoryCallbacks(
+        onBack = onBack,
         onSearchQueryChange = { searchQuery = it },
         onSortChange = { sortMode = it },
         onEntryClick = { id -> expandedEntryId = id.toLongOrNull() },
@@ -115,16 +109,14 @@ fun MemoryScreen(
             }
         },
         onEntryEditRequest = { id -> editingEntryId = id.toLongOrNull() },
-        // Editing persistence is parked: MemoryRepository has no `update`
-        // API in v0.1. Surface a snackbar so the affordance is visible.
-        onEntryEditCommit = { _, _ ->
-            scope.launch { snackbarHostState.showSnackbar(message = EDIT_COMING_SOON_MESSAGE) }
+        onEntryEditCommit = { id, newBody ->
+            id.toLongOrNull()?.let { entryId ->
+                viewModel.editVectorMemory(id = entryId, newText = newBody)
+            }
             editingEntryId = null
         },
         onEntryEditCancel = { editingEntryId = null },
-        onEntryPin = {
-            scope.launch { snackbarHostState.showSnackbar(message = PIN_COMING_SOON_MESSAGE) }
-        },
+        onEntryPin = { id -> id.toLongOrNull()?.let(viewModel::togglePinned) },
         onCloseDetail = {
             expandedEntryId = null
             editingEntryId = null
@@ -136,7 +128,6 @@ fun MemoryScreen(
 
     Box(modifier = Modifier.fillMaxSize().testTag(tag = MEMORY_ROOT_TEST_TAG)) {
         MemoryContent(state = viewState, callbacks = callbacks)
-        SnackbarHost(hostState = snackbarHostState)
     }
 }
 
@@ -168,6 +159,7 @@ private fun MemoryChunk.toMemoryRow(): MemoryRow = MemoryRow(
     tags = emptyList(),
     relevanceScore = null,
     lastAccessed = formatMemoryTimestamp(timestamp = timestamp),
+    isPinned = isPinned,
 )
 
 private fun MemoryChunk.toEntryDetail(): MemoryEntryDetail = MemoryEntryDetail(
@@ -176,16 +168,13 @@ private fun MemoryChunk.toEntryDetail(): MemoryEntryDetail = MemoryEntryDetail(
     body = text,
     tags = emptyList(),
     lastAccessed = formatMemoryTimestamp(timestamp = timestamp),
+    isPinned = isPinned,
 )
 
 private fun formatMemoryTimestamp(timestamp: Long): String {
     val formatter = SimpleDateFormat("dd MMM yyyy HH:mm", Locale.getDefault())
     return formatter.format(Date(timestamp))
 }
-
-/** Snackbar message when the user requests Edit / Pin before persistence lands. */
-private const val EDIT_COMING_SOON_MESSAGE = "Editing memories ships in a follow-up."
-private const val PIN_COMING_SOON_MESSAGE = "Pinning memories ships in a follow-up."
 
 /** TestTag applied to the screen root. */
 internal const val MEMORY_ROOT_TEST_TAG = "memory_screen_root"

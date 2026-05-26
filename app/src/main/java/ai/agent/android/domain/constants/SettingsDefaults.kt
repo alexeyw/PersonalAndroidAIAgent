@@ -63,4 +63,40 @@ object SettingsDefaults {
      * per-model override has not been configured.
      */
     const val OLLAMA_CONTEXT_WINDOW_DEFAULT: Int = 4_096
+
+    /** Lower bound enforced when the user edits the memory-summary default limit. */
+    const val MEMORY_SUMMARY_LIMIT_MIN: Int = 1
+
+    /** Upper bound enforced when the user edits the memory-summary default limit. */
+    const val MEMORY_SUMMARY_LIMIT_MAX: Int = 50
+
+    /**
+     * Default repetition-penalty applied to local LLM generation. `1.0f` is the
+     * neutral identity. The Settings slider exposes the documented `1.0..2.0`
+     * range so the user can dial up an anti-repetition bias without ever
+     * crossing into the divergence band above `2.0`.
+     */
+    const val REPETITION_PENALTY_DEFAULT: Float = 1.1f
+
+    /** Lower bound enforced when the user edits the repetition-penalty slider. */
+    const val REPETITION_PENALTY_MIN: Float = 1.0f
+
+    /** Upper bound enforced when the user edits the repetition-penalty slider. */
+    const val REPETITION_PENALTY_MAX: Float = 2.0f
+
+    /**
+     * Default fraction of the memory context budget at which automatic
+     * summarization kicks in. Range `0f..1f`. `0.8f` matches the mockup
+     * (80 %). Lower values trigger summarisation sooner at the cost of more
+     * embedding work; higher values keep raw chunks around longer.
+     */
+    const val AUTO_SUMMARIZE_THRESHOLD_DEFAULT: Float = 0.8f
+
+    /**
+     * Maximum length (in characters) of the user-editable system instructions
+     * block. Mirrors the `218 / 4 000 chars` counter shown in the System
+     * instructions card. The bound exists so a runaway paste cannot inflate
+     * the prompt past what an on-device model can fit in context.
+     */
+    const val SYSTEM_INSTRUCTIONS_CHAR_LIMIT: Int = 4_000
 }

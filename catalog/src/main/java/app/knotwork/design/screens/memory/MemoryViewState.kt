@@ -50,6 +50,8 @@ enum class MemorySortMode {
  * @property tags optional tag list rendered as Outline chips.
  * @property relevanceScore optional relevance score (e.g. `"0.93"`).
  * @property lastAccessed human-readable "last accessed" string.
+ * @property isPinned When `true`, the row renders a leading pin glyph and
+ * sorts ahead of unpinned entries on the surface.
  */
 data class MemoryRow(
     val id: String,
@@ -58,15 +60,22 @@ data class MemoryRow(
     val tags: List<String>,
     val relevanceScore: String?,
     val lastAccessed: String,
+    val isPinned: Boolean = false,
 )
 
-/** Per-entry payload surfaced in the detail bottom sheet. */
+/**
+ * Per-entry payload surfaced in the detail bottom sheet.
+ *
+ * @property isPinned drives the Pin / Unpin action label in the sheet
+ * footer.
+ */
 data class MemoryEntryDetail(
     val id: String,
     val title: String,
     val body: String,
     val tags: List<String>,
     val lastAccessed: String,
+    val isPinned: Boolean = false,
 )
 
 /**
@@ -107,6 +116,7 @@ data class MemoryViewState(
 
 @Suppress("LongParameterList")
 class MemoryCallbacks(
+    val onBack: () -> Unit = {},
     val onSearchQueryChange: (String) -> Unit = {},
     val onSortChange: (MemorySortMode) -> Unit = {},
     val onEntryClick: (String) -> Unit = {},

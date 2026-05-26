@@ -1,5 +1,25 @@
 import dev.detekt.gradle.Detekt
 
+/**
+ * Resolves the current short git SHA (e.g. `19b9c8f`) via
+ * `providers.exec("git", "rev-parse", "--short", "HEAD")`. Returns
+ * `"unknown"` when git is absent, the working tree is not a repository,
+ * or the command otherwise fails (e.g. a tarball-based release build on a
+ * CI runner that lacks git history).
+ */
+fun Project.resolveGitSha(): String = runCatching {
+    val output = providers.exec {
+        commandLine("git", "rev-parse", "--short", "HEAD")
+        isIgnoreExitValue = true
+    }
+    val exitCode = output.result.get().exitValue
+    if (exitCode == 0) {
+        output.standardOutput.asText.get().trim().ifEmpty { "unknown" }
+    } else {
+        "unknown"
+    }
+}.getOrDefault("unknown")
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
@@ -44,21 +64,49 @@ android {
         // link to the canonical text without hardcoding the values in UI code.
         resValue("string", "license_name", "Apache License 2.0")
         resValue("string", "license_url", "https://www.apache.org/licenses/LICENSE-2.0")
+
+        // Phase 22 / Task 8: surface the build's short git SHA inside the
+        // About row of the Knotwork settings screen so users can paste a
+        // precise build identifier into bug reports without needing the APK
+        // hash. Falls back to "unknown" when `git` is unavailable (e.g. a
+        // tarball build).
+        buildConfigField("String", "GIT_SHA", "\"${resolveGitSha()}\"")
+
+        // Phase 22 / Task 9: build date surfaced in the Settings top-app-bar
+        // subtitle (`v0.9.2 · alpha · 2026.05.18`). Captured at configuration
+        // time as an epoch-millis Long so the formatter on the screen owns
+        // the locale-specific rendering. Stable across CI builds — the value
+        // reflects when the APK was assembled, not when the binary is
+        // installed.
+        buildConfigField(
+            "long",
+            "GIT_COMMIT_DATE_EPOCH_MS",
+            "${System.currentTimeMillis()}L",
+        )
     }
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            // Phase 22 / Task 17 — R8 in full mode + resource shrinking.
+            // Keep rules for reflection-heavy code paths (Koog, Ktor,
+            // kotlinx.serialization, MediaPipe / LiteRT JNI, SQLCipher,
+            // AppFunctions KSP-generated wrappers) live in
+            // `proguard-rules.pro`; AGP appends the standard
+            // `proguard-android-optimize.txt` from the Android SDK.
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
             )
-            // Phase 21 / Task 11/11 — until a release keystore is provisioned,
-            // sign the release variant with the debug keystore so
-            // `./gradlew :app:assembleRelease` produces an installable APK we
-            // can measure for size and smoke-test on device. v0.1.0 ships
-            // unsigned for production use; a real `signingConfigs.release`
-            // block lands when the keystore is in place.
+            // v0.1.0 ships signed with the debug keystore. A real
+            // `signingConfigs.release` block (with `keyAlias` / `keyPassword`
+            // sourced from `local.properties` or environment variables) is
+            // intentionally deferred: the Play Store submission lands in a
+            // separate task once the production keystore is provisioned,
+            // tracked in `docs/release.md`. Installing the GitHub-Release
+            // APK on a developer device still works with the debug signing
+            // identity.
             signingConfig = signingConfigs.getByName("debug")
             // Strip non-arm64 ABIs from the release APK. With `minSdk = 36`
             // (Android 16) every supported device is 64-bit; shipping
@@ -88,6 +136,16 @@ android {
     packaging {
         resources {
             excludes += "META-INF/*"
+            // Phase 22 / Task 17 — Jansi (transitive via Koog → log adapter)
+            // ships pre-built native binaries for Windows / Mac / Linux that
+            // are dead weight on Android. Stripping them shaves ~430 KB off
+            // the release APK without touching runtime behaviour (the
+            // ANSI-escape rendering only runs on JVM hosts).
+            excludes += "org/fusesource/jansi/internal/native/Windows/**"
+            excludes += "org/fusesource/jansi/internal/native/Mac/**"
+            excludes += "org/fusesource/jansi/internal/native/Linux/**"
+            excludes += "org/fusesource/jansi/internal/native/FreeBSD/**"
+            excludes += "META-INF/native-image/jansi/**"
         }
     }
 
@@ -397,6 +455,9 @@ dependencies {
     // Logging
     implementation(libs.timber)
 
+    // Process restart for the Settings → restart-required banner.
+    implementation(libs.process.phoenix)
+
     // Local Storage (Room)
     implementation(libs.room.runtime)
     implementation(libs.room.ktx)
@@ -419,6 +480,12 @@ dependencies {
     implementation(libs.koog.google)
     implementation(libs.koog.deepseek)
     implementation(libs.koog.ollama)
+    // Runtime SPI provider — see the `koog-http-client-ktor` entry in
+    // `libs.versions.toml` for the rationale. Required for every Koog
+    // prompt-executor since 1.0.0; without it the executors throw
+    // `No KoogHttpClient.Factory provider found on the runtime classpath`
+    // on the first network call.
+    implementation(libs.koog.http.client.ktor)
 
     // Security Crypto
     implementation(libs.androidx.security.crypto)

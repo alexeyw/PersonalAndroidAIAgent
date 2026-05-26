@@ -10,7 +10,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.unit.dp
+import app.knotwork.design.theme.KnotworkTheme
 
 /**
  * Triple-tap state picker rendered as a `DropdownMenu` anchored to the
@@ -34,7 +34,10 @@ fun ChatHomeDebugStatePicker(expanded: Boolean, onDismiss: () -> Unit, onPick: (
             text = stringResource(app.knotwork.design.R.string.knotwork_chat_home_debug_picker_title),
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+            modifier = Modifier.padding(
+                horizontal = KnotworkTheme.spacing.sp4,
+                vertical = KnotworkTheme.spacing.sp2,
+            ),
         )
         DebugStateRows.entries.forEach { row ->
             DropdownMenuItem(
@@ -64,7 +67,6 @@ internal enum class DebugStateRows(val id: String, val labelRes: Int) {
     Clarification(id = DebugStateIds.CLARIFICATION, labelRes = R.string.chat_home_debug_state_clarification),
     Error(id = DebugStateIds.ERROR, labelRes = R.string.chat_home_debug_state_error),
     DrawerOpen(id = DebugStateIds.DRAWER_OPEN, labelRes = R.string.chat_home_debug_state_drawer_open),
-    ConsolePeek(id = DebugStateIds.CONSOLE_PEEK, labelRes = R.string.chat_home_debug_state_console_peek),
     ConsolePartial(id = DebugStateIds.CONSOLE_PARTIAL, labelRes = R.string.chat_home_debug_state_console_partial),
     ConsoleFull(id = DebugStateIds.CONSOLE_FULL, labelRes = R.string.chat_home_debug_state_console_full),
 }

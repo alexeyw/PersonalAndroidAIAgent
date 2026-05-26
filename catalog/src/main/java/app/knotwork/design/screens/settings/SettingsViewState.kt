@@ -2,79 +2,242 @@ package app.knotwork.design.screens.settings
 
 /**
  * Visual variant of the settings surface. Mirrors
- * `compose/screens/README.md §C7 · Settings`.
+ * `compose/screens/README.md §C7 · Settings` with two additions kept
+ * orthogonal to the section state (Search and Saving) because they
+ * apply globally regardless of which card is open.
  */
 enum class SettingsVisualState {
     /** Initial DataStore + repository read in flight. */
     Loading,
 
-    /** Standard surface; sections render their controls. */
+    /** Standard surface; cards render their controls. */
     Default,
 
-    /** A row is persisting an async change; control turns read-only. */
-    PendingChange,
-
-    /** Inline validation error on one of the rows. */
-    ValidationError,
+    /** Search sheet is open over the body. */
+    Search,
 
     /** Some change requires an app restart to take effect. */
     RestartRequired,
 
-    /** Destructive-action confirm dialog is up. */
+    /** Destructive-action typed-confirm dialog is up. */
     DestructiveAction,
 
-    /** Failed to load a remote setting; inline error tile inside a section. */
+    /** Failed to load a remote setting; an inline error tile sits inside the affected card. */
     Error,
 }
 
-/** Logical settings section. Each owns a render slot inside `SettingsContent`. */
-enum class SettingsSection(val titleResKey: String) {
-    Appearance(titleResKey = "knotwork_settings_section_appearance"),
-    Models(titleResKey = "knotwork_settings_section_models"),
-    Privacy(titleResKey = "knotwork_settings_section_privacy"),
-    Memory(titleResKey = "knotwork_settings_section_memory"),
-    Mcp(titleResKey = "knotwork_settings_section_mcp"),
-    About(titleResKey = "knotwork_settings_section_about"),
+/**
+ * Approve-tool-calls segmented control state — mirrors
+ * [ai.agent.android.domain.models.ToolApprovalPolicy] but stays free of
+ * domain imports so the catalog module keeps its zero-app dependency.
+ */
+enum class ApproveToolCallsOption {
+    AllCalls,
+    Sensitive,
+    Never,
 }
 
 /**
- * Per-row state slice surfaced inside a settings section. Kept generic
- * because the legacy app-side surface owns the actual controls (text
- * fields, sliders, dropdowns). The catalog cares only about the visual
- * frame.
+ * Identity card slice. `null` while the first identity read is in flight
+ * — the card then renders a short skeleton.
  *
- * @property id stable identity used as the `LazyColumn` key.
- * @property title row title.
- * @property subtitle optional secondary line.
- * @property pendingChange `true` when an async persistence is in flight —
- * drives the right-aligned `KnotworkLoader`.
- * @property validationError optional inline validation error rendered in
- * the helper-text slot beneath the row.
+ * @property displayName Localized "Anonymous · this device" label.
+ * @property avatarInitials Two-letter avatar fallback (e.g. "AA").
+ * @property metaLine Secondary line ("device-id 4f3a-92d1 · keys in
+ *   Android Keystore").
  */
-data class SettingsRowState(
-    val id: String,
-    val title: String,
-    val subtitle: String? = null,
-    val pendingChange: Boolean = false,
-    val validationError: String? = null,
-)
+data class IdentityCardState(val displayName: String, val avatarInitials: String, val metaLine: String)
 
-/** Per-section block surfaced by `SettingsContent`. */
-data class SettingsSectionBlock(
-    val section: SettingsSection,
-    val rows: List<SettingsRowState>,
-    val errorMessage: String? = null,
+/**
+ * System instructions card slice.
+ *
+ * @property value Current textarea content.
+ * @property placeholder Empty-state placeholder shown inside the textarea
+ *   when [value] is blank.
+ * @property variableChips Available `$VARIABLE` chip placeholders sorted
+ *   alphabetically. Tapping a chip inserts the placeholder at the cursor.
+ * @property characterCount Live character count for the counter footer.
+ * @property characterLimit Maximum allowed characters (counter denominator).
+ * @property approximateTokens Token-count estimate displayed alongside the
+ *   character counter.
+ * @property helperText Copy beneath the counter ("Prepended to every system
+ *   prompt the agent sends.").
+ * @property validationError Optional inline error rendered beneath the
+ *   counter (e.g. "exceeds character limit").
+ */
+data class SystemInstructionsCardState(
+    val value: String,
+    val placeholder: String,
+    val variableChips: List<String>,
+    val characterCount: Int,
+    val characterLimit: Int,
+    val approximateTokens: Int,
+    val helperText: String,
+    val validationError: String?,
 )
 
 /**
- * Top-level input to `SettingsContent`. Mirrors
- * `compose/screens/README.md §C7`.
+ * Restrictions card slice.
+ *
+ * @property approveSelection Currently selected segmented option.
+ * @property approveAllLabel / [approveSensitiveLabel] / [approveNeverLabel]
+ *   Localized segmented control labels.
+ * @property blockDestructive Whether the "Block destructive tools" toggle is on.
+ * @property blockDestructiveSubtitle Localized helper subtitle.
+ * @property blockNetwork Whether the "Block network from local model" toggle is on.
+ * @property blockNetworkSubtitle Localized helper subtitle.
+ * @property capSteps Trailing-number value for the "Cap autonomous steps" row.
+ */
+data class RestrictionsCardState(
+    val approveSelection: ApproveToolCallsOption,
+    val approveAllLabel: String,
+    val approveSensitiveLabel: String,
+    val approveNeverLabel: String,
+    val blockDestructive: Boolean,
+    val blockDestructiveSubtitle: String,
+    val blockNetwork: Boolean,
+    val blockNetworkSubtitle: String,
+    val capSteps: Int,
+    val capStepsSubtitle: String,
+)
+
+/**
+ * Single sampling-parameter slider. Exposed as data so the catalog can
+ * render the LLM parameters card without owning the labels.
+ *
+ * @property id Stable id for the row — used as the LazyColumn key and as
+ *   the test tag.
+ * @property title Row label.
+ * @property valueLabel Localised display value (e.g. "0.90").
+ * @property value Slider position (`[valueRange.start, valueRange.endInclusive]`).
+ * @property valueRange Slider domain.
+ * @property steps Discrete steps; `0` for continuous sliders.
+ */
+data class LlmParameterSlider(
+    val id: String,
+    val title: String,
+    val valueLabel: String,
+    val value: Float,
+    val valueRange: ClosedFloatingPointRange<Float>,
+    val steps: Int = 0,
+)
+
+data class LlmParametersCardState(val sliders: List<LlmParameterSlider>)
+
+/**
+ * Local-model card slice.
+ *
+ * @property modelName Active model name (null when no model is installed
+ *   — the card then renders an empty state).
+ * @property metaLine "1.4 GB · 2 048 ctx · Q4_K_M · downloaded 12 May".
+ * @property backendLabel Localized inference-backend label, e.g. "NPU (QNN)
+ *   · auto-fallback to GPU then CPU.".
+ * @property backendOptions Available backend dropdown options.
+ * @property selectedBackend Currently selected backend key.
+ * @property testProbeText Subtitle for the Test backend row. The screen
+ *   formats the [ai.agent.android.domain.models.TestProbeResult] before
+ *   passing it down so the catalog stays format-agnostic.
+ * @property testProbeIsError `true` when the last probe failed — drives
+ *   the error tint on the subtitle.
+ */
+data class LocalModelCardState(
+    val modelName: String?,
+    val metaLine: String?,
+    val backendLabel: String,
+    val backendOptions: List<String>,
+    val selectedBackend: String,
+    val testProbeText: String,
+    val testProbeIsError: Boolean,
+)
+
+/**
+ * External-provider list row.
+ *
+ * @property id Stable id (e.g. "openai", "ollama") for keying & test tags.
+ * @property title Display name (`"OpenAI"`).
+ * @property fingerprint Masked API-key fingerprint or `null` for
+ *   not-configured providers.
+ * @property model Currently selected model name; `null` when unset.
+ * @property endpointHint Optional secondary line (e.g. Ollama base URL).
+ * @property isLan `true` for LAN-local providers — drives the LAN pill.
+ */
+data class ProviderRowState(
+    val id: String,
+    val title: String,
+    val fingerprint: String?,
+    val model: String?,
+    val endpointHint: String?,
+    val isLan: Boolean,
+)
+
+data class ExternalProvidersCardState(val rows: List<ProviderRowState>)
+
+/**
+ * Memory stats stat-cell payload.
+ *
+ * @property label Cell label ("Chunks", "Size", "Threads", "Avg score").
+ * @property value Pre-formatted value ("1 248", "14.2 MB", "—", "0.74").
+ */
+data class MemoryStatCell(val label: String, val value: String)
+
+data class MemoryCardState(
+    val stats: List<MemoryStatCell>,
+    val autoSummarizeThreshold: Int,
+    val autoSummarizeLabel: String,
+    val embeddingTitle: String,
+    val embeddingSubtitle: String,
+    val exportLabel: String,
+    val reembedLabel: String,
+    val clearLabel: String,
+    /** Re-embed progress in `0..100`, or `null` when no re-embed is in flight. */
+    val reembedProgressPercent: Int?,
+)
+
+data class NotificationsCardState(val longRunningEnabled: Boolean)
+
+/**
+ * Privacy card slice (Crash reporting toggle stays here per task 9 brief).
+ */
+data class PrivacyCardState(val crashReportingEnabled: Boolean)
+
+/**
+ * Top-level input to `SettingsContent`. Carries every card slice plus the
+ * surface-wide [visualState] flag.
+ *
+ * @property visualState Drives overlays (restart-required banner, typed-
+ *   confirm dialog, loading skeleton).
+ * @property subtitleVersion / [subtitleChannel] / [subtitleBuildDate] Top-
+ *   app-bar subtitle pieces.
+ * @property identity Identity card payload; `null` while loading.
+ * @property systemInstructions System instructions payload.
+ * @property restrictions Restrictions card payload.
+ * @property llmParameters LLM parameters payload.
+ * @property localModel Local-model card payload.
+ * @property externalProviders External providers list payload.
+ * @property memory Memory card payload.
+ * @property notifications Notifications card payload.
+ * @property privacy Privacy card payload (crash reporting toggle).
+ * @property restartRequiredMessage Banner copy when visualState ==
+ *   RestartRequired.
+ * @property destructiveAction Typed-confirm payload when visualState ==
+ *   DestructiveAction.
  */
 data class SettingsViewState(
     val visualState: SettingsVisualState,
-    val sections: List<SettingsSectionBlock> = emptyList(),
+    val subtitleVersion: String,
+    val subtitleChannel: String,
+    val subtitleBuildDate: String,
+    val identity: IdentityCardState?,
+    val systemInstructions: SystemInstructionsCardState,
+    val restrictions: RestrictionsCardState,
+    val llmParameters: LlmParametersCardState,
+    val localModel: LocalModelCardState,
+    val externalProviders: ExternalProvidersCardState,
+    val memory: MemoryCardState,
+    val notifications: NotificationsCardState,
+    val privacy: PrivacyCardState,
     val restartRequiredMessage: String? = null,
-    val destructiveActionMessage: String? = null,
+    val destructiveAction: DestructiveActionState? = null,
 ) {
     init {
         require(
@@ -83,16 +246,91 @@ data class SettingsViewState(
             "restartRequiredMessage must be non-null iff visualState == RestartRequired"
         }
         require(
-            (visualState == SettingsVisualState.DestructiveAction) == (destructiveActionMessage != null),
+            (visualState == SettingsVisualState.DestructiveAction) == (destructiveAction != null),
         ) {
-            "destructiveActionMessage must be non-null iff visualState == DestructiveAction"
+            "destructiveAction must be non-null iff visualState == DestructiveAction"
         }
     }
 }
 
+/**
+ * Destructive typed-confirm dialog payload. The screen renders the
+ * dialog through `SettingsContent`; the typed-confirm field is enabled
+ * only when [pendingInput] (trim+lowercased) equals [keyword].
+ *
+ * @property title Localized dialog title.
+ * @property body Localized dialog body explaining the scope of the action.
+ * @property keyword Word the user must type to enable the confirm button
+ *   (defaults to `"yes"`).
+ * @property hint Placeholder shown in the typed-confirm field.
+ * @property pendingInput Current value of the typed-confirm field.
+ * @property kind Tag identifying which action the dialog is gating.
+ */
+data class DestructiveActionState(
+    val title: String,
+    val body: String,
+    val keyword: String,
+    val hint: String,
+    val pendingInput: String,
+    val kind: DestructiveActionKind,
+)
+
+enum class DestructiveActionKind {
+    ClearMemory,
+    ResetSettings,
+}
+
+/**
+ * Bundle of typed callbacks invoked by `SettingsContent`. Kept as a single
+ * data class so the call site stays compact even with the new
+ * card-based surface.
+ */
 @Suppress("LongParameterList")
 class SettingsCallbacks(
-    val onRestart: () -> Unit = {},
+    val onBack: () -> Unit = {},
+    val onSearchClick: () -> Unit = {},
+
+    // System instructions.
+    val onSystemInstructionsChange: (String) -> Unit = {},
+    val onInsertVariableClick: () -> Unit = {},
+    val onChipInsert: (String) -> Unit = {},
+
+    // Restrictions.
+    val onApproveSelectionChange: (ApproveToolCallsOption) -> Unit = {},
+    val onBlockDestructiveChange: (Boolean) -> Unit = {},
+    val onBlockNetworkChange: (Boolean) -> Unit = {},
+    val onCapStepsChange: (Int) -> Unit = {},
+
+    // LLM parameters.
+    val onSliderChange: (id: String, value: Float) -> Unit = { _, _ -> },
+    val onResetLlmDefaults: () -> Unit = {},
+
+    // Local model.
+    val onManageModelsClick: () -> Unit = {},
+    val onChangeModelClick: () -> Unit = {},
+    val onBackendSelected: (String) -> Unit = {},
+    val onTestBackendClick: () -> Unit = {},
+
+    // External providers.
+    val onProviderRowClick: (String) -> Unit = {},
+    val onAddProviderClick: () -> Unit = {},
+
+    // Memory.
+    val onAutoSummarizeChange: (Int) -> Unit = {},
+    val onExportMemoryClick: () -> Unit = {},
+    val onReembedClick: () -> Unit = {},
+    val onClearMemoryClick: () -> Unit = {},
+
+    // Notifications.
+    val onLongRunningToggle: (Boolean) -> Unit = {},
+
+    // Privacy.
+    val onCrashReportingToggle: (Boolean) -> Unit = {},
+    val onResetSettingsClick: () -> Unit = {},
+
+    // Surface-wide.
+    val onRestartClick: () -> Unit = {},
+    val onDestructiveTypedConfirmChange: (String) -> Unit = {},
     val onDestructiveConfirm: () -> Unit = {},
     val onDestructiveCancel: () -> Unit = {},
 )

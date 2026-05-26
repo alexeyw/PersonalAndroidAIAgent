@@ -13,14 +13,18 @@ import ai.agent.android.data.network.AndroidModelDownloadManager
 import ai.agent.android.data.repositories.ChatRepositoryImpl
 import ai.agent.android.data.repositories.ClarificationRepositoryImpl
 import ai.agent.android.data.repositories.FirebaseCrashReportingRepositoryImpl
+import ai.agent.android.data.repositories.IdentityRepositoryImpl
 import ai.agent.android.data.repositories.LocalModelRepositoryImpl
 import ai.agent.android.data.repositories.LocalPipelineRepositoryImpl
+import ai.agent.android.data.repositories.McpServerRepositoryImpl
 import ai.agent.android.data.repositories.MemoryRepositoryImpl
 import ai.agent.android.data.repositories.MetricsRepositoryImpl
+import ai.agent.android.data.repositories.NetworkActivityTrackerImpl
 import ai.agent.android.data.repositories.NetworkStateRepositoryImpl
 import ai.agent.android.data.repositories.PowerStateRepositoryImpl
 import ai.agent.android.data.repositories.PromptRepositoryImpl
 import ai.agent.android.data.repositories.ToolRepositoryImpl
+import ai.agent.android.data.services.LongRunningTaskNotifierImpl
 import ai.agent.android.domain.engine.LlmInferenceEngine
 import ai.agent.android.domain.engine.TaskQueueManager
 import ai.agent.android.domain.engine.TextEmbeddingEngine
@@ -28,16 +32,20 @@ import ai.agent.android.domain.repositories.ApiKeyRepository
 import ai.agent.android.domain.repositories.ChatRepository
 import ai.agent.android.domain.repositories.ClarificationRepository
 import ai.agent.android.domain.repositories.CrashReportingRepository
+import ai.agent.android.domain.repositories.IdentityRepository
 import ai.agent.android.domain.repositories.LocalModelRepository
+import ai.agent.android.domain.repositories.McpServerRepository
 import ai.agent.android.domain.repositories.MemoryRepository
 import ai.agent.android.domain.repositories.MetricsRepository
 import ai.agent.android.domain.repositories.ModelDownloadManager
+import ai.agent.android.domain.repositories.NetworkActivityTracker
 import ai.agent.android.domain.repositories.NetworkStateRepository
 import ai.agent.android.domain.repositories.PipelineRepository
 import ai.agent.android.domain.repositories.PowerStateRepository
 import ai.agent.android.domain.repositories.PromptRepository
 import ai.agent.android.domain.repositories.SettingsRepository
 import ai.agent.android.domain.repositories.ToolRepository
+import ai.agent.android.domain.services.LongRunningTaskNotifier
 import dagger.Binds
 import dagger.Module
 import dagger.hilt.InstallIn
@@ -134,6 +142,15 @@ abstract class DataModule {
     abstract fun bindMcpClientFactory(factory: KoogMcpClientFactory): McpClientFactory
 
     /**
+     * Binds [McpServerRepositoryImpl] to [McpServerRepository] — owns per-server
+     * MCP connections, tool-list caching, and the connection-status flows
+     * consumed by `ToolsViewModel`.
+     */
+    @Binds
+    @Singleton
+    abstract fun bindMcpServerRepository(repository: McpServerRepositoryImpl): McpServerRepository
+
+    /**
      * Binds the [MetricsRepositoryImpl] implementation to the [MetricsRepository] interface.
      */
     @Binds
@@ -153,6 +170,15 @@ abstract class DataModule {
     @Binds
     @Singleton
     abstract fun bindNetworkStateRepository(repository: NetworkStateRepositoryImpl): NetworkStateRepository
+
+    /**
+     * Binds [NetworkActivityTrackerImpl] to [NetworkActivityTracker]. Records every outbound
+     * cloud-LLM and MCP call so the More tab can render the "no network calls in last N m"
+     * privacy indicator.
+     */
+    @Binds
+    @Singleton
+    abstract fun bindNetworkActivityTracker(tracker: NetworkActivityTrackerImpl): NetworkActivityTracker
 
     /**
      * Binds the [TaskQueueManagerImpl] implementation to the [TaskQueueManager] interface.
@@ -192,4 +218,22 @@ abstract class DataModule {
     abstract fun bindCrashReportingRepository(
         repository: FirebaseCrashReportingRepositoryImpl,
     ): CrashReportingRepository
+
+    /**
+     * Binds [IdentityRepositoryImpl] to [IdentityRepository]. Surfaces the
+     * Settings identity card snapshot (device-id + Keystore probe).
+     */
+    @Binds
+    @Singleton
+    abstract fun bindIdentityRepository(repository: IdentityRepositoryImpl): IdentityRepository
+
+    /**
+     * Binds [LongRunningTaskNotifierImpl] to [LongRunningTaskNotifier].
+     * The implementation gates every `notify` call on the user's
+     * `Long-running tasks` toggle so the binding is safe to provide
+     * unconditionally.
+     */
+    @Binds
+    @Singleton
+    abstract fun bindLongRunningTaskNotifier(notifier: LongRunningTaskNotifierImpl): LongRunningTaskNotifier
 }

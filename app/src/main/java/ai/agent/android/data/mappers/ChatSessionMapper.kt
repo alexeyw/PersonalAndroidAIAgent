@@ -13,6 +13,7 @@ fun ChatSessionEntity.toDomain(): ChatSession = ChatSession(
     name = name,
     updatedAt = updatedAt,
     pipelineId = pipelineId,
+    isStarred = isStarred,
 )
 
 /**
@@ -25,4 +26,5 @@ fun ChatSession.toEntity(): ChatSessionEntity = ChatSessionEntity(
     name = name,
     updatedAt = updatedAt,
     pipelineId = pipelineId,
+    isStarred = isStarred,
 )

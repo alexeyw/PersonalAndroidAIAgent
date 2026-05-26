@@ -32,8 +32,8 @@ Required toolchain:
   Android Studio satisfies the requirement out of the box.
 - **Android Studio** — current stable channel (or any IDE that supports
   AGP 9.2.x and Kotlin 2.3.x).
-- **Android SDK** — install platform **API 36** (compileSdk) and
-  **API 37** (targetSdk). Minimum runtime is API 36 (Android 16).
+- **Android SDK** — install platform **API 37** (`compileSdk` +
+  `targetSdk`). Minimum runtime is API 36 (Android 16).
 - **NDK** is not required.
 
 Local configuration:
@@ -53,7 +53,14 @@ Common commands:
 ./gradlew assembleDebug   # build the debug APK
 ./gradlew test            # run JVM unit tests
 ./gradlew check           # full local quality gate (see below)
+./gradlew bundleRelease   # build the Play-Store-shaped AAB (R8-minified)
 ```
+
+The `release` variant runs through R8 + resource shrinking + Jansi-native
+stripping; the keep rules live in [`app/proguard-rules.pro`](app/proguard-rules.pro)
+and the full release playbook (signing posture, AAB build, APK size
+breakdown, future-keystore plan) lives in
+[`docs/release.md`](docs/release.md).
 
 `./gradlew check` aggregates the same checks CI runs on every pull
 request:
@@ -147,6 +154,8 @@ a bug.
 - [`docs/user-guide.md`](docs/user-guide.md) — end-user documentation.
 - [`docs/static-analysis.md`](docs/static-analysis.md) — detekt / ktlint
   / lint configuration and severity policy.
+- [`docs/release.md`](docs/release.md) — release-build playbook (R8
+  keep rules, signing posture, AAB build, APK size breakdown).
 - [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md) — community standards.
 - [`SECURITY.md`](SECURITY.md) — threat model and how to report a
   vulnerability.

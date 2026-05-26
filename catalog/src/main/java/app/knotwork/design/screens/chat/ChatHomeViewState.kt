@@ -1,6 +1,7 @@
 package app.knotwork.design.screens.chat
 
 import app.knotwork.design.components.chat.ChatContent
+import app.knotwork.design.components.chat.ChatContextAction
 import app.knotwork.design.components.chat.ChatMessageStatus
 import app.knotwork.design.components.chat.ChatMetadata
 import app.knotwork.design.components.chat.ChatRole
@@ -23,6 +24,14 @@ import app.knotwork.design.components.console.ConsoleVarRow
  * Mirrors `compose/screens/README.md §C1 · Chat (home)`.
  */
 enum class ChatHomeVisualState {
+    /**
+     * Cold-start state — emitted before the chat repository delivers its
+     * first message snapshot. Rendered as a centred progress indicator with
+     * no placeholder copy so the user never sees the empty-state hero flash
+     * for a frame on every launch. Phase 22 / Task 16 follow-up F4.
+     */
+    Loading,
+
     /** No messages in the active thread; empty-state surface visible. */
     Empty,
 
@@ -83,6 +92,14 @@ data class ChatHomeThreadRow(
      * highlighted with a cream row background.
      */
     val active: Boolean = false,
+    /**
+     * `true` when the user has favorited this thread. Renders a small
+     * leading star glyph in the drawer and lets the host sort favorited
+     * threads to the top of the list. Mirrors the session-level
+     * `isStarred` flag persisted in `chat_sessions.isStarred` (Phase 22 /
+     * Task 4).
+     */
+    val starred: Boolean = false,
 )
 
 /**
@@ -110,7 +127,16 @@ data class ChatHomeSamplePromptCard(val id: String, val title: String, val tools
  * @property filter source filter applied to [logs].
  */
 data class ChatHomeConsoleState(
-    val snap: ConsoleSnap = ConsoleSnap.Peek,
+    /**
+     * When non-null the console pane is rendered as an overlay anchored to
+     * the bottom of the chat surface at the requested snap height. `null`
+     * means the pane is closed — the orthogonal sealed [ChatHomeVisualState]
+     * keeps its meaning and the body underneath renders unchanged. The
+     * console is therefore truly independent of the chat state machine
+     * (Generating / HitlConfirm / Clarification / Idle / Empty / Error all
+     * stay visible behind the pane).
+     */
+    val snap: ConsoleSnap? = null,
     val tab: ConsoleTab = ConsoleTab.Logs,
     val logs: List<ConsoleLine> = emptyList(),
     val vars: List<ConsoleVarRow> = emptyList(),
@@ -200,8 +226,6 @@ class ChatHomeCallbacks(
     val onComposerValueChange: (String) -> Unit = {},
     val onSend: () -> Unit = {},
     val onStop: () -> Unit = {},
-    val onAttach: () -> Unit = {},
-    val onVoice: () -> Unit = {},
     val onOpenDrawer: () -> Unit = {},
     val onCloseDrawer: () -> Unit = {},
     val onSelectThread: (String) -> Unit = {},
@@ -231,6 +255,25 @@ class ChatHomeCallbacks(
     val onImportChat: () -> Unit = {},
     val onOpenSettings: () -> Unit = {},
     val onSamplePromptCard: (ChatHomeSamplePromptCard) -> Unit = {},
+    /**
+     * Fired when the user taps the agent-status pill above the composer.
+     * Hosts wire this to opening the console pane at the Partial snap so
+     * the user can drill into pipeline activity in one tap (the pill
+     * itself surfaces only a one-line summary).
+     */
+    val onAgentStatusClick: () -> Unit = {},
+    /**
+     * Fired when the user picks an action from a message-bubble's
+     * long-press context menu (Copy / Rerun / Rate). The first argument
+     * is the `ChatHomeMessageRow.id` of the row that was long-pressed —
+     * hosts use it to look up the underlying domain message and act
+     * (write to clipboard, re-send the prompt, open the rating sheet).
+     *
+     * Default no-op disables the long-press menu — the catalog only
+     * enables `combinedClickable` when the underlying `onContextAction`
+     * is non-null.
+     */
+    val onMessageContextAction: (rowId: String, action: ChatContextAction) -> Unit = { _, _ -> },
 )
 
 /** Convenience factory returning a callbacks bundle that ignores every event. */

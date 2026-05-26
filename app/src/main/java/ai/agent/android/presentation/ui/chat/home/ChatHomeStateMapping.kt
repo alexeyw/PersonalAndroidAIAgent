@@ -1,5 +1,6 @@
 package ai.agent.android.presentation.ui.chat.home
 
+import ai.agent.android.domain.models.ClarificationRequest
 import app.knotwork.design.components.chat.ChatContent
 import app.knotwork.design.components.chat.ChatMessageStatus
 import app.knotwork.design.components.chat.ChatMetadata
@@ -9,18 +10,22 @@ import app.knotwork.design.components.chat.ComposerState
 import app.knotwork.design.components.chat.HitlConfirmationModel
 import app.knotwork.design.components.chips.Risk
 import app.knotwork.design.components.console.ConsoleFilter
-import app.knotwork.design.components.console.ConsoleLevel
 import app.knotwork.design.components.console.ConsoleLine
 import app.knotwork.design.components.console.ConsoleSnap
-import app.knotwork.design.components.console.ConsoleSource
 import app.knotwork.design.components.console.ConsoleTab
 import app.knotwork.design.components.console.ConsoleTraceSpan
 import app.knotwork.design.components.console.ConsoleVarRow
-import app.knotwork.design.components.console.SpanStatus
 import app.knotwork.design.screens.chat.ChatHomeConsoleState
 import app.knotwork.design.screens.chat.ChatHomeMessageRow
+import app.knotwork.design.screens.chat.ChatHomeThreadRow
 import app.knotwork.design.screens.chat.ChatHomeViewState
 import app.knotwork.design.screens.chat.ChatHomeVisualState
+import org.json.JSONArray
+import org.json.JSONException
+import org.json.JSONObject
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 /**
  * Pure-Kotlin projection of the sealed [ChatHomeUiState] onto the catalog
@@ -52,128 +57,155 @@ fun ChatHomeUiState.toViewState(
     pendingTypedConfirm: String = "",
     consoleSearchQuery: String? = null,
     consoleFilter: ConsoleFilter = ConsoleFilter.allOn,
+    consoleLogs: List<ConsoleLine> = emptyList(),
+    consoleVars: List<ConsoleVarRow> = emptyList(),
+    consoleTraces: List<ConsoleTraceSpan> = emptyList(),
+    consoleTab: ConsoleTab = ConsoleTab.Logs,
+    consoleSnap: ConsoleSnap? = null,
     pipelineName: String = "default",
     tokensUsed: Int = 0,
     tokensMax: Int = 0,
     favorite: Boolean = false,
-): ChatHomeViewState = when (this) {
-    is ChatHomeUiState.Empty -> ChatHomeViewState(
-        visualState = ChatHomeVisualState.Empty,
-        threadTitle = threadTitle,
-        modelName = modelName,
-        composerValue = composerValue,
-        samplePromptCards = fixtures.suggestionCards,
-        pipelineName = pipelineName,
-        tokensUsed = tokensUsed,
-        tokensMax = tokensMax,
-        favorite = favorite,
-        agentStatusLine = fixtures.statusIdle,
+    pendingTool: HitlPending? = null,
+    pendingClarification: ClarificationRequest? = null,
+    threads: List<ChatHomeThreadRow> = emptyList(),
+    streamingTokens: Int = 0,
+): ChatHomeViewState {
+    val consoleState = ChatHomeConsoleState(
+        snap = consoleSnap,
+        tab = consoleTab,
+        logs = consoleLogs,
+        vars = consoleVars,
+        traces = consoleTraces,
+        filter = consoleFilter,
+        searchQuery = consoleSearchQuery,
     )
+    return when (this) {
+        is ChatHomeUiState.Loading -> ChatHomeViewState(
+            visualState = ChatHomeVisualState.Loading,
+            threadTitle = threadTitle,
+            modelName = modelName,
+            composerValue = composerValue,
+            pipelineName = pipelineName,
+            tokensUsed = tokensUsed,
+            tokensMax = tokensMax,
+            favorite = favorite,
+            console = consoleState,
+        )
 
-    is ChatHomeUiState.Idle -> ChatHomeViewState(
-        visualState = ChatHomeVisualState.Idle,
-        threadTitle = threadTitle,
-        modelName = modelName,
-        messages = messages,
-        composerValue = composerValue,
-        pipelineName = pipelineName,
-        tokensUsed = tokensUsed,
-        tokensMax = tokensMax,
-        favorite = favorite,
-        agentStatusLine = fixtures.statusIdle,
-    )
+        is ChatHomeUiState.Empty -> ChatHomeViewState(
+            visualState = ChatHomeVisualState.Empty,
+            threadTitle = threadTitle,
+            modelName = modelName,
+            composerValue = composerValue,
+            samplePromptCards = fixtures.suggestionCards,
+            pipelineName = pipelineName,
+            tokensUsed = tokensUsed,
+            tokensMax = tokensMax,
+            favorite = favorite,
+            agentStatusLine = fixtures.statusIdle,
+            console = consoleState,
+        )
 
-    is ChatHomeUiState.Generating -> ChatHomeViewState(
-        visualState = ChatHomeVisualState.Generating,
-        threadTitle = threadTitle,
-        modelName = modelName,
-        messages = messages,
-        composerValue = composerValue,
-        composerState = ComposerState.Generating,
-        pipelineName = pipelineName,
-        tokensUsed = tokensUsed,
-        tokensMax = tokensMax,
-        favorite = favorite,
-        agentStatusLine = fixtures.statusGenerating,
-    )
+        is ChatHomeUiState.Idle -> ChatHomeViewState(
+            visualState = ChatHomeVisualState.Idle,
+            threadTitle = threadTitle,
+            modelName = modelName,
+            messages = messages,
+            composerValue = composerValue,
+            pipelineName = pipelineName,
+            tokensUsed = tokensUsed,
+            tokensMax = tokensMax,
+            favorite = favorite,
+            agentStatusLine = fixtures.statusIdle,
+            console = consoleState,
+        )
 
-    is ChatHomeUiState.HitlConfirm -> ChatHomeViewState(
-        visualState = ChatHomeVisualState.HitlConfirm,
-        threadTitle = threadTitle,
-        modelName = modelName,
-        messages = messages + hitlRow(modelName, risk),
-        composerValue = composerValue,
-        pendingTypedConfirm = pendingTypedConfirm,
-        pipelineName = pipelineName,
-        tokensUsed = tokensUsed,
-        tokensMax = tokensMax,
-        favorite = favorite,
-        agentStatusLine = fixtures.statusHitl,
-    )
+        is ChatHomeUiState.Generating -> ChatHomeViewState(
+            visualState = ChatHomeVisualState.Generating,
+            threadTitle = threadTitle,
+            modelName = modelName,
+            messages = messages,
+            composerValue = composerValue,
+            composerState = ComposerState.Generating,
+            pipelineName = pipelineName,
+            tokensUsed = tokensUsed,
+            tokensMax = tokensMax,
+            favorite = favorite,
+            // Append the running token count so the pill reads
+            // "generating · 42 tok" — gives the user visible progress on
+            // long generations (Phase 22 / Task 16 follow-up F9).
+            agentStatusLine = formatGeneratingStatus(fixtures.statusGenerating, streamingTokens),
+            console = consoleState,
+        )
 
-    is ChatHomeUiState.Clarification -> ChatHomeViewState(
-        visualState = ChatHomeVisualState.Clarification,
-        threadTitle = threadTitle,
-        modelName = modelName,
-        messages = messages + clarificationRow(modelName),
-        composerValue = composerValue,
-        pipelineName = pipelineName,
-        tokensUsed = tokensUsed,
-        tokensMax = tokensMax,
-        favorite = favorite,
-        agentStatusLine = fixtures.statusClarification,
-    )
+        is ChatHomeUiState.HitlConfirm -> ChatHomeViewState(
+            visualState = ChatHomeVisualState.HitlConfirm,
+            threadTitle = threadTitle,
+            modelName = modelName,
+            messages = messages + (pendingTool?.let { liveHitlRow(modelName, it) } ?: hitlRow(modelName, risk)),
+            composerValue = composerValue,
+            pendingTypedConfirm = pendingTypedConfirm,
+            pipelineName = pipelineName,
+            tokensUsed = tokensUsed,
+            tokensMax = tokensMax,
+            favorite = favorite,
+            agentStatusLine = fixtures.statusHitl,
+            console = consoleState,
+        )
 
-    is ChatHomeUiState.Error -> ChatHomeViewState(
-        visualState = ChatHomeVisualState.Error,
-        threadTitle = threadTitle,
-        modelName = modelName,
-        messages = messages,
-        composerValue = composerValue,
-        composerState = ComposerState.Error(message = message),
-        errorMessage = message,
-        pipelineName = pipelineName,
-        tokensUsed = tokensUsed,
-        tokensMax = tokensMax,
-        favorite = favorite,
-        agentStatusLine = fixtures.statusError,
-    )
+        is ChatHomeUiState.Clarification -> ChatHomeViewState(
+            visualState = ChatHomeVisualState.Clarification,
+            threadTitle = threadTitle,
+            modelName = modelName,
+            messages = messages + (
+                pendingClarification?.let { liveClarificationRow(modelName, it) }
+                    ?: clarificationRow(modelName)
+                ),
+            composerValue = composerValue,
+            pipelineName = pipelineName,
+            tokensUsed = tokensUsed,
+            tokensMax = tokensMax,
+            favorite = favorite,
+            agentStatusLine = fixtures.statusClarification,
+            console = consoleState,
+        )
 
-    is ChatHomeUiState.DrawerOpen -> ChatHomeViewState(
-        visualState = ChatHomeVisualState.DrawerOpen,
-        threadTitle = threadTitle,
-        modelName = modelName,
-        messages = messages,
-        composerValue = composerValue,
-        threads = fixtures.sessionRows,
-        pipelineName = pipelineName,
-        tokensUsed = tokensUsed,
-        tokensMax = tokensMax,
-        favorite = favorite,
-        agentStatusLine = fixtures.statusIdle,
-    )
+        is ChatHomeUiState.Error -> ChatHomeViewState(
+            visualState = ChatHomeVisualState.Error,
+            threadTitle = threadTitle,
+            modelName = modelName,
+            messages = messages,
+            composerValue = composerValue,
+            composerState = ComposerState.Error(message = message),
+            errorMessage = message,
+            pipelineName = pipelineName,
+            tokensUsed = tokensUsed,
+            tokensMax = tokensMax,
+            favorite = favorite,
+            agentStatusLine = fixtures.statusError,
+            console = consoleState,
+        )
 
-    is ChatHomeUiState.ConsoleExpanded -> ChatHomeViewState(
-        visualState = ChatHomeVisualState.ConsoleExpanded,
-        threadTitle = threadTitle,
-        modelName = modelName,
-        messages = messages,
-        composerValue = composerValue,
-        pipelineName = pipelineName,
-        tokensUsed = tokensUsed,
-        tokensMax = tokensMax,
-        favorite = favorite,
-        agentStatusLine = fixtures.statusIdle,
-        console = ChatHomeConsoleState(
-            snap = snap,
-            tab = ConsoleTab.Logs,
-            logs = sampleConsoleLines(),
-            vars = sampleConsoleVars(),
-            traces = sampleConsoleTraces(),
-            filter = consoleFilter,
-            searchQuery = consoleSearchQuery,
-        ),
-    )
+        is ChatHomeUiState.DrawerOpen -> ChatHomeViewState(
+            visualState = ChatHomeVisualState.DrawerOpen,
+            threadTitle = threadTitle,
+            modelName = modelName,
+            messages = messages,
+            composerValue = composerValue,
+            // Live VM-projected threads. Falls back to fixtures only when
+            // the debug picker forces DrawerOpen on an empty session list
+            // (e.g. before the first session is persisted) — production
+            // flows always have at least the active session present.
+            threads = threads.ifEmpty { fixtures.sessionRows },
+            pipelineName = pipelineName,
+            tokensUsed = tokensUsed,
+            tokensMax = tokensMax,
+            favorite = favorite,
+            agentStatusLine = fixtures.statusIdle,
+            console = consoleState,
+        )
+    }
 }
 
 /** Pre-canned baseline conversation used by every non-Empty state. */
@@ -246,6 +278,101 @@ internal fun hitlRow(modelName: String, risk: Risk): ChatHomeMessageRow {
     )
 }
 
+/**
+ * Trailing HITL confirmation row driven by the live [HitlPending]
+ * snapshot the orchestrator captured. Renders the real tool name, risk
+ * tier, and JSON-decoded argument map; the user-visible "summary" line
+ * falls back to the tool name when the agent did not attach one.
+ */
+internal fun liveHitlRow(modelName: String, pending: HitlPending): ChatHomeMessageRow {
+    val argumentsMap = parseHitlArguments(pending.arguments)
+    val timestamp = SimpleDateFormat(HITL_TIMESTAMP_PATTERN, Locale.getDefault())
+        .format(Date(System.currentTimeMillis()))
+    return ChatHomeMessageRow(
+        id = "a-hitl-${pending.toolName}",
+        role = ChatRole.Assistant,
+        content = ChatContent.Confirmation(
+            model = HitlConfirmationModel(
+                risk = pending.risk.toCatalogRisk(),
+                toolName = pending.toolName,
+                summary = pending.toolName,
+                arguments = argumentsMap,
+                timestamp = timestamp,
+            ),
+        ),
+        metadata = ChatMetadata(timestamp = timestamp, model = modelName),
+    )
+}
+
+/**
+ * Trailing clarification row driven by the live [ClarificationRequest]
+ * snapshot the orchestrator captured. Renders the real question text and
+ * options as quick-reply chips; free-form fallback is supplied by the
+ * catalog `ClarificationCard`.
+ */
+internal fun liveClarificationRow(modelName: String, request: ClarificationRequest): ChatHomeMessageRow {
+    val timestamp = SimpleDateFormat(HITL_TIMESTAMP_PATTERN, Locale.getDefault())
+        .format(Date(System.currentTimeMillis()))
+    return ChatHomeMessageRow(
+        id = "a-clar-${request.id}",
+        role = ChatRole.Assistant,
+        content = ChatContent.Clarification(
+            model = ClarificationCardModel(
+                question = request.question,
+                quickReplies = request.options ?: emptyList(),
+            ),
+        ),
+        metadata = ChatMetadata(timestamp = timestamp, model = modelName),
+    )
+}
+
+/**
+ * Parses the orchestrator-emitted JSON argument blob into the
+ * `Map<String, String>` of rendered JSON fragments the catalog
+ * `HitlConfirmationCard` expects. Each value is re-serialised through
+ * [JSONObject] so strings keep their surrounding double-quotes, numbers /
+ * booleans render bare, and nested objects/arrays stay compact JSON.
+ * Falls back to a single `args` entry holding the raw blob when the
+ * payload is not a parseable object — defensive against agents emitting
+ * non-JSON or array-shaped argument payloads.
+ */
+internal fun parseHitlArguments(raw: String): Map<String, String> {
+    val trimmed = raw.trim()
+    if (trimmed.isEmpty()) return emptyMap()
+    return try {
+        val obj = JSONObject(trimmed)
+        val result = linkedMapOf<String, String>()
+        val keys = obj.keys()
+        while (keys.hasNext()) {
+            val key = keys.next()
+            result[key] = renderJsonFragment(obj.get(key))
+        }
+        result
+    } catch (_: JSONException) {
+        mapOf(RAW_ARGS_FALLBACK_KEY to trimmed)
+    }
+}
+
+/**
+ * Renders a single JSON value as the fragment string the catalog
+ * `HitlConfirmationCard` expects: strings are wrapped in double quotes,
+ * numbers and booleans render bare, nested objects/arrays render as
+ * compact JSON, and `JSONObject.NULL` becomes `null`.
+ */
+private fun renderJsonFragment(value: Any?): String = when (value) {
+    null, JSONObject.NULL -> "null"
+    is String -> JSONObject.quote(value)
+    is JSONObject -> value.toString()
+    is JSONArray -> value.toString()
+    else -> value.toString()
+}
+
+/** Pattern used for the HITL / clarification row timestamp. */
+private const val HITL_TIMESTAMP_PATTERN: String = "HH:mm"
+
+/** Key used when the orchestrator's argument blob cannot be parsed as a JSON object. */
+internal const val RAW_ARGS_FALLBACK_KEY: String = "args"
+
 /** Trailing clarification row appended in the Clarification state. */
 internal fun clarificationRow(modelName: String): ChatHomeMessageRow = ChatHomeMessageRow(
     id = "a-clar",
@@ -257,50 +384,6 @@ internal fun clarificationRow(modelName: String): ChatHomeMessageRow = ChatHomeM
         ),
     ),
     metadata = ChatMetadata(timestamp = "09:16", model = modelName),
-)
-
-/** Sample console log lines surfaced when the console pane is expanded. */
-internal fun sampleConsoleLines(): List<ConsoleLine> = listOf(
-    ConsoleLine(
-        timestamp = "09:14:00.012",
-        source = ConsoleSource.RUNTIME,
-        level = ConsoleLevel.Info,
-        text = "pipeline=default loaded (3 nodes)",
-    ),
-    ConsoleLine(
-        timestamp = "09:14:00.118",
-        source = ConsoleSource.NODE,
-        level = ConsoleLevel.Trace,
-        text = "INPUT → LITE_RT prompt rendered (412 tokens)",
-    ),
-    ConsoleLine(
-        timestamp = "09:14:02.341",
-        source = ConsoleSource.TOOL,
-        level = ConsoleLevel.Warn,
-        text = "calendar.create_event awaiting user approval (Sensitive)",
-    ),
-)
-
-/** Sample console var rows surfaced inside the Vars tab. */
-internal fun sampleConsoleVars(): List<ConsoleVarRow> = listOf(
-    ConsoleVarRow(node = "lite_rt#1", key = "temperature", valueJson = "0.7"),
-    ConsoleVarRow(node = "lite_rt#1", key = "topP", valueJson = "0.9"),
-)
-
-/** Sample console trace spans surfaced inside the Traces tab. */
-internal fun sampleConsoleTraces(): List<ConsoleTraceSpan> = listOf(
-    ConsoleTraceSpan(
-        name = "lite_rt#1.generate",
-        durationMs = 1840L,
-        startedAt = "09:14:00.118",
-        status = SpanStatus.Ok,
-    ),
-    ConsoleTraceSpan(
-        name = "calendar.create_event",
-        durationMs = 86L,
-        startedAt = "09:14:02.341",
-        status = SpanStatus.Ok,
-    ),
 )
 
 /**
@@ -318,7 +401,6 @@ internal object DebugStateIds {
     const val CLARIFICATION: String = "clarification"
     const val ERROR: String = "error"
     const val DRAWER_OPEN: String = "drawer_open"
-    const val CONSOLE_PEEK: String = "console_peek"
     const val CONSOLE_PARTIAL: String = "console_partial"
     const val CONSOLE_FULL: String = "console_full"
 }
@@ -334,8 +416,31 @@ internal fun debugStateForId(id: String): ChatHomeUiState? = when (id) {
     DebugStateIds.CLARIFICATION -> ChatHomeUiState.Clarification
     DebugStateIds.ERROR -> ChatHomeUiState.Error(message = "Something went wrong while generating the reply.")
     DebugStateIds.DRAWER_OPEN -> ChatHomeUiState.DrawerOpen
-    DebugStateIds.CONSOLE_PEEK -> ChatHomeUiState.ConsoleExpanded(ConsoleSnap.Peek)
-    DebugStateIds.CONSOLE_PARTIAL -> ChatHomeUiState.ConsoleExpanded(ConsoleSnap.Partial)
-    DebugStateIds.CONSOLE_FULL -> ChatHomeUiState.ConsoleExpanded(ConsoleSnap.Full)
+    // Console snaps are handled separately via [debugConsoleSnapForId] —
+    // they no longer correspond to a top-level [ChatHomeUiState] because
+    // the console is rendered as an independent overlay.
     else -> null
 }
+
+/**
+ * Resolves a [DebugStateIds] entry into the [ConsoleSnap] the debug
+ * picker should open the console at. Returns `null` for non-console
+ * picker entries — the caller falls back to [debugStateForId] for those.
+ */
+internal fun debugConsoleSnapForId(id: String): ConsoleSnap? = when (id) {
+    DebugStateIds.CONSOLE_PARTIAL -> ConsoleSnap.Partial
+    DebugStateIds.CONSOLE_FULL -> ConsoleSnap.Full
+    else -> null
+}
+
+/**
+ * Composes the agent status pill text for the Generating state, appending
+ * the running token count when non-zero ("generating" → "generating · 42 tok").
+ * Phase 22 / Task 16 follow-up F9.
+ *
+ * @param baseLabel the locale-resolved "generating" string from
+ *   [ChatHomeFixtures.statusGenerating].
+ * @param tokens approximate streamed-token count.
+ */
+internal fun formatGeneratingStatus(baseLabel: String, tokens: Int): String =
+    if (tokens > 0) "$baseLabel · $tokens tok" else baseLabel

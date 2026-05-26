@@ -12,6 +12,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -19,63 +20,63 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import app.knotwork.design.theme.KnotworkTheme
-import app.knotwork.design.tokens.KnotworkTextStyles
-
-/** Primary-button visual height (touch target stays ≥ 48 dp via `defaultMinSize`). */
-private val PrimaryButtonHeight = 48.dp
-
-/** Diameter of the loading indicator overlaid on top of the label. */
-private val LoadingIndicatorSize = 16.dp
-
-/** Alpha applied to the label while the button is in the loading state. */
-private const val LOADING_LABEL_ALPHA = 0.3f
 
 /**
- * Knotwork brand primary button.
+ * Knotwork brand **primary** button — filled, accent container.
  *
- * Visual contract (see `compose/components/README.md` §Buttons):
- *  - 48 dp tall, container `MaterialTheme.colorScheme.primary`, label
- *    `LabelLg`, shape `KnotworkTheme.shapes.md`.
- *  - **Loading**: label fades to alpha 0.3, a 16 dp `CircularProgressIndicator`
- *    overlays the centre, click is a no-op (the underlying [Button] is
- *    disabled while loading and re-styled to keep the resting visual).
- *  - **Disabled**: container `extended.surface3`, label `extended.onSurfaceDim`,
- *    no elevation in either state.
- *  - Touch target stays 48 × 48 even when the visual is shorter.
+ * Mirrors `project_docs/buttons.md § KnotworkPrimaryButton`:
+ *  - Container: `colorScheme.primary` (Accent500 light / Accent400 dark).
+ *  - Content: `onPrimary`.
+ *  - Shape: `KnotworkTheme.shapes.full` (pill).
+ *  - Elevation: 0 dp in every state — Knotwork is flat-by-design.
+ *  - Touch target floors at 48 × 48 dp via
+ *    `Modifier.minimumInteractiveComponentSize()` even when the visual is
+ *    32 dp (`KnotworkButtonSize.Sm`).
+ *  - **Loading**: label fades to alpha 0.3, a 16 dp
+ *    `CircularProgressIndicator` overlays the centre, click is gated.
+ *  - **Disabled**: container `extended.surface3`, label
+ *    `extended.onSurfaceDim`, no elevation.
  *
- * @param text user-visible label; passed verbatim to [Text].
- * @param onClick invoked on tap; gated to no-op when [enabled] is `false` or
- * [loading] is `true`.
- * @param modifier optional layout modifier applied to the underlying [Button].
- * @param enabled when `false`, the button is non-interactive and renders the
- * disabled palette.
- * @param loading when `true`, the button is non-interactive, the label fades,
- * and a circular progress indicator overlays the centre.
- * @param leadingIcon optional vector rendered before the label (16 dp); use
- * for "Send", "Save & continue", etc.
+ * @param text user-visible label.
+ * @param onClick invoked on tap; gated to no-op when [enabled] is `false`
+ *   or [loading] is `true`.
+ * @param modifier optional layout modifier applied to the underlying
+ *   [Button].
+ * @param size visual tier — `Sm` (32 dp) / `Md` (40 dp, default) /
+ *   `Lg` (48 dp). See [KnotworkButtonSize].
+ * @param enabled when `false`, the button is non-interactive and renders
+ *   the disabled palette.
+ * @param loading when `true`, the button is non-interactive, the label
+ *   fades, and a circular progress indicator overlays the centre.
+ * @param leadingIcon optional vector rendered before the label
+ *   (`IconSizeMd` / `IconSizeSm` depending on [size]).
  */
+@Suppress("LongParameterList") // Brand-stable public API.
 @Composable
 fun KnotworkPrimaryButton(
     text: String,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    size: KnotworkButtonSize = KnotworkButtonSize.Md,
     enabled: Boolean = true,
     loading: Boolean = false,
     leadingIcon: ImageVector? = null,
 ) {
     val effectiveEnabled = enabled && !loading
+    val visualHeight = KnotworkButtonDefaults.heightFor(size)
     Button(
         onClick = onClick,
         enabled = effectiveEnabled,
-        shape = KnotworkTheme.shapes.md,
+        shape = KnotworkTheme.shapes.full,
         elevation = ButtonDefaults.buttonElevation(
-            defaultElevation = 0.dp,
-            pressedElevation = 0.dp,
-            focusedElevation = 0.dp,
-            hoveredElevation = 0.dp,
-            disabledElevation = 0.dp,
+            defaultElevation = ZERO_ELEVATION,
+            pressedElevation = ZERO_ELEVATION,
+            focusedElevation = ZERO_ELEVATION,
+            hoveredElevation = ZERO_ELEVATION,
+            disabledElevation = ZERO_ELEVATION,
         ),
         colors = ButtonDefaults.buttonColors(
             containerColor = MaterialTheme.colorScheme.primary,
@@ -83,33 +84,48 @@ fun KnotworkPrimaryButton(
             disabledContainerColor = KnotworkTheme.extended.surface3,
             disabledContentColor = KnotworkTheme.extended.onSurfaceDim,
         ),
+        contentPadding = KnotworkButtonDefaults.paddingFor(size),
         modifier = modifier
-            .defaultMinSize(minHeight = PrimaryButtonHeight)
-            .height(PrimaryButtonHeight)
+            .minimumInteractiveComponentSize()
+            .defaultMinSize(minHeight = visualHeight)
+            .height(visualHeight)
             .semantics { if (loading) stateDescription = "Loading" },
     ) {
         Box(contentAlignment = Alignment.Center) {
             Row(
-                horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp2),
+                horizontalArrangement = Arrangement.spacedBy(KnotworkButtonDefaults.IconGap),
                 verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.alpha(if (loading) LOADING_LABEL_ALPHA else 1f),
+                modifier = Modifier.alpha(if (loading) KnotworkButtonDefaults.LOADING_LABEL_ALPHA else 1f),
             ) {
                 if (leadingIcon != null) {
                     Icon(
                         imageVector = leadingIcon,
                         contentDescription = null,
-                        modifier = Modifier.size(LoadingIndicatorSize),
+                        modifier = Modifier.size(KnotworkButtonDefaults.iconSizeFor(size)),
                     )
                 }
-                Text(text = text, style = KnotworkTextStyles.LabelLg)
+                Text(
+                    text = text,
+                    style = KnotworkButtonDefaults.textStyleFor(size),
+                    maxLines = 1,
+                    softWrap = false,
+                    overflow = TextOverflow.Ellipsis,
+                )
             }
             if (loading) {
                 CircularProgressIndicator(
-                    modifier = Modifier.size(LoadingIndicatorSize),
+                    modifier = Modifier.size(KnotworkButtonDefaults.LoadingIndicatorSize),
                     color = MaterialTheme.colorScheme.onPrimary,
-                    strokeWidth = 2.dp,
+                    strokeWidth = KnotworkButtonDefaults.LoadingIndicatorStroke,
                 )
             }
         }
     }
 }
+
+/**
+ * Zero-elevation constant used by every state of the primary button.
+ * Pulled into a `val` so the compose-runtime stability inference treats
+ * the elevation block as static.
+ */
+private val ZERO_ELEVATION = 0.dp

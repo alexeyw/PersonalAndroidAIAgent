@@ -13,8 +13,1059 @@ details.
 
 ## [Unreleased]
 
+### Fixed
+
+- **MCP routing — three regressions in `ToolRepositoryImpl`** (Phase 22 /
+  Task 17 follow-up).
+  - `syncMcpClients` now keys the pool by the full `McpServerConfig`
+    (not just the URL) and tears the connection down + reconnects when
+    any of auth / transport / headers / display name change for an
+    already-connected server. Previously a credentials edit in
+    **Settings → External providers** for an existing endpoint was a
+    silent no-op, and every subsequent `getAvailableTools` /
+    `executeTool` kept using the stale auth until the process restarted.
+  - `executeMcpTool` no longer throws on the first advertising provider
+    whose per-server `mcpId` is in `disabledMcpTools`. Since the gate is
+    scoped per server (id = `mcp:<sha8(serverUrl)>:<toolName>`), two
+    servers can advertise the same tool name and only one's id can be
+    disabled — the loop now flags `sawDisabled = true` and keeps
+    probing, so the enabled sibling still gets a chance to execute.
+  - `executeMcpTool` no longer `break`s out of the loop when an
+    advertising provider's `executeTool` throws. The failure is
+    remembered as `lastExecutionError` and the loop falls through to
+    the remaining providers; if every advertising provider also fails,
+    the **most recent failure is re-thrown** (preserves the actual
+    network / 5xx / parse error instead of the generic "not found").
+    Restores multi-provider resilience — one flaky server can no longer
+    eclipse a healthy sibling.
+  - Plus: the MCP dispatch loop in `executeMcpTool` /
+    `getAvailableTools` / `getRisk` now walks the persisted
+    **`settingsRepository.mcpServers`** order instead of the
+    non-deterministic `ConcurrentHashMap.entries`, so multi-provider
+    probe order is both predictable and matches the priority the user
+    actually configured in Settings. The new helper
+    `distinctMcpConfigs()` deduplicates the list by URL (keep-first)
+    before iteration — defensive measure that pairs with the
+    persistence-side fix below.
+- **`SettingsManager.updateMcpServer` no longer silently produces
+  `[B, B]` when the user edits server A's URL to match an existing
+  server B's URL.** The method now reads the persisted list
+  pre-write, delegates the check to the pure
+  `McpServerCollisionCheck.detectCollision` helper, and returns a typed
+  `UpdateMcpServerResult.UrlCollision(collidingUrl,
+  collidingDisplayName)` instead of writing. `SettingsRepository`'s
+  signature changes from `Unit` to `UpdateMcpServerResult` and
+  `McpServerConfigViewModel.onSubmit` surfaces the collision as an
+  inline `urlError` on the URL field ("A server with this URL already
+  exists: \"<name>\"") — the form stays open with `submitting = false`
+  so the user can fix the value and resubmit. Add-mode (`addMcpServer`)
+  is unchanged. Integration tests in `SettingsManagerTest` use a real
+  file-backed `PreferenceDataStore` (over a `TemporaryFolder`) to
+  prove the `dataStore.edit { … }` write actually does not happen on
+  collision and that the no-op rename (`newUrl == originalUrl`) still
+  persists cleanly.
+
 ### Added
 
+- **R8 minification + resource shrinking on the release build** (Phase 22 /
+  Task 17). `buildTypes.release` now sets `isMinifyEnabled = true` /
+  `isShrinkResources = true`, and `app/proguard-rules.pro` carries keep
+  rules for every reflection-driven subsystem (kotlinx.serialization, Gson,
+  MediaPipe / LiteRT JNI, SQLCipher, Koog + Ktor, AppFunctions KSP-generated
+  inventories / invokers, Hilt, Room) plus `-dontwarn` blocks for the
+  OpenTelemetry incubator + AutoValue symbols Koog pulls in transitively.
+  Each section is documented inline with a one-line rationale.
+- **`docs/release.md`** — single-page release playbook covering variant
+  matrix, signing posture (current debug-keystore vs. the production block
+  to land before Play Store submission), R8 keep-rules rationale,
+  bundle / size measurement instructions, and the v0.1.0 APK-size
+  breakdown.
+- **README hero + screenshot grid regenerated at 1080 × 2400 from new
+  Roborazzi baselines** (one `HeroSnapshotTest` per surface). Five
+  surfaces × light + dark = 10 PNGs total, all wired through `<picture>`
+  blocks that honour `prefers-color-scheme`:
+  - `hero-chat-home{,-dark}.png` — README hero (Idle chat).
+  - `hero-pipeline-editor{,-dark}.png` — vertical stack of NodeCards
+    per node type, clipped from `PipelineEditorCatalogContent`.
+  - `hero-pipeline-library{,-dark}.png` — populated pipeline library
+    (`PipelineLibraryPreview.populated()`).
+  - `hero-tools{,-dark}.png` — built-in AppFunctions + an expanded
+    MCP server (`ToolsPreview.defaultExpanded()`).
+  - `hero-settings{,-dark}.png` — populated Settings stack
+    (`SettingsPreview.default()`).
+
+### Changed
+
+- **Public documentation actualised against the post-legacy code state**
+  (Phase 22 / Task 17 follow-up). Removed references to deleted legacy
+  classes (`ChatScreen` / `ChatViewModel` / `ChatUiState`), retired the
+  "Saving and filtering messages" feature description, rewrote the
+  **Console** section to describe the agent-status pill + independent
+  `ModalBottomSheet` console pane that replaced the legacy mini-console /
+  full-log split, dropped the orphaned `screenshots/TODO.png` placeholders
+  in `docs/user-guide.md`, fixed the chat life-of-a-message sequence
+  diagram in `docs/architecture.md` to use the `ChatHome*` names, updated
+  the **Settings** section of `docs/extending.md` to list all nine cards
+  (was: six), refreshed the `PROMPT_VARIABLES` example in
+  `docs/extending.md` + `pipeline-editor.html` to include the four new
+  variables (`LANG / LOCATION / USER / DEVICE`) that landed in Phase 22 /
+  Task 9, corrected the SDK install requirement in `CONTRIBUTING.md`
+  (compileSdk is API 37, not API 36), wired `docs/release.md` into
+  `README.md`, `CONTRIBUTING.md` (Further reading + Build & test), and
+  `docs/architecture.md` (Further reading), and removed the stale
+  duplicate `more/` block in `FILE_MAP.md`.
+
+- **Jansi non-Android native binaries excluded from the release APK**
+  (Phase 22 / Task 17). `android.packaging.resources` drops
+  `org/fusesource/jansi/internal/native/{Windows,Mac,Linux,FreeBSD}/**` and
+  `META-INF/native-image/jansi/**` — Jansi ships through Koog's logger and
+  only its ANSI-escape rendering runs on JVM hosts. Saves ~430 KB on the
+  release artefact.
+
+### Removed
+
+- **Legacy chat surface** (`presentation/ui/chat/legacy/`) — 13 production
+  files + paired tests (2 unit tests, 4 instrumented tests). The
+  redesigned `chat/home/` package has been the production surface since
+  Phase 21 / Task 8 and absorbed every behaviour that mattered
+  (orchestrator core, HITL, Clarification, console pane, chat export);
+  the legacy package was kept around as a reference while wiring landed,
+  and is now removed so future grep / FILE_MAP / file-tree audits stay
+  honest. Stale docstring + comment references in `ChatHomeViewModel`,
+  `ChatExportPayload`, `AppNavGraph`, `HitlIntegrationTest`, and
+  `ClarificationIntegrationTest` are cleaned up alongside the deletion.
+
+- **Global UI audit on Knotwork-converted screens** (Phase 22 / Task 16).
+  Swept `app/src/main/` for design-system violations across hex colours,
+  shape / typography / dp / motion tokens, theme single-source, and
+  component reuse. One Block-grade and eight Major findings were
+  closed in this PR; the full triage and the deferred TalkBack + dynamic-
+  type release-smoke checklists landed in `project_docs/ui-audit-phase22.md`
+  under the new `## Task 16` section.
+  - `NodeContextConfigSection.kt` swaps the hint `Surface` shape from
+    `RoundedCornerShape(8.dp)` to `KnotworkTheme.shapes.sm` and rebinds
+    paddings to spacing tokens.
+  - `PromptPreviewBottomSheet.kt`, `VariableChipsRow.kt`,
+    `PromptLibraryDialog.kt`, `PipelineLibraryScreen.kt`, and
+    `ChatHomeDebugStatePicker.kt` rebind every on-scale dp literal
+    (`4 / 8 / 12 / 16 / 24`) to the matching `KnotworkTheme.spacing.*`
+    token. Off-scale intentional values (`120 dp` loading container,
+    `2 dp` checkbox-row vertical rhythm) are now private vals with a
+    KDoc documenting the intent.
+  - `AppShellScaffold.kt` ties the bottom-nav slide-in to
+    `KnotworkTheme.motion.dur3` + `easeStd` and collapses to
+    `EnterTransition.None / ExitTransition.None` under
+    `KnotworkTheme.a11y.reducedMotion()`.
+  - `ValidationBar.kt` Auto-fix header action migrated from raw M3
+    `TextButton` to `KnotworkTextButton` for catalog typography +
+    accent. The per-row `Go ↗` action stays on raw `TextButton`
+    pending a `trailingIcon` slot on the catalog button (filed as
+    Minor in the audit doc).
+
+- **Phase 22 / Task 16 post-merge fixes (F1–F10).** Ten review
+  findings landed in the same PR by user request. Roborazzi
+  baselines for `chat_home_*`, `settings_*`, and
+  `prompts_editor_*` were re-recorded.
+  - **F1** — `ChatHomeContent` TopAppBar subtitle drops the
+    `Pipeline · ` prefix (`knotwork_chat_home_topbar_pipeline`) so
+    the token counter fits on a single line at the default font
+    scale.
+  - **F2** — Markdown rendering restored. Catalog `ChatMessage` /
+    `ChatHomeContent` gained an optional
+    `markdownRenderer: @Composable (String) -> Unit` slot;
+    `ChatHomeScreen` wires the `com.mikepenz.markdown.m3.Markdown`
+    renderer. `ChatHomeViewModel.chatMessageToRow` now emits
+    `ChatContent.Markdown` for agent / tool rows and keeps
+    `ChatContent.Text` for user rows. Plain-text fallback is the
+    default when no renderer is supplied. The new catalog
+    `MarkdownTheme.kt` exposes Knotwork-themed
+    `knotworkMarkdownTypography()` / `knotworkMarkdownColor()`
+    factories that flow `KnotworkTextStyles` headings (collapsed
+    from the M3 display tier into `TitleXl → BodySm`), `MonoBase`
+    code, and `extended.surface{1,2,3}` / `divider` backgrounds
+    through the m3 renderer. `:catalog` now declares `markdown-m3`
+    as an `api` dependency.
+  - **F3** — Drawer selected-thread contrast in dark theme. The
+    selected row's background switched from the static
+    `KnotworkPalette.Accent50` to `MaterialTheme.colorScheme.primaryContainer`
+    paired with `onPrimaryContainer` text, mirroring the
+    onboarding Step-2 fix; light theme retains WCAG-AA contrast.
+  - **F4** — Eliminated the empty-chat hero flash on cold start.
+    Added `ChatHomeUiState.Loading` / `ChatHomeVisualState.Loading`,
+    the VM starts in `Loading`, and the catalog renders a centred
+    `CircularProgressIndicator` until the first chat snapshot
+    arrives. `rebalanceRestingState` settles `Loading → Empty / Idle`
+    on the first emission.
+  - **F5** — Settings secondary text (non-SemiBold subtitles on
+    `onSurfaceMuted`) switched from `BodySm` / `LabelSm` to
+    `MonoSm` to match the cloud-provider rows. Touches the
+    Identity card, params helper, system-instructions counter,
+    local-model backend label, Test backend probe line, and
+    memory re-embedding progress.
+  - **F6** — Test backend `Run` action shrunk to
+    `KnotworkButtonSize.Sm`, matching the Memory section's Export /
+    Clear / Reset buttons.
+  - **F7** — Prompt library editor `EditorTextField` renders the
+    multi-line prompt body in `KnotworkTextStyles.MonoSm`, matching
+    the Settings → System instructions field. The Name field keeps
+    the proportional `BodyBase` face.
+  - **F8** — LITE_RT node "Active model" sentinel. Blank
+    `LiteRtConfig.modelId` is now the explicit "use the currently-
+    active model at execute time" choice — surfaced as a new
+    `Active model` dropdown item, the codec persists `modelPath =
+    null` on the domain row, and `LoadModelUseCase` centralises
+    the blank-coerce so every executor (LITE_RT / Output / Summary
+    / Clarification / Tool / System) honours the sentinel. The
+    validator no longer flags blank `modelId` as REQUIRED. The
+    earlier `LaunchedEffect` that eagerly froze the active id into
+    the field on open was removed.
+  - **F9** — Streaming token counter in the agent status pill. New
+    `ChatHomeViewModel.streamingTokens` flow derives an approximate
+    count from `AgentOrchestratorState.Thinking` / `Answering`
+    `partialText.length`. The catalog status string composes as
+    `generating · N tok` while non-zero, resets on each new send /
+    Completed / Error.
+  - **F10** — Restored `systemPrompt` field on the OUTPUT node form.
+    Catalog `OutputConfig` gained the field; `OutputFormBody`
+    renders the same `TextField` + variable chips pattern as
+    LITE_RT / CLOUD; the codec encodes / decodes the field and
+    syncs it onto `NodeModel.systemPrompt` (legacy rows surface
+    their persisted prompt instead of silently clearing).
+
+### Added
+
+- **Knotwork conversion of the remaining screens** (Phase 22 / Task 15).
+  Splash, Models, Prompt library, Task monitor, Live metrics, More, and
+  About now share the catalog-driven Compose surface used by the §C1–C8
+  screens. Each app-side screen is a slim mapper that folds its
+  `UiState` into a catalog `*ViewState` and renders the matching
+  `*Content` composable; design changes from now on live in the
+  `:catalog` module. Specifically:
+  - **Splash** — new `SplashContent` with `KnotworkLogo(Lg)` brand
+    hero, `LinearProgressIndicator` on `KnotworkTheme.extended.surface2`
+    track, status label and `KnotworkPrimaryButton` Retry on error.
+  - **Models** — inline-section layout that matches the design mockup:
+    accent-tinted Active card → HuggingFace token field with `+ Paste`
+    clipboard action → Custom URL field with `Get` button → preset list
+    with three per-row variants (Idle / Downloading / OnDisk).
+    `ModelsViewModel` gained `cancelDownload()` (cancels the in-flight
+    job) and `deleteModel(id)`; `ModelsUiState` adds the
+    `activeDownloadFileName` field so the progress row binds to the
+    matching preset.
+  - **Prompt library** — `ScrollableTabRow` of category tabs +
+    accent-stripe cards with inline `$VAR` highlighting + footer
+    `used by N pipelines · Duplicate` action. Editor moved into a
+    `ModalBottomSheet` (`PromptEditorSheetBody`) with Name / Category /
+    Prompt text / `INSERT` chip row. New VM methods:
+    `selectCategory`, `openEditor(id?)`, `closeEditor`, per-field
+    setters, `saveEditor`, `duplicatePrompt`.
+  - **Task monitor** — `KnotworkFilterChip` row + per-task rows with
+    leading icon tile, `StatusPill` trailing, optional cancel button,
+    and a `TaskMonitorDetailSheetBody` `ModalBottomSheet` opened on
+    row tap. `TaskMonitorViewModel` adds `openDetails(id)` /
+    `closeDetails()`.
+  - **Live metrics** — `MonitoringContent` renders the power-saving
+    banner, a 3-cell `KnotworkStatCell` grid (Inference time / tokens
+    per second / total tokens), total execution line, per-node-type
+    breakdown, and recent-logs lazy column. The original
+    `MonitoringViewModel` is unchanged; the screen consumes its
+    existing state through a pure-Kotlin mapper.
+  - **More** — landing tab is now stateful: `MoreViewModel` aggregates
+    live counters from `MemoryRepository.observeStats`,
+    `LocalModelRepository.getAllModels`, `PromptRepository.getAllPrompts`,
+    `TaskQueueManager.activeSessionsState`, and the new
+    `NetworkActivityTracker.lastOutboundAt` flow. Renders seven rows on
+    `KnotworkNavListRow` with subtitle counters and an active-tasks
+    badge, plus a footer privacy pill (`on-device · no network calls
+    in last N m`).
+  - **About** — full body: `KnotworkLogo(Lg)` hero, version / build /
+    commit card, license card with an `Open license text` CTA, hand-
+    maintained acknowledgments list (15 key dependencies), and a
+    privacy summary card with a `Read privacy policy` CTA.
+- **`NetworkActivityTracker`** (`domain/repositories/` + `data/repositories/`).
+  Singleton timestamp of the most recent outbound LLM / MCP call.
+  Recorded by `CloudLlmNodeExecutor` immediately before each
+  `executeStreaming` call and by `KoogMcpClient.connect` /
+  `executeTool`. Drives the More tab privacy pill — distinct from
+  `NetworkStateRepository`, which only reflects connectivity. The
+  value resets on process recreation, which matches the indicator's
+  "since you opened the app" semantics.
+- **`KnotworkLogo`** (`components/brand/`) — purely vector brand mark
+  (rounded square frame + inner diamond) in three sizes (`Sm` 32 dp,
+  `Md` 64 dp, `Lg` 128 dp). Stroke width is a fixed fraction of the
+  canvas side so all sizes look visually identical.
+- **`KnotworkNavListRow`** (`components/lists/`) — 72 dp tall
+  navigation row with a 48 dp leading icon tile, title (`TitleMd`),
+  optional mono subtitle, optional trailing slot (badge / status
+  pill), and a permanent chevron-right glyph. Backbone of the More
+  tab and a candidate for the secondary surfaces that still use
+  Material 3 `ListItem`.
+
+- **Inputs & chips — design-system alignment** (Phase 22 / Task 14
+  follow-up). Brings every text input and chip on screen onto the
+  canonical Knotwork atom family laid out in
+  `inputs-and-chips.md`. Before this change the catalog had a single
+  `KnotworkChip` (pill-shaped, three styles squeezed into one atom)
+  plus a thin `KnotworkMonoTextArea`; everything else fell back to
+  raw Material 3 `OutlinedTextField` / `FilterChip` / `AssistChip`
+  scattered across 13 production call sites with no shared geometry,
+  caps-label, or focus-state policy. Now:
+  - New catalog atoms under `components/controls/`:
+    - `KnotworkFieldDefaults` + `KnotworkFieldSize { Sm, Md, Lg,
+      Composer }` — single source of truth for heights, paddings,
+      border weights, icon sizes, label / helper / field gaps.
+    - `KnotworkField` — caps-label + optional mono inline hint +
+      helper / error row wrapper. M3 floating label stays off
+      everywhere by design (dense rows + brand-signal cap label).
+    - `KnotworkTextField` — single-line `BasicTextField` with the
+      full 7-state visual table (default / hovered / focused /
+      filled / disabled / readOnly / error), `monospace` flag for
+      tokens / URLs / expressions, and a search-bar variant
+      (pill shape, `surface2`, no border).
+    - `KnotworkTextArea` — multi-line counterpart with
+      length-preserving `VisualTransformation` that recolours
+      `\$[A-Z_]+` tokens accent + underline inline, optional
+      `insertChips` strip that splices the matching `$NAME` at the
+      active cursor position, and `minLines` / `maxLines` controls.
+    - `KnotworkPasswordField` — masks the value behind a `•`
+      transformation by default and offers an eye-toggle trailing
+      icon; flips to mono typography when revealed (long API keys
+      read better in monospace).
+  - New catalog atoms under `components/chips/`:
+    - `KnotworkChipDefaults` + `KnotworkChipSize { Xs, Sm, Md }`.
+    - `KnotworkFilterChip` — selected ↔ unselected toggle on the
+      8 dp `sm` shape (Knotwork deliberately diverges from M3's
+      pill-shaped filter chip), 180 ms cross-fade, optional
+      `trailingCount` and `role` overrides for `Role.Tab` /
+      `Role.Checkbox`.
+    - `KnotworkSuggestionChip` — action-only chip with
+      `surface1` + 1 dp outline so it reads on chat bubbles.
+    - `KnotworkInputChip` + `KnotworkChipsInput` — removable
+      chips inside a `FlowRow` plus an inline `BasicTextField`
+      that commits on Enter / `,` and respects an optional
+      `maxItems` cap (replaces the implicit "Max N items"
+      behaviour that previously had to be reimplemented per
+      caller).
+    - `KnotworkVariableChip` — mono accent-coloured `$VAR`
+      insert chip. Replaces the raw `AssistChip` row that used
+      to back `VariableChipsRow`; the wrapper now forwards to
+      this atom so prompt-variable affordances finally share the
+      brand mono / accent / hollow-border treatment with the
+      `KnotworkTextArea` highlight pass.
+    - `KnotworkDateChip` — non-interactive section-divider pill
+      for the chat stream (Today / Yesterday / locale date).
+  - `RiskPill` and `StatusPill` brought onto the new spec: both
+    drop the filled container for a transparent fill + 1 dp
+    coloured border + leading 6 dp dot + `Mono13` label so they
+    read on every surface (light card, console, chat bubble) and
+    stop creating the contrast-collapse on inverted surfaces that
+    the filled pills hit on the dark theme. `StatusPill` adds
+    `Queued` and `Cancelled` states and pulses the dot on
+    `Running` via an `infiniteRepeatable` tween that collapses to
+    a constant alpha when
+    `KnotworkTheme.a11y.reducedMotion()` is `true`. `Risk.Readonly`
+    label switches from `"Read-only"` to `"Read only"` per spec.
+  - Catalog `ChatComposer` trailing button now models the full
+    4-state matrix from the spec: mic (Idle + empty + `onMic`
+    callback) → send (Idle + non-empty) → stop (Generating) →
+    retry (Error). Container and content colours swap per state
+    (mic uses muted `surface3`, retry uses `riskDestructive`);
+    morph stays at 200 ms and honours reduced motion.
+  - 13 production usage sites migrated to the new family:
+    `ChatHomeScreen` rename sheet, `ChatScreen` rename dialog,
+    `ChatScreen` chat input bar (now wraps the catalog
+    `ChatComposer`), `ClarificationCard` free-form input and the
+    quick-reply chips (which were raw `OutlinedButton`s
+    pretending to be chips), `ModelsScreen` HuggingFace token
+    (now `KnotworkPasswordField` with mask + eye-toggle) and
+    custom-URL field, `PipelineEditorScreen` rename dialog,
+    `PipelineLibraryScreen` pipeline-name dialog,
+    `PromptLibraryScreen` name + text fields (the text field
+    folds in the `VariableChipsRow` companion via the new
+    `insertChips` parameter), `FilterBar` search bar (`Md`
+    pill, leading search icon, `Search` IME action),
+    `ConsoleFullLogSheet` log filter row, `TaskMonitorScreen`
+    task filter row, `VariableChipsRow` (`AssistChip` →
+    `KnotworkVariableChip`), and the catalog
+    `ChatHomeContent` sample-prompt row (`KnotworkChip` →
+    `KnotworkSuggestionChip`).
+  - The legacy `KnotworkChip` becomes `@Deprecated` (pointing at
+    `KnotworkFilterChip`) and is scheduled for removal one
+    iteration later — kept for now so any consumer outside this
+    audit's reach does not break in the middle of the migration.
+
+- **Koog 1.0.0 migration follow-up** — the prior dependency bump
+  (`build: update koog, json, and roborazzi versions`) pointed every
+  `koog-*` library at version `1.0.0`, but three Koog modules
+  (`agents-mcp-server`, `prompt-executor-google-client`,
+  `prompt-executor-deepseek-client`) have not promoted past
+  `1.0.0-beta-preview7` on Maven Central yet — so the build failed
+  to resolve. Plus the major bump renamed two DeepSeek model
+  constants and the MCP client / prompt types moved between
+  packages, breaking the source set. Fixes:
+  - `koog-preview = "1.0.0-beta-preview7"` introduced as a separate
+    version ref so the three unpromoted artifacts can pin to the
+    latest beta without holding back the rest of the Koog stack
+    (re-collapse onto `koog` once they ship 1.0.0 stable).
+  - `koog-mcp` library entry switched from `agents-mcp-server`
+    (server-only since 1.0.0; the misnaming used to work in 0.8.0
+    via a transitive client dep) to `agents-mcp`, which is the
+    actual client artifact carrying `McpToolRegistryProvider` /
+    `mcpStreamableHttpTransport`.
+  - `DeepSeekModels.DeepSeekChat` → `DeepSeekV4Flash`,
+    `DeepSeekModels.DeepSeekReasoner` → `DeepSeekV4Pro` —
+    `KoogModelMapper`, `KoogCloudLlmModelResolver`, and
+    `DelegateTaskTool` updated to the new identifiers. Persisted
+    user model ids fall back to `DeepSeekV4Flash` via
+    `getDeepSeekModel`'s `else` branch.
+  - Test source set migrated to the new Koog 1.0 prompt API:
+    `ai.koog.prompt.dsl.Prompt` → `ai.koog.prompt.Prompt`,
+    `Message.content` → `Message.textContent()` (the base
+    `Message` interface now exposes `parts: List<MessagePart>` and
+    a default `textContent()` extractor; `Message.Response` was
+    renamed to `Message.Assistant`). `DelegateTaskToolTest`,
+    `GraphExecutionEngineTest`, `CloudLlmNodeExecutorTest` were
+    updated; the dead `Message.Response` mock that
+    `DelegateTaskToolTest` carried was deleted (response flows
+    through `StreamFrame.TextDelta` anyway).
+  - Runtime `KoogHttpClient.Factory` lookup fixed. Koog 1.0.0
+    declares the HTTP client as a JVM `ServiceLoader` SPI, but the
+    `http-client-ktor-android-1.0.0` AAR published to Maven Central
+    omits the `META-INF/services/ai.koog.http.client.KoogHttpClient$Factory`
+    registration file (the `KtorKoogHttpClient$Factory` class itself
+    is present, the SPI descriptor is not). The default `LLMClient`
+    secondary constructors therefore threw
+    `IllegalStateException: No KoogHttpClient.Factory provider
+    found on the runtime classpath` on the first cloud call,
+    crashing the app at startup. `KoogClientFactory` now constructs
+    a single `KtorKoogHttpClient.Factory()` instance and passes it
+    explicitly to every cloud / Ollama `LLMClient` constructor
+    (`OpenAILLMClient`, `AnthropicLLMClient`, `GoogleLLMClient`,
+    `DeepSeekLLMClient`, `OllamaClient`), bypassing the broken SPI
+    lookup. `app/build.gradle.kts` already pulls in
+    `libs.koog.http.client.ktor` so the factory class is on the
+    runtime classpath; remove the explicit-factory plumbing once
+    Koog ships an AAR with the services descriptor restored.
+  - Lint baseline absorbs a Koog-version false-positive
+    (`NewerVersionAvailable` claims `1.0.0-beta` is newer than
+    `1.0.0-beta-preview7` for `agents-mcp`; Maven Central only
+    publishes the `…-previewN` series and `-preview7` is the
+    latest). Re-baseline together with the next genuine bump.
+
+- **Pipeline editor — review follow-up** (Phase 22 / Task 14/17,
+  second pass) — eight issues caught on a real device after the
+  initial alignment landed: the `RunStatusBanner` now uses a single
+  Material `Surface` with a `border` parameter so the inner border
+  and the outer background tint always paint the same rectangle (the
+  prior two-Surface layering left the border framing a smaller box
+  than the background); `Stop` on the banner calls a new
+  `OrchestratorViewModel.stopRunAndReset()` that wipes both
+  `isRunning` and `activeNodeId`, and a screen-level `DisposableEffect`
+  fires the same reset on screen leave so the banner can no longer
+  follow the user back to the library or into another pipeline; the
+  `ZoomRail` tiles dropped `IconButton` for `Surface + clickable +
+  Icon` so the 40 dp tile size survives Material3's 48 dp
+  minimum-interactive-component enforcement (tiles no longer overlap);
+  `AutoLayout` post-translates the freshly-computed bbox so its
+  centroid lands on the centroid of the previously occupied area —
+  the re-laid graph stays where the user was looking instead of
+  landing in the upper-left corner; a `FloatingActionButton` with `+`
+  now sits in the bottom-right corner of the canvas (hidden behind
+  the mini-map) and opens the radial quick-add menu at the viewport
+  centre, honouring the empty-state's "Tap + to drop your first node"
+  promise; the toolbar primary `Run` / `Re-run` button shrunk to the
+  `Sm` size variant and dropped its leading icon so the title +
+  subtitle stack has horizontal room to breathe (no more
+  `Running · ste…` truncation); the empty-state CTAs wrap via
+  `FlowRow` and use the `Sm` button size so `From template` no longer
+  truncates to `Fro…`; the overflow `DropdownMenu` gained an
+  explicit `Save pipeline` item that calls
+  `OrchestratorViewModel.saveCurrentPipeline` and surfaces a snackbar
+  on completion, so the user has a reliable "write to disk" lever
+  instead of guessing whether each edit autosaved. Catalog snapshot
+  baselines regenerated to reflect the new toolbar + banner layout.
+
+- **Clarification node — default prompt + library seeds**
+  (Phase 22 / Task 14/17, review fix) — two regressions caught on a
+  fresh Clarification node:
+  - `NodeConfigCodec.defaultFor(CLARIFICATION)` now seeds
+    `questionTemplate` from `DefaultPrompts.getDefaultPromptForNodeType(CLARIFICATION)`.
+    The previous `ClarificationConfig(title = title)` left the
+    prompt blank on every new Clarification node — the user had to
+    type from scratch instead of seeing the registered default.
+  - `GetPromptTemplatesUseCase.seedMissingDefaults` extends the
+    seed set to every prompt-bearing node type
+    (`CLARIFICATION / EVALUATION / LITE_RT / CLOUD / OUTPUT`
+    on top of the existing `INTENT_ROUTER / DECOMPOSITION /
+    SUMMARY / TOOL`). Seed is now **additive** — it inserts only
+    the categories that aren't already in the repository, so
+    existing users who installed before a new category was
+    registered pick up the new entry on the next library open
+    instead of waiting for a DB wipe. Updated `GetPromptTemplatesUseCaseTest`
+    to pin both the "all-present → no-op" and the
+    "Clarification-missing → inserted" paths.
+
+- **App-wide slider — single `KnotworkCompactSlider` atom**
+  (Phase 22 / Task 14/17, review polish) — extracted the
+  inline `CompactSlider` that the Settings screen had been rolling
+  privately into a new catalog atom at
+  `components/controls/KnotworkCompactSlider.kt`. Every slider in
+  the app now goes through it: `KnotworkParamSlider` (Settings
+  numeric params), `SettingsContent` (memory auto-summarize),
+  `NodeConfigForms` (LITE_RT / CLOUD / Decomposition /
+  Evaluation / Summary numeric fields). Visual contract — 4 dp
+  pill-shaped thumb (4 × 18 dp) + 4 dp track, primary thumb /
+  active track, `extended.surface3` inactive, no tick marks
+  regardless of `steps`. Result: every slider reads identically
+  regardless of which surface it sits in, instead of the previous
+  mix of Material defaults vs the inline Settings variant vs the
+  per-sheet `Modifier.height(28.dp)` hack. The dropped per-callsite
+  customisation (settings-parity color helper, `COMPACT_SLIDER_*`
+  constants, private Settings `CompactSlider`) is now `dead-code`
+  removed.
+
+- **Pipeline editor — polish round 3** (Phase 22 / Task 14/17,
+  second real-device review pass) — six fixes on `NodeConfigSheet`:
+  - Every field on the sheet now uses `KnotworkTextStyles.MonoBase`
+    (Title + plain text fields + identifier fields). The mixed
+    BodyBase / MonoBase stack read as accidentally inconsistent on
+    the same dialog. The `monospace` parameter on `TextField` was
+    removed (every call became `MonoBase`).
+  - `VariableChipsRow` converts to a `LazyRow` with horizontal scroll
+    so chips never wrap to a second row. The full prompt-variable
+    set is now exposed: `$DATE / $TIME / $LANG / $LOCATION / $USER /
+    $DEVICE / $MODEL / $TOOLS / $MEMORY_SUMMARY` (matches every
+    registered `PromptVariableProvider` in the `:app` module).
+  - `CloudFormBody` drops the per-node Model id field — cloud-model
+    ids live once per provider in Settings → External providers and
+    are shared across every Cloud node. `CloudConfig.model` stays on
+    the data class for persisted-JSON backward-compat (executor falls
+    back to the provider's configured model when the field is blank).
+    `NodeConfigValidation.validateCloud` correspondingly stops
+    flagging a blank `model` — the previous rule would have locked
+    Save out forever now that the user can't reach the field.
+  - Sheet sliders shrink to a compact 28 dp height — the M3 default
+    48 dp interactive area was visibly inflating every slider row.
+    Same primary thumb / surface3 inactive palette as
+    `KnotworkParamSlider`; trade-off accepted: the form is a config
+    surface, not a discoverability one.
+  - `NodeContextConfigSection` ("Input Data" checkboxes — Original
+    task / Chat history / Long-term memory / Tool results) is back
+    on every NodeConfigSheet. The catalog `NodeConfigSheet` grew an
+    `extraSection: @Composable (() -> Unit)?` slot (and the
+    production `NodeConfigSheetHost` forwards it) so the
+    domain-coupled section can render between the form body and the
+    Save row without dragging `NodeContextConfig` into the catalog.
+    `EditorState` gains a `workingContextConfig` mirror; Save now
+    stitches it into the persisted `NodeModel.contextConfig`.
+  - Default system prompts restored on every prompt-bearing node
+    type. `NodeConfigCodec.deriveFromLegacy` falls back to
+    `DefaultPrompts.getDefaultPromptForNodeType(node.type)` when
+    `node.systemPrompt` is null/blank — older pipelines that
+    persisted before defaults were wired into `NodeModel`
+    construction now see the registered defaults on first open.
+  - Catalog `pipeline_editor_*` snapshot baselines regenerated.
+
+- **Pipeline editor — polish round 2** (Phase 22 / Task 14/17,
+  real-device review pass) — eight more issues:
+  - `NodeConfigSheet` Title field now uses `KnotworkTextStyles.BodyBase`
+    instead of Material3's default `bodyLarge` so it no longer reads
+    larger / different from every other field on the sheet.
+  - `NodeConfigSheet` IntentRouter `Add class` auto-names the new
+    class to a unique `class_N` placeholder so Save doesn't disable
+    while the user is mid-rename (blank names used to immediately
+    trigger the `REQUIRED` validator and lock Save out).
+  - `NodeConfigSheet` prompt-library button moved back into a row
+    above the field (sibling of the label, 32 dp tap-target). The
+    earlier `trailingIcon` placement crowded the prompt and was hard
+    to associate with the `VariableChipsRow` underneath.
+  - `VariableChipsRow` extended to every prompt-bearing form
+    (IntentRouter, Clarification, Decomposition, Evaluation, Summary
+    custom-prompt) — previously only LITE_RT and CLOUD surfaced the
+    `$DATE` / `$TIME` / `$TOOLS` / `$MODEL` / `$MEMORY_SUMMARY`
+    chips.
+  - `NodeConfigForms` `FloatSliderField` / `IntSliderField` now apply
+    the same `SliderDefaults.colors` as `KnotworkParamSlider` on the
+    Settings screen (primary thumb + active track, `surface3`
+    inactive). Sheet sliders no longer fall back to M3's tonal
+    palette.
+  - Pipeline editor `BackHandler` learns the `searchOpen` state —
+    system back closes the Find-node bar (and clears its query)
+    instead of falling through to `onBack` and exiting the editor.
+  - `Run` primary action now surfaces a `Preview only` snackbar
+    explaining that the banner is the UI scaffold and that the real
+    `GraphExecutionEngine` wiring lands in a follow-up. Avoids the
+    "I tapped Run, nothing happened" confusion.
+  - Catalog `pipeline_editor_*` snapshot baselines regenerated.
+
+- **NodeConfigSheet — density tightening** (Phase 22 / Task 14/17,
+  same review pass) — every per-field label now rides on
+  `OutlinedTextField`'s floating-label slot instead of a separate row
+  above (saves ~24 dp per field across 12 forms). The optional
+  prompt-library button moves into the field's `trailingIcon` slot at
+  a compact 32 dp tap target so the row no longer inflates to fit a
+  48 dp `IconButton`. Sheet body padding drops `sp4 → sp3` horizontal
+  + `sp3 → sp2` vertical; inter-field gap drops `sp3 → sp2`. The Save
+  primary CTA shrinks to `KnotworkButtonSize.Sm` so the sticky action
+  row matches the toolbar's `Run` button density. The catalog
+  `pipeline_editor_*` snapshot baselines were regenerated to reflect
+  the tighter sheet.
+
+- **Pipeline editor — design alignment & feature backfill**
+  (Phase 22 / Task 14/17) — closes every divergence the diff document
+  caught between the spec, the production code, and the new designer
+  mockups. The catalog `EditorToolbar` is reshaped to
+  `[← back] [title + subtitle] [primary action] [overflow]`
+  (`EditorPrimaryAction.Run` / `Rerun` / `None` for the primary slot);
+  Undo / Redo / Delete / Auto-layout move into the production-side
+  overflow `DropdownMenu`. The new top-of-canvas `RunStatusBanner`
+  surfaces `Running` (amber + Pause / Stop) and `Done` (green + Trace)
+  variants — replaces the prior bottom `RunTraceBar`. An
+  always-visible right-edge `ZoomRail` (`+ / − / ⤡`) anchors zoom +
+  fit-to-view; a `MiniMap` overlay (270 × 290 dp, `OVERVIEW · 0.42×`
+  header, per-type-hue node bricks + accent viewport rect) drops in
+  from the overflow. A 24 dp `DotGridBackground` lights up under the
+  canvas (toggle from overflow). The empty state becomes a
+  full-hero `EmptyPipelineState` (brand-mark tile + `Start with
+  INPUT` / `From template` CTAs + info pill). The `ValidationBar`
+  gains a header `Auto-fix` action (six recipes registered in
+  `ValidationAutoFix`) + per-row `Go ↗` jumps + severity glyphs.
+  Non-active nodes dim to α 0.40 during a run; running edges adopt
+  the source node's header hue. Copy / Paste node (multi-select
+  Copy button + overflow Paste). Find-node bar (`FilterBar`, opened
+  from overflow). Inline rename via the overflow `Rename node…`
+  dialog. The toolbar subtitle now renders `Editing · nodes N ·
+  edges M` / `N issues · can't run` / `Running · <label>` /
+  `Overview · 0.42× · nodes N`. Two TODO candidates are explicitly
+  deferred to follow-ups: pipeline-as-PNG export (requires
+  FileProvider plumbing) and the sidebar drag-from-palette (overlaps
+  with the radial quick-add menu — best landed alongside broader
+  wide-screen layouts).
+
+- **Onboarding — review follow-up** (Phase 22 / Task 13/17, second
+  pass) — three issues caught on a real device after the initial
+  audit landed: the Step-2 selected `LiteRtModelRow` background
+  switched from the static `Accent50` palette to
+  `MaterialTheme.colorScheme.primaryContainer` so the model name stays
+  readable in dark theme; the per-step `StepHeadline` / `StepBody`
+  dropped from `Display2xl` / `BodyLg` to `TitleXl` / `BodyBase` so
+  the title + description block no longer eats half the viewport on
+  small phones; Step 3's Configure tap now navigates to the same
+  per-provider API-key editor that Settings uses (via the new
+  `OnboardingScreen.onConfigureProvider` callback wired through
+  `AppNavGraph`), and the `configuredCloudProviders` projection is
+  computed reactively from `ApiKeyRepository` so the "Configured" pill
+  flips on whatever is actually persisted — not on which row the user
+  tapped.
+
+- **Onboarding — design audit & alignment** (Phase 22 / Task 13/17) —
+  the four-step pager now honours every chrome rule called out in the
+  task brief: the `StepHeadline` composable clamps the user's
+  `fontScale` to 1.6× per `decisions.md §14` (via an overridden
+  `LocalDensity` scoped to the headline subtree only, leaving every
+  other text on the screen at the unclamped system value); the
+  step-2 download progress indicator now branches on
+  `KnotworkTheme.a11y.reducedMotion()` and collapses to a static
+  primary-filled bar when the download reaches `≥ 0.99f`, matching
+  the brief "под reduced-motion — статичный full bar"; the system
+  predictive-back gesture is wired through a new
+  `PredictiveBackHandler` in `OnboardingScreen` and rewinds the pager
+  one step on steps 2–4, or raises a typed-confirm "Quit setup?"
+  dialog on step 1; the activity-level `SnackbarHost` (which catches
+  the skip-flow hint after onboarding is popped off the back-stack)
+  now renders every message through `KnotworkSnackbar(variant =
+  Default)` so the skip-hint sits on `extended.surface3` instead of
+  the raw Material3 chrome. Roborazzi baseline grew from 8 → 16 PNGs
+  with new fixtures for step-2 `Downloading`, step-2 `DownloadError`,
+  step-2 `CustomUrlInput`, and step-4 `ModelReady`. Findings logged
+  in `project_docs/ui-audit-phase22.md` (`## Task 13 — Onboarding`);
+  `screens/README.md §C5` rewritten to match the second-pass JSX
+  artboard family that `OnboardingViewState` was designed against,
+  replacing the stale first-pass spec.
+
+- **Onboarding — LiteRT model download wiring** (Phase 22 / Task 12/17)
+  — Step 2 of the onboarding pager now actually downloads the picked
+  LiteRT model. The CTA stays disabled until the model is on disk or a
+  download is in flight, so the user can no longer advance into chat
+  with no active model (which previously produced a "LiteRT handle
+  released by system" error on the first send). Re-entering onboarding
+  after a previous install detects the existing file through the new
+  `LocalModelRepository.isInstalled(fileName)` query and surfaces an
+  "Installed" pill on the matching row. Picking *Custom URL…* reveals
+  an inline text field, with on-the-fly filename derivation from the
+  trailing path segment. As soon as a model becomes available the
+  ViewModel runs `LoadModelUseCase` to warm the inference handle, so
+  step 4's "Open chat" CTA becomes enabled the moment the model
+  finishes loading. Skipping onboarding emits a snackbar — "You can
+  install a model from Settings → Models" — so the user knows where to
+  recover the flow later. The bundled preset URLs live in the new
+  `domain/constants/OnboardingModelCatalog.kt` and are shared between
+  the onboarding catalog and the data-layer downloader.
+
+- **Tools — full MCP server configuration** (Phase 22 / Task 10/17) —
+  Each MCP server now carries a full [McpServerConfig]: optional
+  display name, transport selection (SSE via Koog's
+  `defaultSseTransport`; Streamable HTTP via the upstream MCP
+  Kotlin SDK's `HttpClient.mcpStreamableHttpTransport` extension —
+  both end-to-end wired against real servers), a typed
+  authentication selector (None / Bearer / Basic / API Key) with
+  per-scheme fields, and arbitrary request headers for advanced
+  overrides. Adding and editing happen on a
+  dedicated full-screen `McpServerConfigScreen` (route
+  `tools/mcp-config?originalUrl={url}`) — the row's overflow ⋮
+  menu (Refresh / Edit / Remove) opens it pre-filled, the
+  `+ Add MCP` link opens it blank, and Save / Cancel pop back to
+  the list. KoogMcpClient now configures the Ktor `defaultRequest`
+  block with the user-supplied headers so they reach both the SSE
+  handshake and every subsequent JSON-RPC call. Persistence
+  switched from a `stringSet` of URLs to a JSON-encoded list of
+  configs in the new `mcp_servers_json` key — the manager one-shot
+  migrates the legacy key on the first read, and writes the new
+  shape on the next mutation.
+- **Tools — MCP per-tool detail and tool-list fetcher** (Phase 22 /
+  Task 10/17) — Tools surface now drives a real
+  `tools/list` MCP round-trip through the new
+  `McpServerRepository` (data impl: `McpServerRepositoryImpl`).
+  Per-server snapshots in `ToolsUiState` carry the live
+  `McpConnectionStatus` (`Connecting` / `Connected` /
+  `Error(reason)`) and the discovered `McpTool` list — both
+  rendered in the catalog under the expanded server row. Tool
+  list responses are cached for 5 minutes; the trailing refresh
+  icon on every server row force-bypasses the cache. Per-MCP-tool
+  `ToolDetailScreen` now resolves a real
+  `McpTool.inputSchemaJson` instead of the placeholder, and
+  local AppFunction tools render their actual
+  `AgentTool.parameters` (no more cosmetic `{ "...": ... }`
+  stub). New `disabledMcpTools` set in `SettingsRepository`
+  (keyed by `mcp:<sha8(serverUrl)>:<toolName>`) tracks the
+  per-MCP-tool enabled state independently of
+  `disabledAppFunctions`. Standalone `AddMcpServerScreen` route
+  + file deleted — the inline add-form on `ToolsScreen` is the
+  single entry point.
+
+- **Settings — redesign + full backend wiring** (Phase 22 / Task 9/17) —
+  Settings was rewritten end-to-end to match the new mockup. New surface
+  hosts nine cards: identity (device-id + Keystore probe), system
+  instructions (with variable chip row and char/token counter),
+  restrictions (segmented `Approve tool calls` + Block destructive /
+  Block network from local model toggles + Cap autonomous steps),
+  LLM parameters (Temperature / Top-K / Top-P / Repetition penalty /
+  Max context / Max steps + "Reset to defaults"), local model
+  (metadata card + Inference backend dropdown + Test backend with
+  persisted `TestProbeResult`), external providers (collapsed nav-rows
+  with key fingerprint + Add provider sheet → `ProviderDetailScreen`),
+  memory (CHUNKS / SIZE / THREADS / AVG SCORE stat grid +
+  Auto-summarize threshold slider + Embedding model row +
+  Export / Re-embed / Clear actions), notifications (Long-running
+  tasks toggle), and privacy (Crash reporting + Reset all settings).
+  The legacy boolean `requiresUserConfirmation` flag is migrated
+  one-shot into the new `ToolApprovalPolicy` enum
+  (`true` → `SensitiveOrDestructive`, `false` → `NeverPrompt`). New
+  domain: `IdentityRepository`, `MemoryRepository.observeStats()` +
+  `deleteAllMemories()`, `LocalModelRepository.observeActiveModelMeta()`,
+  `EmbeddingModelMetaProvider` (static), `LongRunningTaskNotifier`,
+  `ToolApprovalPolicy`, `TestProbeResult`, `MemoryStats`,
+  `ActiveModelMeta`, `ProviderSummary`, `Identity`, four new
+  `$VARIABLE` providers (`$LANG`, `$LOCATION`, `$USER`, `$DEVICE`),
+  and seven new use cases (`ResetSamplingDefaults`, `ClearAllMemory`,
+  `ExportMemoryBase` over SAF, `ReembedAllMemories` with progress flow,
+  `TestBackend` returning typed probe metrics,
+  `GetSystemPromptVariableCatalog`). `ToolNodeExecutor` now gates by
+  the new policy enum and hard-denies destructive tools when the
+  `Block destructive tools` toggle is on; `KoogClientFactory` returns
+  `null` for every cloud provider (Ollama still reachable) when the
+  `Block network from local model` toggle is on. Restart-required
+  banner detects backend / Ollama URL changes and reboots via
+  `ProcessPhoenix.triggerRebirth`. Destructive actions
+  (Clear memory / Reset settings) use a typed-confirm dialog (`yes`
+  keyword, matching the HITL Destructive pattern). New routes:
+  `settings/provider/{providerId}` (detail editor) +
+  `settings/provider/add` (picker). About screen expanded with
+  version / commit / license / acknowledgments / privacy policy
+  sections.
+- **Settings — port provider/sampling forms in the Knotwork style**
+  (Phase 22 / Task 8/17) — the Settings screen now drives the catalog
+  `SettingsContent` as the single source of truth for chrome (TopAppBar,
+  sections, scroll, visual states). Provider configuration moved to the
+  catalog: `KnotworkProviderRow` renders a collapsible card with masked
+  API-key input, model dropdown, and (for Ollama) base-URL +
+  context-window fields with inline validation. Sampling sliders
+  (temperature, top-K, top-P, max context, pipeline max steps, memory
+  summary default limit) render through `KnotworkParamSlider`. The
+  system-prompt prefix uses the new `KnotworkMonoTextArea`. A new
+  `memorySummaryDefaultLimit` slider exposes the `$MEMORY_SUMMARY`
+  limit (1–50) on the Memory section. About surfaces `app version`,
+  short `git SHA` (via `BuildConfig.GIT_SHA`), and a license link
+  routed to `AboutScreen`. MCP section navigates to the Tools screen
+  for server management. `SettingsContent` now accepts an optional
+  `rowContent` override so the app can replace the default
+  title-subtitle-trailing row with the richer Knotwork variants without
+  forking the catalog scaffolding, and an optional `onBack` callback so
+  the embedded TopAppBar can render a navigation icon. Restart-required
+  / destructive-confirm wiring stays deferred to Task 9 (audit pass).
+- **Memory — design audit & alignment** (Phase 22 / Task 7/17) — full 7-state
+  Roborazzi baseline (Empty / Populated / Searching / LoadingMore /
+  EntryExpanded / Editing / Error) in both themes plus a populated-pinned
+  snapshot covering the Task 6 glyph. Detail-sheet tag chips switched from
+  `ChipStyle.Outline` to `ChipStyle.Tonal` per `screens/README.md §C6`. New
+  `MemoryAccessibilityTest` enumerates the TalkBack-reachable surfaces on
+  happy path #5 (Search → expand → delete) and asserts the pinned-row
+  glyph publishes a non-blank `contentDescription` so colour is never the
+  only signal. Audit findings (closed / deferred) appended to
+  `project_docs/ui-audit-phase22.md`.
+- **Memory — edit + pin persistence** (Phase 22 / Task 6/17) — the
+  detail-sheet Edit and Pin affordances on the Memory screen now drive
+  real persistence instead of "coming soon" snackbars.
+  `MemoryRepository` gains `updateMemory(id, text, embedding)` and
+  `setMemoryPinned(id, pinned)`; the editor regenerates the vector
+  embedding for the new text through `TextEmbeddingEngine` so semantic
+  search stays coherent with the visible body. The catalog
+  `MemoryRow` / `MemoryEntryDetail` / `MemoryEntryRow` carry a new
+  `isPinned` field — pinned rows render a leading star glyph and float
+  to the top of the list ahead of the active sort partition, and the
+  sheet pin button toggles between "Pin to top" and "Unpin" depending
+  on the current state. Room migrates `v22 → v23` adding
+  `memory_chunks.isPinned INTEGER NOT NULL DEFAULT 0`.
+- **Chat home — design audit & alignment** (Phase 22 / Task 5/17) — token
+  sweep over the production chat scope, drawer slide-in motion gated
+  through `respectReducedMotionTransitions`, HitlConfirm snapshot matrix
+  expanded to the 3 risk variants (`Readonly` / `Sensitive` /
+  `Destructive`), and 2 new font-scale 2.0× snapshots covering the worst
+  cases. New `ChatHomeAccessibilityTest` asserts that the TopAppBar,
+  drawer, HITL card, and console pane each publish the minimum number of
+  TalkBack-reachable nodes. Audit findings (closed / deferred) live in
+  `project_docs/ui-audit-phase22.md`.
+- **Chat home — secondary affordances** (Phase 22 / Task 4/17) — the
+  drawer, top app bar, and composer-overflow callbacks that were left
+  stubbed in Tasks 1–3 now drive real backend operations. Every entry
+  point in `compose/screens/README.md §C1` is wired:
+  - **New chat** opens a `ModalBottomSheet` pipeline picker pre-selected
+    to the user's current binding; confirming persists a fresh
+    `ChatSession` and switches to it.
+  - **Rename thread** opens a rename sheet (`OutlinedTextField` +
+    Save / Cancel) driving the new
+    `ChatRepository.renameSession(sessionId, newName)`. The input is
+    trimmed and a blank Save is a no-op.
+  - **Favorite chat** persists a session-level `isStarred` flag via
+    `ChatRepository.setSessionFavorite`. Favorited chats sort to the top
+    of the drawer thread list and render a small leading star glyph next
+    to the title (new `ChatHomeThreadRow.starred` field in the catalog).
+  - **Import chat** launches `ActivityResultContracts.OpenDocument()`
+    with mime `application/json`, reads the file on `Dispatchers.IO`,
+    and forwards the payload to `ChatRepository.importChat(json)` (port
+    of the legacy JSON parser; accepts both export-shaped objects and
+    bare message arrays).
+  - **Open Settings / Models** — `ChatHomeScreen` now takes
+    `onOpenSettings` / `onOpenModels` constructor parameters wired by
+    `AppNavGraph` to the existing `NavRoutes.SETTINGS` and
+    `NavRoutes.MODELS` routes.
+  - **Model picker** opens a `ModalBottomSheet` listing the locally
+    installed LiteRT models (live from
+    `LocalModelRepository.getAllModels()`). Picking a model calls
+    `setActiveModel` + `LoadModelUseCase` to swap the inference handle;
+    the empty case surfaces an "Open Models" pill deep-linking to the
+    Models tab.
+  - **Overflow menu** (anchored `DropdownMenu` on the TopAppBar `⋮`
+    icon) drives Export chat, Delete chat (destructive `AlertDialog`),
+    and Clear console. Export emits a `ChatExportPayload` via
+    `viewModel.exportEvents`; the screen handles the
+    `Intent.ACTION_SEND` share-sheet dispatch. Delete cascades into
+    auto-selecting the next available thread, or creating a fresh
+    unbound chat when none remains.
+- **Room migration `v21 → v22`** — adds the `isStarred INTEGER NOT NULL
+  DEFAULT 0` column to `chat_sessions`. Backfilled to `0` for every
+  pre-existing row. Distinct from `MIGRATION_19_20` which introduced the
+  message-level `isStarred` on `chat_messages`.
+- **`ChatExportPayload`** relocated from `chat/legacy/` to `chat/home/`
+  so the legacy package can be deleted in Phase 22 / Task 17 without a
+  dangling import.
+- **Catalog: `ChatHomeThreadRow.starred: Boolean`** + leading star glyph
+  in `ChatHomeDrawerThreadRow`.
+
+### Changed
+
+- `ChatHomeViewModel` constructor now injects `LocalModelRepository` and
+  `LoadModelUseCase`. Both are used exclusively by the new model-picker
+  sheet — every other flow is untouched.
+- `ChatHomeStateMapping.toViewState` accepts a `threads:
+  List<ChatHomeThreadRow>` parameter so the screen can pass the live VM
+  projection. The fixtures fallback is preserved for the debug picker
+  when the drawer is forced open before any session has been persisted.
+- `ChatHomeViewModel._modelName` is now derived from the active
+  `LocalModel.name` instead of the static `"Local model"` placeholder.
+
+- **Chat home — Console pane real-time wiring** (Phase 22 / Task 3/17) —
+  replaces the `sampleConsoleLines()` / `sampleConsoleVars()` /
+  `sampleConsoleTraces()` fixtures with live data streamed off the agent
+  orchestrator. The console pane now reflects the real pipeline run on
+  every step and survives Clear / Copy / tab-change interactions across
+  process death.
+  - New domain state `AgentOrchestratorState.NodeIO(nodeId, nodeType,
+    input, output)`, emitted by `GraphExecutionEngine` after every
+    non-`INPUT` / non-`OUTPUT` node completes (right after the existing
+    `PipelineTrace` emission). Powers the Vars tab of the console pane —
+    the VM aggregates emissions into a `LinkedHashMap<nodeId, NodeIO>`
+    so repeated invocations of the same node id overwrite (rather than
+    duplicate) Vars rows.
+  - New pure-Kotlin `ChatHomeConsoleMapping.kt`: `ConsoleEvent →
+    ConsoleLine` (timestamp `HH:mm:ss.SSS`, source resolution and severity
+    mapping covering every `ConsoleEventType`), `TraceStep →
+    ConsoleTraceSpan`, `NodeIO → List<ConsoleVarRow>` with
+    `JSONObject.quote`-escaped values.
+  - `ChatHomeViewModel` extensions: `consoleLines`, `consoleVars`,
+    `consoleTraces`, `consoleTab`, `consoleClearConfirmRequested`,
+    `consoleSnackbarEvents` flows plus public methods
+    `onConsoleTabChange`, `requestConsoleClear`,
+    `confirmConsoleClear`, `dismissConsoleClear`,
+    `signalConsoleLineCopied`, `signalConsoleAllCopied`,
+    `buildConsoleLineCopyPayload`, `buildConsoleAllCopyPayload`. The
+    `consoleClearBaseline` logic from the legacy `ChatViewModel` is
+    preserved verbatim so a mid-run `Clear` survives the next cumulative
+    engine snapshot.
+  - `SettingsRepository` gains
+    `consolePreferredConsoleTabName: Flow<String>` +
+    `setConsolePreferredConsoleTabName(name: String)`. The VM hydrates
+    the active tab from this flow at init and writes through on
+    `onConsoleTabChange`, so the user's chosen tab survives process
+    death. Domain stays free of `:catalog` imports — the enum name is
+    stored as a raw string and decoded at the presentation boundary.
+  - `ChatHomeScreen` wires the four previously-stubbed callbacks:
+    `onConsoleCopyLine` writes the plain-text payload via
+    `LocalClipboardManager` and raises a Snackbar; `onConsoleCopyAll`
+    pre-filters the buffer through the active `ConsoleFilter` +
+    search-query so the clipboard mirrors exactly what the user sees;
+    `onConsoleClear` opens a destructive `AlertDialog` and only advances
+    the baseline once the user confirms; `onConsoleTabChange` persists
+    through the VM. The Clear and Line-copied snackbars use new
+    `chat_console_clear_dialog_confirm` / `chat_console_clear_dialog_cancel`
+    / `chat_snackbar_console_line_copied` strings.
+  - `ChatHomeStateMapping.toViewState` now accepts `consoleLogs`,
+    `consoleVars`, `consoleTraces`, `consoleTab` and forwards them to
+    `ChatHomeConsoleState`. The old `sampleConsoleLines()` /
+    `sampleConsoleVars()` / `sampleConsoleTraces()` fixtures are
+    deleted.
+  - **Console pane is now an independent overlay** —
+    `ChatHomeConsoleState.snap` becomes nullable (`null` = closed);
+    catalog `ChatHomeContent` renders the overlay whenever
+    `state.console.snap != null` instead of gating on
+    `visualState == ConsoleExpanded`. `ChatHomeUiState.ConsoleExpanded`
+    is removed from the sealed hierarchy. The VM exposes a dedicated
+    `consoleSnap: StateFlow<ConsoleSnap?>` that is orthogonal to the
+    chat state machine, so the pane survives `Generating →
+    HitlConfirm → Clarification → Completed / Error` transitions
+    instead of being closed by every terminal emission. The debug
+    state picker now routes its `CONSOLE_*` entries through
+    `debugConsoleSnapForId` + `openConsole(snap)`.
+  - Console `Close` icon in the Partial / Full header now actually
+    dismisses the overlay (catalog `ConsolePane` gains a dedicated
+    `onCloseConsole` parameter); previously it only snapped the pane
+    down to `Peek`.
+  - `FullTabStrip` columns widened from 72 dp → 88 dp + `maxLines = 1`
+    so the longest tab label (`TRACES`) no longer wraps onto two lines.
+  - Pill-tap affordance: tapping the agent-status pill above the
+    composer opens the console pane at the Partial snap (catalog
+    `ChatHomeCallbacks.onAgentStatusClick`, screen routes to
+    `viewModel.openConsole()`).
+  - **Console hosted in M3 `ModalBottomSheet`** — the hand-rolled
+    overlay (custom scrim + `Modifier.height(snap.height)` +
+    self-implemented `detectVerticalDragGestures`) is replaced with
+    Material 3's anchored-draggable bottom sheet. We get smooth
+    snap-transition animations, fling-to-snap physics, drag-from-body
+    (not just the handle), tap-outside-to-dismiss, swipe-down-to-close,
+    and a `BottomSheetDefaults.DragHandle` that announces correctly
+    via TalkBack — all for free. The console keeps its "always dark"
+    identity via overridden `containerColor` / `contentColor`. The
+    sheet's `SheetState` is bidirectionally synced with the host's
+    `consoleSnap` flow: programmatic `partialExpand()` /
+    `expand()` calls follow VM-driven changes, and user-driven snap
+    moves are mirrored back through `onConsoleSnapChange`.
+  - **Engine emits no longer conflated.** The per-session orchestrator
+    flow in `TaskQueueManagerImpl` switched from `MutableStateFlow` to
+    `MutableSharedFlow(replay = 1, extraBufferCapacity = 256)`. The
+    `StateFlow` was conflated — when `GraphExecutionEngine` emitted
+    `PipelineTrace` immediately followed by `NodeIO` (two `emit`
+    calls back-to-back), the second `.value =` overwrote the first
+    before the chat-home collector resumed on the main dispatcher, so
+    the Traces tab stayed empty even when the Vars tab populated
+    correctly. `SharedFlow` with `replay = 1` preserves the legacy
+    "subscriber sees latest state on attach" behaviour while the 256-
+    event buffer guarantees no engine emit is silently dropped. The
+    `enqueueTask` / `processTask` / `updateActiveSessionsState` /
+    `evictOldestTerminalSession` paths are migrated to
+    `emit(...)` + `replayCache.lastOrNull()`.
+  - **`ConsoleSnap.Peek` retired.** The 44 dp ticker strip duplicated
+    the agent-status pill above the composer and proved a dead-end UX
+    in user testing. The enum is now `Partial` ↔ `PartiallyExpanded` +
+    `Full` ↔ `Expanded`, matching M3's native `SheetValue`. The
+    debug-picker `CONSOLE_PEEK` entry, the `PeekHeader` /
+    `PeekTabStrip` / `PeekTickerRow` / `DragHandleStrip` composables,
+    and the custom `resolveDragOutcome` snap-cycle helper are deleted.
+
+- **Chat home — HITL and Clarification real-time wiring** (Phase 22 /
+  Task 2/17) — replaces the `forceState(...)` stubs in
+  `ChatHomeScreen.onHitlAllowOnce` / `onHitlReject` / `onClarificationReply`
+  with live orchestrator round-trips.
+  - `ChatHomeViewModel` now injects `ClarificationRepository` and exposes
+    two new `StateFlow`s: `pendingTool: StateFlow<HitlPending?>`
+    (snapshot of the tool the orchestrator is paused on, with risk +
+    raw arguments) and `pendingClarification: StateFlow<ClarificationRequest?>`.
+  - `handleOrchestratorState` maps `WaitingForApproval(name, args, risk)`
+    onto `ChatHomeUiState.HitlConfirm(Risk)` (via `ToolRisk.toCatalogRisk`)
+    and `AwaitingClarification(request)` onto `ChatHomeUiState.Clarification`.
+  - New VM callbacks: `approveTool()` resumes the pipeline with `true`
+    (refused defensively for `Destructive` tools until the typed-confirm
+    matches `"yes"`); `rejectTool()` resumes with `false` and persists a
+    `SYSTEM` chat row recording the denial; `submitClarificationReply(text)`
+    forwards the reply through `ClarificationRepository.submitClarification`
+    and flips back to `Generating`.
+  - Clarification watchdog: when `AwaitingClarification` arrives with a
+    positive `timeoutMs`, the VM arms a `delay(timeoutMs)` job that — on
+    elapse — submits the default answer (first option, or empty for
+    free-form), appends a `SYSTEM` "clarification timed out" chat row,
+    and settles back on `Idle` / `Empty`. The repository's own
+    `withTimeout` remains the authoritative gate; the watchdog is a
+    UI safety-net.
+  - `ChatHomeStateMapping.toViewState` now accepts `pendingTool` /
+    `pendingClarification` and renders the trailing HITL /
+    Clarification rows from live data — tool name, risk, JSON-decoded
+    `Map<String, String>` of argument fragments, question, and
+    quick-reply options — falling back to the existing fixtures only
+    when no real pending snapshot is available (preserves the debug
+    state picker).
+
+- **Chat home — orchestrator core wiring** (Phase 22 / Task 1/17) —
+  replaces the Phase 21 stub `ChatHomeViewModel` (canned delay + reply)
+  with a fully wired Hilt ViewModel that runs the agent orchestrator on
+  the redesigned chat surface.
+  - `ChatHomeViewModel` now injects `AgentOrchestratorUseCase`,
+    `ChatRepository`, `PipelineRepository`, `SettingsRepository`,
+    `LlmInferenceEngine`, and `GetContextWindowUseCase`. `sendMessage()`
+    drives the `Idle → Generating → Idle / Error` cycle through
+    `agentOrchestratorUseCase(sessionId, prompt, pipelineId).collect`,
+    forwarding the active session's `pipelineId`; intermediate states
+    keep `Generating` until HITL / Clarification / Console handlers land
+    in tasks 2/17 and 3/17.
+  - **Pipeline binding** wired end-to-end: TopAppBar subtitle resolves
+    to the bound pipeline name (or the user-marked default, or the
+    first available pipeline), and the deleted-pipeline fallback
+    silently rebinds the session to the default and surfaces a
+    `KnotworkSnackbar` via a new `pipelineFallbackEvents` one-shot
+    `SharedFlow`.
+  - **Session lifecycle**: initial session is restored from
+    `SettingsRepository.currentChatSessionId` (or freshly generated
+    when none exists) and persisted via `ChatRepository.saveSession`;
+    `selectThread` re-subscribes the message stream and rebalances the
+    resting state.
+  - **Token counter**: the TopAppBar shows a rough
+    `getContextWindowUseCase(sessionId).length / 4` estimate against
+    `SettingsRepository.maxContextLength`; a precise tokenizer is
+    queued as a separate follow-up.
+  - Display-message flow now goes through
+    `ChatRepository.getDisplayMessagesForSession`; the legacy in-VM
+    `MutableStateFlow` of pretend messages and the canned reply
+    constants are gone.
+  - Auto-renames a new chat to the first user message (truncated to 20
+    characters) on send, matching legacy parity.
 - **Accessibility + release-candidate gate** (Phase 21 / Task 11/11) —
   finalises the v0.1 surface against `decisions.md §14`:
   - Localised the only hard-coded English `contentDescription` left in

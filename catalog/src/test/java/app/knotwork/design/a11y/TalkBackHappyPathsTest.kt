@@ -86,7 +86,7 @@ class TalkBackHappyPathsTest {
      */
     @Test
     fun happyPath4_settings_default_exposes_focusable_semantics() = assertReachable {
-        SettingsContent(state = SettingsPreview.default(), trailingControl = { })
+        SettingsContent(state = SettingsPreview.default())
     }
 
     /**

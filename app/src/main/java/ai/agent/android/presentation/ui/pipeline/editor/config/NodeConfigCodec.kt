@@ -121,7 +121,15 @@ internal object NodeConfigCodec {
         return when (config) {
             is LiteRtConfig -> withJson.copy(
                 systemPrompt = config.systemPrompt,
-                modelPath = config.modelId.takeIf { it.isNotBlank() } ?: withJson.modelPath,
+                // Blank `modelId` is the explicit "Active model" sentinel
+                // (Phase 22 / Task 16 follow-up F8) — persist as `null` on
+                // the domain row so `LoadModelUseCase(null)` falls back to
+                // the current `LocalModelRepository.getActiveModel()` at
+                // execute time. Earlier this branch preserved the previous
+                // `withJson.modelPath`, which froze the node to whichever
+                // model happened to be active when the user first opened
+                // the form.
+                modelPath = config.modelId.takeIf { it.isNotBlank() },
             )
             is CloudConfig -> withJson.copy(
                 systemPrompt = config.systemPrompt,
@@ -133,13 +141,17 @@ internal object NodeConfigCodec {
                 clarificationTimeoutMs = config.timeoutMs?.toLong(),
                 systemPrompt = config.questionTemplate,
             )
+            // OUTPUT mirrors `systemPrompt` onto the domain row so the
+            // `OutputNodeExecutor` can read it via `node.systemPrompt`
+            // (Phase 22 / Task 16 follow-up F10). Empty string is allowed
+            // and the executor reads it as "echo upstream verbatim".
+            is OutputConfig -> withJson.copy(systemPrompt = config.systemPrompt)
             is IntentRouterConfig,
             is DecompositionConfig,
             is QueueProcessorConfig,
             is EvaluationConfig,
             is SummaryConfig,
             is InputConfig,
-            is OutputConfig,
             -> withJson
         }
     }
@@ -170,7 +182,12 @@ internal object NodeConfigCodec {
             classes = listOf(IntentClass(name = "simple"), IntentClass(name = "complex")),
         )
         CatalogNodeType.IF_CONDITION -> IfConditionConfig(title = title)
-        CatalogNodeType.CLARIFICATION -> ClarificationConfig(title = title)
+        CatalogNodeType.CLARIFICATION -> ClarificationConfig(
+            title = title,
+            questionTemplate = DefaultPrompts
+                .getDefaultPromptForNodeType(DomainNodeType.CLARIFICATION)
+                .orEmpty(),
+        )
         CatalogNodeType.TOOL -> ToolConfig(title = title)
         CatalogNodeType.DECOMPOSITION -> DecompositionConfig(
             title = title,
@@ -221,22 +238,37 @@ internal object NodeConfigCodec {
 
     private fun deriveFromLegacy(node: NodeModel): NodeConfig {
         val title = node.label.ifBlank { node.type.name }
+        // Phase 22 / Task 14 review round 3: when a legacy node persists with
+        // an empty `systemPrompt` (older pipelines created before
+        // `DefaultPrompts.getDefaultPromptForNodeType` was wired into NodeModel
+        // construction), fall back to the registered default prompt instead of
+        // showing an empty field. Users were rightly confused that "standard
+        // prompts disappeared" for these node types.
+        val systemPromptOrDefault = node.systemPrompt
+            ?.takeIf { it.isNotBlank() }
+            ?: DefaultPrompts.getDefaultPromptForNodeType(node.type).orEmpty()
         return when (NodeTypeMapper.toCatalog(node.type)) {
             CatalogNodeType.INPUT -> InputConfig(title = title)
-            CatalogNodeType.OUTPUT -> OutputConfig(title = title)
-            CatalogNodeType.LITE_RT -> LiteRtConfig(
+            // Legacy rows that pre-date F10 keep their persisted
+            // `node.systemPrompt` here so the editor surfaces what they were
+            // already sending to the LLM, instead of silently clearing it.
+            CatalogNodeType.OUTPUT -> OutputConfig(
                 title = title,
                 systemPrompt = node.systemPrompt.orEmpty(),
+            )
+            CatalogNodeType.LITE_RT -> LiteRtConfig(
+                title = title,
+                systemPrompt = systemPromptOrDefault,
                 modelId = node.modelPath.orEmpty(),
             )
             CatalogNodeType.CLOUD -> CloudConfig(
                 title = title,
-                systemPrompt = node.systemPrompt.orEmpty(),
+                systemPrompt = systemPromptOrDefault,
                 provider = CloudProviderMapper.toCatalog(DomainCloudProvider.fromId(node.cloudProvider)),
             )
             CatalogNodeType.INTENT_ROUTER -> IntentRouterConfig(
                 title = title,
-                classifierPrompt = node.systemPrompt.orEmpty(),
+                classifierPrompt = systemPromptOrDefault,
             )
             CatalogNodeType.IF_CONDITION -> IfConditionConfig(
                 title = title,
@@ -244,7 +276,7 @@ internal object NodeConfigCodec {
             )
             CatalogNodeType.CLARIFICATION -> ClarificationConfig(
                 title = title,
-                questionTemplate = node.systemPrompt.orEmpty(),
+                questionTemplate = systemPromptOrDefault,
                 timeoutMs = node.clarificationTimeoutMs?.toInt(),
             )
             CatalogNodeType.TOOL -> ToolConfig(
@@ -253,16 +285,16 @@ internal object NodeConfigCodec {
             )
             CatalogNodeType.DECOMPOSITION -> DecompositionConfig(
                 title = title,
-                planningPrompt = node.systemPrompt.orEmpty(),
+                planningPrompt = systemPromptOrDefault,
             )
             CatalogNodeType.QUEUE_PROCESSOR -> QueueProcessorConfig(title = title)
             CatalogNodeType.EVALUATION -> EvaluationConfig(
                 title = title,
-                criteriaPrompt = node.systemPrompt.orEmpty(),
+                criteriaPrompt = systemPromptOrDefault,
             )
             CatalogNodeType.SUMMARY -> SummaryConfig(
                 title = title,
-                customPrompt = node.systemPrompt,
+                customPrompt = systemPromptOrDefault.takeIf { it.isNotBlank() },
             )
         }
     }
@@ -278,6 +310,7 @@ internal object NodeConfigCodec {
 
     private fun encodeOutput(json: JSONObject, c: OutputConfig) {
         json.put("format", c.format.name)
+        json.put("systemPrompt", c.systemPrompt)
     }
 
     private fun encodeLiteRt(json: JSONObject, c: LiteRtConfig) {
@@ -374,6 +407,10 @@ internal object NodeConfigCodec {
         title = title,
         description = description,
         format = enumOrDefault(p.optStringOrNull("format"), OutputFormat.PLAIN_TEXT),
+        // Optional — older persisted rows that pre-date Phase 22 / Task 16
+        // follow-up F10 simply lack this key and fall back to the default
+        // empty string (echo-through mode).
+        systemPrompt = p.optString("systemPrompt"),
     )
 
     private fun decodeLiteRt(p: JSONObject, title: String, description: String?, fb: NodeModel): LiteRtConfig =

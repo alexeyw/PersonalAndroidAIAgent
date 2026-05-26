@@ -189,6 +189,66 @@ class ChatRepositoryImplTest {
     }
 
     @Test
+    fun `given renameSession when called then dao renameSession is invoked with same args`() = runTest {
+        repository.renameSession("sess-rename", "Brand new name")
+        coVerify(exactly = 1) { chatDao.renameSession("sess-rename", "Brand new name") }
+        // No other session-touching DAO call should fire — rename is a single UPDATE.
+        coVerify(exactly = 0) { chatDao.getSessionById(any()) }
+        coVerify(exactly = 0) { chatDao.upsertSession(any()) }
+        coVerify(exactly = 0) { chatDao.updateSession(any()) }
+    }
+
+    @Test
+    fun `given setSessionFavorite when called then dao setSessionStarred flips the flag`() = runTest {
+        repository.setSessionFavorite("sess-fav", true)
+        repository.setSessionFavorite("sess-fav", false)
+        coVerify(exactly = 1) { chatDao.setSessionStarred("sess-fav", true) }
+        coVerify(exactly = 1) { chatDao.setSessionStarred("sess-fav", false) }
+    }
+
+    @Test
+    fun `given importChat with export-shaped json when called then session and messages persisted`() = runTest {
+        val sessionSlot: CapturingSlot<ChatSessionEntity> = slot()
+        val messages = mutableListOf<ChatMessageEntity>()
+        coEvery { chatDao.upsertSession(capture(sessionSlot)) } returns Unit
+        coEvery { chatDao.insertMessage(capture(messages)) } returns Unit
+
+        val json = """{"sessionName":"Trip plan","messages":[
+            {"role":"USER","text":"Plan a trip","timestamp":111},
+            {"role":"AGENT","text":"Sure","timestamp":222}
+        ]}
+        """.trimIndent()
+
+        val newId = repository.importChat(json)
+
+        assertEquals("Trip plan", sessionSlot.captured.name)
+        assertEquals(newId, sessionSlot.captured.id)
+        assertEquals(2, messages.size)
+        assertEquals("Plan a trip", messages[0].content)
+        assertEquals("USER", messages[0].role)
+        assertEquals(111L, messages[0].timestamp)
+        assertEquals("AGENT", messages[1].role)
+        assertEquals(newId, messages[0].sessionId)
+        assertEquals(newId, messages[1].sessionId)
+    }
+
+    @Test
+    fun `given importChat with bare-array json when called then session uses default imported name`() = runTest {
+        val sessionSlot: CapturingSlot<ChatSessionEntity> = slot()
+        coEvery { chatDao.upsertSession(capture(sessionSlot)) } returns Unit
+
+        val json = """[{"role":"USER","text":"hi","timestamp":1}]"""
+        repository.importChat(json)
+
+        assertEquals("Imported Chat", sessionSlot.captured.name)
+    }
+
+    @Test(expected = org.json.JSONException::class)
+    fun `given importChat with non-JSON when called then throws JSONException`() = runTest {
+        repository.importChat("not json at all")
+    }
+
+    @Test
     fun `given saveSession when called then upsertSession is invoked once`() = runTest {
         // Defect 8 regression guard: `saveSession` must perform a single DAO round-trip
         // via `@Upsert`, replacing the previous SELECT + INSERT/UPDATE pattern. Verifying

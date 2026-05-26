@@ -113,10 +113,12 @@ fun PipelineLibraryContent(
         modifier = modifier.fillMaxSize(),
         containerColor = MaterialTheme.colorScheme.surface,
         topBar = {
-            if (state.visualState == PipelineLibraryVisualState.MultiSelect) {
-                MultiSelectToolbar(state = state, callbacks = callbacks)
-            } else {
-                LibraryTopBar(state = state, callbacks = callbacks)
+            app.knotwork.design.components.topbar.KnotworkTopAppBarShell {
+                if (state.visualState == PipelineLibraryVisualState.MultiSelect) {
+                    MultiSelectToolbar(state = state, callbacks = callbacks)
+                } else {
+                    LibraryTopBar(state = state, callbacks = callbacks)
+                }
             }
         },
     ) { padding ->

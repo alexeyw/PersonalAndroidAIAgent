@@ -25,6 +25,7 @@ import app.knotwork.design.components.pipelineeditor.NodeConfigSheet
  * ViewModel for persistence.
  */
 @Composable
+@Suppress("LongParameterList") // Sheet adapter forwards every catalog seam plus the production extras.
 internal fun NodeConfigSheetHost(
     config: NodeConfig,
     peerTitles: Set<String>,
@@ -34,6 +35,7 @@ internal fun NodeConfigSheetHost(
     availableToolIds: List<String>,
     availableModels: List<LocalModelOption>,
     onPickFromLibrary: (category: String, apply: (String) -> Unit) -> Unit,
+    extraSection: (@Composable () -> Unit)? = null,
 ) {
     NodeConfigSheet(
         config = config,
@@ -44,5 +46,6 @@ internal fun NodeConfigSheetHost(
         availableToolIds = availableToolIds,
         availableModels = availableModels,
         onPickFromLibrary = onPickFromLibrary,
+        extraSection = extraSection,
     )
 }

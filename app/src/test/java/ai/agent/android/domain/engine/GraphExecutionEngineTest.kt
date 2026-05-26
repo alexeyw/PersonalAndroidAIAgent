@@ -27,6 +27,7 @@ import ai.agent.android.domain.models.NodeType
 import ai.agent.android.domain.models.PipelineGraph
 import ai.agent.android.domain.models.Result
 import ai.agent.android.domain.models.Role
+import ai.agent.android.domain.models.ToolApprovalPolicy
 import ai.agent.android.domain.models.ToolRisk
 import ai.agent.android.domain.prompt.PromptTemplateEngine
 import ai.agent.android.domain.prompt.PromptVariableProvider
@@ -36,6 +37,7 @@ import ai.agent.android.domain.repositories.ClarificationRepository
 import ai.agent.android.domain.repositories.CrashReportingRepository
 import ai.agent.android.domain.repositories.LocalModelRepository
 import ai.agent.android.domain.repositories.MetricsRepository
+import ai.agent.android.domain.repositories.NetworkActivityTracker
 import ai.agent.android.domain.repositories.SettingsRepository
 import ai.agent.android.domain.repositories.ToolRepository
 import ai.agent.android.domain.services.ApprovalNotifier
@@ -43,7 +45,7 @@ import ai.agent.android.domain.usecases.EvaluateIfConditionUseCase
 import ai.agent.android.domain.usecases.GetContextWindowUseCase
 import ai.agent.android.domain.usecases.LoadModelUseCase
 import ai.agent.android.domain.usecases.RetrieveRelevantMemoryUseCase
-import ai.koog.prompt.dsl.Prompt
+import ai.koog.prompt.Prompt
 import ai.koog.prompt.executor.clients.LLMClient
 import ai.koog.prompt.executor.clients.anthropic.AnthropicModels
 import ai.koog.prompt.llm.LLModel
@@ -75,6 +77,7 @@ class GraphExecutionEngineTest {
     private lateinit var approvalNotifier: ApprovalNotifier
     private lateinit var koogClientFactory: KoogClientFactory
     private lateinit var cloudLlmModelResolver: KoogCloudLlmModelResolver
+    private lateinit var networkActivityTracker: NetworkActivityTracker
     private lateinit var evaluateIfConditionUseCase: EvaluateIfConditionUseCase
     private lateinit var loadModelUseCase: LoadModelUseCase
     private lateinit var clarificationRepository: ClarificationRepository
@@ -100,6 +103,7 @@ class GraphExecutionEngineTest {
         approvalNotifier = mockk(relaxed = true)
         koogClientFactory = mockk()
         cloudLlmModelResolver = mockk()
+        networkActivityTracker = mockk(relaxed = true)
         evaluateIfConditionUseCase = mockk()
         loadModelUseCase = mockk()
         crashReportingRepository = mockk(relaxed = true)
@@ -150,6 +154,7 @@ class GraphExecutionEngineTest {
             metricsRepository,
             koogClientFactory,
             cloudLlmModelResolver,
+            networkActivityTracker,
         )
 
         val systemNodeExecutor = SystemNodeExecutor(
@@ -197,7 +202,8 @@ class GraphExecutionEngineTest {
         every { chatRepository.getMessagesForSession(any()) } returns flowOf(emptyList())
         every { settingsRepository.systemPromptPrefix } returns flowOf("")
         every { settingsRepository.toolUsageInstruction } returns flowOf("")
-        every { settingsRepository.requiresUserConfirmation } returns flowOf(false)
+        every { settingsRepository.toolApprovalPolicy } returns flowOf(ToolApprovalPolicy.SensitiveOrDestructive)
+        every { settingsRepository.blockDestructiveTools } returns flowOf(false)
         every { settingsRepository.pipelineMaxSteps } returns flowOf(15)
         coEvery { toolRepository.getAvailableTools() } returns emptyList()
 
@@ -824,6 +830,7 @@ class GraphExecutionEngineTest {
                 metricsRepository,
                 koogClientFactory,
                 cloudLlmModelResolver,
+                networkActivityTracker,
             ),
             SystemNodeExecutor(llmEngine, loadModelUseCase, chatRepository),
             QueueProcessorNodeExecutor(),
@@ -944,7 +951,7 @@ class GraphExecutionEngineTest {
 
         // The CLOUD node was invoked with the user's reply embedded in its prompt.
         coVerify { mockAnthropicClient.executeStreaming(any<Prompt>(), any<LLModel>()) }
-        val cloudPromptText = capturedPrompt.captured.messages.joinToString("\n") { it.content }
+        val cloudPromptText = capturedPrompt.captured.messages.joinToString("\n") { it.textContent() }
         assertTrue(
             "Cloud prompt must contain the clarification reply, was: $cloudPromptText",
             cloudPromptText.contains("user reply"),
@@ -996,6 +1003,7 @@ class GraphExecutionEngineTest {
                     metricsRepository,
                     koogClientFactory,
                     cloudLlmModelResolver,
+                    networkActivityTracker,
                 ),
                 SystemNodeExecutor(llmEngine, loadModelUseCase, chatRepository),
                 QueueProcessorNodeExecutor(),
@@ -1157,7 +1165,8 @@ class GraphExecutionEngineTest {
     @Test
     fun `given TOOL node configured as auto when executed then resolved tool name reaches downstream`() = runTest {
         every { settingsRepository.pipelineMaxSteps } returns flowOf(15)
-        every { settingsRepository.requiresUserConfirmation } returns flowOf(false)
+        every { settingsRepository.toolApprovalPolicy } returns flowOf(ToolApprovalPolicy.SensitiveOrDestructive)
+        every { settingsRepository.blockDestructiveTools } returns flowOf(false)
 
         // Two tools registered; the LITE_RT used by ToolNodeExecutor for auto-selection
         // returns a JSON object naming "web.search" — so the observation must be
@@ -1263,7 +1272,8 @@ class GraphExecutionEngineTest {
     @Test
     fun `given INPUT-TOOL-CLOUD-OUTPUT with distinct contexts when run then TOOL is nodeInput-only`() = runTest {
         every { settingsRepository.pipelineMaxSteps } returns flowOf(15)
-        every { settingsRepository.requiresUserConfirmation } returns flowOf(false)
+        every { settingsRepository.toolApprovalPolicy } returns flowOf(ToolApprovalPolicy.SensitiveOrDestructive)
+        every { settingsRepository.blockDestructiveTools } returns flowOf(false)
 
         // Pre-seed the pipeline-scoped data sources so every block in
         // ALL_ENABLED has something visible to render. Without these stubs the
@@ -1424,7 +1434,7 @@ class GraphExecutionEngineTest {
         // cloud client serialises every prompt message into its own field, so
         // we collapse them into a single string for substring assertions.
         coVerify { mockAnthropicClient.executeStreaming(any<Prompt>(), any<LLModel>()) }
-        val cloudPromptText = capturedCloudPrompt.captured.messages.joinToString("\n") { it.content }
+        val cloudPromptText = capturedCloudPrompt.captured.messages.joinToString("\n") { it.textContent() }
         assertTrue(
             "CLOUD prompt missing Original Task block: $cloudPromptText",
             cloudPromptText.contains("--- Original Task ---") && cloudPromptText.contains("user prompt"),
@@ -1529,7 +1539,8 @@ class GraphExecutionEngineTest {
     @Test
     fun `given pipeline with READ_ONLY tool node when run then completes without HITL pause`() = runTest {
         every { settingsRepository.pipelineMaxSteps } returns flowOf(15)
-        every { settingsRepository.requiresUserConfirmation } returns flowOf(false)
+        every { settingsRepository.toolApprovalPolicy } returns flowOf(ToolApprovalPolicy.SensitiveOrDestructive)
+        every { settingsRepository.blockDestructiveTools } returns flowOf(false)
 
         // READ_ONLY + global override OFF must skip the HITL gate entirely: no
         // WaitingForApproval emission, no notifier call, and the pipeline

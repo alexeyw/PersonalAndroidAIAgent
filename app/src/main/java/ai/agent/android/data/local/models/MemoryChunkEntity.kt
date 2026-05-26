@@ -10,6 +10,9 @@ import androidx.room.PrimaryKey
  * @property text The raw text content of the memory.
  * @property embedding The float array representing the text embedding, stored as a serialized string (e.g., comma-separated values).
  * @property timestamp The time the memory was recorded, in milliseconds since epoch.
+ * @property isPinned When `true`, the user marked this chunk so it should sort
+ *   ahead of unpinned rows in the memory surface and survive future
+ *   `compactMemory()` passes that prune older entries.
  */
 @Entity(tableName = "memory_chunks")
 data class MemoryChunkEntity(
@@ -18,4 +21,5 @@ data class MemoryChunkEntity(
     val text: String,
     val embedding: String,
     val timestamp: Long,
+    val isPinned: Boolean = false,
 )

@@ -67,8 +67,22 @@ object NavRoutes {
     /** Path-argument key for [TOOL_DETAIL]. */
     const val TOOL_DETAIL_ID_ARG: String = "toolId"
 
-    /** Add-MCP-server modal route. */
-    const val ADD_MCP_SERVER: String = "tools/add-mcp"
+    /**
+     * MCP server configuration screen — both Add and Edit modes.
+     * `originalUrl` is an optional query argument: absent ⇒ Add new
+     * server; non-empty ⇒ Edit the server with that URL.
+     */
+    const val MCP_SERVER_CONFIG: String = "tools/mcp-config?originalUrl={originalUrl}"
+
+    /** Query-argument key for [MCP_SERVER_CONFIG]. */
+    const val MCP_SERVER_CONFIG_URL_ARG: String = "originalUrl"
+
+    /** Route for Add mode (no `originalUrl` query argument). */
+    const val MCP_SERVER_CONFIG_ADD: String = "tools/mcp-config"
+
+    /** Builds the route for Edit mode against [originalUrl]. */
+    fun mcpServerConfigEditRoute(originalUrl: String): String =
+        "tools/mcp-config?originalUrl=${android.net.Uri.encode(originalUrl)}"
 
     /** More tab — landing screen with secondary navigation. */
     const val MORE: String = "more"
@@ -96,6 +110,21 @@ object NavRoutes {
     /** About screen (under More). Phase 21 / Task 4 stub; full body in Task 10. */
     const val ABOUT: String = "about"
 
+    /**
+     * Standalone external-LLM provider editor reached from the Settings
+     * → External providers nav-rows.
+     */
+    const val PROVIDER_DETAIL: String = "settings/provider/{providerId}"
+
+    /** Navigation argument carrying the [ProviderId.cloudProvider]'s wire id. */
+    const val PROVIDER_DETAIL_ID_ARG: String = "providerId"
+
+    /** Picker sheet shown when the user taps "+ Add provider". */
+    const val ADD_PROVIDER: String = "settings/provider/add"
+
+    /** Search-in-settings modal sheet. */
+    const val SETTINGS_SEARCH: String = "settings/search"
+
     // ─── Modal bottom-sheet placeholder routes ─────────────────────────────
     // Phase 21 / Task 4 introduces the [KnotworkModalRoute] wrapper used by
     // every modal surface. The three sheets below are registered as empty
@@ -107,7 +136,4 @@ object NavRoutes {
 
     /** Console pane sheet — opened from chat (filled in Task 6). */
     const val SHEET_CONSOLE: String = "sheet/console"
-
-    /** Add-MCP-server sheet alias — wired in Task 10 alongside `ToolsScreen`. */
-    const val SHEET_ADD_MCP: String = ADD_MCP_SERVER
 }

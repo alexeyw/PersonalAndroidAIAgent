@@ -5,9 +5,14 @@ package app.knotwork.design.components.pipelineeditor
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AddCircleOutline
 import androidx.compose.material.icons.outlined.AutoStories
@@ -20,7 +25,6 @@ import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -32,10 +36,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.dp
 import app.knotwork.design.R
 import app.knotwork.design.components.buttons.KnotworkTextButton
 import app.knotwork.design.components.chips.ChipStyle
 import app.knotwork.design.components.chips.KnotworkChip
+import app.knotwork.design.components.controls.KnotworkCompactSlider
 import app.knotwork.design.theme.KnotworkTheme
 import app.knotwork.design.tokens.KnotworkTextStyles
 
@@ -87,7 +93,11 @@ object NodeConfigForms {
     ) {
         Column(
             modifier = Modifier.fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp3),
+            // Sheet density tightening (Phase 22 / Task 14 review): inter-field
+            // gap dropped sp3 → sp2 so a 3-4 field form fits a phone viewport
+            // without scroll. Per-form `Column` arrangements keep their own
+            // tighter sp1 internal spacing.
+            verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp2),
         ) {
             TitleField(
                 title = config.title,
@@ -96,7 +106,7 @@ object NodeConfigForms {
             )
             when (config) {
                 is InputConfig -> InputFormBody(config, errors, onChange)
-                is OutputConfig -> OutputFormBody(config, onChange)
+                is OutputConfig -> OutputFormBody(config, onChange, onPickFromLibrary)
                 is LiteRtConfig -> LiteRtFormBody(config, errors, onChange, availableModels, onPickFromLibrary)
                 is CloudConfig -> CloudFormBody(config, errors, onChange, onPickFromLibrary)
                 is IntentRouterConfig -> IntentRouterFormBody(config, errors, onChange, onPickFromLibrary)
@@ -157,17 +167,48 @@ private fun InlineError(failure: ValidationFailure?) {
  */
 @Composable
 private fun VariableChipsRow(onInsert: (String) -> Unit) {
-    val variables = listOf("\$DATE", "\$TIME", "\$TOOLS", "\$MODEL", "\$MEMORY_SUMMARY")
-    FlowRow(
-        modifier = Modifier.fillMaxWidth(),
+    // Full catalog of `PromptVariableProvider` keys exposed in
+    // `app/.../data/prompt/*`. Order mirrors the order users most often reach
+    // for in templates (date / time first, contextual identity last). Add new
+    // keys here when a `PromptVariableProvider` is registered in
+    // `PromptTemplateModule`.
+    val variables = PROMPT_VARIABLE_KEYS
+    // LazyRow with `horizontalScroll`-like behaviour: the chips no longer wrap
+    // to a second row (the previous `FlowRow` was visually noisy and pushed
+    // the slider section down). Keep a clear right-edge padding so the last
+    // chip doesn't kiss the sheet edge.
+    LazyRow(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(VARIABLE_CHIPS_ROW_HEIGHT.dp),
         horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp2),
-        verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp1),
+        contentPadding = PaddingValues(end = KnotworkTheme.spacing.sp2),
     ) {
-        variables.forEach { name ->
+        items(variables) { name ->
             KnotworkChip(label = name, onClick = { onInsert(name) }, style = ChipStyle.Outline)
         }
     }
 }
+
+/**
+ * Variable keys surfaced by the prompt-template engine — kept here as a
+ * snapshot so the catalog stub matches what the `:app` providers register at
+ * runtime. When a new `PromptVariableProvider` lands, add the key here too.
+ */
+private val PROMPT_VARIABLE_KEYS: List<String> = listOf(
+    "\$DATE",
+    "\$TIME",
+    "\$LANG",
+    "\$LOCATION",
+    "\$USER",
+    "\$DEVICE",
+    "\$MODEL",
+    "\$TOOLS",
+    "\$MEMORY_SUMMARY",
+)
+
+/** Fixed row height — chip baseline plus a small breathing budget. */
+private const val VARIABLE_CHIPS_ROW_HEIGHT: Int = 40
 
 /** Single-line title field — shared across every node type. */
 @Composable
@@ -179,13 +220,27 @@ private fun TitleField(title: String, error: ValidationFailure?, onChange: (Stri
             onValueChange = onChange,
             singleLine = true,
             isError = error != null,
+            // Phase 22 / Task 14 review pass 3: every field on the sheet
+            // adopts `MonoBase` so identifiers, prompts, model ids, and titles
+            // all read in the same JetBrains Mono face. Mixed body/mono fonts
+            // read as accidentally inconsistent on the sheet.
+            textStyle = KnotworkTextStyles.MonoBase,
             modifier = Modifier.fillMaxWidth(),
         )
         InlineError(failure = error)
     }
 }
 
-/** Stringly-typed text field used for most per-type rows. */
+/**
+ * Stringly-typed text field used for most per-type rows.
+ *
+ * Layout: `[FieldLabel + optional library button] / [OutlinedTextField] /
+ * [InlineError]`. The library button stays in a sibling row above the field
+ * (not inside the field's `trailingIcon`) so prompt-bearing fields preserve
+ * room for the chips row underneath. Every field uses `MonoBase` (Phase 22 /
+ * Task 14 review round 3) so the sheet reads as a uniform stack regardless
+ * of which field is prose vs identifier vs prompt.
+ */
 @Composable
 @Suppress("LongParameterList") // Adding the optional library hook here keeps every prompt field DRY.
 private fun TextField(
@@ -193,15 +248,16 @@ private fun TextField(
     value: String,
     error: ValidationFailure?,
     singleLine: Boolean,
-    monospace: Boolean,
     onChange: (String) -> Unit,
     libraryCategory: String? = null,
     onPickFromLibrary: PromptLibraryHook? = null,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp1)) {
-        // When the field is prompt-bearing and the screen provided a library hook,
-        // render a small icon button next to the label so users can replace the field
-        // contents with a saved prompt. Other (non-prompt) fields just show the label.
+        // When the field is prompt-bearing AND the screen provided a library
+        // hook, surface a small icon button next to the label so the user can
+        // replace the field with a saved prompt. The button sits in a row with
+        // the label (not inside the field) so the VariableChipsRow below the
+        // field stays visually attached to the prompt area.
         if (libraryCategory != null && onPickFromLibrary != null) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -211,6 +267,7 @@ private fun TextField(
                 Spacer(modifier = Modifier.weight(1f))
                 IconButton(
                     onClick = { onPickFromLibrary(libraryCategory) { picked -> onChange(picked) } },
+                    modifier = Modifier.size(LIBRARY_BUTTON_TARGET_DP.dp),
                 ) {
                     Icon(
                         imageVector = Icons.Outlined.AutoStories,
@@ -226,12 +283,21 @@ private fun TextField(
             onValueChange = onChange,
             singleLine = singleLine,
             isError = error != null,
-            textStyle = if (monospace) KnotworkTextStyles.MonoBase else KnotworkTextStyles.BodyBase,
+            // Same MonoBase rationale as TitleField — the sheet reads as a
+            // uniform mono stack regardless of which field is prose vs ident.
+            textStyle = KnotworkTextStyles.MonoBase,
             modifier = Modifier.fillMaxWidth(),
         )
         InlineError(failure = error)
     }
 }
+
+/**
+ * Compact tap-target for the prompt-library trigger button next to a field
+ * label. 32 dp keeps the label row tighter than the M3 default 48 dp
+ * `IconButton` (which would otherwise inflate the row to fit the touch area).
+ */
+private const val LIBRARY_BUTTON_TARGET_DP: Float = 32f
 
 /** Float field rendered as a slider plus the resolved numeric value. */
 @Suppress("LongParameterList") // Slider field has a stable contract; collapsing the params hides intent.
@@ -253,7 +319,13 @@ private fun FloatSliderField(
                 color = KnotworkTheme.extended.onSurfaceMuted,
             )
         }
-        Slider(value = value, onValueChange = onChange, valueRange = range, steps = steps)
+        KnotworkCompactSlider(
+            value = value,
+            onValueChange = onChange,
+            valueRange = range,
+            steps = steps,
+            modifier = Modifier.fillMaxWidth(),
+        )
         InlineError(failure = error)
     }
 }
@@ -284,11 +356,12 @@ private fun IntSliderField(
         // app when the CLOUD config sheet opens. Continuous + round-on-change gives
         // identical integer increments at user-perceptible drag resolution without
         // the tick-mark blow-up.
-        Slider(
+        KnotworkCompactSlider(
             value = value.toFloat(),
             onValueChange = { next -> onChange(next.toInt()) },
             valueRange = range.first.toFloat()..range.last.toFloat(),
             steps = 0,
+            modifier = Modifier.fillMaxWidth(),
         )
         InlineError(failure = error)
     }
@@ -338,7 +411,6 @@ private fun InputFormBody(
         value = config.inputName,
         error = errors[FieldId.INPUT_NAME],
         singleLine = true,
-        monospace = true,
         onChange = { next -> onChange(config.copy(inputName = next)) },
     )
     TextField(
@@ -346,13 +418,16 @@ private fun InputFormBody(
         value = config.schemaJson.orEmpty(),
         error = errors[FieldId.SCHEMA_JSON],
         singleLine = false,
-        monospace = true,
         onChange = { next -> onChange(config.copy(schemaJson = next.takeIf { it.isNotBlank() })) },
     )
 }
 
 @Composable
-private fun OutputFormBody(config: OutputConfig, onChange: (NodeConfig) -> Unit) {
+private fun OutputFormBody(
+    config: OutputConfig,
+    onChange: (NodeConfig) -> Unit,
+    onPickFromLibrary: PromptLibraryHook?,
+) {
     SegmentedChipRow(
         label = stringResource(R.string.knotwork_node_field_format),
         values = listOf(
@@ -363,6 +438,23 @@ private fun OutputFormBody(config: OutputConfig, onChange: (NodeConfig) -> Unit)
         selected = config.format,
         onSelect = { next -> onChange(config.copy(format = next)) },
     )
+    // Optional system prompt — when blank the executor forwards the
+    // upstream text verbatim; when set the LLM wraps the upstream payload
+    // through this template. Phase 22 / Task 16 follow-up F10.
+    TextField(
+        label = stringResource(R.string.knotwork_node_field_system_prompt),
+        value = config.systemPrompt,
+        // OUTPUT's systemPrompt is optional — blank means "echo upstream
+        // verbatim" — so the field never carries a validation error.
+        error = null,
+        singleLine = false,
+        onChange = { next -> onChange(config.copy(systemPrompt = next)) },
+        libraryCategory = "OUTPUT",
+        onPickFromLibrary = onPickFromLibrary,
+    )
+    VariableChipsRow(onInsert = { variable ->
+        onChange(config.copy(systemPrompt = config.systemPrompt + variable))
+    })
 }
 
 @Composable
@@ -384,7 +476,6 @@ private fun LiteRtFormBody(
         value = config.systemPrompt,
         error = errors[FieldId.SYSTEM_PROMPT],
         singleLine = false,
-        monospace = true,
         onChange = { next -> onChange(config.copy(systemPrompt = next)) },
         libraryCategory = "LITE_RT",
         onPickFromLibrary = onPickFromLibrary,
@@ -433,20 +524,19 @@ private fun CloudFormBody(
         selected = config.provider,
         onSelect = { next -> onChange(config.copy(provider = next)) },
     )
-    TextField(
-        label = stringResource(R.string.knotwork_node_field_model),
-        value = config.model,
-        error = errors[FieldId.MODEL],
-        singleLine = true,
-        monospace = true,
-        onChange = { next -> onChange(config.copy(model = next)) },
-    )
+    // The cloud-model id field used to live here. Phase 22 / Task 14 review
+    // round 3 removes it from the sheet — cloud-provider model ids are
+    // configured once per provider in Settings → External providers and
+    // shared across every Cloud node, so duplicating the field on every
+    // node confused users. The `CloudConfig.model` field stays on the
+    // data class for backward-compat with persisted JSON (empty string is
+    // the default) — the executor falls back to the provider's configured
+    // model at runtime.
     TextField(
         label = stringResource(R.string.knotwork_node_field_system_prompt),
         value = config.systemPrompt,
         error = errors[FieldId.SYSTEM_PROMPT],
         singleLine = false,
-        monospace = true,
         onChange = { next -> onChange(config.copy(systemPrompt = next)) },
         libraryCategory = "CLOUD",
         onPickFromLibrary = onPickFromLibrary,
@@ -533,7 +623,18 @@ private fun IntentRouterFormBody(
         KnotworkTextButton(
             text = stringResource(R.string.knotwork_node_action_add_class),
             onClick = {
-                val updated = config.classes + IntentClass(name = "")
+                // Auto-name the new class with a unique `class_N` placeholder so
+                // it doesn't start blank. A blank name immediately fails the
+                // `REQUIRED` validation rule and disables Save — locking the user
+                // out of saving until they type a name. The placeholder is also
+                // unique relative to existing names (it walks `N` until it finds
+                // a free slot) so it doesn't trip CLASS_NAME_DUPLICATE either.
+                val existing = config.classes.map { it.name }.toSet()
+                val baseN = config.classes.size + 1
+                val placeholder = generateSequence(baseN) { it + 1 }
+                    .map { "class_$it" }
+                    .first { it !in existing }
+                val updated = config.classes + IntentClass(name = placeholder)
                 onChange(config.copy(classes = updated))
             },
             enabled = canAdd,
@@ -546,11 +647,13 @@ private fun IntentRouterFormBody(
         value = config.classifierPrompt,
         error = errors[FieldId.CLASSIFIER_PROMPT],
         singleLine = false,
-        monospace = true,
         onChange = { next -> onChange(config.copy(classifierPrompt = next)) },
         libraryCategory = "INTENT_ROUTER",
         onPickFromLibrary = onPickFromLibrary,
     )
+    VariableChipsRow(onInsert = { variable ->
+        onChange(config.copy(classifierPrompt = config.classifierPrompt + variable))
+    })
     Column(verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp1)) {
         SegmentedChipRow(
             label = stringResource(R.string.knotwork_node_field_fallback_class),
@@ -585,7 +688,6 @@ private fun IfConditionFormBody(
         value = config.expression,
         error = errors[FieldId.EXPRESSION],
         singleLine = true,
-        monospace = true,
         onChange = { next -> onChange(config.copy(expression = next)) },
     )
     TextField(
@@ -593,7 +695,6 @@ private fun IfConditionFormBody(
         value = config.labelTrue,
         error = errors[FieldId.LABEL_TRUE],
         singleLine = true,
-        monospace = false,
         onChange = { next -> onChange(config.copy(labelTrue = next)) },
     )
     TextField(
@@ -601,7 +702,6 @@ private fun IfConditionFormBody(
         value = config.labelFalse,
         error = errors[FieldId.LABEL_FALSE],
         singleLine = true,
-        monospace = false,
         onChange = { next -> onChange(config.copy(labelFalse = next)) },
     )
 }
@@ -618,11 +718,13 @@ private fun ClarificationFormBody(
         value = config.questionTemplate,
         error = errors[FieldId.QUESTION_TEMPLATE],
         singleLine = false,
-        monospace = true,
         onChange = { next -> onChange(config.copy(questionTemplate = next)) },
         libraryCategory = "CLARIFICATION",
         onPickFromLibrary = onPickFromLibrary,
     )
+    VariableChipsRow(onInsert = { variable ->
+        onChange(config.copy(questionTemplate = config.questionTemplate + variable))
+    })
     QuickRepliesField(
         replies = config.quickReplies,
         error = errors[FieldId.QUICK_REPLIES],
@@ -633,7 +735,6 @@ private fun ClarificationFormBody(
         value = config.timeoutMs?.toString().orEmpty(),
         error = errors[FieldId.TIMEOUT_OPTIONAL],
         singleLine = true,
-        monospace = true,
         onChange = { next -> onChange(config.copy(timeoutMs = next.toIntOrNull())) },
     )
 }
@@ -795,15 +896,20 @@ private fun ToolPicker(
 /**
  * Local model selector for [LiteRtFormBody]. Mirrors [ToolPicker] but feeds off the
  * installed-models registry instead of the tool registry: when [availableModels] is
- * non-empty, surfaces an `ExposedDropdownMenu` with the currently-active model badged
- * `· active` at the top, every other model below, and a trailing "Custom path…" entry
- * that reveals a free-text input for paths not in the registry (e.g., a sideloaded
+ * non-empty, surfaces an `ExposedDropdownMenu` with the "Active model" sentinel
+ * pinned at the top (empty [LiteRtConfig.modelId]), every registered model below
+ * (active one badged `· active`), and a trailing "Custom path…" entry that
+ * reveals a free-text input for paths not in the registry (e.g., a sideloaded
  * `.tflite` the user hasn't added to the LocalModelRepository yet).
  *
- * Default selection rule when the user opens a fresh LiteRt node: if [LiteRtConfig.modelId]
- * is blank and an active model is registered, the picker pre-fills the field with the
- * active model's id on first open via [LaunchedEffect]. This satisfies the validator's
- * REQUIRED check immediately and makes the "use the active model" path one tap to Save.
+ * **Active sentinel.** Phase 22 / Task 16 follow-up F8 introduced the rule that
+ * an empty [LiteRtConfig.modelId] means "resolve to whichever model is active
+ * at execute time". Previously the picker eagerly wrote the current active id
+ * into the field on open via `LaunchedEffect`, which froze the pipeline to that
+ * specific id even after the user switched the active model in Settings; the
+ * pipeline would then error out with "Model file not found". With the explicit
+ * sentinel the empty value is the persisted choice — the executor's
+ * `LoadModelUseCase(modelPath = null)` path picks up the current active model.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -813,21 +919,11 @@ private fun ModelPicker(
     availableModels: List<LocalModelOption>,
     onChange: (NodeConfig) -> Unit,
 ) {
-    val activeModelId = remember(availableModels) { availableModels.firstOrNull { it.isActive }?.id }
-    // Auto-pick the active model on first open if the field is blank. This is a render-
-    // time write but it's idempotent (once modelId is non-blank the condition stops
-    // firing) and guarded against the no-active-model case.
-    LaunchedEffect(config.modelId, activeModelId) {
-        if (config.modelId.isBlank() && !activeModelId.isNullOrBlank()) {
-            onChange(config.copy(modelId = activeModelId))
-        }
-    }
-
     Column(verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp1)) {
         FieldLabel(text = stringResource(R.string.knotwork_node_field_model))
         var menuExpanded by remember { mutableStateOf(false) }
         val customLabel = stringResource(R.string.knotwork_node_field_model_custom)
-        val placeholder = stringResource(R.string.knotwork_node_field_model_placeholder)
+        val activeLabel = stringResource(R.string.knotwork_node_field_model_active)
         val activeSuffixFmt = stringResource(R.string.knotwork_node_field_model_active_suffix)
         // Custom mode mirrors ToolPicker: tracks whether the user is editing a path that
         // isn't in `availableModels`. The catalog NodeConfig schema only has
@@ -838,9 +934,11 @@ private fun ModelPicker(
             )
         }
         // Render the registered model in the dropdown anchor; fall back to the raw id
-        // for custom paths; fall back to the placeholder for a blank field.
+        // for custom paths; for a blank field render the "Active model" sentinel
+        // label instead of a placeholder so the choice reads as a real selection.
         val matchedModel = availableModels.firstOrNull { it.id == config.modelId }
         val selectedLabel = when {
+            config.modelId.isBlank() -> activeLabel
             matchedModel != null -> {
                 if (matchedModel.isActive) {
                     activeSuffixFmt.format(matchedModel.displayName)
@@ -849,7 +947,7 @@ private fun ModelPicker(
                 }
             }
             customMode || config.modelId.isNotBlank() -> config.modelId.ifBlank { customLabel }
-            else -> placeholder
+            else -> activeLabel
         }
 
         if (availableModels.isNotEmpty()) {
@@ -875,8 +973,16 @@ private fun ModelPicker(
                     expanded = menuExpanded,
                     onDismissRequest = { menuExpanded = false },
                 ) {
-                    // Active model surfaces at the top with a badge so the canonical
-                    // "just use the model you already have loaded" path is one tap.
+                    // Sentinel: blank `modelId` resolves to the live active
+                    // model at execute time (Phase 22 / Task 16 follow-up F8).
+                    DropdownMenuItem(
+                        text = { Text(text = activeLabel, style = KnotworkTextStyles.MonoBase) },
+                        onClick = {
+                            customMode = false
+                            onChange(config.copy(modelId = ""))
+                            menuExpanded = false
+                        },
+                    )
                     availableModels.sortedByDescending { it.isActive }.forEach { option ->
                         DropdownMenuItem(
                             text = {
@@ -999,11 +1105,13 @@ private fun DecompositionFormBody(
         value = config.planningPrompt,
         error = errors[FieldId.PLANNING_PROMPT],
         singleLine = false,
-        monospace = true,
         onChange = { next -> onChange(config.copy(planningPrompt = next)) },
         libraryCategory = "DECOMPOSITION",
         onPickFromLibrary = onPickFromLibrary,
     )
+    VariableChipsRow(onInsert = { variable ->
+        onChange(config.copy(planningPrompt = config.planningPrompt + variable))
+    })
     IntSliderField(
         label = stringResource(R.string.knotwork_node_field_max_subtasks),
         value = config.maxSubtasks,
@@ -1016,7 +1124,6 @@ private fun DecompositionFormBody(
         value = config.outputSchemaJson.orEmpty(),
         error = errors[FieldId.OUTPUT_SCHEMA_JSON],
         singleLine = false,
-        monospace = true,
         onChange = { next -> onChange(config.copy(outputSchemaJson = next.takeIf { it.isNotBlank() })) },
     )
 }
@@ -1032,7 +1139,6 @@ private fun QueueProcessorFormBody(
         value = config.inputList,
         error = errors[FieldId.INPUT_LIST],
         singleLine = true,
-        monospace = true,
         onChange = { next -> onChange(config.copy(inputList = next)) },
     )
     TextField(
@@ -1040,7 +1146,6 @@ private fun QueueProcessorFormBody(
         value = config.itemVariable,
         error = errors[FieldId.ITEM_VARIABLE],
         singleLine = true,
-        monospace = true,
         onChange = { next -> onChange(config.copy(itemVariable = next)) },
     )
     IntSliderField(
@@ -1075,11 +1180,13 @@ private fun EvaluationFormBody(
         value = config.criteriaPrompt,
         error = errors[FieldId.CRITERIA_PROMPT],
         singleLine = false,
-        monospace = true,
         onChange = { next -> onChange(config.copy(criteriaPrompt = next)) },
         libraryCategory = "EVALUATION",
         onPickFromLibrary = onPickFromLibrary,
     )
+    VariableChipsRow(onInsert = { variable ->
+        onChange(config.copy(criteriaPrompt = config.criteriaPrompt + variable))
+    })
     IntSliderField(
         label = stringResource(R.string.knotwork_node_field_max_retries),
         value = config.maxRetries,
@@ -1112,11 +1219,13 @@ private fun SummaryFormBody(
             value = config.customPrompt.orEmpty(),
             error = errors[FieldId.CUSTOM_PROMPT],
             singleLine = false,
-            monospace = true,
             onChange = { next -> onChange(config.copy(customPrompt = next.takeIf { it.isNotBlank() })) },
             libraryCategory = "SUMMARY",
             onPickFromLibrary = onPickFromLibrary,
         )
+        VariableChipsRow(onInsert = { variable ->
+            onChange(config.copy(customPrompt = (config.customPrompt.orEmpty() + variable)))
+        })
     }
     IntSliderField(
         label = stringResource(R.string.knotwork_node_field_target_length),

@@ -93,7 +93,7 @@ The presentation layer is hosted by a single `NavHost` declared in
   `ModalBottomSheet` with `PredictiveBackHandler` so Android 14+
   predictive-back animates the sheet in lockstep with the user's drag.
 - Deep-links: `knotwork://chat/{threadId}` resolves to the parameterised
-  `chat/{threadId}` route, forwarding the thread id to `ChatViewModel.switchSession`.
+  `chat/{threadId}` route, forwarding the thread id to `ChatHomeViewModel.switchSession`.
 
 Bottom-nav visibility per route is decided by the pure
 `shouldShowBottomNav(route)` function (`BottomNavVisibility.kt`) — the
@@ -114,8 +114,8 @@ key actors and the order in which they collaborate.
 sequenceDiagram
     autonumber
     actor User
-    participant UI as ChatScreen<br/>(Compose)
-    participant VM as ChatViewModel
+    participant UI as ChatHomeScreen<br/>(Compose)
+    participant VM as ChatHomeViewModel
     participant UC as AgentOrchestratorUseCase
     participant Engine as GraphExecutionEngine
     participant Ctx as NodeContextBuilder
@@ -141,17 +141,17 @@ sequenceDiagram
     Engine-->>UC: result
     UC->>Repo: save agent ChatMessage (isFinal = true)
     Repo-->>VM: Flow<List<ChatMessage>> emission
-    VM-->>UI: ChatUiState (StateFlow)
+    VM-->>UI: ChatHomeUiState (StateFlow)
     UI-->>User: rendered reply
 ```
 
 Step-by-step notes:
 
-1. The Compose layer is **stateless with respect to data** — `ChatScreen`
-   only observes `ChatUiState` (a `StateFlow`) and forwards user input
-   to `ChatViewModel`. There are no direct repository or use-case calls
+1. The Compose layer is **stateless with respect to data** — `ChatHomeScreen`
+   only observes `ChatHomeUiState` (a `StateFlow`) and forwards user input
+   to `ChatHomeViewModel`. There are no direct repository or use-case calls
    from any `@Composable`.
-2. `ChatViewModel.sendMessage(...)` persists the user message first
+2. `ChatHomeViewModel.sendMessage(...)` persists the user message first
    (so it survives crashes), then launches the agent on
    `viewModelScope`.
 3. `AgentOrchestratorUseCase` resolves the pipeline bound to the active
@@ -168,15 +168,20 @@ Step-by-step notes:
    output to the engine.
 6. While the graph executes, the engine emits
    `AgentOrchestratorState.ConsoleLog` events. The view-model folds
-   them into `ChatUiState.consoleLines`, which `ChatScreen` renders in
-   the inline mini-console above the input field.
+   them into the `consoleLines` flow exposed by `ChatHomeViewModel`,
+   which `ChatHomeScreen` renders inside the dedicated console
+   `ModalBottomSheet` overlay (opened from the agent-status pill above
+   the composer). The console pane is **independent of the chat state
+   machine** — it stays mounted across `Generating → HitlConfirm →
+   Clarification` transitions instead of being a sealed `ChatHomeUiState`
+   variant.
 7. Intermediate node outputs are persisted with `isFinal = false`. The
    main message list filters those out via
    `ChatRepository.getDisplayMessagesForSession(...)`, but they remain
    available for debugging and export paths.
 8. The final agent reply (`isFinal = true`) is saved through the
-   repository; the resulting `Flow` emission updates
-   `ChatUiState.messages` and the UI re-composes.
+   repository; the resulting `Flow` emission updates the `messages` flow
+   exposed by `ChatHomeViewModel` and the UI re-composes.
 
 ---
 
@@ -536,5 +541,7 @@ flowchart TD
 - [`docs/api-conventions.md`](api-conventions.md) — concrete
   integration conventions for LiteRT-LM, AppFunctions, MCP, Room,
   DataStore, and JSON parsing.
+- [`docs/release.md`](release.md) — release-build playbook (R8 keep
+  rules, signing posture, AAB build, APK size breakdown).
 - [`SECURITY.md`](../SECURITY.md) — threat model and vulnerability
   reporting policy.

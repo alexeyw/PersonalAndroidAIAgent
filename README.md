@@ -9,11 +9,15 @@
 > plans tasks, and takes real actions across Android — without requiring an
 > internet connection.
 
-![Pipeline editor — hero](docs/images/hero-pipeline-editor.png)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/hero-chat-home-dark.png">
+  <img alt="On-Device AI Agent — chat home" src="docs/images/hero-chat-home.png" width="540">
+</picture>
 
-> The Knotwork pipeline editor — drag-and-drop graph of typed nodes (input,
-> local LLM, cloud LLM, tools, routing, output) that processes every chat
-> message end-to-end on-device.
+> The Knotwork chat surface — every message is processed end-to-end on-device
+> by a user-editable pipeline of typed nodes (input, local LLM, cloud LLM,
+> tools, routing, output). The drag-and-drop pipeline editor lives one tap
+> away under the **Pipelines** tab.
 
 ## Pre-release notice
 
@@ -64,14 +68,42 @@ configured it.
   inline validation bar with focus-on-error, run-trace bar, undo / redo,
   and per-type configuration sheets for all 12 node types.
 - Pipeline library with per-chat binding, plus rename / duplicate / delete.
-- Prompt variables (`$DATE`, `$TIME`, `$TOOLS`, `$MODEL`, `$MEMORY_SUMMARY`)
-  rendered fresh on every execution.
+- Prompt variables (`$DATE`, `$TIME`, `$TOOLS`, `$MODEL`, `$MEMORY_SUMMARY`,
+  `$LANG`, `$LOCATION`, `$USER`, `$DEVICE`) rendered fresh on every
+  execution.
+- Redesigned **Settings** screen with identity card, structured
+  HITL restrictions, sampling/repetition controls, memory dashboard
+  (Chunks · Size · Threads · Avg score + Export / Re-embed / Clear),
+  test-backend probe metrics, and a long-running-task notification
+  channel.
+- **Local model manager** with an inline Active card, HuggingFace
+  token + custom URL download fields, and preset rows showing live
+  download progress / on-disk status.
+- **Prompt library** — `ScrollableTabRow` of categories, per-card
+  edit / delete / duplicate actions, inline `$VAR` highlighting in
+  the body, and a `ModalBottomSheet` editor with `INSERT` chip row.
+- **Task monitor** — filterable list of WorkManager background tasks
+  and live chat sessions with swipe-to-cancel and a detail bottom
+  sheet on row tap.
+- **Live metrics** screen surfacing inference time, tokens-per-second,
+  total tokens, per-node-type breakdown, and recent system logs;
+  shows a power-saving banner when the system is throttling.
+- **More tab** with live counters per row (memory chunks, active
+  model, prompt categories, active task count + badge) and a footer
+  privacy pill (`on-device · no network calls in last N m`) driven
+  by a new `NetworkActivityTracker`.
+- **About** screen with brand mark, version / build / commit info,
+  hand-maintained acknowledgments list, and Open license / Read
+  privacy policy links.
 - Agent-initiated clarifications: the agent can ask the user a question
   mid-pipeline and wait for the reply (human-in-the-loop).
 - Multi-session chats with a priority task queue and a redesigned chat
   home built on the Knotwork design system, covering the documented
   Empty / Idle / Generating / HITL / Clarification / Error / Drawer /
-  Console-expanded states deterministically.
+  Console-expanded states deterministically. Drawer / overflow secondary
+  affordances — new chat with pipeline picker, rename, favorite, JSON
+  import / export, in-chat model picker, Settings deep-link — are wired
+  directly into chat home.
 - Background execution as an Android Foreground Service with explicit idle
   and power-state management.
 - Long-term memory with semantic retrieval (RAG) over past conversations.
@@ -84,16 +116,46 @@ configured it.
 
 ## Screenshots
 
-> Placeholder images — real screenshots will land alongside the first
-> tagged pre-release.
+Every image below is captured at 1080 × 2400 from a Roborazzi baseline
+(`./gradlew :catalog:recordRoborazziDebug --tests "*HeroSnapshotTest*"`),
+which means the README and the design-system regression suite are
+guaranteed to stay in sync. Hover over (or tap) an image to see the dark
+variant via your browser's `prefers-color-scheme`.
 
-| Chat screen | Pipeline editor |
-|---|---|
-| ![Screenshot TODO — chat](docs/screenshots/TODO.png) | ![Screenshot TODO — pipeline editor](docs/screenshots/TODO.png) |
-
-| Pipeline library | Browser pipeline editor |
-|---|---|
-| ![Screenshot TODO — pipeline library](docs/screenshots/TODO.png) | ![Screenshot TODO — browser editor](docs/screenshots/TODO.png) |
+<table>
+  <tr>
+    <td align="center">
+      <picture>
+        <source media="(prefers-color-scheme: dark)" srcset="docs/images/hero-pipeline-editor-dark.png">
+        <img alt="Pipeline editor — typed nodes per type" src="docs/images/hero-pipeline-editor.png" width="270">
+      </picture>
+      <br><sub><b>Pipeline editor</b> — typed nodes (input · output · LiteRT · cloud · intent router · if · clarify · …)</sub>
+    </td>
+    <td align="center">
+      <picture>
+        <source media="(prefers-color-scheme: dark)" srcset="docs/images/hero-pipeline-library-dark.png">
+        <img alt="Pipeline library — saved pipelines" src="docs/images/hero-pipeline-library.png" width="270">
+      </picture>
+      <br><sub><b>Pipeline library</b> — saved pipelines + import-from-browser-editor JSON</sub>
+    </td>
+  </tr>
+  <tr>
+    <td align="center">
+      <picture>
+        <source media="(prefers-color-scheme: dark)" srcset="docs/images/hero-tools-dark.png">
+        <img alt="Tools — built-in AppFunctions and expanded MCP server" src="docs/images/hero-tools.png" width="270">
+      </picture>
+      <br><sub><b>Tools</b> — built-in AppFunctions + MCP servers with per-tool risk + toggle</sub>
+    </td>
+    <td align="center">
+      <picture>
+        <source media="(prefers-color-scheme: dark)" srcset="docs/images/hero-settings-dark.png">
+        <img alt="Settings — identity, system instructions, restrictions, LLM parameters" src="docs/images/hero-settings.png" width="270">
+      </picture>
+      <br><sub><b>Settings</b> — identity card, system instructions with <code>$VARIABLE</code> chips, restrictions, LLM params</sub>
+    </td>
+  </tr>
+</table>
 
 ## Requirements
 
@@ -147,6 +209,7 @@ After installing:
 - Code style — [docs/code-style.md](docs/code-style.md).
 - Testing strategy and coverage — [docs/testing.md](docs/testing.md).
 - API & integration conventions — [docs/api-conventions.md](docs/api-conventions.md).
+- Release-build playbook (R8, signing, AAB, APK size) — [docs/release.md](docs/release.md).
 - Contributing guide — [CONTRIBUTING.md](CONTRIBUTING.md).
 - Code of Conduct — [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md).
 - Security policy and threat model — [SECURITY.md](SECURITY.md).

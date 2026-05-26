@@ -174,30 +174,48 @@ internal object ChatHomePreview {
         composerState = ComposerState.Generating,
     )
 
-    /** HITL Confirm state — Sensitive tool call awaiting approval. */
-    fun hitlConfirm(): ChatHomeViewState = ChatHomeViewState(
-        visualState = ChatHomeVisualState.HitlConfirm,
-        threadTitle = THREAD_TITLE,
-        modelName = MODEL_NAME,
-        messages = baselineMessages() + ChatHomeMessageRow(
-            id = "a-hitl",
-            role = ChatRole.Assistant,
-            content = ChatContent.Confirmation(
-                model = HitlConfirmationModel(
-                    risk = Risk.Sensitive,
-                    toolName = "calendar.create_event",
-                    summary = "Add a 30-minute meeting \"Rollout sync\" to your work calendar tomorrow at 10:00.",
-                    arguments = mapOf(
-                        "title" to "\"Rollout sync\"",
-                        "duration" to "30",
-                        "calendar" to "\"work\"",
+    /**
+     * HITL Confirm state. Default risk is `Sensitive` (most common path); the
+     * Phase 22 / Task 5 audit expanded the matrix to the 3 risk variants so
+     * the snapshot baseline catches palette / glyph regressions across every
+     * level the spec defines (see `compose/components/README.md §Buttons` and
+     * `domain/models/ToolRisk.kt`).
+     */
+    fun hitlConfirm(risk: Risk = Risk.Sensitive): ChatHomeViewState {
+        val toolName = when (risk) {
+            Risk.Readonly -> "calendar.read_events"
+            Risk.Sensitive -> "calendar.create_event"
+            Risk.Destructive -> "calendar.delete_event"
+        }
+        val summary = when (risk) {
+            Risk.Readonly -> "List the next three events on your work calendar."
+            Risk.Sensitive ->
+                "Add a 30-minute meeting \"Rollout sync\" to your work calendar tomorrow at 10:00."
+            Risk.Destructive ->
+                "Permanently delete the meeting \"Old sync\" from your work calendar."
+        }
+        return ChatHomeViewState(
+            visualState = ChatHomeVisualState.HitlConfirm,
+            threadTitle = THREAD_TITLE,
+            modelName = MODEL_NAME,
+            messages = baselineMessages() + ChatHomeMessageRow(
+                id = "a-hitl",
+                role = ChatRole.Assistant,
+                content = ChatContent.Confirmation(
+                    model = HitlConfirmationModel(
+                        risk = risk,
+                        toolName = toolName,
+                        summary = summary,
+                        arguments = mapOf(
+                            "calendar" to "\"work\"",
+                        ),
+                        timestamp = "09:16",
                     ),
-                    timestamp = "09:16",
                 ),
+                metadata = ChatMetadata(timestamp = "09:16", model = MODEL_NAME),
             ),
-            metadata = ChatMetadata(timestamp = "09:16", model = MODEL_NAME),
-        ),
-    )
+        )
+    }
 
     /** Clarification state — assistant asks the user a structured question. */
     fun clarification(): ChatHomeViewState = ChatHomeViewState(
@@ -271,6 +289,7 @@ internal object ChatHomePreview {
  * being persisted across renames.
  */
 internal fun ChatHomeVisualState.snapshotTag(): String = when (this) {
+    ChatHomeVisualState.Loading -> "loading"
     ChatHomeVisualState.Empty -> "empty"
     ChatHomeVisualState.Idle -> "idle"
     ChatHomeVisualState.Generating -> "generating"

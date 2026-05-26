@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -27,13 +28,15 @@ private val BAR_HEIGHT = 48.dp
 
 /**
  * Top toolbar that swaps in over the [app.knotwork.design.components.pipelineeditor.EditorToolbar]
- * while the user is in multi-select mode. Shows the selection count, a cancel action,
- * and a destructive Delete action.
+ * while the user is in multi-select mode. Shows the selection count, a cancel
+ * action, a Copy action (Phase 22 / Task 14), and a destructive Delete action.
  *
  * Visual contract: `node-specs.md` §editor toolbar — bulk actions row.
  *
  * @param count number of selected node ids.
- * @param onCancel exits multi-select mode without deleting.
+ * @param onCancel exits multi-select mode without acting.
+ * @param onCopy snapshots the selected nodes into `EditorState.clipboard` and
+ *   exits multi-select. Paste then becomes available from the overflow menu.
  * @param onDelete removes every selected node + their connections.
  * @param modifier optional layout modifier applied to the bar root.
  */
@@ -41,6 +44,7 @@ private val BAR_HEIGHT = 48.dp
 internal fun MultiSelectToolbar(
     count: Int,
     onCancel: () -> Unit,
+    onCopy: () -> Unit,
     onDelete: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -71,12 +75,20 @@ internal fun MultiSelectToolbar(
                 modifier = Modifier.padding(start = KnotworkTheme.spacing.sp2),
             )
         }
-        IconButton(onClick = onDelete) {
-            Icon(
-                imageVector = Icons.Outlined.Delete,
-                contentDescription = stringResource(R.string.pipeline_editor_multi_select_delete),
-                tint = MaterialTheme.colorScheme.error,
-            )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            IconButton(onClick = onCopy) {
+                Icon(
+                    imageVector = Icons.Outlined.ContentCopy,
+                    contentDescription = stringResource(R.string.pipeline_editor_multi_select_copy),
+                )
+            }
+            IconButton(onClick = onDelete) {
+                Icon(
+                    imageVector = Icons.Outlined.Delete,
+                    contentDescription = stringResource(R.string.pipeline_editor_multi_select_delete),
+                    tint = MaterialTheme.colorScheme.error,
+                )
+            }
         }
     }
 }

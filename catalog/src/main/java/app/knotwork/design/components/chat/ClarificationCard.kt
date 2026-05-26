@@ -1,14 +1,19 @@
 package app.knotwork.design.components.chat
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.wrapContentHeight
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -16,10 +21,9 @@ import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -28,7 +32,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
@@ -45,27 +55,31 @@ private val CardPadding = 16.dp
 /** Diameter of the leading spinner glyph rendered next to the header label. */
 private val HeaderIconSize = 18.dp
 
+/** Minimum height of the free-form input pill — keeps the placeholder vertically centered. */
+private val FreeformInputMinHeight = 40.dp
+
 /**
  * Knotwork clarification card — pinned-prompt surface rendered inline in
  * the assistant message stream while the agent is waiting on a typed
- * answer. Mirrors the spec mockup (Phase 21 / Task 10 follow-up):
+ * answer. Mirrors the spec mockup (Phase 21 / Task 10 follow-up,
+ * Phase 22 / Task 5 dark-contrast + composer-aligned input fixes):
  *
  *  - **Container.** Rounded `Accent50` tile so the prompt stands apart
  *    from the surrounding assistant bubble without competing with the
- *    risk-coloured HITL surface.
+ *    risk-coloured HITL surface. The container colour is theme-fixed
+ *    (always cream); body / header text therefore uses fixed dark
+ *    palette tones instead of `MaterialTheme.colorScheme.onSurface` —
+ *    otherwise the light cream container collides with the white
+ *    `onSurface` of the dark theme and the text disappears.
  *  - **Header row.** Spinner-shaped glyph (`AutoAwesome`) tinted brand
  *    primary, followed by the bold "Quick question from the agent"
  *    label.
  *  - **Question.** `BodyBase`, full-width, no clamp.
  *  - **Quick-reply chips.** `FlowRow` of `KnotworkChip(style = Tonal)`.
- *    The chip matching the user's already-submitted answer renders in
- *    its `selected` state; the rest stay inactive.
- *  - **Free-form row.** Single-line `OutlinedTextField` with
- *    `ImeAction.Send` and a trailing arrow-up icon button. Kept on the
- *    card so the user can override the quick replies with a custom
- *    answer without leaving the prompt; the spec mockup shows quick
- *    replies only, but the free-form affordance is retained for the
- *    forthcoming long-answer flow.
+ *  - **Free-form row.** Pill-shaped (`KnotworkTheme.shapes.full`)
+ *    borderless [BasicTextField] with `ImeAction.Send` and a trailing
+ *    circular brand action button — same pattern as the chat composer
+ *    so all in-chat inputs share one visual contract.
  *
  * Once the user replies the card collapses to the existing
  * `Replied: …` summary so the conversation history reads cleanly.
@@ -92,7 +106,7 @@ fun ClarificationCard(model: ClarificationCardModel, onReply: (String) -> Unit, 
         Text(
             text = model.question,
             style = KnotworkTextStyles.BodyBase,
-            color = MaterialTheme.colorScheme.onSurface,
+            color = ClarificationCardForeground,
         )
         if (model.quickReplies.isNotEmpty()) {
             FlowRow(
@@ -115,54 +129,125 @@ fun ClarificationCard(model: ClarificationCardModel, onReply: (String) -> Unit, 
 }
 
 /**
- * Bottom row of the unanswered card — text input + trailing send
- * affordance. Hidden behind the quick replies in the spec mockup but
- * kept on the card so the user can submit a free-form answer that does
- * not fit any canned chip.
+ * Foreground colour for body / header text rendered on the fixed-cream
+ * `Accent50` container. Theme-fixed because the container itself does not
+ * flip with the system theme — using `MaterialTheme.colorScheme.onSurface`
+ * would blow out the contrast under dark theme (white-on-cream).
+ */
+private val ClarificationCardForeground = KnotworkPalette.Accent800
+
+/**
+ * Free-form input row — pill-shaped borderless text field + circular
+ * brand-color action button. Mirrors `ChatComposer` so the user sees one
+ * visual idiom for any in-chat input affordance.
  */
 @Composable
 private fun FreeformRow(placeholder: String, onSubmit: (String) -> Unit) {
     var draft by remember { mutableStateOf("") }
     val canSubmit = draft.isNotBlank()
-    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-        OutlinedTextField(
+    val submit: () -> Unit = {
+        if (canSubmit) {
+            onSubmit(draft.trim())
+            draft = ""
+        }
+    }
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp2),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(KnotworkTheme.shapes.full)
+            .background(color = MaterialTheme.colorScheme.surface)
+            .padding(
+                start = KnotworkTheme.spacing.sp4,
+                end = KnotworkTheme.spacing.sp1,
+                top = KnotworkTheme.spacing.sp1,
+                bottom = KnotworkTheme.spacing.sp1,
+            ),
+    ) {
+        val textStyle: TextStyle = KnotworkTextStyles.BodyBase.copy(
+            color = ClarificationCardForeground,
+        )
+        BasicTextField(
             value = draft,
             onValueChange = { draft = it },
-            placeholder = {
-                Text(text = placeholder, color = KnotworkTheme.extended.onSurfaceDim)
-            },
             singleLine = true,
-            textStyle = KnotworkTextStyles.BodyBase,
+            textStyle = textStyle,
+            cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
-            keyboardActions = KeyboardActions(
-                onSend = {
-                    if (canSubmit) {
-                        onSubmit(draft.trim())
-                        draft = ""
+            keyboardActions = KeyboardActions(onSend = { submit() }),
+            modifier = Modifier
+                .weight(1f)
+                .heightIn(min = FreeformInputMinHeight)
+                .wrapContentHeight(Alignment.CenterVertically),
+            decorationBox = { innerTextField ->
+                Box(contentAlignment = Alignment.CenterStart) {
+                    if (draft.isEmpty()) {
+                        Text(
+                            text = placeholder,
+                            style = KnotworkTextStyles.BodyBase,
+                            color = KnotworkTheme.extended.onSurfaceDim,
+                        )
                     }
-                },
-            ),
-            modifier = Modifier.weight(1f),
-        )
-        IconButton(
-            onClick = {
-                if (canSubmit) {
-                    onSubmit(draft.trim())
-                    draft = ""
+                    innerTextField()
                 }
             },
-            enabled = canSubmit,
-        ) {
-            Icon(
-                imageVector = Icons.Filled.ArrowUpward,
-                contentDescription = stringResource(R.string.knotwork_clarification_send),
-                tint = if (canSubmit) {
-                    MaterialTheme.colorScheme.primary
-                } else {
-                    KnotworkTheme.extended.onSurfaceDim
-                },
+        )
+        ClarificationSendButton(enabled = canSubmit, onClick = submit)
+    }
+}
+
+/** Diameter of the circular send action button inside the clarification pill. */
+private val ClarificationActionButtonSize = 48.dp
+
+/** Size of the glyph rendered inside the circular action button. */
+private val ClarificationActionIconSize = 20.dp
+
+/**
+ * Circular filled brand-color send button used inside the clarification
+ * free-form row. Mirrors the composer's `ComposerActionButton` so the two
+ * input pills behave identically; disabled state desaturates to
+ * `extended.surface3` / `extended.onSurfaceDim`.
+ */
+@Composable
+private fun ClarificationSendButton(enabled: Boolean, onClick: () -> Unit) {
+    val containerColor = if (enabled) {
+        MaterialTheme.colorScheme.primary
+    } else {
+        KnotworkTheme.extended.surface3
+    }
+    val tint = if (enabled) {
+        MaterialTheme.colorScheme.onPrimary
+    } else {
+        KnotworkTheme.extended.onSurfaceDim
+    }
+    val interactionSource = remember { MutableInteractionSource() }
+    val description = stringResource(R.string.knotwork_clarification_send)
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier = Modifier
+            .minimumInteractiveComponentSize()
+            .size(ClarificationActionButtonSize)
+            .clip(androidx.compose.foundation.shape.CircleShape)
+            .background(color = containerColor)
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                enabled = enabled,
+                role = Role.Button,
+                onClick = onClick,
             )
-        }
+            .semantics {
+                contentDescription = description
+                role = Role.Button
+            },
+    ) {
+        Icon(
+            imageVector = Icons.Filled.ArrowUpward,
+            contentDescription = null,
+            tint = tint,
+            modifier = Modifier.size(ClarificationActionIconSize),
+        )
     }
 }
 
@@ -188,7 +273,7 @@ private fun HeaderRow() {
         Text(
             text = stringResource(R.string.knotwork_clarification_header),
             style = KnotworkTextStyles.TitleMd.copy(fontWeight = FontWeight.SemiBold),
-            color = MaterialTheme.colorScheme.onSurface,
+            color = ClarificationCardForeground,
         )
     }
 }

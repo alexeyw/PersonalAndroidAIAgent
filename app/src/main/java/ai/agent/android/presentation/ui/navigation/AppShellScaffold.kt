@@ -1,8 +1,12 @@
 package ai.agent.android.presentation.ui.navigation
 
+import ai.agent.android.presentation.state.TransientMessageRelay
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.LocalActivity
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
@@ -19,14 +23,20 @@ import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.navigation.NavHostController
 import androidx.navigation.NavOptionsBuilder
 import androidx.navigation.compose.currentBackStackEntryAsState
+import app.knotwork.design.components.misc.KnotworkSnackbar
+import app.knotwork.design.components.misc.SnackbarVariant
 import app.knotwork.design.theme.KnotworkTheme
 
 /**
@@ -63,7 +73,11 @@ import app.knotwork.design.theme.KnotworkTheme
  * @param content The nav-graph composable to host. Typically `AppNavGraph`.
  */
 @Composable
-fun AppShellScaffold(navController: NavHostController, content: @Composable (innerPadding: PaddingValues) -> Unit) {
+fun AppShellScaffold(
+    navController: NavHostController,
+    transientMessageRelay: TransientMessageRelay,
+    content: @Composable (innerPadding: PaddingValues) -> Unit,
+) {
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute: String? = navBackStackEntry?.destination?.route
     val showBottomNav = shouldShowBottomNav(currentRoute)
@@ -72,6 +86,17 @@ fun AppShellScaffold(navController: NavHostController, content: @Composable (inn
     val isOnTabRoot = TAB_DESTINATIONS.any { it.route == currentRoute }
     BackHandler(enabled = isOnTabRoot) {
         activity?.finish()
+    }
+
+    // Activity-level snackbar host: outlives every NavGraph destination
+    // so messages emitted from a screen that pops itself off the
+    // back-stack (today: onboarding's skip-flow hint) still render
+    // *after* navigation settles on the next destination.
+    val snackbarHostState = remember { SnackbarHostState() }
+    LaunchedEffect(transientMessageRelay) {
+        transientMessageRelay.messages.collect { message ->
+            snackbarHostState.showSnackbar(message = message)
+        }
     }
 
     // Wrap the whole shell in `imePadding()` so the bottom-nav + body slide
@@ -86,11 +111,45 @@ fun AppShellScaffold(navController: NavHostController, content: @Composable (inn
     Scaffold(
         modifier = Modifier.fillMaxSize().imePadding(),
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
+        snackbarHost = {
+            SnackbarHost(hostState = snackbarHostState) { data ->
+                // Render every transient message through the Knotwork-toned
+                // surface so the onboarding skip-flow hint (and every other
+                // activity-level snackbar) sits on `extended.surface3`
+                // instead of the raw Material3 chrome.
+                KnotworkSnackbar(data = data, variant = SnackbarVariant.Default)
+            }
+        },
         bottomBar = {
+            // Bind the bottom-nav slide to `KnotworkTheme.motion.dur3` (`easeStd`)
+            // so the duration rides the design-system token rather than the
+            // Compose internal default. Reduced-motion collapses the transition
+            // to an instant swap per `decisions.md §14` — Material's slide spec
+            // is not respected by the system `TRANSITION_ANIMATION_SCALE`, so an
+            // explicit gate is the only way to honour the user preference.
+            val reduceMotion = KnotworkTheme.a11y.reducedMotion()
+            val durationMs = KnotworkTheme.motion.dur3
+            val easing = KnotworkTheme.motion.easeStd
+            val enter = if (reduceMotion) {
+                EnterTransition.None
+            } else {
+                slideInVertically(
+                    animationSpec = tween(durationMillis = durationMs, easing = easing),
+                    initialOffsetY = { it },
+                ) + fadeIn(animationSpec = tween(durationMillis = durationMs, easing = easing))
+            }
+            val exit = if (reduceMotion) {
+                ExitTransition.None
+            } else {
+                slideOutVertically(
+                    animationSpec = tween(durationMillis = durationMs, easing = easing),
+                    targetOffsetY = { it },
+                ) + fadeOut(animationSpec = tween(durationMillis = durationMs, easing = easing))
+            }
             AnimatedVisibility(
                 visible = showBottomNav,
-                enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
-                exit = slideOutVertically(targetOffsetY = { it }) + fadeOut(),
+                enter = enter,
+                exit = exit,
             ) {
                 AppBottomNavigationBar(
                     currentRoute = currentRoute,
@@ -163,7 +222,7 @@ internal fun String.belongsToTab(tab: TabDestination): Boolean = when (tab.route
     NavRoutes.TOOLS ->
         this == NavRoutes.TOOLS ||
             this == NavRoutes.TOOL_DETAIL ||
-            this == NavRoutes.ADD_MCP_SERVER
+            this == NavRoutes.MCP_SERVER_CONFIG
     NavRoutes.MORE ->
         this == NavRoutes.MORE ||
             this == NavRoutes.MEMORY ||

@@ -2,11 +2,14 @@ package app.knotwork.design.screens.chat
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.unit.Density
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import app.knotwork.design.a11y.FixedKnotworkA11y
 import app.knotwork.design.a11y.LocalKnotworkA11y
+import app.knotwork.design.components.chips.Risk
 import app.knotwork.design.theme.KnotworkTheme
 import com.github.takahirom.roborazzi.captureRoboImage
 import org.junit.Rule
@@ -16,12 +19,22 @@ import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 
 /**
- * Roborazzi snapshot baseline for `ChatHomeContent` across all 9 documented
- * states (`compose/screens/README.md §C1`) in both themes — 18 PNGs.
+ * Roborazzi snapshot baseline for `ChatHomeContent` across every documented
+ * state of `compose/screens/README.md §C1`.
+ *
+ * Coverage:
+ *  - 7 single-variant states × 2 themes (Empty / Idle / Generating /
+ *    Clarification / Error / DrawerOpen / ConsoleExpanded).
+ *  - HitlConfirm × 3 risk variants × 2 themes (Readonly / Sensitive /
+ *    Destructive) — the destructive variant doubles as the typed-confirm
+ *    gating snapshot.
+ *  - 2 dynamic-type variants at `fontScale = 2.0` (idle + destructive HITL)
+ *    pinned per `decisions.md §14`.
  *
  * Reduced-motion is pinned via [FixedKnotworkA11y] so the `KnotworkLoader`
  * and any other looping animation collapse to a deterministic steady-state
- * per `decisions.md §14`.
+ * per `decisions.md §14`. The snapshot baseline therefore doubles as the
+ * reduced-motion fallback verification (Phase 22 / Task 5).
  */
 @RunWith(AndroidJUnit4::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -61,13 +74,33 @@ class ChatHomeContentSnapshotTest {
     }
 
     @Test
-    fun chat_home_hitl_confirm_light() = snapshot(name = "hitl_confirm", dark = false) {
-        ChatHomeContent(state = ChatHomePreview.hitlConfirm())
+    fun chat_home_hitl_confirm_readonly_light() = snapshot(name = "hitl_confirm_readonly", dark = false) {
+        ChatHomeContent(state = ChatHomePreview.hitlConfirm(risk = Risk.Readonly))
     }
 
     @Test
-    fun chat_home_hitl_confirm_dark() = snapshot(name = "hitl_confirm", dark = true) {
-        ChatHomeContent(state = ChatHomePreview.hitlConfirm())
+    fun chat_home_hitl_confirm_readonly_dark() = snapshot(name = "hitl_confirm_readonly", dark = true) {
+        ChatHomeContent(state = ChatHomePreview.hitlConfirm(risk = Risk.Readonly))
+    }
+
+    @Test
+    fun chat_home_hitl_confirm_sensitive_light() = snapshot(name = "hitl_confirm_sensitive", dark = false) {
+        ChatHomeContent(state = ChatHomePreview.hitlConfirm(risk = Risk.Sensitive))
+    }
+
+    @Test
+    fun chat_home_hitl_confirm_sensitive_dark() = snapshot(name = "hitl_confirm_sensitive", dark = true) {
+        ChatHomeContent(state = ChatHomePreview.hitlConfirm(risk = Risk.Sensitive))
+    }
+
+    @Test
+    fun chat_home_hitl_confirm_destructive_light() = snapshot(name = "hitl_confirm_destructive", dark = false) {
+        ChatHomeContent(state = ChatHomePreview.hitlConfirm(risk = Risk.Destructive))
+    }
+
+    @Test
+    fun chat_home_hitl_confirm_destructive_dark() = snapshot(name = "hitl_confirm_destructive", dark = true) {
+        ChatHomeContent(state = ChatHomePreview.hitlConfirm(risk = Risk.Destructive))
     }
 
     @Test
@@ -110,14 +143,32 @@ class ChatHomeContentSnapshotTest {
         ChatHomeContent(state = ChatHomePreview.consoleExpanded())
     }
 
+    @Test
+    fun chat_home_idle_font_scale_2x_light() = snapshot(name = "idle_font_scale_2x", dark = false, fontScale = 2f) {
+        ChatHomeContent(state = ChatHomePreview.idle())
+    }
+
+    @Test
+    fun chat_home_hitl_destructive_font_scale_2x_light() =
+        snapshot(name = "hitl_destructive_font_scale_2x", dark = false, fontScale = 2f) {
+            ChatHomeContent(state = ChatHomePreview.hitlConfirm(risk = Risk.Destructive))
+        }
+
     /**
-     * Wraps the content under the standard test rule, pins reduced-motion so
-     * looping animations don't randomise the snapshot, and writes the PNG to
-     * `src/test/snapshots/chat_home_<name>_<theme>.png`.
+     * Wraps the content under the standard test rule, pins reduced-motion +
+     * fontScale via [FixedKnotworkA11y] for determinism, and writes the PNG
+     * to `src/test/snapshots/chat_home_<name>_<theme>.png`.
      */
-    private fun snapshot(name: String, dark: Boolean, content: @Composable () -> Unit) {
+    private fun snapshot(name: String, dark: Boolean, fontScale: Float = 1f, content: @Composable () -> Unit) {
         composeTestRule.setContent {
-            CompositionLocalProvider(LocalKnotworkA11y provides FixedKnotworkA11y(reducedMotion = true)) {
+            // Override LocalDensity so Material text actually renders at the
+            // requested font scale — FixedKnotworkA11y only adjusts the
+            // a11y-aware Knotwork primitives, not the underlying typography.
+            val baseDensity = LocalDensity.current
+            CompositionLocalProvider(
+                LocalKnotworkA11y provides FixedKnotworkA11y(reducedMotion = true, fontScale = fontScale),
+                LocalDensity provides Density(density = baseDensity.density, fontScale = fontScale),
+            ) {
                 KnotworkTheme(darkTheme = dark) { content() }
             }
         }

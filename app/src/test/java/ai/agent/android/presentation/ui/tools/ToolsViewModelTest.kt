@@ -1,6 +1,10 @@
 package ai.agent.android.presentation.ui.tools
 
 import ai.agent.android.domain.models.AgentTool
+import ai.agent.android.domain.models.McpConnectionStatus
+import ai.agent.android.domain.models.McpServerConfig
+import ai.agent.android.domain.models.McpTool
+import ai.agent.android.domain.repositories.McpServerRepository
 import ai.agent.android.domain.repositories.SettingsRepository
 import ai.agent.android.domain.repositories.ToolRepository
 import io.mockk.coEvery
@@ -17,6 +21,8 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 
@@ -25,19 +31,35 @@ class ToolsViewModelTest {
 
     private val settingsRepository: SettingsRepository = mockk(relaxed = true)
     private val toolRepository: ToolRepository = mockk(relaxed = true)
+    private val mcpServerRepository: McpServerRepository = mockk(relaxed = true)
+
     private lateinit var viewModel: ToolsViewModel
     private val testDispatcher = StandardTestDispatcher()
 
-    private val mcpServersFlow = MutableStateFlow<Set<String>>(emptySet())
+    private val mcpServersFlow = MutableStateFlow<List<McpServerConfig>>(emptyList())
     private val disabledAppFunctionsFlow = MutableStateFlow<Set<String>>(emptySet())
+    private val disabledMcpToolsFlow = MutableStateFlow<Set<String>>(emptySet())
+    private val statusFlows = mutableMapOf<String, MutableStateFlow<McpConnectionStatus>>()
+
+    private fun statusFlowFor(url: String): MutableStateFlow<McpConnectionStatus> =
+        statusFlows.getOrPut(url) { MutableStateFlow(McpConnectionStatus.Connecting) }
 
     @Before
     fun setup() {
         Dispatchers.setMain(testDispatcher)
-        every { settingsRepository.mcpServerUrls } returns mcpServersFlow
+        every { settingsRepository.mcpServers } returns mcpServersFlow
         every { settingsRepository.disabledAppFunctions } returns disabledAppFunctionsFlow
-        coEvery { toolRepository.getAllLocalTools() } returns listOf(AgentTool("get_system_time", "desc", "{}"))
-        viewModel = ToolsViewModel(settingsRepository, toolRepository)
+        every { settingsRepository.disabledMcpTools } returns disabledMcpToolsFlow
+        coEvery { toolRepository.getAllLocalTools() } returns listOf(
+            AgentTool(name = "get_system_time", description = "desc", parameters = "{}"),
+        )
+        every { mcpServerRepository.observeConnectionStatus(any()) } answers { statusFlowFor(firstArg()) }
+        coEvery { mcpServerRepository.fetchToolList(any(), any()) } returns Result.success(emptyList())
+        viewModel = ToolsViewModel(
+            settingsRepository = settingsRepository,
+            toolRepository = toolRepository,
+            mcpServerRepository = mcpServerRepository,
+        )
     }
 
     @After
@@ -47,45 +69,174 @@ class ToolsViewModelTest {
 
     @Test
     fun `initial state reflects repository values`() = runTest {
-        mcpServersFlow.value = setOf("http://test.com")
-        disabledAppFunctionsFlow.value = setOf("get_system_time")
-
-        advanceUntilIdle()
-
-        assertEquals(listOf("http://test.com"), viewModel.uiState.value.mcpServers)
-        assertEquals(setOf("get_system_time"), viewModel.uiState.value.disabledAppFunctions)
-        assertEquals("get_system_time", viewModel.uiState.value.localTools.first().name)
-    }
-
-    @Test
-    fun `addMcpServer calls repository and clears input`() = runTest {
-        viewModel.onMcpUrlInputChanged("http://new.com")
-        assertEquals("http://new.com", viewModel.uiState.value.newMcpUrlInput)
-
-        viewModel.addMcpServer()
-        advanceUntilIdle()
-
-        coVerify { settingsRepository.addMcpServerUrl("http://new.com") }
-        assertEquals("", viewModel.uiState.value.newMcpUrlInput)
-    }
-
-    @Test
-    fun `removeMcpServer calls repository`() = runTest {
-        viewModel.removeMcpServer("http://old.com")
-        advanceUntilIdle()
-
-        coVerify { settingsRepository.removeMcpServerUrl("http://old.com") }
-    }
-
-    @Test
-    fun `toggleLocalTool updates repository`() = runTest {
+        mcpServersFlow.value = listOf(McpServerConfig(url = "http://test.com"))
         disabledAppFunctionsFlow.value = setOf("get_system_time")
         advanceUntilIdle()
 
-        // Enable it
-        viewModel.toggleLocalTool("get_system_time", true)
+        val state = viewModel.uiState.value
+        assertEquals(listOf("http://test.com"), state.mcpServers.map { it.url })
+        assertEquals(setOf("get_system_time"), state.disabledAppFunctions)
+        assertEquals("get_system_time", state.localTools.first().name)
+    }
+
+    @Test
+    fun `appearing server snapshot exists before observers and fetches launch`() = runTest {
+        val url = "https://racy.example/mcp"
+        val config = McpServerConfig(url = url)
+        val sample = McpTool(
+            id = "mcp:cafebabe:tool",
+            serverUrl = url,
+            name = "tool",
+            description = "",
+            inputSchemaJson = "{}",
+        )
+        coEvery {
+            mcpServerRepository.fetchToolList(config = config, forceRefresh = false)
+        } returns Result.success(listOf(sample))
+
+        mcpServersFlow.value = listOf(config)
         advanceUntilIdle()
 
-        coVerify { settingsRepository.setDisabledAppFunctions(emptySet()) }
+        val snapshot = viewModel.uiState.value.mcpServers.firstOrNull { it.url == url }
+        assertTrue("snapshot for $url must exist", snapshot != null)
+        assertEquals(listOf(sample), snapshot!!.tools)
+    }
+
+    @Test
+    fun `appearing server triggers fetchToolList with the persisted config`() = runTest {
+        val url = "https://example.com/mcp"
+        val config = McpServerConfig(url = url, headers = mapOf("Authorization" to "Bearer xyz"))
+        val sample = McpTool(
+            id = "mcp:abcd1234:search",
+            serverUrl = url,
+            name = "search",
+            description = "Web search",
+            inputSchemaJson = "{}",
+        )
+        coEvery {
+            mcpServerRepository.fetchToolList(config = config, forceRefresh = false)
+        } returns Result.success(listOf(sample))
+
+        mcpServersFlow.value = listOf(config)
+        advanceUntilIdle()
+
+        coVerify { mcpServerRepository.fetchToolList(config = config, forceRefresh = false) }
+        val snapshot = viewModel.uiState.value.mcpServers.first()
+        assertEquals(url, snapshot.url)
+        assertEquals(listOf(sample), snapshot.tools)
+    }
+
+    @Test
+    fun `connection error surfaces in the snapshot status`() = runTest {
+        val url = "https://broken.example/mcp"
+        mcpServersFlow.value = listOf(McpServerConfig(url = url))
+        advanceUntilIdle()
+
+        statusFlowFor(url).value = McpConnectionStatus.Error(reason = "boom")
+        advanceUntilIdle()
+
+        val snapshot = viewModel.uiState.value.mcpServers.first()
+        assertTrue(snapshot.status is McpConnectionStatus.Error)
+        assertEquals("boom", (snapshot.status as McpConnectionStatus.Error).reason)
+    }
+
+    @Test
+    fun `removeMcpServer drops the snapshot`() = runTest {
+        val url = "http://old.com"
+        mcpServersFlow.value = listOf(McpServerConfig(url = url))
+        advanceUntilIdle()
+
+        viewModel.removeMcpServer(url = url)
+        mcpServersFlow.value = emptyList()
+        advanceUntilIdle()
+
+        coVerify { settingsRepository.removeMcpServer(url = url) }
+        coVerify { mcpServerRepository.disconnect(serverUrl = url) }
+        assertTrue(viewModel.uiState.value.mcpServers.isEmpty())
+    }
+
+    @Test
+    fun `edited config for an existing URL triggers a forced refetch`() = runTest {
+        // Regression guard for the on-save-edit flow: after the user changes
+        // auth headers or transport on a known URL, reconcileServerSet must
+        // re-fetch with forceRefresh=true so the UI reflects the new
+        // connection state without a manual Refresh tap.
+        val url = "https://hf.example/mcp"
+        val original = McpServerConfig(url = url)
+        val edited = McpServerConfig(url = url, headers = mapOf("Authorization" to "Bearer t"))
+        mcpServersFlow.value = listOf(original)
+        advanceUntilIdle()
+
+        mcpServersFlow.value = listOf(edited)
+        advanceUntilIdle()
+
+        coVerify { mcpServerRepository.fetchToolList(config = edited, forceRefresh = true) }
+    }
+
+    @Test
+    fun `refreshServer forces a fresh fetchToolList with the persisted config`() = runTest {
+        val url = "https://refresh.example/mcp"
+        val config = McpServerConfig(url = url, headers = mapOf("X-Test" to "1"))
+        mcpServersFlow.value = listOf(config)
+        advanceUntilIdle()
+
+        viewModel.refreshServer(serverUrl = url)
+        advanceUntilIdle()
+
+        coVerify { mcpServerRepository.fetchToolList(config = config, forceRefresh = true) }
+    }
+
+    @Test
+    fun `toggleServerExpanded flips the membership in expandedServerUrls`() = runTest {
+        val url = "https://expand.example/mcp"
+        mcpServersFlow.value = listOf(McpServerConfig(url = url))
+        advanceUntilIdle()
+
+        viewModel.toggleServerExpanded(serverUrl = url)
+        assertEquals(setOf(url), viewModel.uiState.value.expandedServerUrls)
+        viewModel.toggleServerExpanded(serverUrl = url)
+        assertTrue(viewModel.uiState.value.expandedServerUrls.isEmpty())
+    }
+
+    @Test
+    fun `toggleLocalTool enables previously-disabled function`() = runTest {
+        disabledAppFunctionsFlow.value = setOf("get_system_time")
+        advanceUntilIdle()
+
+        viewModel.toggleLocalTool(toolName = "get_system_time", isEnabled = true)
+        advanceUntilIdle()
+
+        coVerify { settingsRepository.setDisabledAppFunctions(functions = emptySet()) }
+    }
+
+    @Test
+    fun `toggleMcpTool writes to disabledMcpTools`() = runTest {
+        val id = "mcp:abcd1234:search"
+        viewModel.toggleMcpTool(toolId = id, isEnabled = false)
+        advanceUntilIdle()
+
+        coVerify { settingsRepository.setDisabledMcpTools(toolIds = setOf(id)) }
+    }
+
+    @Test
+    fun `findMcpTool returns the matching tool or null`() = runTest {
+        val url = "https://lookup.example/mcp"
+        val config = McpServerConfig(url = url)
+        val tool = McpTool(
+            id = "mcp:deadbeef:search",
+            serverUrl = url,
+            name = "search",
+            description = "Web search",
+            inputSchemaJson = "{}",
+        )
+        coEvery {
+            mcpServerRepository.fetchToolList(config = config, forceRefresh = false)
+        } returns Result.success(listOf(tool))
+
+        mcpServersFlow.value = listOf(config)
+        advanceUntilIdle()
+
+        assertEquals(tool, viewModel.findMcpTool(toolId = tool.id))
+        assertNull(viewModel.findMcpTool(toolId = "mcp:deadbeef:missing"))
     }
 }

@@ -12,6 +12,7 @@ import ai.agent.android.domain.models.NodeOutput
 import ai.agent.android.domain.repositories.ApiKeyRepository
 import ai.agent.android.domain.repositories.ChatRepository
 import ai.agent.android.domain.repositories.MetricsRepository
+import ai.agent.android.domain.repositories.NetworkActivityTracker
 import ai.agent.android.domain.repositories.SettingsRepository
 import ai.agent.android.domain.repositories.ToolRepository
 import ai.koog.prompt.dsl.prompt
@@ -52,6 +53,7 @@ class CloudLlmNodeExecutor @Inject constructor(
     private val metricsRepository: MetricsRepository,
     private val cloudLlmClientFactory: CloudLlmClientFactory,
     private val cloudLlmModelResolver: CloudLlmModelResolver,
+    private val networkActivityTracker: NetworkActivityTracker,
 ) : NodeExecutor {
 
     override fun execute(
@@ -94,6 +96,9 @@ class CloudLlmNodeExecutor @Inject constructor(
                 // The resolver owns the per-provider configured-id ↔ default fallback,
                 // so the executor stays out of the data layer's settings plumbing.
                 val model = cloudLlmModelResolver.resolveModel(selectedProvider) as LLModel
+                // Privacy-status pulse for the More tab footer. Recorded right before
+                // the network call so the timestamp reflects the actual outbound moment.
+                networkActivityTracker.recordOutbound()
                 client.executeStreaming(prompt("default") { user(fullPrompt) }, model)
                     .mapNotNull { (it as? StreamFrame.TextDelta)?.text }
             }

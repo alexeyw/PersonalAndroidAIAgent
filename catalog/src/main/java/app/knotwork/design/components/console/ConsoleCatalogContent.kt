@@ -83,27 +83,9 @@ fun ConsoleCatalogContent() {
                 .padding(KnotworkTheme.spacing.sp4),
             verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp4),
         ) {
-            SectionLabel(text = "ConsolePane — Peek")
-            ConsolePane(
-                snap = ConsoleSnap.Peek,
-                onSnapChange = {},
-                tab = ConsoleTab.Logs,
-                onTabChange = {},
-                logs = DemoLogs,
-                vars = DemoVars,
-                traces = DemoTraces,
-                filter = ConsoleFilter.allOn,
-                onFilterChange = {},
-                onSearch = {},
-                onCopyAll = {},
-                onClear = {},
-            )
-
-            SectionLabel(text = "ConsolePane — Partial · Logs")
+            SectionLabel(text = "ConsolePane — Logs")
             var filter by remember { mutableStateOf(ConsoleFilter.allOn) }
             ConsolePane(
-                snap = ConsoleSnap.Partial,
-                onSnapChange = {},
                 tab = ConsoleTab.Logs,
                 onTabChange = {},
                 logs = DemoLogs,
@@ -114,12 +96,11 @@ fun ConsoleCatalogContent() {
                 onSearch = {},
                 onCopyAll = {},
                 onClear = {},
+                onCloseConsole = {},
             )
 
-            SectionLabel(text = "ConsolePane — Partial · Vars")
+            SectionLabel(text = "ConsolePane — Vars")
             ConsolePane(
-                snap = ConsoleSnap.Partial,
-                onSnapChange = {},
                 tab = ConsoleTab.Vars,
                 onTabChange = {},
                 logs = DemoLogs,
@@ -130,12 +111,11 @@ fun ConsoleCatalogContent() {
                 onSearch = {},
                 onCopyAll = {},
                 onClear = {},
+                onCloseConsole = {},
             )
 
-            SectionLabel(text = "ConsolePane — Partial · Traces")
+            SectionLabel(text = "ConsolePane — Traces")
             ConsolePane(
-                snap = ConsoleSnap.Partial,
-                onSnapChange = {},
                 tab = ConsoleTab.Traces,
                 onTabChange = {},
                 logs = DemoLogs,
@@ -146,6 +126,7 @@ fun ConsoleCatalogContent() {
                 onSearch = {},
                 onCopyAll = {},
                 onClear = {},
+                onCloseConsole = {},
             )
         }
     }

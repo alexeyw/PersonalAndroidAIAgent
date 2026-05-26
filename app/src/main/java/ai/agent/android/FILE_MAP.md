@@ -19,6 +19,7 @@ This file maps the contents of the main application package.
     - `AppDatabase.kt` - Room database definition.
     - `Converters.kt` - Type converters for Room.
     - `EncryptedDbPassphraseProvider.kt` - Provides the SQLCipher passphrase stored in EncryptedSharedPreferences.
+    - `McpServerCollisionCheck.kt` - Pure helper that detects when an `updateMcpServer` call would persist a duplicate URL row (editing server A's URL to match an existing server B's URL). Extracted from `SettingsManager.updateMcpServer` so the decision matrix is unit-testable without DataStore plumbing.
     - `SettingsManager.kt` - App settings manager.
     - `dao/` - Data Access Objects (DAOs).
       - `ChatDao.kt` - Chat messages DAO.
@@ -44,6 +45,10 @@ This file maps the contents of the main application package.
     - `ToolsVariableProvider.kt` - Resolves `$TOOLS` to the active tools list (`name — description`, one per line).
     - `ModelVariableProvider.kt` - Resolves `$MODEL` to the currently active local model display name.
     - `MemorySummaryVariableProvider.kt` - Resolves `$MEMORY_SUMMARY` to a numbered list of recent long-term memory chunks.
+    - `LangVariableProvider.kt` - Resolves `$LANG` to the device's BCP-47 language tag.
+    - `LocationVariableProvider.kt` - Resolves `$LOCATION` to the device's coarse region (country code).
+    - `UserVariableProvider.kt` - Resolves `$USER` to the identity card's display name (currently "Anonymous").
+    - `DeviceVariableProvider.kt` - Resolves `$DEVICE` to a short "manufacturer · model · Android version" descriptor.
   - `mappers/` - Data mapping layer.
     - `LocalModelMapper.kt` - Mapper for local models.
     - `ChatMessageMapper.kt` - Mapper for chat messages.
@@ -58,10 +63,13 @@ This file maps the contents of the main application package.
     - `ChatRepositoryImpl.kt` - Chat repository implementation.
     - `ClarificationRepositoryImpl.kt` - In-memory implementation of `ClarificationRepository` that suspends pipeline coroutines until the user answers (or the request times out).
     - `FirebaseCrashReportingRepositoryImpl.kt` - Firebase-backed `CrashReportingRepository`. Every method is gated on `SettingsRepository.crashReportingEnabled` and short-circuits to no-op when the user has not opted in.
-    - `LocalModelRepositoryImpl.kt` - Local model repository implementation.
+    - `IdentityRepositoryImpl.kt` - Resolves the Settings identity card snapshot (ANDROID_ID → 8-hex device id, AndroidKeyStore probe).
+    - `LocalModelRepositoryImpl.kt` - Local model repository implementation; observes the active model file metadata for the Settings local-model card.
     - `LocalPipelineRepositoryImpl.kt` - Local pipeline repository implementation.
+    - `McpServerRepositoryImpl.kt` - Per-server gateway over the raw `McpClient` transport; owns lazy connections, the 5-minute tool-list cache, and per-URL `McpConnectionStatus` flows consumed by `ToolsViewModel`.
     - `MemoryRepositoryImpl.kt` - Memory repository implementation.
     - `MetricsRepositoryImpl.kt` - Metrics repository implementation.
+    - `NetworkActivityTrackerImpl.kt` - Records `System.currentTimeMillis()` on every outbound cloud-LLM and MCP call. Drives the More tab footer privacy pill via `NetworkActivityTracker.lastOutboundAt`.
     - `NetworkStateRepositoryImpl.kt` - Network state repository implementation.
     - `PowerStateRepositoryImpl.kt` - Power state repository implementation.
     - `ToolRepositoryImpl.kt` - Tool repository implementation.
@@ -70,6 +78,7 @@ This file maps the contents of the main application package.
     - `AgentIdleManager.kt` - Manager for device idle state.
     - `AgentPowerManager.kt` - Manager for power states.
     - `AgentWorker.kt` - WorkManager worker for agent tasks.
+    - `LongRunningTaskNotifierImpl.kt` - Notifier for the `LongRunningTasksChannel`; gated on the Settings → Notifications toggle.
   - `testing/` - Production-graph entry points used solely by instrumented tests.
     - `AppFunctionsE2ETestEntryPoint.kt` - Hilt `EntryPoint` exposing `ToolRepository`, `SettingsRepository`, and `ChatRepository` to `AppFunctionsEndToEndTest` so the test can reach the production singletons without a Hilt test component.
   - `tools/` - Tool and action implementations.
@@ -93,6 +102,7 @@ This file maps the contents of the main application package.
   - `constants/` - Domain-level constants.
     - `DefaultPrompts.kt` - Default system prompts.
     - `NotificationChannels.kt` - Canonical ids of every Android `NotificationChannel` (foreground service status, approval prompts).
+    - `OnboardingModelCatalog.kt` - Maps the catalog-side `OnboardingLiteRtModel.id` (`gemma_4_e2b` / `gemma_4_e4b`) to the on-disk filename + HuggingFace URL consumed by `OnboardingViewModel.startDownload` and `LocalModelRepository.isInstalled`. Also derives a filename from the user-supplied custom URL row.
     - `PipelineExecutionDefaults.kt` - Engine-level timing and log-size constants consumed by `GraphExecutionEngine` and the LLM-backed node executors (post-emit pause, LiteRT pre-warm delay, node-IO log char limit).
     - `SettingsDefaults.kt` - Default values for every user-tunable preference (sampling params, timeouts, pipeline-step bounds, Ollama context window). Single source of truth shared by `SettingsManager`, `SettingsViewModel`, and the visual orchestrator.
     - `TimeAndIdConstants.kt` - Cross-module numeric constants for time-unit conversion (`MS_PER_SECOND`, `MS_PER_MINUTE`) and the notification-id partition range shared by approval-publish/receive paths.
@@ -129,6 +139,11 @@ This file maps the contents of the main application package.
     - `DownloadState.kt` - Download state model.
     - `LocalBackend.kt` - Typed enum for the on-device LiteRT execution backend (CPU/GPU/NPU); owns the persisted wire keys via `LocalBackend.key`.
     - `LocalModel.kt` - Domain model for local models.
+    - `McpAuth.kt` - Sealed authentication scheme (`None` / `Bearer` / `Basic` / `ApiKey`) carried by `McpServerConfig.auth`. `KoogMcpClient.composeHeaders` renders the matching request header at connect time.
+    - `McpConnectionStatus.kt` - Sealed lifecycle (`Connecting` / `Connected` / `Error(reason)`) exposed by `McpServerRepository.observeConnectionStatus` and rendered as the per-server status pill.
+    - `McpServerConfig.kt` - Per-server configuration persisted by `SettingsRepository.mcpServers`: URL + optional display name + transport (SSE / Streamable HTTP) + typed `McpAuth` + arbitrary headers (advanced overrides).
+    - `McpTool.kt` - Domain model for one tool advertised by an MCP server (`id = "mcp:<sha8(serverUrl)>:<toolName>"`, `serverUrl`, `name`, `description`, `inputSchemaJson`, optional `risk`).
+    - `McpTransport.kt` - Transport selector backing `McpServerConfig.transport`. Only SSE is end-to-end wired today through Koog 0.8; STREAMABLE_HTTP falls back to SSE until upstream support lands.
     - `MemoryChunk.kt` - Memory chunk model.
     - `MemorySummary.kt` - Lightweight memory projection (id/text/timestamp) used by `$MEMORY_SUMMARY`.
     - `NetworkState.kt` - Network state model.
@@ -148,16 +163,19 @@ This file maps the contents of the main application package.
     - `TaskPriority.kt` - Task priority enum.
     - `ToolInvocationResult.kt` - Snapshot of a single tool invocation (toolName + output) accumulated by `GraphExecutionEngine` during a pipeline run for the `--- Tool Results ---` block.
     - `ToolRisk.kt` - Per-tool risk classification (`READ_ONLY` / `SENSITIVE` / `DESTRUCTIVE`) consumed by the HITL gate; canonical resolution lives in `ToolRepository.getRisk`.
+    - `UpdateMcpServerResult.kt` - Sealed outcome of `SettingsRepository.updateMcpServer` (`Success` / `UrlCollision(collidingUrl, collidingDisplayName)`). Lets the Edit-MCP-server form surface an inline error instead of silently overwriting a sibling row when the user types a URL that already belongs to another persisted server.
   - `repositories/` - Repository interfaces.
     - `ApiKeyRepository.kt` - API key repository interface.
     - `ChatRepository.kt` - Chat repository interface.
     - `LocalToolExecutor.kt` - Strategy interface for executing a single locally-registered agent tool (multibound by name in `LocalToolsModule`).
+    - `McpServerRepository.kt` - Per-server gateway interface (`fetchToolList` with 5-min cache + `forceRefresh`, `observeConnectionStatus`, `disconnect`). Data-layer impl: `McpServerRepositoryImpl`.
     - `ClarificationRepository.kt` - Bridges the agent (suspending until the user answers) and the UI (publishing the pending question, forwarding the reply).
     - `CrashReportingRepository.kt` - Domain gateway for anonymous crash reporting (opt-in). All methods are no-op until `SettingsRepository.crashReportingEnabled` becomes `true`.
     - `LocalModelRepository.kt` - Local model repository interface.
     - `MemoryRepository.kt` - Memory repository interface.
     - `MetricsRepository.kt` - Metrics repository interface.
     - `ModelDownloadManager.kt` - Model download manager interface.
+    - `NetworkActivityTracker.kt` - Domain interface tracking the timestamp of the most recent outbound LLM / MCP call. Used by the More tab privacy footer to compute "no network calls in last N m" without observing connectivity.
     - `NetworkStateRepository.kt` - Network state repository interface.
     - `PipelineRepository.kt` - Pipeline repository interface.
     - `PowerStateRepository.kt` - Power state repository interface.
@@ -182,6 +200,12 @@ This file maps the contents of the main application package.
     - `SavePipelineUseCase.kt` - Use case to save a pipeline.
     - `ScheduleTaskUseCase.kt` - Use case to schedule tasks.
     - `TaskRouterUseCase.kt` - Use case to route tasks.
+    - `ResetSamplingDefaultsUseCase.kt` - Resets temperature / top-K / top-P / repetition penalty / max context / max steps to the documented defaults.
+    - `ClearAllMemoryUseCase.kt` - Wipes every memory chunk (pinned and unpinned). Gated behind the typed-confirm dialog.
+    - `ExportMemoryBaseUseCase.kt` - Serialises the memory table to a portable JSON blob. SAF-driven from `SettingsScreen`.
+    - `ReembedAllMemoriesUseCase.kt` - Re-runs the active embedding engine over every chunk; streams `0f..1f` progress.
+    - `TestBackendUseCase.kt` - Runs a fixed prompt-probe against the active local model and persists `TestProbeResult` so the Settings row keeps showing the latest throughput.
+    - `GetSystemPromptVariableCatalogUseCase.kt` - Materialises the `$VARIABLE` chip catalog with live preview samples for the Settings → System instructions card.
 - `presentation/` - UI and presentation layer.
   - `common/` - Cross-feature presentation utilities.
     - `UiText.kt` - Sealed `UiText` (`Resource` / `Dynamic` / `Joined` / `Empty`) used by `UiState`s to carry user-visible text without holding a `Context`.
@@ -197,6 +221,7 @@ This file maps the contents of the main application package.
     - `ApprovalAction.kt` - Typed enum pairing the Approve/Deny notification actions with their wire `Intent.action` strings; owns `fromAction` parsing.
   - `state/` - State management components.
     - `ActiveSessionTracker.kt` - Tracker for active chat session.
+    - `TransientMessageRelay.kt` - `@Singleton` one-shot snackbar bus consumed by the activity-level `SnackbarHost` in `AppShellScaffold`. Used by `OnboardingViewModel.skipOnboarding` to surface the "install a model from Settings → Models" hint *after* navigation pops onboarding off the back-stack.
   - `theme/` - Compose theme definitions.
     - `Theme.kt` - App theme definition. Reads the static fallback palette from `res/values/colors.xml` via `colorResource(...)`; dynamic color (Android 12+) takes precedence on supported devices.
     - `Type.kt` - Typography settings.
@@ -210,44 +235,30 @@ This file maps the contents of the main application package.
       - `KnotworkModalRoute.kt` - Generic `ModalBottomSheet` + `PredictiveBackHandler` wrapper reused by every modal-sheet route (`NodeConfigSheet`, `ConsolePane`, `AddMcpServerScreen` — bodies arrive in Tasks 6/7/10).
       - `AppShellScaffold.kt` - Root scaffold: bottom-nav chrome, tab-switch state preservation, root-tab `BackHandler = activity.finish()`, theme-flip crossfade.
       - `AppNavGraph.kt` - The single `NavHost` for the app, hosting splash → onboarding → tabs (Chat / Pipelines nested-graph / Tools / More) + secondary screens + modal-sheet placeholders. Reads `isFirstLaunch` to drive the onboarding gate.
-    - `onboarding/` - First-launch onboarding gate (Phase 21 / Task 4 stub; full pager in Task 10).
-      - `OnboardingScreen.kt` - Single-screen welcome + Get-started CTA; flips `SettingsRepository.isFirstLaunch` once on completion.
-      - `OnboardingViewModel.kt` - Hilt ViewModel; persists `isFirstLaunch = false`.
-    - `more/` - "More" tab landing screen.
-      - `MoreScreen.kt` - Material3 `ListItem` list with Memory / Models / Prompts / Task monitor / Live metrics / Settings / About rows.
-    - `about/` - About screen (Phase 21 / Task 4 stub; full body in Task 10).
-      - `AboutScreen.kt` - App name + version (`BuildConfig.VERSION_NAME`) + license name.
-    - `chat/` - Chat surface (Phase 21 / Task 8: the redesigned `home/` package is the production surface; `legacy/` keeps the original implementation while orchestrator integration is pending).
-      - `home/` - Redesigned Knotwork chat home (Phase 21 / Task 8). Wired to `CHAT_TAB` via `AppNavGraph`.
-        - `ChatHomeScreen.kt` - Stateful entry composable: subscribes to `ChatHomeViewModel`, maps `ChatHomeUiState → ChatHomeViewState`, threads the debug state picker, owns IME / navigation-bar insets.
+    - `onboarding/` - First-launch onboarding gate with the 4-step Knotwork pager (Phase 22 / Task 12 wired the real download / model-load flow on top of the Phase 21 catalog surface).
+      - `OnboardingScreen.kt` - Composable entry: subscribes to `OnboardingViewModel.state`, forwards finish/skip callbacks into the nav-graph, hosts a `SnackbarHost` for the skip-flow hint emitted on `OnboardingViewModel.skipSnackbarEvents`.
+      - `OnboardingViewModel.kt` - Hilt ViewModel orchestrating the download + warm-up flow. Injects `LocalModelRepository`, `ModelDownloadManager`, `LoadModelUseCase`; folds `DownloadState` into the catalog `OnboardingViewState`, persists the freshly-downloaded `LocalModel`, runs `LoadModelUseCase` to warm the inference handle, and emits one-shot snackbar pings on skip. Sets `hasCompletedOnboarding` on finish / skip.
+    - `about/` - About screen (Phase 22 / Task 15 — full Knotwork redesign on top of `AboutContent`: hero brand mark + version / license / acknowledgments / privacy cards).
+      - `AboutScreen.kt` - Slim wrapper around the catalog `AboutContent`. Owns the 15-entry hand-maintained acknowledgments list and the `ACTION_VIEW` intents for License / Privacy CTAs.
+    - `chat/` - Chat surface — production surface lives in `home/`.
+      - `home/` - Redesigned Knotwork chat home. Wired to `CHAT_TAB` via `AppNavGraph`.
+        - `ChatHomeScreen.kt` - Stateful entry composable: subscribes to `ChatHomeViewModel`, maps `ChatHomeUiState → ChatHomeViewState`, surfaces the deleted-pipeline fallback Snackbar, threads the debug state picker, owns IME / navigation-bar insets. Owns the new-thread / rename / model-picker `ModalBottomSheet`s, the TopAppBar overflow `DropdownMenu` (Export / Delete / Clear console), the `ActivityResultContracts.OpenDocument` import launcher, and the `Intent.ACTION_SEND` share-sheet for chat export. Takes `onOpenSettings` / `onOpenModels` lambdas wired by `AppNavGraph`.
+        - `ChatExportPayload.kt` - One-shot payload carrying exported chat JSON to the share sheet.
         - `ChatHomeUiState.kt` - Sealed UI state for the 9-state matrix (Empty / Idle / Generating / HitlConfirm(Risk) / Clarification / Error(message) / DrawerOpen / ConsoleExpanded(snap); dark theme is cross-cutting).
-        - `ChatHomeViewModel.kt` - Stub Hilt ViewModel exposing `state: StateFlow<ChatHomeUiState>`. Drives `Idle → Generating → Idle` round-trip on `sendMessage`; debug-only `forceState` for the picker. Orchestrator wiring lands post-v0.1.
+        - `ChatHomeViewModel.kt` - Hilt ViewModel injecting `AgentOrchestratorUseCase`, `ChatRepository`, `PipelineRepository`, `SettingsRepository`, `GetContextWindowUseCase`, `LlmInferenceEngine`, `ClarificationRepository`. Exposes `state`, `messages`, `threadTitle`, `pipelineName`, `tokens{Used,Max}`, `composerValue`, `pendingTypedConfirm`, `consoleSearchQuery`, `consoleFilter`, `pendingTool`, `pendingClarification`, `consoleLines`, `consoleVars`, `consoleTraces`, `consoleTab`, `consoleClearConfirmRequested`, plus `pipelineFallbackEvents` / `consoleSnackbarEvents` one-shots. Wires the orchestrator core, HITL (`WaitingForApproval` → `HitlConfirm(Risk)` with destructive typed-confirm gating, system-message persistence on reject), Clarification (`AwaitingClarification` → `Clarification` with VM-side watchdog timer), and the console pane (`ConsoleLog` / `PipelineTrace` / `NodeIO` aggregation with `consoleClearBaseline`, Copy line / Copy all clipboard payloads, persisted preferred tab).
         - `ChatHomeStateMapping.kt` - Pure-Kotlin mapper from `ChatHomeUiState` to the catalog `ChatHomeViewState`, plus debug-picker fixtures and the `DebugStateIds` constants.
+        - `ChatHomeConsoleMapping.kt` - Pure-Kotlin mappers from the domain orchestrator output to the catalog console-pane row models: `ConsoleEvent → ConsoleLine`, `TraceStep → ConsoleTraceSpan`, `NodeIO → List<ConsoleVarRow>`.
         - `ChatHomeDebugStatePicker.kt` - Triple-tap state picker (`DropdownMenu`) — visible only in debug builds via `BuildConfig.DEBUG` guard.
-      - `legacy/` - Original chat surface preserved for post-v0.1 orchestrator integration. Not wired into navigation today.
-        - `AgentThoughtIndicator.kt` - Indicator for agent thinking.
-        - `ApprovalBanner.kt` - Prominent inline approval prompt rendered above the chat input bar whenever the orchestrator is in `WaitingForApproval`; complements the compact console-line indicator with full-width Approve / Deny buttons and a risk-coloured badge.
-        - `ChatExportPayload.kt` - Payload carrying exported chat JSON to the share sheet.
-        - `ChatScreen.kt` - Legacy chat UI screen (rebound to `CHAT_TAB` once the orchestrator-wiring task lands).
-        - `ChatUiState.kt` - Legacy chat UI state.
-        - `ChatViewModel.kt` - Legacy chat ViewModel — still wires `AgentOrchestratorUseCase`, `ChatRepository`, etc.
-        - `ClarificationCard.kt` - Inline chat card rendering an `AwaitingClarification` request (pending/answered/timed-out states with countdown).
-        - `ClarificationCardUiModel.kt` - UI projection of a clarification request held in `ChatUiState.clarificationCards`.
-        - `ConsoleFullLogSheet.kt` - Expanded-console `ModalBottomSheet` (Phase 17.5): renders the full chronological log of the active session with millisecond timestamps, filter chips, `Clear` / `Copy all` actions, auto-scroll, and a `↓ New events` FAB.
-        - `ConsoleLogFilter.kt` - Pure-Kotlin enum (`All / Nodes / Tools / Memory / Errors`) backing the filter-chip row in the expanded console, plus the `matches(event)` predicate.
-        - `ConsolePanelCollapsed.kt` - Stateless 56dp mini-console rendered above the chat input; shows the last 3 `ConsoleEvent`s in monospace with type-coded colors and `HH:mm:ss [TAG] message` formatting.
-        - `PipelineSummary.kt` - Lightweight UI projection of a pipeline (id + name) used by the chat-screen pipeline selectors and TopAppBar subtitle.
-        - `PipelineTraceCard.kt` - Pipeline trace UI component.
     - `memory/` - Memory screen components.
       - `MemoryScreen.kt` - Memory UI screen.
       - `MemoryUiState.kt` - Memory UI state.
       - `MemoryViewModel.kt` - Memory ViewModel.
-    - `models/` - Models screen components.
-      - `ModelsScreen.kt` - Models UI screen.
-      - `ModelsUiState.kt` - Models UI state.
-      - `ModelsViewModel.kt` - Models ViewModel.
+    - `models/` - Models screen components (Phase 22 / Task 15 — Knotwork redesign with inline Active card + HF auth + Custom URL + Presets list).
+      - `ModelsScreen.kt` - Slim mapper. Folds `ModelsUiState` into the catalog `ModelsViewState` (Active card / HF auth section / Custom URL / Presets list with Idle / Downloading / OnDisk variants).
+      - `ModelsUiState.kt` - Models UI state. Adds `activeDownloadFileName: String?` so the catalog can render the in-flight progress on the matching preset row.
+      - `ModelsViewModel.kt` - Models ViewModel. Adds `cancelDownload` (cancels the active download job) and `deleteModel`.
     - `monitoring/` - Monitoring screen components.
-      - `MonitoringScreen.kt` - Monitoring UI screen.
+      - `MonitoringScreen.kt` - Slim mapper. Folds `MonitoringUiState` into the catalog `MonitoringViewState` and renders `MonitoringContent` (Phase 22 / Task 15).
       - `MonitoringUiState.kt` - Monitoring UI state.
       - `MonitoringViewModel.kt` - Monitoring ViewModel.
     - `orchestrator/` - Pipeline library + shared orchestrator ViewModel (the canvas surface moved to `pipeline/editor/` in Phase 21 / Task 9).
@@ -257,44 +268,58 @@ This file maps the contents of the main application package.
       - `components/` - Orchestrator UI components.
         - `NodeContextConfigSection.kt` - "Input Data" section of the node configuration dialog: five checkboxes mapped to `NodeContextConfig` flags (with `nodeInput` rendered locked-on) plus a hint banner.
         - `PromptLibraryDialog.kt` - Prompt library dialog UI component.
-    - `pipeline/editor/` - Phase 21 / Task 9 — production pipeline editor.
-      - `PipelineEditorScreen.kt` - Stateful entry composable: subscribes to `OrchestratorViewModel` + `runState`, owns the screen-local `EditorState`, hosts the catalog `NodeConfigSheet`, dispatches graph mutations.
-      - `PipelineEditorContent.kt` - Pure-layout content. Vertical stack of `EditorToolbar` (or `MultiSelectToolbar`) + `EditorCanvas` + `ValidationBar` (or `RunTraceBar`).
+    - `pipeline/editor/` - Phase 21 / Task 9 — production pipeline editor (Phase 22 / Task 14 reshapes the toolbar + adds RunStatusBanner, ZoomRail, MiniMap, FilterBar, EmptyPipelineState, DotGridBackground, ValidationAutoFix, copy/paste, search, grid toggle).
+      - `PipelineEditorScreen.kt` - Stateful entry composable: subscribes to `OrchestratorViewModel` + `runState`, owns the screen-local `EditorState`, computes the toolbar subtitle / primary-action variant, hosts the overflow `DropdownMenu` (Undo / Redo / Rename… / Delete / Auto-layout / Mini-map / grid toggle / Find node… / Paste), the catalog `NodeConfigSheet`, the rename dialog, and the run-banner clock.
+      - `PipelineEditorContent.kt` - Pure-layout content. Vertical stack of `EditorToolbar` (or `MultiSelectToolbar`) + `RunStatusBanner` + `EditorCanvas` + `ValidationBar`.
       - `config/NodeConfigCodec.kt` - JSON ↔ catalog `NodeConfig` codec + legacy-field derivation for pre-Phase-21 rows + `defaultFor(type, title)` factory.
       - `config/NodeTypeMapper.kt` - Bridges between domain `NodeType` / `CloudProvider` and the catalog enums (`pipelineeditor.NodeType` / `CloudProvider`).
-      - `core/CanvasTransform.kt` - Pan / pinch-zoom math + `snapToGrid(value)` helper; pure Kotlin.
+      - `core/CanvasTransform.kt` - Pan / pinch-zoom math + `snapToGrid` + `fitToBounds(bbox, viewport, padding)` + `zoomedOneStep(direction, viewport)` + `Bounds` data class with `Bounds.ofNodes(...)`; pure Kotlin.
       - `core/BezierEdge.kt` - Cubic-Bezier control-point math, point-evaluation, arc-length approximation, hit-test; pure Kotlin.
       - `core/AutoLayout.kt` - Sugiyama-style hierarchical layout (longest-path layering + median crossing reduction + grid-snapped coordinates); pure Kotlin.
       - `core/EditorUndoRedo.kt` - Bounded undo / redo snapshot stack (capacity = 50); pure Kotlin.
-      - `core/EditorState.kt` - `@Stable` screen-local state holder (`transform`, `selection`, `multiSelectMode`, `connectionInProgress`, `quickAddAnchor`, `activeRunningNodeId`, `isRunning`, `configuringNodeId`, `workingConfig`, `undoRedo`). `rememberEditorState()` factory.
-      - `canvas/EditorCanvas.kt` - Pinch-zoom + pan + tap / long-press gesture host; composes `EditorEdges` underneath every `EditorNode`; overlays the `QuickAddRadialMenu` when active.
-      - `canvas/EditorNode.kt` - Per-node Compose wrapper around the catalog `NodeCard`. Owns the drag pickup + spring-release animations and routes outbound-port drags to connection mode.
-      - `canvas/EditorEdges.kt` - Single `Canvas` drawing every edge as a cubic Bezier, the preview-edge while a connection is being drawn, and the traveling-dot run-trace animation.
+      - `core/EditorState.kt` - `@Stable` screen-local state holder (`transform`, `selection`, `multiSelectMode`, `connectionInProgress`, `quickAddAnchor`, `activeRunningNodeId`, `isRunning`, `configuringNodeId`, `workingConfig`, `undoRedo`, `miniMapOpen`, `gridVisible`, `clipboard`, `searchOpen`, `searchQuery`). `rememberEditorState()` factory.
+      - `core/MiniMapGeometry.kt` - Pure-Kotlin projection from canvas-space to mini-map pixels (`canvasToMiniX/Y` + inverse + `viewportRect`); used by the `MiniMap` overlay. Unit-tested.
+      - `core/ValidationAutoFix.kt` - Best-effort auto-fix recipe registry for `PipelineValidationError`s (MissingInput / MissingOutput / MultipleInputs / MultipleOutputs / DisconnectedInput / DisconnectedOutput); returns an `AutoFixOutcome`. Drives the `Auto-fix` action on `ValidationBar`. Also owns `PipelineValidationError.focusableNodeId(graph)` for the per-row `Go ↗` button.
+      - `canvas/EditorCanvas.kt` - Pinch-zoom + pan + tap / long-press gesture host; composes `DotGridBackground` (when `gridVisible`), `EditorEdges`, every `EditorNode`, the `EmptyPipelineState`, the `QuickAddRadialMenu`, the `FilterBar` overlay (when `searchOpen`), the `MiniMap` overlay (when `miniMapOpen`), and the `ZoomRail`.
+      - `canvas/EditorNode.kt` - Per-node Compose wrapper around the catalog `NodeCard`. Owns the drag pickup + spring-release animations and routes outbound-port drags to connection mode. `dimmed` parameter drops opacity to 0.40 for non-active nodes during a live run.
+      - `canvas/EditorEdges.kt` - Single `Canvas` drawing every edge as a cubic Bezier, the preview-edge while a connection is being drawn, and the traveling-dot run-trace animation. Running edges adopt the source node's header hue (per-type-tinted active branch).
       - `canvas/QuickAddRadialMenu.kt` - 12-tile radial menu (one per node type) anchored at the long-press point; dispatches `onPick(type)`.
-      - `bars/ValidationBar.kt` - Bottom bar listing `PipelineValidationError`s; tap → `requestFocusNode(nodeId)`.
-      - `bars/RunTraceBar.kt` - Bottom bar shown while a run is active; displays the running node label and a steady indicator dot.
-      - `bars/MultiSelectToolbar.kt` - Top bar that replaces `EditorToolbar` while multi-select is active; surfaces count + Cancel / Delete.
+      - `canvas/DotGridBackground.kt` - Canvas-aligned 24 dp dot grid rendered under nodes; pans + zooms with `transform`; hidden when the projected step falls below 6 px.
+      - `canvas/MiniMap.kt` - Bottom-right mini-map overlay (270 × 290 dp) with `OVERVIEW · 0.42×` header and per-type-hue node bricks + accent viewport rectangle. Exposes `formatScalePercent(scale)`.
+      - `canvas/ZoomRail.kt` - Always-visible right-edge `+` / `−` / `⤡` (fit-to-view) tile stack.
+      - `canvas/FilterBar.kt` - Top-edge `Find node…` bar (opened from overflow). Auto-focuses; submit centres on the first matching node and selects it.
+      - `canvas/EmptyPipelineState.kt` - Empty-canvas hero: brand-mark tile + helper copy + `Start with INPUT` / `From template` CTAs + canvas-geometry info pill.
+      - `bars/ValidationBar.kt` - Bottom bar listing `PipelineValidationError`s. Phase 22 / Task 14 adds a header banner (issue count + `Auto-fix` action), per-row severity glyphs (`Blocker` / `Warning`), and a trailing `Go ↗` button that focuses the offending node when one exists.
+      - `bars/MultiSelectToolbar.kt` - Top bar that replaces `EditorToolbar` while multi-select is active; surfaces count + Cancel / Copy / Delete.
       - `sheet/NodeConfigSheetHost.kt` - Thin adapter exposing the catalog `NodeConfigSheet` (with all 12 per-type forms + validator) to the editor screen.
-    - `prompts/` - Prompt Library screen components.
-      - `PromptLibraryScreen.kt` - Prompt library UI screen.
-      - `PromptLibraryUiState.kt` - Prompt library UI state.
-      - `PromptLibraryViewModel.kt` - Prompt library ViewModel.
-    - `splash/` - Cold-start splash / loading screen.
-      - `SplashScreen.kt` - Compose splash UI: app name, determinate `LinearProgressIndicator`, status label, inline error + Retry button. Calls `onInitialized` once initialization reaches `InitStage.Done` so the activity can navigate to `home`.
+    - `prompts/` - Prompt Library screen components (Phase 22 / Task 15 — Knotwork redesign with `ScrollableTabRow` + per-card actions + `ModalBottomSheet` editor).
+      - `PromptLibraryScreen.kt` - Slim mapper. Folds `PromptLibraryUiState` into the catalog `PromptLibraryViewState`, hosts the editor `ModalBottomSheet` with `PromptEditorSheetBody`.
+      - `PromptLibraryUiState.kt` - Prompt library UI state. Adds `selectedCategory: String?`, `editorDraft: PromptEditorDraft?`.
+      - `PromptLibraryViewModel.kt` - Prompt library ViewModel. Adds `selectCategory`, `openEditor(id?)`, `closeEditor`, per-field editor setters, `saveEditor`, `duplicatePrompt`.
+    - `splash/` - Cold-start splash / loading screen (Phase 22 / Task 15 wired to the Knotwork `SplashContent` catalog surface).
+      - `SplashScreen.kt` - Slim mapper. Folds `SplashUiState` into `SplashViewState` (Initializing / Loading / Error) and renders `SplashContent`.
       - `SplashUiState.kt` - Render state of `SplashScreen` (message, progressFraction, isDone, errorMessage).
       - `SplashViewModel.kt` - Hilt ViewModel that subscribes to `AppInitializationUseCase`, folds each `InitProgress` into `SplashUiState`, and exposes `retry()` to re-run the pipeline after a fatal failure.
-    - `settings/` - Settings screen components.
-      - `SettingsScreen.kt` - Settings UI screen.
-      - `SettingsUiState.kt` - Settings UI state.
-      - `SettingsViewModel.kt` - Settings ViewModel.
-    - `taskmonitor/` - Task monitoring screen components.
-      - `TaskMonitorScreen.kt` - Task monitor UI screen.
-      - `TaskMonitorState.kt` - Task monitor UI state.
-      - `TaskMonitorViewModel.kt` - Task monitor ViewModel.
+    - `more/` - "More" tab landing screen (Phase 22 / Task 15 — Knotwork-converted, now stateful with live counters + footer privacy pill).
+      - `MoreScreen.kt` - Slim mapper. Subscribes to `MoreViewModel.uiState`, builds the `MoreViewState`, renders `MoreContent`.
+      - `MoreUiState.kt` - Pre-formatted display strings for each row subtitle + the footer pill (memory chunks, active model, prompt categories, active task counts, network status).
+      - `MoreViewModel.kt` - Aggregates the live counters from `MemoryRepository.observeStats`, `LocalModelRepository.getAllModels`, `PromptRepository.getAllPrompts`, `TaskQueueManager.activeSessionsState`, and `NetworkActivityTracker.lastOutboundAt`. Owns the pure-Kotlin formatters (`formatMemoryStats`, `formatPromptsStats`, `formatNetworkStatus`).
+    - `settings/` - Settings screen components. Phase 22 / Task 9 redesigned the surface end-to-end: nine cards (identity / system instructions / restrictions / LLM parameters / local model / external providers / memory / notifications / privacy) drive the catalog `SettingsContent`.
+      - `SettingsScreen.kt` - Slim mapper. Translates `SettingsUiState` into the catalog `SettingsViewState`, hosts the SAF launcher for memory export, the `ProcessPhoenix.triggerRebirth` restart hook, and the `SnackbarHost`.
+      - `SettingsUiState.kt` - Per-card state slices (identity, system instructions + variable chip catalog, restrictions, LLM params, local model + active-model meta, providers, memory stats, notifications, privacy, restart-required flag, destructive-action staging).
+      - `SettingsViewModel.kt` - Aggregates every preference + repository projection. Owns the restart-required baseline snapshot, the destructive typed-confirm gate (Clear memory / Reset settings), and the test-backend probe runner.
+      - `provider/` - Standalone provider editor reached from the External providers nav-rows.
+        - `ProviderDetailScreen.kt` - Hosts `KnotworkProviderRow` for the selected provider. Routes through `ProviderDetailViewModel` to `ApiKeyRepository`.
+        - `ProviderPickerScreen.kt` - "+ Add provider" picker — full-screen list of the 5 known providers.
+    - `taskmonitor/` - Task monitoring screen (Phase 22 / Task 15 — Knotwork-converted; swipe-to-cancel + detail `ModalBottomSheet`).
+      - `TaskMonitorScreen.kt` - Slim mapper. Folds `TaskMonitorState` into the catalog `TaskMonitorViewState` (filter chips + rows + optional `TaskMonitorDetail`), hosts the detail bottom sheet, wires `openDetails` / `closeDetails`.
+      - `TaskMonitorState.kt` - Task monitor UI state. Adds `detailTaskId: String?` for the bottom-sheet host.
+      - `TaskMonitorViewModel.kt` - Task monitor ViewModel. `openDetails` / `closeDetails` toggle the detail sheet via a private `_detailTaskId` flow combined into the unified state.
     - `tools/` - Tools screen components.
-      - `ToolsScreen.kt` - Tools UI screen — Phase 21 / Task 10 rewrite, drives catalog `ToolsContent`.
-      - `ToolsUiState.kt` - Tools UI state.
-      - `ToolsViewModel.kt` - Tools ViewModel.
-      - `ToolDetailScreen.kt` - Per-tool detail screen (Phase 21 / Task 10) showing schema preview + enable toggle.
-      - `AddMcpServerScreen.kt` - Add-MCP-server screen with URL validation (Phase 21 / Task 10).
+      - `ToolsScreen.kt` - Tools UI screen — drives catalog `ToolsContent`. Two-section list (built-in AppFunctions / MCP servers with nested expandable tool list, refresh + delete affordances).
+      - `ToolsUiState.kt` - Tools UI state. Carries per-server `McpServerSnapshot` (status + tool list) plus expansion + disabled-MCP-tool sets.
+      - `ToolsViewModel.kt` - Tools ViewModel. Reconciles `SettingsRepository.mcpServerUrls` against per-URL status observers from `McpServerRepository`; persists local + MCP toggle changes; exposes `findMcpTool(id)` lookup.
+      - `ToolDetailScreen.kt` - Per-tool detail screen. Branches on `toolId` prefix: `mcp:…` → resolves `McpTool` via `ToolsViewModel.findMcpTool` and renders the server-supplied JSON Schema verbatim; otherwise renders the real `AgentTool.parameters` for local AppFunctions.
+      - `McpServerConfigScreen.kt` - Standalone full-screen Add/Edit MCP server screen. Reached from the Tools surface via the `+ Add MCP` link (Add mode) or the pencil icon on a server row (Edit mode). Form supports URL, optional display name, transport selector, and arbitrary headers.
+      - `McpServerConfigViewModel.kt` - Drives `McpServerConfigScreen`. Reads `SettingsRepository.mcpServers` once for Edit pre-fill; persists via `addMcpServer` / `updateMcpServer` and disconnects the cached client on save so new headers take effect.
 - `FILE_MAP.md` - This file mapping the current directory structure.

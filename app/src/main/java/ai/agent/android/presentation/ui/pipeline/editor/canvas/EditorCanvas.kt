@@ -4,6 +4,7 @@ import ai.agent.android.R
 import ai.agent.android.domain.models.NodeModel
 import ai.agent.android.domain.models.NodeType
 import ai.agent.android.domain.models.PipelineGraph
+import ai.agent.android.presentation.ui.pipeline.editor.core.Bounds
 import ai.agent.android.presentation.ui.pipeline.editor.core.CanvasTransform
 import ai.agent.android.presentation.ui.pipeline.editor.core.ConnectionDraft
 import ai.agent.android.presentation.ui.pipeline.editor.core.EditorState
@@ -13,7 +14,10 @@ import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Text
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Add
+import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -25,16 +29,15 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import app.knotwork.design.components.pipelineeditor.NodeError
 import app.knotwork.design.theme.KnotworkTheme
-import app.knotwork.design.tokens.KnotworkTextStyles
 
 /**
  * Top-level editor canvas. Hosts pan / pinch zoom, all node renderers, the edge layer,
@@ -75,6 +78,8 @@ internal fun EditorCanvas(
     onAddConnection: (sourceNodeId: String, targetNodeId: String, label: String?) -> Unit,
     onOpenNodeConfig: (nodeId: String) -> Unit,
     onLongPressEdge: (connectionId: String) -> Unit,
+    onStartWithInput: () -> Unit,
+    onFromTemplate: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val density = LocalDensity.current
@@ -186,6 +191,14 @@ internal fun EditorCanvas(
                 }
             },
     ) {
+        // Dot grid lives at the bottom of the draw stack — under edges so a node
+        // never bleeds onto a dot, and visible only when the user has not
+        // toggled it off via the overflow menu. Tracks `transform` so the
+        // dots pan + zoom with the canvas.
+        if (editor.gridVisible) {
+            DotGridBackground(transform = editor.transform)
+        }
+
         val draftDraw = editor.connectionInProgress?.let { draft ->
             val source = nodesByIdLive[draft.sourceNodeId] ?: return@let null
             val anchor = outboundPortAnchor(source, portsFor(source), draft.sourcePortLabel, density)
@@ -233,6 +246,15 @@ internal fun EditorCanvas(
                 error = errorsByNodeId[node.id],
                 ports = ports,
                 reducedMotion = reducedMotion,
+                // While a run is live AND the orchestrator has reported an
+                // active node, dim every OTHER node so the user's eye snaps to
+                // the running card. Outside of run mode — or while the active
+                // node id is still null (run started but the engine hasn't
+                // emitted the first node tick yet) — every node renders at full
+                // opacity so the canvas stays readable.
+                dimmed = editor.isRunning &&
+                    editor.activeRunningNodeId != null &&
+                    editor.activeRunningNodeId != node.id,
                 onSelect = { editor.toggleSelection(node.id) },
                 onOpenConfig = { onOpenNodeConfig(node.id) },
                 onLongPress = {
@@ -309,15 +331,14 @@ internal fun EditorCanvas(
         }
 
         if (graph.nodes.isEmpty()) {
-            Box(
-                modifier = Modifier.align(Alignment.Center).padding(KnotworkTheme.spacing.sp6),
-            ) {
-                Text(
-                    text = stringResource(R.string.pipeline_editor_empty_subtitle),
-                    style = KnotworkTextStyles.BodyBase,
-                    color = KnotworkTheme.extended.onSurfaceMuted,
-                )
-            }
+            EmptyPipelineState(
+                scale = editor.transform.scale,
+                onStartWithInput = onStartWithInput,
+                onFromTemplate = onFromTemplate,
+                modifier = Modifier
+                    .align(Alignment.Center)
+                    .padding(KnotworkTheme.spacing.sp6),
+            )
         }
 
         val anchor = editor.quickAddAnchor
@@ -334,6 +355,135 @@ internal fun EditorCanvas(
                 onDismiss = { editor.quickAddAnchor = null },
             )
         }
+
+        // Search / Find-node bar pinned to the top edge of the canvas when the
+        // user has opened it from the overflow menu. Stretches edge-to-edge so
+        // the text field has room without competing with the zoom rail.
+        if (editor.searchOpen) {
+            val matchCount = remember(graph.nodes, editor.searchQuery) {
+                if (editor.searchQuery.isBlank()) {
+                    0
+                } else {
+                    graph.nodes.count { node ->
+                        node.label.contains(editor.searchQuery, ignoreCase = true) ||
+                            node.type.name.contains(editor.searchQuery, ignoreCase = true)
+                    }
+                }
+            }
+            FilterBar(
+                query = editor.searchQuery,
+                matchCount = matchCount,
+                onQueryChange = { editor.searchQuery = it },
+                onSubmit = {
+                    val firstMatch = graph.nodes.firstOrNull { node ->
+                        node.label.contains(editor.searchQuery, ignoreCase = true) ||
+                            node.type.name.contains(editor.searchQuery, ignoreCase = true)
+                    } ?: return@FilterBar
+                    editor.transform = editor.transform.centeredOn(
+                        x = firstMatch.x,
+                        y = firstMatch.y,
+                        viewportW = viewportSize.first.toFloat(),
+                        viewportH = viewportSize.second.toFloat(),
+                    )
+                    editor.selection = setOf(firstMatch.id)
+                    editor.multiSelectMode = false
+                },
+                onClose = {
+                    editor.searchOpen = false
+                    editor.searchQuery = ""
+                },
+                modifier = Modifier.align(Alignment.TopStart),
+            )
+        }
+
+        // Floating `+` button anchored bottom-right. Tap opens the same radial
+        // quick-add menu the long-press-on-canvas gesture surfaces, but anchored
+        // at the viewport centre so the user always has a discoverable way to
+        // drop the first node — the empty-state helper text literally promises
+        // "Tap + to drop your first node". Hidden when the mini-map is open so
+        // the two bottom-right overlays don't collide.
+        if (!editor.miniMapOpen) {
+            FloatingActionButton(
+                onClick = {
+                    val cx = viewportSize.first / 2f
+                    val cy = viewportSize.second / 2f
+                    editor.quickAddAnchor = cx to cy
+                },
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(KnotworkTheme.spacing.sp4),
+                shape = KnotworkTheme.shapes.full,
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.Add,
+                    contentDescription = stringResource(R.string.pipeline_editor_fab_add_node),
+                )
+            }
+        }
+
+        // Mini-map overlay anchored to the bottom-right corner. Renders only when
+        // the user has opened it from the overflow menu; tap inside the body
+        // centres the canvas on the corresponding canvas-space point.
+        if (editor.miniMapOpen) {
+            MiniMap(
+                graph = graph,
+                transform = editor.transform,
+                viewportSize = IntSize(viewportSize.first, viewportSize.second),
+                onTapCanvasPoint = { canvasX, canvasY ->
+                    editor.transform = editor.transform.centeredOn(
+                        x = canvasX,
+                        y = canvasY,
+                        viewportW = viewportSize.first.toFloat(),
+                        viewportH = viewportSize.second.toFloat(),
+                    )
+                },
+                onClose = { editor.miniMapOpen = false },
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(KnotworkTheme.spacing.sp3),
+            )
+        }
+
+        // Always-visible zoom rail anchored to the top-right corner of the canvas.
+        // Tile callbacks read `viewportSize` (recorded by `onSizeChanged` above) so
+        // the +/− buttons zoom around the viewport centre, not (0, 0). Fit-to-view
+        // uses `Bounds.ofNodes` over the live node positions; falls back to no-op
+        // when the graph is empty.
+        ZoomRail(
+            onZoomIn = {
+                editor.transform = editor.transform.zoomedOneStep(
+                    direction = 1,
+                    viewportW = viewportSize.first.toFloat(),
+                    viewportH = viewportSize.second.toFloat(),
+                )
+            },
+            onZoomOut = {
+                editor.transform = editor.transform.zoomedOneStep(
+                    direction = -1,
+                    viewportW = viewportSize.first.toFloat(),
+                    viewportH = viewportSize.second.toFloat(),
+                )
+            },
+            onFit = {
+                val bbox = Bounds.ofNodes(
+                    positions = graph.nodes.map { it.x to it.y },
+                    nodeWidth = NODE_CARD_WIDTH_PX,
+                    nodeHeight = NODE_CARD_HEIGHT_FOR_FIT_PX,
+                ) ?: return@ZoomRail
+                editor.transform = editor.transform.fitToBounds(
+                    bbox = bbox,
+                    viewportW = viewportSize.first.toFloat(),
+                    viewportH = viewportSize.second.toFloat(),
+                    paddingPx = with(density) { ZOOM_RAIL_FIT_PADDING_DP.dp.toPx() },
+                )
+            },
+            canZoomIn = editor.transform.scale < CanvasTransform.MAX_SCALE,
+            canZoomOut = editor.transform.scale > CanvasTransform.MIN_SCALE,
+            canFit = graph.nodes.isNotEmpty(),
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .padding(KnotworkTheme.spacing.sp3),
+        )
     }
 
     LaunchedEffect(reducedMotion) {
@@ -378,6 +528,20 @@ private fun hitTestInputPort(
 
 private const val INBOUND_HIT_DP = 32f
 
-// Surface a stable name for the unused Color import (used elsewhere in this module).
-@Suppress("unused")
-private val transparentReference: Color = Color.Transparent
+/**
+ * Canvas-space pixel width of a [app.knotwork.design.components.pipelineeditor.NodeCard].
+ * Mirrors `NodeCardWidth = 168.dp` in the catalog. Treated as 168 canvas px because
+ * `NodeModel.x / y` is the card's top-left at canvas scale 1.0.
+ */
+private const val NODE_CARD_WIDTH_PX = 168f
+
+/**
+ * Canvas-space pixel height used for [Bounds.ofNodes] when computing fit-to-view.
+ * Card height varies between `NodeCardMinHeight = 64.dp` and `NodeCardMaxHeight = 96.dp`
+ * depending on whether a runtime error line is rendered. We use the conservative max
+ * so fit-to-view leaves a comfortable margin around every card.
+ */
+private const val NODE_CARD_HEIGHT_FOR_FIT_PX = 96f
+
+/** Screen-space padding (dp) around the framed bbox when the user taps Fit-to-view. */
+private const val ZOOM_RAIL_FIT_PADDING_DP = 32f

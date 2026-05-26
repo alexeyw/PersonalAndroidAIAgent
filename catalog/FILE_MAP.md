@@ -61,7 +61,47 @@ project — `:app` consumes it as an `implementation` dependency.
     wrappers for the page in both themes.
   - `buttons/` — `KnotworkPrimaryButton` / `KnotworkSecondaryButton` /
     `KnotworkTextButton` / `KnotworkIconButton` + previews.
-  - `chips/` — `KnotworkChip` / `RiskPill` / `StatusPill` + previews.
+  - `chips/` — chip family per `inputs-and-chips.md` §6.
+    - `KnotworkChipDefaults.kt` — `KnotworkChipSize` enum + shared size /
+      padding / motion constants.
+    - `KnotworkFilterChip.kt` — toggle / segmented chip (selected ↔
+      unselected, 180 ms cross-fade, optional trailing count).
+    - `KnotworkSuggestionChip.kt` — action-only chip (quick-reply,
+      onboarding suggestions; outline + surface1 so it reads on chat
+      bubbles).
+    - `KnotworkInputChip.kt` — removable chip with trailing `×`.
+    - `KnotworkChipsInput.kt` — composite for list-of-strings entry:
+      [`FlowRow`] of input chips + inline `BasicTextField` that commits
+      on Enter / `,`, honours optional `maxItems` cap.
+    - `KnotworkVariableChip.kt` — mono accent-coloured `$VAR` insert chip.
+    - `KnotworkDateChip.kt` — non-interactive section-divider pill for
+      chat (Today / Yesterday / locale date).
+    - `RiskPill.kt` — transparent + 1 dp risk-coloured border + 6 dp dot
+      + Mono13 label (Read only / Sensitive / Destructive).
+    - `StatusPill.kt` — same geometry as `RiskPill`, status-driven
+      colour family (`Queued`, `Idle`, `Running`, `Success`, `Warning`,
+      `Error`, `Cancelled`); pulses the dot for `Running` (respects
+      `KnotworkTheme.a11y.reducedMotion()`).
+    - `KnotworkChip.kt` — `@Deprecated` legacy chip kept for one
+      release to ease the migration; new call sites use the split
+      family above.
+    - `KnotworkChipsPreview.kt` — `@Preview` wrappers.
+  - `controls/` — text-input + slider atoms per `inputs-and-chips.md`
+    §1–§5.
+    - `KnotworkFieldDefaults.kt` — `KnotworkFieldSize` enum +
+      heights / paddings / borders / icon gaps shared by every text
+      input.
+    - `KnotworkField.kt` — caps-label + helper / error wrapper
+      (M3 floating label intentionally off across the design system).
+    - `KnotworkTextField.kt` — single-line `BasicTextField` with full
+      state table (default / hovered / focused / filled / disabled /
+      readOnly / error), mono flag, search-bar variant.
+    - `KnotworkTextArea.kt` — multi-line counterpart; live
+      `\$[A-Z_]+` highlight, optional `insertChips` strip.
+    - `KnotworkPasswordField.kt` — masked text + eye-toggle on top of
+      `KnotworkTextField`.
+    - `KnotworkCompactSlider.kt` — 4×18 dp pill thumb + 4 dp track.
+    - `KnotworkSegmentedControl.kt` — segmented row of filter chips.
   - `lists/` — `PipelineListRow` / `ToolListRow` / `MemoryEntryRow` +
     previews.
   - `misc/` — `KnotworkLoader` / `KnotworkSnackbar` / `EmptyState` /

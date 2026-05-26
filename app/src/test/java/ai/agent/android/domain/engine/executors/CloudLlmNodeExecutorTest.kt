@@ -9,9 +9,10 @@ import ai.agent.android.domain.models.NodeType
 import ai.agent.android.domain.repositories.ApiKeyRepository
 import ai.agent.android.domain.repositories.ChatRepository
 import ai.agent.android.domain.repositories.MetricsRepository
+import ai.agent.android.domain.repositories.NetworkActivityTracker
 import ai.agent.android.domain.repositories.SettingsRepository
 import ai.agent.android.domain.repositories.ToolRepository
-import ai.koog.prompt.dsl.Prompt
+import ai.koog.prompt.Prompt
 import ai.koog.prompt.executor.clients.LLMClient
 import ai.koog.prompt.executor.clients.anthropic.AnthropicModels
 import ai.koog.prompt.llm.LLModel
@@ -38,6 +39,7 @@ class CloudLlmNodeExecutorTest {
     private lateinit var metricsRepository: MetricsRepository
     private lateinit var clientFactory: CloudLlmClientFactory
     private lateinit var modelResolver: CloudLlmModelResolver
+    private lateinit var networkActivityTracker: NetworkActivityTracker
     private lateinit var executor: CloudLlmNodeExecutor
 
     @Before
@@ -49,6 +51,7 @@ class CloudLlmNodeExecutorTest {
         metricsRepository = mockk(relaxed = true)
         clientFactory = mockk()
         modelResolver = mockk()
+        networkActivityTracker = mockk(relaxed = true)
 
         every { settingsRepository.systemPromptPrefix } returns flowOf("")
         every { apiKeyRepository.getAnthropicKey() } returns flowOf("anthropic-key")
@@ -65,6 +68,7 @@ class CloudLlmNodeExecutorTest {
             metricsRepository,
             clientFactory,
             modelResolver,
+            networkActivityTracker,
         )
     }
 
@@ -83,7 +87,7 @@ class CloudLlmNodeExecutorTest {
         val assembledContext = "--- Original Task ---\nQ\n\n--- Previous Node Output ---\nU"
         executor.execute(node, assembledContext, "s1", "Q").toList()
 
-        val text = capturedPrompt.captured.messages.joinToString("\n") { it.content }
+        val text = capturedPrompt.captured.messages.joinToString("\n") { it.textContent() }
         assertTrue(text.contains(assembledContext))
         assertFalse(text.contains("RELEVANT LONG-TERM MEMORIES:"))
     }

@@ -1,8 +1,15 @@
-@file:Suppress("MatchingDeclarationName") // Hosts SettingsContent and helpers.
+@file:Suppress(
+    "MatchingDeclarationName",
+    "LongMethod",
+    "LargeClass",
+    "TooManyFunctions",
+)
 
 package app.knotwork.design.screens.settings
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -14,35 +21,83 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.outlined.Add
+import androidx.compose.material.icons.outlined.Block
+import androidx.compose.material.icons.outlined.Bolt
+import androidx.compose.material.icons.outlined.ChevronRight
+import androidx.compose.material.icons.outlined.Download
+import androidx.compose.material.icons.outlined.ExpandMore
+import androidx.compose.material.icons.outlined.Refresh
+import androidx.compose.material.icons.outlined.Search
+import androidx.compose.material.icons.outlined.Shield
+import androidx.compose.material.icons.outlined.WarningAmber
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import app.knotwork.design.R
 import app.knotwork.design.components.buttons.KnotworkPrimaryButton
+import app.knotwork.design.components.buttons.KnotworkSecondaryButton
 import app.knotwork.design.components.buttons.KnotworkTextButton
+import app.knotwork.design.components.chips.ChipStyle
+import app.knotwork.design.components.chips.KnotworkChip
+import app.knotwork.design.components.controls.KnotworkCompactSlider
+import app.knotwork.design.components.controls.KnotworkSegmentedControl
 import app.knotwork.design.components.misc.KnotworkLoader
+import app.knotwork.design.components.misc.KnotworkSectionAction
+import app.knotwork.design.components.misc.KnotworkStatCell
 import app.knotwork.design.components.misc.StripedPlaceholder
 import app.knotwork.design.theme.KnotworkTheme
 import app.knotwork.design.tokens.KnotworkTextStyles
 
 /**
- * Stateless Knotwork settings surface. Mirrors
- * `compose/screens/README.md §C7 · Settings`.
+ * Stateless Knotwork Settings surface — Phase 22 / Task 9 redesign.
  *
- * The screen renders sectioned headers + rows. Each row is rendered via
- * [SettingsRow] which exposes a trailing control slot — `:app` code passes
- * the matching `Switch` / `Slider` / dropdown for the row.
+ * Renders the full settings stack described in `compose/screens/README.md
+ * §C7`: identity card, system instructions textarea, restrictions panel,
+ * LLM parameters sliders, local-model card, external-provider list,
+ * memory stats + actions, notifications, and the privacy crash-reporting
+ * toggle.
+ *
+ * The composable is stateless: every value originates in [state] and
+ * every interaction routes through [callbacks]. Overlays
+ * (restart-required banner, destructive typed-confirm dialog) flip on
+ * via [state]`.visualState`.
+ *
+ * @param state Immutable input describing every card.
+ * @param modifier Layout modifier applied to the outer Box.
+ * @param callbacks Bundle of typed callbacks for every interaction.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -50,22 +105,37 @@ fun SettingsContent(
     state: SettingsViewState,
     modifier: Modifier = Modifier,
     callbacks: SettingsCallbacks = noopSettingsCallbacks(),
-    trailingControl: @Composable (SettingsRowState) -> Unit = { _ -> },
 ) {
     Box(modifier = modifier.fillMaxSize()) {
         Scaffold(
             containerColor = MaterialTheme.colorScheme.surface,
-            topBar = { SettingsTopBar() },
+            topBar = {
+                app.knotwork.design.components.topbar.KnotworkTopAppBarShell {
+                    SettingsTopBar(state = state, onBack = callbacks.onBack, onSearch = callbacks.onSearchClick)
+                }
+            },
+            // The outer `AppShellScaffold` already applies the system /
+            // bottom-nav insets for the whole shell. Letting this catalog
+            // Scaffold replay them would double-count the bottom inset and
+            // leave dead space between the Privacy card and the bottom-nav.
+            contentWindowInsets = androidx.compose.foundation.layout.WindowInsets(0, 0, 0, 0),
             modifier = Modifier.fillMaxSize(),
         ) { padding ->
-            SettingsBody(state = state, padding = padding, trailingControl = trailingControl)
+            when (state.visualState) {
+                SettingsVisualState.Loading -> SettingsLoadingBody(padding)
+                else -> SettingsBody(state = state, callbacks = callbacks, padding = padding)
+            }
         }
         if (state.visualState == SettingsVisualState.RestartRequired) {
-            RestartBanner(message = state.restartRequiredMessage.orEmpty(), onRestart = callbacks.onRestart)
+            RestartBanner(
+                message = state.restartRequiredMessage.orEmpty(),
+                onRestart = callbacks.onRestartClick,
+            )
         }
-        if (state.visualState == SettingsVisualState.DestructiveAction) {
-            DestructiveConfirmDialog(
-                message = state.destructiveActionMessage.orEmpty(),
+        if (state.visualState == SettingsVisualState.DestructiveAction && state.destructiveAction != null) {
+            DestructiveTypedConfirmDialog(
+                payload = state.destructiveAction,
+                onTypedConfirmChange = callbacks.onDestructiveTypedConfirmChange,
                 onConfirm = callbacks.onDestructiveConfirm,
                 onCancel = callbacks.onDestructiveCancel,
             )
@@ -73,16 +143,52 @@ fun SettingsContent(
     }
 }
 
+// ─── Scaffolding ────────────────────────────────────────────────────────────
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun SettingsTopBar() {
+private fun SettingsTopBar(state: SettingsViewState, onBack: () -> Unit, onSearch: () -> Unit) {
     TopAppBar(
         title = {
-            Text(
-                text = androidx.compose.ui.res.stringResource(R.string.knotwork_settings_title),
-                style = KnotworkTextStyles.TitleLg,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
+            Column {
+                Text(
+                    text = androidx.compose.ui.res.stringResource(R.string.knotwork_settings_title),
+                    style = KnotworkTextStyles.TitleLg,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                val subtitle = listOf(
+                    "v${state.subtitleVersion}",
+                    state.subtitleChannel,
+                    state.subtitleBuildDate,
+                ).filter { it.isNotBlank() }.joinToString(" · ")
+                if (subtitle.isNotBlank()) {
+                    Text(
+                        text = subtitle,
+                        // Mono secondary text matches the cloud-provider rows
+                        // (Phase 22 / Task 16 follow-up F5).
+                        style = KnotworkTextStyles.MonoSm,
+                        color = KnotworkTheme.extended.onSurfaceMuted,
+                    )
+                }
+            }
+        },
+        navigationIcon = {
+            IconButton(onClick = onBack) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                    contentDescription = androidx.compose.ui.res.stringResource(R.string.knotwork_settings_back),
+                    tint = MaterialTheme.colorScheme.onSurface,
+                )
+            }
+        },
+        actions = {
+            IconButton(onClick = onSearch) {
+                Icon(
+                    imageVector = Icons.Outlined.Search,
+                    contentDescription = androidx.compose.ui.res.stringResource(R.string.knotwork_settings_search_cd),
+                    tint = MaterialTheme.colorScheme.onSurface,
+                )
+            }
         },
         colors = TopAppBarDefaults.topAppBarColors(
             containerColor = MaterialTheme.colorScheme.surface,
@@ -92,122 +198,214 @@ private fun SettingsTopBar() {
 }
 
 @Composable
-private fun SettingsBody(
-    state: SettingsViewState,
-    padding: PaddingValues,
-    trailingControl: @Composable (SettingsRowState) -> Unit,
-) {
-    when (state.visualState) {
-        SettingsVisualState.Loading -> SettingsLoading(padding = padding)
-        else -> LazyColumn(
-            modifier = Modifier.fillMaxSize().padding(padding),
-            contentPadding = PaddingValues(vertical = KnotworkTheme.spacing.sp2),
-            verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp1),
-        ) {
-            state.sections.forEach { block ->
-                item(key = "section-header-${block.section.name}") {
-                    SettingsSectionHeader(section = block.section)
-                }
-                items(items = block.rows, key = { row -> "${block.section.name}-${row.id}" }) { row ->
-                    SettingsRow(row = row) { trailingControl(row) }
-                }
-                if (block.errorMessage != null) {
-                    item(key = "section-error-${block.section.name}") {
-                        SettingsSectionErrorTile(message = block.errorMessage)
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun SettingsLoading(padding: PaddingValues) {
-    LazyColumn(
-        modifier = Modifier.fillMaxSize().padding(padding),
-        verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp2),
+private fun SettingsLoadingBody(padding: PaddingValues) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(padding)
+            .padding(KnotworkTheme.spacing.sp4),
+        verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp3),
     ) {
-        items(items = SettingsSection.entries) {
+        repeat(SETTINGS_LOADING_ROWS) {
             StripedPlaceholder(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(LOADING_ROW_HEIGHT)
-                    .padding(horizontal = KnotworkTheme.spacing.sp4),
+                    .height(LOADING_ROW_HEIGHT),
             )
         }
     }
 }
 
 @Composable
-private fun SettingsSectionHeader(section: SettingsSection) {
-    val titleResId = when (section) {
-        SettingsSection.Appearance -> R.string.knotwork_settings_section_appearance
-        SettingsSection.Models -> R.string.knotwork_settings_section_models
-        SettingsSection.Privacy -> R.string.knotwork_settings_section_privacy
-        SettingsSection.Memory -> R.string.knotwork_settings_section_memory
-        SettingsSection.Mcp -> R.string.knotwork_settings_section_mcp
-        SettingsSection.About -> R.string.knotwork_settings_section_about
-    }
-    Text(
-        text = androidx.compose.ui.res.stringResource(titleResId),
-        style = KnotworkTextStyles.TitleMd,
-        color = MaterialTheme.colorScheme.onSurface,
+private fun SettingsBody(state: SettingsViewState, callbacks: SettingsCallbacks, padding: PaddingValues) {
+    Column(
         modifier = Modifier
-            .fillMaxWidth()
+            .fillMaxSize()
+            .padding(padding)
+            .verticalScroll(rememberScrollState())
             .padding(
                 horizontal = KnotworkTheme.spacing.sp4,
                 vertical = KnotworkTheme.spacing.sp3,
             )
-            .background(color = MaterialTheme.colorScheme.surface),
-    )
+            .testTag(SETTINGS_BODY_TEST_TAG),
+        verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp6),
+    ) {
+        IdentityCard(state = state.identity)
+        SystemInstructionsCard(state = state.systemInstructions, callbacks = callbacks)
+        RestrictionsCard(state = state.restrictions, callbacks = callbacks)
+        LlmParametersCard(state = state.llmParameters, callbacks = callbacks)
+        LocalModelCard(state = state.localModel, callbacks = callbacks)
+        ExternalProvidersCard(state = state.externalProviders, callbacks = callbacks)
+        MemoryCard(state = state.memory, callbacks = callbacks)
+        NotificationsCard(state = state.notifications, callbacks = callbacks)
+        PrivacyCard(state = state.privacy, callbacks = callbacks)
+    }
 }
 
-/**
- * Single settings row: title + optional subtitle + trailing control slot.
- *
- * @param row the immutable row payload.
- * @param trailing slot exposed to the caller for the per-row control
- * (Switch / Slider / dropdown). The catalog owns no Material controls so
- * downstream features can compose any control they need.
- */
+// ─── Identity card ──────────────────────────────────────────────────────────
+
 @Composable
-fun SettingsRow(row: SettingsRowState, trailing: @Composable () -> Unit) {
-    Column(
+private fun IdentityCard(state: IdentityCardState?) {
+    Surface(
+        shape = KnotworkTheme.shapes.md,
+        color = KnotworkTheme.extended.surface1,
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = KnotworkTheme.spacing.sp4, vertical = KnotworkTheme.spacing.sp2),
+            .testTag(IDENTITY_CARD_TEST_TAG),
     ) {
+        if (state == null) {
+            StripedPlaceholder(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(IDENTITY_LOADING_HEIGHT)
+                    .padding(KnotworkTheme.spacing.sp4),
+            )
+            return@Surface
+        }
         Row(
-            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+            verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp3),
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(KnotworkTheme.spacing.sp4),
         ) {
-            Column(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp1),
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = Modifier
+                    .size(IDENTITY_AVATAR_SIZE)
+                    .clip(KnotworkTheme.shapes.full)
+                    .background(color = KnotworkTheme.extended.surface3),
             ) {
                 Text(
-                    text = row.title,
-                    style = KnotworkTextStyles.TitleMd,
+                    text = state.avatarInitials,
+                    style = KnotworkTextStyles.LabelMd.copy(fontWeight = FontWeight.SemiBold),
                     color = MaterialTheme.colorScheme.onSurface,
                 )
-                if (row.subtitle != null) {
-                    Text(
-                        text = row.subtitle,
-                        style = KnotworkTextStyles.BodySm,
-                        color = KnotworkTheme.extended.onSurfaceMuted,
-                    )
-                }
             }
-            if (row.pendingChange) {
-                Box(modifier = Modifier.size(KnotworkTheme.spacing.sp4)) { KnotworkLoader() }
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = state.displayName,
+                    style = KnotworkTextStyles.TitleMd.copy(fontWeight = FontWeight.SemiBold),
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                Text(
+                    text = state.metaLine,
+                    style = KnotworkTextStyles.MonoSm,
+                    color = KnotworkTheme.extended.onSurfaceMuted,
+                )
             }
-            trailing()
         }
-        if (row.validationError != null) {
-            Spacer(modifier = Modifier.height(KnotworkTheme.spacing.sp1))
+    }
+}
+
+// ─── System instructions card ───────────────────────────────────────────────
+
+@Composable
+private fun SystemInstructionsCard(state: SystemInstructionsCardState, callbacks: SettingsCallbacks) {
+    SettingsSection(
+        // The trailing "+ Insert variable" link was a stub that did
+        // nothing visible — the real entry point is the chip row below
+        // the field, which inserts at the end of the text. Dropped to
+        // avoid the dead affordance.
+        title = androidx.compose.ui.res.stringResource(R.string.knotwork_settings_section_system_instructions),
+    ) {
+        // Use a locally-remembered TextFieldValue (text + selection +
+        // composition) instead of binding the field directly to
+        // `state.value`. The host writes every keystroke into the
+        // DataStore-backed Flow which re-emits and re-pushes the
+        // string here; without the local cache the cursor jumps to
+        // end after every character and the user can't edit mid-text
+        // or delete cleanly with the IME's backspace.
+        var fieldValue by androidx.compose.runtime.remember {
+            androidx.compose.runtime.mutableStateOf(
+                androidx.compose.ui.text.input.TextFieldValue(
+                    text = state.value,
+                    selection = androidx.compose.ui.text.TextRange(state.value.length),
+                ),
+            )
+        }
+        // Sync FROM the external Flow only when the persisted value
+        // actually drifts from what the local field already shows —
+        // typically because the user tapped a `$VARIABLE` chip and
+        // the VM appended the placeholder at the end. The selection
+        // is moved to the end so the cursor follows the inserted
+        // token.
+        androidx.compose.runtime.LaunchedEffect(state.value) {
+            if (state.value != fieldValue.text) {
+                fieldValue = androidx.compose.ui.text.input.TextFieldValue(
+                    text = state.value,
+                    selection = androidx.compose.ui.text.TextRange(state.value.length),
+                )
+            }
+        }
+        OutlinedTextField(
+            value = fieldValue,
+            onValueChange = { next ->
+                fieldValue = next
+                // Notify the host only when the text content changed —
+                // selection-only changes (cursor moves) don't need to
+                // round-trip through DataStore.
+                if (next.text != state.value) {
+                    callbacks.onSystemInstructionsChange(next.text)
+                }
+            },
+            placeholder = { Text(state.placeholder, style = KnotworkTextStyles.MonoSm) },
+            textStyle = KnotworkTextStyles.MonoSm,
+            minLines = SYSTEM_INSTRUCTIONS_MIN_LINES,
+            maxLines = SYSTEM_INSTRUCTIONS_MAX_LINES,
+            isError = state.validationError != null,
+            shape = KnotworkTheme.shapes.md,
+            modifier = Modifier
+                .fillMaxWidth()
+                .testTag(SYSTEM_INSTRUCTIONS_FIELD_TEST_TAG),
+        )
+        // Variables row is horizontally scrollable so the six default chips
+        // (`$DATE`, `$TIME`, `$LANG`, `$LOCATION`, `$USER`, `$DEVICE`) keep
+        // their natural width regardless of screen size. A non-scrollable
+        // `Row` would force each child to compress on a 360 dp screen and
+        // wrap the label inside the chip ("$LOC ATION").
+        androidx.compose.foundation.lazy.LazyRow(
+            horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp2),
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            items(items = state.variableChips, key = { it }) { placeholder ->
+                KnotworkChip(
+                    label = placeholder,
+                    style = ChipStyle.Outline,
+                    onClick = { callbacks.onChipInsert(placeholder) },
+                )
+            }
+        }
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            val helper = state.helperText
+            if (helper.isNotBlank()) {
+                Text(
+                    text = helper,
+                    // Mono secondary text — F5.
+                    style = KnotworkTextStyles.MonoSm,
+                    color = KnotworkTheme.extended.onSurfaceMuted,
+                    modifier = Modifier.weight(1f),
+                )
+            } else {
+                Spacer(modifier = Modifier.weight(1f))
+            }
             Text(
-                text = row.validationError,
+                text = androidx.compose.ui.res.stringResource(
+                    R.string.knotwork_settings_system_instructions_counter,
+                    state.characterCount,
+                    state.characterLimit,
+                    state.approximateTokens,
+                ),
+                style = KnotworkTextStyles.MonoSm,
+                color = KnotworkTheme.extended.onSurfaceMuted,
+            )
+        }
+        if (state.validationError != null) {
+            Text(
+                text = state.validationError,
                 style = KnotworkTextStyles.BodySm,
                 color = KnotworkTheme.extended.signalError,
             )
@@ -215,40 +413,696 @@ fun SettingsRow(row: SettingsRowState, trailing: @Composable () -> Unit) {
     }
 }
 
+// ─── Restrictions card ──────────────────────────────────────────────────────
+
 @Composable
-private fun SettingsSectionErrorTile(message: String) {
-    Surface(
-        shape = KnotworkTheme.shapes.md,
-        color = KnotworkTheme.extended.surface1,
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(KnotworkTheme.spacing.sp4),
+private fun RestrictionsCard(state: RestrictionsCardState, callbacks: SettingsCallbacks) {
+    SettingsSection(
+        title = androidx.compose.ui.res.stringResource(R.string.knotwork_settings_section_restrictions),
     ) {
-        Text(
-            text = message,
-            style = KnotworkTextStyles.BodyBase,
-            color = KnotworkTheme.extended.signalError,
-            modifier = Modifier.padding(KnotworkTheme.spacing.sp3),
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp3),
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text(
+                text = androidx.compose.ui.res.stringResource(R.string.knotwork_settings_restrictions_approve),
+                style = KnotworkTextStyles.BodySm.copy(fontWeight = FontWeight.SemiBold),
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 2,
+                modifier = Modifier.weight(1f),
+            )
+            KnotworkSegmentedControl(
+                options = listOf(state.approveAllLabel, state.approveSensitiveLabel, state.approveNeverLabel),
+                selectedIndex = when (state.approveSelection) {
+                    ApproveToolCallsOption.AllCalls -> 0
+                    ApproveToolCallsOption.Sensitive -> 1
+                    ApproveToolCallsOption.Never -> 2
+                },
+                onSelect = { index ->
+                    val option = when (index) {
+                        0 -> ApproveToolCallsOption.AllCalls
+                        1 -> ApproveToolCallsOption.Sensitive
+                        else -> ApproveToolCallsOption.Never
+                    }
+                    callbacks.onApproveSelectionChange(option)
+                },
+                modifier = Modifier.weight(SEGMENTED_TRAILING_WEIGHT),
+            )
+        }
+        IconToggleRow(
+            icon = Icons.Outlined.Shield,
+            title = androidx.compose.ui.res.stringResource(R.string.knotwork_settings_restrictions_block_destructive),
+            subtitle = state.blockDestructiveSubtitle,
+            checked = state.blockDestructive,
+            onCheckedChange = callbacks.onBlockDestructiveChange,
+        )
+        IconToggleRow(
+            icon = Icons.Outlined.Block,
+            title = androidx.compose.ui.res.stringResource(R.string.knotwork_settings_restrictions_block_network),
+            subtitle = state.blockNetworkSubtitle,
+            checked = state.blockNetwork,
+            onCheckedChange = callbacks.onBlockNetworkChange,
+        )
+        IconValueRow(
+            icon = Icons.Outlined.WarningAmber,
+            title = androidx.compose.ui.res.stringResource(R.string.knotwork_settings_restrictions_cap_steps),
+            subtitle = state.capStepsSubtitle,
+            valueLabel = state.capSteps.toString(),
         )
     }
 }
 
 @Composable
+private fun IconToggleRow(
+    icon: ImageVector,
+    title: String,
+    subtitle: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp3),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onCheckedChange(!checked) },
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = KnotworkTheme.extended.onSurfaceMuted,
+            modifier = Modifier.size(KnotworkTheme.spacing.sp5),
+        )
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = title,
+                style = KnotworkTextStyles.BodySm.copy(fontWeight = FontWeight.SemiBold),
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            Text(
+                text = subtitle,
+                // Mono secondary text — F5.
+                style = KnotworkTextStyles.MonoSm,
+                color = KnotworkTheme.extended.onSurfaceMuted,
+            )
+        }
+        Switch(
+            checked = checked,
+            onCheckedChange = null,
+            colors = SwitchDefaults.colors(
+                checkedThumbColor = MaterialTheme.colorScheme.onPrimary,
+                checkedTrackColor = MaterialTheme.colorScheme.primary,
+                checkedBorderColor = MaterialTheme.colorScheme.primary,
+            ),
+            // Material3's default Switch is 52×32 dp which dwarfs the
+            // row-titles at our 14sp scale. Shrink the rendering box to
+            // ~78% so the visual matches the mockup; the actual touch
+            // target lives on the parent Row (`Modifier.clickable`), so
+            // we keep the documented 48 dp interactive floor.
+            modifier = Modifier.scale(SWITCH_SCALE),
+        )
+    }
+}
+
+@Composable
+private fun IconValueRow(icon: ImageVector, title: String, subtitle: String, valueLabel: String) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp3),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = KnotworkTheme.extended.onSurfaceMuted,
+            modifier = Modifier.size(KnotworkTheme.spacing.sp5),
+        )
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = title,
+                style = KnotworkTextStyles.BodySm.copy(fontWeight = FontWeight.SemiBold),
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            Text(
+                text = subtitle,
+                // Mono secondary text — F5.
+                style = KnotworkTextStyles.MonoSm,
+                color = KnotworkTheme.extended.onSurfaceMuted,
+            )
+        }
+        Text(
+            text = valueLabel,
+            style = KnotworkTextStyles.TitleMd.copy(fontWeight = FontWeight.SemiBold),
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+    }
+}
+
+// ─── LLM parameters card ────────────────────────────────────────────────────
+
+@Composable
+private fun LlmParametersCard(state: LlmParametersCardState, callbacks: SettingsCallbacks) {
+    SettingsSection(
+        title = androidx.compose.ui.res.stringResource(R.string.knotwork_settings_section_llm),
+        trailing = {
+            KnotworkSectionAction(
+                label = androidx.compose.ui.res.stringResource(R.string.knotwork_settings_llm_reset),
+                onClick = callbacks.onResetLlmDefaults,
+            )
+        },
+    ) {
+        state.sliders.forEach { slider ->
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag(SLIDER_ROW_TAG_PREFIX + slider.id),
+                verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp1),
+            ) {
+                Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = slider.title,
+                        style = KnotworkTextStyles.BodySm.copy(fontWeight = FontWeight.SemiBold),
+                        color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.weight(1f),
+                    )
+                    Text(
+                        text = slider.valueLabel,
+                        style = KnotworkTextStyles.MonoSm,
+                        color = KnotworkTheme.extended.onSurfaceMuted,
+                    )
+                }
+                KnotworkCompactSlider(
+                    value = slider.value,
+                    onValueChange = { newValue -> callbacks.onSliderChange(slider.id, newValue) },
+                    valueRange = slider.valueRange,
+                    steps = slider.steps,
+                )
+            }
+        }
+    }
+}
+
+// ─── Local-model card ───────────────────────────────────────────────────────
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun LocalModelCard(state: LocalModelCardState, callbacks: SettingsCallbacks) {
+    SettingsSection(
+        title = androidx.compose.ui.res.stringResource(R.string.knotwork_settings_section_local_model),
+        trailing = {
+            KnotworkSectionAction(
+                label = androidx.compose.ui.res.stringResource(R.string.knotwork_settings_local_model_manage),
+                icon = Icons.Outlined.Download,
+                onClick = callbacks.onManageModelsClick,
+            )
+        },
+    ) {
+        Surface(
+            shape = KnotworkTheme.shapes.md,
+            color = KnotworkTheme.extended.surface1,
+            border = BorderStroke(SectionCardBorder, KnotworkTheme.extended.divider),
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp3),
+                modifier = Modifier.padding(KnotworkTheme.spacing.sp3),
+            ) {
+                Box(
+                    contentAlignment = Alignment.Center,
+                    modifier = Modifier
+                        .size(LOCAL_MODEL_TILE_SIZE)
+                        .clip(KnotworkTheme.shapes.sm)
+                        .background(color = KnotworkTheme.extended.surface2),
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.Bolt,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurface,
+                    )
+                }
+                Column(modifier = Modifier.weight(1f)) {
+                    val modelName = state.modelName ?: androidx.compose.ui.res.stringResource(
+                        R.string.knotwork_settings_local_model_empty,
+                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(
+                            KnotworkTheme.spacing.sp2,
+                        ),
+                    ) {
+                        Text(
+                            text = modelName,
+                            style = KnotworkTextStyles.BodySm.copy(fontWeight = FontWeight.SemiBold),
+                            color = MaterialTheme.colorScheme.onSurface,
+                            maxLines = 1,
+                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f, fill = false),
+                        )
+                        if (state.modelName != null) {
+                            ActivePill()
+                        }
+                    }
+                    if (state.metaLine != null) {
+                        Text(
+                            text = state.metaLine,
+                            style = KnotworkTextStyles.MonoSm,
+                            color = KnotworkTheme.extended.onSurfaceMuted,
+                            maxLines = 2,
+                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                        )
+                    }
+                }
+                KnotworkTextButton(
+                    text = androidx.compose.ui.res.stringResource(R.string.knotwork_settings_local_model_change),
+                    onClick = callbacks.onChangeModelClick,
+                )
+            }
+        }
+
+        var backendExpanded by remember { mutableStateOf(false) }
+        ExposedDropdownMenuBox(
+            expanded = backendExpanded,
+            onExpandedChange = { backendExpanded = it },
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp3),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .menuAnchor(
+                        androidx.compose.material3.ExposedDropdownMenuAnchorType.PrimaryNotEditable,
+                        enabled = true,
+                    ),
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.Bolt,
+                    contentDescription = null,
+                    tint = KnotworkTheme.extended.onSurfaceMuted,
+                    modifier = Modifier.size(KnotworkTheme.spacing.sp5),
+                )
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = androidx.compose.ui.res.stringResource(
+                            R.string.knotwork_settings_local_model_backend_title,
+                        ),
+                        style = KnotworkTextStyles.BodySm.copy(fontWeight = FontWeight.SemiBold),
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                    Text(
+                        text = state.backendLabel,
+                        // Mono secondary text — F5.
+                        style = KnotworkTextStyles.MonoSm,
+                        color = KnotworkTheme.extended.onSurfaceMuted,
+                    )
+                }
+                Text(
+                    text = state.selectedBackend,
+                    style = KnotworkTextStyles.MonoSm,
+                    color = KnotworkTheme.extended.onSurfaceMuted,
+                )
+                Icon(
+                    imageVector = Icons.Outlined.ExpandMore,
+                    contentDescription = null,
+                    tint = KnotworkTheme.extended.onSurfaceMuted,
+                )
+            }
+            ExposedDropdownMenu(
+                expanded = backendExpanded,
+                onDismissRequest = { backendExpanded = false },
+            ) {
+                state.backendOptions.forEach { option ->
+                    DropdownMenuItem(
+                        text = { Text(option) },
+                        onClick = {
+                            callbacks.onBackendSelected(option)
+                            backendExpanded = false
+                        },
+                    )
+                }
+            }
+        }
+
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp3),
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Icon(
+                imageVector = Icons.Outlined.Bolt,
+                contentDescription = null,
+                tint = KnotworkTheme.extended.onSurfaceMuted,
+                modifier = Modifier.size(KnotworkTheme.spacing.sp5),
+            )
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = androidx.compose.ui.res.stringResource(
+                        R.string.knotwork_settings_local_model_test_title,
+                    ),
+                    style = KnotworkTextStyles.BodySm.copy(fontWeight = FontWeight.SemiBold),
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                Text(
+                    text = state.testProbeText,
+                    // Switched to MonoSm so the Test backend metadata line
+                    // matches the cloud-provider rows and similar Settings
+                    // secondary text (Phase 22 / Task 16 follow-up F5).
+                    style = KnotworkTextStyles.MonoSm,
+                    color = if (state.testProbeIsError) {
+                        KnotworkTheme.extended.signalError
+                    } else {
+                        KnotworkTheme.extended.onSurfaceMuted
+                    },
+                )
+            }
+            KnotworkSecondaryButton(
+                text = androidx.compose.ui.res.stringResource(R.string.knotwork_settings_local_model_test_run),
+                onClick = callbacks.onTestBackendClick,
+                // Match the small-size memory-section buttons (Export /
+                // Clear / Reset) instead of the default Md tier so the row
+                // chrome stays tight (Phase 22 / Task 16 follow-up F6).
+                size = app.knotwork.design.components.buttons.KnotworkButtonSize.Sm,
+            )
+        }
+    }
+}
+
+@Composable
+private fun ActivePill() {
+    Surface(
+        shape = KnotworkTheme.shapes.full,
+        color = KnotworkTheme.extended.signalSuccess.copy(alpha = ACTIVE_PILL_ALPHA),
+    ) {
+        Text(
+            text = androidx.compose.ui.res.stringResource(R.string.knotwork_settings_local_model_active_pill),
+            style = KnotworkTextStyles.LabelSm.copy(fontWeight = FontWeight.SemiBold),
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.padding(
+                horizontal = KnotworkTheme.spacing.sp2,
+                vertical = KnotworkTheme.spacing.sp1,
+            ),
+        )
+    }
+}
+
+// ─── External providers list ────────────────────────────────────────────────
+
+@Composable
+private fun ExternalProvidersCard(state: ExternalProvidersCardState, callbacks: SettingsCallbacks) {
+    SettingsSection(
+        title = androidx.compose.ui.res.stringResource(R.string.knotwork_settings_section_providers),
+        trailing = {
+            KnotworkSectionAction(
+                label = androidx.compose.ui.res.stringResource(R.string.knotwork_settings_providers_add),
+                icon = Icons.Outlined.Add,
+                onClick = callbacks.onAddProviderClick,
+            )
+        },
+    ) {
+        state.rows.forEach { row ->
+            ProviderNavRow(row = row, onClick = { callbacks.onProviderRowClick(row.id) })
+        }
+    }
+}
+
+@Composable
+private fun ProviderNavRow(row: ProviderRowState, onClick: () -> Unit) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp3),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .testTag(PROVIDER_ROW_TAG_PREFIX + row.id),
+    ) {
+        Box(
+            contentAlignment = Alignment.Center,
+            modifier = Modifier
+                .size(LOCAL_MODEL_TILE_SIZE)
+                .clip(KnotworkTheme.shapes.sm)
+                .background(color = KnotworkTheme.extended.surface2),
+        ) {
+            Icon(
+                imageVector = Icons.Outlined.Bolt,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurface,
+            )
+        }
+        Column(modifier = Modifier.weight(1f)) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp2),
+            ) {
+                Text(
+                    text = row.title,
+                    style = KnotworkTextStyles.BodySm.copy(fontWeight = FontWeight.SemiBold),
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                if (row.isLan) {
+                    Surface(
+                        shape = KnotworkTheme.shapes.full,
+                        color = KnotworkTheme.extended.surface2,
+                    ) {
+                        Text(
+                            text = androidx.compose.ui.res.stringResource(R.string.knotwork_settings_providers_lan),
+                            style = KnotworkTextStyles.LabelSm.copy(fontWeight = FontWeight.SemiBold),
+                            color = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.padding(
+                                horizontal = KnotworkTheme.spacing.sp2,
+                                vertical = KnotworkTheme.spacing.sp1,
+                            ),
+                        )
+                    }
+                }
+            }
+            val subtitle = when {
+                row.fingerprint == null -> androidx.compose.ui.res.stringResource(
+                    R.string.knotwork_settings_providers_not_configured,
+                )
+                row.endpointHint != null -> "${row.endpointHint} · ${row.model.orEmpty()}"
+                row.model != null -> "${row.fingerprint} · ${row.model}"
+                else -> row.fingerprint
+            }
+            Text(
+                text = subtitle,
+                style = KnotworkTextStyles.MonoSm,
+                color = KnotworkTheme.extended.onSurfaceMuted,
+            )
+        }
+        Icon(
+            imageVector = Icons.Outlined.ChevronRight,
+            contentDescription = null,
+            tint = KnotworkTheme.extended.onSurfaceMuted,
+        )
+    }
+}
+
+// ─── Memory card ────────────────────────────────────────────────────────────
+
+@Composable
+private fun MemoryCard(state: MemoryCardState, callbacks: SettingsCallbacks) {
+    SettingsSection(
+        title = androidx.compose.ui.res.stringResource(R.string.knotwork_settings_section_memory),
+    ) {
+        Surface(
+            shape = KnotworkTheme.shapes.md,
+            color = KnotworkTheme.extended.surface1,
+            border = BorderStroke(SectionCardBorder, KnotworkTheme.extended.divider),
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(KnotworkTheme.spacing.sp3),
+                horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp3),
+            ) {
+                state.stats.forEach { cell ->
+                    KnotworkStatCell(value = cell.value, label = cell.label, modifier = Modifier.weight(1f))
+                }
+            }
+        }
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp1),
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = state.autoSummarizeLabel,
+                    style = KnotworkTextStyles.BodySm.copy(fontWeight = FontWeight.SemiBold),
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.weight(1f),
+                )
+                Text(
+                    text = "${state.autoSummarizeThreshold} %",
+                    style = KnotworkTextStyles.MonoSm,
+                    color = KnotworkTheme.extended.onSurfaceMuted,
+                )
+            }
+            KnotworkCompactSlider(
+                value = state.autoSummarizeThreshold.toFloat(),
+                onValueChange = { newValue -> callbacks.onAutoSummarizeChange(newValue.toInt()) },
+                valueRange = 0f..100f,
+            )
+        }
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(
+                KnotworkTheme.spacing.sp3,
+            ),
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = state.embeddingTitle,
+                    style = KnotworkTextStyles.BodySm.copy(fontWeight = FontWeight.SemiBold),
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                Text(
+                    text = state.embeddingSubtitle,
+                    style = KnotworkTextStyles.MonoSm,
+                    color = KnotworkTheme.extended.onSurfaceMuted,
+                )
+            }
+        }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp2),
+        ) {
+            KnotworkSecondaryButton(
+                text = state.exportLabel,
+                onClick = callbacks.onExportMemoryClick,
+                size = app.knotwork.design.components.buttons.KnotworkButtonSize.Sm,
+                modifier = Modifier.weight(1f),
+            )
+            KnotworkSecondaryButton(
+                text = state.reembedLabel,
+                onClick = callbacks.onReembedClick,
+                size = app.knotwork.design.components.buttons.KnotworkButtonSize.Sm,
+                modifier = Modifier.weight(1f),
+            )
+            KnotworkSecondaryButton(
+                text = state.clearLabel,
+                onClick = callbacks.onClearMemoryClick,
+                size = app.knotwork.design.components.buttons.KnotworkButtonSize.Sm,
+                destructive = true,
+                modifier = Modifier.weight(1f),
+            )
+        }
+        val progress = state.reembedProgressPercent
+        if (progress != null) {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp1),
+            ) {
+                LinearProgressIndicator(
+                    progress = { progress / 100f },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(
+                        KnotworkTheme.spacing.sp1,
+                    ),
+                ) {
+                    Box(modifier = Modifier.size(KnotworkTheme.spacing.sp4)) { KnotworkLoader() }
+                    Text(
+                        text = "Re-embedding · $progress %",
+                        // Mono secondary text — F5.
+                        style = KnotworkTextStyles.MonoSm,
+                        color = KnotworkTheme.extended.onSurfaceMuted,
+                    )
+                }
+            }
+        }
+    }
+}
+
+// ─── Notifications card ────────────────────────────────────────────────────
+
+@Composable
+private fun NotificationsCard(state: NotificationsCardState, callbacks: SettingsCallbacks) {
+    SettingsSection(
+        title = androidx.compose.ui.res.stringResource(R.string.knotwork_settings_section_notifications),
+    ) {
+        IconToggleRow(
+            icon = Icons.Outlined.Refresh,
+            title = androidx.compose.ui.res.stringResource(R.string.knotwork_settings_notifications_long_running),
+            subtitle = androidx.compose.ui.res.stringResource(
+                R.string.knotwork_settings_notifications_long_running_subtitle,
+            ),
+            checked = state.longRunningEnabled,
+            onCheckedChange = callbacks.onLongRunningToggle,
+        )
+    }
+}
+
+// ─── Privacy card ───────────────────────────────────────────────────────────
+
+@Composable
+private fun PrivacyCard(state: PrivacyCardState, callbacks: SettingsCallbacks) {
+    SettingsSection(
+        title = androidx.compose.ui.res.stringResource(R.string.knotwork_settings_section_privacy),
+    ) {
+        IconToggleRow(
+            icon = Icons.Outlined.Shield,
+            title = androidx.compose.ui.res.stringResource(R.string.knotwork_settings_crash_reporting_label),
+            subtitle = androidx.compose.ui.res.stringResource(R.string.knotwork_settings_crash_reporting_hint),
+            checked = state.crashReportingEnabled,
+            onCheckedChange = callbacks.onCrashReportingToggle,
+        )
+        KnotworkTextButton(
+            text = androidx.compose.ui.res.stringResource(R.string.knotwork_settings_reset_button),
+            onClick = callbacks.onResetSettingsClick,
+        )
+    }
+}
+
+// ─── Section frame ─────────────────────────────────────────────────────────
+
+@Composable
+private fun SettingsSection(title: String, trailing: @Composable () -> Unit = {}, content: @Composable () -> Unit) {
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp3),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = title.uppercase(),
+                style = KnotworkTextStyles.LabelSm.copy(fontWeight = FontWeight.SemiBold),
+                color = KnotworkTheme.extended.onSurfaceMuted,
+                modifier = Modifier.weight(1f),
+            )
+            trailing()
+        }
+        content()
+    }
+}
+
+// ─── Restart banner & destructive dialog ────────────────────────────────────
+
+@Composable
 private fun RestartBanner(message: String, onRestart: () -> Unit) {
     Box(
-        contentAlignment = androidx.compose.ui.Alignment.BottomCenter,
-        modifier = Modifier.fillMaxSize().padding(KnotworkTheme.spacing.sp4),
+        contentAlignment = Alignment.BottomCenter,
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(KnotworkTheme.spacing.sp4),
     ) {
         Surface(
             shape = KnotworkTheme.shapes.md,
             color = KnotworkTheme.extended.surface3,
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .testTag(RESTART_BANNER_TEST_TAG),
         ) {
             Row(
-                verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+                verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = KnotworkTheme.spacing.sp3, vertical = KnotworkTheme.spacing.sp2),
+                    .padding(
+                        horizontal = KnotworkTheme.spacing.sp3,
+                        vertical = KnotworkTheme.spacing.sp2,
+                    ),
             ) {
                 Text(
                     text = message,
@@ -266,32 +1120,83 @@ private fun RestartBanner(message: String, onRestart: () -> Unit) {
 }
 
 @Composable
-private fun DestructiveConfirmDialog(message: String, onConfirm: () -> Unit, onCancel: () -> Unit) {
+private fun DestructiveTypedConfirmDialog(
+    payload: DestructiveActionState,
+    onTypedConfirmChange: (String) -> Unit,
+    onConfirm: () -> Unit,
+    onCancel: () -> Unit,
+) {
+    val canConfirm = payload.pendingInput.trim().equals(payload.keyword, ignoreCase = true)
     AlertDialog(
         onDismissRequest = onCancel,
-        title = {
-            Text(text = androidx.compose.ui.res.stringResource(R.string.knotwork_settings_destructive_confirm_title))
+        title = { Text(payload.title) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp2)) {
+                Text(text = payload.body, style = KnotworkTextStyles.BodyBase)
+                OutlinedTextField(
+                    value = payload.pendingInput,
+                    onValueChange = onTypedConfirmChange,
+                    placeholder = { Text(payload.hint, style = KnotworkTextStyles.BodySm) },
+                    singleLine = true,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag(DESTRUCTIVE_TYPED_FIELD_TEST_TAG),
+                )
+            }
         },
-        text = { Text(text = message) },
         confirmButton = {
             KnotworkPrimaryButton(
-                text = androidx.compose.ui.res.stringResource(
-                    R.string.knotwork_settings_destructive_confirm_yes,
-                ),
+                text = androidx.compose.ui.res.stringResource(R.string.knotwork_settings_destructive_confirm),
                 onClick = onConfirm,
+                enabled = canConfirm,
+                modifier = Modifier.testTag(DESTRUCTIVE_CONFIRM_BUTTON_TEST_TAG),
             )
         },
         dismissButton = {
             TextButton(onClick = onCancel) {
                 Text(
-                    text = androidx.compose.ui.res.stringResource(
-                        R.string.knotwork_settings_destructive_confirm_cancel,
-                    ),
+                    text = androidx.compose.ui.res.stringResource(R.string.knotwork_settings_destructive_cancel),
                 )
             }
         },
     )
 }
 
-/** Height of a single skeleton row in the Loading state. */
+// ─── Constants ─────────────────────────────────────────────────────────────
+
+/** Test tag for the scrollable Settings body — used by instrumented tests. */
+const val SETTINGS_BODY_TEST_TAG: String = "settings_body"
+const val IDENTITY_CARD_TEST_TAG: String = "settings_identity_card"
+const val SYSTEM_INSTRUCTIONS_FIELD_TEST_TAG: String = "settings_system_instructions_field"
+const val RESTART_BANNER_TEST_TAG: String = "settings_restart_banner"
+const val DESTRUCTIVE_TYPED_FIELD_TEST_TAG: String = "settings_destructive_typed_field"
+const val DESTRUCTIVE_CONFIRM_BUTTON_TEST_TAG: String = "settings_destructive_confirm"
+const val SLIDER_ROW_TAG_PREFIX: String = "settings_slider_"
+const val PROVIDER_ROW_TAG_PREFIX: String = "settings_provider_row_"
+
+private val LOCAL_MODEL_TILE_SIZE = 40.dp
+private val SectionCardBorder = 1.dp
 private val LOADING_ROW_HEIGHT = 56.dp
+private val IDENTITY_LOADING_HEIGHT = 72.dp
+private val IDENTITY_AVATAR_SIZE = 48.dp
+private const val SETTINGS_LOADING_ROWS = 6
+private const val SYSTEM_INSTRUCTIONS_MIN_LINES = 5
+private const val SYSTEM_INSTRUCTIONS_MAX_LINES = 12
+private const val ACTIVE_PILL_ALPHA = 0.18f
+
+/**
+ * Relative weight of the trailing segmented control inside the restrictions
+ * card's "Approve tool calls" row. The label takes weight 1 and the
+ * segmented control takes 2.5 so each of the three options has enough
+ * width for the longest label ("Sensitive +") at the default font scale.
+ */
+private const val SEGMENTED_TRAILING_WEIGHT = 2.5f
+
+/**
+ * Visual scale of the Material3 Switch inside the restrictions /
+ * notifications / privacy toggle rows. The default 52×32 dp control
+ * dwarfs the surrounding 14 sp row title; 78% trims it to ~40×25 dp
+ * which matches the mockup. The interactive 48 dp floor stays intact
+ * because the parent `Row` carries the `clickable` modifier.
+ */
+private const val SWITCH_SCALE = 0.78f

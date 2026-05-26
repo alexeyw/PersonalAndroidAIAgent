@@ -1,687 +1,441 @@
 package ai.agent.android.presentation.ui.settings
 
+import ai.agent.android.BuildConfig
 import ai.agent.android.R
-import ai.agent.android.data.engine.KoogModelMapper
 import ai.agent.android.domain.constants.SettingsDefaults
+import ai.agent.android.domain.models.ActiveModelMeta
 import ai.agent.android.domain.models.LocalBackend
-import ai.agent.android.presentation.ui.common.resolve
-import android.widget.Toast
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
+import ai.agent.android.domain.models.ProviderId
+import ai.agent.android.domain.models.ToolApprovalPolicy
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.ArrowBack
-import androidx.compose.material.icons.outlined.ExpandMore
-import androidx.compose.material.icons.outlined.Memory
-import androidx.compose.material.icons.outlined.Shield
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExposedDropdownMenuAnchorType
-import androidx.compose.material3.ExposedDropdownMenuBox
-import androidx.compose.material3.ExposedDropdownMenuDefaults
-import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Slider
-import androidx.compose.material3.SliderDefaults
-import androidx.compose.material3.Switch
-import androidx.compose.material3.SwitchDefaults
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
-import app.knotwork.design.theme.KnotworkTheme
-import app.knotwork.design.tokens.KnotworkTextStyles
+import app.knotwork.design.screens.settings.ApproveToolCallsOption
+import app.knotwork.design.screens.settings.DestructiveActionKind
+import app.knotwork.design.screens.settings.DestructiveActionState
+import app.knotwork.design.screens.settings.ExternalProvidersCardState
+import app.knotwork.design.screens.settings.IdentityCardState
+import app.knotwork.design.screens.settings.LlmParameterSlider
+import app.knotwork.design.screens.settings.LlmParametersCardState
+import app.knotwork.design.screens.settings.LocalModelCardState
+import app.knotwork.design.screens.settings.MemoryCardState
+import app.knotwork.design.screens.settings.MemoryStatCell
+import app.knotwork.design.screens.settings.NotificationsCardState
+import app.knotwork.design.screens.settings.PrivacyCardState
+import app.knotwork.design.screens.settings.ProviderRowState
+import app.knotwork.design.screens.settings.RestrictionsCardState
+import app.knotwork.design.screens.settings.SettingsCallbacks
+import app.knotwork.design.screens.settings.SettingsContent
+import app.knotwork.design.screens.settings.SettingsViewState
+import app.knotwork.design.screens.settings.SettingsVisualState
+import app.knotwork.design.screens.settings.SystemInstructionsCardState
+import com.jakewharton.processphoenix.ProcessPhoenix
+import java.text.SimpleDateFormat
+import java.util.Locale
 import kotlin.math.roundToInt
 
 /**
- * Composable screen for managing agent settings.
+ * Phase 22 / Task 9 — redesigned Settings surface.
  *
- * Phase 21 / Task 10 (mockup pass): every row is styled with the brand
- * tokens — small-caps mono section headers, amber-tinted sliders with the
- * value on the right edge, mono outlined text fields, and a brand-amber
- * Switch for toggles.
+ * Slim mapper between [SettingsViewModel] state and the catalog's
+ * [SettingsContent]. Hosts the SAF launcher for memory export and the
+ * `ProcessPhoenix.triggerRebirth` call wired to the restart-required
+ * banner.
+ *
+ * @param viewModel Hilt-injected VM holding the persisted state.
+ * @param onBack invoked when the user taps the system back button.
+ * @param onOpenModels invoked from the Local model card's "Manage" /
+ *   "Change" buttons; routes to the Models screen.
+ * @param onOpenProvider invoked when the user taps a collapsed provider
+ *   nav-row; routes to the standalone provider detail screen.
+ * @param onOpenAddProvider invoked from the "+ Add provider" action.
+ * @param onOpenSearch invoked from the magnifying-glass action.
  */
-@Suppress("LongMethod") // Single long form; helper composables already split the chrome.
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
     modifier: Modifier = Modifier,
     viewModel: SettingsViewModel = hiltViewModel(),
     onBack: () -> Unit = {},
+    onOpenModels: () -> Unit = {},
+    onOpenProvider: (ProviderId) -> Unit = {},
+    onOpenAddProvider: () -> Unit = {},
+    onOpenSearch: () -> Unit = {},
 ) {
     val uiState by viewModel.uiState.collectAsState()
-    val scrollState = rememberScrollState()
-    val locale = LocalConfiguration.current.locales[0]
     val context = LocalContext.current
+    val snackbarHostState = remember { SnackbarHostState() }
 
-    val openAiModels = KoogModelMapper.getOpenAIModelIdList()
-    val anthropicModels = KoogModelMapper.getAnthropicModelIdList()
-    val googleModels = KoogModelMapper.getGoogleModelIdList()
-    val deepSeekModels = KoogModelMapper.getDeepSeekModelIdList()
+    val exportLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument(MIME_JSON),
+    ) { uri: Uri? ->
+        uri ?: return@rememberLauncherForActivityResult
+        val stream = runCatching { context.contentResolver.openOutputStream(uri) }.getOrNull()
+        if (stream != null) viewModel.exportMemoryBase(stream)
+    }
 
-    Scaffold(
-        modifier = modifier.fillMaxSize(),
-        containerColor = MaterialTheme.colorScheme.surface,
-        // Outer `AppShellScaffold` already absorbs the bottom-nav inset.
-        contentWindowInsets = WindowInsets(0, 0, 0, 0),
-        topBar = {
-            TopAppBar(
-                title = {
-                    Text(
-                        text = stringResource(R.string.settings_screen_title),
-                        style = KnotworkTextStyles.TitleLg,
-                        color = MaterialTheme.colorScheme.onSurface,
-                    )
-                },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Outlined.ArrowBack,
-                            contentDescription = stringResource(R.string.common_back),
-                            tint = MaterialTheme.colorScheme.onSurface,
-                        )
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface,
-                    titleContentColor = MaterialTheme.colorScheme.onSurface,
-                ),
-            )
+    LaunchedEffect(uiState.snackbarMessage) {
+        val message = uiState.snackbarMessage ?: return@LaunchedEffect
+        snackbarHostState.showSnackbar(message)
+        viewModel.snackbarShown()
+    }
+
+    val exportFilename = stringResource(R.string.settings_memory_export_filename)
+    val viewState = buildViewState(uiState, context)
+    val callbacks = buildCallbacks(
+        viewModel = viewModel,
+        onBack = onBack,
+        onOpenModels = onOpenModels,
+        onOpenAddProvider = onOpenAddProvider,
+        onOpenSearch = onOpenSearch,
+        onProviderClick = { id ->
+            ProviderId.entries.firstOrNull { it.cloudProvider.id == id }?.let(onOpenProvider)
         },
-    ) { paddingValues ->
-        Column(
-            verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp3),
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
-                .padding(horizontal = KnotworkTheme.spacing.sp4)
-                .verticalScroll(scrollState),
-        ) {
-            // ---------------- SYSTEM INSTRUCTIONS ----------------
-            SettingsSectionHeader(label = stringResource(R.string.settings_section_system_instructions))
-            MonoOutlinedTextField(
-                value = uiState.systemPromptPrefix,
-                onValueChange = viewModel::updateSystemPromptPrefix,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(SYSTEM_PROMPT_FIELD_HEIGHT),
-                placeholder = stringResource(R.string.settings_field_system_prompt_prefix),
-            )
-            Text(
-                text = stringResource(R.string.settings_system_prompt_helper),
-                style = KnotworkTextStyles.MonoSm,
-                color = KnotworkTheme.extended.onSurfaceMuted,
-            )
+        onExportClick = { exportLauncher.launch(exportFilename) },
+        onRestart = {
+            viewModel.acknowledgeRestart()
+            // No-arg overload — ProcessPhoenix resolves the app's launcher
+            // intent via PackageManager. The two-arg form requires an
+            // intent that already resolves to a concrete component, and
+            // a bare `Intent()` does not, so PhoenixActivity blew up with
+            // `ActivityNotFoundException` and the :phoenix process died
+            // before it could kill the original (visible to the user as
+            // "Restart only quits the app").
+            ProcessPhoenix.triggerRebirth(context.applicationContext)
+        },
+    )
 
-            // ---------------- RESTRICTIONS ----------------
-            SettingsSectionHeader(label = stringResource(R.string.settings_section_restrictions))
-            SettingsToggleRow(
-                icon = Icons.Outlined.Shield,
-                title = stringResource(R.string.settings_human_in_loop_label),
-                subtitle = stringResource(R.string.settings_human_in_loop_hint),
-                checked = uiState.requiresUserConfirmation,
-                onCheckedChange = viewModel::updateRequiresUserConfirmation,
-            )
+    Box(modifier = modifier.fillMaxSize()) {
+        SettingsContent(state = viewState, callbacks = callbacks)
+        SnackbarHost(hostState = snackbarHostState)
+    }
+}
 
-            // ---------------- LLM PARAMETERS ----------------
-            SettingsSectionHeader(label = stringResource(R.string.settings_section_llm_parameters))
-            KnotworkParamSlider(
-                label = stringResource(R.string.settings_param_temperature_label),
+@Composable
+@Suppress("LongMethod")
+private fun buildViewState(uiState: SettingsUiState, context: android.content.Context): SettingsViewState {
+    val buildDate = formatBuildDate(BuildConfig.GIT_COMMIT_DATE_EPOCH_MS)
+    val placeholder = stringResource(R.string.settings_field_system_prompt_prefix)
+    val helperText = stringResource(R.string.settings_system_instructions_helper)
+    val characterCount = uiState.systemInstructions.length
+    val charLimit = SettingsDefaults.SYSTEM_INSTRUCTIONS_CHAR_LIMIT
+    val tokenApprox = (characterCount / CHARS_PER_TOKEN).toInt().coerceAtLeast(0)
+    val identity = uiState.identity?.let { id ->
+        IdentityCardState(
+            displayName = id.displayName,
+            avatarInitials = context.getString(R.string.settings_identity_avatar_initials),
+            metaLine = context.getString(
+                if (id.keystoreAvailable) {
+                    R.string.settings_identity_meta_keystore_ok
+                } else {
+                    R.string.settings_identity_meta_keystore_missing
+                },
+                id.deviceId,
+            ),
+        )
+    }
+    val systemInstructions = SystemInstructionsCardState(
+        value = uiState.systemInstructions,
+        placeholder = placeholder,
+        variableChips = uiState.variableCatalog.map { it.placeholder },
+        characterCount = characterCount,
+        characterLimit = charLimit,
+        approximateTokens = tokenApprox,
+        helperText = helperText,
+        validationError = if (characterCount > charLimit) {
+            context.getString(R.string.settings_system_instructions_too_long, charLimit)
+        } else {
+            null
+        },
+    )
+    val restrictions = RestrictionsCardState(
+        approveSelection = when (uiState.toolApprovalPolicy) {
+            ToolApprovalPolicy.AllCalls -> ApproveToolCallsOption.AllCalls
+            ToolApprovalPolicy.SensitiveOrDestructive -> ApproveToolCallsOption.Sensitive
+            ToolApprovalPolicy.NeverPrompt -> ApproveToolCallsOption.Never
+        },
+        approveAllLabel = stringResource(R.string.settings_restrictions_approve_all),
+        approveSensitiveLabel = stringResource(R.string.settings_restrictions_approve_sensitive),
+        approveNeverLabel = stringResource(R.string.settings_restrictions_approve_never),
+        blockDestructive = uiState.blockDestructiveTools,
+        blockDestructiveSubtitle = stringResource(R.string.settings_restrictions_block_destructive_subtitle),
+        blockNetwork = uiState.blockNetworkFromLocalModel,
+        blockNetworkSubtitle = stringResource(R.string.settings_restrictions_block_network_subtitle),
+        capSteps = uiState.capAutonomousSteps,
+        capStepsSubtitle = stringResource(R.string.settings_restrictions_cap_steps_subtitle),
+    )
+    val locale = LocalConfiguration.current.locales[0]
+    val llm = LlmParametersCardState(
+        sliders = listOf(
+            LlmParameterSlider(
+                id = "temperature",
+                title = stringResource(R.string.settings_row_temperature_title),
                 valueLabel = String.format(locale, "%.1f", uiState.temperature),
                 value = uiState.temperature,
-                onValueChange = viewModel::updateTemperature,
                 valueRange = 0f..2f,
-            )
-            KnotworkParamSlider(
-                label = stringResource(R.string.settings_param_top_k_label),
+            ),
+            LlmParameterSlider(
+                id = "top_k",
+                title = stringResource(R.string.settings_row_top_k_title),
                 valueLabel = uiState.topK.toString(),
                 value = uiState.topK.toFloat(),
-                onValueChange = { viewModel.updateTopK(it.roundToInt()) },
                 valueRange = 1f..100f,
                 steps = 99,
-            )
-            KnotworkParamSlider(
-                label = stringResource(R.string.settings_param_top_p_label),
+            ),
+            LlmParameterSlider(
+                id = "top_p",
+                title = stringResource(R.string.settings_row_top_p_title),
                 valueLabel = String.format(locale, "%.2f", uiState.topP),
                 value = uiState.topP,
-                onValueChange = viewModel::updateTopP,
                 valueRange = 0f..1f,
-            )
-            KnotworkParamSlider(
-                label = stringResource(R.string.settings_param_max_context_label),
-                valueLabel = androidx.compose.ui.res.pluralStringResource(
-                    R.plurals.settings_param_max_context_value,
-                    uiState.maxContextLength,
-                    uiState.maxContextLength,
-                ),
+            ),
+            LlmParameterSlider(
+                id = "repetition_penalty",
+                title = stringResource(R.string.settings_row_repetition_penalty_title),
+                valueLabel = String.format(locale, "%.2f", uiState.repetitionPenalty),
+                value = uiState.repetitionPenalty,
+                valueRange = 1f..2f,
+            ),
+            LlmParameterSlider(
+                id = "max_context",
+                title = stringResource(R.string.settings_row_max_context_title),
+                valueLabel = "${uiState.maxContextLength} tok",
                 value = uiState.maxContextLength.toFloat(),
-                onValueChange = { viewModel.updateMaxContextLength(it.roundToInt()) },
                 valueRange = 512f..8192f,
                 steps = 14,
-            )
-            PipelineMaxStepsField(
-                currentValue = uiState.pipelineMaxSteps,
-                onCommit = viewModel::updatePipelineMaxSteps,
-            )
-
-            // ---------------- LOCAL MODEL ----------------
-            SettingsSectionHeader(label = stringResource(R.string.settings_section_local_model))
-            InferenceBackendRow(
-                currentBackend = uiState.localModelBackend,
-                onBackendChange = viewModel::updateLocalModelBackend,
-            )
-            Spacer(modifier = Modifier.height(KnotworkTheme.spacing.sp1))
-            TextButton(
-                onClick = {
-                    viewModel.testBackend { resultMsg ->
-                        Toast.makeText(context, context.resolve(resultMsg), Toast.LENGTH_LONG).show()
-                    }
-                },
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Text(stringResource(R.string.settings_test_backend_button, uiState.localModelBackend))
-            }
-
-            // ---------------- PRIVACY ----------------
-            SettingsSectionHeader(label = stringResource(R.string.settings_section_privacy))
-            PrivacySection(
-                crashReportingEnabled = uiState.crashReportingEnabled,
-                onCrashReportingChange = viewModel::updateCrashReportingEnabled,
-            )
-
-            // ---------------- EXTERNAL PROVIDERS ----------------
-            SettingsSectionHeader(label = stringResource(R.string.settings_section_external_providers))
-            ProviderSettingsSection(
-                title = "OpenAI",
-                keyValue = uiState.openAiKey,
-                onKeyChange = viewModel::updateOpenAiKey,
-                modelValue = uiState.openAiModel,
-                onModelChange = viewModel::updateOpenAiModel,
-                availableModels = openAiModels,
-            )
-            ProviderSettingsSection(
-                title = "Anthropic",
-                keyValue = uiState.anthropicKey,
-                onKeyChange = viewModel::updateAnthropicKey,
-                modelValue = uiState.anthropicModel,
-                onModelChange = viewModel::updateAnthropicModel,
-                availableModels = anthropicModels,
-            )
-            ProviderSettingsSection(
-                title = "Google",
-                keyValue = uiState.googleKey,
-                onKeyChange = viewModel::updateGoogleKey,
-                modelValue = uiState.googleModel,
-                onModelChange = viewModel::updateGoogleModel,
-                availableModels = googleModels,
-            )
-            ProviderSettingsSection(
-                title = "DeepSeek",
-                keyValue = uiState.deepSeekKey,
-                onKeyChange = viewModel::updateDeepSeekKey,
-                modelValue = uiState.deepSeekModel,
-                onModelChange = viewModel::updateDeepSeekModel,
-                availableModels = deepSeekModels,
-            )
-
-            // ---------------- OLLAMA ----------------
-            SettingsSectionHeader(label = stringResource(R.string.settings_section_ollama))
-            OutlinedTextField(
-                value = uiState.ollamaBaseUrl,
-                onValueChange = viewModel::updateOllamaBaseUrl,
-                label = { Text(stringResource(R.string.settings_ollama_base_url_label)) },
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true,
-            )
-            OutlinedTextField(
-                value = uiState.ollamaModel,
-                onValueChange = viewModel::updateOllamaModel,
-                label = { Text(stringResource(R.string.settings_ollama_model_label)) },
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true,
-            )
-            OutlinedTextField(
-                value = uiState.ollamaContextWindow,
-                onValueChange = viewModel::updateOllamaContextWindow,
-                label = { Text(stringResource(R.string.settings_ollama_context_label)) },
-                modifier = Modifier.fillMaxWidth(),
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                singleLine = true,
-            )
-
-            Spacer(modifier = Modifier.height(KnotworkTheme.spacing.sp10))
-        }
-    }
-}
-
-// ---------- Brand-styled helper composables ----------
-
-/**
- * Small-caps monospace section header rendered before every settings
- * block. Mirrors the spec mockup ("SYSTEM INSTRUCTIONS" / "RESTRICTIONS"
- * / "LLM PARAMETERS" / "LOCAL MODEL" etc.). The label is uppercased
- * here so callers can keep the string resources human-readable.
- */
-@Composable
-private fun SettingsSectionHeader(label: String) {
-    Text(
-        text = label.uppercase(),
-        style = KnotworkTextStyles.MonoSm,
-        color = KnotworkTheme.extended.onSurfaceMuted,
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(top = KnotworkTheme.spacing.sp3, bottom = KnotworkTheme.spacing.sp1),
-    )
-}
-
-/**
- * Branded slider row — `TitleMd` label on the left, brand-primary value
- * label on the right, amber-tinted Material slider underneath.
- */
-@Composable
-private fun KnotworkParamSlider(
-    label: String,
-    valueLabel: String,
-    value: Float,
-    onValueChange: (Float) -> Unit,
-    valueRange: ClosedFloatingPointRange<Float>,
-    steps: Int = 0,
-) {
-    Column(verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp1)) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            Text(
-                text = label,
-                style = KnotworkTextStyles.TitleMd.copy(fontWeight = FontWeight.SemiBold),
-                color = MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier.weight(1f),
-            )
-            Text(
-                text = valueLabel,
-                style = KnotworkTextStyles.MonoBase.copy(fontWeight = FontWeight.SemiBold),
-                color = MaterialTheme.colorScheme.primary,
-            )
-        }
-        Slider(
-            value = value,
-            onValueChange = onValueChange,
-            valueRange = valueRange,
-            steps = steps,
-            colors = SliderDefaults.colors(
-                thumbColor = MaterialTheme.colorScheme.primary,
-                activeTrackColor = MaterialTheme.colorScheme.primary,
-                inactiveTrackColor = KnotworkTheme.extended.surface3,
-                activeTickColor = MaterialTheme.colorScheme.primary,
-                inactiveTickColor = KnotworkTheme.extended.surface3,
             ),
-        )
-    }
-}
-
-/**
- * Toggle row used inside the RESTRICTIONS and PRIVACY sections — leading
- * shield-like icon, two-line content, trailing brand-amber Switch.
- */
-@Composable
-private fun SettingsToggleRow(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    title: String,
-    subtitle: String,
-    checked: Boolean,
-    onCheckedChange: (Boolean) -> Unit,
-) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp3),
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable { onCheckedChange(!checked) }
-            .padding(vertical = KnotworkTheme.spacing.sp2),
-    ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier.size(KnotworkTheme.spacing.sp6),
-        )
-        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp1)) {
-            Text(
-                text = title,
-                style = KnotworkTextStyles.TitleMd.copy(fontWeight = FontWeight.SemiBold),
-                color = MaterialTheme.colorScheme.onSurface,
-            )
-            Text(
-                text = subtitle,
-                style = KnotworkTextStyles.BodyBase,
-                color = KnotworkTheme.extended.onSurfaceMuted,
-            )
-        }
-        Switch(
-            checked = checked,
-            onCheckedChange = null,
-            colors = SwitchDefaults.colors(
-                checkedThumbColor = MaterialTheme.colorScheme.onPrimary,
-                checkedTrackColor = MaterialTheme.colorScheme.primary,
-                checkedBorderColor = MaterialTheme.colorScheme.primary,
+            LlmParameterSlider(
+                id = "max_steps",
+                title = stringResource(R.string.settings_row_max_steps_title),
+                valueLabel = uiState.capAutonomousSteps.toString(),
+                value = uiState.capAutonomousSteps.toFloat(),
+                valueRange = 5f..100f,
+                steps = 94,
             ),
-        )
-    }
-}
-
-/**
- * Multi-line outlined text field rendered with the brand monospace
- * typeface for system-prompt entry. Uses a transparent background +
- * outline border so it sits on the surface like every other input on
- * the screen.
- */
-@Composable
-private fun MonoOutlinedTextField(
-    value: String,
-    onValueChange: (String) -> Unit,
-    modifier: Modifier = Modifier,
-    placeholder: String,
-) {
-    Box(
-        modifier = modifier
-            .clip(KnotworkTheme.shapes.md)
-            .border(width = 1.dp, color = KnotworkTheme.extended.outlineStrong, shape = KnotworkTheme.shapes.md)
-            .padding(KnotworkTheme.spacing.sp3),
-    ) {
-        BasicTextField(
-            value = value,
-            onValueChange = onValueChange,
-            textStyle = KnotworkTextStyles.MonoBase.copy(color = MaterialTheme.colorScheme.onSurface),
-            cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-            modifier = Modifier.fillMaxSize(),
-        )
-        if (value.isEmpty()) {
-            Text(
-                text = placeholder,
-                style = KnotworkTextStyles.MonoBase,
-                color = KnotworkTheme.extended.onSurfaceMuted,
-            )
-        }
-    }
-}
-
-/**
- * Inline pipeline-max-steps field. Numeric-keyboard `OutlinedTextField`
- * with brand-amber error state when the parsed value falls outside the
- * `5..100` bracket.
- */
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun PipelineMaxStepsField(currentValue: Int, onCommit: (Int) -> Unit) {
-    var text by remember { mutableStateOf(currentValue.toString()) }
-    LaunchedEffect(currentValue) {
-        val coerced = text.toIntOrNull()?.coerceIn(
-            SettingsDefaults.PIPELINE_MAX_STEPS_MIN,
-            SettingsDefaults.PIPELINE_MAX_STEPS_MAX,
-        )
-        if (coerced != currentValue) {
-            text = currentValue.toString()
-        }
-    }
-    val parsed = text.toIntOrNull()
-    val outOfRange = parsed?.let { it !in PIPELINE_MAX_STEPS_VALID_RANGE } ?: true
-    OutlinedTextField(
-        value = text,
-        onValueChange = { input ->
-            text = input
-            val v = input.toIntOrNull()
-            if (v != null && v in PIPELINE_MAX_STEPS_VALID_RANGE) onCommit(v)
-        },
-        label = { Text(stringResource(R.string.settings_pipeline_max_steps_label)) },
-        modifier = Modifier.fillMaxWidth(),
-        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-        singleLine = true,
-        isError = outOfRange,
-        supportingText = {
-            if (outOfRange) Text(stringResource(R.string.settings_pipeline_max_steps_helper))
-        },
-        colors = OutlinedTextFieldDefaults.colors(
-            focusedBorderColor = MaterialTheme.colorScheme.primary,
-            cursorColor = MaterialTheme.colorScheme.primary,
-            focusedLabelColor = MaterialTheme.colorScheme.primary,
         ),
     )
-}
-
-/**
- * Inference-backend row: leading chip glyph, primary label + monospace
- * subtitle `"NPU · QNN · auto"`-shaped, trailing chevron that toggles
- * the dropdown. Wraps a Material `ExposedDropdownMenuBox` so the chip
- * receipts the menu anchor cleanly.
- */
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun InferenceBackendRow(currentBackend: String, onBackendChange: (String) -> Unit) {
-    var expanded by remember { mutableStateOf(false) }
-    ExposedDropdownMenuBox(
-        expanded = expanded,
-        onExpandedChange = { expanded = it },
-    ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp3),
-            modifier = Modifier
-                .fillMaxWidth()
-                .menuAnchor(
-                    ExposedDropdownMenuAnchorType.PrimaryNotEditable,
-                    enabled = true,
-                )
-                .padding(vertical = KnotworkTheme.spacing.sp2),
-        ) {
-            Box(
-                contentAlignment = Alignment.Center,
-                modifier = Modifier
-                    .size(BACKEND_ICON_TILE_SIZE)
-                    .clip(KnotworkTheme.shapes.sm)
-                    .background(color = KnotworkTheme.extended.surface2),
-            ) {
-                Icon(
-                    imageVector = Icons.Outlined.Memory,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier.size(KnotworkTheme.spacing.sp5),
-                )
-            }
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = stringResource(R.string.settings_inference_backend),
-                    style = KnotworkTextStyles.TitleMd.copy(fontWeight = FontWeight.SemiBold),
-                    color = MaterialTheme.colorScheme.onSurface,
-                )
-                Text(
-                    text = currentBackend,
-                    style = KnotworkTextStyles.MonoSm,
-                    color = KnotworkTheme.extended.onSurfaceMuted,
-                )
-            }
-            Icon(
-                imageVector = Icons.Outlined.ExpandMore,
-                contentDescription = null,
-                tint = KnotworkTheme.extended.onSurfaceMuted,
+    val activeMeta = uiState.activeModelMeta
+    val localModel = LocalModelCardState(
+        modelName = activeMeta?.name,
+        metaLine = activeMeta?.let { formatActiveModelMeta(it, context) },
+        backendLabel = stringResource(
+            R.string.settings_row_inference_backend_subtitle,
+            uiState.localModelBackend,
+        ),
+        backendOptions = LocalBackend.entries.map { it.key },
+        selectedBackend = uiState.localModelBackend,
+        testProbeText = formatTestProbe(uiState, context),
+        testProbeIsError = uiState.lastTestProbeResult?.success == false,
+    )
+    val providers = ExternalProvidersCardState(
+        rows = uiState.providers.map { summary ->
+            ProviderRowState(
+                id = summary.id.cloudProvider.id,
+                title = summary.displayName,
+                fingerprint = summary.keyFingerprint,
+                model = summary.model,
+                endpointHint = summary.endpointHint,
+                isLan = summary.isLanLocal,
             )
-        }
-        ExposedDropdownMenu(
-            expanded = expanded,
-            onDismissRequest = { expanded = false },
-        ) {
-            LocalBackend.entries.forEach { backend ->
-                DropdownMenuItem(
-                    text = { Text(backend.key) },
-                    onClick = {
-                        onBackendChange(backend.key)
-                        expanded = false
-                    },
-                )
-            }
-        }
-    }
-}
-
-/**
- * Per-provider section: brand-styled title, masked API-key input,
- * model-picker dropdown. Wraps the legacy fields with the brand
- * outline + spacing.
- */
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun ProviderSettingsSection(
-    title: String,
-    keyValue: String,
-    onKeyChange: (String) -> Unit,
-    modelValue: String,
-    onModelChange: (String) -> Unit,
-    availableModels: List<String>,
-) {
-    var expanded by remember { mutableStateOf(false) }
-    Column(verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp2)) {
-        Text(
-            text = title,
-            style = KnotworkTextStyles.TitleMd.copy(fontWeight = FontWeight.SemiBold),
-            color = MaterialTheme.colorScheme.onSurface,
-        )
-        OutlinedTextField(
-            value = keyValue,
-            onValueChange = onKeyChange,
-            label = { Text(stringResource(R.string.settings_provider_api_key_label, title)) },
-            modifier = Modifier.fillMaxWidth(),
-            visualTransformation = PasswordVisualTransformation(),
-            singleLine = true,
-        )
-        ExposedDropdownMenuBox(
-            expanded = expanded,
-            onExpandedChange = { expanded = it },
-        ) {
-            OutlinedTextField(
-                value = modelValue,
-                onValueChange = onModelChange,
-                label = { Text(stringResource(R.string.settings_provider_model_label, title)) },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .menuAnchor(
-                        ExposedDropdownMenuAnchorType.PrimaryNotEditable,
-                        enabled = true,
-                    ),
-                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
-                colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors(),
-            )
-            ExposedDropdownMenu(
-                expanded = expanded,
-                onDismissRequest = { expanded = false },
-            ) {
-                availableModels.forEach { model ->
-                    DropdownMenuItem(
-                        text = { Text(model) },
-                        onClick = {
-                            onModelChange(model)
-                            expanded = false
-                        },
-                    )
-                }
-            }
-        }
-        HorizontalDivider(color = KnotworkTheme.extended.divider)
-    }
-}
-
-/**
- * Privacy section — crash-reporting opt-in with a consent dialog. The
- * toggle is inverted (default OFF) so flipping ON requires explicit
- * confirmation.
- */
-@Composable
-private fun PrivacySection(crashReportingEnabled: Boolean, onCrashReportingChange: (Boolean) -> Unit) {
-    var showConsentDialog by remember { mutableStateOf(false) }
-
-    SettingsToggleRow(
-        icon = Icons.Outlined.Shield,
-        title = stringResource(R.string.settings_crash_reporting_label),
-        subtitle = stringResource(R.string.settings_crash_reporting_hint),
-        checked = crashReportingEnabled,
-        onCheckedChange = { wantOn ->
-            if (wantOn) {
-                showConsentDialog = true
-            } else {
-                onCrashReportingChange(false)
-            }
         },
     )
-
-    if (showConsentDialog) {
-        AlertDialog(
-            onDismissRequest = { showConsentDialog = false },
-            title = { Text(stringResource(R.string.settings_crash_reporting_dialog_title)) },
-            text = { Text(stringResource(R.string.settings_crash_reporting_dialog_body)) },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        showConsentDialog = false
-                        onCrashReportingChange(true)
-                    },
-                ) {
-                    Text(stringResource(R.string.settings_crash_reporting_dialog_confirm))
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showConsentDialog = false }) {
-                    Text(stringResource(R.string.settings_crash_reporting_dialog_dismiss))
-                }
+    val memory = MemoryCardState(
+        stats = listOf(
+            MemoryStatCell(
+                value = uiState.memoryStats.chunkCount.toString(),
+                label = stringResource(R.string.settings_memory_stat_chunks),
+            ),
+            MemoryStatCell(
+                value = formatBytes(uiState.memoryStats.totalBytes),
+                label = stringResource(R.string.settings_memory_stat_size),
+            ),
+            MemoryStatCell(
+                value = if (uiState.memoryStats.threadCount > 0) {
+                    uiState.memoryStats.threadCount.toString()
+                } else {
+                    stringResource(R.string.settings_memory_stat_dash)
+                },
+                label = stringResource(R.string.settings_memory_stat_threads),
+            ),
+            MemoryStatCell(
+                value = uiState.memoryStats.averageSimilarityScore
+                    ?.let { String.format(locale, "%.2f", it) }
+                    ?: stringResource(R.string.settings_memory_stat_dash),
+                label = stringResource(R.string.settings_memory_stat_avg_score),
+            ),
+        ),
+        autoSummarizeThreshold = (uiState.autoSummarizeThreshold * MAX_PERCENT).roundToInt(),
+        autoSummarizeLabel = stringResource(R.string.settings_memory_auto_summarize_title),
+        embeddingTitle = stringResource(R.string.settings_memory_embedding_title),
+        embeddingSubtitle = stringResource(R.string.settings_memory_embedding_subtitle),
+        exportLabel = stringResource(R.string.settings_memory_export),
+        reembedLabel = stringResource(R.string.settings_memory_reembed),
+        clearLabel = stringResource(R.string.settings_memory_clear),
+        reembedProgressPercent = uiState.reembedProgress?.let { (it * MAX_PERCENT).roundToInt() },
+    )
+    val notifications = NotificationsCardState(longRunningEnabled = uiState.longRunningTaskNotificationsEnabled)
+    val privacy = PrivacyCardState(crashReportingEnabled = uiState.crashReportingEnabled)
+    val destructive = uiState.pendingDestructive?.let { kind ->
+        DestructiveActionState(
+            title = stringResource(
+                if (kind == PendingDestructiveAction.ClearMemory) {
+                    R.string.settings_destructive_clear_memory_title
+                } else {
+                    R.string.settings_destructive_reset_title
+                },
+            ),
+            body = stringResource(
+                if (kind == PendingDestructiveAction.ClearMemory) {
+                    R.string.settings_destructive_clear_memory_body
+                } else {
+                    R.string.settings_destructive_reset_body
+                },
+            ),
+            keyword = stringResource(R.string.settings_destructive_typed_keyword),
+            hint = stringResource(R.string.settings_destructive_typed_hint),
+            pendingInput = uiState.destructiveTypedInput,
+            kind = if (kind == PendingDestructiveAction.ClearMemory) {
+                DestructiveActionKind.ClearMemory
+            } else {
+                DestructiveActionKind.ResetSettings
             },
         )
     }
+    val visualState = when {
+        uiState.identity == null -> SettingsVisualState.Loading
+        uiState.pendingDestructive != null -> SettingsVisualState.DestructiveAction
+        uiState.restartRequired -> SettingsVisualState.RestartRequired
+        else -> SettingsVisualState.Default
+    }
+    return SettingsViewState(
+        visualState = visualState,
+        subtitleVersion = BuildConfig.VERSION_NAME,
+        subtitleChannel = BuildConfig.BUILD_TYPE,
+        subtitleBuildDate = buildDate,
+        identity = identity,
+        systemInstructions = systemInstructions,
+        restrictions = restrictions,
+        llmParameters = llm,
+        localModel = localModel,
+        externalProviders = providers,
+        memory = memory,
+        notifications = notifications,
+        privacy = privacy,
+        restartRequiredMessage = stringResource(R.string.settings_restart_required_message)
+            .takeIf { visualState == SettingsVisualState.RestartRequired },
+        destructiveAction = destructive,
+    )
 }
 
-/** Approximate height of the system-prompt mono text field. */
-private val SYSTEM_PROMPT_FIELD_HEIGHT = 120.dp
+@Composable
+@Suppress("LongParameterList")
+private fun buildCallbacks(
+    viewModel: SettingsViewModel,
+    onBack: () -> Unit,
+    onOpenModels: () -> Unit,
+    onOpenAddProvider: () -> Unit,
+    onOpenSearch: () -> Unit,
+    onProviderClick: (String) -> Unit,
+    onExportClick: () -> Unit,
+    onRestart: () -> Unit,
+): SettingsCallbacks = SettingsCallbacks(
+    onBack = onBack,
+    onSearchClick = onOpenSearch,
+    onSystemInstructionsChange = viewModel::updateSystemInstructions,
+    onInsertVariableClick = { /* sheet wiring lands in a follow-up; chip row already inserts. */ },
+    onChipInsert = viewModel::insertVariable,
+    onApproveSelectionChange = { option ->
+        viewModel.setToolApprovalPolicy(
+            when (option) {
+                ApproveToolCallsOption.AllCalls -> ToolApprovalPolicy.AllCalls
+                ApproveToolCallsOption.Sensitive -> ToolApprovalPolicy.SensitiveOrDestructive
+                ApproveToolCallsOption.Never -> ToolApprovalPolicy.NeverPrompt
+            },
+        )
+    },
+    onBlockDestructiveChange = viewModel::setBlockDestructiveTools,
+    onBlockNetworkChange = viewModel::setBlockNetworkFromLocalModel,
+    onCapStepsChange = viewModel::setCapAutonomousSteps,
+    onSliderChange = { id, value ->
+        when (id) {
+            "temperature" -> viewModel.setTemperature(value)
+            "top_k" -> viewModel.setTopK(value.roundToInt())
+            "top_p" -> viewModel.setTopP(value)
+            "repetition_penalty" -> viewModel.setRepetitionPenalty(value)
+            "max_context" -> viewModel.setMaxContextLength(value.roundToInt())
+            "max_steps" -> viewModel.setCapAutonomousSteps(value.roundToInt())
+        }
+    },
+    onResetLlmDefaults = viewModel::resetSamplingDefaults,
+    onManageModelsClick = onOpenModels,
+    onChangeModelClick = onOpenModels,
+    onBackendSelected = viewModel::setLocalModelBackend,
+    onTestBackendClick = viewModel::runBackendProbe,
+    onProviderRowClick = onProviderClick,
+    onAddProviderClick = onOpenAddProvider,
+    onAutoSummarizeChange = viewModel::setAutoSummarizeThreshold,
+    onExportMemoryClick = onExportClick,
+    onReembedClick = viewModel::runReembed,
+    onClearMemoryClick = viewModel::stageClearMemory,
+    onLongRunningToggle = viewModel::setLongRunningTaskNotificationsEnabled,
+    onCrashReportingToggle = viewModel::setCrashReportingEnabled,
+    onResetSettingsClick = viewModel::stageResetSettings,
+    onRestartClick = onRestart,
+    onDestructiveTypedConfirmChange = viewModel::updateDestructiveTypedInput,
+    onDestructiveConfirm = viewModel::confirmDestructive,
+    onDestructiveCancel = viewModel::cancelDestructive,
+)
 
-/** Size of the leading icon tile rendered next to the inference backend row. */
-private val BACKEND_ICON_TILE_SIZE = 40.dp
+private fun formatBuildDate(epochMs: Long): String =
+    SimpleDateFormat("yyyy.MM.dd", Locale.US).format(java.util.Date(epochMs))
 
-/** Inclusive range for the pipeline-max-steps input. */
-private val PIPELINE_MAX_STEPS_VALID_RANGE =
-    SettingsDefaults.PIPELINE_MAX_STEPS_MIN..SettingsDefaults.PIPELINE_MAX_STEPS_MAX
+private fun formatActiveModelMeta(meta: ActiveModelMeta, context: android.content.Context): String {
+    val size = formatBytes(meta.sizeBytes)
+    val ctx = "${meta.contextWindowTokens}"
+    val quant = meta.quantization ?: "-"
+    val downloaded = meta.downloadedAtMs?.let {
+        SimpleDateFormat("d MMM", Locale.getDefault()).format(java.util.Date(it))
+    } ?: "-"
+    return context.getString(R.string.settings_local_model_meta, size, ctx, quant, downloaded)
+}
+
+private fun formatTestProbe(uiState: SettingsUiState, context: android.content.Context): String {
+    val probe = uiState.lastTestProbeResult ?: return context.getString(R.string.settings_row_test_backend_idle)
+    return if (probe.success) {
+        val durationLabel = String.format(Locale.getDefault(), "%.2fs", probe.durationMs / MS_PER_SECOND_F)
+        val tpsLabel = String.format(Locale.getDefault(), "%.1f", probe.tokensPerSecond)
+        context.getString(R.string.settings_row_test_backend_success, probe.tokensGenerated, durationLabel, tpsLabel)
+    } else {
+        context.getString(R.string.settings_row_test_backend_failed, probe.errorMessage.orEmpty())
+    }
+}
+
+private fun formatBytes(bytes: Long): String {
+    if (bytes < BYTES_PER_KB) return "$bytes B"
+    val kb = bytes / BYTES_PER_KB_F
+    if (kb < BYTES_PER_KB) return String.format(Locale.getDefault(), "%.1f KB", kb)
+    val mb = kb / BYTES_PER_KB
+    if (mb < BYTES_PER_KB) return String.format(Locale.getDefault(), "%.1f MB", mb)
+    val gb = mb / BYTES_PER_KB
+    return String.format(Locale.getDefault(), "%.1f GB", gb)
+}
+
+private const val MIME_JSON = "application/json"
+private const val CHARS_PER_TOKEN = 3.5f
+private const val MS_PER_SECOND_F = 1_000f
+private const val MAX_PERCENT = 100
+private const val BYTES_PER_KB = 1_024L
+private const val BYTES_PER_KB_F = 1_024f

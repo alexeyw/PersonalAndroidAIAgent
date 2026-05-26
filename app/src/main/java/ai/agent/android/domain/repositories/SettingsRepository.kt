@@ -1,13 +1,24 @@
 package ai.agent.android.domain.repositories
 
+import ai.agent.android.domain.models.McpServerConfig
+import ai.agent.android.domain.models.TestProbeResult
+import ai.agent.android.domain.models.ToolApprovalPolicy
 import ai.agent.android.domain.models.ToolRisk
+import ai.agent.android.domain.models.UpdateMcpServerResult
 import kotlinx.coroutines.flow.Flow
 
 /**
- * Repository interface for managing application-wide settings and user preferences.
+ * Repository interface for managing application-wide settings and user
+ * preferences. Provides abstraction over the underlying persistence
+ * mechanism (DataStore + EncryptedSharedPreferences for the secret
+ * payloads).
  *
- * Provides abstraction over the underlying persistence mechanism (e.g., DataStore, SharedPreferences).
+ * The interface is intentionally large; per-feature splits (Sampling /
+ * Identity / Memory) are planned post-v0.1. The detekt suppression is
+ * file-scoped because every method here serves a single coherent
+ * "user-tunable preference" concern.
  */
+@Suppress("TooManyFunctions")
 interface SettingsRepository {
 
     /**
@@ -151,19 +162,36 @@ interface SettingsRepository {
     suspend fun setToolUsageInstruction(instruction: String)
 
     /**
-     * A [Flow] representing the set of connected MCP server URLs.
+     * Configured MCP servers, ordered by user insertion order.
+     *
+     * Each entry carries the URL plus optional display name, transport
+     * choice, and arbitrary request headers (typically `Authorization`).
+     * Implementations migrate legacy URL-only persistence one-shot to
+     * default [McpServerConfig]s on first read.
      */
-    val mcpServerUrls: Flow<Set<String>>
+    val mcpServers: Flow<List<McpServerConfig>>
 
     /**
-     * Adds an MCP server URL.
+     * Persists [config]. If a server with the same URL already exists,
+     * it is replaced in place (preserving order).
      */
-    suspend fun addMcpServerUrl(url: String)
+    suspend fun addMcpServer(config: McpServerConfig)
 
     /**
-     * Removes an MCP server URL.
+     * Replaces the server identified by [originalUrl] with [updated].
+     * If [originalUrl] is not present, behaves the same as [addMcpServer].
+     * The URL inside [updated] may differ from [originalUrl] (edit
+     * scenario); persistence keeps the row at its old position.
+     *
+     * Refuses to persist with [UpdateMcpServerResult.UrlCollision] when
+     * `updated.url` matches the URL of a different existing row. Without
+     * this guard, replacing by index would silently produce a `[B, B]`
+     * list and lose the original server's auth / headers / display name.
      */
-    suspend fun removeMcpServerUrl(url: String)
+    suspend fun updateMcpServer(originalUrl: String, updated: McpServerConfig): UpdateMcpServerResult
+
+    /** Removes the server identified by [url]. No-op when missing. */
+    suspend fun removeMcpServer(url: String)
 
     /**
      * A [Flow] representing the set of disabled local app function names.
@@ -174,6 +202,21 @@ interface SettingsRepository {
      * Updates the set of disabled local app functions.
      */
     suspend fun setDisabledAppFunctions(functions: Set<String>)
+
+    /**
+     * A [Flow] of disabled MCP tool ids. Entries match the
+     * `mcp:<sha8(serverUrl)>:<toolName>` ids produced by
+     * `McpServerRepositoryImpl.mcpToolId`. Kept separate from
+     * [disabledAppFunctions] because the two namespaces share no collision
+     * guarantees — disabling `search_tool` (local) and an MCP tool named
+     * `search_tool` are independent decisions.
+     */
+    val disabledMcpTools: Flow<Set<String>>
+
+    /**
+     * Updates the set of disabled MCP tools.
+     */
+    suspend fun setDisabledMcpTools(toolIds: Set<String>)
 
     /**
      * A [Flow] of per-AppFunction risk overrides, keyed by the AppFunction's
@@ -214,6 +257,22 @@ interface SettingsRepository {
     suspend fun setCurrentChatSessionId(sessionId: String?)
 
     /**
+     * A [Flow] emitting the user's last-selected console tab on the chat
+     * home pane. Stored as a raw string (the enum name from
+     * `app.knotwork.design.components.console.ConsoleTab`) so the domain
+     * layer stays free of `:catalog` imports. Defaults to `"Logs"` for a
+     * fresh install.
+     */
+    val consolePreferredConsoleTabName: Flow<String>
+
+    /**
+     * Persists the user's chosen console tab so it survives process death.
+     *
+     * @param name Enum name of the chosen tab (`Logs` / `Vars` / `Traces`).
+     */
+    suspend fun setConsolePreferredConsoleTabName(name: String)
+
+    /**
      * A [Flow] representing the maximum number of memory chunks to load for similarity search.
      */
     val maxMemoryChunksForSearch: Flow<Int>
@@ -239,6 +298,25 @@ interface SettingsRepository {
      *        [ai.agent.android.domain.models.LocalBackend.key] to obtain it.
      */
     suspend fun setLocalModelBackend(backend: String)
+
+    /**
+     * Sentinel emitted by [setLastInitBackendAttempt] right before a
+     * non-CPU LiteRT backend init is attempted. Cleared on successful init.
+     *
+     * Used as a crash-recovery breadcrumb: if a cold-start observes this
+     * key still set to a non-CPU backend, the previous LiteRT init
+     * crashed mid-flight (typically a missing GPU/NPU dispatch library
+     * killing the process via SIGABRT before Kotlin try/catch can fire).
+     * `LiteRTLlmEngine.initialize` then forces CPU and clears the
+     * persisted backend so subsequent restarts are stable.
+     */
+    val lastInitBackendAttempt: Flow<String?>
+
+    /**
+     * Updates the crash-recovery breadcrumb. Pass `null` to clear it on
+     * successful init.
+     */
+    suspend fun setLastInitBackendAttempt(backendKey: String?)
 
     /**
      * A [Flow] representing the timeout in milliseconds for tool approval requests.
@@ -320,4 +398,123 @@ interface SettingsRepository {
      * variable (it resolves to an empty string).
      */
     suspend fun setMemorySummaryDefaultLimit(limit: Int)
+
+    /**
+     * Policy that drives the Human-in-the-Loop approval gate in
+     * `ToolNodeExecutor`. Supersedes the legacy boolean
+     * [requiresUserConfirmation] flag.
+     *
+     * The first read of this flow performs a one-shot migration from the
+     * legacy boolean key: `true` → [ToolApprovalPolicy.SensitiveOrDestructive],
+     * `false` → [ToolApprovalPolicy.NeverPrompt]. Migration only fires when
+     * the new key is absent.
+     */
+    val toolApprovalPolicy: Flow<ToolApprovalPolicy>
+
+    /**
+     * Persists the user's tool-approval policy choice.
+     *
+     * @param policy The new policy.
+     */
+    suspend fun setToolApprovalPolicy(policy: ToolApprovalPolicy)
+
+    /**
+     * `true` when the user has opted to hard-block every `DESTRUCTIVE`
+     * tool — `ToolNodeExecutor` refuses to call the tool and returns a
+     * structured "blocked by policy" observation. Defaults to `false`.
+     */
+    val blockDestructiveTools: Flow<Boolean>
+
+    /**
+     * Updates the hard-deny destructive-tool flag.
+     *
+     * @param blocked `true` to refuse destructive tools outright.
+     */
+    suspend fun setBlockDestructiveTools(blocked: Boolean)
+
+    /**
+     * Local-only mode flag. When `true`, `KoogClientFactory` returns `null`
+     * for every cloud provider (OpenAI / Anthropic / Google / DeepSeek);
+     * only the on-device LiteRT engine and LAN-local Ollama remain
+     * reachable. Defaults to `false`.
+     */
+    val blockNetworkFromLocalModel: Flow<Boolean>
+
+    /**
+     * Updates the local-only mode flag.
+     *
+     * @param blocked `true` to gate every cloud provider.
+     */
+    suspend fun setBlockNetworkFromLocalModel(blocked: Boolean)
+
+    /**
+     * Repetition-penalty parameter applied to local generation. Range
+     * `1.0..2.0`. `1.0f` is the neutral identity; higher values penalise
+     * recent tokens.
+     */
+    val repetitionPenalty: Flow<Float>
+
+    /**
+     * Updates the repetition-penalty value. The implementation coerces the
+     * argument into the documented `1.0..2.0` range so a misbehaving
+     * slider cannot persist out-of-bounds values.
+     *
+     * @param value New penalty.
+     */
+    suspend fun setRepetitionPenalty(value: Float)
+
+    /**
+     * Fraction of the memory context budget at which automatic
+     * summarisation triggers. Range `0f..1f`. Default
+     * [ai.agent.android.domain.constants.SettingsDefaults.AUTO_SUMMARIZE_THRESHOLD_DEFAULT].
+     */
+    val autoSummarizeThreshold: Flow<Float>
+
+    /**
+     * Updates the auto-summarize threshold. Coerced into `0f..1f`.
+     *
+     * @param threshold Fraction triggering summarisation.
+     */
+    suspend fun setAutoSummarizeThreshold(threshold: Float)
+
+    /**
+     * `true` when the user has opted into long-running task notifications.
+     * Drives the "Long-running tasks" toggle in the Notifications card —
+     * gates the runtime watcher that fires a system notification when a
+     * pipeline run exceeds the wall-clock threshold while the app is in the
+     * background. Defaults to `true`.
+     */
+    val longRunningTaskNotificationsEnabled: Flow<Boolean>
+
+    /**
+     * Persists the long-running task notifications toggle.
+     *
+     * @param enabled `true` to allow background notifications.
+     */
+    suspend fun setLongRunningTaskNotificationsEnabled(enabled: Boolean)
+
+    /**
+     * Last persisted result of a `Test backend` run inside Settings.
+     * Emits `null` until the user has run the probe at least once.
+     */
+    val lastTestProbeResult: Flow<TestProbeResult?>
+
+    /**
+     * Persists the latest test-backend probe result so the row's
+     * subtitle survives navigation.
+     *
+     * @param result Probe outcome to persist; pass `null` to clear.
+     */
+    suspend fun setLastTestProbeResult(result: TestProbeResult?)
+
+    /**
+     * Resets the local-generation sampling parameters back to the
+     * documented defaults ([SettingsDefaults.TEMPERATURE_DEFAULT],
+     * [SettingsDefaults.TOP_K_DEFAULT], [SettingsDefaults.TOP_P_DEFAULT],
+     * [SettingsDefaults.REPETITION_PENALTY_DEFAULT],
+     * [SettingsDefaults.MAX_CONTEXT_LENGTH_DEFAULT],
+     * [SettingsDefaults.PIPELINE_MAX_STEPS_DEFAULT]). Used by the
+     * "Reset to defaults" action in Settings → LLM parameters.
+     */
+    suspend fun resetSamplingDefaults()
 }

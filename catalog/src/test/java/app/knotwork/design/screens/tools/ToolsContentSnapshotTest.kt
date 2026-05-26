@@ -28,6 +28,11 @@ class ToolsContentSnapshotTest {
     }
 
     @Test
+    fun tools_empty_dark() = snapshot(name = "empty", dark = true) {
+        ToolsContent(state = ToolsPreview.empty())
+    }
+
+    @Test
     fun tools_default_light() = snapshot(name = "default", dark = false) {
         ToolsContent(state = ToolsPreview.default())
     }
@@ -38,12 +43,42 @@ class ToolsContentSnapshotTest {
     }
 
     @Test
-    fun tools_default_with_form_light() = snapshot(name = "default_with_form", dark = false) {
-        ToolsContent(state = ToolsPreview.defaultWithForm())
+    fun tools_default_expanded_light() = snapshot(name = "default_expanded", dark = false) {
+        ToolsContent(state = ToolsPreview.defaultExpanded())
+    }
+
+    @Test
+    fun tools_default_expanded_dark() = snapshot(name = "default_expanded", dark = true) {
+        ToolsContent(state = ToolsPreview.defaultExpanded())
+    }
+
+    @Test
+    fun tools_default_syncing_light() = snapshot(name = "default_syncing", dark = false) {
+        ToolsContent(state = ToolsPreview.defaultSyncing())
+    }
+
+    @Test
+    fun tools_default_syncing_dark() = snapshot(name = "default_syncing", dark = true) {
+        ToolsContent(state = ToolsPreview.defaultSyncing())
+    }
+
+    @Test
+    fun tools_default_disconnected_light() = snapshot(name = "default_disconnected", dark = false) {
+        ToolsContent(state = ToolsPreview.defaultDisconnected())
+    }
+
+    @Test
+    fun tools_default_disconnected_dark() = snapshot(name = "default_disconnected", dark = true) {
+        ToolsContent(state = ToolsPreview.defaultDisconnected())
     }
 
     @Test
     fun tools_loading_light() = snapshot(name = "loading", dark = false) {
+        ToolsContent(state = ToolsPreview.loading())
+    }
+
+    @Test
+    fun tools_loading_dark() = snapshot(name = "loading", dark = true) {
         ToolsContent(state = ToolsPreview.loading())
     }
 
@@ -53,7 +88,17 @@ class ToolsContentSnapshotTest {
     }
 
     @Test
+    fun tools_error_dark() = snapshot(name = "error", dark = true) {
+        ToolsContent(state = ToolsPreview.error())
+    }
+
+    @Test
     fun tool_detail_default_light() = snapshot(name = "tool_detail_default", dark = false) {
+        ToolDetailContent(state = ToolsPreview.toolDetailDefault())
+    }
+
+    @Test
+    fun tool_detail_default_dark() = snapshot(name = "tool_detail_default", dark = true) {
         ToolDetailContent(state = ToolsPreview.toolDetailDefault())
     }
 
@@ -63,13 +108,33 @@ class ToolsContentSnapshotTest {
     }
 
     @Test
+    fun tool_detail_schema_error_dark() = snapshot(name = "tool_detail_schema_error", dark = true) {
+        ToolDetailContent(state = ToolsPreview.toolDetailSchemaError())
+    }
+
+    @Test
     fun add_mcp_default_light() = snapshot(name = "add_mcp_default", dark = false) {
-        AddMcpServerContent(state = ToolsPreview.addMcpDefault())
+        McpServerConfigContent(form = ToolsPreview.addMcpDefault())
+    }
+
+    @Test
+    fun add_mcp_default_dark() = snapshot(name = "add_mcp_default", dark = true) {
+        McpServerConfigContent(form = ToolsPreview.addMcpDefault())
     }
 
     @Test
     fun add_mcp_invalid_light() = snapshot(name = "add_mcp_invalid", dark = false) {
-        AddMcpServerContent(state = ToolsPreview.addMcpInvalid())
+        McpServerConfigContent(form = ToolsPreview.addMcpInvalid())
+    }
+
+    @Test
+    fun edit_mcp_with_headers_light() = snapshot(name = "edit_mcp_with_headers", dark = false) {
+        McpServerConfigContent(form = ToolsPreview.editMcpWithHeaders())
+    }
+
+    @Test
+    fun edit_mcp_with_headers_dark() = snapshot(name = "edit_mcp_with_headers", dark = true) {
+        McpServerConfigContent(form = ToolsPreview.editMcpWithHeaders())
     }
 
     private fun snapshot(name: String, dark: Boolean, content: @Composable () -> Unit) {
@@ -135,6 +200,23 @@ internal object ToolsPreview {
         ),
     )
 
+    private fun nestedTools(): List<McpToolEntry> = listOf(
+        McpToolEntry(
+            id = "mcp:abc12345:arxiv.search",
+            name = "arxiv.search",
+            description = "Search arXiv abstracts by query · returns the top 5 hits",
+            risk = BuiltInToolRisk.ReadOnly,
+            enabled = true,
+        ),
+        McpToolEntry(
+            id = "mcp:abc12345:arxiv.fetch",
+            name = "arxiv.fetch",
+            description = "Download an arXiv PDF by id · stores into memory",
+            risk = BuiltInToolRisk.Sensitive,
+            enabled = false,
+        ),
+    )
+
     fun empty(): ToolsViewState = ToolsViewState(visualState = ToolsVisualState.Empty)
 
     fun loading(): ToolsViewState = ToolsViewState(visualState = ToolsVisualState.Loading)
@@ -145,11 +227,61 @@ internal object ToolsPreview {
         mcpServers = servers(),
     )
 
-    fun defaultWithForm(): ToolsViewState = ToolsViewState(
+    /**
+     * Default surface with the first MCP server row expanded, surfacing its
+     * nested [McpToolEntry] rows underneath the server header (per the
+     * `screens/README.md §C4` Connected state — "rows render normally").
+     */
+    fun defaultExpanded(): ToolsViewState = ToolsViewState(
         visualState = ToolsVisualState.Default,
         builtInTools = builtIns(),
-        mcpServers = servers(),
-        addServerForm = AddMcpServerForm(url = ""),
+        mcpServers = servers().mapIndexed { index, row ->
+            if (index == 0) row.copy(tools = nestedTools(), expanded = true) else row
+        },
+    )
+
+    /**
+     * Default surface with one server in the [McpConnectionState.Syncing]
+     * state — leading dot rendered in `MaterialTheme.colorScheme.primary`,
+     * subtitle reflects the fetch-in-flight label.
+     */
+    fun defaultSyncing(): ToolsViewState = ToolsViewState(
+        visualState = ToolsVisualState.Default,
+        builtInTools = builtIns(),
+        mcpServers = listOf(
+            McpServerRow(
+                id = "mcp://arxiv-search.local:7411",
+                url = "mcp://arxiv-search.local:7411",
+                toolCount = 3,
+                latencyLabel = "syncing…",
+                state = McpConnectionState.Syncing,
+            ),
+            servers()[1],
+            servers()[2],
+        ),
+    )
+
+    /**
+     * Default surface with one server in [McpConnectionState.Disconnected]
+     * — server row and its nested tools (when expanded) render at 60 %
+     * opacity per `screens/README.md §C4` Disconnected state.
+     */
+    fun defaultDisconnected(): ToolsViewState = ToolsViewState(
+        visualState = ToolsVisualState.Default,
+        builtInTools = builtIns(),
+        mcpServers = listOf(
+            McpServerRow(
+                id = "mcp://arxiv-search.local:7411",
+                url = "mcp://arxiv-search.local:7411",
+                toolCount = 3,
+                latencyLabel = "unreachable",
+                state = McpConnectionState.Disconnected,
+                tools = nestedTools(),
+                expanded = true,
+            ),
+            servers()[1],
+            servers()[2],
+        ),
     )
 
     fun error(): ToolsViewState = ToolsViewState(
@@ -183,10 +315,18 @@ internal object ToolsPreview {
         enabled = false,
     )
 
-    fun addMcpDefault(): AddMcpServerViewState = AddMcpServerViewState(url = "https://server.example.com/mcp")
+    fun addMcpDefault(): AddMcpServerForm = AddMcpServerForm(url = "https://server.example.com/mcp")
 
-    fun addMcpInvalid(): AddMcpServerViewState = AddMcpServerViewState(
+    fun addMcpInvalid(): AddMcpServerForm = AddMcpServerForm(
         url = "server.example.com",
         urlError = "URL must start with http:// or https://.",
+    )
+
+    fun editMcpWithHeaders(): AddMcpServerForm = AddMcpServerForm(
+        url = "https://hf.example/mcp",
+        name = "HuggingFace MCP",
+        transport = McpTransportOption.StreamableHttp,
+        headers = listOf(McpHeaderRow(key = "Authorization", value = "Bearer hf_secret")),
+        editingUrl = "https://hf.example/mcp",
     )
 }

@@ -10,45 +10,19 @@
 -->
 <resources>
     <!-- TopAppBar -->
-    <string name="chat_topbar_title_default">Agent Chat</string>
-    <string name="chat_topbar_pipeline_label">Pipeline: %1$s</string>
-    <string name="chat_topbar_context_label">Context: %1$d / %2$d</string>
-    <string name="chat_topbar_show_all_cd">Show all messages</string>
-    <string name="chat_topbar_show_starred_cd">Show only starred</string>
 
     <!-- Overflow menu -->
-    <string name="chat_menu_chat_settings">Chat settings</string>
-    <string name="chat_menu_export_chat">Export chat</string>
     <string name="chat_export_chooser_title">Export chat</string>
 
     <!-- Pipeline switch confirmation dialog -->
-    <string name="chat_dialog_generation_in_progress_title">Generation in progress</string>
-    <string name="chat_dialog_generation_in_progress_text">A response is being generated. Cancel it and switch the pipeline?</string>
-    <string name="chat_dialog_pipeline_switch_cancel_and_switch">Cancel and switch</string>
-    <string name="chat_dialog_pipeline_switch_wait">Wait</string>
 
     <!-- New chat pipeline sheet -->
-    <string name="chat_sheet_new_chat_title">Choose pipeline for the new chat</string>
 
     <!-- Chat-settings dialog -->
-    <string name="chat_dialog_chat_settings_title">Chat settings</string>
-    <string name="chat_dialog_chat_settings_pipeline_label">Pipeline</string>
-    <string name="chat_pipeline_use_default">Use default pipeline</string>
-    <string name="chat_pipeline_use_default_with_name">Use default pipeline (%1$s)</string>
 
     <!-- Drawer -->
-    <string name="chat_drawer_rename_chat_title">Rename Chat</string>
-    <string name="chat_drawer_rename_chat_name_label">Chat Name</string>
-    <string name="chat_drawer_sessions_header">Chat Sessions</string>
-    <string name="chat_drawer_new_chat">New Chat</string>
-    <string name="chat_drawer_import_chat">Import Chat</string>
-    <string name="chat_drawer_rename_session_cd">Rename Session</string>
-    <string name="chat_drawer_delete_session_cd">Delete Session</string>
 
     <!-- Message bubble -->
-    <string name="chat_message_starred_cd">Starred</string>
-    <string name="chat_message_menu_save">Save</string>
-    <string name="chat_message_menu_unsave">Unsave</string>
 
     <!-- Input bar -->
     <string name="chat_input_placeholder">Ask the agent...</string>
@@ -56,69 +30,33 @@
     <string name="chat_input_send_cd">Send</string>
 
     <!-- Console (collapsed + full) -->
-    <string name="chat_console_title">Console log</string>
-    <string name="chat_console_clear_cd">Clear log</string>
-    <string name="chat_console_copy_all_cd">Copy all</string>
-    <string name="chat_console_new_events">New events</string>
-    <string name="chat_console_empty">Console log is empty</string>
-    <string name="chat_console_no_match">No events match this filter</string>
     <string name="chat_console_clear_dialog_title">Clear console log?</string>
     <string name="chat_console_clear_dialog_text">This removes every event from the current session log. The action cannot be undone.</string>
 
     <!-- Console event tags (rendered inside log lines as `[TAG]`) -->
-    <string name="chat_console_tag_node">NODE</string>
-    <string name="chat_console_tag_tool">TOOL</string>
-    <string name="chat_console_tag_memory">MEM</string>
-    <string name="chat_console_tag_system">SYS</string>
-    <string name="chat_console_tag_error">ERR</string>
 
     <!-- Console filter chips -->
-    <string name="chat_console_filter_all">All</string>
-    <string name="chat_console_filter_nodes">Nodes</string>
-    <string name="chat_console_filter_tools">Tools</string>
-    <string name="chat_console_filter_memory">Memory</string>
-    <string name="chat_console_filter_errors">Errors</string>
 
     <!-- Clarification card -->
-    <string name="chat_clarification_title">Agent requests clarification</string>
-    <string name="chat_clarification_option_cd">Option: %1$s</string>
-    <string name="chat_clarification_answer_placeholder">Your answer</string>
-    <string name="chat_clarification_send_cd">Send answer</string>
-    <string name="chat_clarification_autoreply">Auto-reply in %1$ds</string>
-    <string name="chat_clarification_answered">You answered: %1$s</string>
-    <string name="chat_clarification_default_used">Default answer used: %1$s</string>
 
     <!-- Pipeline trace card -->
-    <string name="chat_trace_title">Pipeline trace (%1$d steps)</string>
-    <string name="chat_trace_collapse_cd">Collapse</string>
-    <string name="chat_trace_expand_cd">Expand</string>
-    <string name="chat_trace_tokens">%1$d tokens</string>
-    <string name="chat_trace_ms">%1$d ms</string>
 
     <!-- Agent thought indicator -->
-    <string name="chat_thought_now_initializing">[NOW] Initializing agent...</string>
-    <string name="chat_thought_now_thinking">[NOW] Agent is thinking...</string>
-    <string name="chat_thought_now_answering">[NOW] Agent is answering...</string>
-    <string name="chat_thought_now_using_tool">[NOW] Using tool: %1$s...</string>
-    <string name="chat_thought_now_observation">[NOW] Observation: %1$s</string>
-    <string name="chat_thought_now_approve">[ASK] Approve %1$s?</string>
-    <string name="chat_thought_now_stage">[NOW] Stage: %1$s</string>
     <string name="chat_thought_deny">Deny</string>
     <string name="chat_thought_approve">Approve</string>
 
     <!-- Risk chip rendered next to the tool name in the approval prompt. Temporary
          constants until the Phase 21 design pass replaces them with palette tokens. -->
-    <string name="chat_risk_chip_read_only">READ</string>
-    <string name="chat_risk_chip_sensitive">SENS</string>
-    <string name="chat_risk_chip_destructive">DEST</string>
 
     <!-- Inline approval banner shown above the chat input when the agent is waiting for
          the user to confirm a tool execution. -->
-    <string name="chat_approval_banner_title">Approve %1$s?</string>
 
     <!-- Snackbar feedback -->
     <string name="chat_snackbar_copied">Copied</string>
     <string name="chat_snackbar_console_copied">Console log copied</string>
+    <string name="chat_snackbar_console_line_copied">Line copied</string>
+    <string name="chat_console_clear_dialog_confirm">Clear</string>
+    <string name="chat_console_clear_dialog_cancel">Cancel</string>
 
     <!-- Session naming -->
     <string name="chat_session_imported_default_name">Imported Chat</string>
@@ -137,7 +75,6 @@
     <string name="chat_home_debug_state_clarification">Clarification</string>
     <string name="chat_home_debug_state_error">Error</string>
     <string name="chat_home_debug_state_drawer_open">Drawer open</string>
-    <string name="chat_home_debug_state_console_peek">Console — Peek</string>
     <string name="chat_home_debug_state_console_partial">Console — Partial</string>
     <string name="chat_home_debug_state_console_full">Console — Full</string>
 
@@ -178,4 +115,40 @@
     <string name="chat_home_suggestion_card_2_tools">clipboard</string>
     <string name="chat_home_suggestion_card_3_title">Look up \"LiteRT delegate options\"</string>
     <string name="chat_home_suggestion_card_3_tools">search_tool</string>
+
+    <!-- Overflow menu (Phase 22 / Task 4) -->
+    <string name="chat_overflow_export">Export chat</string>
+    <string name="chat_overflow_delete">Delete chat</string>
+    <string name="chat_overflow_clear_console">Clear console</string>
+
+    <!-- Delete chat confirmation (Phase 22 / Task 4) -->
+    <string name="chat_delete_dialog_title">Delete this chat?</string>
+    <string name="chat_delete_dialog_text">This permanently removes the conversation, including every message in it. This cannot be undone.</string>
+    <string name="chat_delete_dialog_confirm">Delete</string>
+    <string name="chat_delete_dialog_cancel">Cancel</string>
+
+    <!-- Rename session sheet (Phase 22 / Task 4) -->
+    <string name="chat_rename_sheet_title">Rename chat</string>
+    <string name="chat_rename_sheet_label">Chat name</string>
+    <string name="chat_rename_sheet_save">Save</string>
+    <string name="chat_rename_sheet_cancel">Cancel</string>
+
+    <!-- New chat pipeline picker sheet (Phase 22 / Task 4) -->
+    <string name="chat_new_thread_sheet_title">Start a new chat</string>
+    <string name="chat_new_thread_sheet_create">Create</string>
+    <string name="chat_new_thread_sheet_cancel">Cancel</string>
+    <string name="chat_new_thread_sheet_use_default">Use default pipeline</string>
+
+    <!-- Model picker sheet (Phase 22 / Task 4) -->
+    <string name="chat_model_picker_sheet_title">Choose model</string>
+    <string name="chat_model_picker_empty">No models installed</string>
+    <string name="chat_model_picker_open_models">Open Models</string>
+    <string name="chat_model_picker_active_cd">Active model</string>
+
+    <!-- Import chat (Phase 22 / Task 4) -->
+    <string name="chat_import_failed">Could not import chat: %1$s</string>
+    <string name="chat_import_unreadable">Selected file could not be read.</string>
+
+    <!-- Long-press message context menu (Phase 22 / Task 4 review fix). -->
+    <string name="chat_message_rate_coming_soon">Message rating is not yet available.</string>
 </resources>

@@ -1,53 +1,30 @@
 package ai.agent.android.presentation.ui.taskmonitor
 
 import ai.agent.android.R
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Build
-import androidx.compose.material.icons.filled.Info
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.ui.Alignment
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.res.colorResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.dp
+import app.knotwork.design.screens.taskmonitor.TaskFilterKind
+import app.knotwork.design.screens.taskmonitor.TaskMonitorCallbacks
+import app.knotwork.design.screens.taskmonitor.TaskMonitorContent
+import app.knotwork.design.screens.taskmonitor.TaskMonitorDetail
+import app.knotwork.design.screens.taskmonitor.TaskMonitorDetailSheetBody
+import app.knotwork.design.screens.taskmonitor.TaskMonitorRow
+import app.knotwork.design.screens.taskmonitor.TaskMonitorStrings
+import app.knotwork.design.screens.taskmonitor.TaskMonitorViewState
+import app.knotwork.design.screens.taskmonitor.TaskMonitorVisualState
+import app.knotwork.design.screens.taskmonitor.TaskRowStatus
 
 /**
- * Screen displaying the list of active chat sessions and WorkManager background tasks.
- *
- * @param viewModel The ViewModel providing the task monitor state.
- * @param modifier The modifier for this composable.
- * @param onNavigateToChat Callback to navigate to a specific chat session.
- * @param onBack Callback when the back button is pressed.
+ * Slim app-side Task Monitor mapper. Subscribes to
+ * [TaskMonitorViewModel.uiState] and renders [TaskMonitorContent] with an
+ * optional row-detail `ModalBottomSheet`.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -58,171 +35,111 @@ fun TaskMonitorScreen(
     onBack: () -> Unit = {},
 ) {
     val uiState by viewModel.uiState.collectAsState()
-
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text(stringResource(R.string.taskmonitor_screen_title)) },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = stringResource(R.string.common_back),
-                        )
-                    }
-                },
-            )
+    val strings = taskMonitorStrings()
+    val viewState = remember(uiState) { uiState.toViewState() }
+    val callbacks = TaskMonitorCallbacks(
+        onBack = onBack,
+        onFilterChanged = { viewModel.onFilterChanged(it.toAppFilter()) },
+        onRowClick = viewModel::openDetails,
+        onRowCancel = viewModel::onCancelTaskClicked,
+        onDetailDismiss = viewModel::closeDetails,
+        onDetailOpenChat = { taskId ->
+            // The catalog already gates the CTA visibility on
+            // `canOpenChat`; this guard is a defence-in-depth so a
+            // mistaken host invocation can't write an invalid
+            // currentChatSessionId for a background WorkManager UUID.
+            val task = uiState.tasks.firstOrNull { it.id == taskId }
+            if (task?.type == TaskType.SESSION) {
+                viewModel.onOpenChatClicked(taskId) {
+                    viewModel.closeDetails()
+                    onNavigateToChat(taskId)
+                }
+            }
         },
-    ) { paddingValues ->
-        Column(
-            modifier = modifier
-                .fillMaxSize()
-                .padding(paddingValues)
-                .padding(horizontal = 16.dp),
-        ) {
-            Spacer(modifier = Modifier.height(16.dp))
+        onRetry = {},
+    )
 
-            // Filters
-            LazyRow(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                items(TaskFilterType.entries.toTypedArray()) { filterType ->
-                    FilterChip(
-                        selected = uiState.filter == filterType,
-                        onClick = { viewModel.onFilterChanged(filterType) },
-                        label = { Text(stringResource(filterType.displayNameRes)) },
-                    )
-                }
-            }
+    TaskMonitorContent(state = viewState, modifier = modifier, strings = strings, callbacks = callbacks)
 
-            Spacer(modifier = Modifier.height(16.dp))
-
-            if (uiState.isLoading) {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator()
-                }
-            } else if (uiState.tasks.isEmpty()) {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text(
-                        text = stringResource(R.string.taskmonitor_empty),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            } else {
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    items(uiState.tasks, key = { it.id }) { task ->
-                        TaskCard(
-                            task = task,
-                            onCancel = { viewModel.onCancelTaskClicked(it) },
-                            onNavigateToChat = { sessionId ->
-                                viewModel.onOpenChatClicked(sessionId) {
-                                    onNavigateToChat(sessionId)
-                                }
-                            },
-                        )
-                    }
-                }
-            }
+    val detail = viewState.expandedDetail
+    if (detail != null) {
+        val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+        ModalBottomSheet(onDismissRequest = viewModel::closeDetails, sheetState = sheetState) {
+            TaskMonitorDetailSheetBody(detail = detail, strings = strings, callbacks = callbacks)
         }
     }
 }
 
-/**
- * Displays a single task or session in a card format.
- *
- * @param task The task data model to display.
- * @param onCancel Callback invoked when the cancel button is clicked.
- * @param onNavigateToChat Callback invoked when the 'Open Chat' button is clicked.
- */
+internal fun TaskMonitorState.toViewState(): TaskMonitorViewState {
+    val rows = tasks.map { it.toRow() }
+    val visualState = when {
+        isLoading -> TaskMonitorVisualState.Loading
+        rows.isEmpty() -> TaskMonitorVisualState.Empty
+        else -> TaskMonitorVisualState.Default
+    }
+    val detail = detailTaskId?.let { id ->
+        tasks.firstOrNull { it.id == id }?.let { task ->
+            TaskMonitorDetail(
+                id = task.id,
+                title = task.title,
+                subtitle = task.pipelineStage,
+                status = task.status.toCatalog(),
+                logs = emptyList(),
+                // Open-chat navigation is only valid for chat-session
+                // tasks; background WorkManager rows carry a UUID id
+                // that does not resolve to a chat.
+                canOpenChat = task.type == TaskType.SESSION,
+            )
+        }
+    }
+    return TaskMonitorViewState(
+        visualState = visualState,
+        filter = filter.toCatalog(),
+        rows = rows,
+        expandedDetail = detail,
+    )
+}
+
+private fun TaskItem.toRow(): TaskMonitorRow = TaskMonitorRow(
+    id = id,
+    title = title,
+    subtitle = pipelineStage,
+    status = status.toCatalog(),
+    progress = progress?.takeIf { it >= 0f },
+    isCancellable = type == TaskType.BACKGROUND_WORK && (status == TaskStatus.RUNNING || status == TaskStatus.QUEUED),
+)
+
+private fun TaskStatus.toCatalog(): TaskRowStatus = when (this) {
+    TaskStatus.RUNNING -> TaskRowStatus.Running
+    TaskStatus.QUEUED -> TaskRowStatus.Queued
+    TaskStatus.COMPLETED -> TaskRowStatus.Success
+    TaskStatus.FAILED -> TaskRowStatus.Failed
+}
+
+private fun TaskFilterType.toCatalog(): TaskFilterKind = when (this) {
+    TaskFilterType.ALL -> TaskFilterKind.All
+    TaskFilterType.ACTIVE -> TaskFilterKind.Active
+    TaskFilterType.BACKGROUND -> TaskFilterKind.Background
+    TaskFilterType.COMPLETED -> TaskFilterKind.Completed
+}
+
+private fun TaskFilterKind.toAppFilter(): TaskFilterType = when (this) {
+    TaskFilterKind.All -> TaskFilterType.ALL
+    TaskFilterKind.Active -> TaskFilterType.ACTIVE
+    TaskFilterKind.Background -> TaskFilterType.BACKGROUND
+    TaskFilterKind.Completed -> TaskFilterType.COMPLETED
+}
+
 @Composable
-fun TaskCard(task: TaskItem, onCancel: (String) -> Unit, onNavigateToChat: (String) -> Unit) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-    ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Icon(
-                    imageVector = if (task.type == TaskType.SESSION) Icons.Default.Info else Icons.Default.Build,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                )
-
-                Column(
-                    modifier = Modifier
-                        .weight(1f)
-                        .padding(start = 12.dp),
-                ) {
-                    Text(
-                        text = task.title,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold,
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = stringResource(R.string.taskmonitor_status, task.status.name),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = when (task.status) {
-                            TaskStatus.RUNNING -> colorResource(R.color.task_status_running)
-                            TaskStatus.FAILED -> MaterialTheme.colorScheme.error
-                            TaskStatus.QUEUED -> MaterialTheme.colorScheme.tertiary
-                            TaskStatus.COMPLETED -> MaterialTheme.colorScheme.onSurfaceVariant
-                        },
-                    )
-                    if (task.pipelineStage != null) {
-                        Spacer(modifier = Modifier.height(2.dp))
-                        Text(
-                            text = stringResource(R.string.taskmonitor_stage, task.pipelineStage),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.secondary,
-                        )
-                    }
-                }
-            }
-
-            // Progress indicator if running and progress is available
-            if (task.status == TaskStatus.RUNNING && task.progress != null) {
-                Spacer(modifier = Modifier.height(12.dp))
-                if (task.progress < 0f) {
-                    LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-                } else {
-                    LinearProgressIndicator(
-                        progress = { task.progress },
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                }
-            }
-
-            // Action Buttons
-            if (task.type == TaskType.SESSION || task.status in listOf(TaskStatus.QUEUED, TaskStatus.RUNNING)) {
-                Spacer(modifier = Modifier.height(12.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End,
-                ) {
-                    if (task.type == TaskType.SESSION) {
-                        Button(onClick = { onNavigateToChat(task.id) }) {
-                            Text(stringResource(R.string.taskmonitor_open_chat))
-                        }
-                    } else if (task.type == TaskType.BACKGROUND_WORK &&
-                        task.status in listOf(TaskStatus.QUEUED, TaskStatus.RUNNING)
-                    ) {
-                        Button(
-                            onClick = { onCancel(task.id) },
-                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
-                        ) {
-                            Text(stringResource(R.string.common_cancel))
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
+private fun taskMonitorStrings(): TaskMonitorStrings = TaskMonitorStrings(
+    title = stringResource(R.string.taskmonitor_screen_title),
+    backCd = stringResource(R.string.common_back),
+    cancelCd = stringResource(R.string.common_cancel),
+    emptyTitle = stringResource(R.string.taskmonitor_empty_title),
+    emptySubtitle = stringResource(R.string.taskmonitor_empty_subtitle),
+    errorTitle = stringResource(R.string.taskmonitor_error_title),
+    errorRetry = stringResource(R.string.common_retry),
+    detailDismiss = stringResource(R.string.common_close),
+    detailOpenChat = stringResource(R.string.taskmonitor_open_chat),
+    detailNoLogs = stringResource(R.string.taskmonitor_detail_no_logs),
+)

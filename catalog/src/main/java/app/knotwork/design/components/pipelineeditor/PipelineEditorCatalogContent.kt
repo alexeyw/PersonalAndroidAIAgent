@@ -42,16 +42,26 @@ fun PipelineEditorCatalogContent() {
             SectionLabel(text = "EdgeLabel — variants")
             EdgeLabelRow()
 
-            SectionLabel(text = "EditorToolbar")
+            SectionLabel(text = "EditorToolbar — editing")
             EditorToolbar(
                 name = "Weekly digest",
                 onNameChange = {},
-                onUndo = {},
-                onRedo = {},
-                onDelete = {},
-                onAutoLayout = {},
-                onRun = {},
+                onNavigateUp = {},
+                onPrimaryAction = {},
                 onOverflow = {},
+                subtitle = "Editing · 4 nodes · 3 edges",
+                primaryAction = EditorPrimaryAction.Run,
+            )
+
+            SectionLabel(text = "EditorToolbar — last run done")
+            EditorToolbar(
+                name = "research-deepdive",
+                onNameChange = {},
+                onNavigateUp = {},
+                onPrimaryAction = {},
+                onOverflow = {},
+                subtitle = "Last run · 12.8 s · 2 408 tok",
+                primaryAction = EditorPrimaryAction.Rerun,
             )
 
             SectionLabel(text = "NodeConfigSheet body — LiteRT (idle)")

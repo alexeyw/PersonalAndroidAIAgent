@@ -2,13 +2,6 @@
 <issues format="6" by="lint 9.2.1" type="baseline" client="gradle" dependencies="true" name="AGP (9.2.1)" variant="all" version="9.2.1">
 
     <issue
-        id="BadPeriodicWorkRequestEnqueue"
-        message="Use `enqueueUniquePeriodicWork()` instead of `enqueue()`">
-        <location
-            file="../../../../.gradle/caches/9.4.1/transforms/8169723bf09fb0454fc3084989753c8c/transformed/work-runtime-2.11.2/jars/classes.jar!/androidx/work/WorkManager.class"/>
-    </issue>
-
-    <issue
         id="RedundantLabel"
         message="Redundant label can be removed"
         errorLine1="            android:label=&quot;@string/app_name&quot;"
@@ -64,72 +57,6 @@
     </issue>
 
     <issue
-        id="NewerVersionAvailable"
-        message="A newer version of net.zetetic:sqlcipher-android than 4.15.0 is available: 4.16.0"
-        errorLine1="sqlcipher = &quot;4.15.0&quot;"
-        errorLine2="            ~~~~~~~~">
-        <location
-            file="../gradle/libs.versions.toml"
-            line="31"
-            column="13"/>
-    </issue>
-
-    <issue
-        id="ConfigurationScreenWidthHeight"
-        message="Using Configuration.screenHeightDp instead of LocalWindowInfo.current.containerSize"
-        errorLine1="        val isCompactConsole = configuration.screenHeightDp &lt;= compactConsoleThresholdDp"
-        errorLine2="                               ~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/ai/agent/android/presentation/ui/chat/legacy/ChatScreen.kt"
-            line="312"
-            column="32"/>
-    </issue>
-
-    <issue
-        id="ModifierParameter"
-        message="Modifier parameter should be the first optional parameter"
-        errorLine1="    modifier: Modifier = Modifier,"
-        errorLine2="    ~~~~~~~~">
-        <location
-            file="src/main/java/ai/agent/android/presentation/ui/chat/legacy/AgentThoughtIndicator.kt"
-            line="66"
-            column="5"/>
-    </issue>
-
-    <issue
-        id="ModifierParameter"
-        message="Modifier parameter should be the first optional parameter"
-        errorLine1="    modifier: Modifier = Modifier,"
-        errorLine2="    ~~~~~~~~">
-        <location
-            file="src/main/java/ai/agent/android/presentation/ui/chat/legacy/ConsolePanelCollapsed.kt"
-            line="105"
-            column="5"/>
-    </issue>
-
-    <issue
-        id="PluralsCandidate"
-        message="Formatting %d followed by words (&quot;steps&quot;): This should probably be a plural rather than a string"
-        errorLine1="    &lt;string name=&quot;chat_trace_title&quot;>Pipeline trace (%1$d steps)&lt;/string>"
-        errorLine2="    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/values/strings_chat.xml"
-            line="92"
-            column="5"/>
-    </issue>
-
-    <issue
-        id="PluralsCandidate"
-        message="Formatting %d followed by words (&quot;tokens&quot;): This should probably be a plural rather than a string"
-        errorLine1="    &lt;string name=&quot;chat_trace_tokens&quot;>%1$d tokens&lt;/string>"
-        errorLine2="    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/values/strings_chat.xml"
-            line="95"
-            column="5"/>
-    </issue>
-
-    <issue
         id="PluralsCandidate"
         message="Formatting %d followed by words (&quot;chunks&quot;): This should probably be a plural rather than a string"
         errorLine1="    &lt;string name=&quot;memory_chunks_stored&quot;>%1$d chunks stored&lt;/string>"
@@ -181,46 +108,57 @@
     </issue>
 
     <issue
-        id="AutoboxingStateCreation"
-        message="Prefer `mutableIntStateOf` instead of `mutableStateOf`"
-        errorLine1="    var selectedTab by remember { mutableStateOf(0) }"
-        errorLine2="                                  ~~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/ai/agent/android/presentation/ui/prompts/PromptLibraryScreen.kt"
-            line="74"
-            column="35"/>
-    </issue>
-
-    <issue
         id="UnusedResources"
         message="The resource `R.string.knotwork_tools_empty_learn` appears to be unused"
         errorLine1="    &lt;string name=&quot;knotwork_tools_empty_learn&quot;>Learn about MCP&lt;/string>"
         errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="../catalog/src/main/res/values/strings.xml"
-            line="205"
+            line="206"
             column="13"/>
     </issue>
 
     <issue
         id="UnusedResources"
         message="The resource `R.string.knotwork_settings_restart_required` appears to be unused"
-        errorLine1="    &lt;string name=&quot;knotwork_settings_restart_required&quot;>Changes take effect on restart.&lt;/string>"
+        errorLine1="    &lt;string name=&quot;knotwork_settings_restart_required&quot;>Backend change requires restart.&lt;/string>"
         errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="../catalog/src/main/res/values/strings.xml"
-            line="253"
+            line="328"
             column="13"/>
     </issue>
 
     <issue
         id="UnusedResources"
-        message="The resource `R.string.knotwork_settings_destructive_confirm_message` appears to be unused"
-        errorLine1="    &lt;string name=&quot;knotwork_settings_destructive_confirm_message&quot;>This action cannot be undone.&lt;/string>"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        message="The resource `R.string.chat_input_placeholder` appears to be unused"
+        errorLine1="    &lt;string name=&quot;chat_input_placeholder&quot;>Ask the agent...&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
-            file="../catalog/src/main/res/values/strings.xml"
-            line="256"
+            file="src/main/res/values/strings_chat.xml"
+            line="28"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.chat_input_stop_cd` appears to be unused"
+        errorLine1="    &lt;string name=&quot;chat_input_stop_cd&quot;>Stop generation&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings_chat.xml"
+            line="29"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.string.chat_input_send_cd` appears to be unused"
+        errorLine1="    &lt;string name=&quot;chat_input_send_cd&quot;>Send&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/values/strings_chat.xml"
+            line="30"
             column="13"/>
     </issue>
 
@@ -231,7 +169,7 @@
         errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/res/values/strings_chat.xml"
-            line="124"
+            line="62"
             column="13"/>
     </issue>
 
@@ -242,7 +180,7 @@
         errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/res/values/strings_chat.xml"
-            line="125"
+            line="63"
             column="13"/>
     </issue>
 
@@ -253,7 +191,7 @@
         errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/res/values/strings_chat.xml"
-            line="128"
+            line="66"
             column="13"/>
     </issue>
 
@@ -264,7 +202,7 @@
         errorLine2="            ~~~~~~~~~~~~~~~~">
         <location
             file="src/main/res/values/strings_common.xml"
-            line="21"
+            line="18"
             column="13"/>
     </issue>
 
@@ -275,7 +213,7 @@
         errorLine2="            ~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/res/values/strings_common.xml"
-            line="22"
+            line="19"
             column="13"/>
     </issue>
 
@@ -286,7 +224,7 @@
         errorLine2="            ~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/res/values/strings_common.xml"
-            line="23"
+            line="20"
             column="13"/>
     </issue>
 
@@ -297,7 +235,7 @@
         errorLine2="            ~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/res/values/strings_common.xml"
-            line="24"
+            line="21"
             column="13"/>
     </issue>
 
@@ -308,7 +246,7 @@
         errorLine2="            ~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/res/values/strings_common.xml"
-            line="25"
+            line="22"
             column="13"/>
     </issue>
 
@@ -319,7 +257,7 @@
         errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/res/values/strings_common.xml"
-            line="26"
+            line="23"
             column="13"/>
     </issue>
 
@@ -330,7 +268,7 @@
         errorLine2="            ~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/res/values/strings_common.xml"
-            line="27"
+            line="24"
             column="13"/>
     </issue>
 
@@ -341,7 +279,7 @@
         errorLine2="            ~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/res/values/strings_common.xml"
-            line="28"
+            line="25"
             column="13"/>
     </issue>
 
@@ -352,7 +290,7 @@
         errorLine2="            ~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/res/values/strings_common.xml"
-            line="29"
+            line="26"
             column="13"/>
     </issue>
 
@@ -363,7 +301,7 @@
         errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/res/values/strings_common.xml"
-            line="40"
+            line="35"
             column="13"/>
     </issue>
 
@@ -374,7 +312,7 @@
         errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/res/values/strings_common.xml"
-            line="41"
+            line="36"
             column="13"/>
     </issue>
 
@@ -385,7 +323,7 @@
         errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/res/values/strings_common.xml"
-            line="42"
+            line="37"
             column="13"/>
     </issue>
 
@@ -770,52 +708,8 @@
         errorLine2="                                          ~~~~~~~~~~~~~~~~">
         <location
             file="src/main/res/values/strings_chat.xml"
-            line="54"
+            line="28"
             column="43"/>
-    </issue>
-
-    <issue
-        id="TypographyEllipsis"
-        message="Replace &quot;...&quot; with ellipsis character (…, &amp;#8230;) ?"
-        errorLine1="    &lt;string name=&quot;chat_thought_now_initializing&quot;>[NOW] Initializing agent...&lt;/string>"
-        errorLine2="                                                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/values/strings_chat.xml"
-            line="99"
-            column="50"/>
-    </issue>
-
-    <issue
-        id="TypographyEllipsis"
-        message="Replace &quot;...&quot; with ellipsis character (…, &amp;#8230;) ?"
-        errorLine1="    &lt;string name=&quot;chat_thought_now_thinking&quot;>[NOW] Agent is thinking...&lt;/string>"
-        errorLine2="                                             ~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/values/strings_chat.xml"
-            line="100"
-            column="46"/>
-    </issue>
-
-    <issue
-        id="TypographyEllipsis"
-        message="Replace &quot;...&quot; with ellipsis character (…, &amp;#8230;) ?"
-        errorLine1="    &lt;string name=&quot;chat_thought_now_answering&quot;>[NOW] Agent is answering...&lt;/string>"
-        errorLine2="                                              ~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/values/strings_chat.xml"
-            line="101"
-            column="47"/>
-    </issue>
-
-    <issue
-        id="TypographyEllipsis"
-        message="Replace &quot;...&quot; with ellipsis character (…, &amp;#8230;) ?"
-        errorLine1="    &lt;string name=&quot;chat_thought_now_using_tool&quot;>[NOW] Using tool: %1$s...&lt;/string>"
-        errorLine2="                                               ~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/values/strings_chat.xml"
-            line="102"
-            column="48"/>
     </issue>
 
     <issue
@@ -827,17 +721,6 @@
             file="src/main/res/values/strings_memory.xml"
             line="10"
             column="42"/>
-    </issue>
-
-    <issue
-        id="TypographyEllipsis"
-        message="Replace &quot;...&quot; with ellipsis character (…, &amp;#8230;) ?"
-        errorLine1="    &lt;string name=&quot;models_progress_downloading&quot;>Downloading...&lt;/string>"
-        errorLine2="                                               ~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/values/strings_models.xml"
-            line="9"
-            column="48"/>
     </issue>
 
 </issues>

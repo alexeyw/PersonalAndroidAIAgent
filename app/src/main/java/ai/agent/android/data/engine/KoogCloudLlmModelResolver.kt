@@ -44,7 +44,7 @@ class KoogCloudLlmModelResolver @Inject constructor(private val apiKeyRepository
             apiKeyRepository.getGoogleModel().first() ?: GoogleModels.Gemini3_Flash_Preview.id,
         )
         CloudProvider.DEEPSEEK -> KoogModelMapper.getDeepSeekModel(
-            apiKeyRepository.getDeepSeekModel().first() ?: DeepSeekModels.DeepSeekChat.id,
+            apiKeyRepository.getDeepSeekModel().first() ?: DeepSeekModels.DeepSeekV4Flash.id,
         )
         CloudProvider.OLLAMA -> LLModel(
             provider = LLMProvider.Ollama,

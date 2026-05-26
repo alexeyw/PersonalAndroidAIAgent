@@ -26,7 +26,8 @@ class RiskPillTest {
         composeTestRule.setContent {
             KnotworkTheme { RiskPill(risk = Risk.Readonly) }
         }
-        composeTestRule.onNodeWithContentDescription("Risk level: Read-only").assertIsDisplayed()
+        // Spec rename: "Read-only" → "Read only" (inputs-and-chips.md §6.6 label table).
+        composeTestRule.onNodeWithContentDescription("Risk level: Read only").assertIsDisplayed()
     }
 
     @Test

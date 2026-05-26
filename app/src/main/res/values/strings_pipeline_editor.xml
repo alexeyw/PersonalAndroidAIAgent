@@ -6,17 +6,24 @@
     <string name="pipeline_editor_quick_add_title">Add node</string>
     <string name="pipeline_editor_quick_add_close">Close add-node menu</string>
 
+    <!-- FAB tucked into the canvas bottom-right. Opens the radial quick-add menu
+         anchored at the viewport centre. -->
+    <string name="pipeline_editor_fab_add_node">Add node</string>
+
     <!-- Validation bar -->
     <string name="pipeline_editor_validation_clean">Pipeline is valid</string>
     <plurals name="pipeline_editor_validation_count">
-        <item quantity="one">%1$d issue</item>
-        <item quantity="other">%1$d issues</item>
+        <item quantity="one">%1$d issue — can\'t run</item>
+        <item quantity="other">%1$d issues — can\'t run</item>
     </plurals>
-    <string name="pipeline_editor_validation_focus">Tap an issue to centre the canvas on the affected node</string>
-
-    <!-- Run trace bar -->
-    <string name="pipeline_editor_run_trace_idle">Idle</string>
-    <string name="pipeline_editor_run_trace_active">Active node: %1$s</string>
+    <!-- Header action: try to auto-fix all addressable issues. -->
+    <string name="pipeline_editor_validation_auto_fix">Auto-fix</string>
+    <!-- Per-row jump-to-affected-node action. -->
+    <string name="pipeline_editor_validation_go">Go</string>
+    <!-- Snackbar telling the user no recipe applied. -->
+    <string name="pipeline_editor_validation_auto_fix_none">No safe auto-fix available — please address the issues manually.</string>
+    <!-- Snackbar telling the user the auto-fix recipes succeeded. -->
+    <string name="pipeline_editor_validation_auto_fix_done">Auto-fix applied.</string>
 
     <!-- Multi-select toolbar -->
     <plurals name="pipeline_editor_multi_select_count">
@@ -24,10 +31,84 @@
         <item quantity="other">%1$d selected</item>
     </plurals>
     <string name="pipeline_editor_multi_select_cancel">Cancel selection</string>
+    <string name="pipeline_editor_multi_select_copy">Copy selected nodes</string>
     <string name="pipeline_editor_multi_select_delete">Delete selected nodes</string>
 
-    <!-- Empty state -->
-    <string name="pipeline_editor_empty_subtitle">Long-press anywhere to add your first node.</string>
+    <!-- Overflow paste (Phase 22 / Task 14). Disabled when clipboard is empty. -->
+    <string name="pipeline_editor_overflow_paste">Paste</string>
+    <!-- Snackbar when paste runs on an empty clipboard. -->
+    <string name="pipeline_editor_overflow_paste_empty">Clipboard is empty — copy a node first.</string>
+
+    <!-- Rename selected node (Phase 22 / Task 14). -->
+    <string name="pipeline_editor_overflow_rename">Rename node…</string>
+    <string name="pipeline_editor_rename_title">Rename node</string>
+    <string name="pipeline_editor_rename_field_label">Node label</string>
+    <string name="pipeline_editor_rename_confirm">Rename</string>
+    <string name="pipeline_editor_rename_cancel">Cancel</string>
+
+    <!-- Search / Find node bar (Phase 22 / Task 14). -->
+    <string name="pipeline_editor_overflow_find">Find node…</string>
+    <string name="pipeline_editor_search_placeholder">Search nodes…</string>
+    <string name="pipeline_editor_search_close">Close search</string>
+    <!-- "N matches" pill on the right of the bar. %1$d = match count. -->
+    <plurals name="pipeline_editor_search_count">
+        <item quantity="one">%1$d match</item>
+        <item quantity="other">%1$d matches</item>
+    </plurals>
+
+    <!-- Empty state (Phase 22 / Task 14 redesign per mockup-2). The
+         pre-Phase-22 single-line "Long-press anywhere…" hint is superseded by
+         the title + helper copy here. -->
+    <string name="pipeline_editor_empty_title">Empty pipeline</string>
+    <string name="pipeline_editor_empty_helper">Tap + to drop your first node, or long-press anywhere on the canvas for the radial picker.</string>
+    <string name="pipeline_editor_empty_cta_start">Start with INPUT</string>
+    <string name="pipeline_editor_empty_cta_template">From template</string>
+    <!-- Info pill: "canvas: 1200 × 1600 · 24 dp grid · 1.00×". %1$d, %2$d = reference canvas geometry,
+         %3$d = grid spacing in dp, %4$s = pre-formatted scale (e.g. "1.00×"). -->
+    <string name="pipeline_editor_empty_info_pill">canvas: %1$d × %2$d · %3$d dp grid · %4$s</string>
+
+    <!-- Zoom rail (Phase 22 / Task 14) - canvas right-edge overlay. -->
+    <string name="pipeline_editor_zoom_rail_zoom_in">Zoom in</string>
+    <string name="pipeline_editor_zoom_rail_zoom_out">Zoom out</string>
+    <string name="pipeline_editor_zoom_rail_fit">Fit pipeline to view</string>
+
+    <!-- Mini-map overlay (Phase 22 / Task 14). -->
+    <string name="pipeline_editor_mini_map_title">OVERVIEW</string>
+    <string name="pipeline_editor_mini_map_close">Close mini-map</string>
+    <string name="pipeline_editor_overflow_mini_map">Mini-map</string>
+
+    <!-- Toolbar subtitle: overview state shown while the mini-map is open. -->
+    <!-- "Overview · scale · N nodes". %1$s = pre-formatted scale (e.g. "0.42×"), %2$d = node count. -->
+    <string name="pipeline_editor_subtitle_overview">Overview · %1$s · nodes %2$d</string>
+
+    <!-- Toolbar subtitle (Phase 22 / Task 14) - one line under the pipeline name. -->
+    <!-- Editing state: shows node and edge counts. %1$d = nodes, %2$d = edges. -->
+    <string name="pipeline_editor_subtitle_editing">Editing · nodes %1$d · edges %2$d</string>
+    <!-- Validation state: shows issue count + "can't run" gate. %1$d = issue count. -->
+    <plurals name="pipeline_editor_subtitle_issues">
+        <item quantity="one">%1$d issue · can\'t run</item>
+        <item quantity="other">%1$d issues · can\'t run</item>
+    </plurals>
+    <!-- Running state: shows the active node label. %1$s = active node label, "…" when null. -->
+    <string name="pipeline_editor_subtitle_running">Running · %1$s</string>
+    <!-- Running state with no active node label resolved yet. -->
+    <string name="pipeline_editor_subtitle_running_idle">Running · …</string>
+
+    <!-- Overflow menu actions (Phase 22 / Task 14). Mirrors knotwork_editor_action_* but
+         lives at app-layer because the menu items are composed in PipelineEditorScreen
+         from the production overflow controller, not by the catalog atom. -->
+    <string name="pipeline_editor_overflow_undo">Undo</string>
+    <string name="pipeline_editor_overflow_redo">Redo</string>
+    <string name="pipeline_editor_overflow_delete">Delete selection</string>
+    <string name="pipeline_editor_overflow_auto_layout">Auto-layout</string>
+    <string name="pipeline_editor_overflow_save">Save pipeline</string>
+    <string name="pipeline_editor_save_done">Pipeline saved.</string>
+
+    <!-- Snackbar explaining that Run only surfaces the UI preview today;
+         actual orchestrator wiring lands in a follow-up. -->
+    <string name="pipeline_editor_run_preview">Preview only — the execution engine wires up in a follow-up. Banner reflects the planned UI.</string>
+    <string name="pipeline_editor_overflow_toggle_grid_show">Show grid</string>
+    <string name="pipeline_editor_overflow_toggle_grid_hide">Hide grid</string>
 
     <!-- Edge selection / removal -->
     <string name="pipeline_editor_edge_selected_hint">Connection selected. Press 🗑 to remove.</string>

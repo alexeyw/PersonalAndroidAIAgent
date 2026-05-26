@@ -1,7 +1,9 @@
 package ai.agent.android.domain.repositories
 
 import ai.agent.android.domain.models.MemoryChunk
+import ai.agent.android.domain.models.MemoryStats
 import ai.agent.android.domain.models.MemorySummary
+import kotlinx.coroutines.flow.Flow
 
 /**
  * Repository interface for managing and searching long-term memory.
@@ -68,4 +70,47 @@ interface MemoryRepository {
      * @param id The ID of the memory chunk to delete.
      */
     suspend fun deleteMemory(id: Long)
+
+    /**
+     * Replaces the text content and embedding of an existing memory chunk.
+     *
+     * The caller is responsible for regenerating the embedding for the new
+     * text — the repository will not derive it implicitly. The chunk's
+     * `timestamp` is intentionally left untouched so the entry keeps its
+     * original chronological position.
+     *
+     * @param id Identifier of the chunk to update.
+     * @param text The new raw text content.
+     * @param embedding The new vector embedding produced from [text].
+     */
+    suspend fun updateMemory(id: Long, text: String, embedding: FloatArray)
+
+    /**
+     * Flips the pinned state of a single memory chunk. Pinned chunks sort
+     * ahead of unpinned chunks on the memory surface and are exempt from
+     * future compaction passes.
+     *
+     * @param id Identifier of the chunk to update.
+     * @param pinned `true` to pin the chunk, `false` to unpin it.
+     */
+    suspend fun setMemoryPinned(id: Long, pinned: Boolean)
+
+    /**
+     * Removes every memory chunk — including pinned entries — from the
+     * underlying table. Backs the Settings → Memory → Clear destructive
+     * action (typed-confirm dialog).
+     */
+    suspend fun deleteAllMemories()
+
+    /**
+     * Live snapshot of the aggregate stats rendered in the Settings →
+     * Memory card. Emits a fresh value whenever the underlying table
+     * mutates; consumers should `collectAsState` or `stateIn` it.
+     *
+     * Thread count and average similarity score are best-effort: the v0.1
+     * implementation returns `0` for threads (thread-attribution lands in
+     * a follow-up) and `null` for averageSimilarityScore until a
+     * similarity-search call has been recorded.
+     */
+    fun observeStats(): Flow<MemoryStats>
 }

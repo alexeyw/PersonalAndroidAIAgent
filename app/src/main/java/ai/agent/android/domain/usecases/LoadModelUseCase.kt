@@ -34,7 +34,12 @@ class LoadModelUseCase @Inject constructor(
      */
     suspend operator fun invoke(modelPath: String? = null): Result<Unit, AppError> = withContext(Dispatchers.IO) {
         try {
-            val pathToLoad = modelPath ?: localModelRepository.getActiveModel()?.path
+            // Blank `modelPath` is the "Active model" sentinel persisted by
+            // the LITE_RT node form (Phase 22 / Task 16 follow-up F8) — fall
+            // back to `getActiveModel()` just like the null case. Centralising
+            // the coercion here keeps every executor's call site uniform.
+            val requestedPath = modelPath?.takeIf { it.isNotBlank() }
+            val pathToLoad = requestedPath ?: localModelRepository.getActiveModel()?.path
                 ?: return@withContext Result.Error(
                     error = LlmSystemError,
                     message = "No active model found. Please select a model in settings or provide a path.",

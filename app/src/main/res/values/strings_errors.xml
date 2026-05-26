@@ -15,12 +15,7 @@
     <string name="errors_generic_invalid_json">invalid JSON</string>
 
     <!-- Chat feature -->
-    <string name="errors_chat_model_init_failure">Model Error: %1$s. Please check your model settings.</string>
     <string name="errors_chat_pipeline_removed">The pipeline was deleted. Default pipeline is used now.</string>
-    <string name="errors_chat_load_model_first">Please load a model in Settings before sending a message.</string>
-    <string name="errors_chat_export_failed">Failed to export chat: %1$s</string>
-    <string name="errors_chat_import_failed">Failed to import chat: %1$s</string>
-    <string name="errors_chat_file_unreadable">Could not read selected file</string>
 
     <!-- Orchestrator feature -->
     <string name="errors_orchestrator_cycle_detected">Cannot connect: Cycle detected</string>
@@ -38,7 +33,10 @@
     <string name="errors_orchestrator_validation_node_no_sources">Node \"%1$s\" will not receive any data — enable at least one source</string>
 
     <!-- Settings feature -->
-    <string name="errors_settings_no_active_model">No active local model found. Please download and select one first.</string>
-    <string name="errors_settings_test_backend_failed">Failed: %1$s</string>
-    <string name="errors_settings_test_backend_exception">Exception: %1$s</string>
+    <!--
+        Phase 22 / Task 9 — the legacy `errors_settings_*` strings were removed
+        once `SettingsViewModel` switched to the typed [TestProbeResult]
+        envelope (failure copy now lives inside `settings_row_test_backend_failed`
+        and is reused by the snackbar surface).
+    -->
 </resources>
