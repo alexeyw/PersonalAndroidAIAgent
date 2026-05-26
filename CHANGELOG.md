@@ -15,6 +15,48 @@ details.
 
 ### Tests
 
+- **Compose `androidTest` coverage for `presentation.ui.pipeline.editor`**
+  (Phase 23 / Task 7). Twelve test files mirroring the Phase 23 / Task 6
+  chat-home pattern: `createComposeRule()` + a shared
+  `mockOrchestratorViewModel` factory (exposes mutable `StateFlow` /
+  `SharedFlow` handles for `uiState`, `runState`, `focusNodeRequest`
+  so tests drive state transitions without re-stubbing) plus a
+  `PipelineEditorTestFixtures` graph palette. Most tests render
+  internal canvas / bar / sheet composables directly with a real
+  `EditorState`; a small minority drive the full `PipelineEditorScreen`
+  to exercise overflow / sheet / dialog wiring. Coverage:
+  `PipelineEditorContentRenderTest` (empty hero, populated cards,
+  multi-select toolbar swap, clean-validation copy),
+  `PipelineEditorOverflowMenuTest` (Save / Undo / Redo / Rename / Delete
+  / Auto-layout / Mini-map / Grid / Find / Paste menu items render and
+  dispatch; Save tap → `vm.saveCurrentPipeline`; Find opens FilterBar;
+  Grid label flips Show ↔ Hide; Paste on empty clipboard does not
+  invoke `vm.addNode`), `PipelineEditorMultiSelectTest` (toolbar count
+  pluralisation, Cancel / Copy / Delete callbacks),
+  `PipelineEditorRadialMenuTest` (all twelve `NodeType` labels render;
+  tile tap dispatches the domain `NodeType`; close icon dispatches
+  `onDismiss`), `PipelineEditorValidationBarTest` (clean-state copy;
+  header banner plural; per-row labels; Auto-fix CTA invokes callback
+  when at least one error is auto-fixable; `Go ↗` dispatches
+  `onFocusNode` with the resolved node id),
+  `PipelineEditorNodeConfigSheetTest` (per-type forms — Input / Output
+  / LiteRt / Cloud — render their characteristic fields; editing the
+  Input variable-name field fires `onChange` with the mutated
+  `InputConfig`; Save / Cancel dispatch), `PipelineEditorSearchTest`
+  (FilterBar placeholder, query change forwarding, match-count pill,
+  Close button), `PipelineEditorMiniMapAndGridTest` (MiniMap renders
+  OVERVIEW header + `formatScalePercent`; close button dispatches),
+  `PipelineEditorCopyPasteTest` (multi-select Copy populates
+  `editor.clipboard` from the live graph; overflow Paste on empty
+  clipboard does not dispatch `vm.addNode` / `vm.updateNodeFromEditor`),
+  `PipelineEditorRunStateTest` (Idle hides the run banner; flipping
+  `runState` to Running shows the RUNNING badge and hides the toolbar
+  Run button), `PipelineEditorGestureTest` (real `performTouchInput` —
+  long-press on a node card enters multi-select; drag on a node card
+  commits `vm.moveNode` with a non-zero delta). Pinch / two-finger zoom
+  is deliberately out of scope — pure-Kotlin math is exhaustively
+  covered by `CanvasTransformTest`, and `ZoomRail` exposes the same
+  code path through deterministic buttons.
 - **Compose `androidTest` coverage for `presentation.ui.chat.home`**
   (Phase 23 / Task 6). Extended the existing
   `createComposeRule()` + mocked `ChatHomeViewModel` pattern with a shared

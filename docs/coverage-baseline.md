@@ -119,6 +119,19 @@ The non-zero numbers in `presentation.ui.*` come from `*ViewModel` and
 `*Screen.kt` Composables themselves — those need androidTest / Compose UI tests
 to register coverage and are intentionally not the focus of this phase.
 
+Phase 23 / Task 7/9 adds an androidTest suite under
+`app/src/androidTest/.../presentation/ui/pipeline/editor/` (12 files:
+`OrchestratorViewModelMockFactory`, `PipelineEditorContentRenderTest`,
+`PipelineEditorOverflowMenuTest`, `PipelineEditorMultiSelectTest`,
+`PipelineEditorRadialMenuTest`, `PipelineEditorValidationBarTest`,
+`PipelineEditorNodeConfigSheetTest`, `PipelineEditorSearchTest`,
+`PipelineEditorMiniMapAndGridTest`, `PipelineEditorCopyPasteTest`,
+`PipelineEditorRunStateTest`, `PipelineEditorGestureTest`). These run
+under `connectedDebugAndroidTest` and do **not** contribute to the
+Kover percentages above (Kover only ingests JVM unit-test execution
+data). The numbers stay flat; the regression gate is whether
+`connectedDebugAndroidTest` stays green.
+
 ### Other
 
 | Package                                   | Coverage | Covered / Total |
