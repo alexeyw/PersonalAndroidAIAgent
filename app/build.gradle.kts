@@ -329,8 +329,6 @@ kover {
                     "ai.agent.android.presentation.ui.pipeline.editor.PipelineEditorScreen*",
                     "ai.agent.android.presentation.ui.splash.SplashScreen*",
                     "ai.agent.android.presentation.theme.*",
-                    "ai.agent.android.presentation.notifications.*",
-                    "ai.agent.android.presentation.receivers.*",
                     "ai.agent.android.presentation.state.*",
                     // Phase 23 / Task 4/9 — `data.services.*` is now covered by
                     // Robolectric tests (`AgentForegroundServiceTest`,
@@ -338,6 +336,12 @@ kover {
                     // `AgentPowerManagerTest`, `LongRunningTaskNotifierImplTest`).
                     // The exclusion that was here while the package waited for
                     // Robolectric coverage has been lifted.
+                    // Phase 23 / Task 5/9 — `presentation.notifications.*` and
+                    // `presentation.receivers.*` are now covered by Robolectric
+                    // tests (`ApprovalNotificationManagerTest`,
+                    // `AgentApprovalReceiverTest`). The exclusions that lived
+                    // here while those packages waited for ShadowNotificationManager
+                    // / BroadcastReceiver coverage have been lifted.
                     // Tool-execution Android glue (AppFunctions service, search
                     // tool HTTP client, delegate-task LLM bridge) needs either
                     // an Android runtime or live LLM/HTTP fixtures.
