@@ -26,6 +26,7 @@ This file maps the contents of the main application package.
       - `LocalModelDao.kt` - Local models DAO.
       - `MemoryDao.kt` - Memory chunks DAO.
       - `PipelineDao.kt` - Pipelines DAO.
+      - `PipelinePresetDao.kt` - User-saved pipeline-preset DAO (Phase 24 / Task 1). Backs the `pipeline_presets` table; bundled presets live in `assets/presets/pipelines/` and never reach this DAO.
       - `PromptTemplateDao.kt` - Prompt templates DAO.
       - `TraceStepDao.kt` - Trace steps DAO.
     - `models/` - Local DB entity models.
@@ -36,6 +37,7 @@ This file maps the contents of the main application package.
       - `MemoryChunkEntity.kt` - Memory chunk entity.
       - `NodeEntity.kt` - Pipeline node entity.
       - `PipelineEntity.kt` - Pipeline entity.
+      - `PipelinePresetEntity.kt` - User-saved pipeline preset row (Phase 24 / Task 1). Stores `id`, `name`, `description`, `categoryKey`, `graphJson` (full preset payload serialised by `PipelinePresetJsonSerializer`), `tagsCsv`, `createdAt`.
       - `PipelineWithNodesAndConnections.kt` - Pipeline relational model.
       - `PromptTemplateEntity.kt` - Prompt template entity.
       - `TraceStepEntity.kt` - Trace step entity.
@@ -65,6 +67,7 @@ This file maps the contents of the main application package.
     - `FirebaseCrashReportingRepositoryImpl.kt` - Firebase-backed `CrashReportingRepository`. Every method is gated on `SettingsRepository.crashReportingEnabled` and short-circuits to no-op when the user has not opted in.
     - `IdentityRepositoryImpl.kt` - Resolves the Settings identity card snapshot (ANDROID_ID → 8-hex device id, AndroidKeyStore probe).
     - `LocalModelRepositoryImpl.kt` - Local model repository implementation; observes the active model file metadata for the Settings local-model card.
+    - `LocalPipelinePresetRepositoryImpl.kt` - Local impl of `PipelinePresetRepository` (Phase 24 / Task 1). Composes the bundled `assets/presets/pipelines/*.json` catalogue (lazy IO-dispatched read, cached for process lifetime, malformed files skipped) with user-saved Room rows; rejects bundled presets on the user-save path.
     - `LocalPipelineRepositoryImpl.kt` - Local pipeline repository implementation.
     - `McpServerRepositoryImpl.kt` - Per-server gateway over the raw `McpClient` transport; owns lazy connections, the 5-minute tool-list cache, and per-URL `McpConnectionStatus` flows consumed by `ToolsViewModel`.
     - `MemoryRepositoryImpl.kt` - Memory repository implementation.
@@ -119,6 +122,7 @@ This file maps the contents of the main application package.
     - `executors/ClarificationNodeExecutor.kt` - Executor for `NodeType.CLARIFICATION` that asks the local LLM to generate a question/options JSON, suspends on `ClarificationRepository.requestAnswer`, and forwards the user's reply downstream.
   - `pipelineio/` - JSON serialisation gateway for pipeline import/export.
     - `PipelineJsonSerializer.kt` - Two-way mapper between `PipelineGraph` and the `schemaVersion: 1` JSON document shared with the browser-side editor (`pipeline-editor.html`).
+    - `PipelinePresetJsonSerializer.kt` - Two-way mapper between `PipelinePreset` and the pipeline-preset JSON format used by `assets/presets/pipelines/*.json` and the browser editor's `*.preset.json` export. Strict superset of the pipeline JSON; delegates the graph half to `PipelineJsonSerializer` (Phase 24 / Task 1).
   - `prompt/` - Prompt templating layer.
     - `PromptVariableProvider.kt` - Contract for a single substitutable prompt variable.
     - `PromptTemplateEngine.kt` - Renders templates by substituting `$KEY` placeholders.
@@ -154,6 +158,8 @@ This file maps the contents of the main application package.
     - `NodeType.kt` - Node type enum.
     - `PipelineGraph.kt` - Pipeline graph model.
     - `PipelineImportOutcome.kt` - Sealed result of parsing a pipeline JSON document (Success / SchemaMismatch / Failure) consumed by `ImportPipelineUseCase`.
+    - `PipelinePreset.kt` - Domain model of a reusable pipeline template (Phase 24 / Task 1). Carries `id`, `name`, `description`, `category` (`PresetCategory` enum with wire keys), `graph: PipelineGraph` (template), `tags`, `isBundled`.
+    - `PipelinePresetImportOutcome.kt` - Sealed result of parsing a preset JSON document (Success / SchemaMismatch / Failure), mirroring `PipelineImportOutcome`.
     - `PipelineValidationError.kt` - Pipeline validation error model.
     - `PipelineValidationException.kt` - Pipeline validation exception model.
     - `PowerState.kt` - Power state model.
@@ -177,6 +183,7 @@ This file maps the contents of the main application package.
     - `ModelDownloadManager.kt` - Model download manager interface.
     - `NetworkActivityTracker.kt` - Domain interface tracking the timestamp of the most recent outbound LLM / MCP call. Used by the More tab privacy footer to compute "no network calls in last N m" without observing connectivity.
     - `NetworkStateRepository.kt` - Network state repository interface.
+    - `PipelinePresetRepository.kt` - Domain gateway over the two-tier pipeline-preset catalogue: bundled (read-only, from APK assets) + user-saved (mutable, Room-backed). Data-layer impl: `LocalPipelinePresetRepositoryImpl` (Phase 24 / Task 1).
     - `PipelineRepository.kt` - Pipeline repository interface.
     - `PowerStateRepository.kt` - Power state repository interface.
     - `SettingsRepository.kt` - Settings repository interface.
@@ -194,9 +201,11 @@ This file maps the contents of the main application package.
     - `ImportPipelineUseCase.kt` - Parses a pipeline JSON document via `PipelineJsonSerializer` and persists clean imports through `SavePipelineUseCase`; defers schema-mismatch persistence to a separate `persistConfirmed` step.
     - `InitializeAppUseCase.kt` - Use case for app initialization.
     - `LoadModelUseCase.kt` - Use case to load a model.
+    - `LoadPipelineFromPresetUseCase.kt` - Materialises a `PipelinePreset` into a concrete `PipelineGraph` with fresh ids (pipeline + nodes + connections), drops orphan connections, validates, persists via `PipelineRepository.savePipeline`, returns the new pipeline id (Phase 24 / Task 1).
     - `LoadPipelineUseCase.kt` - Use case to load a pipeline.
     - `RenamePipelineUseCase.kt` - Validates and applies a new display name to an existing pipeline; canonical name-validation gate (trim + length).
     - `RetrieveRelevantMemoryUseCase.kt` - Use case to retrieve memories.
+    - `SavePipelineAsPresetUseCase.kt` - Packages the currently-edited `PipelineGraph` into a user-saved `PipelinePreset` (validates name, runs `PipelineGraph.validate()`, enforces `isBundled=false`). Phase 24 / Task 1.
     - `SavePipelineUseCase.kt` - Use case to save a pipeline.
     - `ScheduleTaskUseCase.kt` - Use case to schedule tasks.
     - `TaskRouterUseCase.kt` - Use case to route tasks.

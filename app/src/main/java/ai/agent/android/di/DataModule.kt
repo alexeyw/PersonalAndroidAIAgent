@@ -15,6 +15,7 @@ import ai.agent.android.data.repositories.ClarificationRepositoryImpl
 import ai.agent.android.data.repositories.FirebaseCrashReportingRepositoryImpl
 import ai.agent.android.data.repositories.IdentityRepositoryImpl
 import ai.agent.android.data.repositories.LocalModelRepositoryImpl
+import ai.agent.android.data.repositories.LocalPipelinePresetRepositoryImpl
 import ai.agent.android.data.repositories.LocalPipelineRepositoryImpl
 import ai.agent.android.data.repositories.McpServerRepositoryImpl
 import ai.agent.android.data.repositories.MemoryRepositoryImpl
@@ -40,6 +41,7 @@ import ai.agent.android.domain.repositories.MetricsRepository
 import ai.agent.android.domain.repositories.ModelDownloadManager
 import ai.agent.android.domain.repositories.NetworkActivityTracker
 import ai.agent.android.domain.repositories.NetworkStateRepository
+import ai.agent.android.domain.repositories.PipelinePresetRepository
 import ai.agent.android.domain.repositories.PipelineRepository
 import ai.agent.android.domain.repositories.PowerStateRepository
 import ai.agent.android.domain.repositories.PromptRepository
@@ -193,6 +195,15 @@ abstract class DataModule {
     @Binds
     @Singleton
     abstract fun bindPipelineRepository(repository: LocalPipelineRepositoryImpl): PipelineRepository
+
+    /**
+     * Binds [LocalPipelinePresetRepositoryImpl] to [PipelinePresetRepository] — composes the
+     * bundled assets/presets/pipelines catalogue with the user-saved Room rows
+     * (Phase 24 / Task 1).
+     */
+    @Binds
+    @Singleton
+    abstract fun bindPipelinePresetRepository(repository: LocalPipelinePresetRepositoryImpl): PipelinePresetRepository
 
     /**
      * Binds the [PromptRepositoryImpl] implementation to the [PromptRepository] interface.

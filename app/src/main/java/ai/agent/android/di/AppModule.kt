@@ -7,6 +7,7 @@ import ai.agent.android.data.local.dao.ChatDao
 import ai.agent.android.data.local.dao.LocalModelDao
 import ai.agent.android.data.local.dao.MemoryDao
 import ai.agent.android.data.local.dao.PipelineDao
+import ai.agent.android.data.local.dao.PipelinePresetDao
 import ai.agent.android.data.local.dao.PromptTemplateDao
 import ai.agent.android.data.local.dao.TraceStepDao
 import ai.agent.android.data.tools.local.AppFunctionDataCodec
@@ -105,6 +106,7 @@ object AppModule {
                 AppDatabase.MIGRATION_20_21,
                 AppDatabase.MIGRATION_21_22,
                 AppDatabase.MIGRATION_22_23,
+                AppDatabase.MIGRATION_23_24,
             )
             .fallbackToDestructiveMigration(true)
             .build()
@@ -145,6 +147,13 @@ object AppModule {
      */
     @Provides
     fun provideTraceStepDao(database: AppDatabase): TraceStepDao = database.traceStepDao()
+
+    /**
+     * Provides the [PipelinePresetDao] backing the user-saved
+     * pipeline-preset catalogue introduced in Phase 24 / Task 1.
+     */
+    @Provides
+    fun providePipelinePresetDao(database: AppDatabase): PipelinePresetDao = database.pipelinePresetDao()
 
     /**
      * Provides the singleton instance of Converters for Room mapping.
