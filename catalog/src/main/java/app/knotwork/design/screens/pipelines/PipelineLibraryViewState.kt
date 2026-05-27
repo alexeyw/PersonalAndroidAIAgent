@@ -178,6 +178,7 @@ class PipelineLibraryCallbacks(
     val onSetAsDefault: (String) -> Unit = {},
     val onRename: (String) -> Unit = {},
     val onExportJson: (String) -> Unit = {},
+    val onSaveAsPreset: (String) -> Unit = {},
     val onImportJson: () -> Unit = {},
     val onOpenDrawer: () -> Unit = {},
     val onOpenSearch: () -> Unit = {},

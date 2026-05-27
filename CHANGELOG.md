@@ -15,6 +15,25 @@ details.
 
 ### Added
 
+- **Pipeline presets — UI** (Phase 24 / Task 3/9). Surfaces the Phase 24
+  preset catalogue end-to-end through three user-facing entry points:
+  - **Speed-dial FAB** on the pipeline library — replaces the single
+    "+ New pipeline" FAB with a two-action speed-dial (`+ New pipeline` /
+    `+ From preset`). The "+ From preset" action opens a new modal
+    `PresetPickerSheet` with Bundled / Mine tabs, `PresetCategory`
+    filter chips, and a one-line `INPUT → LITE_RT → OUTPUT` graph
+    preview on every card. Tapping "Use this preset" materialises a
+    fresh pipeline via `LoadPipelineFromPresetUseCase` and routes the
+    user straight into the editor.
+  - **Save as preset** action — exposed in both the pipeline-library
+    row overflow menu and the editor overflow. Opens a dialog
+    capturing name / description / category / tags, then persists via
+    `SavePipelineAsPresetUseCase`.
+  - **More → Library** — new `PipelinePresetsManagerScreen` reachable
+    from the More tab. Bundled presets render as read-only rows;
+    user presets expose Rename / Export-JSON (via SAF) / Delete with
+    a destructive-confirm dialog.
+
 - **Bundled pipeline-preset catalogue** (Phase 24 / Task 2/9). Ships six
   curated starter presets under `assets/presets/pipelines/` covering the
   typical entry-point scenarios: `local_only_qa` (offline INPUT → LITE_RT →

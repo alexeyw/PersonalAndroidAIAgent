@@ -22,6 +22,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.OpenInNew
 import androidx.compose.material.icons.outlined.AccountTree
 import androidx.compose.material.icons.outlined.Add
+import androidx.compose.material.icons.outlined.Bookmarks
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.ContentCopy
@@ -697,6 +698,19 @@ private fun RowOverflowMenu(row: PipelineLibraryRow, expanded: Boolean, callback
             onClick = {
                 callbacks.onOverflowDismiss()
                 callbacks.onExportJson(row.id)
+            },
+        )
+        DropdownMenuItem(
+            leadingIcon = {
+                Icon(
+                    imageVector = Icons.Outlined.Bookmarks,
+                    contentDescription = null,
+                )
+            },
+            text = { Text(stringResource(R.string.knotwork_library_menu_save_as_preset)) },
+            onClick = {
+                callbacks.onOverflowDismiss()
+                callbacks.onSaveAsPreset(row.id)
             },
         )
         HorizontalDivider()

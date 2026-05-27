@@ -194,6 +194,7 @@
     <string name="knotwork_library_menu_rename">Rename</string>
     <string name="knotwork_library_menu_duplicate">Duplicate</string>
     <string name="knotwork_library_menu_export">Export JSON</string>
+    <string name="knotwork_library_menu_save_as_preset">Save as preset</string>
     <string name="knotwork_library_menu_delete">Delete</string>
     <string name="knotwork_library_row_overflow_cd">More actions for %1$s</string>
 

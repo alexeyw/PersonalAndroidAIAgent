@@ -107,6 +107,9 @@ object NavRoutes {
     /** Prompt-template library (under More). */
     const val PROMPTS: String = "prompts"
 
+    /** Pipeline-preset manager (under More → Library). Phase 24 / Task 3. */
+    const val PIPELINE_PRESETS: String = "pipeline-presets"
+
     /** About screen (under More). Phase 21 / Task 4 stub; full body in Task 10. */
     const val ABOUT: String = "about"
 

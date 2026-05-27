@@ -8,6 +8,7 @@ import ai.agent.android.presentation.ui.common.resolve
 import ai.agent.android.presentation.ui.orchestrator.OrchestratorViewModel
 import ai.agent.android.presentation.ui.orchestrator.components.NodeContextConfigSection
 import ai.agent.android.presentation.ui.orchestrator.components.PromptLibraryDialog
+import ai.agent.android.presentation.ui.orchestrator.presets.SaveAsPresetDialog
 import ai.agent.android.presentation.ui.pipeline.editor.canvas.formatScalePercent
 import ai.agent.android.presentation.ui.pipeline.editor.config.NodeConfigCodec
 import ai.agent.android.presentation.ui.pipeline.editor.config.NodeTypeMapper
@@ -29,6 +30,7 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.Redo
 import androidx.compose.material.icons.automirrored.outlined.Undo
+import androidx.compose.material.icons.outlined.Bookmarks
 import androidx.compose.material.icons.outlined.ContentPaste
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Edit
@@ -124,6 +126,9 @@ fun PipelineEditorScreen(viewModel: OrchestratorViewModel, onBack: () -> Unit) {
     // Rename-node dialog state — set to the target node id when the user picks
     // "Rename node…" from the overflow menu (requires exactly one node selected).
     var pendingRenameNodeId by remember { mutableStateOf<String?>(null) }
+    // Save-as-preset dialog state — true while the dialog is visible, dismissed
+    // on cancel or after submission.
+    var saveAsPresetOpen by remember { mutableStateOf(false) }
     // Screen-local clock driving the [RunStatusBanner] elapsed-seconds metric.
     // Reset to 0 every time a new run starts; ticks ~10 Hz while running so the
     // banner reads ~"4.2 s" rather than jumping by whole seconds. Stops when
@@ -556,6 +561,16 @@ fun PipelineEditorScreen(viewModel: OrchestratorViewModel, onBack: () -> Unit) {
                     },
                 )
                 DropdownMenuItem(
+                    text = { Text(stringResource(R.string.pipeline_editor_overflow_save_as_preset)) },
+                    onClick = {
+                        overflowOpen = false
+                        saveAsPresetOpen = true
+                    },
+                    leadingIcon = {
+                        Icon(Icons.Outlined.Bookmarks, contentDescription = null)
+                    },
+                )
+                DropdownMenuItem(
                     text = { Text(stringResource(R.string.pipeline_editor_overflow_auto_layout)) },
                     onClick = {
                         overflowOpen = false
@@ -794,6 +809,22 @@ fun PipelineEditorScreen(viewModel: OrchestratorViewModel, onBack: () -> Unit) {
                     },
                 )
             }
+        }
+
+        if (saveAsPresetOpen) {
+            SaveAsPresetDialog(
+                initialName = pipeline.name,
+                onDismiss = { saveAsPresetOpen = false },
+                onConfirm = { result ->
+                    viewModel.saveCurrentAsPreset(
+                        name = result.name,
+                        description = result.description,
+                        category = result.category,
+                        tags = result.tags,
+                    )
+                    saveAsPresetOpen = false
+                },
+            )
         }
 
         val edgeToDelete = pendingEdgeDelete

@@ -53,4 +53,11 @@ class MoreFormattersTest {
         val result = formatNetworkStatus(now = now, lastOutboundAt = lastAt)
         assertEquals("online · cloud enabled", result)
     }
+
+    @Test
+    fun `formatLibraryStats handles zero one and many`() {
+        assertEquals("no saved presets", formatLibraryStats(0))
+        assertEquals("1 saved preset", formatLibraryStats(1))
+        assertEquals("7 saved presets", formatLibraryStats(7))
+    }
 }

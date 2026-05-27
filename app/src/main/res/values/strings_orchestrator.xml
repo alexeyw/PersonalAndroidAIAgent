@@ -56,4 +56,51 @@
     <string name="orchestrator_context_tool_results_label">Tool results</string>
     <string name="orchestrator_context_tool_results_hint">Data returned by tools in the current step</string>
     <string name="orchestrator_context_hint">Fewer inputs make the node faster and cheaper. Enable only what\'s needed.</string>
+
+    <!-- Phase 24 / Task 3 — Pipeline presets UI -->
+    <!-- Library speed-dial -->
+    <string name="orchestrator_library_speed_dial_new">New</string>
+    <string name="orchestrator_library_speed_dial_new_pipeline">+ New pipeline</string>
+    <string name="orchestrator_library_speed_dial_from_preset">+ From preset</string>
+
+    <!-- Preset picker sheet -->
+    <string name="orchestrator_preset_picker_title">Pipeline presets</string>
+    <string name="orchestrator_preset_picker_tab_bundled">Bundled</string>
+    <string name="orchestrator_preset_picker_tab_mine">Mine</string>
+    <string name="orchestrator_preset_picker_chip_all">All</string>
+    <string name="orchestrator_preset_picker_empty">No presets match this filter.</string>
+    <string name="orchestrator_preset_picker_use">Use this preset</string>
+    <string name="orchestrator_preset_picker_loaded">Preset loaded into editor</string>
+
+    <!-- Save as preset dialog -->
+    <string name="orchestrator_preset_save_title">Save as preset</string>
+    <string name="orchestrator_preset_save_name_label">Name</string>
+    <string name="orchestrator_preset_save_description_label">Description</string>
+    <string name="orchestrator_preset_save_category_label">Category</string>
+    <string name="orchestrator_preset_save_tags_label">Tags (comma-separated)</string>
+    <string name="orchestrator_preset_save_success">Preset saved</string>
+
+    <!-- Preset categories -->
+    <string name="orchestrator_preset_category_local">Local</string>
+    <string name="orchestrator_preset_category_cloud">Cloud</string>
+    <string name="orchestrator_preset_category_hybrid">Hybrid</string>
+    <string name="orchestrator_preset_category_tool">Tool</string>
+    <string name="orchestrator_preset_category_research">Research</string>
+    <string name="orchestrator_preset_category_other">Other</string>
+
+    <!-- Preset manager screen -->
+    <string name="orchestrator_preset_manager_title">Pipeline preset library</string>
+    <string name="orchestrator_preset_manager_section_bundled">Bundled presets</string>
+    <string name="orchestrator_preset_manager_section_user">Your presets</string>
+    <string name="orchestrator_preset_manager_bundled_empty">No bundled presets are available.</string>
+    <string name="orchestrator_preset_manager_user_empty">You haven\'t saved any presets yet. Save a pipeline as preset from the editor or the library overflow menu.</string>
+    <string name="orchestrator_preset_manager_action_rename">Rename</string>
+    <string name="orchestrator_preset_manager_action_export">Export JSON</string>
+    <string name="orchestrator_preset_manager_action_delete">Delete</string>
+    <string name="orchestrator_preset_manager_rename_title">Rename preset</string>
+    <string name="orchestrator_preset_manager_rename_blank">Preset name cannot be blank</string>
+    <string name="orchestrator_preset_manager_renamed">Preset renamed</string>
+    <string name="orchestrator_preset_manager_deleted">Preset deleted</string>
+    <string name="orchestrator_preset_manager_delete_title">Delete preset?</string>
+    <string name="orchestrator_preset_manager_delete_confirm">Delete the preset \"%1$s\"? This cannot be undone.</string>
 </resources>

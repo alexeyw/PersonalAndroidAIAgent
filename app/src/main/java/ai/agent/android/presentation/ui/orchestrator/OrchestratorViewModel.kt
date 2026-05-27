@@ -11,6 +11,7 @@ import ai.agent.android.domain.models.PipelineGraph
 import ai.agent.android.domain.models.PipelineImportOutcome
 import ai.agent.android.domain.models.PipelineValidationError
 import ai.agent.android.domain.models.PipelineValidationException
+import ai.agent.android.domain.models.PresetCategory
 import ai.agent.android.domain.models.PromptTemplate
 import ai.agent.android.domain.pipelineio.PipelineJsonSerializer
 import ai.agent.android.domain.prompt.PromptTemplateEngine
@@ -26,6 +27,7 @@ import ai.agent.android.domain.usecases.GetPromptTemplatesUseCase
 import ai.agent.android.domain.usecases.ImportPipelineUseCase
 import ai.agent.android.domain.usecases.LoadPipelineUseCase
 import ai.agent.android.domain.usecases.RenamePipelineUseCase
+import ai.agent.android.domain.usecases.SavePipelineAsPresetUseCase
 import ai.agent.android.domain.usecases.SavePipelineUseCase
 import ai.agent.android.domain.usecases.SavePromptTemplateUseCase
 import ai.agent.android.presentation.ui.common.UiText
@@ -70,6 +72,7 @@ class OrchestratorViewModel @Inject constructor(
     private val createPipelineUseCase: CreatePipelineUseCase,
     private val getPromptTemplatesUseCase: GetPromptTemplatesUseCase,
     private val savePromptTemplateUseCase: SavePromptTemplateUseCase,
+    private val savePipelineAsPresetUseCase: SavePipelineAsPresetUseCase,
     private val apiKeyRepository: ApiKeyRepository,
     private val toolRepository: ToolRepository,
     private val localModelRepository: LocalModelRepository,
@@ -1016,6 +1019,81 @@ class OrchestratorViewModel @Inject constructor(
      * can render the same copy without re-implementing the mapping.
      */
     fun labelFor(error: PipelineValidationError): UiText = validationErrorAsUiText(error)
+
+    /**
+     * Packages the currently-edited pipeline (whatever is loaded into the
+     * editor) as a user preset via [SavePipelineAsPresetUseCase]. Surfaces
+     * a success / failure message through [OrchestratorUiState.feedbackMessage]
+     * / [OrchestratorUiState.errorMessage] so the calling screen (editor)
+     * doesn't need its own Snackbar plumbing.
+     */
+    fun saveCurrentAsPreset(
+        name: String,
+        description: String,
+        category: PresetCategory,
+        tags: List<String> = emptyList(),
+    ) {
+        viewModelScope.launch {
+            val result = savePipelineAsPresetUseCase(
+                graph = _uiState.value.currentPipeline,
+                name = name,
+                description = description,
+                category = category,
+                tags = tags,
+            )
+            _uiState.update { state ->
+                val error = result.exceptionOrNull()?.let(::messageForSaveError)
+                state.copy(
+                    errorMessage = error,
+                    feedbackMessage = if (error == null) {
+                        UiText(R.string.orchestrator_preset_save_success)
+                    } else {
+                        state.feedbackMessage
+                    },
+                )
+            }
+        }
+    }
+
+    /**
+     * Packages an existing library pipeline ([pipelineId]) as a user
+     * preset. Resolves the graph through [LoadPipelineUseCase.getPipelineById]
+     * before delegating to [SavePipelineAsPresetUseCase], so the editor
+     * does not need to be loaded with the source pipeline first.
+     */
+    fun saveAsPresetFromLibrary(
+        pipelineId: String,
+        name: String,
+        description: String,
+        category: PresetCategory,
+        tags: List<String> = emptyList(),
+    ) {
+        viewModelScope.launch {
+            val pipeline = loadPipelineUseCase.getPipelineById(pipelineId)
+            if (pipeline == null) {
+                _uiState.update { it.copy(errorMessage = UiText(R.string.errors_orchestrator_pipeline_not_found)) }
+                return@launch
+            }
+            val result = savePipelineAsPresetUseCase(
+                graph = pipeline,
+                name = name,
+                description = description,
+                category = category,
+                tags = tags,
+            )
+            _uiState.update { state ->
+                val error = result.exceptionOrNull()?.let(::messageForSaveError)
+                state.copy(
+                    errorMessage = error,
+                    feedbackMessage = if (error == null) {
+                        UiText(R.string.orchestrator_preset_save_success)
+                    } else {
+                        state.feedbackMessage
+                    },
+                )
+            }
+        }
+    }
 
     private companion object {
         /**

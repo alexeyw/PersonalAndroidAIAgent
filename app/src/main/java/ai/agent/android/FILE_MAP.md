@@ -272,11 +272,19 @@ This file maps the contents of the main application package.
       - `MonitoringViewModel.kt` - Monitoring ViewModel.
     - `orchestrator/` - Pipeline library + shared orchestrator ViewModel (the canvas surface moved to `pipeline/editor/` in Phase 21 / Task 9).
       - `OrchestratorUiState.kt` - Orchestrator UI state and `PromptPreviewState` / `PipelineRunState`.
-      - `OrchestratorViewModel.kt` - Orchestrator ViewModel. Owns graph mutation, persistence, validation, run-state placeholder, and the editor `focusNodeRequest` SharedFlow.
-      - `PipelineLibraryScreen.kt` - Library screen listing every saved pipeline (active highlight, long-press / `⋮` menu for Load / Rename / Duplicate / Delete, FAB for new pipeline). Shares `OrchestratorViewModel` with the editor via the `pipelines` nested nav graph.
+      - `OrchestratorViewModel.kt` - Orchestrator ViewModel. Owns graph mutation, persistence, validation, run-state placeholder, and the editor `focusNodeRequest` SharedFlow. Phase 24 / Task 3 adds `saveCurrentAsPreset` + `saveAsPresetFromLibrary` powered by `SavePipelineAsPresetUseCase`.
+      - `PipelineLibraryScreen.kt` - Library screen listing every saved pipeline. Phase 24 / Task 3 replaces the single FAB with `PipelineLibrarySpeedDial` (+ New / + From preset), wires `onBrowseTemplates` to `PresetPickerSheet`, and adds the `Save as preset` row overflow action.
       - `components/` - Orchestrator UI components.
         - `NodeContextConfigSection.kt` - "Input Data" section of the node configuration dialog: five checkboxes mapped to `NodeContextConfig` flags (with `nodeInput` rendered locked-on) plus a hint banner.
         - `PromptLibraryDialog.kt` - Prompt library dialog UI component.
+      - `presets/` - Pipeline preset UI (Phase 24 / Task 3).
+        - `PipelinePresetsViewModel.kt` - Hilt VM driving `PresetPickerSheet` and `PipelinePresetsManagerScreen`. Owns bundled/user catalogue flows, tab+chip selection, load-from-preset hand-off, rename/delete/export of user presets.
+        - `PipelinePresetsUiState.kt` - UI state for the picker and manager (bundled/user lists, active tab, category chip, `pendingPipelineIdFromPreset` editor hand-off).
+        - `PresetPickerSheet.kt` - `ModalBottomSheet` exposing the bundled/user catalogue as a tap-to-instantiate picker with category chips and a graph-flow preview per card.
+        - `SaveAsPresetDialog.kt` - `AlertDialog` capturing name/description/category/tags; shared by the library row overflow and the editor overflow.
+        - `PipelinePresetsManagerScreen.kt` - Full-screen manager reachable from More → Library. Bundled rows are read-only; user rows expose Rename / Export-JSON (SAF) / Delete.
+        - `PipelineLibrarySpeedDial.kt` - Two-action speed-dial that replaces the catalog `PipelineLibraryFab` overlay (`+ New pipeline` / `+ From preset`).
+        - `GraphFlowPreview.kt` - Pure-Kotlin helper rendering a one-line `INPUT → LITE_RT → OUTPUT` summary used in preset cards.
     - `pipeline/editor/` - Phase 21 / Task 9 — production pipeline editor (Phase 22 / Task 14 reshapes the toolbar + adds RunStatusBanner, ZoomRail, MiniMap, FilterBar, EmptyPipelineState, DotGridBackground, ValidationAutoFix, copy/paste, search, grid toggle).
       - `PipelineEditorScreen.kt` - Stateful entry composable: subscribes to `OrchestratorViewModel` + `runState`, owns the screen-local `EditorState`, computes the toolbar subtitle / primary-action variant, hosts the overflow `DropdownMenu` (Undo / Redo / Rename… / Delete / Auto-layout / Mini-map / grid toggle / Find node… / Paste), the catalog `NodeConfigSheet`, the rename dialog, and the run-banner clock.
       - `PipelineEditorContent.kt` - Pure-layout content. Vertical stack of `EditorToolbar` (or `MultiSelectToolbar`) + `RunStatusBanner` + `EditorCanvas` + `ValidationBar`.
@@ -311,8 +319,8 @@ This file maps the contents of the main application package.
       - `SplashViewModel.kt` - Hilt ViewModel that subscribes to `AppInitializationUseCase`, folds each `InitProgress` into `SplashUiState`, and exposes `retry()` to re-run the pipeline after a fatal failure.
     - `more/` - "More" tab landing screen (Phase 22 / Task 15 — Knotwork-converted, now stateful with live counters + footer privacy pill).
       - `MoreScreen.kt` - Slim mapper. Subscribes to `MoreViewModel.uiState`, builds the `MoreViewState`, renders `MoreContent`.
-      - `MoreUiState.kt` - Pre-formatted display strings for each row subtitle + the footer pill (memory chunks, active model, prompt categories, active task counts, network status).
-      - `MoreViewModel.kt` - Aggregates the live counters from `MemoryRepository.observeStats`, `LocalModelRepository.getAllModels`, `PromptRepository.getAllPrompts`, `TaskQueueManager.activeSessionsState`, and `NetworkActivityTracker.lastOutboundAt`. Owns the pure-Kotlin formatters (`formatMemoryStats`, `formatPromptsStats`, `formatNetworkStatus`).
+      - `MoreUiState.kt` - Pre-formatted display strings for each row subtitle + the footer pill (memory chunks, active model, prompt categories, active task counts, network status, user-preset count for Library).
+      - `MoreViewModel.kt` - Aggregates the live counters from `MemoryRepository.observeStats`, `LocalModelRepository.getAllModels`, `PromptRepository.getAllPrompts`, `TaskQueueManager.activeSessionsState`, `NetworkActivityTracker.lastOutboundAt`, and `PipelinePresetRepository.getUserPresets` (Phase 24 / Task 3). Owns the pure-Kotlin formatters (`formatMemoryStats`, `formatPromptsStats`, `formatLibraryStats`, `formatNetworkStatus`).
     - `settings/` - Settings screen components. Phase 22 / Task 9 redesigned the surface end-to-end: nine cards (identity / system instructions / restrictions / LLM parameters / local model / external providers / memory / notifications / privacy) drive the catalog `SettingsContent`.
       - `SettingsScreen.kt` - Slim mapper. Translates `SettingsUiState` into the catalog `SettingsViewState`, hosts the SAF launcher for memory export, the `ProcessPhoenix.triggerRebirth` restart hook, and the `SnackbarHost`.
       - `SettingsUiState.kt` - Per-card state slices (identity, system instructions + variable chip catalog, restrictions, LLM params, local model + active-model meta, providers, memory stats, notifications, privacy, restart-required flag, destructive-action staging).
