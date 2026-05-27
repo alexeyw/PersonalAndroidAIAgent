@@ -15,6 +15,23 @@ details.
 
 ### Added
 
+- **Bundled pipeline-preset catalogue** (Phase 24 / Task 2/9). Ships six
+  curated starter presets under `assets/presets/pipelines/` covering the
+  typical entry-point scenarios: `local_only_qa` (offline INPUT → LITE_RT →
+  OUTPUT), `cloud_assist` (cloud with chat history + long-term memory),
+  `tool_using_react` (reasoner → tool → summariser chain),
+  `multi_step_research` (DECOMPOSITION → QUEUE_PROCESSOR with an explicit
+  `Item` / `Done` fan-out plus a back-edge that loops each subtask through
+  a cloud researcher), `clarify_then_act` (CLARIFICATION gate before a
+  local reply) and `routed_local_cloud` (INTENT_ROUTER sending simple
+  requests on-device and complex ones to the cloud). A new
+  `PipelinePresetCatalogValidationTest` (JVM unit) parses every bundled
+  file, runs `PipelineGraph.validate()` over each embedded graph, and
+  verifies that every `$VARIABLE` token resolves against the registered
+  `PromptVariableProvider` set in `di/PromptTemplateModule.kt` — so adding
+  a broken preset, an unknown variable, or accidentally deleting one of
+  the six fails the build.
+
 - **Pipeline preset — domain model and storage** (Phase 24 / Task 1/9).
   Introduces `PipelinePreset` as a reusable pre-built pipeline template
   with two persistence tiers:

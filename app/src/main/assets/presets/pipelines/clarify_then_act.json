@@ -1,0 +1,108 @@
+{
+  "schemaVersion": 1,
+  "id": "clarify_then_act",
+  "name": "Clarify, then act",
+  "description": "Pauses to ask one clarifying question when the request is ambiguous, then answers locally with the disambiguated input. Useful when the user's intent is often underspecified.",
+  "category": "hybrid",
+  "tags": ["clarification", "local", "interactive"],
+  "updatedAt": 1748304000000,
+  "nodes": [
+    {
+      "id": "input",
+      "type": "INPUT",
+      "position": { "x": 80.0, "y": 200.0 },
+      "label": "Input",
+      "config": {
+        "systemPrompt": null,
+        "cloudProvider": null,
+        "modelPath": null,
+        "toolName": null,
+        "clarificationTimeoutMs": null,
+        "conditionPrompt": null,
+        "conditionKeywords": null,
+        "conditionComplexity": null
+      },
+      "contextConfig": {
+        "chatHistory": false,
+        "originalTask": false,
+        "nodeInput": true,
+        "longTermMemory": false,
+        "toolResults": false
+      }
+    },
+    {
+      "id": "clarify",
+      "type": "CLARIFICATION",
+      "position": { "x": 320.0, "y": 200.0 },
+      "label": "Clarify",
+      "config": {
+        "systemPrompt": "Inspect the user's request. If anything important is ambiguous, craft ONE concise clarifying question and propose 2-3 short, mutually exclusive options. Today is $DATE. Output STRICTLY valid JSON of shape: {\"question\": \"...\", \"options\": [\"...\", \"...\"]}. If nothing needs clarifying, output an empty options array and a question that confirms intent in one line.",
+        "cloudProvider": null,
+        "modelPath": null,
+        "toolName": null,
+        "clarificationTimeoutMs": 60000,
+        "conditionPrompt": null,
+        "conditionKeywords": null,
+        "conditionComplexity": null
+      },
+      "contextConfig": {
+        "chatHistory": false,
+        "originalTask": true,
+        "nodeInput": true,
+        "longTermMemory": false,
+        "toolResults": false
+      }
+    },
+    {
+      "id": "lite_rt",
+      "type": "LITE_RT",
+      "position": { "x": 560.0, "y": 200.0 },
+      "label": "Local LLM",
+      "config": {
+        "systemPrompt": "You are an on-device assistant running on $MODEL. Today is $DATE. The user's clarified request appears below; answer it directly in one or two short paragraphs.",
+        "cloudProvider": null,
+        "modelPath": null,
+        "toolName": null,
+        "clarificationTimeoutMs": null,
+        "conditionPrompt": null,
+        "conditionKeywords": null,
+        "conditionComplexity": null
+      },
+      "contextConfig": {
+        "chatHistory": false,
+        "originalTask": true,
+        "nodeInput": true,
+        "longTermMemory": false,
+        "toolResults": false
+      }
+    },
+    {
+      "id": "output",
+      "type": "OUTPUT",
+      "position": { "x": 800.0, "y": 200.0 },
+      "label": "Reply",
+      "config": {
+        "systemPrompt": null,
+        "cloudProvider": null,
+        "modelPath": null,
+        "toolName": null,
+        "clarificationTimeoutMs": null,
+        "conditionPrompt": null,
+        "conditionKeywords": null,
+        "conditionComplexity": null
+      },
+      "contextConfig": {
+        "chatHistory": true,
+        "originalTask": true,
+        "nodeInput": true,
+        "longTermMemory": true,
+        "toolResults": true
+      }
+    }
+  ],
+  "connections": [
+    { "id": "c1", "fromNodeId": "input", "toNodeId": "clarify", "label": null },
+    { "id": "c2", "fromNodeId": "clarify", "toNodeId": "lite_rt", "label": null },
+    { "id": "c3", "fromNodeId": "lite_rt", "toNodeId": "output", "label": null }
+  ]
+}
