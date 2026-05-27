@@ -141,8 +141,8 @@ deliberate batch of fixes:
 ## Kover — coverage measurement & threshold
 
 Plugin: `org.jetbrains.kotlinx.kover` `0.9.8`. Strict mode: a single
-aggregate rule enforces **≥ 70 % LINE coverage** over the unit-testable
-surface.
+aggregate rule enforces **≥ 75 % LINE coverage** over the unit-testable
+surface (raised from 70 % in Phase 23 / Task 9/9).
 
 Kover 0.9.x does not support per-rule filters (that landed in 0.10+), so
 filtering is done globally via `reports.filters.excludes`. The excluded
@@ -153,16 +153,23 @@ class set covers:
 - All `*Preview.kt` files and `@Preview`-annotated functions.
 - Hilt DI modules (`ai.agent.android.di.*`).
 - `App.kt` and `MainActivity` — Android-runtime-bound bootstrap.
-- All `*Screen` Composables and `presentation.ui.*.components.*`.
-- `presentation.theme/notifications/receivers/state.*` — Android-runtime UI glue.
-- `data.services.*` (Foreground service, WorkManager worker, idle/power managers).
-- `data.tools.local.*` Android-runtime glue (AppFunctions service, search HTTP, delegate-task).
+- All `*Screen` Composables and `presentation.ui.*.components.*`, plus the
+  Phase 23 sub-packages `presentation.ui.navigation.*`,
+  `presentation.ui.about.AboutScreen*` / `AboutAcknowledgments*`,
+  `presentation.ui.more.MoreScreen*`, and
+  `presentation.ui.settings.provider.{ProviderPickerScreen, ProviderDetailScreen}*`.
+- `presentation.theme/state.*` — declarative Compose constants.
+- `data.tools.local.*` Android-runtime glue (AppFunctions service, search HTTP,
+  delegate-task), including the Phase 23 sub-package
+  `data.tools.local.appfunctions.*`.
 - `data.local.dao.*` interfaces (impls are auto-excluded via the `*_Impl` pattern).
+- `data.logging.CrashlyticsTimberTree*` — Firebase Crashlytics Timber bridge.
 
-After these exclusions the aggregate runs at ~80 % (baseline);
+After these exclusions the aggregate runs at ~77.6 %;
 [`coverage-baseline.md`](coverage-baseline.md) keeps the per-package
-breakdown for refactor-impact tracking. The 70 % floor protects against
-regression with a 10 pp buffer for in-flight refactors.
+breakdown and the (informational) per-package targets. The 75 % floor
+protects against regression with ~2.6 pp of headroom for in-flight
+refactors.
 
 Verification is wired into the `check` lifecycle:
 

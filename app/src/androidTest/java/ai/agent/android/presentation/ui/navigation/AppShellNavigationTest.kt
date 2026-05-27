@@ -129,16 +129,26 @@ class AppShellNavigationTest {
         // pipeline (that would require a `createAndroidComposeRule` host
         // with the real MainActivity) while still exercising the
         // navDeepLink matching logic, which is the unit under test.
+        //
+        // Note: the `LaunchedEffect` that fires `navigate(...)` must live
+        // *inside* the NavHost's start-destination composable. A
+        // top-level `LaunchedEffect(navController)` would run before the
+        // sibling `NavHost(...)` composition installs the graph, and the
+        // navigate call would fail with "Navigation graph has not been
+        // set for NavController". By the time the CHAT_TAB destination
+        // composes, the graph is guaranteed to be registered.
         composeTestRule.setContent {
             val navController = rememberNavController()
-            LaunchedEffect(navController) {
-                navController.navigate(
-                    Uri.parse("${NavRoutes.DEEP_LINK_SCHEME}://chat/thread-42"),
-                )
-            }
             AppShellScaffold(navController = navController, transientMessageRelay = TransientMessageRelay()) { _ ->
                 NavHost(navController = navController, startDestination = NavRoutes.CHAT_TAB) {
-                    composable(NavRoutes.CHAT_TAB) { Text(CHAT_TAB_BODY) }
+                    composable(NavRoutes.CHAT_TAB) {
+                        LaunchedEffect(Unit) {
+                            navController.navigate(
+                                Uri.parse("${NavRoutes.DEEP_LINK_SCHEME}://chat/thread-42"),
+                            )
+                        }
+                        Text(CHAT_TAB_BODY)
+                    }
                     composable(
                         route = NavRoutes.CHAT_WITH_THREAD,
                         arguments = listOf(

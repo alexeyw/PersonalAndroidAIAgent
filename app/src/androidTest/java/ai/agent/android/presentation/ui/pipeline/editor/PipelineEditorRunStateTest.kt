@@ -3,12 +3,15 @@ package ai.agent.android.presentation.ui.pipeline.editor
 import ai.agent.android.presentation.ui.orchestrator.OrchestratorUiState
 import ai.agent.android.presentation.ui.orchestrator.PipelineRunState
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.test.platform.app.InstrumentationRegistry
+import app.knotwork.design.a11y.FixedKnotworkA11y
+import app.knotwork.design.a11y.LocalKnotworkA11y
 import org.junit.Rule
 import org.junit.Test
 import app.knotwork.design.R as KnotworkR
@@ -52,9 +55,18 @@ class PipelineEditorRunStateTest {
         val pipeline = PipelineEditorTestFixtures.threeNodePipeline()
         handles.uiStateFlow.value = OrchestratorUiState(currentPipeline = pipeline)
 
+        // Pin `reducedMotion = true` for the duration of the test so the
+        // active-node pulse animation (NodeCard.kt rememberInfiniteTransition,
+        // gated by KnotworkTheme.a11y.reducedMotion()) does not keep the
+        // Compose recomposer perpetually busy. Without this, the first
+        // `waitForIdle()` after flipping the run state into Running times
+        // out with "ComposeIdlingResource is busy due to pending
+        // recompositions" because the infinite transition never settles.
         composeTestRule.setContent {
-            MaterialTheme {
-                PipelineEditorScreen(viewModel = vm, onBack = {})
+            CompositionLocalProvider(LocalKnotworkA11y provides FixedKnotworkA11y(reducedMotion = true)) {
+                MaterialTheme {
+                    PipelineEditorScreen(viewModel = vm, onBack = {})
+                }
             }
         }
 

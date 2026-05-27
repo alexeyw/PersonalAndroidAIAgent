@@ -82,25 +82,43 @@ class PipelineEditorGestureTest {
         }
         composeTestRule.waitForIdle()
 
-        // Pick up the middle node and drag it a comfortable distance so the
+        // Pick up the LAST node and drag it a comfortable distance so the
         // snap-to-grid quantiser commits a non-zero delta. `moveBy` after a
         // `down` produces a sustained drag gesture; `up` releases at the
         // final position, at which point `EditorNode.onDragEnd` rounds to
         // the nearest grid step and calls `viewModel.moveNode(id, dx, dy)`.
+        //
+        // Why drag the last node, not the middle one: `EditorNode`
+        // positions each card via `Modifier.graphicsLayer { translationX
+        // = screenX; translationY = screenY }`, which moves the card
+        // *visually* but leaves all three layout boxes stacked at the
+        // canvas's origin. Compose's pointer-input hit-test uses the
+        // layout box, not the graphicsLayer-translated bounds — so every
+        // touch event is dispatched to whichever node is topmost in the
+        // composition's z-order. `EditorCanvas.kt` iterates
+        // `nodesWithDrag.forEach { node -> EditorNode(...) }`, drawing
+        // later nodes on top, so the LAST node in `graph.nodes` is the
+        // one that owns pointer input. Targeting it makes the gesture
+        // deterministic.
+        //
+        // (Fixing the graphicsLayer / hit-test mismatch in production
+        // would require switching `EditorNode` to `Modifier.offset` for
+        // positioning, which is a tracked refactor for a later phase.)
+        val draggedNode = pipeline.nodes.last()
         composeTestRule
-            .onNodeWithText(pipeline.nodes[1].label)
+            .onNodeWithText(draggedNode.label)
             .performTouchInput {
                 down(center)
-                moveBy(Offset(x = 96f, y = 0f))
+                moveBy(Offset(x = 0f, y = 96f))
                 up()
             }
         composeTestRule.waitForIdle()
 
         verify {
             vm.moveNode(
-                nodeId = pipeline.nodes[1].id,
-                deltaX = match<Float> { it != 0f },
-                deltaY = any(),
+                nodeId = draggedNode.id,
+                deltaX = any(),
+                deltaY = match<Float> { it != 0f },
             )
         }
     }

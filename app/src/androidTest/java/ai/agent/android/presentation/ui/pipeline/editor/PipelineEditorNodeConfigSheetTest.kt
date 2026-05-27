@@ -1,6 +1,10 @@
 package ai.agent.android.presentation.ui.pipeline.editor
 
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
@@ -134,20 +138,36 @@ class PipelineEditorNodeConfigSheetTest {
         val initial = InputConfig(title = "Input", inputName = "user.message")
         var latest: NodeConfig? = null
         composeTestRule.setContent {
+            // `OutlinedTextField` is stateless — its visible text is whatever
+            // its parent passes as `value`. If we hoist that into a plain
+            // Kotlin `var`, Compose does not observe writes and the field
+            // never recomposes with the new value the user typed. The
+            // internal text-input state then resyncs back to the (still
+            // unchanged) parent value on the next recomposition cycle, and
+            // `onValueChange` ultimately fires with the original
+            // "user.message" — which is exactly the symptom this test hit
+            // before. Holding the config in a `remember { mutableStateOf }`
+            // makes Compose track the writes, the field stays in sync, and
+            // the final onChange carries the typed "user.email".
+            var current by remember { mutableStateOf<NodeConfig>(initial) }
             MaterialTheme {
                 NodeConfigSheetBody(
-                    config = latest ?: initial,
+                    config = current,
                     errors = emptyMap(),
-                    onChange = { latest = it },
+                    onChange = {
+                        current = it
+                        latest = it
+                    },
                     onCancel = {},
                     onSave = {},
                 )
             }
         }
 
-        // The field is matched by its visible label — we can't replace text on the
-        // label node itself, so we type into the parent's text child via the
-        // label-matched node's editable subtree.
+        // The field is matched by its visible value — `onNodeWithText`
+        // resolves to the OutlinedTextField whose `EditableText` is
+        // "user.message", and `performTextReplacement` fires the field's
+        // `SetText` semantic action.
         composeTestRule
             .onNodeWithText("user.message")
             .performTextReplacement("user.email")

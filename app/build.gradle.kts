@@ -237,6 +237,7 @@ kotlin {
 
 // Kover — test-coverage measurement & enforcement.
 // Phase 18 / Task 9-10: aggregate threshold enforced via `koverVerifyDebug`.
+// Phase 23 / Task 9/9: aggregate floor raised 70 % → 75 % at end of phase.
 //
 // Per-rule filters are a Kover 0.10+ feature; on the 0.9.x line the only
 // way to scope verification is via the (global) `reports.filters` block,
@@ -247,11 +248,12 @@ kotlin {
 // here. The trade-off is documented in docs/coverage-baseline.md:
 // instrumented coverage for `*Screen.kt` etc. is a separate workstream.
 //
-// The single rule then enforces a 70 % aggregate floor over the
+// The single rule then enforces a 75 % aggregate floor over the
 // remaining "unit-testable" surface — domain + data.repositories +
-// presentation ViewModels / UiStates. Baseline numbers for those layers
-// (89 % / 83 % / ~55 % respectively) leave comfortable headroom; the floor
-// protects against silent regressions while leaving room for refactors.
+// presentation ViewModels / UiStates. Today's measurement is ~77.6 %, so
+// the floor leaves ~2.6 pp of headroom against silent regression. Per-
+// package targets that the build cannot yet enforce (no rule-level filters
+// in 0.9.x) live in docs/coverage-baseline.md.
 kover {
     reports {
         filters {
@@ -330,6 +332,33 @@ kover {
                     "ai.agent.android.presentation.ui.splash.SplashScreen*",
                     "ai.agent.android.presentation.theme.*",
                     "ai.agent.android.presentation.state.*",
+                    // Phase 23 / Task 9/9 — additional Compose-surface / nav-glue
+                    // packages introduced during phase/23. Same rationale as the
+                    // existing presentation.ui.*Screen exclusions: rendering and
+                    // navigation code needs Compose UI tests, not JVM unit tests.
+                    // The redesigned bottom-nav shell (AppShellScaffold,
+                    // AppNavGraph, TabDestination, BottomNavVisibility,
+                    // KnotworkModalRoute, NavRoutes) is pure UI wiring; route
+                    // constants in NavRoutes are unreachable in JVM tests.
+                    "ai.agent.android.presentation.ui.navigation.*",
+                    // Single static About surface (AboutScreen.kt). The
+                    // `AboutAcknowledgments` private object lives in the same
+                    // file and is pure declarative data feeding the Composable.
+                    "ai.agent.android.presentation.ui.about.AboutScreen*",
+                    "ai.agent.android.presentation.ui.about.AboutAcknowledgments*",
+                    // Bottom-nav "More" hub Composable. The MoreViewModel /
+                    // MoreUiState in the same package remain inside the gate.
+                    "ai.agent.android.presentation.ui.more.MoreScreen*",
+                    // Provider picker and detail Compose screens under
+                    // presentation/ui/settings/provider — covered by the
+                    // catalog snapshot suite, not JVM unit tests.
+                    "ai.agent.android.presentation.ui.settings.provider.ProviderPickerScreen*",
+                    "ai.agent.android.presentation.ui.settings.provider.ProviderDetailScreen*",
+                    // AppFunctions callee-side wrapper (SearchAppFunction). The
+                    // KSP-generated `*_AppFunctionInvoker` infrastructure and
+                    // the platform `PlatformAppFunctionService` need the Android
+                    // runtime plus the AppFunctions service host to execute.
+                    "ai.agent.android.data.tools.local.appfunctions.*",
                     // Phase 23 / Task 4/9 — `data.services.*` is now covered by
                     // Robolectric tests (`AgentForegroundServiceTest`,
                     // `AgentWorkerTest`, `AgentIdleManagerTest`,
@@ -372,10 +401,21 @@ kover {
         }
 
         verify {
-            rule("Aggregate unit-testable coverage must stay ≥70%") {
+            // Aggregate gate — protects against silent regression across the
+            // whole unit-testable surface. The current measured value (Phase
+            // 23 / Task 9/9, May 2026) is ~77.5 %; the 75 % floor leaves a
+            // ~2.5 pp buffer for in-flight refactors.
+            //
+            // Per-package thresholds were considered for this task but cannot
+            // be expressed on Kover 0.9.x — the rule-level `filters { ... }`
+            // block is a 0.10+ feature (not yet released; 0.9.8 is the latest
+            // on the Gradle Plugin Portal as of May 2026). Per-package
+            // *targets* are documented in docs/coverage-baseline.md as
+            // guidance; promote them to enforced rules once Kover 0.10 ships.
+            rule("Aggregate unit-testable coverage must stay ≥75%") {
                 groupBy = kotlinx.kover.gradle.plugin.dsl.GroupingEntityType.APPLICATION
                 bound {
-                    minValue = 70
+                    minValue = 75
                     coverageUnits = kotlinx.kover.gradle.plugin.dsl.CoverageUnit.LINE
                     aggregationForGroup =
                         kotlinx.kover.gradle.plugin.dsl.AggregationType.COVERED_PERCENTAGE

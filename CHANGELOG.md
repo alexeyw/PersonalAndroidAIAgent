@@ -13,6 +13,33 @@ details.
 
 ## [Unreleased]
 
+### Build / coverage
+
+- **Coverage gate raised 70 % → 75 % LINE aggregate** (Phase 23 / Task 9/9).
+  `koverVerifyDebug` (run via `./gradlew check`) now fails the build if
+  aggregate line coverage over the unit-testable surface drops below 75 %.
+  Today's measurement after the new exclusions sits at ~77.6 %, leaving
+  ~2.6 pp of headroom against silent regression. Per-package targets are
+  documented as informational guidance in
+  [`docs/coverage-baseline.md`](docs/coverage-baseline.md); they will be
+  promoted to enforced rules once Kover 0.10 ships rule-level filters
+  (0.9.8 is the latest available on the Gradle Plugin Portal). Several
+  Compose-surface and Android-runtime-glue packages introduced earlier in
+  phase/23 were also added to the Kover exclusion list to align with the
+  existing `presentation.ui.*Screen*` convention:
+  `presentation.ui.navigation.*`,
+  `presentation.ui.about.{AboutScreen,AboutAcknowledgments}*`,
+  `presentation.ui.more.MoreScreen*`,
+  `presentation.ui.settings.provider.{ProviderPickerScreen,ProviderDetailScreen}*`,
+  and `data.tools.local.appfunctions.*`. Without these exclusions the
+  aggregate would have been 73.8 % — the previously-claimed "~80 %" in
+  the baseline doc was stale because the new screens never made it into
+  the filter when they shipped. Touched files:
+  [`app/build.gradle.kts`](app/build.gradle.kts),
+  [`docs/coverage-baseline.md`](docs/coverage-baseline.md),
+  [`docs/static-analysis.md`](docs/static-analysis.md),
+  [`docs/testing.md`](docs/testing.md).
+
 ### Tests
 
 - **Compose `androidTest` coverage for the remaining `presentation.ui`

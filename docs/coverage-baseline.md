@@ -1,147 +1,119 @@
-# Test-Coverage Baseline (Phase 18 — Task 2/10)
+# Test-Coverage Baseline
 
-This document captures the **starting** test-coverage numbers for the project at
-the moment Kover is wired into the build. It exists to:
+Living record of the project's unit-test LINE coverage and the gate
+configuration that backs it. Updated at the end of each phase that touches
+coverage materially.
 
-1. Make the impact of the upcoming string/prompt/constant refactors (Tasks 3–6)
-   visible — those tasks shuffle a lot of lines and we want to see whether
-   coverage moves up, down, or stays flat as a result.
-2. Provide concrete percentages that Task 9/10 can use to seed `koverVerify`
-   thresholds (currently the verify rule is **not configured** — Kover runs in
-   pure measurement mode in this phase).
+## Snapshot — Phase 23 / Task 9/9 (current)
 
-## Snapshot
+| Field        | Value                                                          |
+|--------------|----------------------------------------------------------------|
+| Date         | 2026-05-26                                                     |
+| Branch base  | `phase/23` (closing the phase)                                 |
+| Kover        | 0.9.8 (latest on the Gradle Plugin Portal)                     |
+| Variant      | `debug` (Android default unit-test variant)                    |
+| Test command | `./gradlew :app:testDebugUnitTest`                             |
+| Build gate   | aggregate LINE ≥ **75 %** (raised 70 % → 75 % in this task)    |
 
-| Field        | Value                                              |
-|--------------|----------------------------------------------------|
-| Date         | 2026-05-10                                         |
-| Branch base  | `main` @ `2b43507`                                 |
-| Kover        | 0.9.8 (plugin id `org.jetbrains.kotlinx.kover`)    |
-| Variant      | `debug` (Android default unit-test variant)        |
-| Test command | `./gradlew :app:testDebugUnitTest`                 |
+`./gradlew :app:koverLog` headline figure: **`application line coverage: 77.62 %`**
+(5 968 / 7 689 lines after exclusions).
 
-## Aggregate
+### Historical snapshots
 
-| Counter      | Coverage | Covered / Total |
-|--------------|----------|-----------------|
-| LINE         | **45.3%**| 3 601 / 7 952   |
-| INSTRUCTION  | 35.9%    | 29 370 / 81 904 |
-| BRANCH       | 31.4%    | 1 067 / 3 401   |
-| METHOD       | 48.8%    | 703 / 1 440     |
-| CLASS        | 67.7%    | 387 / 572       |
+| Phase / Task            | Date       | Aggregate LINE | Gate  |
+|-------------------------|------------|----------------|-------|
+| Phase 18 / Task 2/10    | 2026-05-10 | 45.3 % (raw, no exclusions yet) | — (measurement only) |
+| Phase 18 / Task 9-10    | 2026-05-?? | ~80 % (with exclusions, claimed) | 70 % |
+| Phase 23 / Task 9/9     | 2026-05-26 | 77.6 % (after extending exclusions for nav/about/more/provider screens + AppFunctions glue) | **75 %** |
 
-The headline number quoted by `./gradlew :app:koverLog` is the LINE coverage
-(`application line coverage: 45.2557%`).
+## Per-package LINE coverage (post-exclusions)
 
-## Per-package (LINE)
+Numbers measured against `phase/23` HEAD, 2026-05-26. Sorted by layer.
+Packages excluded from the gate (Composables, Android-runtime glue, DI,
+generated code) do not appear in this table — they live in the
+"Exclusions applied" section below.
 
-Sorted alphabetically. `n/a`-style 0% entries on tiny packages (a few lines)
-are typically pure-interface or DI-glue files that fall under the exclusion
-filters in spirit but slip through because they live outside the
-excluded-package wildcards — see "Known noise" below.
+### `domain/` — 90.0 % (1 764 / 1 960 lines)
 
-### `domain/` — 89.4% (1 454 / 1 627 lines)
+| Package                       | Coverage | Covered / Total | Target  |
+|-------------------------------|----------|-----------------|---------|
+| `domain.constants`            | 100.00 % | 34 / 34         | ≥ 95 %  |
+| `domain.engine`               | 93.56 %  | 407 / 435       | ≥ 90 %  |
+| `domain.engine.executors`     | 78.42 %  | 378 / 482       | ≥ 75 %  |
+| `domain.models`               | 94.50 %  | 378 / 400       | ≥ 90 %  |
+| `domain.pipelineio`           | 92.91 %  | 118 / 127       | ≥ 90 %  |
+| `domain.prompt`               | 100.00 % | 53 / 53         | ≥ 95 %  |
+| `domain.repositories`         | 60.00 %  | 3 / 5           | n/a — interface declarations |
+| `domain.usecases`             | 85.06 %  | 393 / 462       | ≥ 80 %  |
 
-| Package                                   | Coverage | Covered / Total |
-|-------------------------------------------|----------|-----------------|
-| `domain.constants`                        | 90.9%    | 10 / 11         |
-| `domain.engine`                           | 92.8%    | 324 / 349       |
-| `domain.engine.executors`                 | 75.4%    | 318 / 422       |
-| `domain.models`                           | 96.4%    | 319 / 331       |
-| `domain.pipelineio`                       | 92.9%    | 118 / 127       |
-| `domain.prompt`                           | 100.0%   | 52 / 52         |
-| `domain.repositories`                     | 33.3%    | 1 / 3           |
-| `domain.usecases`                         | 94.0%    | 312 / 332       |
+`domain` remains the strongest layer. The 60 % figure on `domain.repositories`
+is a single `companion object` constant in an otherwise pure-interface
+package — not a meaningful target (`n/a`).
 
-`domain` is the strongest layer — this matches the project rule that all
-business logic must sit here and ship with unit tests. The `domain.repositories`
-package contains only interface declarations; the 1/3 non-zero figure is
-incidental (a `companion object` constant) and not a meaningful target.
+### `data/` — 72.6 % (1 363 / 1 877 lines)
 
-### `data/` — 58.5% (950 / 1 625 lines)
+| Package                       | Coverage | Covered / Total | Target  |
+|-------------------------------|----------|-----------------|---------|
+| `data.engine`                 | 55.39 %  | 190 / 343       | ≥ 50 %  |
+| `data.local`                  | 48.30 %  | 327 / 677       | ≥ 45 %  |
+| `data.local.models`           | 93.02 %  | 80 / 86         | ≥ 90 %  |
+| `data.mappers`                | 100.00 % | 43 / 43         | ≥ 95 %  |
+| `data.mcp`                    | 79.45 %  | 58 / 73         | ≥ 75 %  |
+| `data.network`                | 92.68 %  | 38 / 41         | ≥ 90 %  |
+| `data.prompt`                 | 49.25 %  | 33 / 67         | ≥ 45 %  |
+| `data.repositories`           | 82.20 %  | 494 / 601       | ≥ 80 %  |
+| `data.services`               | 99.42 %  | 171 / 172       | ≥ 95 %  |
+| `data.tools.local`            | 74.53 %  | 199 / 267       | ≥ 70 %  |
+| `data.tools.local.executors`  | 100.00 % | 21 / 21         | ≥ 95 %  |
 
-| Package                                   | Coverage | Covered / Total |
-|-------------------------------------------|----------|-----------------|
-| `data.engine`                             | 52.7%    | 167 / 317       |
-| `data.local`                              | 41.3%    | 160 / 387       |
-| `data.local.dao`                          | 0.0%     | 0 / 7           |
-| `data.local.models`                       | 92.6%    | 75 / 81         |
-| `data.mappers`                            | 100.0%   | 38 / 38         |
-| `data.mcp`                                | 77.1%    | 37 / 48         |
-| `data.network`                            | 92.7%    | 38 / 41         |
-| `data.prompt`                             | 86.8%    | 33 / 38         |
-| `data.repositories`                       | 83.1%    | 301 / 362       |
-| `data.services`                           | 99.4%    | 171 / 172       |
-| `data.tools.local`                        | 27.7%    | 39 / 141        |
-| `data.tools.local.executors`              | 0.0%     | 0 / 24          |
+`data.services` jumped from 44 % to 99 % during Phase 23 / Task 4/9 when
+Robolectric coverage of `AgentForegroundService`, `AgentWorker`,
+`AgentIdleManager`, `AgentPowerManager`, and `LongRunningTaskNotifierImpl`
+landed; the previous `data.services.*` exclusion was lifted in that task
+and remains lifted.
 
-The notable holes here — `data.tools.local` (tool implementations),
-`data.tools.local.executors` (LocalToolExecutor multibinding strategies),
-and `data.local.dao` (Room DAO interfaces themselves) — are dominated by
-Android-runtime-bound code that is hard to exercise with plain JVM unit
-tests. They are explicit candidates for either Robolectric / instrumented
-coverage or for refactoring extractions in later phases.
+### `presentation/` — 74.7 % (2 837 / 3 800 lines)
 
-`data.services` was the largest of these holes (44.0% at the original
-baseline) until Phase 23 / Task 4/9 — `AgentForegroundService`,
-`AgentWorker`, `AgentIdleManager`, `AgentPowerManager`, and
-`LongRunningTaskNotifierImpl` are now exercised by Robolectric tests under
-`app/src/test/java/ai/agent/android/data/services/`. The corresponding
-`ai.agent.android.data.services.*` entry was removed from the Kover
-exclusion list. The line-count rose to 172 (from 141) because the new
-suite makes a few previously-unreachable branches reachable to the
-instrumentation.
+| Package                                       | Coverage | Covered / Total | Target  |
+|-----------------------------------------------|----------|-----------------|---------|
+| `presentation.notifications`                  | 100.00 % | 63 / 63         | ≥ 95 %  |
+| `presentation.receivers`                      | 100.00 % | 14 / 14         | ≥ 95 %  |
+| `presentation.ui.chat.home`                   | 84.29 %  | 692 / 821       | ≥ 80 %  |
+| `presentation.ui.common`                      | 37.50 %  | 6 / 16          | ≥ 35 %  |
+| `presentation.ui.memory`                      | 92.86 %  | 52 / 56         | ≥ 85 %  |
+| `presentation.ui.models`                      | 82.14 %  | 92 / 112        | ≥ 75 %  |
+| `presentation.ui.monitoring`                  | 100.00 % | 30 / 30         | ≥ 95 %  |
+| `presentation.ui.more`                        | 23.19 %  | 16 / 69         | known gap — `MoreViewModel` lacks tests (Phase 24 follow-up) |
+| `presentation.ui.onboarding`                  | 86.61 %  | 110 / 127       | ≥ 80 %  |
+| `presentation.ui.orchestrator`                | 85.03 %  | 335 / 394       | ≥ 80 %  |
+| `presentation.ui.pipeline.editor.config`      | 52.40 %  | 175 / 334       | known gap — `NodeConfigCodec` round-trip tests (Phase 24 follow-up) |
+| `presentation.ui.pipeline.editor.core`        | 85.16 %  | 310 / 364       | ≥ 80 %  |
+| `presentation.ui.prompts`                     | 41.67 %  | 45 / 108        | known gap — `PromptVariablesViewModel` thin tests |
+| `presentation.ui.settings`                    | 88.89 %  | 256 / 288       | ≥ 80 %  |
+| `presentation.ui.settings.provider`           | 0.00 %   | 0 / 83          | known gap — `ProviderDetailViewModel` / `ProviderDetailUiState` lack tests (Phase 24 follow-up) |
+| `presentation.ui.splash`                      | 97.30 %  | 36 / 37         | ≥ 90 %  |
+| `presentation.ui.taskmonitor`                 | 90.91 %  | 100 / 110       | ≥ 85 %  |
+| `presentation.ui.tools`                       | 92.34 %  | 205 / 222       | ≥ 85 %  |
 
-### `presentation/` — 25.5% (1 197 / 4 687 lines)
-
-| Package                                   | Coverage | Covered / Total |
-|-------------------------------------------|----------|-----------------|
-| `presentation.notifications`              | 0.0%     | 0 / 36          |
-| `presentation.receivers`                  | 0.0%     | 0 / 8           |
-| `presentation.state`                      | 0.0%     | 0 / 4           |
-| `presentation.theme`                      | 0.0%     | 0 / 36          |
-| `presentation.ui`                         | 0.0%     | 0 / 42          |
-| `presentation.ui.chat`                    | 29.8%    | 431 / 1 448     |
-| `presentation.ui.components`              | 4.2%     | 5 / 118         |
-| `presentation.ui.memory`                  | 16.7%    | 43 / 258        |
-| `presentation.ui.models`                  | 35.9%    | 80 / 223        |
-| `presentation.ui.monitoring`              | 19.1%    | 30 / 157        |
-| `presentation.ui.orchestrator`            | 27.7%    | 290 / 1 047     |
-| `presentation.ui.orchestrator.components` | 0.0%     | 0 / 265         |
-| `presentation.ui.prompts`                 | 17.9%    | 43 / 240        |
-| `presentation.ui.settings`                | 27.5%    | 110 / 400       |
-| `presentation.ui.splash`                  | 43.9%    | 36 / 82         |
-| `presentation.ui.taskmonitor`             | 44.3%    | 93 / 210        |
-| `presentation.ui.tools`                   | 31.9%    | 36 / 113        |
-
-The non-zero numbers in `presentation.ui.*` come from `*ViewModel` and
-`*UiState` classes (covered by JVM unit tests). The 0% numbers represent the
-`*Screen.kt` Composables themselves — those need androidTest / Compose UI tests
-to register coverage and are intentionally not the focus of this phase.
-
-Phase 23 / Task 7/9 adds an androidTest suite under
-`app/src/androidTest/.../presentation/ui/pipeline/editor/` (12 files:
-`OrchestratorViewModelMockFactory`, `PipelineEditorContentRenderTest`,
-`PipelineEditorOverflowMenuTest`, `PipelineEditorMultiSelectTest`,
-`PipelineEditorRadialMenuTest`, `PipelineEditorValidationBarTest`,
-`PipelineEditorNodeConfigSheetTest`, `PipelineEditorSearchTest`,
-`PipelineEditorMiniMapAndGridTest`, `PipelineEditorCopyPasteTest`,
-`PipelineEditorRunStateTest`, `PipelineEditorGestureTest`). These run
-under `connectedDebugAndroidTest` and do **not** contribute to the
-Kover percentages above (Kover only ingests JVM unit-test execution
-data). The numbers stay flat; the regression gate is whether
-`connectedDebugAndroidTest` stays green.
+The 0 % / sub-50 % rows above are **testable** code (ViewModel + UiState
+classes) that simply lacks coverage today. They are not excluded from the
+gate — they pull the aggregate down — and are tracked as Phase 24 follow-up
+items rather than being silently filtered. The "Target" column is
+**informational**: with Kover 0.9.x the build only enforces the global 75 %
+aggregate; per-package floors will be promoted to enforced rules when Kover
+0.10 ships (per-rule `filters { ... }` is a 0.10+ feature).
 
 ### Other
 
-| Package                                   | Coverage | Covered / Total |
-|-------------------------------------------|----------|-----------------|
-| `ai.agent.android` (root — `App.kt`)      | 0.0%     | 0 / 8           |
-| `appfunctions_aggregated_deps`            | 0.0%     | 0 / 5           |
+| Package                            | Coverage | Covered / Total |
+|------------------------------------|----------|-----------------|
+| `ai.agent.android` (root, `App.kt`)| 23.53 %  | 8 / 34          |
+| `appfunctions_aggregated_deps`     | 0.00 %   | 0 / 5           |
 
-`appfunctions_aggregated_deps` is generated by the AppFunctions KSP processor
-and could be added to the exclusion list later; at 5 lines it does not move
-the aggregate.
+`App.kt` is the Hilt `Application` subclass; the lit lines are the
+Crashlytics opt-in gate. `appfunctions_aggregated_deps` is KSP-generated
+boilerplate and could be added to the exclusion list later; at 5 lines it
+does not move the aggregate.
 
 ## Exclusions applied
 
@@ -159,26 +131,53 @@ Each is justified below.
 | `ai.agent.android.data.local.AppDatabase`        | Room database class (declarations + migration shells).                    |
 | `ai.agent.android.data.local.AppDatabase_Impl*`  | Room-generated database implementation.                                  |
 | `*_AutoMigration_*`                               | Room auto-migration generated bridges.                                   |
+| `ai.agent.android.data.local.dao.*`              | Room DAO **interfaces** (only `companion object` constants in source).   |
 | `*ComposableSingletons*`, `ComposableSingletons$*`| Compose-compiler-emitted lambda singletons.                              |
 | `*Preview`, `*PreviewKt`                          | Compose preview files (project convention: `*Preview.kt`).               |
 | `ai.agent.android.di.*`                           | Hilt DI modules — only `@Provides` wiring, no business behaviour.        |
 | `ai.agent.android.BuildConfig`                    | Android-Gradle-generated build constants.                                |
 | `*.databinding.*`, `*.BR`                         | DataBinding generated code (defensive — project does not use DataBinding today). |
 | `@androidx.compose.ui.tooling.preview.Preview`    | Belt-and-braces annotation filter for preview functions outside `*Preview.kt`. |
+| `ai.agent.android.App`                            | Hilt `Application` subclass; needs Android runtime to instantiate.       |
+| `ai.agent.android.presentation.ui.MainActivity*`  | Compose host `Activity`; covered by androidTest, not JVM unit tests.      |
+| `ai.agent.android.presentation.ui.*Screen*`       | Top-level Compose screen files (project convention: `*Screen.kt`).        |
+| `ai.agent.android.presentation.ui.components.*`   | Reusable Compose components used by multiple screens.                     |
+| `ai.agent.android.presentation.ui.orchestrator.components.*` | Sub-package of orchestrator Compose components.                |
+| `ai.agent.android.presentation.ui.chat.legacy.*` (selected) | Phase 21 / Task 8 — legacy chat surface kept until orchestrator rewire.|
+| `ai.agent.android.presentation.ui.chat.home.ChatHomeScreen*`, `ChatHomeDebugStatePicker*`, `DebugStateRows*` | Compose surfaces of the redesigned chat home. |
+| `ai.agent.android.presentation.ui.pipeline.editor.canvas.*` | Phase 21 / Task 9 — gesture / animation / Bezier draw layer.       |
+| `ai.agent.android.presentation.ui.pipeline.editor.bars.*`   | Editor top / bottom bars (Compose).                                  |
+| `ai.agent.android.presentation.ui.pipeline.editor.sheet.*`  | Editor bottom sheets (Compose).                                      |
+| `ai.agent.android.presentation.ui.pipeline.editor.PipelineEditorContent*`, `PipelineEditorScreen*` | Pipeline editor host Composables.        |
+| `ai.agent.android.presentation.ui.splash.SplashScreen*`     | Splash Composable.                                                   |
+| `ai.agent.android.presentation.theme.*`           | Material 3 colour / typography constants. Pure declarative data.         |
+| `ai.agent.android.presentation.state.*`           | Tiny constant-only state types historically used by Compose code.        |
+| `ai.agent.android.presentation.ui.navigation.*`   | **New in Phase 23 / Task 9/9.** `AppShellScaffold`, `AppNavGraph`, `TabDestination`, `BottomNavVisibility`, `KnotworkModalRoute`, `NavRoutes` — bottom-nav shell + nav-graph wiring. Pure UI / nav glue; route constants unreachable in JVM tests. |
+| `ai.agent.android.presentation.ui.about.AboutScreen*`, `AboutAcknowledgments*` | **New in Phase 23 / Task 9/9.** Single-file Compose About surface plus its private declarative acknowledgments list. |
+| `ai.agent.android.presentation.ui.more.MoreScreen*` | **New in Phase 23 / Task 9/9.** Bottom-nav More hub Composable. The sibling `MoreViewModel` / `MoreUiState` remain inside the gate. |
+| `ai.agent.android.presentation.ui.settings.provider.ProviderPickerScreen*`, `ProviderDetailScreen*` | **New in Phase 23 / Task 9/9.** Provider picker and per-provider configuration screens — covered by the catalog Roborazzi snapshots, not JVM unit tests. |
+| `ai.agent.android.data.tools.local.appfunctions.*` | **New in Phase 23 / Task 9/9.** AppFunctions callee wrapper (`SearchAppFunction`); the platform `PlatformAppFunctionService` host needs the Android runtime to dispatch. |
+| `ai.agent.android.data.tools.local.AgentAppFunctionService*`, `LocalAppFunctionManager`, `SearchTool*`, `DelegateTaskTool*` | Tool-execution Android glue (live HTTP / LLM bridge).                    |
+| `ai.agent.android.data.logging.CrashlyticsTimberTree*` | Firebase Crashlytics Timber bridge; `getInstance()` paths need Google Play services on Android. |
 
-## Known noise
+## Justified zero-coverage packages
 
-These packages show 0% but are intentional or out-of-scope for unit-test
-coverage:
+These appear as 0 % (or near-zero) but are intentional / out-of-scope for
+unit-test coverage. They are documented here so a future reader does not
+mistake them for missing work.
 
-- `presentation.theme` — Material 3 colour / typography constants. Pure data.
-- `presentation.notifications`, `presentation.receivers` — Android-runtime
-  classes (`NotificationManager`, `BroadcastReceiver`). Need instrumented tests.
-- `data.local.dao` — Room DAO **interfaces**. The generated `*_Impl`
-  implementations are correctly excluded; the interface lines themselves
-  (constants in `companion object`s) account for the 7 reported lines.
-- `data.tools.local.executors` — `LocalToolExecutor` strategies wired through
-  Hilt multibinding. Trivial dispatch code; tests live one level up.
+- **`presentation.theme`** — Material 3 colour / typography constants and a
+  thin `Theme` composable. Pure declarative composition; no branching
+  business logic to test. Excluded via the
+  `ai.agent.android.presentation.theme.*` pattern above.
+- **`presentation.ui`** (root entry-points) — `MainActivity` plus the
+  `*ScreenKt` host shells under the top-level `presentation/ui/` directory.
+  These are Android-runtime-bound Compose roots; their coverage is the
+  domain of `connectedDebugAndroidTest`, not the JVM Kover pipeline.
+- **`data.local.dao`** — Room DAO interfaces. Their generated `*_Impl`
+  implementations are covered, the interface lines themselves are
+  declarative.
+- **`appfunctions_aggregated_deps`** — KSP-generated boilerplate; 5 lines.
 
 ## How to regenerate locally
 
@@ -228,27 +227,29 @@ task, or sooner if the PAT scope is updated.
   invoked with the `Debug` suffix throughout. `release` is irrelevant for
   unit-test coverage.
 
-## Enforced threshold (Phase 18 — Task 9/10)
+## Enforced threshold (current)
 
-`koverVerifyDebug` now fails the build when aggregate LINE coverage over
-the unit-testable surface drops below **70 %**. Kover 0.9.x does not
-support per-rule filters, so the rule is one application-level threshold
-applied to a globally-filtered class set (see `app/build.gradle.kts` →
-`kover { reports { filters { excludes { ... } } } }`).
+`koverVerifyDebug` fails the build when aggregate LINE coverage over the
+unit-testable surface drops below **75 %** (raised from 70 % in Phase 23 /
+Task 9/9). Today's measurement is **77.6 %**, giving the gate ~2.6 pp of
+headroom against silent regression.
 
-The exclusion list, beyond what was already filtered for the baseline
-above, adds the Android-runtime-bound classes that the JVM unit-test
-pipeline cannot exercise — `App.kt`, `MainActivity`, all `*Screen`
-Composables, `presentation.ui.*.components.*`, `presentation.theme`,
-`presentation.notifications`, `presentation.receivers`,
-`presentation.state`, parts of `data.tools.local.*`, and
-`data.local.dao.*`. (Phase 23 / Task 4/9 lifted the previous
-`data.services.*` exclusion — that package is now covered by Robolectric
-tests; see the per-package row above.)
+Kover 0.9.x has no rule-level `filters { ... }` block — that DSL element is
+gated behind a future 0.10 release — so the gate is a single
+application-wide rule operating over the globally-filtered class set in
+`app/build.gradle.kts` → `kover { reports { filters { excludes { ... } } } }`.
+The per-package floors in the tables above are **informational targets**;
+promote them to enforced rules once Kover 0.10 ships.
 
-After these exclusions the **current** aggregate LINE coverage (May 2026)
-is ~80 %. The 70 % floor leaves a 10 pp buffer for in-flight refactors.
+Phase 23 / Task 9/9 also added several Compose-surface / Android-runtime
+exclusions that fell through the existing wildcards because they live in
+new sub-packages introduced during this phase:
+`presentation.ui.navigation.*`, `presentation.ui.about.AboutScreen*` (+ its
+private `AboutAcknowledgments` data list), `presentation.ui.more.MoreScreen*`,
+`presentation.ui.settings.provider.{ProviderPickerScreen, ProviderDetailScreen}*`,
+and `data.tools.local.appfunctions.*`. Without these, the aggregate would
+sit at 73.8 % — i.e. the previously-claimed "~80 %" was already incorrect
+because the new screens never made it into the filter when they shipped.
 
 Raise the threshold deliberately as coverage grows; do **not** lower it
-without team agreement. The per-package decomposition above remains the
-useful drill-down view when reading the HTML report.
+without team agreement.
