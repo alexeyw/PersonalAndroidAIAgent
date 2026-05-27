@@ -1,0 +1,8 @@
+# Bundled pipeline-preset catalogue (Phase 24 / Task 1).
+#
+# Task 1/9 wires the loader and lays an empty directory so the asset
+# enumeration in LocalPipelinePresetRepositoryImpl resolves cleanly.
+# Task 2/9 fills this directory with the curated starter catalogue
+# (local_only_qa.json, cloud_assist.json, tool_using_react.json,
+# multi_step_research.json, clarify_then_act.json,
+# routed_local_cloud.json).

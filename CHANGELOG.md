@@ -13,6 +13,26 @@ details.
 
 ## [Unreleased]
 
+### Added
+
+- **Pipeline preset — domain model and storage** (Phase 24 / Task 1/9).
+  Introduces `PipelinePreset` as a reusable pre-built pipeline template
+  with two persistence tiers:
+  - **Bundled** presets ship inside the APK under
+    `assets/presets/pipelines/*.json` (catalogue files filled in by
+    Task 2/9; Task 1 wires the loader and lays the empty directory).
+  - **User** presets are persisted in a new `pipeline_presets` Room
+    table (schema **v23 → v24** via `MIGRATION_23_24`).
+  `LoadPipelineFromPresetUseCase` materialises a preset into a concrete
+  pipeline with fresh ids (regenerated for the pipeline, every node, and
+  every connection — orphan connections are dropped, mirroring
+  `DuplicatePipelineUseCase`). `SavePipelineAsPresetUseCase` packages the
+  current graph into a user preset after validating the name (1..60 chars)
+  and running `PipelineGraph.validate()`. The new
+  `PipelinePresetJsonSerializer` delegates the embedded graph half to
+  `PipelineJsonSerializer`, keeping the preset and pipeline formats
+  forever in sync.
+
 ### Build / coverage
 
 - **Coverage gate raised 70 % → 75 % LINE aggregate** (Phase 23 / Task 9/9).
