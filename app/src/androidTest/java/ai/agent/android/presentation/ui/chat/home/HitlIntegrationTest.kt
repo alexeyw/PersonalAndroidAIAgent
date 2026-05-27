@@ -98,6 +98,11 @@ class HitlIntegrationTest {
     }
 
     private fun viewStateWithHitl(risk: Risk, toolName: String, pendingTypedConfirm: String = ""): ChatHomeViewState {
+        // The card surfaces both `toolName` (header) and `summary` (body).
+        // Use a deliberately distinct summary so `onNodeWithText(toolName)`
+        // resolves to exactly one node (the header). Production code paths
+        // can fall back to `summary = toolName`; that fallback is covered by
+        // ChatHomeHitlScreenFlowTest.hitlState_rendersPendingToolName.
         val row = ChatHomeMessageRow(
             id = "a-hitl",
             role = ChatRole.Assistant,
@@ -105,7 +110,7 @@ class HitlIntegrationTest {
                 model = HitlConfirmationModel(
                     risk = risk,
                     toolName = toolName,
-                    summary = toolName,
+                    summary = "Run $toolName with the given arguments.",
                     arguments = mapOf("path" to "\"/tmp/x\""),
                     timestamp = "09:16",
                 ),

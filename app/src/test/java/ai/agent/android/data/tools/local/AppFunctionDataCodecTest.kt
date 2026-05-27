@@ -422,6 +422,48 @@ class AppFunctionDataCodecTest {
     }
 
     @Test
+    fun `planWriteOps drops an extra field nested inside a SetObject and logs a warning`() {
+        // Regression: extra-field detection recurses through nested objects so an LLM that
+        // includes a spurious key inside a nested payload still produces a valid encoding.
+        val nestedType = AppFunctionObjectTypeMetadata(
+            properties = mapOf("street" to AppFunctionStringTypeMetadata(isNullable = false)),
+            required = listOf("street"),
+            qualifiedName = "com.example.Address",
+            isNullable = false,
+        )
+        val schema = listOf(param("address", nestedType))
+
+        val ops = codec.planWriteOps("""{"address":{"street":"Main","ghost":42}}""", schema)
+
+        // The nested object is still encoded with only the declared field.
+        val nestedOp = ops.single() as AppFunctionWriteOp.SetObject
+        assertEquals(listOf(AppFunctionWriteOp.SetString("street", "Main")), nestedOp.children)
+        assertTrue(warnLogs.any { it.contains("'ghost'") })
+    }
+
+    @Test
+    fun `planWriteOps fails when a required field is missing inside an item of a SetObjectList`() {
+        // Recursion through array items must still enforce required-field validation per item.
+        val nestedType = AppFunctionObjectTypeMetadata(
+            properties = mapOf("name" to AppFunctionStringTypeMetadata(isNullable = false)),
+            required = listOf("name"),
+            qualifiedName = "com.example.Item",
+            isNullable = false,
+        )
+        val schema = listOf(
+            param(
+                "items",
+                AppFunctionArrayTypeMetadata(itemType = nestedType, isNullable = false),
+            ),
+        )
+
+        val error = assertThrows(IllegalArgumentException::class.java) {
+            codec.planWriteOps("""{"items":[{"name":"x"},{}]}""", schema)
+        }
+        assertTrue(error.message!!.contains("'name'"))
+    }
+
+    @Test
     fun `planWriteOps fails when a required nested-object field is missing`() {
         val nestedType = AppFunctionObjectTypeMetadata(
             properties = mapOf("street" to AppFunctionStringTypeMetadata(isNullable = false)),

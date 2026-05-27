@@ -42,6 +42,12 @@ plugins {
 // `AppFunctionsEndToEndTest` comes back empty.
 ksp {
     arg("appfunctions:aggregateAppFunctions", "true")
+    // Phase 23 / Task 3/9 — export the Room schema for every version so that
+    // `MigrationTestHelper` can validate migrations against frozen JSON
+    // snapshots in `app/schemas/`. The corresponding `exportSchema = true`
+    // flag is set on the `@Database` annotation. Every future schema bump
+    // must commit the newly generated `N.json` alongside the migration.
+    arg("room.schemaLocation", "$projectDir/schemas")
 }
 
 android {
@@ -131,6 +137,20 @@ android {
 
     testOptions {
         unitTests.isReturnDefaultValues = true
+        // Phase 23 / Task 4/9 — Robolectric needs the merged Android resources
+        // and assets on the JVM unit-test classpath (string lookups in
+        // `LongRunningTaskNotifierImpl`, drawables resolved by NotificationCompat
+        // builders). Without this flag Robolectric falls back to its own minimal
+        // resource table and `context.getString(R.string.…)` returns a placeholder.
+        unitTests.isIncludeAndroidResources = true
+    }
+
+    // Phase 23 / Task 3/9 — expose the exported Room schemas to the
+    // androidTest classpath so `MigrationTestHelper` (which reads them from
+    // `assets/`) can validate every migration step against the frozen
+    // snapshots in `app/schemas/`.
+    sourceSets {
+        getByName("androidTest").assets.srcDir("$projectDir/schemas")
     }
 
     packaging {
@@ -217,6 +237,7 @@ kotlin {
 
 // Kover — test-coverage measurement & enforcement.
 // Phase 18 / Task 9-10: aggregate threshold enforced via `koverVerifyDebug`.
+// Phase 23 / Task 9/9: aggregate floor raised 70 % → 75 % at end of phase.
 //
 // Per-rule filters are a Kover 0.10+ feature; on the 0.9.x line the only
 // way to scope verification is via the (global) `reports.filters` block,
@@ -227,11 +248,12 @@ kotlin {
 // here. The trade-off is documented in docs/coverage-baseline.md:
 // instrumented coverage for `*Screen.kt` etc. is a separate workstream.
 //
-// The single rule then enforces a 70 % aggregate floor over the
+// The single rule then enforces a 75 % aggregate floor over the
 // remaining "unit-testable" surface — domain + data.repositories +
-// presentation ViewModels / UiStates. Baseline numbers for those layers
-// (89 % / 83 % / ~55 % respectively) leave comfortable headroom; the floor
-// protects against silent regressions while leaving room for refactors.
+// presentation ViewModels / UiStates. Today's measurement is ~77.6 %, so
+// the floor leaves ~2.6 pp of headroom against silent regression. Per-
+// package targets that the build cannot yet enforce (no rule-level filters
+// in 0.9.x) live in docs/coverage-baseline.md.
 kover {
     reports {
         filters {
@@ -309,13 +331,46 @@ kover {
                     "ai.agent.android.presentation.ui.pipeline.editor.PipelineEditorScreen*",
                     "ai.agent.android.presentation.ui.splash.SplashScreen*",
                     "ai.agent.android.presentation.theme.*",
-                    "ai.agent.android.presentation.notifications.*",
-                    "ai.agent.android.presentation.receivers.*",
                     "ai.agent.android.presentation.state.*",
-                    // Background-execution glue (Foreground service / WorkManager
-                    // worker / power & idle managers) — runs only on a real
-                    // Android process; not unit-testable from the JVM.
-                    "ai.agent.android.data.services.*",
+                    // Phase 23 / Task 9/9 — additional Compose-surface / nav-glue
+                    // packages introduced during phase/23. Same rationale as the
+                    // existing presentation.ui.*Screen exclusions: rendering and
+                    // navigation code needs Compose UI tests, not JVM unit tests.
+                    // The redesigned bottom-nav shell (AppShellScaffold,
+                    // AppNavGraph, TabDestination, BottomNavVisibility,
+                    // KnotworkModalRoute, NavRoutes) is pure UI wiring; route
+                    // constants in NavRoutes are unreachable in JVM tests.
+                    "ai.agent.android.presentation.ui.navigation.*",
+                    // Single static About surface (AboutScreen.kt). The
+                    // `AboutAcknowledgments` private object lives in the same
+                    // file and is pure declarative data feeding the Composable.
+                    "ai.agent.android.presentation.ui.about.AboutScreen*",
+                    "ai.agent.android.presentation.ui.about.AboutAcknowledgments*",
+                    // Bottom-nav "More" hub Composable. The MoreViewModel /
+                    // MoreUiState in the same package remain inside the gate.
+                    "ai.agent.android.presentation.ui.more.MoreScreen*",
+                    // Provider picker and detail Compose screens under
+                    // presentation/ui/settings/provider — covered by the
+                    // catalog snapshot suite, not JVM unit tests.
+                    "ai.agent.android.presentation.ui.settings.provider.ProviderPickerScreen*",
+                    "ai.agent.android.presentation.ui.settings.provider.ProviderDetailScreen*",
+                    // AppFunctions callee-side wrapper (SearchAppFunction). The
+                    // KSP-generated `*_AppFunctionInvoker` infrastructure and
+                    // the platform `PlatformAppFunctionService` need the Android
+                    // runtime plus the AppFunctions service host to execute.
+                    "ai.agent.android.data.tools.local.appfunctions.*",
+                    // Phase 23 / Task 4/9 — `data.services.*` is now covered by
+                    // Robolectric tests (`AgentForegroundServiceTest`,
+                    // `AgentWorkerTest`, `AgentIdleManagerTest`,
+                    // `AgentPowerManagerTest`, `LongRunningTaskNotifierImplTest`).
+                    // The exclusion that was here while the package waited for
+                    // Robolectric coverage has been lifted.
+                    // Phase 23 / Task 5/9 — `presentation.notifications.*` and
+                    // `presentation.receivers.*` are now covered by Robolectric
+                    // tests (`ApprovalNotificationManagerTest`,
+                    // `AgentApprovalReceiverTest`). The exclusions that lived
+                    // here while those packages waited for ShadowNotificationManager
+                    // / BroadcastReceiver coverage have been lifted.
                     // Tool-execution Android glue (AppFunctions service, search
                     // tool HTTP client, delegate-task LLM bridge) needs either
                     // an Android runtime or live LLM/HTTP fixtures.
@@ -324,7 +379,10 @@ kover {
                     "ai.agent.android.data.tools.local.LocalAppFunctionManager",
                     "ai.agent.android.data.tools.local.SearchTool*",
                     "ai.agent.android.data.tools.local.DelegateTaskTool*",
-                    "ai.agent.android.data.tools.local.executors.*",
+                    // NOTE: `data.tools.local.executors.*` are pure JSON-arg
+                    // parsers that delegate to the (excluded) Android-runtime
+                    // tools above — they are JVM-unit-testable and covered by
+                    // `*ExecutorTest`s under `data/tools/local/executors/`.
                     // Firebase Crashlytics glue: the repository impl and the
                     // Timber tree thinly wrap `FirebaseCrashlytics` /
                     // `FirebaseAnalytics` singletons which need the Android
@@ -343,10 +401,21 @@ kover {
         }
 
         verify {
-            rule("Aggregate unit-testable coverage must stay ≥70%") {
+            // Aggregate gate — protects against silent regression across the
+            // whole unit-testable surface. The current measured value (Phase
+            // 23 / Task 9/9, May 2026) is ~77.5 %; the 75 % floor leaves a
+            // ~2.5 pp buffer for in-flight refactors.
+            //
+            // Per-package thresholds were considered for this task but cannot
+            // be expressed on Kover 0.9.x — the rule-level `filters { ... }`
+            // block is a 0.10+ feature (not yet released; 0.9.8 is the latest
+            // on the Gradle Plugin Portal as of May 2026). Per-package
+            // *targets* are documented in docs/coverage-baseline.md as
+            // guidance; promote them to enforced rules once Kover 0.10 ships.
+            rule("Aggregate unit-testable coverage must stay ≥75%") {
                 groupBy = kotlinx.kover.gradle.plugin.dsl.GroupingEntityType.APPLICATION
                 bound {
-                    minValue = 70
+                    minValue = 75
                     coverageUnits = kotlinx.kover.gradle.plugin.dsl.CoverageUnit.LINE
                     aggregationForGroup =
                         kotlinx.kover.gradle.plugin.dsl.AggregationType.COVERED_PERCENTAGE
@@ -522,6 +591,10 @@ dependencies {
     testImplementation(libs.mockk)
     testImplementation(libs.coroutines.test)
     testImplementation(libs.work.testing)
+    // Phase 23 / Task 4/9 — Robolectric is needed for the foreground service,
+    // notification builder, and Doze (`ShadowPowerManager`) paths under
+    // `data.services`. The version is pinned in `gradle/libs.versions.toml`.
+    testImplementation(libs.robolectric)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(platform(libs.androidx.compose.bom))
@@ -529,6 +602,7 @@ dependencies {
     debugImplementation(libs.androidx.compose.ui.tooling)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
     androidTestImplementation(libs.mockk.android)
+    androidTestImplementation(libs.room.testing)
 }
 
 // Phase 20 / Task 6/7: install the :tools-probe debug APK alongside the agent's test
