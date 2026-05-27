@@ -198,14 +198,12 @@ abstract class DataModule {
 
     /**
      * Binds [LocalPipelinePresetRepositoryImpl] to [PipelinePresetRepository] — composes the
-     * bundled `assets/presets/pipelines/*.json` catalogue with the user-saved Room rows
+     * bundled assets/presets/pipelines catalogue with the user-saved Room rows
      * (Phase 24 / Task 1).
      */
     @Binds
     @Singleton
-    abstract fun bindPipelinePresetRepository(
-        repository: LocalPipelinePresetRepositoryImpl,
-    ): PipelinePresetRepository
+    abstract fun bindPipelinePresetRepository(repository: LocalPipelinePresetRepositoryImpl): PipelinePresetRepository
 
     /**
      * Binds the [PromptRepositoryImpl] implementation to the [PromptRepository] interface.

@@ -2,8 +2,8 @@ package ai.agent.android.domain.models
 
 /**
  * Outcome of parsing a pipeline-preset JSON document — either one of the
- * bundled `assets/presets/pipelines/*.json` files or a `*.preset.json`
- * exported from the browser-side editor.
+ * bundled JSON files under `assets/presets/pipelines` or a `.preset.json`
+ * file exported from the browser-side editor.
  *
  * Mirrors the shape of [PipelineImportOutcome]; the preset format wraps the
  * same pipeline-graph schema with three extra top-level fields
@@ -32,11 +32,8 @@ sealed class PipelinePresetImportOutcome {
      * @property foundVersion The `schemaVersion` value read from the file.
      * @property expectedVersion The version this build expects.
      */
-    data class SchemaMismatch(
-        val preset: PipelinePreset,
-        val foundVersion: Int,
-        val expectedVersion: Int,
-    ) : PipelinePresetImportOutcome()
+    data class SchemaMismatch(val preset: PipelinePreset, val foundVersion: Int, val expectedVersion: Int) :
+        PipelinePresetImportOutcome()
 
     /**
      * Parsing failed irrecoverably (malformed JSON, missing required

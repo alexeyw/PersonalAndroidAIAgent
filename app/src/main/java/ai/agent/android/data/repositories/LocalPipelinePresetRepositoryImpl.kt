@@ -25,7 +25,7 @@ import javax.inject.Inject
  * independent stores:
  *
  * - **Bundled** presets are read lazily on first subscription from
- *   `assets/presets/pipelines/*.json`, parsed via
+ *   the `assets/presets/pipelines` directory, parsed via
  *   [PipelinePresetJsonSerializer], and cached for the lifetime of the
  *   process (the asset set cannot change at runtime, so re-reading on
  *   every subscription is pure waste).

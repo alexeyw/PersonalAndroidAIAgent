@@ -23,9 +23,7 @@ import javax.inject.Inject
  *
  * @property pipelinePresetRepository Persistence sink for the new preset.
  */
-class SavePipelineAsPresetUseCase @Inject constructor(
-    private val pipelinePresetRepository: PipelinePresetRepository,
-) {
+class SavePipelineAsPresetUseCase @Inject constructor(private val pipelinePresetRepository: PipelinePresetRepository) {
     /**
      * Builds a [PipelinePreset] from [graph] and persists it.
      *

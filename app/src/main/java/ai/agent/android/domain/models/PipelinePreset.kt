@@ -8,8 +8,8 @@ package ai.agent.android.domain.models
  * Two sub-kinds share this single type, distinguished only by [isBundled]:
  *
  * - **Bundled** presets ship inside the APK under
- *   `assets/presets/pipelines/*.json` and are read-only. They form the
- *   curated starter catalogue visible on first launch.
+ *   `assets/presets/pipelines` (as JSON files) and are read-only. They
+ *   form the curated starter catalogue visible on first launch.
  * - **User** presets live in Room (`pipeline_presets` table, schema v24) and
  *   are mutable — the user can save the currently-edited graph as a preset
  *   for later reuse, rename, or delete it.
@@ -81,6 +81,7 @@ enum class PresetCategory(val key: String) {
     OTHER("other"),
     ;
 
+    /** Companion factory exposing [fromKey] for wire-key decoding. */
     companion object {
         /**
          * Decodes [key] to its [PresetCategory], falling back to [OTHER] for

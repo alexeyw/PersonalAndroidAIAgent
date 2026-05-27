@@ -11,9 +11,8 @@ import kotlinx.coroutines.flow.Flow
  * Data Access Object for the user-saved pipeline-preset catalogue
  * (`pipeline_presets`, schema v24).
  *
- * Bundled presets ship in `assets/presets/pipelines/*.json` and never
- * reach this DAO — the repository layer composes the two catalogues for
- * its callers.
+ * Bundled presets ship in `assets/presets/pipelines` and never reach this
+ * DAO — the repository layer composes the two catalogues for its callers.
  */
 @Dao
 interface PipelinePresetDao {

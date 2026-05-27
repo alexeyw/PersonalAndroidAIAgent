@@ -11,8 +11,8 @@ import org.json.JSONObject
 
 /**
  * Two-way mapper between [PipelinePreset] and the schema-versioned JSON
- * format used by the bundled `assets/presets/pipelines/*.json` files and
- * by the browser-side editor's `*.preset.json` export (introduced in
+ * format used by the bundled JSON files under `assets/presets/pipelines`
+ * and by the browser-side editor's `.preset.json` export (introduced in
  * Phase 24 / Task 7).
  *
  * The preset format is **a strict superset** of the pipeline format owned
@@ -116,11 +116,7 @@ object PipelinePresetJsonSerializer {
         }
     }
 
-    private fun buildPreset(
-        root: JSONObject,
-        graph: PipelineGraph,
-        isBundled: Boolean,
-    ): PipelinePreset {
+    private fun buildPreset(root: JSONObject, graph: PipelineGraph, isBundled: Boolean): PipelinePreset {
         // The preset id and the embedded graph id are independent: a
         // bundled file's id is its filename stem (carried through the
         // top-level `id` field), while the graph keeps its own id so the

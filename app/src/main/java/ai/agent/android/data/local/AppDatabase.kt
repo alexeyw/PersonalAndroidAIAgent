@@ -360,7 +360,7 @@ abstract class AppDatabase : RoomDatabase() {
          *
          * Adds the `pipeline_presets` table backing the user-saved
          * preset catalogue. Bundled presets live in
-         * `assets/presets/pipelines/*.json` and never reach this table.
+         * `assets/presets/pipelines` and never reach this table.
          *
          * The graph is stored as a JSON blob produced by
          * `PipelinePresetJsonSerializer.serialize(...)` so preset rows

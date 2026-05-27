@@ -8,8 +8,8 @@ import kotlinx.coroutines.flow.Flow
  * Phase 24:
  *
  * - **Bundled presets** are read-only and ship inside the APK under
- *   `assets/presets/pipelines/*.json`. They form the curated starter
- *   catalogue surfaced on first launch.
+ *   `assets/presets/pipelines`. They form the curated starter catalogue
+ *   surfaced on first launch.
  * - **User presets** are mutable and live in the `pipeline_presets` Room
  *   table (schema v24). They are created when the user runs
  *   `SavePipelineAsPresetUseCase` against the currently-edited graph.
