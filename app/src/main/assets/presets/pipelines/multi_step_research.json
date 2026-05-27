@@ -1,0 +1,133 @@
+{
+  "schemaVersion": 1,
+  "id": "multi_step_research",
+  "name": "Multi-step research",
+  "description": "Decomposes the request into subtasks, then loops over each subtask through a cloud LLM via the queue processor. The Done branch leaves the loop and produces the final answer.",
+  "category": "research",
+  "tags": ["research", "decomposition", "cloud", "loop"],
+  "updatedAt": 1748304000000,
+  "nodes": [
+    {
+      "id": "input",
+      "type": "INPUT",
+      "position": { "x": 80.0, "y": 200.0 },
+      "label": "Input",
+      "config": {
+        "systemPrompt": null,
+        "cloudProvider": null,
+        "modelPath": null,
+        "toolName": null,
+        "clarificationTimeoutMs": null,
+        "conditionPrompt": null,
+        "conditionKeywords": null,
+        "conditionComplexity": null
+      },
+      "contextConfig": {
+        "chatHistory": false,
+        "originalTask": false,
+        "nodeInput": true,
+        "longTermMemory": false,
+        "toolResults": false
+      }
+    },
+    {
+      "id": "decomposition",
+      "type": "DECOMPOSITION",
+      "position": { "x": 320.0, "y": 200.0 },
+      "label": "Decomposition",
+      "config": {
+        "systemPrompt": "You are a task decomposer. Break the user's request into a short ordered list of independent research subtasks (typically 2-5). Today is $DATE. Output STRICTLY a JSON array of plain-text strings — no prose, no keys, no trailing commentary.",
+        "cloudProvider": null,
+        "modelPath": null,
+        "toolName": null,
+        "clarificationTimeoutMs": null,
+        "conditionPrompt": null,
+        "conditionKeywords": null,
+        "conditionComplexity": null
+      },
+      "contextConfig": {
+        "chatHistory": false,
+        "originalTask": true,
+        "nodeInput": true,
+        "longTermMemory": false,
+        "toolResults": false
+      }
+    },
+    {
+      "id": "queue",
+      "type": "QUEUE_PROCESSOR",
+      "position": { "x": 560.0, "y": 200.0 },
+      "label": "Queue",
+      "config": {
+        "systemPrompt": null,
+        "cloudProvider": null,
+        "modelPath": null,
+        "toolName": null,
+        "clarificationTimeoutMs": null,
+        "conditionPrompt": null,
+        "conditionKeywords": null,
+        "conditionComplexity": null
+      },
+      "contextConfig": {
+        "chatHistory": false,
+        "originalTask": true,
+        "nodeInput": true,
+        "longTermMemory": false,
+        "toolResults": false
+      }
+    },
+    {
+      "id": "cloud",
+      "type": "CLOUD",
+      "position": { "x": 800.0, "y": 100.0 },
+      "label": "Researcher",
+      "config": {
+        "systemPrompt": "You are a research assistant working on ONE subtask at a time within a larger plan. Today is $DATE. Investigate the current subtask thoroughly and return concrete findings in two or three short paragraphs. Previously completed subtask results, when present, appear above the current subtask — reuse them rather than restarting research.",
+        "cloudProvider": "auto",
+        "modelPath": null,
+        "toolName": null,
+        "clarificationTimeoutMs": null,
+        "conditionPrompt": null,
+        "conditionKeywords": null,
+        "conditionComplexity": null
+      },
+      "contextConfig": {
+        "chatHistory": false,
+        "originalTask": true,
+        "nodeInput": true,
+        "longTermMemory": false,
+        "toolResults": false
+      }
+    },
+    {
+      "id": "output",
+      "type": "OUTPUT",
+      "position": { "x": 800.0, "y": 320.0 },
+      "label": "Reply",
+      "config": {
+        "systemPrompt": null,
+        "cloudProvider": null,
+        "modelPath": null,
+        "toolName": null,
+        "clarificationTimeoutMs": null,
+        "conditionPrompt": null,
+        "conditionKeywords": null,
+        "conditionComplexity": null
+      },
+      "contextConfig": {
+        "chatHistory": true,
+        "originalTask": true,
+        "nodeInput": true,
+        "longTermMemory": true,
+        "toolResults": true
+      }
+    }
+  ],
+  "connections": [
+    { "id": "c1", "fromNodeId": "input", "toNodeId": "decomposition", "label": null },
+    { "id": "c2", "fromNodeId": "decomposition", "toNodeId": "queue", "label": null },
+    { "id": "c3", "fromNodeId": "queue", "toNodeId": "cloud", "label": "Item" },
+    { "id": "c4", "fromNodeId": "cloud", "toNodeId": "queue", "label": null },
+    { "id": "c5", "fromNodeId": "queue", "toNodeId": "output", "label": "Done" }
+  ]
+}
