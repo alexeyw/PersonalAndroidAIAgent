@@ -9,9 +9,9 @@ import ai.agent.android.domain.models.NodeType
  *
  * Co-locating the LLM-driven set with the limits keeps every prompt-preset
  * code path — domain validation (`SavePromptAsPresetUseCase`), bundled
- * catalogue validation (`PromptPresetCatalogValidationTest`), and the
- * future UI filter in `PromptLibraryDialog` (Phase 24 / Task 5) — pointing
- * at one source of truth instead of redeclaring the rule each time.
+ * catalogue validation (`PromptPresetCatalogValidationTest`), and the UI
+ * filter in `PromptPresetPickerDialog` (Phase 24 / Task 5) — pointing at
+ * one source of truth instead of redeclaring the rule each time.
  */
 object PromptPresetConstants {
 

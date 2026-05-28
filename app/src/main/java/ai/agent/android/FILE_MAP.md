@@ -286,7 +286,8 @@ This file maps the contents of the main application package.
       - `PipelineLibraryScreen.kt` - Library screen listing every saved pipeline. Phase 24 / Task 3 replaces the single FAB with `PipelineLibrarySpeedDial` (+ New / + From preset), wires `onBrowseTemplates` to `PresetPickerSheet`, and adds the `Save as preset` row overflow action.
       - `components/` - Orchestrator UI components.
         - `NodeContextConfigSection.kt` - "Input Data" section of the node configuration dialog: five checkboxes mapped to `NodeContextConfig` flags (with `nodeInput` rendered locked-on) plus a hint banner.
-        - `PromptLibraryDialog.kt` - Prompt library dialog UI component.
+        - `PromptPresetPickerDialog.kt` - Bundled/Mine tabbed picker scoped to the active `NodeType` (Phase 24 / Task 5). Owns the search 200ms debounce, tag-chip multi-filter, and per-row Preview/Apply. Replaces the legacy `PromptLibraryDialog`. Exposes `filterPresets(...)` for unit tests.
+        - `SavePromptAsPresetDialog.kt` - Name/description/tags dialog raised when the user taps the 💾 button on a prompt-bearing field in `NodeConfigSheet` (Phase 24 / Task 5). Validates against `PromptPresetConstants` (60-char name cap) and hands a `SavePromptAsPresetResult` back to the editor. Exposes `parsePromptPresetTags(...)` and `canSavePromptPreset(...)` for unit tests.
       - `presets/` - Pipeline preset UI (Phase 24 / Task 3).
         - `PipelinePresetsViewModel.kt` - Hilt VM driving `PresetPickerSheet` and `PipelinePresetsManagerScreen`. Owns bundled/user catalogue flows, tab+chip selection, load-from-preset hand-off, rename/delete/export of user presets.
         - `PipelinePresetsUiState.kt` - UI state for the picker and manager (bundled/user lists, active tab, category chip, `pendingPipelineIdFromPreset` editor hand-off).

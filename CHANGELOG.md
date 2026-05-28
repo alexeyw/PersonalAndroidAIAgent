@@ -15,6 +15,20 @@ details.
 
 ### Added
 
+- **Prompt presets — UI** (Phase 24 / Task 5/9). Wires the bundled and
+  user-saved prompt-preset catalogue (Task 4) into the production
+  pipeline editor. The 📚 button next to every prompt-bearing field in
+  `NodeConfigSheet` now opens a new `PromptPresetPickerDialog` filtered
+  by the active node's `NodeType`, with **Bundled** and **Mine** tabs,
+  a tag-chip multi-filter, 200 ms debounced search by name, and
+  per-row Preview / Apply actions. A new 💾 button next to 📚 captures
+  the current draft as a user preset via a name / description / tags
+  dialog that delegates to `SavePromptAsPresetUseCase`. The Preview
+  action reuses the existing `PromptPreviewBottomSheet` with full
+  `$VARIABLE` substitution so the user can verify a preset before
+  applying it. Replaces the legacy `PromptLibraryDialog` that was
+  backed by the older `PromptTemplate` model.
+
 - **Prompt presets — domain model & bundled catalogue** (Phase 24 /
   Task 4/9). New first-class entity for reusable system-prompt templates,
   attached to a single LLM-driven `NodeType` (LITE_RT, CLOUD, OUTPUT,

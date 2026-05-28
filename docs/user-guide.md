@@ -451,6 +451,34 @@ $MEMORY_SUMMARY
 To emit a literal `$KEY` (for example, when you want to write
 documentation inside the prompt), escape the dollar sign as `\$KEY`.
 
+### Prompt presets
+
+Every prompt-bearing field in a node's configuration sheet has two
+small icons next to its label:
+
+- **📚 Library** — opens a picker scoped to the current node's type.
+  The picker has two tabs:
+  - **Bundled** — curated, read-only prompt templates that ship with
+    the app (e.g. *Concise assistant*, *Step-by-step reasoner*,
+    *JSON structured output*, *Keyword classifier*, *Dependency-aware
+    decomposition*).
+  - **Mine** — prompt templates you've saved yourself (see 💾 below).
+  Use the search box to filter by name, or tap the tag chips to narrow
+  the list further. Every row exposes two actions:
+  - **Preview** — renders the prompt with `$VARIABLE` placeholders
+    substituted at the current moment so you can see the final text
+    before applying.
+  - **Apply** — replaces the field's current value with the preset's
+    body and closes the picker.
+- **💾 Save as preset** — captures the current draft as a new entry in
+  the **Mine** tab. You enter a name (max 60 chars), an optional
+  description, and optional comma-separated tags. The preset's node
+  type is inferred from the field you saved from, so it'll only show
+  up in the picker when you open it on a matching node type later.
+
+User presets live in the app's local database; bundled presets ship
+with the APK and are never modified.
+
 ---
 
 ## Browser pipeline editor

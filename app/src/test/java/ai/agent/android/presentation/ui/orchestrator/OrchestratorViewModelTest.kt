@@ -10,11 +10,13 @@ import ai.agent.android.domain.models.PipelineGraph
 import ai.agent.android.domain.models.PipelineValidationError
 import ai.agent.android.domain.models.PipelineValidationException
 import ai.agent.android.domain.models.PresetCategory
+import ai.agent.android.domain.models.PromptPreset
 import ai.agent.android.domain.prompt.PromptSegment
 import ai.agent.android.domain.prompt.PromptTemplateEngine
 import ai.agent.android.domain.prompt.PromptVariableProvider
 import ai.agent.android.domain.repositories.ApiKeyRepository
 import ai.agent.android.domain.repositories.LocalModelRepository
+import ai.agent.android.domain.repositories.PromptPresetRepository
 import ai.agent.android.domain.repositories.SettingsRepository
 import ai.agent.android.domain.repositories.ToolRepository
 import ai.agent.android.domain.usecases.CreatePipelineUseCase
@@ -66,6 +68,7 @@ class OrchestratorViewModelTest {
     private lateinit var localModelRepository: LocalModelRepository
     private lateinit var settingsRepository: SettingsRepository
     private lateinit var promptTemplateEngine: PromptTemplateEngine
+    private lateinit var promptPresetRepository: PromptPresetRepository
     private lateinit var providerDate: PromptVariableProvider
     private lateinit var providerTime: PromptVariableProvider
     private lateinit var viewModel: OrchestratorViewModel
@@ -91,6 +94,9 @@ class OrchestratorViewModelTest {
         savePromptTemplateUseCase = mockk()
         savePipelineAsPresetUseCase = mockk()
         savePromptAsPresetUseCase = mockk()
+        promptPresetRepository = mockk(relaxed = true) {
+            every { getPresetsForType(any()) } returns flowOf(emptyList())
+        }
         apiKeyRepository = mockk()
         toolRepository = mockk()
         localModelRepository = mockk()
@@ -136,6 +142,7 @@ class OrchestratorViewModelTest {
             localModelRepository,
             settingsRepository,
             promptTemplateEngine,
+            promptPresetRepository,
             setOf(providerDate, providerTime),
         )
     }
@@ -1108,6 +1115,110 @@ class OrchestratorViewModelTest {
             name = "x",
             description = "",
             category = PresetCategory.OTHER,
+        )
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertNotNull(viewModel.uiState.value.errorMessage)
+    }
+
+    // ─── Phase 24 / Task 5 — Prompt preset surface ────────────────────────────
+
+    @Test
+    fun `bundledPresetsForType returns only bundled presets`() = runTest {
+        val bundled = PromptPreset(
+            id = "b1",
+            name = "Bundled",
+            description = "",
+            nodeType = NodeType.LITE_RT,
+            systemPrompt = "You are helpful.",
+            isBundled = true,
+        )
+        val user = bundled.copy(id = "u1", name = "Mine", isBundled = false)
+        every { promptPresetRepository.getPresetsForType(NodeType.LITE_RT) } returns
+            flowOf(listOf(bundled, user))
+
+        val emitted = mutableListOf<List<PromptPreset>>()
+        viewModel.bundledPresetsForType(NodeType.LITE_RT)
+            .collect { emitted += it }
+
+        assertEquals(1, emitted.last().size)
+        assertEquals("b1", emitted.last().first().id)
+    }
+
+    @Test
+    fun `userPresetsForType returns only user presets`() = runTest {
+        val bundled = PromptPreset(
+            id = "b1",
+            name = "Bundled",
+            description = "",
+            nodeType = NodeType.CLOUD,
+            systemPrompt = "You are helpful.",
+            isBundled = true,
+        )
+        val user = bundled.copy(id = "u1", name = "Mine", isBundled = false)
+        every { promptPresetRepository.getPresetsForType(NodeType.CLOUD) } returns
+            flowOf(listOf(bundled, user))
+
+        val emitted = mutableListOf<List<PromptPreset>>()
+        viewModel.userPresetsForType(NodeType.CLOUD)
+            .collect { emitted += it }
+
+        assertEquals(1, emitted.last().size)
+        assertEquals("u1", emitted.last().first().id)
+    }
+
+    @Test
+    fun `saveCurrentPromptAsPreset sets feedback message on success`() = runTest {
+        coEvery {
+            savePromptAsPresetUseCase(
+                systemPrompt = any(),
+                name = any(),
+                description = any(),
+                nodeType = any(),
+                tags = any(),
+            )
+        } returns Result.success("preset-1")
+
+        viewModel.saveCurrentPromptAsPreset(
+            systemPrompt = "You are concise.",
+            name = "Concise assistant",
+            description = "",
+            nodeType = NodeType.LITE_RT,
+            tags = listOf("concise"),
+        )
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertEquals(null, state.errorMessage)
+        assertNotNull(state.feedbackMessage)
+        coVerify(exactly = 1) {
+            savePromptAsPresetUseCase(
+                systemPrompt = "You are concise.",
+                name = "Concise assistant",
+                description = "",
+                nodeType = NodeType.LITE_RT,
+                tags = listOf("concise"),
+            )
+        }
+    }
+
+    @Test
+    fun `saveCurrentPromptAsPreset surfaces error on failure`() = runTest {
+        coEvery {
+            savePromptAsPresetUseCase(
+                systemPrompt = any(),
+                name = any(),
+                description = any(),
+                nodeType = any(),
+                tags = any(),
+            )
+        } returns Result.failure(IllegalArgumentException("Preset name must not be blank"))
+
+        viewModel.saveCurrentPromptAsPreset(
+            systemPrompt = "ignored",
+            name = "",
+            description = "",
+            nodeType = NodeType.LITE_RT,
         )
         testDispatcher.scheduler.advanceUntilIdle()
 

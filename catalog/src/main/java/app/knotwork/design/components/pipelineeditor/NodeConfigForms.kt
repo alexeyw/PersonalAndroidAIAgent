@@ -16,6 +16,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AddCircleOutline
 import androidx.compose.material.icons.outlined.AutoStories
+import androidx.compose.material.icons.outlined.BookmarkAdd
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.RemoveCircleOutline
 import androidx.compose.material3.DropdownMenuItem
@@ -77,12 +78,17 @@ object NodeConfigForms {
      * its dropdown. Empty list (the default) falls back to a free-text input.
      * @param onPickFromLibrary optional hook to open the prompt-library picker from
      * any prompt-bearing field. The catalog form invokes it with
-     * `(category, applySelected)` where `category` matches a `PromptTemplate.category`
-     * and `applySelected` is the lambda the form wants run when the user picks a
-     * prompt; the screen renders its own picker dialog and calls `applySelected`.
-     * `null` (the default) hides the library button entirely.
+     * `(category, applySelected)` where `category` is the LLM-driven `NodeType.name`
+     * (e.g. `"LITE_RT"`) and `applySelected` is the lambda the form wants run when the
+     * user picks a preset; the screen renders its own picker dialog and calls
+     * `applySelected`. `null` (the default) hides the library button entirely.
+     * @param onSavePreset optional hook to capture the current draft of a prompt-bearing
+     * field as a user prompt preset. The catalog form invokes it with
+     * `(category, currentPrompt)`; the screen shows its own Save-as-preset dialog with
+     * name/description/tags fields. `null` (the default) hides the save button entirely.
      */
     @Composable
+    @Suppress("LongParameterList")
     fun Body(
         config: NodeConfig,
         errors: Map<FieldId, ValidationFailure>,
@@ -90,6 +96,7 @@ object NodeConfigForms {
         availableToolIds: List<String> = emptyList(),
         availableModels: List<LocalModelOption> = emptyList(),
         onPickFromLibrary: ((category: String, apply: (String) -> Unit) -> Unit)? = null,
+        onSavePreset: ((category: String, currentPrompt: String) -> Unit)? = null,
     ) {
         Column(
             modifier = Modifier.fillMaxWidth(),
@@ -106,17 +113,48 @@ object NodeConfigForms {
             )
             when (config) {
                 is InputConfig -> InputFormBody(config, errors, onChange)
-                is OutputConfig -> OutputFormBody(config, onChange, onPickFromLibrary)
-                is LiteRtConfig -> LiteRtFormBody(config, errors, onChange, availableModels, onPickFromLibrary)
-                is CloudConfig -> CloudFormBody(config, errors, onChange, onPickFromLibrary)
-                is IntentRouterConfig -> IntentRouterFormBody(config, errors, onChange, onPickFromLibrary)
+                is OutputConfig -> OutputFormBody(config, onChange, onPickFromLibrary, onSavePreset)
+                is LiteRtConfig -> LiteRtFormBody(
+                    config = config,
+                    errors = errors,
+                    onChange = onChange,
+                    availableModels = availableModels,
+                    onPickFromLibrary = onPickFromLibrary,
+                    onSavePreset = onSavePreset,
+                )
+                is CloudConfig -> CloudFormBody(config, errors, onChange, onPickFromLibrary, onSavePreset)
+                is IntentRouterConfig -> IntentRouterFormBody(
+                    config = config,
+                    errors = errors,
+                    onChange = onChange,
+                    onPickFromLibrary = onPickFromLibrary,
+                    onSavePreset = onSavePreset,
+                )
                 is IfConditionConfig -> IfConditionFormBody(config, errors, onChange)
-                is ClarificationConfig -> ClarificationFormBody(config, errors, onChange, onPickFromLibrary)
+                is ClarificationConfig -> ClarificationFormBody(
+                    config = config,
+                    errors = errors,
+                    onChange = onChange,
+                    onPickFromLibrary = onPickFromLibrary,
+                    onSavePreset = onSavePreset,
+                )
                 is ToolConfig -> ToolFormBody(config, errors, onChange, availableToolIds)
-                is DecompositionConfig -> DecompositionFormBody(config, errors, onChange, onPickFromLibrary)
+                is DecompositionConfig -> DecompositionFormBody(
+                    config = config,
+                    errors = errors,
+                    onChange = onChange,
+                    onPickFromLibrary = onPickFromLibrary,
+                    onSavePreset = onSavePreset,
+                )
                 is QueueProcessorConfig -> QueueProcessorFormBody(config, errors, onChange)
-                is EvaluationConfig -> EvaluationFormBody(config, errors, onChange, onPickFromLibrary)
-                is SummaryConfig -> SummaryFormBody(config, errors, onChange, onPickFromLibrary)
+                is EvaluationConfig -> EvaluationFormBody(
+                    config = config,
+                    errors = errors,
+                    onChange = onChange,
+                    onPickFromLibrary = onPickFromLibrary,
+                    onSavePreset = onSavePreset,
+                )
+                is SummaryConfig -> SummaryFormBody(config, errors, onChange, onPickFromLibrary, onSavePreset)
             }
         }
     }
@@ -128,6 +166,13 @@ object NodeConfigForms {
  * screen surfaces its own dialog and calls the inner lambda with the chosen prompt.
  */
 private typealias PromptLibraryHook = (category: String, apply: (String) -> Unit) -> Unit
+
+/**
+ * Typed shorthand for the optional save-as-preset callback the screen passes down to
+ * forms. The form invokes it as `hook(category, currentPrompt)`; the screen renders
+ * its own name/description/tags dialog and persists the new preset on confirm.
+ */
+private typealias SavePresetHook = (category: String, currentPrompt: String) -> Unit
 
 // ─────────────────────────────────────────────────────────────────────────
 // Shared helpers
@@ -251,28 +296,47 @@ private fun TextField(
     onChange: (String) -> Unit,
     libraryCategory: String? = null,
     onPickFromLibrary: PromptLibraryHook? = null,
+    onSavePreset: SavePresetHook? = null,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp1)) {
-        // When the field is prompt-bearing AND the screen provided a library
-        // hook, surface a small icon button next to the label so the user can
-        // replace the field with a saved prompt. The button sits in a row with
-        // the label (not inside the field) so the VariableChipsRow below the
-        // field stays visually attached to the prompt area.
-        if (libraryCategory != null && onPickFromLibrary != null) {
+        // When the field is prompt-bearing AND the screen provided a library/save
+        // hook, surface small icon buttons next to the label so the user can replace
+        // the field with a saved prompt (📚) or persist the current draft as a new
+        // user preset (💾). The buttons sit in a row with the label (not inside the
+        // field) so the VariableChipsRow below the field stays visually attached to
+        // the prompt area.
+        val hasLibrary = libraryCategory != null && onPickFromLibrary != null
+        val hasSave = libraryCategory != null && onSavePreset != null
+        if (hasLibrary || hasSave) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 FieldLabel(text = label)
                 Spacer(modifier = Modifier.weight(1f))
-                IconButton(
-                    onClick = { onPickFromLibrary(libraryCategory) { picked -> onChange(picked) } },
-                    modifier = Modifier.size(LIBRARY_BUTTON_TARGET_DP.dp),
-                ) {
-                    Icon(
-                        imageVector = Icons.Outlined.AutoStories,
-                        contentDescription = stringResource(R.string.knotwork_node_action_load_from_library),
-                    )
+                if (hasLibrary) {
+                    IconButton(
+                        onClick = {
+                            onPickFromLibrary(libraryCategory) { picked -> onChange(picked) }
+                        },
+                        modifier = Modifier.size(LIBRARY_BUTTON_TARGET_DP.dp),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.AutoStories,
+                            contentDescription = stringResource(R.string.knotwork_node_action_load_from_library),
+                        )
+                    }
+                }
+                if (hasSave) {
+                    IconButton(
+                        onClick = { onSavePreset(libraryCategory, value) },
+                        modifier = Modifier.size(LIBRARY_BUTTON_TARGET_DP.dp),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.BookmarkAdd,
+                            contentDescription = stringResource(R.string.knotwork_node_action_save_as_preset),
+                        )
+                    }
                 }
             }
         } else {
@@ -427,6 +491,7 @@ private fun OutputFormBody(
     config: OutputConfig,
     onChange: (NodeConfig) -> Unit,
     onPickFromLibrary: PromptLibraryHook?,
+    onSavePreset: SavePresetHook?,
 ) {
     SegmentedChipRow(
         label = stringResource(R.string.knotwork_node_field_format),
@@ -451,6 +516,7 @@ private fun OutputFormBody(
         onChange = { next -> onChange(config.copy(systemPrompt = next)) },
         libraryCategory = "OUTPUT",
         onPickFromLibrary = onPickFromLibrary,
+        onSavePreset = onSavePreset,
     )
     VariableChipsRow(onInsert = { variable ->
         onChange(config.copy(systemPrompt = config.systemPrompt + variable))
@@ -458,12 +524,14 @@ private fun OutputFormBody(
 }
 
 @Composable
+@Suppress("LongParameterList")
 private fun LiteRtFormBody(
     config: LiteRtConfig,
     errors: Map<FieldId, ValidationFailure>,
     onChange: (NodeConfig) -> Unit,
     availableModels: List<LocalModelOption>,
     onPickFromLibrary: PromptLibraryHook?,
+    onSavePreset: SavePresetHook?,
 ) {
     ModelPicker(
         config = config,
@@ -479,6 +547,7 @@ private fun LiteRtFormBody(
         onChange = { next -> onChange(config.copy(systemPrompt = next)) },
         libraryCategory = "LITE_RT",
         onPickFromLibrary = onPickFromLibrary,
+        onSavePreset = onSavePreset,
     )
     VariableChipsRow(onInsert = { variable ->
         onChange(config.copy(systemPrompt = config.systemPrompt + variable))
@@ -507,11 +576,13 @@ private fun LiteRtFormBody(
 }
 
 @Composable
+@Suppress("LongParameterList")
 private fun CloudFormBody(
     config: CloudConfig,
     errors: Map<FieldId, ValidationFailure>,
     onChange: (NodeConfig) -> Unit,
     onPickFromLibrary: PromptLibraryHook?,
+    onSavePreset: SavePresetHook?,
 ) {
     SegmentedChipRow(
         label = stringResource(R.string.knotwork_node_field_provider),
@@ -540,6 +611,7 @@ private fun CloudFormBody(
         onChange = { next -> onChange(config.copy(systemPrompt = next)) },
         libraryCategory = "CLOUD",
         onPickFromLibrary = onPickFromLibrary,
+        onSavePreset = onSavePreset,
     )
     VariableChipsRow(onInsert = { variable ->
         onChange(config.copy(systemPrompt = config.systemPrompt + variable))
@@ -568,11 +640,13 @@ private fun CloudFormBody(
 }
 
 @Composable
+@Suppress("LongParameterList")
 private fun IntentRouterFormBody(
     config: IntentRouterConfig,
     errors: Map<FieldId, ValidationFailure>,
     onChange: (NodeConfig) -> Unit,
     onPickFromLibrary: PromptLibraryHook?,
+    onSavePreset: SavePresetHook?,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp1)) {
         FieldLabel(text = stringResource(R.string.knotwork_node_field_classes))
@@ -650,6 +724,7 @@ private fun IntentRouterFormBody(
         onChange = { next -> onChange(config.copy(classifierPrompt = next)) },
         libraryCategory = "INTENT_ROUTER",
         onPickFromLibrary = onPickFromLibrary,
+        onSavePreset = onSavePreset,
     )
     VariableChipsRow(onInsert = { variable ->
         onChange(config.copy(classifierPrompt = config.classifierPrompt + variable))
@@ -707,11 +782,13 @@ private fun IfConditionFormBody(
 }
 
 @Composable
+@Suppress("LongParameterList")
 private fun ClarificationFormBody(
     config: ClarificationConfig,
     errors: Map<FieldId, ValidationFailure>,
     onChange: (NodeConfig) -> Unit,
     onPickFromLibrary: PromptLibraryHook?,
+    onSavePreset: SavePresetHook?,
 ) {
     TextField(
         label = stringResource(R.string.knotwork_node_field_question),
@@ -721,6 +798,7 @@ private fun ClarificationFormBody(
         onChange = { next -> onChange(config.copy(questionTemplate = next)) },
         libraryCategory = "CLARIFICATION",
         onPickFromLibrary = onPickFromLibrary,
+        onSavePreset = onSavePreset,
     )
     VariableChipsRow(onInsert = { variable ->
         onChange(config.copy(questionTemplate = config.questionTemplate + variable))
@@ -1094,11 +1172,13 @@ private fun ToolFormBody(
 }
 
 @Composable
+@Suppress("LongParameterList")
 private fun DecompositionFormBody(
     config: DecompositionConfig,
     errors: Map<FieldId, ValidationFailure>,
     onChange: (NodeConfig) -> Unit,
     onPickFromLibrary: PromptLibraryHook?,
+    onSavePreset: SavePresetHook?,
 ) {
     TextField(
         label = stringResource(R.string.knotwork_node_field_planning_prompt),
@@ -1108,6 +1188,7 @@ private fun DecompositionFormBody(
         onChange = { next -> onChange(config.copy(planningPrompt = next)) },
         libraryCategory = "DECOMPOSITION",
         onPickFromLibrary = onPickFromLibrary,
+        onSavePreset = onSavePreset,
     )
     VariableChipsRow(onInsert = { variable ->
         onChange(config.copy(planningPrompt = config.planningPrompt + variable))
@@ -1169,11 +1250,13 @@ private fun QueueProcessorFormBody(
 }
 
 @Composable
+@Suppress("LongParameterList")
 private fun EvaluationFormBody(
     config: EvaluationConfig,
     errors: Map<FieldId, ValidationFailure>,
     onChange: (NodeConfig) -> Unit,
     onPickFromLibrary: PromptLibraryHook?,
+    onSavePreset: SavePresetHook?,
 ) {
     TextField(
         label = stringResource(R.string.knotwork_node_field_criteria_prompt),
@@ -1183,6 +1266,7 @@ private fun EvaluationFormBody(
         onChange = { next -> onChange(config.copy(criteriaPrompt = next)) },
         libraryCategory = "EVALUATION",
         onPickFromLibrary = onPickFromLibrary,
+        onSavePreset = onSavePreset,
     )
     VariableChipsRow(onInsert = { variable ->
         onChange(config.copy(criteriaPrompt = config.criteriaPrompt + variable))
@@ -1197,11 +1281,13 @@ private fun EvaluationFormBody(
 }
 
 @Composable
+@Suppress("LongParameterList")
 private fun SummaryFormBody(
     config: SummaryConfig,
     errors: Map<FieldId, ValidationFailure>,
     onChange: (NodeConfig) -> Unit,
     onPickFromLibrary: PromptLibraryHook?,
+    onSavePreset: SavePresetHook?,
 ) {
     SegmentedChipRow(
         label = stringResource(R.string.knotwork_node_field_format),
@@ -1222,6 +1308,7 @@ private fun SummaryFormBody(
             onChange = { next -> onChange(config.copy(customPrompt = next.takeIf { it.isNotBlank() })) },
             libraryCategory = "SUMMARY",
             onPickFromLibrary = onPickFromLibrary,
+            onSavePreset = onSavePreset,
         )
         VariableChipsRow(onInsert = { variable ->
             onChange(config.copy(customPrompt = (config.customPrompt.orEmpty() + variable)))

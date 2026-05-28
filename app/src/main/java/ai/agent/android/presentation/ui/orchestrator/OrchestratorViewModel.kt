@@ -12,12 +12,14 @@ import ai.agent.android.domain.models.PipelineImportOutcome
 import ai.agent.android.domain.models.PipelineValidationError
 import ai.agent.android.domain.models.PipelineValidationException
 import ai.agent.android.domain.models.PresetCategory
+import ai.agent.android.domain.models.PromptPreset
 import ai.agent.android.domain.models.PromptTemplate
 import ai.agent.android.domain.pipelineio.PipelineJsonSerializer
 import ai.agent.android.domain.prompt.PromptTemplateEngine
 import ai.agent.android.domain.prompt.PromptVariableProvider
 import ai.agent.android.domain.repositories.ApiKeyRepository
 import ai.agent.android.domain.repositories.LocalModelRepository
+import ai.agent.android.domain.repositories.PromptPresetRepository
 import ai.agent.android.domain.repositories.SettingsRepository
 import ai.agent.android.domain.repositories.ToolRepository
 import ai.agent.android.domain.usecases.CreatePipelineUseCase
@@ -35,6 +37,7 @@ import ai.agent.android.presentation.ui.common.UiText
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -42,6 +45,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.util.UUID
@@ -80,6 +84,7 @@ class OrchestratorViewModel @Inject constructor(
     private val localModelRepository: LocalModelRepository,
     private val settingsRepository: SettingsRepository,
     private val promptTemplateEngine: PromptTemplateEngine,
+    private val promptPresetRepository: PromptPresetRepository,
     private val promptVariableProviders: Set<@JvmSuppressWildcards PromptVariableProvider>,
 ) : ViewModel() {
 
@@ -917,6 +922,25 @@ class OrchestratorViewModel @Inject constructor(
     }
 
     /**
+     * Cold flow of bundled prompt presets targeting [nodeType], for the
+     * `PromptPresetPickerDialog`'s Bundled tab. The dialog calls
+     * `collectAsState(initial = emptyList())` so a brief empty render is
+     * acceptable while the first asset-decode pass resolves.
+     *
+     * Pure delegation to [PromptPresetRepository] — kept here so the picker
+     * does not need to depend on the data layer directly.
+     */
+    fun bundledPresetsForType(nodeType: NodeType): Flow<List<PromptPreset>> =
+        promptPresetRepository.getPresetsForType(nodeType).map { all -> all.filter { it.isBundled } }
+
+    /**
+     * Cold flow of user-saved prompt presets targeting [nodeType], for the
+     * `PromptPresetPickerDialog`'s Mine tab.
+     */
+    fun userPresetsForType(nodeType: NodeType): Flow<List<PromptPreset>> =
+        promptPresetRepository.getPresetsForType(nodeType).map { all -> all.filter { !it.isBundled } }
+
+    /**
      * Renders [template] through [PromptTemplateEngine] and exposes the resulting
      * segments via [OrchestratorUiState.previewState].
      *
@@ -1099,11 +1123,9 @@ class OrchestratorViewModel @Inject constructor(
 
     /**
      * Packages a freshly-edited system prompt as a user prompt preset via
-     * [SavePromptAsPresetUseCase] (Phase 24 / Task 4). The UI surface
-     * wiring this method (Save as preset action in `NodeConfigSheet` /
-     * `PromptLibraryDialog`) lands in Phase 24 / Task 5. Exposed here so
-     * the use case has an end-to-end caller and the wiring task only has
-     * to add the UI form.
+     * [SavePromptAsPresetUseCase] (Phase 24 / Task 4). Invoked by
+     * `PipelineEditorScreen` from the 💾 button on prompt-bearing fields
+     * inside `NodeConfigSheet` (Phase 24 / Task 5).
      *
      * Errors are reported through [OrchestratorUiState.errorMessage] /
      * [OrchestratorUiState.feedbackMessage] using the same channel as

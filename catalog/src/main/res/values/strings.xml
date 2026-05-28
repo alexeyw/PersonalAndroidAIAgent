@@ -523,6 +523,7 @@
     <string name="knotwork_node_action_add_class">Add class</string>
     <string name="knotwork_node_action_remove_class">Remove class</string>
     <string name="knotwork_node_action_load_from_library">Load from library</string>
+    <string name="knotwork_node_action_save_as_preset">Save as preset</string>
     <string name="knotwork_node_field_tool_auto">Auto (let the agent pick)</string>
     <string name="knotwork_node_field_tool_custom">Custom tool id…</string>
     <string name="knotwork_node_field_model_active_suffix">%1$s · active</string>
