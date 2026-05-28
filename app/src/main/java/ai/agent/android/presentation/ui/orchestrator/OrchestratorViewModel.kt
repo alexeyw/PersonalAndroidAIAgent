@@ -29,6 +29,7 @@ import ai.agent.android.domain.usecases.LoadPipelineUseCase
 import ai.agent.android.domain.usecases.RenamePipelineUseCase
 import ai.agent.android.domain.usecases.SavePipelineAsPresetUseCase
 import ai.agent.android.domain.usecases.SavePipelineUseCase
+import ai.agent.android.domain.usecases.SavePromptAsPresetUseCase
 import ai.agent.android.domain.usecases.SavePromptTemplateUseCase
 import ai.agent.android.presentation.ui.common.UiText
 import androidx.lifecycle.ViewModel
@@ -73,6 +74,7 @@ class OrchestratorViewModel @Inject constructor(
     private val getPromptTemplatesUseCase: GetPromptTemplatesUseCase,
     private val savePromptTemplateUseCase: SavePromptTemplateUseCase,
     private val savePipelineAsPresetUseCase: SavePipelineAsPresetUseCase,
+    private val savePromptAsPresetUseCase: SavePromptAsPresetUseCase,
     private val apiKeyRepository: ApiKeyRepository,
     private val toolRepository: ToolRepository,
     private val localModelRepository: LocalModelRepository,
@@ -1087,6 +1089,54 @@ class OrchestratorViewModel @Inject constructor(
                     errorMessage = error,
                     feedbackMessage = if (error == null) {
                         UiText(R.string.orchestrator_preset_save_success)
+                    } else {
+                        state.feedbackMessage
+                    },
+                )
+            }
+        }
+    }
+
+    /**
+     * Packages a freshly-edited system prompt as a user prompt preset via
+     * [SavePromptAsPresetUseCase] (Phase 24 / Task 4). The UI surface
+     * wiring this method (Save as preset action in `NodeConfigSheet` /
+     * `PromptLibraryDialog`) lands in Phase 24 / Task 5. Exposed here so
+     * the use case has an end-to-end caller and the wiring task only has
+     * to add the UI form.
+     *
+     * Errors are reported through [OrchestratorUiState.errorMessage] /
+     * [OrchestratorUiState.feedbackMessage] using the same channel as
+     * pipeline-preset saves.
+     *
+     * @param systemPrompt The raw prompt template to save.
+     * @param name Display name for the preset.
+     * @param description Free-form description.
+     * @param nodeType The node type this preset targets. Must be LLM-driven
+     *   (validated by [SavePromptAsPresetUseCase]).
+     * @param tags Lower-case kebab-case tags.
+     */
+    fun saveCurrentPromptAsPreset(
+        systemPrompt: String,
+        name: String,
+        description: String,
+        nodeType: NodeType,
+        tags: List<String> = emptyList(),
+    ) {
+        viewModelScope.launch {
+            val result = savePromptAsPresetUseCase(
+                systemPrompt = systemPrompt,
+                name = name,
+                description = description,
+                nodeType = nodeType,
+                tags = tags,
+            )
+            _uiState.update { state ->
+                val error = result.exceptionOrNull()?.let(::messageForSaveError)
+                state.copy(
+                    errorMessage = error,
+                    feedbackMessage = if (error == null) {
+                        UiText(R.string.orchestrator_prompt_preset_save_success)
                     } else {
                         state.feedbackMessage
                     },

@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "id": "clarification_multiple_choice",
+  "name": "Multiple-choice question",
+  "description": "Emits a clarifying question with 2–4 concrete answer options for the user to tap.",
+  "nodeType": "CLARIFICATION",
+  "systemPrompt": "You are a Clarification Generator. Inspect the upstream context and craft ONE concise question that, once answered, lets the agent proceed unambiguously.\n\nOutput EXACTLY a single JSON object, with no surrounding prose and no markdown code fence:\n\n{\"question\": \"<the clarifying question>\", \"options\": [\"<option 1>\", \"<option 2>\", \"<option 3>\"]}\n\nRules:\n- 2 to 4 options, each a short noun phrase.\n- Options must be mutually exclusive and collectively cover the realistic cases.\n- The question must be answerable by choosing exactly one option.",
+  "tags": ["clarification", "multiple-choice", "json"]
+}

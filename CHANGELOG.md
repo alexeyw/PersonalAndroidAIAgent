@@ -15,6 +15,29 @@ details.
 
 ### Added
 
+- **Prompt presets — domain model & bundled catalogue** (Phase 24 /
+  Task 4/9). New first-class entity for reusable system-prompt templates,
+  attached to a single LLM-driven `NodeType` (LITE_RT, CLOUD, OUTPUT,
+  SUMMARY, INTENT_ROUTER, DECOMPOSITION, EVALUATION, CLARIFICATION).
+  Bundled presets ship inside the APK at `assets/presets/prompts/` (18
+  starter prompts — 2–3 per LLM-driven type, including
+  `litert_concise_assistant`, `output_markdown_with_sections`,
+  `router_keyword_classifier`, `decomposition_json_subtasks`,
+  `clarification_multiple_choice`, …) and are loaded read-only via
+  `LocalPromptPresetRepositoryImpl`. User-saved presets land in a new
+  `prompt_presets` Room table (schema v25), created and observed
+  through `PromptPresetDao` / `PromptPresetRepository`. The new
+  `SavePromptAsPresetUseCase` is the single entry point for the
+  user-save flow — it validates name (1..60 chars), `systemPrompt`
+  (≤ 8000 chars, `PromptPresetConstants.MAX_SYSTEM_PROMPT_LENGTH`), and
+  the target `NodeType`. The catalogue ships behind a
+  `PromptPresetCatalogValidationTest` (JVM unit) that pins the filename
+  set, asserts every `nodeType` is LLM-driven, every `$VARIABLE`
+  resolves against the registered provider whitelist, every
+  `systemPrompt` fits within the soft limit, and every LLM-driven type
+  has at least one bundled preset. The Prompt-Library UI rewiring that
+  actually surfaces this catalogue lives in Task 5/9.
+
 - **Pipeline presets — UI** (Phase 24 / Task 3/9). Surfaces the Phase 24
   preset catalogue end-to-end through three user-facing entry points:
   - **Speed-dial FAB** on the pipeline library — replaces the single

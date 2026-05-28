@@ -17,6 +17,7 @@ import ai.agent.android.data.repositories.IdentityRepositoryImpl
 import ai.agent.android.data.repositories.LocalModelRepositoryImpl
 import ai.agent.android.data.repositories.LocalPipelinePresetRepositoryImpl
 import ai.agent.android.data.repositories.LocalPipelineRepositoryImpl
+import ai.agent.android.data.repositories.LocalPromptPresetRepositoryImpl
 import ai.agent.android.data.repositories.McpServerRepositoryImpl
 import ai.agent.android.data.repositories.MemoryRepositoryImpl
 import ai.agent.android.data.repositories.MetricsRepositoryImpl
@@ -44,6 +45,7 @@ import ai.agent.android.domain.repositories.NetworkStateRepository
 import ai.agent.android.domain.repositories.PipelinePresetRepository
 import ai.agent.android.domain.repositories.PipelineRepository
 import ai.agent.android.domain.repositories.PowerStateRepository
+import ai.agent.android.domain.repositories.PromptPresetRepository
 import ai.agent.android.domain.repositories.PromptRepository
 import ai.agent.android.domain.repositories.SettingsRepository
 import ai.agent.android.domain.repositories.ToolRepository
@@ -204,6 +206,15 @@ abstract class DataModule {
     @Binds
     @Singleton
     abstract fun bindPipelinePresetRepository(repository: LocalPipelinePresetRepositoryImpl): PipelinePresetRepository
+
+    /**
+     * Binds [LocalPromptPresetRepositoryImpl] to [PromptPresetRepository] — composes the
+     * bundled assets/presets/prompts catalogue with the user-saved Room rows
+     * (Phase 24 / Task 4).
+     */
+    @Binds
+    @Singleton
+    abstract fun bindPromptPresetRepository(repository: LocalPromptPresetRepositoryImpl): PromptPresetRepository
 
     /**
      * Binds the [PromptRepositoryImpl] implementation to the [PromptRepository] interface.

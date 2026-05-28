@@ -79,6 +79,7 @@
     <string name="orchestrator_preset_save_category_label">Category</string>
     <string name="orchestrator_preset_save_tags_label">Tags (comma-separated)</string>
     <string name="orchestrator_preset_save_success">Preset saved</string>
+    <string name="orchestrator_prompt_preset_save_success">Prompt preset saved</string>
 
     <!-- Preset categories -->
     <string name="orchestrator_preset_category_local">Local</string>
