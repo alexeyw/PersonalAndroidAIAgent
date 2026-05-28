@@ -18,7 +18,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.res.stringResource
 import app.knotwork.design.screens.prompts.PromptPresetPickerCallbacks
 import app.knotwork.design.screens.prompts.PromptPresetPickerRow
-import app.knotwork.design.screens.prompts.PromptPresetPickerSearchField
 import app.knotwork.design.screens.prompts.PromptPresetPickerSheet
 import app.knotwork.design.screens.prompts.PromptPresetPickerStrings
 import app.knotwork.design.screens.prompts.PromptPresetPickerTab
@@ -77,7 +76,6 @@ fun PromptPresetPickerDialog(
     var debouncedQuery by remember { mutableStateOf("") }
     var selectedTag by remember { mutableStateOf<String?>(null) }
     var selectedRowId by remember { mutableStateOf<String?>(null) }
-    var searchExpanded by remember { mutableStateOf(false) }
 
     LaunchedEffect(searchQuery) {
         // 200 ms debounce per spec — short search terms type faster than the
@@ -166,34 +164,14 @@ fun PromptPresetPickerDialog(
             onDismiss()
         },
         onCancel = onDismiss,
-        onClose = { searchExpanded = !searchExpanded },
+        onClose = onDismiss,
     )
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
     ) {
-        if (searchExpanded) {
-            PromptPresetPickerSearchField(
-                value = searchQuery,
-                onValueChange = { searchQuery = it },
-                placeholder = strings.searchHint,
-            )
-        }
-        PromptPresetPickerSheet(
-            state = state,
-            strings = strings,
-            callbacks = callbacks.copy(
-                // When search is expanded, the top-right Close icon collapses the search
-                // field instead of closing the sheet. When collapsed, the same icon
-                // dismisses the sheet. We pre-resolved both behaviours into onClose above.
-                onClose = if (searchExpanded) {
-                    { searchExpanded = false }
-                } else {
-                    onDismiss
-                },
-            ),
-        )
+        PromptPresetPickerSheet(state = state, strings = strings, callbacks = callbacks)
     }
 }
 
@@ -255,21 +233,7 @@ private fun pickerStrings(): PromptPresetPickerStrings = PromptPresetPickerStrin
     usePrompt = stringResource(R.string.prompt_preset_picker_action_use_prompt),
     previewCd = stringResource(R.string.prompt_preset_picker_action_preview),
     closeCd = stringResource(R.string.common_close),
-    searchCd = stringResource(R.string.prompt_preset_picker_search_cd),
 )
-
-/** Mutable shallow-copy helper for PromptPresetPickerCallbacks (the class isn't a data class). */
-private fun PromptPresetPickerCallbacks.copy(onClose: () -> Unit = this.onClose): PromptPresetPickerCallbacks =
-    PromptPresetPickerCallbacks(
-        onTabSelected = this.onTabSelected,
-        onSearchChange = this.onSearchChange,
-        onTagSelected = this.onTagSelected,
-        onRowSelected = this.onRowSelected,
-        onPreviewRow = this.onPreviewRow,
-        onUsePrompt = this.onUsePrompt,
-        onCancel = this.onCancel,
-        onClose = onClose,
-    )
 
 /** Debounce window for the search field — matches the spec (200 ms). */
 private const val SEARCH_DEBOUNCE_MS: Long = 200L

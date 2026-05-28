@@ -141,6 +141,16 @@ class PromptLibraryViewModel @Inject constructor(
     }
 
     /**
+     * Updates the always-visible search field. The screen mapper applies a
+     * case-insensitive substring match on `PromptPreset.name`; no debouncing
+     * is necessary because the catalogue lives entirely in memory and the
+     * filter is O(N) over a small list.
+     */
+    fun onSearchQueryChange(query: String) {
+        _uiState.update { it.copy(searchQuery = query) }
+    }
+
+    /**
      * Opens the bottom-sheet editor.
      *
      * @param promptId `null` to start a fresh draft (pre-filled with the

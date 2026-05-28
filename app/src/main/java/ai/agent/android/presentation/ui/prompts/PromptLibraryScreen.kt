@@ -4,6 +4,7 @@ import ai.agent.android.R
 import ai.agent.android.domain.constants.PromptPresetConstants
 import ai.agent.android.domain.models.PromptPreset
 import ai.agent.android.presentation.ui.common.asString
+import ai.agent.android.presentation.ui.components.PromptPreviewBottomSheet
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -56,11 +57,18 @@ fun PromptLibraryScreen(
     val callbacks = PromptLibraryCallbacks(
         onBack = onBack,
         onSearch = {},
+        onSearchQueryChange = viewModel::onSearchQueryChange,
         onCategorySelected = viewModel::selectCategory,
         onNewPrompt = { viewModel.openEditor(promptId = null) },
         onEditPrompt = { viewModel.openEditor(promptId = it) },
         onDeletePrompt = viewModel::deletePrompt,
         onDuplicatePrompt = viewModel::duplicatePrompt,
+        onPreviewPrompt = { presetId ->
+            val preset = (uiState.bundledPresets + uiState.userPresets)
+                .firstOrNull { it.id == presetId }
+                ?: return@PromptLibraryCallbacks
+            viewModel.requestPromptPreview(preset.systemPrompt)
+        },
         onEditorNameChange = viewModel::onEditorNameChange,
         onEditorCategoryChange = viewModel::onEditorCategoryChange,
         onEditorBodyChange = viewModel::onEditorBodyChange,
@@ -91,6 +99,17 @@ fun PromptLibraryScreen(
                 callbacks = callbacks,
             )
         }
+    }
+
+    // Prompt preview bottom sheet — driven by `previewState`. The sheet body
+    // (`PromptPreviewBottomSheet`) renders `null` segments as a centred
+    // spinner so the user gets feedback while resolution runs on IO.
+    val previewState = uiState.previewState
+    if (previewState !is PromptPreviewState.Hidden) {
+        PromptPreviewBottomSheet(
+            segments = (previewState as? PromptPreviewState.Ready)?.segments,
+            onDismiss = viewModel::dismissPromptPreview,
+        )
     }
 }
 
@@ -128,8 +147,12 @@ internal fun PromptLibraryUiState.toViewState(
         ?: categories.firstOrNull().orEmpty()
     val allPresets = bundledPresets + userPresets
     val totalPresets = allPresets.size
+    val trimmedQuery = searchQuery.trim()
     val rows = allPresets
         .filter { it.nodeType.name == selected }
+        .filter { preset ->
+            trimmedQuery.isEmpty() || preset.name.contains(trimmedQuery, ignoreCase = true)
+        }
         .map { preset ->
             PromptRow(
                 id = preset.id,
@@ -141,6 +164,9 @@ internal fun PromptLibraryUiState.toViewState(
                 // the field to 0 so the catalog footer reads as a placeholder
                 // until a dedicated counter use case lands.
                 usedByCount = 0,
+                // Bundled presets are read-only — the catalog hides Edit /
+                // Delete affordances under this flag.
+                isReadOnly = preset.isBundled,
             )
         }
     val subtitle = subtitleFormat.format(categories.size, totalPresets)
@@ -176,6 +202,7 @@ internal fun PromptLibraryUiState.toViewState(
         editor = editor,
         subtitle = subtitle,
         errorMessage = errorText,
+        searchQuery = searchQuery,
     )
 }
 
@@ -187,10 +214,11 @@ private fun promptLibraryStrings(): LocalisedPromptLibraryStrings = LocalisedPro
     content = PromptLibraryStrings(
         title = stringResource(R.string.prompts_screen_title),
         backCd = stringResource(R.string.prompts_back_cd),
-        searchCd = stringResource(R.string.prompts_search_cd),
+        searchHint = stringResource(R.string.prompts_search_hint),
         fabCd = stringResource(R.string.prompts_fab_cd),
         editCd = stringResource(R.string.prompts_edit_cd),
         deleteCd = stringResource(R.string.prompts_delete_cd),
+        previewCd = stringResource(R.string.prompts_preview_cd),
         duplicate = stringResource(R.string.prompts_duplicate),
         usedByFormat = stringResource(R.string.prompts_used_by_format),
         emptyTitle = stringResource(R.string.prompts_empty_title),

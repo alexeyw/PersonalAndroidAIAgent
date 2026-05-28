@@ -54,6 +54,7 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import app.knotwork.design.components.buttons.KnotworkTextButton
 import app.knotwork.design.components.chips.KnotworkChip
+import app.knotwork.design.components.controls.KnotworkTextField
 import app.knotwork.design.components.misc.EmptyState
 import app.knotwork.design.components.pipelineeditor.headerTint
 import app.knotwork.design.theme.KnotworkTheme
@@ -120,6 +121,11 @@ fun PromptLibraryContent(
             ) {
                 PromptsCategoryTabs(state = state, callbacks = callbacks)
             }
+            if (state.visualState != PromptLibraryVisualState.Loading &&
+                state.visualState != PromptLibraryVisualState.Error
+            ) {
+                PromptsSearchField(state = state, strings = strings, callbacks = callbacks)
+            }
             when (state.visualState) {
                 PromptLibraryVisualState.Loading -> PromptsLoading()
                 PromptLibraryVisualState.Empty -> PromptsEmpty(strings = strings)
@@ -167,15 +173,10 @@ private fun PromptsTopBar(
                 )
             }
         },
-        actions = {
-            IconButton(onClick = callbacks.onSearch) {
-                Icon(
-                    imageVector = Icons.Outlined.Search,
-                    contentDescription = strings.searchCd,
-                    tint = MaterialTheme.colorScheme.onSurface,
-                )
-            }
-        },
+        // The search icon was a non-functional placeholder; the always-visible
+        // search field under the tab bar replaces it. Keep the TopAppBar slot
+        // free for future actions (Import / Export, etc.).
+        actions = {},
         colors = TopAppBarDefaults.topAppBarColors(
             containerColor = MaterialTheme.colorScheme.surface,
             titleContentColor = MaterialTheme.colorScheme.onSurface,
@@ -234,6 +235,32 @@ private fun PromptsCategoryTabs(state: PromptLibraryViewState, callbacks: Prompt
             )
         }
     }
+}
+
+/**
+ * Always-visible search field rendered under the tab bar. Replaces the
+ * earlier top-bar Search icon (which used to fire an unwired `onSearch`
+ * callback). The field is stateless — the host owns [searchQuery] and
+ * routes edits via [PromptLibraryCallbacks.onSearchQueryChange].
+ */
+@Composable
+private fun PromptsSearchField(
+    state: PromptLibraryViewState,
+    strings: PromptLibraryStrings,
+    callbacks: PromptLibraryCallbacks,
+) {
+    KnotworkTextField(
+        value = state.searchQuery,
+        onValueChange = callbacks.onSearchQueryChange,
+        placeholder = strings.searchHint,
+        search = true,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(
+                horizontal = KnotworkTheme.spacing.sp4,
+                vertical = KnotworkTheme.spacing.sp2,
+            ),
+    )
 }
 
 /**
@@ -304,6 +331,7 @@ private fun PromptsList(
                 onEdit = { callbacks.onEditPrompt(prompt.id) },
                 onDelete = { callbacks.onDeletePrompt(prompt.id) },
                 onDuplicate = { callbacks.onDuplicatePrompt(prompt.id) },
+                onPreview = { callbacks.onPreviewPrompt(prompt.id) },
             )
         }
     }
@@ -318,6 +346,7 @@ private fun PromptCard(
     onEdit: () -> Unit,
     onDelete: () -> Unit,
     onDuplicate: () -> Unit,
+    onPreview: () -> Unit,
 ) {
     // Card accent + chip share the same node-type hue from the
     // catalog palette so a card visually echoes the matching node on
@@ -365,15 +394,24 @@ private fun PromptCard(
                     modifier = Modifier
                         .weight(1f)
                         .padding(start = KnotworkTheme.spacing.sp2),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
+                    // Name wraps onto multiple lines so long titles aren't
+                    // truncated. The card grows vertically.
                 )
-                CompactIconButton(icon = Icons.Outlined.Edit, contentDescription = strings.editCd, onClick = onEdit)
+                // Preview is available on every row (read-only OR mutable);
+                // Edit + Delete only render when the row is mutable.
                 CompactIconButton(
-                    icon = Icons.Outlined.DeleteOutline,
-                    contentDescription = strings.deleteCd,
-                    onClick = onDelete,
+                    icon = Icons.Outlined.Search,
+                    contentDescription = strings.previewCd,
+                    onClick = onPreview,
                 )
+                if (!prompt.isReadOnly) {
+                    CompactIconButton(icon = Icons.Outlined.Edit, contentDescription = strings.editCd, onClick = onEdit)
+                    CompactIconButton(
+                        icon = Icons.Outlined.DeleteOutline,
+                        contentDescription = strings.deleteCd,
+                        onClick = onDelete,
+                    )
+                }
             }
             Text(
                 text = highlightVariables(text = prompt.body, variables = variables),
@@ -727,10 +765,11 @@ private fun FooterHint(text: String) {
 data class PromptLibraryStrings(
     val title: String = "Prompt library",
     val backCd: String = "Back",
-    val searchCd: String = "Search prompts",
+    val searchHint: String = "Search by name",
     val fabCd: String = "Add prompt",
     val editCd: String = "Edit prompt",
     val deleteCd: String = "Delete prompt",
+    val previewCd: String = "Preview",
     val duplicate: String = "Duplicate",
     val usedByFormat: String = "used by %1\$d pipelines",
     val emptyTitle: String = "No prompts yet",

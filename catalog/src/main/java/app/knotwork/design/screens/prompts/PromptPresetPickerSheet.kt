@@ -134,7 +134,6 @@ data class PromptPresetPickerStrings(
     val usePrompt: String = "Use prompt",
     val previewCd: String = "Preview",
     val closeCd: String = "Close",
-    val searchCd: String = "Search",
 )
 
 /** One-shot callbacks consumed by [PromptPresetPickerSheet]. */
@@ -178,11 +177,20 @@ fun PromptPresetPickerSheet(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = KnotworkTheme.spacing.sp4),
-        verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp2),
+            .padding(horizontal = KnotworkTheme.spacing.sp2),
+        verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp1),
     ) {
         HeaderRow(state = state, strings = strings, callbacks = callbacks)
         TabRowSection(state = state, strings = strings, callbacks = callbacks)
+        // Search is always visible (the top-right magnifier in the earlier
+        // version was a non-functional placeholder). A dedicated field
+        // surfaces the action immediately and matches the spec's "Search
+        // by name" hint.
+        PromptPresetPickerSearchField(
+            value = state.searchQuery,
+            onValueChange = callbacks.onSearchChange,
+            placeholder = strings.searchHint,
+        )
         if (state.tagChips.isNotEmpty()) {
             TagFilterRow(state = state, callbacks = callbacks)
         }
@@ -218,13 +226,6 @@ private fun HeaderRow(
                     color = KnotworkTheme.extended.onSurfaceMuted,
                 )
             }
-        }
-        IconButton(onClick = {}) {
-            Icon(
-                imageVector = Icons.Outlined.Search,
-                contentDescription = strings.searchCd,
-                tint = MaterialTheme.colorScheme.onSurface,
-            )
         }
         IconButton(onClick = callbacks.onClose) {
             Icon(
@@ -435,7 +436,7 @@ private fun BodyList(
         modifier = Modifier
             .fillMaxWidth()
             .heightIn(min = LIST_MIN_HEIGHT.dp, max = LIST_MAX_HEIGHT.dp),
-        verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp2),
+        verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp1),
         contentPadding = PaddingValues(vertical = KnotworkTheme.spacing.sp1),
     ) {
         items(state.rows, key = { it.id }) { row ->
@@ -475,8 +476,8 @@ private fun PresetRow(
             .background(color = containerColor)
             .then(borderModifier)
             .selectable(selected = selected, onClick = onSelect, role = Role.RadioButton)
-            .padding(KnotworkTheme.spacing.sp3),
-        verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp1),
+            .padding(KnotworkTheme.spacing.sp2),
+        verticalArrangement = Arrangement.spacedBy(2.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             RadioButton(
@@ -615,8 +616,12 @@ private const val TAB_INDICATOR_HEIGHT: Int = 2
 /** Tap-target for the per-row magnifier preview icon. */
 private const val PREVIEW_ICON_TARGET: Int = 28
 
-/** Indent for the row's description / metadata to align under the title. */
-private const val ROW_BODY_INSET: Int = 44
+/**
+ * Indent for the row's description / metadata to align under the title.
+ * Tuned so the body text starts roughly under the title (radio button is
+ * 24 dp wide + 8 dp gap).
+ */
+private const val ROW_BODY_INSET: Int = 32
 
 /** Body-list max height so the sheet stays under the IME on small phones. */
 private const val LIST_MAX_HEIGHT: Int = 420

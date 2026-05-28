@@ -20,14 +20,25 @@ enum class PromptLibraryVisualState {
 /**
  * Per-prompt list-card content surfaced by `PromptLibraryContent`.
  *
- * @property id stable database id.
+ * @property id stable identifier.
  * @property category category label rendered in the leading chip.
- * @property name prompt display name (bold title).
+ * @property name prompt display name (bold title). Wraps onto multiple
+ *   lines — the card never truncates the name.
  * @property body raw prompt text including `$VAR` tokens. The catalog
- * renderer highlights placeholders inline via [PromptLibraryContent].
+ *   renderer highlights placeholders inline via [PromptLibraryContent].
  * @property usedByCount how many pipelines reference this prompt.
+ * @property isReadOnly `true` hides destructive affordances (Edit + Delete)
+ *   so the row only exposes Preview / Duplicate. Used for bundled-preset
+ *   rows that the user is not allowed to mutate.
  */
-data class PromptRow(val id: String, val category: String, val name: String, val body: String, val usedByCount: Int)
+data class PromptRow(
+    val id: String,
+    val category: String,
+    val name: String,
+    val body: String,
+    val usedByCount: Int,
+    val isReadOnly: Boolean = false,
+)
 
 /**
  * Editor-sheet body. Mirrors the "Edit prompt" mockup.
@@ -68,6 +79,7 @@ data class PromptLibraryViewState(
     val editor: PromptEditorState? = null,
     val subtitle: String = "",
     val errorMessage: String? = null,
+    val searchQuery: String = "",
 ) {
     init {
         require((visualState == PromptLibraryVisualState.Error) == (errorMessage != null)) {
@@ -86,6 +98,8 @@ class PromptLibraryCallbacks(
     val onEditPrompt: (String) -> Unit = {},
     val onDeletePrompt: (String) -> Unit = {},
     val onDuplicatePrompt: (String) -> Unit = {},
+    val onPreviewPrompt: (String) -> Unit = {},
+    val onSearchQueryChange: (String) -> Unit = {},
     val onEditorNameChange: (String) -> Unit = {},
     val onEditorCategoryChange: (String) -> Unit = {},
     val onEditorBodyChange: (String) -> Unit = {},
