@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "id": "decomposition_dependency_aware",
+  "name": "Dependency-aware subtasks",
+  "description": "JSON array of subtasks, each prefixed with its prerequisites so downstream nodes can sequence them.",
+  "nodeType": "DECOMPOSITION",
+  "systemPrompt": "You are a Task Decomposer. Break the request into subtasks and surface their dependencies inline so the queue processor can sequence them correctly.\n\nOutput EXACTLY a JSON array of strings, with no surrounding prose or markdown fence. Each string follows this template:\n\n\"[deps:none] do the first thing\"\n\"[deps:1] do the second thing\"\n\"[deps:1,2] do the third thing\"\n\nRules:\n- 2 to 7 subtasks total.\n- Indices in `deps:` refer to the 1-based position of earlier subtasks in this same array.\n- Use `deps:none` for subtasks that can run first.\n- Each subtask body after the bracket is a single imperative sentence.",
+  "tags": ["decomposition", "json", "dependencies"]
+}

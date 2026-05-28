@@ -27,6 +27,7 @@ This file maps the contents of the main application package.
       - `MemoryDao.kt` - Memory chunks DAO.
       - `PipelineDao.kt` - Pipelines DAO.
       - `PipelinePresetDao.kt` - User-saved pipeline-preset DAO (Phase 24 / Task 1). Backs the `pipeline_presets` table; bundled presets live in `assets/presets/pipelines/` and never reach this DAO.
+      - `PromptPresetDao.kt` - User-saved prompt-preset DAO (Phase 24 / Task 4). Backs the `prompt_presets` table; bundled presets live in `assets/presets/prompts/` and never reach this DAO.
       - `PromptTemplateDao.kt` - Prompt templates DAO.
       - `TraceStepDao.kt` - Trace steps DAO.
     - `models/` - Local DB entity models.
@@ -38,6 +39,7 @@ This file maps the contents of the main application package.
       - `NodeEntity.kt` - Pipeline node entity.
       - `PipelineEntity.kt` - Pipeline entity.
       - `PipelinePresetEntity.kt` - User-saved pipeline preset row (Phase 24 / Task 1). Stores `id`, `name`, `description`, `categoryKey`, `graphJson` (full preset payload serialised by `PipelinePresetJsonSerializer`), `tagsCsv`, `createdAt`.
+      - `PromptPresetEntity.kt` - User-saved prompt preset row (Phase 24 / Task 4). Stores `id`, `name`, `description`, `nodeTypeKey`, `systemPrompt`, `tagsCsv`, `createdAt`.
       - `PipelineWithNodesAndConnections.kt` - Pipeline relational model.
       - `PromptTemplateEntity.kt` - Prompt template entity.
       - `TraceStepEntity.kt` - Trace step entity.
@@ -69,6 +71,7 @@ This file maps the contents of the main application package.
     - `LocalModelRepositoryImpl.kt` - Local model repository implementation; observes the active model file metadata for the Settings local-model card.
     - `LocalPipelinePresetRepositoryImpl.kt` - Local impl of `PipelinePresetRepository` (Phase 24 / Task 1). Composes the bundled `assets/presets/pipelines/*.json` catalogue (lazy IO-dispatched read, cached for process lifetime, malformed files skipped) with user-saved Room rows; rejects bundled presets on the user-save path.
     - `LocalPipelineRepositoryImpl.kt` - Local pipeline repository implementation.
+    - `LocalPromptPresetRepositoryImpl.kt` - Local impl of `PromptPresetRepository` (Phase 24 / Task 4). Composes the bundled `assets/presets/prompts/*.json` catalogue (lazy IO-dispatched read, cached for process lifetime, malformed files skipped) with user-saved Room rows; rejects bundled presets on the user-save path; drops user rows whose stored `nodeTypeKey` no longer maps to a known `NodeType`.
     - `McpServerRepositoryImpl.kt` - Per-server gateway over the raw `McpClient` transport; owns lazy connections, the 5-minute tool-list cache, and per-URL `McpConnectionStatus` flows consumed by `ToolsViewModel`.
     - `MemoryRepositoryImpl.kt` - Memory repository implementation.
     - `MetricsRepositoryImpl.kt` - Metrics repository implementation.
@@ -104,6 +107,7 @@ This file maps the contents of the main application package.
 - `domain/` - Domain layer containing core business logic and Use Cases.
   - `constants/` - Domain-level constants.
     - `DefaultPrompts.kt` - Default system prompts.
+    - `PromptPresetConstants.kt` - Cross-module limits + `LLM_DRIVEN_NODE_TYPES` set shared by the prompt-preset domain (Phase 24 / Task 4): `MAX_NAME_LENGTH = 60`, `MAX_SYSTEM_PROMPT_LENGTH = 8000`, and the set of node types that can host a system-prompt preset.
     - `NotificationChannels.kt` - Canonical ids of every Android `NotificationChannel` (foreground service status, approval prompts).
     - `OnboardingModelCatalog.kt` - Maps the catalog-side `OnboardingLiteRtModel.id` (`gemma_4_e2b` / `gemma_4_e4b`) to the on-disk filename + HuggingFace URL consumed by `OnboardingViewModel.startDownload` and `LocalModelRepository.isInstalled`. Also derives a filename from the user-supplied custom URL row.
     - `PipelineExecutionDefaults.kt` - Engine-level timing and log-size constants consumed by `GraphExecutionEngine` and the LLM-backed node executors (post-emit pause, LiteRT pre-warm delay, node-IO log char limit).
@@ -123,6 +127,8 @@ This file maps the contents of the main application package.
   - `pipelineio/` - JSON serialisation gateway for pipeline import/export.
     - `PipelineJsonSerializer.kt` - Two-way mapper between `PipelineGraph` and the `schemaVersion: 1` JSON document shared with the browser-side editor (`pipeline-editor.html`).
     - `PipelinePresetJsonSerializer.kt` - Two-way mapper between `PipelinePreset` and the pipeline-preset JSON format used by `assets/presets/pipelines/*.json` and the browser editor's `*.preset.json` export. Strict superset of the pipeline JSON; delegates the graph half to `PipelineJsonSerializer` (Phase 24 / Task 1).
+  - `promptio/` - JSON serialisation gateway for prompt-preset import/export (Phase 24 / Task 4).
+    - `PromptPresetJsonSerializer.kt` - Two-way mapper between `PromptPreset` and its `schemaVersion: 1` JSON document. Rejects unknown / non-LLM `NodeType` values at parse time; never throws (returns `Success / SchemaMismatch / Failure`).
   - `prompt/` - Prompt templating layer.
     - `PromptVariableProvider.kt` - Contract for a single substitutable prompt variable.
     - `PromptTemplateEngine.kt` - Renders templates by substituting `$KEY` placeholders.
@@ -160,6 +166,8 @@ This file maps the contents of the main application package.
     - `PipelineImportOutcome.kt` - Sealed result of parsing a pipeline JSON document (Success / SchemaMismatch / Failure) consumed by `ImportPipelineUseCase`.
     - `PipelinePreset.kt` - Domain model of a reusable pipeline template (Phase 24 / Task 1). Carries `id`, `name`, `description`, `category` (`PresetCategory` enum with wire keys), `graph: PipelineGraph` (template), `tags`, `isBundled`.
     - `PipelinePresetImportOutcome.kt` - Sealed result of parsing a preset JSON document (Success / SchemaMismatch / Failure), mirroring `PipelineImportOutcome`.
+    - `PromptPreset.kt` - Domain model of a reusable system-prompt template (Phase 24 / Task 4). Carries `id`, `name`, `description`, `nodeType: NodeType` (must be LLM-driven), `systemPrompt`, `tags`, `isBundled`.
+    - `PromptPresetImportOutcome.kt` - Sealed result of parsing a prompt-preset JSON document (Success / SchemaMismatch / Failure).
     - `PipelineValidationError.kt` - Pipeline validation error model.
     - `PipelineValidationException.kt` - Pipeline validation exception model.
     - `PowerState.kt` - Power state model.
@@ -184,6 +192,7 @@ This file maps the contents of the main application package.
     - `NetworkActivityTracker.kt` - Domain interface tracking the timestamp of the most recent outbound LLM / MCP call. Used by the More tab privacy footer to compute "no network calls in last N m" without observing connectivity.
     - `NetworkStateRepository.kt` - Network state repository interface.
     - `PipelinePresetRepository.kt` - Domain gateway over the two-tier pipeline-preset catalogue: bundled (read-only, from APK assets) + user-saved (mutable, Room-backed). Data-layer impl: `LocalPipelinePresetRepositoryImpl` (Phase 24 / Task 1).
+    - `PromptPresetRepository.kt` - Domain gateway over the two-tier prompt-preset catalogue: bundled (read-only, from APK assets) + user-saved (mutable, Room-backed). Exposes a per-`NodeType` filtered flow used by the Prompt Library. Data-layer impl: `LocalPromptPresetRepositoryImpl` (Phase 24 / Task 4).
     - `PipelineRepository.kt` - Pipeline repository interface.
     - `PowerStateRepository.kt` - Power state repository interface.
     - `SettingsRepository.kt` - Settings repository interface.
@@ -206,6 +215,7 @@ This file maps the contents of the main application package.
     - `RenamePipelineUseCase.kt` - Validates and applies a new display name to an existing pipeline; canonical name-validation gate (trim + length).
     - `RetrieveRelevantMemoryUseCase.kt` - Use case to retrieve memories.
     - `SavePipelineAsPresetUseCase.kt` - Packages the currently-edited `PipelineGraph` into a user-saved `PipelinePreset` (validates name, runs `PipelineGraph.validate()`, enforces `isBundled=false`). Phase 24 / Task 1.
+    - `SavePromptAsPresetUseCase.kt` - Packages a freshly-edited system prompt into a user-saved `PromptPreset`. Validates name (1..60), `systemPrompt` (non-blank, ≤ `MAX_SYSTEM_PROMPT_LENGTH`), and that the target `NodeType` is LLM-driven. Phase 24 / Task 4.
     - `SavePipelineUseCase.kt` - Use case to save a pipeline.
     - `ScheduleTaskUseCase.kt` - Use case to schedule tasks.
     - `TaskRouterUseCase.kt` - Use case to route tasks.
@@ -272,7 +282,7 @@ This file maps the contents of the main application package.
       - `MonitoringViewModel.kt` - Monitoring ViewModel.
     - `orchestrator/` - Pipeline library + shared orchestrator ViewModel (the canvas surface moved to `pipeline/editor/` in Phase 21 / Task 9).
       - `OrchestratorUiState.kt` - Orchestrator UI state and `PromptPreviewState` / `PipelineRunState`.
-      - `OrchestratorViewModel.kt` - Orchestrator ViewModel. Owns graph mutation, persistence, validation, run-state placeholder, and the editor `focusNodeRequest` SharedFlow. Phase 24 / Task 3 adds `saveCurrentAsPreset` + `saveAsPresetFromLibrary` powered by `SavePipelineAsPresetUseCase`.
+      - `OrchestratorViewModel.kt` - Orchestrator ViewModel. Owns graph mutation, persistence, validation, run-state placeholder, and the editor `focusNodeRequest` SharedFlow. Phase 24 / Task 3 adds `saveCurrentAsPreset` + `saveAsPresetFromLibrary` powered by `SavePipelineAsPresetUseCase`. Phase 24 / Task 4 adds `saveCurrentPromptAsPreset` powered by `SavePromptAsPresetUseCase` (UI surface lands in Task 5).
       - `PipelineLibraryScreen.kt` - Library screen listing every saved pipeline. Phase 24 / Task 3 replaces the single FAB with `PipelineLibrarySpeedDial` (+ New / + From preset), wires `onBrowseTemplates` to `PresetPickerSheet`, and adds the `Save as preset` row overflow action.
       - `components/` - Orchestrator UI components.
         - `NodeContextConfigSection.kt` - "Input Data" section of the node configuration dialog: five checkboxes mapped to `NodeContextConfig` flags (with `nodeInput` rendered locked-on) plus a hint banner.

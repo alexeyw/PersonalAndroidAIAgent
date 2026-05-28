@@ -26,6 +26,7 @@ import ai.agent.android.domain.usecases.LoadPipelineUseCase
 import ai.agent.android.domain.usecases.RenamePipelineUseCase
 import ai.agent.android.domain.usecases.SavePipelineAsPresetUseCase
 import ai.agent.android.domain.usecases.SavePipelineUseCase
+import ai.agent.android.domain.usecases.SavePromptAsPresetUseCase
 import ai.agent.android.domain.usecases.SavePromptTemplateUseCase
 import ai.agent.android.presentation.ui.common.UiText
 import io.mockk.coEvery
@@ -59,6 +60,7 @@ class OrchestratorViewModelTest {
     private lateinit var getPromptTemplatesUseCase: GetPromptTemplatesUseCase
     private lateinit var savePromptTemplateUseCase: SavePromptTemplateUseCase
     private lateinit var savePipelineAsPresetUseCase: SavePipelineAsPresetUseCase
+    private lateinit var savePromptAsPresetUseCase: SavePromptAsPresetUseCase
     private lateinit var apiKeyRepository: ApiKeyRepository
     private lateinit var toolRepository: ToolRepository
     private lateinit var localModelRepository: LocalModelRepository
@@ -88,6 +90,7 @@ class OrchestratorViewModelTest {
         getPromptTemplatesUseCase = mockk()
         savePromptTemplateUseCase = mockk()
         savePipelineAsPresetUseCase = mockk()
+        savePromptAsPresetUseCase = mockk()
         apiKeyRepository = mockk()
         toolRepository = mockk()
         localModelRepository = mockk()
@@ -127,6 +130,7 @@ class OrchestratorViewModelTest {
             getPromptTemplatesUseCase,
             savePromptTemplateUseCase,
             savePipelineAsPresetUseCase,
+            savePromptAsPresetUseCase,
             apiKeyRepository,
             toolRepository,
             localModelRepository,

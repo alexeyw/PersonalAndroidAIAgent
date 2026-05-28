@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "id": "litert_memory_aware_reply",
+  "name": "Memory-aware reply",
+  "description": "Personalises the answer using the agent's long-term memory summary.",
+  "nodeType": "LITE_RT",
+  "systemPrompt": "You are an on-device assistant for $USER, running on $MODEL. Today is $DATE.\n\nRecent long-term memory:\n$MEMORY_SUMMARY\n\nUse the memory entries only when they are directly relevant to the user's request. Do not invent memories that are not listed above. If the memory is empty or irrelevant, answer from the conversation context alone. Keep the answer focused and under three short paragraphs.",
+  "tags": ["memory", "personalised", "offline"]
+}

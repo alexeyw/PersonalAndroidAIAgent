@@ -19,9 +19,10 @@ see [`docs/user-guide.md`](user-guide.md).
    built-in as a callee-side AppFunction)
 3. [Add a new cloud provider](#3-add-a-new-cloud-provider)
 4. [Add a new prompt variable](#4-add-a-new-prompt-variable)
-5. [Use input atoms and chip atoms](#5-use-input-atoms-and-chip-atoms)
-6. [Synchronization table — "if you change X, also touch Y"](#6-synchronization-table)
-7. [Quality gate](#7-quality-gate)
+5. [Add a bundled prompt preset](#5-add-a-bundled-prompt-preset)
+6. [Use input atoms and chip atoms](#6-use-input-atoms-and-chip-atoms)
+7. [Synchronization table — "if you change X, also touch Y"](#7-synchronization-table)
+8. [Quality gate](#8-quality-gate)
 
 ---
 
@@ -524,7 +525,85 @@ new placeholder.
 
 ---
 
-## 5. Use input atoms and chip atoms
+## 5. Add a bundled prompt preset
+
+A **prompt preset** is a reusable system-prompt template that ships
+inside the APK and surfaces in the Prompt Library so the user can apply
+it to a compatible LLM-driven node with one tap. Bundled presets are
+read-only; the user can also save their own (`SavePromptAsPresetUseCase`),
+which land in the `prompt_presets` Room table instead.
+
+Adding a new bundled preset is a single-file change plus one line in
+the catalogue validation test.
+
+### 5.1. Drop a JSON file under `assets/presets/prompts/`
+
+Filename convention: `<nodetype_in_lowercase>_<short_slug>.json`
+(e.g. `litert_concise_assistant.json`, `output_json_structured.json`).
+The filename stem becomes the preset `id`, so it must be unique across
+the directory.
+
+Schema (`PromptPresetJsonSerializer`, version 1):
+
+```json
+{
+  "schemaVersion": 1,
+  "id": "litert_concise_assistant",
+  "name": "Concise assistant",
+  "description": "Single-paragraph answers, no preamble.",
+  "nodeType": "LITE_RT",
+  "systemPrompt": "You are a concise on-device assistant running on $MODEL. Today is $DATE. ...",
+  "tags": ["concise", "starter"]
+}
+```
+
+Rules:
+
+- `nodeType` must be one of the LLM-driven types listed in
+  `PromptPresetConstants.LLM_DRIVEN_NODE_TYPES` (LITE_RT, CLOUD, OUTPUT,
+  SUMMARY, INTENT_ROUTER, DECOMPOSITION, EVALUATION, CLARIFICATION).
+  Non-LLM types (`INPUT`, `TOOL`, `IF_CONDITION`, `QUEUE_PROCESSOR`)
+  never run a system prompt and are rejected by the serializer.
+- `systemPrompt` may only reference `$VARIABLE` tokens registered in
+  `di/PromptTemplateModule.kt` (`$DATE`, `$TIME`, `$TOOLS`, `$MODEL`,
+  `$MEMORY_SUMMARY`, `$LANG`, `$LOCATION`, `$USER`, `$DEVICE`).
+  Misspellings remain in the rendered output as literal `$KEY` and the
+  catalogue test fails the build.
+- `systemPrompt` length must not exceed
+  `PromptPresetConstants.MAX_SYSTEM_PROMPT_LENGTH` (8000 chars).
+- `name` must not exceed `PromptPresetConstants.MAX_NAME_LENGTH` (60
+  chars).
+- `tags` are lower-case, kebab-case labels.
+
+### 5.2. Register the filename in `PromptPresetCatalogValidationTest`
+
+`expectedFileNames` in
+`app/src/test/java/ai/agent/android/domain/promptio/PromptPresetCatalogValidationTest.kt`
+is a hard whitelist of the shipped catalogue. Add the new filename in
+the same commit; otherwise the catalogue test will refuse the new file
+(or, if you removed one, miss the deletion). The test also asserts that
+every LLM-driven NodeType has at least one bundled preset — if you
+introduce a new LLM-driven type elsewhere, ship at least one bundled
+preset for it.
+
+### 5.3. Tests
+
+The catalogue test (`PromptPresetCatalogValidationTest`) already covers:
+- the filename set matches `expectedFileNames`;
+- every file parses to `Success` with `isBundled = true` and `id` equal
+  to the filename stem;
+- every `nodeType` is LLM-driven;
+- every `systemPrompt` fits within `MAX_SYSTEM_PROMPT_LENGTH`;
+- every `name` fits within `MAX_NAME_LENGTH`;
+- every `$VARIABLE` token is in the registered whitelist;
+- every LLM-driven NodeType has at least one bundled preset.
+
+You don't need to add a per-file test — the catalogue test runs once
+over the whole directory.
+
+---
+
+## 6. Use input atoms and chip atoms
 
 Every text input and chip on screen lives in the Knotwork catalog under
 `catalog/src/main/java/app/knotwork/design/components/controls/` and
@@ -599,7 +678,7 @@ pills). The conventions a new atom must follow:
 
 ---
 
-## 6. Synchronization table
+## 7. Synchronization table
 
 The same change can require updates in multiple places. The table
 below lists the four extension points and every file that must move
@@ -620,7 +699,7 @@ of the existing constants is a candidate for the same edit.
 
 ---
 
-## 7. Quality gate
+## 8. Quality gate
 
 Before pushing any change from the recipes above, run the full quality
 gate locally:
