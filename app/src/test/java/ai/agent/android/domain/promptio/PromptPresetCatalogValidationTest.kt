@@ -61,6 +61,9 @@ class PromptPresetCatalogValidationTest {
         "evaluation_scored_critic.json",
         "clarification_multiple_choice.json",
         "clarification_open_ended.json",
+        "if_question_vs_command.json",
+        "if_destructive_intent.json",
+        "if_needs_external_info.json",
     )
 
     /**

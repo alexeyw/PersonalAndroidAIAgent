@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "id": "if_needs_external_info",
+  "name": "Needs external lookup",
+  "description": "True when answering the request requires live external information (web search, current events, fresh data) beyond the model's training cut-off.",
+  "nodeType": "IF_CONDITION",
+  "systemPrompt": "Answering the upstream request well requires live, time-sensitive information from outside the model's training corpus — for example: today's weather or news, current prices, schedules, scores, version numbers, status of a deployed system, or any other fact that can plausibly change after $DATE.",
+  "tags": ["routing", "search", "tools"]
+}

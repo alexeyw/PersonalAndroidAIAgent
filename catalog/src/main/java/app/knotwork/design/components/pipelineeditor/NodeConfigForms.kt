@@ -132,7 +132,13 @@ object NodeConfigForms {
                     onPickFromLibrary = onPickFromLibrary,
                     onSavePreset = onSavePreset,
                 )
-                is IfConditionConfig -> IfConditionFormBody(config, errors, onChange)
+                is IfConditionConfig -> IfConditionFormBody(
+                    config = config,
+                    errors = errors,
+                    onChange = onChange,
+                    onPickFromLibrary = onPickFromLibrary,
+                    onSavePreset = onSavePreset,
+                )
                 is ClarificationConfig -> ClarificationFormBody(
                     config = config,
                     errors = errors,
@@ -755,17 +761,27 @@ private fun IntentRouterFormBody(
 }
 
 @Composable
+@Suppress("LongParameterList")
 private fun IfConditionFormBody(
     config: IfConditionConfig,
     errors: Map<FieldId, ValidationFailure>,
     onChange: (NodeConfig) -> Unit,
+    onPickFromLibrary: PromptLibraryHook?,
+    onSavePreset: SavePresetHook?,
 ) {
+    // The `expression` field maps to domain `NodeModel.conditionPrompt` —
+    // a free-form natural-language condition the LLM classifies as
+    // `true`/`false` via `DefaultPrompts.IfCondition.EVALUATION_TEMPLATE`.
+    // It accepts presets exactly like the other LLM-driven fields.
     TextField(
         label = stringResource(R.string.knotwork_node_field_expression),
         value = config.expression,
         error = errors[FieldId.EXPRESSION],
-        singleLine = true,
+        singleLine = false,
         onChange = { next -> onChange(config.copy(expression = next)) },
+        libraryCategory = "IF_CONDITION",
+        onPickFromLibrary = onPickFromLibrary,
+        onSavePreset = onSavePreset,
     )
     TextField(
         label = stringResource(R.string.knotwork_node_field_label_true),

@@ -39,14 +39,22 @@ object PromptPresetConstants {
     const val MAX_SYSTEM_PROMPT_LENGTH = 8000
 
     /**
-     * The set of [NodeType]s that run a system prompt through the LLM and
-     * therefore can have a prompt preset associated with them.
+     * The set of [NodeType]s that feed a user-authored prompt to the LLM
+     * and therefore can have a prompt preset associated with them.
      *
-     * Sourced from `DESCRIPTION.md §5` ("Подстановка применяется только к
-     * нодам, чей `systemPrompt` действительно отправляется в LLM"). The
-     * `TOOL`, `INPUT`, `IF_CONDITION`, `QUEUE_PROCESSOR` types are
-     * excluded because their executors never feed `systemPrompt` to a
-     * model — saving a preset against them would be meaningless.
+     * For LITE_RT / CLOUD / OUTPUT / SUMMARY / INTENT_ROUTER /
+     * DECOMPOSITION / EVALUATION / CLARIFICATION the preset body is the
+     * node's `systemPrompt` template. For [NodeType.IF_CONDITION] the
+     * preset body is the free-form **condition prompt** stored on
+     * `NodeModel.conditionPrompt` (catalog `IfConditionConfig.expression`):
+     * the `EvaluateIfConditionUseCase` wraps it in
+     * `DefaultPrompts.IfCondition.EVALUATION_TEMPLATE` and asks the LLM
+     * to classify the upstream text as `true` / `false`. That's still a
+     * user-authored prompt template — exactly what presets exist for.
+     *
+     * The `TOOL`, `INPUT`, `QUEUE_PROCESSOR` types are excluded because
+     * their executors never feed a user-authored prompt to a model —
+     * saving a preset against them would be meaningless.
      */
     val LLM_DRIVEN_NODE_TYPES: Set<NodeType> = setOf(
         NodeType.LITE_RT,
@@ -57,5 +65,6 @@ object PromptPresetConstants {
         NodeType.DECOMPOSITION,
         NodeType.EVALUATION,
         NodeType.CLARIFICATION,
+        NodeType.IF_CONDITION,
     )
 }
