@@ -6,12 +6,12 @@ import ai.agent.android.domain.models.AgentOrchestratorState
 import ai.agent.android.domain.models.LocalModel
 import ai.agent.android.domain.models.MemoryStats
 import ai.agent.android.domain.models.PipelinePreset
-import ai.agent.android.domain.models.PromptTemplate
+import ai.agent.android.domain.models.PromptPreset
 import ai.agent.android.domain.repositories.LocalModelRepository
 import ai.agent.android.domain.repositories.MemoryRepository
 import ai.agent.android.domain.repositories.NetworkActivityTracker
 import ai.agent.android.domain.repositories.PipelinePresetRepository
-import ai.agent.android.domain.repositories.PromptRepository
+import ai.agent.android.domain.repositories.PromptPresetRepository
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -39,7 +39,7 @@ import javax.inject.Inject
 class MoreViewModel @Inject constructor(
     memoryRepository: MemoryRepository,
     private val localModelRepository: LocalModelRepository,
-    private val promptRepository: PromptRepository,
+    private val promptPresetRepository: PromptPresetRepository,
     private val taskQueueManager: TaskQueueManager,
     private val networkActivityTracker: NetworkActivityTracker,
     pipelinePresetRepository: PipelinePresetRepository,
@@ -48,7 +48,13 @@ class MoreViewModel @Inject constructor(
     val uiState: StateFlow<MoreUiState> = combine(
         memoryRepository.observeStats(),
         localModelRepository.getAllModels(),
-        promptRepository.getAllPrompts(),
+        // Combined bundled + user catalogue — mirrors what the Prompt
+        // Library screen actually renders so the subtitle counter is
+        // consistent with the screen the row links to.
+        combine(
+            promptPresetRepository.getBundledPresets(),
+            promptPresetRepository.getUserPresets(),
+        ) { bundled, user -> bundled + user },
         taskQueueManager.activeSessionsState,
         networkActivityTracker.lastOutboundAt,
         // Independent wall-clock ticker so the footer privacy pill
@@ -76,7 +82,7 @@ class MoreViewModel @Inject constructor(
     private fun reduceUiState(values: Array<Any?>): MoreUiState {
         val memStats = values[0] as MemoryStats
         val models = values[1] as List<LocalModel>
-        val prompts = values[2] as List<PromptTemplate>
+        val prompts = values[2] as List<PromptPreset>
         val activeSessions = values[3] as Map<*, AgentOrchestratorState>
         val lastNetwork = values[4] as Long?
         val now = values[5] as Long
@@ -90,7 +96,10 @@ class MoreViewModel @Inject constructor(
         return MoreUiState(
             memorySubtitle = formatMemoryStats(memStats.chunkCount, memStats.totalBytes),
             modelsSubtitle = if (active != null) "${active.name} · active" else "no model installed",
-            promptsSubtitle = formatPromptsStats(prompts.map { it.category }.distinct().size, prompts.size),
+            // Categories = distinct `NodeType`s present in the catalogue.
+            // The Library renders all LLM-driven node types as tabs and shows
+            // bundled + user presets under each, so this is the same shape.
+            promptsSubtitle = formatPromptsStats(prompts.map { it.nodeType }.distinct().size, prompts.size),
             tasksSubtitle = if (runningCount == 0 && queuedCount == 0) {
                 "none"
             } else {
