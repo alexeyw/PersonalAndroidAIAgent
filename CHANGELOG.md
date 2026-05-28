@@ -16,18 +16,33 @@ details.
 ### Added
 
 - **Prompt presets — UI** (Phase 24 / Task 5/9). Wires the bundled and
-  user-saved prompt-preset catalogue (Task 4) into the production
-  pipeline editor. The 📚 button next to every prompt-bearing field in
-  `NodeConfigSheet` now opens a new `PromptPresetPickerDialog` filtered
-  by the active node's `NodeType`, with **Bundled** and **Mine** tabs,
-  a tag-chip multi-filter, 200 ms debounced search by name, and
-  per-row Preview / Apply actions. A new 💾 button next to 📚 captures
-  the current draft as a user preset via a name / description / tags
-  dialog that delegates to `SavePromptAsPresetUseCase`. The Preview
-  action reuses the existing `PromptPreviewBottomSheet` with full
-  `$VARIABLE` substitution so the user can verify a preset before
-  applying it. Replaces the legacy `PromptLibraryDialog` that was
-  backed by the older `PromptTemplate` model.
+  user-saved prompt-preset catalogue (Task 4) into the two production
+  surfaces:
+  - The pipeline editor's `NodeConfigSheet` gets a 📚 / 💾 pair on
+    every prompt-bearing field. 📚 opens a new Knotwork-styled
+    `PromptPresetPickerSheet` (modal bottom sheet) filtered by the
+    active node's `NodeType`, with **Bundled** / **Mine** tabs, a
+    leading `All N` chip + per-tag filter chips, 200 ms debounced
+    search by name, radio-style row selection, a per-row magnifier
+    preview, a `● CURRENT` pill on the row whose prompt matches the
+    field's current value, and a sticky bottom `Cancel / ✓ Use prompt`
+    bar. The Preview action surfaces the existing
+    `PromptPreviewBottomSheet` with full `$VARIABLE` substitution. 💾
+    captures the current draft as a user preset via a
+    name / description / tags dialog routed through
+    `SavePromptAsPresetUseCase`.
+  - The standalone **Prompt library** screen (More → Library) now
+    surfaces the same `PromptPreset` catalogue (bundled + user) in
+    place of the legacy `PromptTemplate` source. Bundled rows are
+    read-only (delete is silently a no-op); user rows can be edited
+    via the existing bottom-sheet editor — saves go through
+    `SavePromptAsPresetUseCase` with `existingId` (new upsert path)
+    so an edit replaces the same preset in place. Duplicate writes a
+    new user preset with a `(copy)` suffix; the source preset can be
+    bundled, which is the canonical path for "start customising a
+    bundled template".
+  Replaces the legacy `PromptLibraryDialog` (Knotwork-styled
+  `AlertDialog`) that was backed by the older `PromptTemplate` model.
 
 - **Prompt presets — domain model & bundled catalogue** (Phase 24 /
   Task 4/9). New first-class entity for reusable system-prompt templates,

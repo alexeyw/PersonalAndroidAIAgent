@@ -78,10 +78,12 @@ object NodeConfigForms {
      * its dropdown. Empty list (the default) falls back to a free-text input.
      * @param onPickFromLibrary optional hook to open the prompt-library picker from
      * any prompt-bearing field. The catalog form invokes it with
-     * `(category, applySelected)` where `category` is the LLM-driven `NodeType.name`
-     * (e.g. `"LITE_RT"`) and `applySelected` is the lambda the form wants run when the
-     * user picks a preset; the screen renders its own picker dialog and calls
-     * `applySelected`. `null` (the default) hides the library button entirely.
+     * `(category, currentPrompt, applySelected)` where `category` is the LLM-driven
+     * `NodeType.name` (e.g. `"LITE_RT"`), `currentPrompt` is the field's current draft
+     * (so the picker can mark the matching row as `CURRENT`), and `applySelected` is
+     * the lambda the form wants run when the user picks a preset; the screen renders
+     * its own picker and calls `applySelected`. `null` (the default) hides the library
+     * button entirely.
      * @param onSavePreset optional hook to capture the current draft of a prompt-bearing
      * field as a user prompt preset. The catalog form invokes it with
      * `(category, currentPrompt)`; the screen shows its own Save-as-preset dialog with
@@ -95,7 +97,7 @@ object NodeConfigForms {
         onChange: (NodeConfig) -> Unit,
         availableToolIds: List<String> = emptyList(),
         availableModels: List<LocalModelOption> = emptyList(),
-        onPickFromLibrary: ((category: String, apply: (String) -> Unit) -> Unit)? = null,
+        onPickFromLibrary: ((category: String, currentPrompt: String, apply: (String) -> Unit) -> Unit)? = null,
         onSavePreset: ((category: String, currentPrompt: String) -> Unit)? = null,
     ) {
         Column(
@@ -162,10 +164,10 @@ object NodeConfigForms {
 
 /**
  * Typed shorthand for the optional prompt-library callback the screen passes down to
- * forms. The form invokes it as `hook(category) { picked -> onChange(...) }`; the
- * screen surfaces its own dialog and calls the inner lambda with the chosen prompt.
+ * forms. The form invokes it as `hook(category, currentPrompt) { picked -> onChange(...) }`;
+ * the screen surfaces its own picker and calls the inner lambda with the chosen prompt.
  */
-private typealias PromptLibraryHook = (category: String, apply: (String) -> Unit) -> Unit
+private typealias PromptLibraryHook = (category: String, currentPrompt: String, apply: (String) -> Unit) -> Unit
 
 /**
  * Typed shorthand for the optional save-as-preset callback the screen passes down to
@@ -317,7 +319,7 @@ private fun TextField(
                 if (hasLibrary) {
                     IconButton(
                         onClick = {
-                            onPickFromLibrary(libraryCategory) { picked -> onChange(picked) }
+                            onPickFromLibrary(libraryCategory, value) { picked -> onChange(picked) }
                         },
                         modifier = Modifier.size(LIBRARY_BUTTON_TARGET_DP.dp),
                     ) {

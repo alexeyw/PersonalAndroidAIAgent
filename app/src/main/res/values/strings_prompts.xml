@@ -24,6 +24,7 @@
     <string name="prompts_editor_body_label">PROMPT TEXT</string>
     <string name="prompts_editor_body_placeholder">Write the prompt here…</string>
     <string name="prompts_editor_insert_label">INSERT</string>
+    <string name="prompts_editor_category_invalid">Pick an LLM-driven node type (LITE_RT, CLOUD, OUTPUT, SUMMARY, INTENT_ROUTER, DECOMPOSITION, EVALUATION, CLARIFICATION).</string>
     <string name="prompts_editor_footer_format" tools:ignore="PluralsCandidate">Used by %1$d pipelines · changes apply on next run</string>
     <string name="prompts_editor_close_cd">Close editor</string>
 </resources>

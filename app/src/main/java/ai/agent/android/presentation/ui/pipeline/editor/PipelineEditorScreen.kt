@@ -722,14 +722,18 @@ fun PipelineEditorScreen(viewModel: OrchestratorViewModel, onBack: () -> Unit) {
                             isActive = model.isActive,
                         )
                     },
-                    onPickFromLibrary = { category, apply ->
+                    onPickFromLibrary = { category, currentPrompt, apply ->
                         // Categories emitted by the catalog are always LLM-driven NodeType
                         // names (`"LITE_RT"` etc.); see NodeConfigForms — non-LLM forms
                         // never expose the 📚 button. Defensive `runCatching` so a future
                         // typo in the catalog doesn't crash the editor.
                         val type = runCatching { NodeType.valueOf(category) }.getOrNull()
                         if (type != null) {
-                            pendingLibrary = PendingPromptLibrary(nodeType = type, apply = apply)
+                            pendingLibrary = PendingPromptLibrary(
+                                nodeType = type,
+                                currentPrompt = currentPrompt,
+                                apply = apply,
+                            )
                         }
                     },
                     onSavePreset = { category, currentPrompt ->
@@ -795,6 +799,7 @@ fun PipelineEditorScreen(viewModel: OrchestratorViewModel, onBack: () -> Unit) {
                 nodeType = libraryRequest.nodeType,
                 bundled = bundled,
                 mine = mine,
+                currentPrompt = libraryRequest.currentPrompt,
                 onApply = { picked ->
                     libraryRequest.apply(picked)
                     pendingLibrary = null
@@ -975,10 +980,11 @@ private fun rememberToolbarSubtitle(
 
 /**
  * Pending prompt-library request raised by the catalog sheet's 📚 button. [nodeType]
- * scopes which `PromptPreset`s show up in the picker; [apply] is the form's "set this
- * field" lambda, invoked when the user picks a preset.
+ * scopes which `PromptPreset`s show up in the picker; [currentPrompt] is the field's
+ * current draft so the picker can mark the matching row as `CURRENT`; [apply] is the
+ * form's "set this field" lambda, invoked when the user picks a preset.
  */
-private data class PendingPromptLibrary(val nodeType: NodeType, val apply: (String) -> Unit)
+private data class PendingPromptLibrary(val nodeType: NodeType, val currentPrompt: String, val apply: (String) -> Unit)
 
 /**
  * Pending save-as-prompt-preset request raised by the catalog sheet's 💾 button.

@@ -61,7 +61,7 @@ fun NodeConfigSheet(
     onSave: (NodeConfig) -> Unit,
     availableToolIds: List<String> = emptyList(),
     availableModels: List<LocalModelOption> = emptyList(),
-    onPickFromLibrary: ((category: String, apply: (String) -> Unit) -> Unit)? = null,
+    onPickFromLibrary: ((category: String, currentPrompt: String, apply: (String) -> Unit) -> Unit)? = null,
     onSavePreset: ((category: String, currentPrompt: String) -> Unit)? = null,
     extraSection: (@Composable () -> Unit)? = null,
 ) {
@@ -115,7 +115,7 @@ private fun ScrollableNodeConfigSheetBody(
     onSave: (NodeConfig) -> Unit,
     availableToolIds: List<String>,
     availableModels: List<LocalModelOption>,
-    onPickFromLibrary: ((category: String, apply: (String) -> Unit) -> Unit)?,
+    onPickFromLibrary: ((category: String, currentPrompt: String, apply: (String) -> Unit) -> Unit)?,
     onSavePreset: ((category: String, currentPrompt: String) -> Unit)?,
     extraSection: (@Composable () -> Unit)?,
 ) {
@@ -173,7 +173,7 @@ fun NodeConfigSheetBody(
     onSave: (NodeConfig) -> Unit,
     availableToolIds: List<String> = emptyList(),
     availableModels: List<LocalModelOption> = emptyList(),
-    onPickFromLibrary: ((category: String, apply: (String) -> Unit) -> Unit)? = null,
+    onPickFromLibrary: ((category: String, currentPrompt: String, apply: (String) -> Unit) -> Unit)? = null,
     onSavePreset: ((category: String, currentPrompt: String) -> Unit)? = null,
     extraSection: (@Composable () -> Unit)? = null,
 ) {

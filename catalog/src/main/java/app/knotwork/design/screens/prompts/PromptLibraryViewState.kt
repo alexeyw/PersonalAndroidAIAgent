@@ -27,7 +27,7 @@ enum class PromptLibraryVisualState {
  * renderer highlights placeholders inline via [PromptLibraryContent].
  * @property usedByCount how many pipelines reference this prompt.
  */
-data class PromptRow(val id: Long, val category: String, val name: String, val body: String, val usedByCount: Int)
+data class PromptRow(val id: String, val category: String, val name: String, val body: String, val usedByCount: Int)
 
 /**
  * Editor-sheet body. Mirrors the "Edit prompt" mockup.
@@ -39,7 +39,7 @@ data class PromptRow(val id: Long, val category: String, val name: String, val b
  * @property usedByCount surfaced in the footer hint when [id] is non-null.
  */
 data class PromptEditorState(
-    val id: Long? = null,
+    val id: String? = null,
     val name: String = "",
     val category: String = "",
     val body: String = "",
@@ -83,9 +83,9 @@ class PromptLibraryCallbacks(
     val onSearch: () -> Unit = {},
     val onCategorySelected: (String) -> Unit = {},
     val onNewPrompt: () -> Unit = {},
-    val onEditPrompt: (Long) -> Unit = {},
-    val onDeletePrompt: (Long) -> Unit = {},
-    val onDuplicatePrompt: (Long) -> Unit = {},
+    val onEditPrompt: (String) -> Unit = {},
+    val onDeletePrompt: (String) -> Unit = {},
+    val onDuplicatePrompt: (String) -> Unit = {},
     val onEditorNameChange: (String) -> Unit = {},
     val onEditorCategoryChange: (String) -> Unit = {},
     val onEditorBodyChange: (String) -> Unit = {},

@@ -1,7 +1,8 @@
 package ai.agent.android.presentation.ui.prompts
 
 import ai.agent.android.R
-import ai.agent.android.domain.models.NodeType
+import ai.agent.android.domain.constants.PromptPresetConstants
+import ai.agent.android.domain.models.PromptPreset
 import ai.agent.android.presentation.ui.common.asString
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
@@ -27,6 +28,11 @@ import app.knotwork.design.screens.prompts.PromptRow
  * Slim app-side Prompt Library mapper. Subscribes to
  * [PromptLibraryViewModel.uiState], folds the projection into the catalog
  * [PromptLibraryViewState], and hosts the editor `ModalBottomSheet`.
+ *
+ * Phase 24 / Task 5 swaps the data source from legacy `PromptTemplate`
+ * to [PromptPreset] (bundled + user). The catalog DTOs stay the same; the
+ * mapper folds each preset into a `PromptRow` keyed by the preset's
+ * String id.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -40,10 +46,9 @@ fun PromptLibraryScreen(
     val editorStrings = promptEditorStrings()
     val resolvedErrorMessage = uiState.errorMessage?.asString()
     val genericErrorMessage = stringResource(R.string.errors_generic_unexpected)
-    val viewState = remember(uiState, strings.subtitleFormat, strings.usedByFormat, resolvedErrorMessage) {
+    val viewState = remember(uiState, strings.subtitleFormat, resolvedErrorMessage) {
         uiState.toViewState(
             subtitleFormat = strings.subtitleFormat,
-            usedByFormat = strings.usedByFormat,
             resolvedErrorMessage = resolvedErrorMessage,
             fallbackErrorMessage = genericErrorMessage,
         )
@@ -93,47 +98,52 @@ fun PromptLibraryScreen(
  * Maps the app-side [PromptLibraryUiState] onto the catalog
  * [PromptLibraryViewState] consumed by `PromptLibraryContent`.
  *
+ * Categories are sourced from [PromptPresetConstants.LLM_DRIVEN_NODE_TYPES]
+ * — the set of node types that can host a system-prompt preset — so the
+ * tab row is stable across loads (even when one category has zero presets).
+ * Rows for the active tab come from `bundledPresets + userPresets`.
+ *
  * Branch order: a non-null [errorMessage] always wins over the
  * "empty prompts" branch — otherwise a failed initial load with no
  * cached prompts would hide behind a misleading empty state and the
  * Retry CTA would never be reachable.
  *
  * @param subtitleFormat localised `"%1$d categories · %2$d prompts"` template.
- * @param usedByFormat localised `"used by %1$d pipelines"` template
- * (currently unused — the catalog applies its own formatting from
- * `usedByCount`).
- * @param resolvedErrorMessage pre-resolved `errorMessage.asString()`
- * value (mappers cannot call `@Composable` resolvers themselves), or
- * `null` when no error is in flight.
- * @param fallbackErrorMessage generic localised error string used as
- * the rendered subtitle when [errorMessage] is non-null but resolves
- * to an empty payload.
+ * @param resolvedErrorMessage pre-resolved `errorMessage.asString()` value
+ *   (mappers cannot call `@Composable` resolvers themselves), or `null`
+ *   when no error is in flight.
+ * @param fallbackErrorMessage generic localised error string used as the
+ *   rendered subtitle when [errorMessage] is non-null but resolves to an
+ *   empty payload.
  */
-@Suppress("UNUSED_PARAMETER") // usedByFormat reserved for future per-row count formatting.
 internal fun PromptLibraryUiState.toViewState(
     subtitleFormat: String,
-    usedByFormat: String,
     resolvedErrorMessage: String?,
     fallbackErrorMessage: String,
 ): PromptLibraryViewState {
-    val categories = if (promptTemplates.isEmpty()) {
-        NodeType.entries.map { it.name }
-    } else {
-        promptTemplates.map { it.category }.distinct().sorted()
-    }
-    val selected = selectedCategory ?: categories.firstOrNull().orEmpty()
-    val rows = promptTemplates
-        .filter { it.category == selected }
-        .map { template ->
+    val categories = PromptPresetConstants.LLM_DRIVEN_NODE_TYPES
+        .map { it.name }
+        .sorted()
+    val selected = selectedCategory?.takeIf { it in categories }
+        ?: categories.firstOrNull().orEmpty()
+    val allPresets = bundledPresets + userPresets
+    val totalPresets = allPresets.size
+    val rows = allPresets
+        .filter { it.nodeType.name == selected }
+        .map { preset ->
             PromptRow(
-                id = template.id,
-                category = template.category,
-                name = template.name,
-                body = template.text,
+                id = preset.id,
+                category = preset.nodeType.name,
+                name = preset.name,
+                body = preset.systemPrompt,
+                // No "used by N pipelines" counter for presets — that would
+                // require scanning every pipeline graph on every load. Wire
+                // the field to 0 so the catalog footer reads as a placeholder
+                // until a dedicated counter use case lands.
                 usedByCount = 0,
             )
         }
-    val subtitle = subtitleFormat.format(categories.size, promptTemplates.size)
+    val subtitle = subtitleFormat.format(categories.size, totalPresets)
     val editor = editorDraft?.let { draft ->
         PromptEditorState(
             id = draft.id,
@@ -149,7 +159,7 @@ internal fun PromptLibraryUiState.toViewState(
         // rendered as Empty, hiding the real failure and the Retry CTA.
         errorMessage != null -> PromptLibraryVisualState.Error
         isLoading -> PromptLibraryVisualState.Loading
-        promptTemplates.isEmpty() -> PromptLibraryVisualState.Empty
+        allPresets.isEmpty() -> PromptLibraryVisualState.Empty
         else -> PromptLibraryVisualState.Default
     }
     val errorText = if (visualState == PromptLibraryVisualState.Error) {
@@ -170,34 +180,26 @@ internal fun PromptLibraryUiState.toViewState(
 }
 
 /** Bundle of localised display strings threaded into [PromptLibraryContent]. */
-private data class LocalisedPromptLibraryStrings(
-    val content: PromptLibraryStrings,
-    val subtitleFormat: String,
-    val usedByFormat: String,
-)
+private data class LocalisedPromptLibraryStrings(val content: PromptLibraryStrings, val subtitleFormat: String)
 
 @Composable
-private fun promptLibraryStrings(): LocalisedPromptLibraryStrings {
-    val usedByFormat = stringResource(R.string.prompts_used_by_format)
-    return LocalisedPromptLibraryStrings(
-        content = PromptLibraryStrings(
-            title = stringResource(R.string.prompts_screen_title),
-            backCd = stringResource(R.string.prompts_back_cd),
-            searchCd = stringResource(R.string.prompts_search_cd),
-            fabCd = stringResource(R.string.prompts_fab_cd),
-            editCd = stringResource(R.string.prompts_edit_cd),
-            deleteCd = stringResource(R.string.prompts_delete_cd),
-            duplicate = stringResource(R.string.prompts_duplicate),
-            usedByFormat = usedByFormat,
-            emptyTitle = stringResource(R.string.prompts_empty_title),
-            emptySubtitle = stringResource(R.string.prompts_empty_subtitle),
-            errorTitle = stringResource(R.string.prompts_error_title),
-            errorRetry = stringResource(R.string.common_retry),
-        ),
-        subtitleFormat = stringResource(R.string.prompts_subtitle_format),
-        usedByFormat = usedByFormat,
-    )
-}
+private fun promptLibraryStrings(): LocalisedPromptLibraryStrings = LocalisedPromptLibraryStrings(
+    content = PromptLibraryStrings(
+        title = stringResource(R.string.prompts_screen_title),
+        backCd = stringResource(R.string.prompts_back_cd),
+        searchCd = stringResource(R.string.prompts_search_cd),
+        fabCd = stringResource(R.string.prompts_fab_cd),
+        editCd = stringResource(R.string.prompts_edit_cd),
+        deleteCd = stringResource(R.string.prompts_delete_cd),
+        duplicate = stringResource(R.string.prompts_duplicate),
+        usedByFormat = stringResource(R.string.prompts_used_by_format),
+        emptyTitle = stringResource(R.string.prompts_empty_title),
+        emptySubtitle = stringResource(R.string.prompts_empty_subtitle),
+        errorTitle = stringResource(R.string.prompts_error_title),
+        errorRetry = stringResource(R.string.common_retry),
+    ),
+    subtitleFormat = stringResource(R.string.prompts_subtitle_format),
+)
 
 @Composable
 private fun promptEditorStrings(): PromptEditorStrings = PromptEditorStrings(
