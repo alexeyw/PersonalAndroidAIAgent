@@ -37,6 +37,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -112,6 +113,7 @@ data class PromptPresetPickerViewState(
     val selectedTab: PromptPresetPickerTab = PromptPresetPickerTab.BUNDLED,
     val bundledCount: Int = 0,
     val mineCount: Int = 0,
+    val searchOpen: Boolean = false,
     val searchQuery: String = "",
     val tagChips: List<PromptPresetTagChip> = emptyList(),
     val selectedTagFilter: String? = null,
@@ -134,12 +136,15 @@ data class PromptPresetPickerStrings(
     val usePrompt: String = "Use prompt",
     val previewCd: String = "Preview",
     val closeCd: String = "Close",
+    val searchCd: String = "Search presets",
+    val clearSearchCd: String = "Clear search",
 )
 
 /** One-shot callbacks consumed by [PromptPresetPickerSheet]. */
 @Suppress("LongParameterList") // Public DTO — fields kept explicit on purpose.
 class PromptPresetPickerCallbacks(
     val onTabSelected: (PromptPresetPickerTab) -> Unit = {},
+    val onToggleSearch: () -> Unit = {},
     val onSearchChange: (String) -> Unit = {},
     val onTagSelected: (String?) -> Unit = {},
     val onRowSelected: (String) -> Unit = {},
@@ -182,15 +187,21 @@ fun PromptPresetPickerSheet(
     ) {
         HeaderRow(state = state, strings = strings, callbacks = callbacks)
         TabRowSection(state = state, strings = strings, callbacks = callbacks)
-        // Search is always visible (the top-right magnifier in the earlier
-        // version was a non-functional placeholder). A dedicated field
-        // surfaces the action immediately and matches the spec's "Search
-        // by name" hint.
-        PromptPresetPickerSearchField(
-            value = state.searchQuery,
-            onValueChange = callbacks.onSearchChange,
-            placeholder = strings.searchHint,
-        )
+        // Collapsible search — gated on `searchOpen`. The Search icon in
+        // the header toggles this; the trailing × inside the field clears
+        // the query without dismissing the field, while collapsing via
+        // the header icon clears AND hides it (handled at the screen
+        // level via the `onToggleSearch` callback).
+        if (state.searchOpen) {
+            PromptPresetPickerSearchField(
+                value = state.searchQuery,
+                onValueChange = callbacks.onSearchChange,
+                placeholder = strings.searchHint,
+                trailingIcon = Icons.Outlined.Close.takeIf { state.searchQuery.isNotEmpty() },
+                onTrailingClick = { callbacks.onSearchChange("") },
+                trailingContentDescription = strings.clearSearchCd,
+            )
+        }
         if (state.tagChips.isNotEmpty()) {
             TagFilterRow(state = state, callbacks = callbacks)
         }
@@ -226,6 +237,13 @@ private fun HeaderRow(
                     color = KnotworkTheme.extended.onSurfaceMuted,
                 )
             }
+        }
+        IconButton(onClick = callbacks.onToggleSearch) {
+            Icon(
+                imageVector = Icons.Outlined.Search,
+                contentDescription = strings.searchCd,
+                tint = MaterialTheme.colorScheme.onSurface,
+            )
         }
         IconButton(onClick = callbacks.onClose) {
             Icon(
@@ -595,11 +613,15 @@ private fun ActionRow(
  * search icon is toggled.
  */
 @Composable
+@Suppress("LongParameterList")
 fun PromptPresetPickerSearchField(
     value: String,
     onValueChange: (String) -> Unit,
     placeholder: String,
     modifier: Modifier = Modifier,
+    trailingIcon: ImageVector? = null,
+    onTrailingClick: (() -> Unit)? = null,
+    trailingContentDescription: String? = null,
 ) {
     KnotworkTextField(
         value = value,
@@ -607,6 +629,9 @@ fun PromptPresetPickerSearchField(
         modifier = modifier.fillMaxWidth(),
         placeholder = placeholder,
         search = true,
+        trailingIcon = trailingIcon,
+        onTrailingClick = onTrailingClick,
+        contentDescription = trailingContentDescription,
     )
 }
 

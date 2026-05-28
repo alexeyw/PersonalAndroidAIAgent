@@ -121,7 +121,8 @@ fun PromptLibraryContent(
             ) {
                 PromptsCategoryTabs(state = state, callbacks = callbacks)
             }
-            if (state.visualState != PromptLibraryVisualState.Loading &&
+            if (state.searchOpen &&
+                state.visualState != PromptLibraryVisualState.Loading &&
                 state.visualState != PromptLibraryVisualState.Error
             ) {
                 PromptsSearchField(state = state, strings = strings, callbacks = callbacks)
@@ -173,10 +174,18 @@ private fun PromptsTopBar(
                 )
             }
         },
-        // The search icon was a non-functional placeholder; the always-visible
-        // search field under the tab bar replaces it. Keep the TopAppBar slot
-        // free for future actions (Import / Export, etc.).
-        actions = {},
+        actions = {
+            // Search icon toggles the inline search field rendered under the
+            // tab bar. Clicking again collapses it (and the screen clears
+            // the query so reopening starts fresh).
+            IconButton(onClick = callbacks.onToggleSearch) {
+                Icon(
+                    imageVector = Icons.Outlined.Search,
+                    contentDescription = strings.searchCd,
+                    tint = MaterialTheme.colorScheme.onSurface,
+                )
+            }
+        },
         colors = TopAppBarDefaults.topAppBarColors(
             containerColor = MaterialTheme.colorScheme.surface,
             titleContentColor = MaterialTheme.colorScheme.onSurface,
@@ -249,11 +258,17 @@ private fun PromptsSearchField(
     strings: PromptLibraryStrings,
     callbacks: PromptLibraryCallbacks,
 ) {
+    val hasQuery = state.searchQuery.isNotEmpty()
     KnotworkTextField(
         value = state.searchQuery,
         onValueChange = callbacks.onSearchQueryChange,
         placeholder = strings.searchHint,
         search = true,
+        // Trailing × clears the query in place but keeps the field open;
+        // collapsing the field is the toolbar Search icon's job.
+        trailingIcon = Icons.Outlined.Close.takeIf { hasQuery },
+        onTrailingClick = { callbacks.onSearchQueryChange("") }.takeIf { hasQuery },
+        contentDescription = strings.clearSearchCd,
         modifier = Modifier
             .fillMaxWidth()
             .padding(
@@ -766,6 +781,8 @@ data class PromptLibraryStrings(
     val title: String = "Prompt library",
     val backCd: String = "Back",
     val searchHint: String = "Search by name",
+    val searchCd: String = "Search prompts",
+    val clearSearchCd: String = "Clear search",
     val fabCd: String = "Add prompt",
     val editCd: String = "Edit prompt",
     val deleteCd: String = "Delete prompt",

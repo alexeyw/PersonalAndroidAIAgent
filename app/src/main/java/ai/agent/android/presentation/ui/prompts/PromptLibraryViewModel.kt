@@ -151,6 +151,22 @@ class PromptLibraryViewModel @Inject constructor(
     }
 
     /**
+     * Toggles the inline search field. Collapsing clears the query so the
+     * filtered row set resets — the alternative (preserve query but hide
+     * the field) traps the user in a filtered state with no visible
+     * affordance to clear it.
+     */
+    fun onToggleSearch() {
+        _uiState.update { state ->
+            val next = !state.searchOpen
+            state.copy(
+                searchOpen = next,
+                searchQuery = if (next) state.searchQuery else "",
+            )
+        }
+    }
+
+    /**
      * Opens the bottom-sheet editor.
      *
      * @param promptId `null` to start a fresh draft (pre-filled with the

@@ -72,6 +72,7 @@ fun PromptPresetPickerDialog(
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var selectedTab by remember { mutableStateOf(PromptPresetTab.BUNDLED) }
+    var searchOpen by remember { mutableStateOf(false) }
     var searchQuery by remember { mutableStateOf("") }
     var debouncedQuery by remember { mutableStateOf("") }
     var selectedTag by remember { mutableStateOf<String?>(null) }
@@ -130,6 +131,7 @@ fun PromptPresetPickerDialog(
         },
         bundledCount = bundled.size,
         mineCount = mine.size,
+        searchOpen = searchOpen,
         searchQuery = searchQuery,
         tagChips = tagChips,
         selectedTagFilter = selectedTag,
@@ -148,6 +150,16 @@ fun PromptPresetPickerDialog(
             selectedTab = when (catalogTab) {
                 PromptPresetPickerTab.BUNDLED -> PromptPresetTab.BUNDLED
                 PromptPresetPickerTab.MINE -> PromptPresetTab.MINE
+            }
+        },
+        onToggleSearch = {
+            // Toggling closed clears the query so reopening starts fresh —
+            // the alternative (preserve query but hide field) traps the
+            // user in a filtered state with no visible filter to clear.
+            val next = !searchOpen
+            searchOpen = next
+            if (!next) {
+                searchQuery = ""
             }
         },
         onSearchChange = { searchQuery = it },
@@ -233,6 +245,8 @@ private fun pickerStrings(): PromptPresetPickerStrings = PromptPresetPickerStrin
     usePrompt = stringResource(R.string.prompt_preset_picker_action_use_prompt),
     previewCd = stringResource(R.string.prompt_preset_picker_action_preview),
     closeCd = stringResource(R.string.common_close),
+    searchCd = stringResource(R.string.prompt_preset_picker_search_cd),
+    clearSearchCd = stringResource(R.string.prompt_preset_picker_clear_search_cd),
 )
 
 /** Debounce window for the search field — matches the spec (200 ms). */

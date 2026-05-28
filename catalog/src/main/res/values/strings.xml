@@ -119,8 +119,6 @@
     <string name="knotwork_library_title">Pipelines</string>
     <!-- Placeholder inside the inline search field. -->
     <string name="knotwork_library_search_placeholder">Search pipelines</string>
-    <!-- ContentDescription for the inline search field. -->
-    <string name="knotwork_library_search_cd">Pipeline search input</string>
     <!-- ContentDescription for the trailing clear-search button. -->
     <string name="knotwork_library_search_clear_cd">Clear pipeline search</string>
     <!-- Filter chip label: show every pipeline (default). -->

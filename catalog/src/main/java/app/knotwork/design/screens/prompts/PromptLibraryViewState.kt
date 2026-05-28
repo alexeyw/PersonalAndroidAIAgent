@@ -80,6 +80,7 @@ data class PromptLibraryViewState(
     val subtitle: String = "",
     val errorMessage: String? = null,
     val searchQuery: String = "",
+    val searchOpen: Boolean = false,
 ) {
     init {
         require((visualState == PromptLibraryVisualState.Error) == (errorMessage != null)) {
@@ -100,6 +101,7 @@ class PromptLibraryCallbacks(
     val onDuplicatePrompt: (String) -> Unit = {},
     val onPreviewPrompt: (String) -> Unit = {},
     val onSearchQueryChange: (String) -> Unit = {},
+    val onToggleSearch: () -> Unit = {},
     val onEditorNameChange: (String) -> Unit = {},
     val onEditorCategoryChange: (String) -> Unit = {},
     val onEditorBodyChange: (String) -> Unit = {},
