@@ -89,7 +89,7 @@ fun SaveAsPresetDialog(initialName: String, onDismiss: () -> Unit, onConfirm: (S
                             FilterChip(
                                 selected = category == entry,
                                 onClick = { category = entry },
-                                label = { Text(presetCategoryLabel(entry)) },
+                                label = { Text(presetCategoryLabelText(entry)) },
                                 colors = FilterChipDefaults.filterChipColors(),
                             )
                         }
@@ -123,20 +123,6 @@ fun SaveAsPresetDialog(initialName: String, onDismiss: () -> Unit, onConfirm: (S
             TextButton(onClick = onDismiss) { Text(stringResource(R.string.common_cancel)) }
         },
     )
-}
-
-/**
- * Maps a [PresetCategory] to a localised display label. Kept outside the
- * dialog body so manager / picker surfaces can reuse the same wording.
- */
-@Composable
-internal fun presetCategoryLabel(category: PresetCategory): String = when (category) {
-    PresetCategory.LOCAL -> stringResource(R.string.orchestrator_preset_category_local)
-    PresetCategory.CLOUD -> stringResource(R.string.orchestrator_preset_category_cloud)
-    PresetCategory.HYBRID -> stringResource(R.string.orchestrator_preset_category_hybrid)
-    PresetCategory.TOOL -> stringResource(R.string.orchestrator_preset_category_tool)
-    PresetCategory.RESEARCH -> stringResource(R.string.orchestrator_preset_category_research)
-    PresetCategory.OTHER -> stringResource(R.string.orchestrator_preset_category_other)
 }
 
 /** Test-tag applied to the Save-as-preset dialog root for Compose tests. */

@@ -285,6 +285,7 @@ This file maps the contents of the main application package.
         - `PipelinePresetsManagerScreen.kt` - Full-screen manager reachable from More → Library. Bundled rows are read-only; user rows expose Rename / Export-JSON (SAF) / Delete.
         - `PipelineLibrarySpeedDial.kt` - Two-action speed-dial that replaces the catalog `PipelineLibraryFab` overlay (`+ New pipeline` / `+ From preset`).
         - `GraphFlowPreview.kt` - Pure-Kotlin helper rendering a one-line `INPUT → LITE_RT → OUTPUT` summary used in preset cards.
+        - `PresetCategoryStyle.kt` - Theme-aware mapping from `PresetCategory` to its Knotwork accent colour + the shared `PresetCategoryBadge` chip used on every preset card.
     - `pipeline/editor/` - Phase 21 / Task 9 — production pipeline editor (Phase 22 / Task 14 reshapes the toolbar + adds RunStatusBanner, ZoomRail, MiniMap, FilterBar, EmptyPipelineState, DotGridBackground, ValidationAutoFix, copy/paste, search, grid toggle).
       - `PipelineEditorScreen.kt` - Stateful entry composable: subscribes to `OrchestratorViewModel` + `runState`, owns the screen-local `EditorState`, computes the toolbar subtitle / primary-action variant, hosts the overflow `DropdownMenu` (Undo / Redo / Rename… / Delete / Auto-layout / Mini-map / grid toggle / Find node… / Paste), the catalog `NodeConfigSheet`, the rename dialog, and the run-banner clock.
       - `PipelineEditorContent.kt` - Pure-layout content. Vertical stack of `EditorToolbar` (or `MultiSelectToolbar`) + `RunStatusBanner` + `EditorCanvas` + `ValidationBar`.

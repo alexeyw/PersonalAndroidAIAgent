@@ -8,7 +8,7 @@
 
     Keys follow `orchestrator_<context>_<purpose>`.
 -->
-<resources>
+<resources xmlns:tools="http://schemas.android.com/tools">
     <!-- Screen titles -->
     <string name="orchestrator_library_title">Pipelines</string>
 
@@ -64,7 +64,7 @@
     <string name="orchestrator_library_speed_dial_from_preset">+ From preset</string>
 
     <!-- Preset picker sheet -->
-    <string name="orchestrator_preset_picker_title">Pipeline presets</string>
+    <string name="orchestrator_preset_picker_title">Choose a preset</string>
     <string name="orchestrator_preset_picker_tab_bundled">Bundled</string>
     <string name="orchestrator_preset_picker_tab_mine">Mine</string>
     <string name="orchestrator_preset_picker_chip_all">All</string>
@@ -89,9 +89,8 @@
     <string name="orchestrator_preset_category_other">Other</string>
 
     <!-- Preset manager screen -->
-    <string name="orchestrator_preset_manager_title">Pipeline preset library</string>
-    <string name="orchestrator_preset_manager_section_bundled">Bundled presets</string>
-    <string name="orchestrator_preset_manager_section_user">Your presets</string>
+    <string name="orchestrator_preset_manager_title">Pipeline presets</string>
+    <string name="orchestrator_preset_manager_subtitle" tools:ignore="PluralsCandidate">%1$d bundled · %2$d saved</string>
     <string name="orchestrator_preset_manager_bundled_empty">No bundled presets are available.</string>
     <string name="orchestrator_preset_manager_user_empty">You haven\'t saved any presets yet. Save a pipeline as preset from the editor or the library overflow menu.</string>
     <string name="orchestrator_preset_manager_action_rename">Rename</string>
