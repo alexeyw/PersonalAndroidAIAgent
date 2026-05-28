@@ -39,9 +39,32 @@
     <string name="orchestrator_feedback_pipeline_deleted">Pipeline deleted</string>
     <string name="orchestrator_feedback_pipeline_created">Pipeline created</string>
 
-    <!-- Prompt library dialog -->
-    <string name="orchestrator_prompt_library_title">Prompt Library</string>
-    <string name="orchestrator_prompt_library_empty">No prompts found in library. Save custom prompts from the configuration dialog.</string>
+    <!-- Prompt-preset picker (Phase 24 / Task 5) -->
+    <string name="prompt_preset_picker_title">Prompt presets</string>
+    <string name="prompt_preset_picker_subtitle">%1$s · pick a preset for this node</string>
+    <string name="prompt_preset_picker_tab_bundled">Bundled</string>
+    <string name="prompt_preset_picker_tab_mine">Mine</string>
+    <string name="prompt_preset_picker_all_chip">All</string>
+    <string name="prompt_preset_picker_current_badge">CURRENT</string>
+    <string name="prompt_preset_picker_tokens_suffix">tok</string>
+    <string name="prompt_preset_picker_empty_bundled">No bundled presets for this node type.</string>
+    <string name="prompt_preset_picker_empty_mine">You haven\'t saved any presets for this node type.</string>
+    <string name="prompt_preset_picker_empty_filtered">No presets match the current filter.</string>
+    <string name="prompt_preset_picker_action_preview">Preview</string>
+    <string name="prompt_preset_picker_action_use_prompt">Use prompt</string>
+    <string name="prompt_preset_picker_action_cancel">Cancel</string>
+
+    <!-- Save-as-prompt-preset dialog (Phase 24 / Task 5) -->
+    <string name="prompt_preset_save_dialog_title">Save as preset</string>
+    <string name="prompt_preset_save_dialog_subtitle">Target node type: %1$s</string>
+    <string name="prompt_preset_save_field_name">Name</string>
+    <string name="prompt_preset_save_field_description">Description (optional)</string>
+    <string name="prompt_preset_save_field_tags">Tags (comma-separated, optional)</string>
+    <string name="prompt_preset_save_field_tags_hint">e.g. concise, reasoning, json</string>
+    <string name="prompt_preset_save_action_save">Save</string>
+    <string name="prompt_preset_save_action_cancel">Cancel</string>
+    <string name="prompt_preset_save_error_blank_prompt">Cannot save an empty system prompt.</string>
+    <string name="prompt_preset_save_error_name_too_long" tools:ignore="PluralsCandidate">Name must be at most %1$d characters</string>
 
     <!-- Node context-config section -->
     <string name="orchestrator_context_section_title">Input Data</string>

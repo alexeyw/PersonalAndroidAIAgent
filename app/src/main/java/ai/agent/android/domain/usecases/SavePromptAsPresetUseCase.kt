@@ -53,6 +53,7 @@ class SavePromptAsPresetUseCase @Inject constructor(private val promptPresetRepo
         description: String,
         nodeType: NodeType,
         tags: List<String> = emptyList(),
+        existingId: String? = null,
     ): Result<String> {
         val trimmedName = name.trim()
         if (trimmedName.isEmpty()) {
@@ -88,7 +89,11 @@ class SavePromptAsPresetUseCase @Inject constructor(private val promptPresetRepo
         }
 
         val preset = PromptPreset(
-            id = UUID.randomUUID().toString(),
+            // `existingId` enables in-place update of a user-saved preset
+            // (insert-or-update semantics — the repository upserts by id).
+            // A blank `existingId` falls back to a fresh UUID so the
+            // legacy save-new path keeps working unchanged.
+            id = existingId?.takeIf { it.isNotBlank() } ?: UUID.randomUUID().toString(),
             name = trimmedName,
             description = description.trim(),
             nodeType = nodeType,

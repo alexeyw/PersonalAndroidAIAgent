@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "id": "if_destructive_intent",
+  "name": "Destructive or sensitive action",
+  "description": "True when fulfilling the request would modify, delete, send, purchase, or otherwise mutate user data or external state.",
+  "nodeType": "IF_CONDITION",
+  "systemPrompt": "Fulfilling the upstream request would mutate state visible to the user or to third parties — for example: deleting or overwriting files, sending email or messages, posting on the user's behalf, making a purchase, modifying calendar / contacts / system settings, or invoking any tool whose effect is not purely read-only.",
+  "tags": ["safety", "destructive", "starter"]
+}

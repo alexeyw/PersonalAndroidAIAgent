@@ -286,7 +286,8 @@ This file maps the contents of the main application package.
       - `PipelineLibraryScreen.kt` - Library screen listing every saved pipeline. Phase 24 / Task 3 replaces the single FAB with `PipelineLibrarySpeedDial` (+ New / + From preset), wires `onBrowseTemplates` to `PresetPickerSheet`, and adds the `Save as preset` row overflow action.
       - `components/` - Orchestrator UI components.
         - `NodeContextConfigSection.kt` - "Input Data" section of the node configuration dialog: five checkboxes mapped to `NodeContextConfig` flags (with `nodeInput` rendered locked-on) plus a hint banner.
-        - `PromptLibraryDialog.kt` - Prompt library dialog UI component.
+        - `PromptPresetPickerDialog.kt` - App-side bottom-sheet wrapper around the catalog `PromptPresetPickerSheet` (Phase 24 / Task 5). Owns the screen-local state: tab selection, 200 ms debounced search, tag filter, currently-selected row, search-expanded toggle. Exposes `filterPresets`, `buildTagChips`, `estimateTokens` for unit tests. Replaces the legacy `PromptLibraryDialog`.
+        - `SavePromptAsPresetDialog.kt` - Name/description/tags dialog raised when the user taps the 💾 button on a prompt-bearing field in `NodeConfigSheet` (Phase 24 / Task 5). Validates against `PromptPresetConstants` (60-char name cap) and hands a `SavePromptAsPresetResult` back to the editor. Exposes `parsePromptPresetTags(...)` and `canSavePromptPreset(...)` for unit tests.
       - `presets/` - Pipeline preset UI (Phase 24 / Task 3).
         - `PipelinePresetsViewModel.kt` - Hilt VM driving `PresetPickerSheet` and `PipelinePresetsManagerScreen`. Owns bundled/user catalogue flows, tab+chip selection, load-from-preset hand-off, rename/delete/export of user presets.
         - `PipelinePresetsUiState.kt` - UI state for the picker and manager (bundled/user lists, active tab, category chip, `pendingPipelineIdFromPreset` editor hand-off).
@@ -320,10 +321,10 @@ This file maps the contents of the main application package.
       - `bars/ValidationBar.kt` - Bottom bar listing `PipelineValidationError`s. Phase 22 / Task 14 adds a header banner (issue count + `Auto-fix` action), per-row severity glyphs (`Blocker` / `Warning`), and a trailing `Go ↗` button that focuses the offending node when one exists.
       - `bars/MultiSelectToolbar.kt` - Top bar that replaces `EditorToolbar` while multi-select is active; surfaces count + Cancel / Copy / Delete.
       - `sheet/NodeConfigSheetHost.kt` - Thin adapter exposing the catalog `NodeConfigSheet` (with all 12 per-type forms + validator) to the editor screen.
-    - `prompts/` - Prompt Library screen components (Phase 22 / Task 15 — Knotwork redesign with `ScrollableTabRow` + per-card actions + `ModalBottomSheet` editor).
-      - `PromptLibraryScreen.kt` - Slim mapper. Folds `PromptLibraryUiState` into the catalog `PromptLibraryViewState`, hosts the editor `ModalBottomSheet` with `PromptEditorSheetBody`.
-      - `PromptLibraryUiState.kt` - Prompt library UI state. Adds `selectedCategory: String?`, `editorDraft: PromptEditorDraft?`.
-      - `PromptLibraryViewModel.kt` - Prompt library ViewModel. Adds `selectCategory`, `openEditor(id?)`, `closeEditor`, per-field editor setters, `saveEditor`, `duplicatePrompt`.
+    - `prompts/` - Prompt Library screen components. Phase 24 / Task 5 rewires the screen end-to-end onto the new `PromptPreset` catalogue (bundled + user) — the legacy `PromptTemplate` source is no longer consulted here.
+      - `PromptLibraryScreen.kt` - Slim mapper. Folds `PromptLibraryUiState` (bundled + user presets) into the catalog `PromptLibraryViewState`, hosts the editor `ModalBottomSheet` with `PromptEditorSheetBody`. Categories come from `PromptPresetConstants.LLM_DRIVEN_NODE_TYPES`.
+      - `PromptLibraryUiState.kt` - Prompt library UI state. Carries `bundledPresets`, `userPresets`, `selectedCategory: String?`, `editorDraft: PromptEditorDraft?` (draft id is now `String`, with optional `description` + `tags` preserved on edit).
+      - `PromptLibraryViewModel.kt` - Prompt library ViewModel. Injects `PromptPresetRepository` + `SavePromptAsPresetUseCase`. Exposes `selectCategory`, `openEditor(id?)`, `closeEditor`, per-field editor setters, `saveEditor` (upsert via `existingId`), `duplicatePrompt`, `deletePrompt` (bundled-aware no-op).
     - `splash/` - Cold-start splash / loading screen (Phase 22 / Task 15 wired to the Knotwork `SplashContent` catalog surface).
       - `SplashScreen.kt` - Slim mapper. Folds `SplashUiState` into `SplashViewState` (Initializing / Loading / Error) and renders `SplashContent`.
       - `SplashUiState.kt` - Render state of `SplashScreen` (message, progressFraction, isDone, errorMessage).

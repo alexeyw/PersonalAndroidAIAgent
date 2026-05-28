@@ -11,6 +11,7 @@ import io.mockk.slot
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -151,5 +152,41 @@ class SavePromptAsPresetUseCaseTest {
 
         assertTrue(result.isFailure)
         assertEquals("disk full", result.exceptionOrNull()?.message)
+    }
+
+    @Test
+    fun `given existingId when invoke then persists preset with that id (upsert)`() = runTest {
+        val captured = slot<PromptPreset>()
+        coEvery { repository.saveUserPreset(capture(captured)) } returns Unit
+
+        val result = useCase(
+            systemPrompt = "updated",
+            name = "Reused",
+            description = "",
+            nodeType = NodeType.LITE_RT,
+            existingId = "fixed-id-123",
+        )
+
+        assertTrue(result.isSuccess)
+        assertEquals("fixed-id-123", captured.captured.id)
+    }
+
+    @Test
+    fun `given blank existingId when invoke then falls back to a fresh UUID`() = runTest {
+        val captured = slot<PromptPreset>()
+        coEvery { repository.saveUserPreset(capture(captured)) } returns Unit
+
+        useCase(
+            systemPrompt = "ok",
+            name = "ok",
+            description = "",
+            nodeType = NodeType.LITE_RT,
+            existingId = "   ",
+        )
+
+        // Blank ids must not be persisted — they would collide on insert and would
+        // also bypass our intent of "create new with fresh UUID".
+        assertTrue(captured.captured.id.isNotBlank())
+        assertNotEquals("   ", captured.captured.id)
     }
 }

@@ -64,23 +64,6 @@ internal object PipelineLibraryPreview {
         totalCount = rows().size,
     )
 
-    fun filtering(): PipelineLibraryViewState {
-        val filtered = rows().take(n = 2)
-        return PipelineLibraryViewState(
-            visualState = PipelineLibraryVisualState.Filtering,
-            pipelines = filtered,
-            totalCount = rows().size,
-            searchQuery = "rev",
-        )
-    }
-
-    fun filteringNoMatches(): PipelineLibraryViewState = PipelineLibraryViewState(
-        visualState = PipelineLibraryVisualState.Filtering,
-        pipelines = emptyList(),
-        totalCount = rows().size,
-        searchQuery = "zzz",
-    )
-
     fun swipeOpen(): PipelineLibraryViewState {
         val markedRevealed = rows().mapIndexed { index, row ->
             if (index == 1) row.copy(revealed = true) else row

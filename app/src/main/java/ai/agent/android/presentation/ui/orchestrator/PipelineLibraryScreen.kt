@@ -78,7 +78,6 @@ fun PipelineLibraryScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
 
-    var searchQuery by remember { mutableStateOf("") }
     var activeFilter by remember { mutableStateOf(PipelineLibraryFilter.All) }
     var openOverflowRowId by remember { mutableStateOf<String?>(null) }
     var showCreateDialog by remember { mutableStateOf(false) }
@@ -119,9 +118,9 @@ fun PipelineLibraryScreen(
         }
     }
 
-    val filteredRows by remember(rows, searchQuery, activeFilter) {
+    val filteredRows by remember(rows, activeFilter) {
         derivedStateOf {
-            val byFilter = when (activeFilter) {
+            when (activeFilter) {
                 PipelineLibraryFilter.All, PipelineLibraryFilter.Mine -> rows
                 // Recent: top-N by last-modified order — repository already
                 // returns pipelines newest-first.
@@ -131,8 +130,6 @@ fun PipelineLibraryScreen(
                 // we'd surface the empty result deterministically.
                 PipelineLibraryFilter.Shared -> emptyList()
             }
-            val q = searchQuery.trim()
-            if (q.isEmpty()) byFilter else byFilter.filter { it.title.contains(q, ignoreCase = true) }
         }
     }
 
@@ -140,24 +137,20 @@ fun PipelineLibraryScreen(
         uiState.errorMessage != null && rows.isEmpty() -> PipelineLibraryVisualState.Error
         uiState.isLoading && rows.isEmpty() -> PipelineLibraryVisualState.Loading
         rows.isEmpty() -> PipelineLibraryVisualState.Empty
-        searchQuery.isNotBlank() || activeFilter != PipelineLibraryFilter.All ->
-            PipelineLibraryVisualState.Filtering
         else -> PipelineLibraryVisualState.Populated
     }
 
     val viewState = PipelineLibraryViewState(
         visualState = visualState,
-        pipelines = if (visualState == PipelineLibraryVisualState.Filtering) filteredRows else rows,
+        pipelines = if (activeFilter != PipelineLibraryFilter.All) filteredRows else rows,
         totalCount = rows.size,
         defaultCount = if (uiState.defaultPipelineId != null) 1 else 0,
-        searchQuery = searchQuery,
         activeFilter = activeFilter,
         errorMessage = if (visualState == PipelineLibraryVisualState.Error) errorText.orEmpty() else null,
         openOverflowRowId = openOverflowRowId,
     )
 
     val callbacks = PipelineLibraryCallbacks(
-        onSearchQueryChange = { searchQuery = it },
         onFilterChange = { activeFilter = it },
         onPipelineClick = { id ->
             viewModel.loadPipeline(pipelineId = id)
@@ -192,20 +185,12 @@ fun PipelineLibraryScreen(
             uiState.savedPipelines.firstOrNull { it.id == id }?.let { deleteTarget = it }
         },
         onOpenDrawer = { /* drawer ships post-v0.1. */ },
-        onOpenSearch = {
-            // Reveal the inline chrome by seeding the query with an empty
-            // string so the show-search-chrome predicate fires.
-            if (searchQuery.isEmpty()) searchQuery = "" // no-op, but explicit
-            activeFilter = PipelineLibraryFilter.All
-            searchQuery = " " // single-space sentinel that disappears as the user types
-        },
         onTopOverflow = { /* top overflow ships post-v0.1. */ },
         onNewPipeline = { showCreateDialog = true },
         onBrowseTemplates = { showPresetPicker = true },
         onSaveAsPreset = { id ->
             uiState.savedPipelines.firstOrNull { it.id == id }?.let { saveAsPresetTarget = it }
         },
-        onClearSearch = { searchQuery = "" },
         onErrorRetry = { viewModel.clearError() },
     )
 

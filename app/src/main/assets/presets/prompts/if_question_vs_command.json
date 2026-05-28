@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "id": "if_question_vs_command",
+  "name": "Is question, not command",
+  "description": "True when the upstream text is an information-seeking question rather than an instruction to perform an action.",
+  "nodeType": "IF_CONDITION",
+  "systemPrompt": "The upstream text is an information-seeking question (the user wants an answer or explanation) rather than a directive to execute an action, change state, or run a tool.",
+  "tags": ["intent", "question", "starter"]
+}

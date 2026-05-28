@@ -17,7 +17,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.OpenInNew
 import androidx.compose.material.icons.outlined.AccountTree
@@ -31,7 +30,6 @@ import androidx.compose.material.icons.outlined.DriveFileRenameOutline
 import androidx.compose.material.icons.outlined.FileDownload
 import androidx.compose.material.icons.outlined.FileUpload
 import androidx.compose.material.icons.outlined.MoreVert
-import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.WarningAmber
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -49,10 +47,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import app.knotwork.design.R
@@ -188,13 +184,6 @@ private fun LibraryTopBar(state: PipelineLibraryViewState, callbacks: PipelineLi
             }
         },
         actions = {
-            IconButton(onClick = callbacks.onOpenSearch) {
-                Icon(
-                    imageVector = Icons.Outlined.Search,
-                    contentDescription = stringResource(R.string.knotwork_library_search_icon_cd),
-                    tint = MaterialTheme.colorScheme.onSurface,
-                )
-            }
             IconButton(onClick = callbacks.onTopOverflow) {
                 Icon(
                     imageVector = Icons.Outlined.MoreVert,
@@ -259,90 +248,20 @@ private fun LibraryBody(state: PipelineLibraryViewState, callbacks: PipelineLibr
             .fillMaxSize()
             .padding(padding),
     ) {
-        // The inline search field + filter-chip row only render when the
-        // host explicitly puts the surface in a filtering state (search
-        // text non-empty or a chip other than All selected). The default
-        // mockup has neither — surface starts with the LIBRARY header.
-        val showSearchChrome = state.searchQuery.isNotEmpty() ||
-            state.activeFilter != PipelineLibraryFilter.All ||
-            state.visualState == PipelineLibraryVisualState.Filtering
-        if (showSearchChrome && state.visualState != PipelineLibraryVisualState.Error) {
-            LibrarySearchField(query = state.searchQuery, onQueryChange = callbacks.onSearchQueryChange)
+        // Filter chips are always visible (above the list) — cheap navigation,
+        // not a power-user surface that needs to be hidden. Skipped only in
+        // the Error state where the whole list is replaced.
+        if (state.visualState != PipelineLibraryVisualState.Error) {
             LibraryFilterRow(active = state.activeFilter, onChange = callbacks.onFilterChange)
-            if (state.visualState == PipelineLibraryVisualState.Filtering) {
-                FilterCountLine(visible = state.pipelines.size, total = state.totalCount)
-            }
         }
         when (state.visualState) {
             PipelineLibraryVisualState.Empty -> LibraryEmptyState(callbacks = callbacks)
             PipelineLibraryVisualState.Loading -> LibraryLoadingState()
             PipelineLibraryVisualState.Error -> LibraryErrorState(state = state, callbacks = callbacks)
-            PipelineLibraryVisualState.Filtering -> {
-                if (state.pipelines.isEmpty()) {
-                    LibraryNoMatchState(callbacks = callbacks, query = state.searchQuery)
-                } else {
-                    LibraryList(state = state, callbacks = callbacks)
-                }
-            }
             else -> LibraryList(state = state, callbacks = callbacks)
         }
     }
 }
-
-@Composable
-private fun LibrarySearchField(query: String, onQueryChange: (String) -> Unit) {
-    val fieldCd = stringResource(R.string.knotwork_library_search_cd)
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp2),
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = KnotworkTheme.spacing.sp4, vertical = KnotworkTheme.spacing.sp2)
-            .clip(KnotworkTheme.shapes.md)
-            .background(color = KnotworkTheme.extended.surface2)
-            .padding(horizontal = KnotworkTheme.spacing.sp3, vertical = KnotworkTheme.spacing.sp2),
-    ) {
-        Icon(
-            imageVector = Icons.Outlined.Search,
-            contentDescription = null,
-            tint = KnotworkTheme.extended.onSurfaceMuted,
-            modifier = Modifier.size(SEARCH_ICON_SIZE),
-        )
-        Box(modifier = Modifier.weight(1f)) {
-            BasicTextField(
-                value = query,
-                onValueChange = onQueryChange,
-                singleLine = true,
-                textStyle = KnotworkTextStyles.BodyBase.copy(color = MaterialTheme.colorScheme.onSurface),
-                cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .semantics { contentDescription = fieldCd },
-            )
-            if (query.isEmpty()) {
-                Text(
-                    text = stringResource(R.string.knotwork_library_search_placeholder),
-                    style = KnotworkTextStyles.BodyBase,
-                    color = KnotworkTheme.extended.onSurfaceMuted,
-                    maxLines = 1,
-                )
-            }
-        }
-        if (query.isNotEmpty()) {
-            IconButton(onClick = { onQueryChange("") }) {
-                Icon(
-                    imageVector = Icons.Outlined.Close,
-                    contentDescription = stringResource(R.string.knotwork_library_search_clear_cd),
-                    tint = KnotworkTheme.extended.onSurfaceMuted,
-                    modifier = Modifier.size(SEARCH_ICON_SIZE),
-                )
-            }
-        }
-    }
-}
-
-/** Leading / trailing search-field icon size. */
-private val SEARCH_ICON_SIZE = 20.dp
 
 @Composable
 private fun LibraryFilterRow(active: PipelineLibraryFilter, onChange: (PipelineLibraryFilter) -> Unit) {
@@ -367,19 +286,6 @@ private fun LibraryFilterRow(active: PipelineLibraryFilter, onChange: (PipelineL
             )
         }
     }
-}
-
-/** Subtitle line beneath the filter chips: "X of Y" — only rendered while filtering. */
-@Composable
-private fun FilterCountLine(visible: Int, total: Int) {
-    Text(
-        text = stringResource(R.string.knotwork_library_filter_count, visible, total),
-        style = KnotworkTextStyles.BodySm,
-        color = KnotworkTheme.extended.onSurfaceMuted,
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = KnotworkTheme.spacing.sp4, vertical = KnotworkTheme.spacing.sp1),
-    )
 }
 
 @Composable
@@ -449,18 +355,6 @@ private fun LibraryErrorState(state: PipelineLibraryViewState, callbacks: Pipeli
             onClick = callbacks.onErrorReport,
         )
     }
-}
-
-@Composable
-private fun LibraryNoMatchState(callbacks: PipelineLibraryCallbacks, query: String) {
-    EmptyState(
-        title = stringResource(R.string.knotwork_library_no_match_title),
-        subtitle = stringResource(R.string.knotwork_library_no_match_subtitle) +
-            (if (query.isNotEmpty()) " (\"$query\")" else ""),
-        illustration = { /* No striped placeholder for the no-match tile. */ },
-        ctaLabel = stringResource(R.string.knotwork_library_no_match_clear),
-        onCtaClick = callbacks.onClearSearch,
-    )
 }
 
 @Composable
