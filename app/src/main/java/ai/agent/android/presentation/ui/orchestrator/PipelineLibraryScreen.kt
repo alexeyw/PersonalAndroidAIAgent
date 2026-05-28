@@ -3,6 +3,10 @@ package ai.agent.android.presentation.ui.orchestrator
 import ai.agent.android.R
 import ai.agent.android.domain.models.PipelineGraph
 import ai.agent.android.presentation.ui.common.asString
+import ai.agent.android.presentation.ui.orchestrator.presets.PipelineLibrarySpeedDial
+import ai.agent.android.presentation.ui.orchestrator.presets.PipelinePresetsViewModel
+import ai.agent.android.presentation.ui.orchestrator.presets.PresetPickerSheet
+import ai.agent.android.presentation.ui.orchestrator.presets.SaveAsPresetDialog
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -34,7 +38,6 @@ import app.knotwork.design.components.controls.KnotworkField
 import app.knotwork.design.components.controls.KnotworkTextField
 import app.knotwork.design.screens.pipelines.PipelineLibraryCallbacks
 import app.knotwork.design.screens.pipelines.PipelineLibraryContent
-import app.knotwork.design.screens.pipelines.PipelineLibraryFab
 import app.knotwork.design.screens.pipelines.PipelineLibraryFilter
 import app.knotwork.design.screens.pipelines.PipelineLibraryRow
 import app.knotwork.design.screens.pipelines.PipelineLibraryViewState
@@ -66,10 +69,12 @@ import kotlinx.coroutines.launch
 @Composable
 fun PipelineLibraryScreen(
     viewModel: OrchestratorViewModel = hiltViewModel(),
+    presetsViewModel: PipelinePresetsViewModel = hiltViewModel(),
     onOpenEditor: () -> Unit = {},
     onBack: () -> Unit = {},
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val presetsState by presetsViewModel.uiState.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
 
@@ -79,6 +84,8 @@ fun PipelineLibraryScreen(
     var showCreateDialog by remember { mutableStateOf(false) }
     var renameTarget by remember { mutableStateOf<PipelineGraph?>(null) }
     var deleteTarget by remember { mutableStateOf<PipelineGraph?>(null) }
+    var saveAsPresetTarget by remember { mutableStateOf<PipelineGraph?>(null) }
+    var showPresetPicker by remember { mutableStateOf(false) }
 
     val errorText = uiState.errorMessage?.asString()
     LaunchedEffect(errorText) {
@@ -194,8 +201,9 @@ fun PipelineLibraryScreen(
         },
         onTopOverflow = { /* top overflow ships post-v0.1. */ },
         onNewPipeline = { showCreateDialog = true },
-        onBrowseTemplates = {
-            scope.launch { snackbarHostState.showSnackbar(message = TEMPLATES_COMING_SOON_MESSAGE) }
+        onBrowseTemplates = { showPresetPicker = true },
+        onSaveAsPreset = { id ->
+            uiState.savedPipelines.firstOrNull { it.id == id }?.let { saveAsPresetTarget = it }
         },
         onClearSearch = { searchQuery = "" },
         onErrorRetry = { viewModel.clearError() },
@@ -204,8 +212,9 @@ fun PipelineLibraryScreen(
     Box(modifier = Modifier.fillMaxSize().testTag(tag = LIBRARY_ROOT_TEST_TAG)) {
         PipelineLibraryContent(state = viewState, callbacks = callbacks)
         if (!viewState.isFabHidden) {
-            PipelineLibraryFab(
-                onClick = callbacks.onNewPipeline,
+            PipelineLibrarySpeedDial(
+                onNewPipeline = callbacks.onNewPipeline,
+                onFromPreset = { showPresetPicker = true },
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
                     .padding(
@@ -215,6 +224,59 @@ fun PipelineLibraryScreen(
             )
         }
         SnackbarHost(hostState = snackbarHostState)
+    }
+
+    if (showPresetPicker) {
+        PresetPickerSheet(
+            state = presetsState,
+            onTabSelected = presetsViewModel::selectTab,
+            onCategorySelected = presetsViewModel::selectCategory,
+            onUsePreset = { id ->
+                presetsViewModel.loadFromPreset(id)
+                showPresetPicker = false
+            },
+            onDismiss = { showPresetPicker = false },
+        )
+    }
+
+    LaunchedEffect(presetsState.pendingPipelineIdFromPreset) {
+        presetsState.pendingPipelineIdFromPreset?.let { newPipelineId ->
+            presetsViewModel.consumePendingPipelineNavigation()
+            viewModel.loadPipeline(newPipelineId)
+            onOpenEditor()
+        }
+    }
+
+    val presetFeedback = presetsState.feedbackMessage?.asString()
+    LaunchedEffect(presetFeedback) {
+        presetFeedback?.let { msg ->
+            snackbarHostState.showSnackbar(msg)
+            presetsViewModel.clearFeedback()
+        }
+    }
+    val presetError = presetsState.errorMessage?.asString()
+    LaunchedEffect(presetError) {
+        presetError?.let { msg ->
+            snackbarHostState.showSnackbar(msg)
+            presetsViewModel.clearError()
+        }
+    }
+
+    saveAsPresetTarget?.let { target ->
+        SaveAsPresetDialog(
+            initialName = target.name,
+            onDismiss = { saveAsPresetTarget = null },
+            onConfirm = { result ->
+                viewModel.saveAsPresetFromLibrary(
+                    pipelineId = target.id,
+                    name = result.name,
+                    description = result.description,
+                    category = result.category,
+                    tags = result.tags,
+                )
+                saveAsPresetTarget = null
+            },
+        )
     }
 
     if (showCreateDialog) {
@@ -355,9 +417,6 @@ private const val LEADING_TINT_PACKED: Long = 0xFFC48225
 
 /** TestTag applied to the screen root so Espresso / Compose tests can anchor. */
 internal const val LIBRARY_ROOT_TEST_TAG = "pipeline_library_root"
-
-/** Snackbar message shown when the user taps "Browse templates" before the gallery lands. */
-private const val TEMPLATES_COMING_SOON_MESSAGE = "Template gallery ships after v0.1."
 
 /** Snackbar message shown when the user taps "Export JSON" — per-id export lands post-v0.1. */
 private const val EXPORT_COMING_SOON_MESSAGE = "Per-pipeline export ships in a follow-up."

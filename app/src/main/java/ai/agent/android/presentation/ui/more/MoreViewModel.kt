@@ -5,10 +5,12 @@ import ai.agent.android.domain.engine.TaskQueueManager
 import ai.agent.android.domain.models.AgentOrchestratorState
 import ai.agent.android.domain.models.LocalModel
 import ai.agent.android.domain.models.MemoryStats
+import ai.agent.android.domain.models.PipelinePreset
 import ai.agent.android.domain.models.PromptTemplate
 import ai.agent.android.domain.repositories.LocalModelRepository
 import ai.agent.android.domain.repositories.MemoryRepository
 import ai.agent.android.domain.repositories.NetworkActivityTracker
+import ai.agent.android.domain.repositories.PipelinePresetRepository
 import ai.agent.android.domain.repositories.PromptRepository
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -40,6 +42,7 @@ class MoreViewModel @Inject constructor(
     private val promptRepository: PromptRepository,
     private val taskQueueManager: TaskQueueManager,
     private val networkActivityTracker: NetworkActivityTracker,
+    pipelinePresetRepository: PipelinePresetRepository,
 ) : ViewModel() {
 
     val uiState: StateFlow<MoreUiState> = combine(
@@ -55,6 +58,7 @@ class MoreViewModel @Inject constructor(
         // status text would stay stuck on whatever it was at the last
         // memory / model / prompt / task / network-activity emission.
         statusTicker(),
+        pipelinePresetRepository.getUserPresets(),
     ) { values -> reduceUiState(values = values) }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(STATE_STOP_TIMEOUT_MS),
@@ -76,6 +80,7 @@ class MoreViewModel @Inject constructor(
         val activeSessions = values[3] as Map<*, AgentOrchestratorState>
         val lastNetwork = values[4] as Long?
         val now = values[5] as Long
+        val userPresets = values[6] as List<PipelinePreset>
         val active = models.firstOrNull { it.isActive }
         val runningCount = activeSessions.values.count {
             it is AgentOrchestratorState.Thinking ||
@@ -93,6 +98,7 @@ class MoreViewModel @Inject constructor(
             },
             tasksBadge = runningCount,
             aboutSubtitle = "v${BuildConfig.VERSION_NAME} · build ${BuildConfig.VERSION_CODE}",
+            librarySubtitle = formatLibraryStats(userPresets.size),
             networkStatusText = formatNetworkStatus(now, lastNetwork),
             networkStatusOk = lastNetwork == null ||
                 (now - lastNetwork) > FRESH_NETWORK_WINDOW_MS,
@@ -166,6 +172,18 @@ internal fun formatMemoryStats(chunkCount: Int, totalBytes: Long): String {
  */
 internal fun formatPromptsStats(categoriesCount: Int, promptsCount: Int): String =
     "$categoriesCount categories · $promptsCount prompts"
+
+/**
+ * Format the Library row subtitle.
+ *
+ * @param userPresetCount Number of user-saved pipeline presets (bundled
+ *   presets are not surfaced here because they are not user-owned).
+ */
+internal fun formatLibraryStats(userPresetCount: Int): String = when (userPresetCount) {
+    0 -> "no saved presets"
+    1 -> "1 saved preset"
+    else -> "$userPresetCount saved presets"
+}
 
 /**
  * Compute the network-status footer text from the [lastOutboundAt]

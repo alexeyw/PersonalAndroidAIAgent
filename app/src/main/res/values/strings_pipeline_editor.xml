@@ -102,6 +102,7 @@
     <string name="pipeline_editor_overflow_delete">Delete selection</string>
     <string name="pipeline_editor_overflow_auto_layout">Auto-layout</string>
     <string name="pipeline_editor_overflow_save">Save pipeline</string>
+    <string name="pipeline_editor_overflow_save_as_preset">Save as preset…</string>
     <string name="pipeline_editor_save_done">Pipeline saved.</string>
 
     <!-- Snackbar explaining that Run only surfaces the UI preview today;

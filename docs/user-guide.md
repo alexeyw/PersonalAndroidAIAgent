@@ -305,10 +305,30 @@ per-pipeline menu:
   first.
 - **Set as default** — make this pipeline the fallback for any chat
   that has no explicit binding.
+- **Save as preset** — package the pipeline as a reusable template
+  with a name, description, category and tags. Saved presets show up
+  under **More → Library** and in the **+ From preset** picker.
 
-Tap the **+** button (floating action button) to create a new
-pipeline. New pipelines start as a minimal `INPUT → OUTPUT` graph so
-that they are valid immediately.
+Tap the **+** button (floating action button) to expand the two-way
+speed-dial:
+
+- **+ New pipeline** — create a blank pipeline. New pipelines start as
+  a minimal `INPUT → OUTPUT` graph so that they are valid immediately.
+- **+ From preset** — opens the **Pipeline presets** picker with a
+  **Bundled** tab (curated starter presets that ship with the app) and
+  a **Mine** tab (presets you have saved yourself). Use the category
+  chips to narrow the list, tap a card to see its graph preview, then
+  hit **Use this preset** to spawn a fresh pipeline from the template
+  and jump into the editor.
+
+### Managing presets
+
+Open **More → Library** to manage every pipeline preset. Bundled
+presets are read-only — they can be exported as JSON (for example to
+import them in the browser pipeline editor) but not renamed or
+deleted. Your own presets expose a `⋮` overflow with **Rename**,
+**Export JSON** (writes a `*.preset.json` file via the system file
+picker), and **Delete** (asks to confirm).
 
 For a marketing-style preview of this screen see
 [`docs/images/hero-pipeline-library.png`](images/hero-pipeline-library.png)

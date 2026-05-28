@@ -3,6 +3,7 @@ package ai.agent.android.presentation.ui.more
 import ai.agent.android.R
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Bolt
+import androidx.compose.material.icons.outlined.Bookmarks
 import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Memory
@@ -35,6 +36,7 @@ fun MoreScreen(
     onNavigateToSettings: () -> Unit,
     onNavigateToPrompts: () -> Unit,
     onNavigateToAbout: () -> Unit,
+    onNavigateToLibrary: () -> Unit,
     viewModel: MoreViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -46,6 +48,7 @@ fun MoreScreen(
         titleMetrics = stringResource(R.string.more_row_monitoring),
         titleSettings = stringResource(R.string.more_row_settings),
         titleAbout = stringResource(R.string.more_row_about),
+        titleLibrary = stringResource(R.string.more_row_library),
         onMemory = onNavigateToMemory,
         onModels = onNavigateToModels,
         onPrompts = onNavigateToPrompts,
@@ -53,6 +56,7 @@ fun MoreScreen(
         onMetrics = onNavigateToMonitoring,
         onSettings = onNavigateToSettings,
         onAbout = onNavigateToAbout,
+        onLibrary = onNavigateToLibrary,
     )
     MoreContent(
         state = state,
@@ -75,6 +79,7 @@ internal fun MoreUiState.toViewState(
     titleMetrics: String,
     titleSettings: String,
     titleAbout: String,
+    titleLibrary: String,
     onMemory: () -> Unit,
     onModels: () -> Unit,
     onPrompts: () -> Unit,
@@ -82,6 +87,7 @@ internal fun MoreUiState.toViewState(
     onMetrics: () -> Unit,
     onSettings: () -> Unit,
     onAbout: () -> Unit,
+    onLibrary: () -> Unit,
 ): MoreViewState = MoreViewState(
     rows = listOf(
         MoreRow(
@@ -104,6 +110,13 @@ internal fun MoreUiState.toViewState(
             subtitle = promptsSubtitle,
             icon = Icons.Outlined.Tune,
             onClick = onPrompts,
+        ),
+        MoreRow(
+            id = "library",
+            title = titleLibrary,
+            subtitle = librarySubtitle,
+            icon = Icons.Outlined.Bookmarks,
+            onClick = onLibrary,
         ),
         MoreRow(
             id = "tasks",
