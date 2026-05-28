@@ -141,32 +141,6 @@ class PromptLibraryViewModel @Inject constructor(
     }
 
     /**
-     * Updates the always-visible search field. The screen mapper applies a
-     * case-insensitive substring match on `PromptPreset.name`; no debouncing
-     * is necessary because the catalogue lives entirely in memory and the
-     * filter is O(N) over a small list.
-     */
-    fun onSearchQueryChange(query: String) {
-        _uiState.update { it.copy(searchQuery = query) }
-    }
-
-    /**
-     * Toggles the inline search field. Collapsing clears the query so the
-     * filtered row set resets — the alternative (preserve query but hide
-     * the field) traps the user in a filtered state with no visible
-     * affordance to clear it.
-     */
-    fun onToggleSearch() {
-        _uiState.update { state ->
-            val next = !state.searchOpen
-            state.copy(
-                searchOpen = next,
-                searchQuery = if (next) state.searchQuery else "",
-            )
-        }
-    }
-
-    /**
      * Opens the bottom-sheet editor.
      *
      * @param promptId `null` to start a fresh draft (pre-filled with the

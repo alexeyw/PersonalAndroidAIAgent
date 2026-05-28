@@ -23,7 +23,6 @@ import app.knotwork.design.screens.prompts.PromptPresetPickerStrings
 import app.knotwork.design.screens.prompts.PromptPresetPickerTab
 import app.knotwork.design.screens.prompts.PromptPresetPickerViewState
 import app.knotwork.design.screens.prompts.PromptPresetTagChip
-import kotlinx.coroutines.delay
 
 /**
  * Tab identifiers backing the picker's segmented header (app-side mirror of
@@ -72,18 +71,9 @@ fun PromptPresetPickerDialog(
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var selectedTab by remember { mutableStateOf(PromptPresetTab.BUNDLED) }
-    var searchOpen by remember { mutableStateOf(false) }
-    var searchQuery by remember { mutableStateOf("") }
-    var debouncedQuery by remember { mutableStateOf("") }
     var selectedTag by remember { mutableStateOf<String?>(null) }
     var selectedRowId by remember { mutableStateOf<String?>(null) }
 
-    LaunchedEffect(searchQuery) {
-        // 200 ms debounce per spec — short search terms type faster than the
-        // per-keystroke filter would otherwise re-render the LazyColumn.
-        delay(SEARCH_DEBOUNCE_MS)
-        debouncedQuery = searchQuery
-    }
     // Reset tag chip and selection when tabs flip — the union of tags is
     // tab-specific (a tag in Bundled may not exist in Mine), and a stale
     // selectedRowId would refer to a row not in the new list.
@@ -99,10 +89,9 @@ fun PromptPresetPickerDialog(
     val tagCounts = remember(sourceList) {
         sourceList.flatMap { it.tags }.groupingBy { it }.eachCount()
     }
-    val filtered = remember(sourceList, debouncedQuery, selectedTag) {
-        filterPresets(
+    val filtered = remember(sourceList, selectedTag) {
+        filterPresetsByTags(
             presets = sourceList,
-            query = debouncedQuery,
             selectedTags = selectedTag?.let { setOf(it) } ?: emptySet(),
         )
     }
@@ -131,8 +120,6 @@ fun PromptPresetPickerDialog(
         },
         bundledCount = bundled.size,
         mineCount = mine.size,
-        searchOpen = searchOpen,
-        searchQuery = searchQuery,
         tagChips = tagChips,
         selectedTagFilter = selectedTag,
         rows = rows,
@@ -152,17 +139,6 @@ fun PromptPresetPickerDialog(
                 PromptPresetPickerTab.MINE -> PromptPresetTab.MINE
             }
         },
-        onToggleSearch = {
-            // Toggling closed clears the query so reopening starts fresh —
-            // the alternative (preserve query but hide field) traps the
-            // user in a filtered state with no visible filter to clear.
-            val next = !searchOpen
-            searchOpen = next
-            if (!next) {
-                searchQuery = ""
-            }
-        },
-        onSearchChange = { searchQuery = it },
         onTagSelected = { tag -> selectedTag = tag },
         onRowSelected = { rowId -> selectedRowId = rowId },
         onPreviewRow = { rowId ->
@@ -206,20 +182,14 @@ internal fun buildTagChips(
 }
 
 /**
- * Filters [presets] by a case-insensitive substring [query] match on
- * [PromptPreset.name] AND by a tag-intersection rule: a preset matches when
- * every selected tag is present on the preset (AND semantics, mirrors how
- * filter chips usually compose). Pure function so it can be unit-tested
- * without spinning up Compose.
+ * Filters [presets] by tag-intersection: a preset matches when every selected
+ * tag is present on the preset (AND semantics, mirrors how filter chips usually
+ * compose). Pure function so it can be unit-tested without spinning up Compose.
  */
-internal fun filterPresets(presets: List<PromptPreset>, query: String, selectedTags: Set<String>): List<PromptPreset> {
-    val trimmed = query.trim()
+internal fun filterPresetsByTags(presets: List<PromptPreset>, selectedTags: Set<String>): List<PromptPreset> {
+    if (selectedTags.isEmpty()) return presets
     return presets.filter { preset ->
-        val matchesQuery = trimmed.isEmpty() ||
-            preset.name.contains(trimmed, ignoreCase = true)
-        val matchesTags = selectedTags.isEmpty() ||
-            selectedTags.all { tag -> preset.tags.any { it.equals(tag, ignoreCase = true) } }
-        matchesQuery && matchesTags
+        selectedTags.all { tag -> preset.tags.any { it.equals(tag, ignoreCase = true) } }
     }
 }
 
@@ -237,7 +207,6 @@ private fun pickerStrings(): PromptPresetPickerStrings = PromptPresetPickerStrin
     subtitleFormat = stringResource(R.string.prompt_preset_picker_subtitle),
     tabBundled = stringResource(R.string.prompt_preset_picker_tab_bundled),
     tabMine = stringResource(R.string.prompt_preset_picker_tab_mine),
-    searchHint = stringResource(R.string.prompt_preset_picker_search_hint),
     allChip = stringResource(R.string.prompt_preset_picker_all_chip),
     currentBadge = stringResource(R.string.prompt_preset_picker_current_badge),
     tokensSuffix = stringResource(R.string.prompt_preset_picker_tokens_suffix),
@@ -245,12 +214,7 @@ private fun pickerStrings(): PromptPresetPickerStrings = PromptPresetPickerStrin
     usePrompt = stringResource(R.string.prompt_preset_picker_action_use_prompt),
     previewCd = stringResource(R.string.prompt_preset_picker_action_preview),
     closeCd = stringResource(R.string.common_close),
-    searchCd = stringResource(R.string.prompt_preset_picker_search_cd),
-    clearSearchCd = stringResource(R.string.prompt_preset_picker_clear_search_cd),
 )
-
-/** Debounce window for the search field — matches the spec (200 ms). */
-private const val SEARCH_DEBOUNCE_MS: Long = 200L
 
 /** GPT-style rule-of-thumb: ~4 characters per token. */
 private const val CHARS_PER_TOKEN: Int = 4

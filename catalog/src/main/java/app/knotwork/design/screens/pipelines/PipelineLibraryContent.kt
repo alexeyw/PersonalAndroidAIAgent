@@ -30,7 +30,6 @@ import androidx.compose.material.icons.outlined.DriveFileRenameOutline
 import androidx.compose.material.icons.outlined.FileDownload
 import androidx.compose.material.icons.outlined.FileUpload
 import androidx.compose.material.icons.outlined.MoreVert
-import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.WarningAmber
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -56,7 +55,6 @@ import app.knotwork.design.R
 import app.knotwork.design.components.buttons.KnotworkSecondaryButton
 import app.knotwork.design.components.buttons.KnotworkTextButton
 import app.knotwork.design.components.chips.KnotworkChip
-import app.knotwork.design.components.controls.KnotworkTextField
 import app.knotwork.design.components.misc.EmptyState
 import app.knotwork.design.components.misc.StripedPlaceholder
 import app.knotwork.design.theme.KnotworkTheme
@@ -186,13 +184,6 @@ private fun LibraryTopBar(state: PipelineLibraryViewState, callbacks: PipelineLi
             }
         },
         actions = {
-            IconButton(onClick = callbacks.onOpenSearch) {
-                Icon(
-                    imageVector = Icons.Outlined.Search,
-                    contentDescription = stringResource(R.string.knotwork_library_search_icon_cd),
-                    tint = MaterialTheme.colorScheme.onSurface,
-                )
-            }
             IconButton(onClick = callbacks.onTopOverflow) {
                 Icon(
                     imageVector = Icons.Outlined.MoreVert,
@@ -257,63 +248,19 @@ private fun LibraryBody(state: PipelineLibraryViewState, callbacks: PipelineLibr
             .fillMaxSize()
             .padding(padding),
     ) {
-        // Filter chips are always visible — they're cheap navigation, not a
-        // power-user surface that needs to be hidden. The inline search
-        // field still respects the previous gate so the default LIBRARY
-        // header isn't pushed down on first open; opening the search via
-        // the toolbar icon (`onOpenSearch`) flips visualState → Filtering
-        // and reveals the field.
+        // Filter chips are always visible (above the list) — cheap navigation,
+        // not a power-user surface that needs to be hidden. Skipped only in
+        // the Error state where the whole list is replaced.
         if (state.visualState != PipelineLibraryVisualState.Error) {
             LibraryFilterRow(active = state.activeFilter, onChange = callbacks.onFilterChange)
-        }
-        val showSearchField = state.searchQuery.isNotEmpty() ||
-            state.visualState == PipelineLibraryVisualState.Filtering
-        if (showSearchField && state.visualState != PipelineLibraryVisualState.Error) {
-            LibrarySearchField(query = state.searchQuery, onQueryChange = callbacks.onSearchQueryChange)
-            if (state.visualState == PipelineLibraryVisualState.Filtering) {
-                FilterCountLine(visible = state.pipelines.size, total = state.totalCount)
-            }
         }
         when (state.visualState) {
             PipelineLibraryVisualState.Empty -> LibraryEmptyState(callbacks = callbacks)
             PipelineLibraryVisualState.Loading -> LibraryLoadingState()
             PipelineLibraryVisualState.Error -> LibraryErrorState(state = state, callbacks = callbacks)
-            PipelineLibraryVisualState.Filtering -> {
-                if (state.pipelines.isEmpty()) {
-                    LibraryNoMatchState(callbacks = callbacks, query = state.searchQuery)
-                } else {
-                    LibraryList(state = state, callbacks = callbacks)
-                }
-            }
             else -> LibraryList(state = state, callbacks = callbacks)
         }
     }
-}
-
-/**
- * Inline search field — matches the Prompt Library size by delegating to
- * [KnotworkTextField] (single padded TextField rather than the earlier
- * double-padded `Row` + `BasicTextField` chrome which made the field
- * read ~2× taller than the rest of the catalog).
- */
-@Composable
-private fun LibrarySearchField(query: String, onQueryChange: (String) -> Unit) {
-    val hasQuery = query.isNotEmpty()
-    KnotworkTextField(
-        value = query,
-        onValueChange = onQueryChange,
-        placeholder = stringResource(R.string.knotwork_library_search_placeholder),
-        search = true,
-        trailingIcon = Icons.Outlined.Close.takeIf { hasQuery },
-        onTrailingClick = { onQueryChange("") }.takeIf { hasQuery },
-        contentDescription = stringResource(R.string.knotwork_library_search_clear_cd),
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(
-                horizontal = KnotworkTheme.spacing.sp4,
-                vertical = KnotworkTheme.spacing.sp2,
-            ),
-    )
 }
 
 @Composable
@@ -339,19 +286,6 @@ private fun LibraryFilterRow(active: PipelineLibraryFilter, onChange: (PipelineL
             )
         }
     }
-}
-
-/** Subtitle line beneath the filter chips: "X of Y" — only rendered while filtering. */
-@Composable
-private fun FilterCountLine(visible: Int, total: Int) {
-    Text(
-        text = stringResource(R.string.knotwork_library_filter_count, visible, total),
-        style = KnotworkTextStyles.BodySm,
-        color = KnotworkTheme.extended.onSurfaceMuted,
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = KnotworkTheme.spacing.sp4, vertical = KnotworkTheme.spacing.sp1),
-    )
 }
 
 @Composable
@@ -421,18 +355,6 @@ private fun LibraryErrorState(state: PipelineLibraryViewState, callbacks: Pipeli
             onClick = callbacks.onErrorReport,
         )
     }
-}
-
-@Composable
-private fun LibraryNoMatchState(callbacks: PipelineLibraryCallbacks, query: String) {
-    EmptyState(
-        title = stringResource(R.string.knotwork_library_no_match_title),
-        subtitle = stringResource(R.string.knotwork_library_no_match_subtitle) +
-            (if (query.isNotEmpty()) " (\"$query\")" else ""),
-        illustration = { /* No striped placeholder for the no-match tile. */ },
-        ctaLabel = stringResource(R.string.knotwork_library_no_match_clear),
-        onCtaClick = callbacks.onClearSearch,
-    )
 }
 
 @Composable

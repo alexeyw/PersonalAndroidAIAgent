@@ -61,26 +61,6 @@ class PipelineLibraryContentSnapshotTest {
     }
 
     @Test
-    fun library_filtering_light() = snapshot(name = "filtering", dark = false) {
-        PipelineLibraryContent(state = PipelineLibraryPreview.filtering())
-    }
-
-    @Test
-    fun library_filtering_dark() = snapshot(name = "filtering", dark = true) {
-        PipelineLibraryContent(state = PipelineLibraryPreview.filtering())
-    }
-
-    @Test
-    fun library_filtering_no_matches_light() = snapshot(name = "filtering_no_matches", dark = false) {
-        PipelineLibraryContent(state = PipelineLibraryPreview.filteringNoMatches())
-    }
-
-    @Test
-    fun library_filtering_no_matches_dark() = snapshot(name = "filtering_no_matches", dark = true) {
-        PipelineLibraryContent(state = PipelineLibraryPreview.filteringNoMatches())
-    }
-
-    @Test
     fun library_swipe_open_light() = snapshot(name = "swipe_open", dark = false) {
         PipelineLibraryContent(state = PipelineLibraryPreview.swipeOpen())
     }

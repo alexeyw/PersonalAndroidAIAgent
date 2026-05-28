@@ -57,8 +57,6 @@ fun PromptLibraryScreen(
     val callbacks = PromptLibraryCallbacks(
         onBack = onBack,
         onSearch = {},
-        onToggleSearch = viewModel::onToggleSearch,
-        onSearchQueryChange = viewModel::onSearchQueryChange,
         onCategorySelected = viewModel::selectCategory,
         onNewPrompt = { viewModel.openEditor(promptId = null) },
         onEditPrompt = { viewModel.openEditor(promptId = it) },
@@ -148,12 +146,8 @@ internal fun PromptLibraryUiState.toViewState(
         ?: categories.firstOrNull().orEmpty()
     val allPresets = bundledPresets + userPresets
     val totalPresets = allPresets.size
-    val trimmedQuery = searchQuery.trim()
     val rows = allPresets
         .filter { it.nodeType.name == selected }
-        .filter { preset ->
-            trimmedQuery.isEmpty() || preset.name.contains(trimmedQuery, ignoreCase = true)
-        }
         .map { preset ->
             PromptRow(
                 id = preset.id,
@@ -203,8 +197,6 @@ internal fun PromptLibraryUiState.toViewState(
         editor = editor,
         subtitle = subtitle,
         errorMessage = errorText,
-        searchQuery = searchQuery,
-        searchOpen = searchOpen,
     )
 }
 
@@ -216,9 +208,6 @@ private fun promptLibraryStrings(): LocalisedPromptLibraryStrings = LocalisedPro
     content = PromptLibraryStrings(
         title = stringResource(R.string.prompts_screen_title),
         backCd = stringResource(R.string.prompts_back_cd),
-        searchHint = stringResource(R.string.prompts_search_hint),
-        searchCd = stringResource(R.string.prompts_search_cd),
-        clearSearchCd = stringResource(R.string.prompts_clear_search_cd),
         fabCd = stringResource(R.string.prompts_fab_cd),
         editCd = stringResource(R.string.prompts_edit_cd),
         deleteCd = stringResource(R.string.prompts_delete_cd),

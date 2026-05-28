@@ -117,10 +117,6 @@
 
     <!-- TopAppBar title for the pipeline library screen. -->
     <string name="knotwork_library_title">Pipelines</string>
-    <!-- Placeholder inside the inline search field. -->
-    <string name="knotwork_library_search_placeholder">Search pipelines</string>
-    <!-- ContentDescription for the trailing clear-search button. -->
-    <string name="knotwork_library_search_clear_cd">Clear pipeline search</string>
     <!-- Filter chip label: show every pipeline (default). -->
     <string name="knotwork_library_filter_all">All</string>
     <!-- Filter chip label: only pipelines used recently. -->
@@ -141,20 +137,12 @@
     <string name="knotwork_library_empty_cta_new">+ New pipeline</string>
     <!-- Secondary CTA inside the empty-state. -->
     <string name="knotwork_library_empty_cta_templates">Browse templates</string>
-    <!-- Title shown when filtering produces no matching pipelines. -->
-    <string name="knotwork_library_no_match_title">No pipelines match this search</string>
-    <!-- Body shown when filtering produces no matching pipelines. -->
-    <string name="knotwork_library_no_match_subtitle">Try a different search or clear the current filter.</string>
-    <!-- CTA inside the no-results empty-state. -->
-    <string name="knotwork_library_no_match_clear">Clear search</string>
     <!-- Title shown when the repository fails to load the pipeline list. -->
     <string name="knotwork_library_error_title">Couldn\'t load pipelines</string>
     <!-- Primary retry CTA inside the error empty-state. -->
     <string name="knotwork_library_error_retry">Retry</string>
     <!-- Tertiary CTA inside the error empty-state. -->
     <string name="knotwork_library_error_report">Report problem</string>
-    <!-- Subtitle rendered under the search field counting visible vs total rows (e.g. "12 of 47"). -->
-    <string name="knotwork_library_filter_count">%1$d of %2$d</string>
     <!-- Multi-select bar label showing the selected count. -->
     <plurals name="knotwork_library_multi_select_count">
         <item quantity="one">%1$d selected</item>
@@ -171,8 +159,6 @@
         <item quantity="one">%1$d saved · %2$d default</item>
         <item quantity="other">%1$d saved · %2$d default</item>
     </plurals>
-    <!-- ContentDescription for the trailing search icon. -->
-    <string name="knotwork_library_search_icon_cd">Search pipelines</string>
     <!-- ContentDescription for the trailing overflow icon. -->
     <string name="knotwork_library_top_overflow_cd">Library actions</string>
     <!-- LIBRARY section header inside the list. -->
@@ -341,6 +327,7 @@
     <string name="knotwork_memory_empty_cta">Open chat</string>
     <string name="knotwork_memory_no_match_title">Nothing matches this search</string>
     <string name="knotwork_memory_no_match_subtitle">Try a different word or clear the search.</string>
+    <string name="knotwork_memory_no_match_clear">Clear search</string>
     <string name="knotwork_memory_error_title">Memory unavailable</string>
     <string name="knotwork_memory_error_retry">Retry</string>
     <string name="knotwork_memory_error_open_diagnostics">Open diagnostics</string>

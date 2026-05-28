@@ -35,10 +35,6 @@ data class PromptLibraryUiState(
     val previewState: PromptPreviewState = PromptPreviewState.Hidden,
     val selectedCategory: String? = null,
     val editorDraft: PromptEditorDraft? = null,
-    /** Live search query (case-insensitive substring match on `PromptPreset.name`). */
-    val searchQuery: String = "",
-    /** `true` when the inline search field is expanded under the tab bar. */
-    val searchOpen: Boolean = false,
 )
 
 /**

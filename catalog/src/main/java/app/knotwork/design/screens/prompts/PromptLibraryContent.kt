@@ -54,7 +54,6 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import app.knotwork.design.components.buttons.KnotworkTextButton
 import app.knotwork.design.components.chips.KnotworkChip
-import app.knotwork.design.components.controls.KnotworkTextField
 import app.knotwork.design.components.misc.EmptyState
 import app.knotwork.design.components.pipelineeditor.headerTint
 import app.knotwork.design.theme.KnotworkTheme
@@ -121,12 +120,6 @@ fun PromptLibraryContent(
             ) {
                 PromptsCategoryTabs(state = state, callbacks = callbacks)
             }
-            if (state.searchOpen &&
-                state.visualState != PromptLibraryVisualState.Loading &&
-                state.visualState != PromptLibraryVisualState.Error
-            ) {
-                PromptsSearchField(state = state, strings = strings, callbacks = callbacks)
-            }
             when (state.visualState) {
                 PromptLibraryVisualState.Loading -> PromptsLoading()
                 PromptLibraryVisualState.Empty -> PromptsEmpty(strings = strings)
@@ -174,18 +167,9 @@ private fun PromptsTopBar(
                 )
             }
         },
-        actions = {
-            // Search icon toggles the inline search field rendered under the
-            // tab bar. Clicking again collapses it (and the screen clears
-            // the query so reopening starts fresh).
-            IconButton(onClick = callbacks.onToggleSearch) {
-                Icon(
-                    imageVector = Icons.Outlined.Search,
-                    contentDescription = strings.searchCd,
-                    tint = MaterialTheme.colorScheme.onSurface,
-                )
-            }
-        },
+        // TopAppBar slot intentionally empty — search was removed in Phase 24 /
+        // Task 5 review pass. Reserved for future actions (Import / Export).
+        actions = {},
         colors = TopAppBarDefaults.topAppBarColors(
             containerColor = MaterialTheme.colorScheme.surface,
             titleContentColor = MaterialTheme.colorScheme.onSurface,
@@ -244,38 +228,6 @@ private fun PromptsCategoryTabs(state: PromptLibraryViewState, callbacks: Prompt
             )
         }
     }
-}
-
-/**
- * Always-visible search field rendered under the tab bar. Replaces the
- * earlier top-bar Search icon (which used to fire an unwired `onSearch`
- * callback). The field is stateless — the host owns [searchQuery] and
- * routes edits via [PromptLibraryCallbacks.onSearchQueryChange].
- */
-@Composable
-private fun PromptsSearchField(
-    state: PromptLibraryViewState,
-    strings: PromptLibraryStrings,
-    callbacks: PromptLibraryCallbacks,
-) {
-    val hasQuery = state.searchQuery.isNotEmpty()
-    KnotworkTextField(
-        value = state.searchQuery,
-        onValueChange = callbacks.onSearchQueryChange,
-        placeholder = strings.searchHint,
-        search = true,
-        // Trailing × clears the query in place but keeps the field open;
-        // collapsing the field is the toolbar Search icon's job.
-        trailingIcon = Icons.Outlined.Close.takeIf { hasQuery },
-        onTrailingClick = { callbacks.onSearchQueryChange("") }.takeIf { hasQuery },
-        contentDescription = strings.clearSearchCd,
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(
-                horizontal = KnotworkTheme.spacing.sp4,
-                vertical = KnotworkTheme.spacing.sp2,
-            ),
-    )
 }
 
 /**
@@ -780,9 +732,6 @@ private fun FooterHint(text: String) {
 data class PromptLibraryStrings(
     val title: String = "Prompt library",
     val backCd: String = "Back",
-    val searchHint: String = "Search by name",
-    val searchCd: String = "Search prompts",
-    val clearSearchCd: String = "Clear search",
     val fabCd: String = "Add prompt",
     val editCd: String = "Edit prompt",
     val deleteCd: String = "Delete prompt",
