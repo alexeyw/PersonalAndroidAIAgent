@@ -43,6 +43,9 @@ enum class ConsoleSource {
     /** Output emitted from a tool invocation. */
     TOOL,
 
+    /** Long-term memory retrieval (semantic search hits surfaced into context). */
+    MEMORY,
+
     /** Output emitted by the engine runtime (orchestrator, scheduler). */
     RUNTIME,
 

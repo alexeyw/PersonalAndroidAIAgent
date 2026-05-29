@@ -32,6 +32,7 @@ import androidx.compose.material.icons.outlined.Bolt
 import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.ExpandMore
+import androidx.compose.material.icons.outlined.Memory
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Shield
@@ -1056,6 +1057,13 @@ private fun PrivacyCard(state: PrivacyCardState, callbacks: SettingsCallbacks) {
             subtitle = androidx.compose.ui.res.stringResource(R.string.knotwork_settings_crash_reporting_hint),
             checked = state.crashReportingEnabled,
             onCheckedChange = callbacks.onCrashReportingToggle,
+        )
+        IconToggleRow(
+            icon = Icons.Outlined.Memory,
+            title = androidx.compose.ui.res.stringResource(R.string.knotwork_settings_verbose_memory_logging_label),
+            subtitle = androidx.compose.ui.res.stringResource(R.string.knotwork_settings_verbose_memory_logging_hint),
+            checked = state.verboseMemoryLoggingEnabled,
+            onCheckedChange = callbacks.onVerboseMemoryLoggingToggle,
         )
         KnotworkTextButton(
             text = androidx.compose.ui.res.stringResource(R.string.knotwork_settings_reset_button),

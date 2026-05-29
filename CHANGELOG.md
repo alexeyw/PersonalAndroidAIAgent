@@ -40,6 +40,17 @@ details.
 
 ### Added
 
+- **Memory observability in the agent console** (Phase 25 / Task 6/10). Every
+  long-term-memory retrieval now surfaces in the chat console as a dedicated
+  `MEMORY` source line (previously collapsed into the generic `RUNTIME`
+  source), so the new `MEMORY` filter chip isolates memory activity from node
+  and tool output. Each retrieval line echoes the truncated query, the hit
+  count, and the per-hit similarity scores
+  (`Memory: query='…' → 2 hits (0.83, 0.40)`) instead of the old bare count.
+  A new opt-in **Settings → Privacy → Verbose memory logging** toggle (default
+  off, `SettingsRepository.verboseMemoryLoggingEnabled`) expands each retrieval
+  line with a per-hit snippet + score, and makes `MemoryCompactionUseCase` log
+  the cluster membership (merged chunk ids) of every consolidation to logcat.
 - **Background memory compaction** (Phase 25 / Task 5/10). A daily
   `MemoryCompactionWorker` (WorkManager, constrained to charging + device-idle)
   consolidates stale, redundant long-term memory so the `memory_chunks` table
@@ -280,6 +291,12 @@ details.
 
 ### Changed
 
+- **`MemoryAccess` console events carry query + scores** (Phase 25 / Task 6/10).
+  The format moved from `Memory: N chunk(s) retrieved` to a richer line built
+  by the new pure `MemoryAccessLogFormatter`. `RetrieveRelevantMemoryUseCase`
+  gains a score-preserving `retrieveScored(...)` entry point (the score-free
+  `invoke(...)` now delegates to it) so the engine can render scores without a
+  second retrieval.
 - **Browser pipeline editor — full sync sweep** (Phase 24 / Task 6/9).
   Re-synced `pipeline-editor.html` with the Android source of truth after
   the Phase 20–24 drift:

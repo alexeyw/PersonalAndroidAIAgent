@@ -99,6 +99,9 @@ class SettingsManager @Inject constructor(private val dataStore: DataStore<Prefe
         val MEMORY_COMPACTION_ENABLED = booleanPreferencesKey("memory_compaction_enabled")
         val MEMORY_COMPACTION_AGE_DAYS = intPreferencesKey("memory_compaction_age_days")
         val MAX_MEMORY_CHUNKS = intPreferencesKey("max_memory_chunks")
+
+        // Phase 25 / Task 6 — Memory observability.
+        val VERBOSE_MEMORY_LOGGING_ENABLED = booleanPreferencesKey("verbose_memory_logging_enabled")
     }
 
     override val isFirstLaunch: Flow<Boolean> = dataStore.data
@@ -753,6 +756,26 @@ class SettingsManager @Inject constructor(private val dataStore: DataStore<Prefe
     override suspend fun setMemoryCompactionEnabled(enabled: Boolean) {
         dataStore.edit { preferences ->
             preferences[PreferencesKeys.MEMORY_COMPACTION_ENABLED] = enabled
+        }
+    }
+
+    override val verboseMemoryLoggingEnabled: Flow<Boolean> = dataStore.data
+        .catch { exception ->
+            if (exception is IOException) {
+                Timber.e(exception, "Error reading preferences")
+                emit(emptyPreferences())
+            } else {
+                throw exception
+            }
+        }
+        .map { preferences ->
+            preferences[PreferencesKeys.VERBOSE_MEMORY_LOGGING_ENABLED]
+                ?: SettingsDefaults.VERBOSE_MEMORY_LOGGING_ENABLED_DEFAULT
+        }
+
+    override suspend fun setVerboseMemoryLoggingEnabled(enabled: Boolean) {
+        dataStore.edit { preferences ->
+            preferences[PreferencesKeys.VERBOSE_MEMORY_LOGGING_ENABLED] = enabled
         }
     }
 

@@ -209,6 +209,10 @@ class SettingsViewModel @Inject constructor(
         settingsRepository.crashReportingEnabled.onEach { value ->
             _uiState.update { it.copy(crashReportingEnabled = value) }
         }.launchIn(viewModelScope)
+
+        settingsRepository.verboseMemoryLoggingEnabled.onEach { value ->
+            _uiState.update { it.copy(verboseMemoryLoggingEnabled = value) }
+        }.launchIn(viewModelScope)
     }
 
     private fun observeProviders() {
@@ -522,6 +526,10 @@ class SettingsViewModel @Inject constructor(
             settingsRepository.setCrashReportingEnabled(enabled)
             crashReportingRepository.setEnabled(enabled)
         }
+    }
+
+    fun setVerboseMemoryLoggingEnabled(enabled: Boolean) {
+        viewModelScope.launch { settingsRepository.setVerboseMemoryLoggingEnabled(enabled) }
     }
 
     // ─── Surface ───────────────────────────────────────────────────────────

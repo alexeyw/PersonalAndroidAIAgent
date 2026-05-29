@@ -158,6 +158,15 @@ object SettingsDefaults {
     const val MEMORY_COMPACTION_ENABLED_DEFAULT: Boolean = true
 
     /**
+     * Default for the "Verbose memory logging" privacy toggle. `false` so the
+     * agent console and logcat stay terse out of the box. When the user opts in
+     * (Settings → Privacy), memory retrieval console events expand with per-hit
+     * snippets and similarity scores, and the compaction pass logs the cluster
+     * membership of every consolidation.
+     */
+    const val VERBOSE_MEMORY_LOGGING_ENABLED_DEFAULT: Boolean = false
+
+    /**
      * Default age, in days, after which a non-pinned chunk becomes a candidate
      * for compaction. Fresh chunks are left alone so recently-learned facts
      * keep their exact wording; only stale ones are eligible for clustering.

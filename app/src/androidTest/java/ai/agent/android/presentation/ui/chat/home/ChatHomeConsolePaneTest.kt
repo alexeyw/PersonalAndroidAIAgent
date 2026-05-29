@@ -5,6 +5,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.platform.ClipboardManager
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.test.assertExists
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.onAllNodesWithText
@@ -118,7 +119,62 @@ class ChatHomeConsolePaneTest {
 
         verify(exactly = 1) {
             viewModel.onConsoleFilterChange(
-                match { it.sources == setOf(ConsoleSource.TOOL, ConsoleSource.RUNTIME, ConsoleSource.USER) },
+                match {
+                    it.sources == setOf(
+                        ConsoleSource.TOOL,
+                        ConsoleSource.MEMORY,
+                        ConsoleSource.RUNTIME,
+                        ConsoleSource.USER,
+                    )
+                },
+            )
+        }
+    }
+
+    @Test
+    fun memoryRetrievalLine_isVisibleInLogsTab() {
+        val memoryLine = ConsoleLine(
+            timestamp = "12:00:00.000",
+            source = ConsoleSource.MEMORY,
+            level = ConsoleLevel.Info,
+            text = "Memory: query='what is my UI preference' → 2 hits (0.83, 0.40)",
+        )
+        val (viewModel, _) = mockChatHomeViewModel(
+            initialConsoleSnap = ConsoleSnap.Partial,
+            initialConsoleLines = listOf(memoryLine),
+            initialConsoleFilter = ConsoleFilter.allOn,
+        )
+        setContentWithConsoleOpen(viewModel)
+
+        // The MEMORY filter chip is rendered and the retrieval line is shown.
+        composeTestRule.onNodeWithText("MEMORY").assertExists()
+        composeTestRule
+            .onNodeWithText("Memory: query='what is my UI preference' → 2 hits (0.83, 0.40)")
+            .assertExists()
+    }
+
+    @Test
+    fun memoryFilterChip_tap_invokesOnConsoleFilterChange() {
+        val (viewModel, _) = mockChatHomeViewModel(
+            initialConsoleSnap = ConsoleSnap.Partial,
+            initialConsoleLines = listOf(sampleLine("hello")),
+        )
+        setContentWithConsoleOpen(viewModel)
+
+        // The MEMORY chip is initially ON; tapping should remove MEMORY only.
+        composeTestRule.onNodeWithText("MEMORY").performClick()
+        composeTestRule.waitForIdle()
+
+        verify(exactly = 1) {
+            viewModel.onConsoleFilterChange(
+                match {
+                    it.sources == setOf(
+                        ConsoleSource.NODE,
+                        ConsoleSource.TOOL,
+                        ConsoleSource.RUNTIME,
+                        ConsoleSource.USER,
+                    )
+                },
             )
         }
     }

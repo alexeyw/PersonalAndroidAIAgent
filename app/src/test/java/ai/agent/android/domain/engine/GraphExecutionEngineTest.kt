@@ -199,6 +199,8 @@ class GraphExecutionEngineTest {
 
         coEvery { getContextWindowUseCase(sessionId) } returns ""
         coEvery { retrieveRelevantMemoryUseCase(any()) } returns emptyList()
+        coEvery { retrieveRelevantMemoryUseCase.retrieveScored(any()) } returns emptyList()
+        every { settingsRepository.verboseMemoryLoggingEnabled } returns flowOf(false)
         every { chatRepository.getMessagesForSession(any()) } returns flowOf(emptyList())
         every { settingsRepository.systemPromptPrefix } returns flowOf("")
         every { settingsRepository.toolUsageInstruction } returns flowOf("")
@@ -1167,14 +1169,15 @@ class GraphExecutionEngineTest {
         every { settingsRepository.pipelineMaxSteps } returns flowOf(15)
 
         // The retrieval use case is resolved once per run, keyed off the user
-        // prompt; stub it to surface exactly one relevant chunk.
-        coEvery { retrieveRelevantMemoryUseCase(any()) } returns listOf(
+        // prompt; stub it to surface exactly one relevant chunk (with a score —
+        // the engine consumes the score-preserving variant for the console).
+        coEvery { retrieveRelevantMemoryUseCase.retrieveScored(any()) } returns listOf(
             MemoryChunk(
                 id = 7L,
                 text = "user prefers dark mode",
                 embedding = FloatArray(0),
                 timestamp = 0L,
-            ),
+            ) to 0.83f,
         )
 
         val inputNode = NodeModel("input", NodeType.INPUT, 0f, 0f)
@@ -1361,13 +1364,13 @@ class GraphExecutionEngineTest {
                 ),
             ),
         )
-        coEvery { retrieveRelevantMemoryUseCase(any()) } returns listOf(
+        coEvery { retrieveRelevantMemoryUseCase.retrieveScored(any()) } returns listOf(
             MemoryChunk(
                 id = 99L,
                 text = "user lives in Berlin",
                 embedding = FloatArray(0),
                 timestamp = 0L,
-            ),
+            ) to 0.77f,
         )
 
         // ToolRepository: one available tool plus a deterministic execution
@@ -1552,9 +1555,11 @@ class GraphExecutionEngineTest {
             .last()
             .events
 
-        // Memory access is reported even when the corpus is empty.
+        // Memory access is reported even when the corpus is empty, carrying the
+        // truncated query and a zero-hit count.
         val memEvent = finalLog.single { it.type == ConsoleEventType.MemoryAccess }
-        assertTrue(memEvent.message.contains("0"))
+        assertTrue("Missing query echo: ${memEvent.message}", memEvent.message.contains("query='User prompt'"))
+        assertTrue("Missing zero-hit count: ${memEvent.message}", memEvent.message.contains("0 hits"))
 
         // Every non-OUTPUT node yields a paired ▶ / ✓ NodeExecution event;
         // OUTPUT only gets a ▶ because its own Completed state already serves
@@ -1568,6 +1573,81 @@ class GraphExecutionEngineTest {
         assertTrue("Missing LITE_RT done", nodeMessages.any { it.startsWith("✓") && it.contains("LITE_RT") })
         assertTrue("Missing OUTPUT start", nodeMessages.any { it.startsWith("▶") && it.contains("OUTPUT") })
         assertTrue("OUTPUT must not push ✓", nodeMessages.none { it.startsWith("✓") && it.contains("OUTPUT") })
+    }
+
+    @Test
+    fun `given retrieved hits when run completes then MemoryAccess event carries query and scores`() = runTest {
+        every { settingsRepository.pipelineMaxSteps } returns flowOf(15)
+        coEvery { retrieveRelevantMemoryUseCase.retrieveScored(any()) } returns listOf(
+            MemoryChunk(id = 1L, text = "user prefers dark mode", embedding = FloatArray(0), timestamp = 0L) to 0.9f,
+            MemoryChunk(id = 2L, text = "user lives in Berlin", embedding = FloatArray(0), timestamp = 0L) to 0.4f,
+        )
+
+        val graph = PipelineGraph(
+            id = "g1",
+            name = "Memory Console",
+            nodes = listOf(
+                NodeModel("input_1", NodeType.INPUT, 0f, 0f),
+                NodeModel("llm_1", NodeType.LITE_RT, 0f, 0f),
+                NodeModel("output_1", NodeType.OUTPUT, 0f, 0f),
+            ),
+            connections = listOf(
+                ConnectionModel("c1", "input_1", "llm_1"),
+                ConnectionModel("c2", "llm_1", "output_1"),
+            ),
+        )
+        every { llmEngine.generateResponseStream(any()) } returns flowOf("answer")
+
+        val memEvent = engine(sessionId, "what is my UI preference", graph).toList()
+            .filterIsInstance<AgentOrchestratorState.ConsoleLog>()
+            .last()
+            .events
+            .single { it.type == ConsoleEventType.MemoryAccess }
+
+        // Terse format (verbose off): single line with query echo, hit count and scores.
+        assertEquals(
+            "Memory: query='what is my UI preference' → 2 hits (0.90, 0.40)",
+            memEvent.message,
+        )
+    }
+
+    @Test
+    fun `given verbose memory logging when run completes then MemoryAccess event expands per-hit snippets`() = runTest {
+        every { settingsRepository.pipelineMaxSteps } returns flowOf(15)
+        every { settingsRepository.verboseMemoryLoggingEnabled } returns flowOf(true)
+        coEvery { retrieveRelevantMemoryUseCase.retrieveScored(any()) } returns listOf(
+            MemoryChunk(id = 1L, text = "user prefers dark mode", embedding = FloatArray(0), timestamp = 0L) to 0.9f,
+        )
+
+        val graph = PipelineGraph(
+            id = "g1",
+            name = "Memory Console Verbose",
+            nodes = listOf(
+                NodeModel("input_1", NodeType.INPUT, 0f, 0f),
+                NodeModel("llm_1", NodeType.LITE_RT, 0f, 0f),
+                NodeModel("output_1", NodeType.OUTPUT, 0f, 0f),
+            ),
+            connections = listOf(
+                ConnectionModel("c1", "input_1", "llm_1"),
+                ConnectionModel("c2", "llm_1", "output_1"),
+            ),
+        )
+        every { llmEngine.generateResponseStream(any()) } returns flowOf("answer")
+
+        val memEvent = engine(sessionId, "prefs", graph).toList()
+            .filterIsInstance<AgentOrchestratorState.ConsoleLog>()
+            .last()
+            .events
+            .single { it.type == ConsoleEventType.MemoryAccess }
+
+        assertTrue(
+            "Missing header line: ${memEvent.message}",
+            memEvent.message.startsWith("Memory: query='prefs' → 1 hits (0.90)"),
+        )
+        assertTrue(
+            "Missing per-hit snippet: ${memEvent.message}",
+            memEvent.message.contains("1. [0.90] user prefers dark mode"),
+        )
     }
 
     @Test

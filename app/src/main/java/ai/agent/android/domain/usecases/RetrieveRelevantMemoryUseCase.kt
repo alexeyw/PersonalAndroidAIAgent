@@ -65,30 +65,55 @@ class RetrieveRelevantMemoryUseCase @Inject constructor(
      *   then by descending final score), capped at the effective top-K.
      */
     suspend operator fun invoke(query: String, limit: Int? = null, threshold: Float? = null): List<MemoryChunk> =
-        withContext(Dispatchers.Default) {
-            // Embed the query with the user's active provider so it shares the
-            // stored chunks' embedding space.
-            val provider = embeddingProviderResolver.resolve()
-            val queryEmbedding = provider.embed(query)
+        retrieveScored(query, limit, threshold).map { it.first }
 
-            val effectiveLimit = limit ?: settingsRepository.memorySearchTopK.first()
-            val effectiveThreshold = threshold ?: settingsRepository.memorySearchThreshold.first()
-            val halfLifeDays = settingsRepository.memoryRecencyHalfLifeDays.first()
-            val searchPoolLimit = settingsRepository.maxMemoryChunksForSearch.first()
+    /**
+     * Score-preserving variant of [invoke]: runs the exact same embed → search →
+     * re-rank → top-K pipeline but returns each surviving chunk paired with its
+     * final (post-rerank) score, best-first.
+     *
+     * Used by [ai.agent.android.domain.engine.GraphExecutionEngine] to surface
+     * the similarity scores in the `MemoryAccess` console event without a second
+     * retrieval. [invoke] is the score-free façade callers use when they only
+     * need the chunks.
+     *
+     * @param query The text query (e.g. the user's message) to find context for.
+     * @param limit Maximum number of memories to return. When `null` (the
+     *   default), `SettingsRepository.memorySearchTopK` is used.
+     * @param threshold Minimum final (post-rerank) score a memory must reach to
+     *   be kept. Pinned chunks bypass this filter. When `null` (the default),
+     *   `SettingsRepository.memorySearchThreshold` is used.
+     * @return Relevant `(chunk, finalScore)` pairs ordered best-first (pinned
+     *   chunks first, then by descending final score), capped at the effective
+     *   top-K.
+     */
+    suspend fun retrieveScored(
+        query: String,
+        limit: Int? = null,
+        threshold: Float? = null,
+    ): List<Pair<MemoryChunk, Float>> = withContext(Dispatchers.Default) {
+        // Embed the query with the user's active provider so it shares the
+        // stored chunks' embedding space.
+        val provider = embeddingProviderResolver.resolve()
+        val queryEmbedding = provider.embed(query)
 
-            // Pull the full scored pool (not just the raw-cosine top-K) so the
-            // re-ranker can promote a pinned or fresh chunk that the raw search
-            // would have left just outside the top-K. Top-K is applied last.
-            memoryRepository.findSimilarMemories(queryEmbedding, searchPoolLimit, limit = searchPoolLimit)
-                .let { candidates ->
-                    memoryReranker.rerank(
-                        candidates = candidates,
-                        nowMillis = System.currentTimeMillis(),
-                        halfLifeDays = halfLifeDays,
-                        threshold = effectiveThreshold,
-                    )
-                }
-                .take(effectiveLimit)
-                .map { it.first }
-        }
+        val effectiveLimit = limit ?: settingsRepository.memorySearchTopK.first()
+        val effectiveThreshold = threshold ?: settingsRepository.memorySearchThreshold.first()
+        val halfLifeDays = settingsRepository.memoryRecencyHalfLifeDays.first()
+        val searchPoolLimit = settingsRepository.maxMemoryChunksForSearch.first()
+
+        // Pull the full scored pool (not just the raw-cosine top-K) so the
+        // re-ranker can promote a pinned or fresh chunk that the raw search
+        // would have left just outside the top-K. Top-K is applied last.
+        memoryRepository.findSimilarMemories(queryEmbedding, searchPoolLimit, limit = searchPoolLimit)
+            .let { candidates ->
+                memoryReranker.rerank(
+                    candidates = candidates,
+                    nowMillis = System.currentTimeMillis(),
+                    halfLifeDays = halfLifeDays,
+                    threshold = effectiveThreshold,
+                )
+            }
+            .take(effectiveLimit)
+    }
 }

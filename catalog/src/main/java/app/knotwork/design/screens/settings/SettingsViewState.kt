@@ -199,9 +199,14 @@ data class MemoryCardState(
 data class NotificationsCardState(val longRunningEnabled: Boolean)
 
 /**
- * Privacy card slice (Crash reporting toggle stays here per task 9 brief).
+ * Privacy card slice. Carries the crash-reporting toggle and the verbose
+ * memory-logging diagnostic toggle.
+ *
+ * @property crashReportingEnabled Whether anonymous crash reporting is on.
+ * @property verboseMemoryLoggingEnabled Whether verbose memory diagnostics
+ *   (per-hit console snippets + scores, compaction membership logs) are on.
  */
-data class PrivacyCardState(val crashReportingEnabled: Boolean)
+data class PrivacyCardState(val crashReportingEnabled: Boolean, val verboseMemoryLoggingEnabled: Boolean = false)
 
 /**
  * Top-level input to `SettingsContent`. Carries every card slice plus the
@@ -330,6 +335,7 @@ class SettingsCallbacks(
 
     // Privacy.
     val onCrashReportingToggle: (Boolean) -> Unit = {},
+    val onVerboseMemoryLoggingToggle: (Boolean) -> Unit = {},
     val onResetSettingsClick: () -> Unit = {},
 
     // Surface-wide.

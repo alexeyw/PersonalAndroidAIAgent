@@ -141,6 +141,28 @@ class RetrieveRelevantMemoryUseCaseTest {
     }
 
     @Test
+    fun `retrieveScored preserves the final scores and order, while invoke drops them`() = runTest {
+        val query = "where do I live?"
+        val queryEmbedding = floatArrayOf(1f, 0f, 0f)
+        coEvery { provider.embed(query) } returns queryEmbedding
+
+        val first = chunk(1, "user lives in Berlin", floatArrayOf(1f, 0f, 0f))
+        val second = chunk(2, "user moved from Munich", floatArrayOf(0.9f, 0.1f, 0f))
+        coEvery {
+            memoryRepository.findSimilarMemories(queryEmbedding, searchPoolLimit, searchPoolLimit)
+        } returns listOf(first to 0.95f, second to 0.80f)
+
+        val scored = useCase.retrieveScored(query)
+
+        // The scored variant keeps the (chunk, score) pairs best-first.
+        assertEquals(listOf(first, second), scored.map { it.first })
+        assertEquals(0.95f, scored[0].second, 1e-4f)
+        assertEquals(0.80f, scored[1].second, 1e-4f)
+        // The score-free façade returns the same chunks in the same order.
+        assertEquals(listOf(first, second), useCase(query))
+    }
+
+    @Test
     fun `given a pinned chunk when reranked then it is promoted above a stronger non-pinned chunk`() = runTest {
         val query = "q"
         val queryEmbedding = floatArrayOf(0.5f)

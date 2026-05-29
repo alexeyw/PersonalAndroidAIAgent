@@ -58,6 +58,7 @@ class MemoryCompactionUseCaseTest {
         kMeansClusterer = mockk()
 
         every { settingsRepository.memoryCompactionAgeDays } returns flowOf(30)
+        every { settingsRepository.verboseMemoryLoggingEnabled } returns flowOf(false)
         coEvery { loadModelUseCase.invoke(any()) } returns Result.Success(Unit)
         coEvery { promptTemplateEngine.render(any(), any()) } answers { firstArg() }
         coEvery { embeddingProviderResolver.resolve() } returns embeddingProvider
@@ -110,6 +111,27 @@ class MemoryCompactionUseCaseTest {
         coVerify(exactly = 1) { memoryRepository.deleteMemory(1L) }
         coVerify(exactly = 1) { memoryRepository.deleteMemory(2L) }
         coVerify(exactly = 1) { memoryRepository.deleteMemory(3L) }
+    }
+
+    @Test
+    fun `given verbose memory logging when a dense cluster is consolidated then the pass still succeeds`() = runTest {
+        // Verbose logging adds a membership log line; it must not change behaviour.
+        every { settingsRepository.verboseMemoryLoggingEnabled } returns flowOf(true)
+        val candidates = listOf(chunk(1, "a"), chunk(2, "b"), chunk(3, "c"))
+        coEvery { memoryRepository.getCompactionCandidates(any()) } returns candidates
+        every { kMeansClusterer.cluster(any()) } returns listOf(listOf(0, 1, 2))
+
+        val outcome = useCase(now)
+
+        assertEquals(1, outcome.clustersProcessed)
+        assertEquals(3, outcome.chunksConsolidated)
+        coVerify(exactly = 1) {
+            memoryRepository.saveMemory(
+                "Merged fact",
+                any(),
+                MemorySource.Compaction(originalChunkIds = listOf(1L, 2L, 3L)),
+            )
+        }
     }
 
     @Test

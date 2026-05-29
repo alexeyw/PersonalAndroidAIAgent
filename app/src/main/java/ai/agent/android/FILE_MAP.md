@@ -127,6 +127,7 @@ This file maps the contents of the main application package.
     - `DefaultPipelineFactory.kt` - Factory for default pipelines.
     - `GraphExecutionEngine.kt` - Engine responsible for executing PipelineGraphs.
     - `LlmInferenceEngine.kt` - LLM engine interface.
+    - `MemoryAccessLogFormatter.kt` - Pure formatter for the `MemoryAccess` console event. Renders the terse one-line summary (`query` + hit count + scores) and, when verbose memory logging is on, the per-hit snippet/score expansion. Used by `GraphExecutionEngine`.
     - `NodeContextBuilder.kt` - Assembles a node's executor input by concatenating only the context blocks enabled by its `NodeContextConfig` (Original Task, Chat History, Long-Term Memory, Tool Results, Previous Node Output).
     - `PipelineExecutionContext.kt` - Immutable per-iteration snapshot of pipeline-scoped data (original user message, chat history, previous node output, tool invocation results, memory entries) consumed by `NodeContextBuilder`.
     - `TaskQueueManager.kt` - Task queue manager interface.

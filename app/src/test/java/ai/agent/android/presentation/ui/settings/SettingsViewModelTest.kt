@@ -93,6 +93,7 @@ class SettingsViewModelTest {
         every { settings.autoSummarizeThreshold } returns MutableStateFlow(0.8f)
         every { settings.longRunningTaskNotificationsEnabled } returns MutableStateFlow(true)
         every { settings.crashReportingEnabled } returns MutableStateFlow(false)
+        every { settings.verboseMemoryLoggingEnabled } returns MutableStateFlow(false)
 
         every { localModels.observeActiveModelMeta() } returns MutableStateFlow(null)
         every { memory.observeStats() } returns MutableStateFlow(MemoryStats.EMPTY)
@@ -303,6 +304,22 @@ class SettingsViewModelTest {
         advanceUntilIdle()
         coVerify { settings.setCrashReportingEnabled(true) }
         coVerify { crashReporting.setEnabled(true) }
+    }
+
+    @Test
+    fun `setVerboseMemoryLoggingEnabled routes through repository`() = runTest {
+        advanceUntilIdle()
+        viewModel.setVerboseMemoryLoggingEnabled(true)
+        advanceUntilIdle()
+        coVerify { settings.setVerboseMemoryLoggingEnabled(true) }
+    }
+
+    @Test
+    fun `verboseMemoryLoggingEnabled flow is mirrored into uiState`() = runTest {
+        every { settings.verboseMemoryLoggingEnabled } returns MutableStateFlow(true)
+        val vm = newViewModel()
+        advanceUntilIdle()
+        assertTrue(vm.uiState.value.verboseMemoryLoggingEnabled)
     }
 
     @Test
