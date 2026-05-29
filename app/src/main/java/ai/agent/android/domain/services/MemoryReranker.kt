@@ -69,15 +69,22 @@ class MemoryReranker @Inject constructor() {
 
     /**
      * Collapses near-identical chunks that share the same first
-     * [DEDUP_PREFIX_LENGTH] characters of text, keeping the newest survivor of
-     * each group so the freshest phrasing wins.
+     * [DEDUP_PREFIX_LENGTH] characters of text down to a single survivor.
+     *
+     * A **pinned** chunk always wins its group, with the newest `timestamp` as
+     * the tiebreaker; only among equally-pinned chunks does the freshest
+     * phrasing win. Picking purely by timestamp would let a later auto-extracted
+     * (unpinned) duplicate evict a chunk the user deliberately pinned, silently
+     * stripping its threshold exemption and top-of-list guarantee.
      *
      * @param candidates Raw search hits.
      * @return One representative `(chunk, similarity)` pair per distinct prefix.
      */
     private fun deduplicate(candidates: List<Pair<MemoryChunk, Float>>): List<Pair<MemoryChunk, Float>> = candidates
         .groupBy { it.first.text.take(DEDUP_PREFIX_LENGTH) }
-        .map { (_, group) -> group.maxBy { it.first.timestamp } }
+        .map { (_, group) ->
+            group.maxWith(compareBy({ it.first.isPinned }, { it.first.timestamp }))
+        }
 
     /**
      * Computes the post-ranking score for a single chunk.

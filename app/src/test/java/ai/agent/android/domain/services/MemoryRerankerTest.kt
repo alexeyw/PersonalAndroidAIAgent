@@ -172,6 +172,25 @@ class MemoryRerankerTest {
     }
 
     @Test
+    fun `given a pinned chunk and a newer unpinned duplicate when reranked then the pinned chunk survives`() {
+        val sharedPrefix = "y".repeat(80)
+        val pinnedOlder = chunk(id = 1, text = sharedPrefix + "AAA", timestamp = now - 10 * DAY, isPinned = true)
+        val unpinnedNewer = chunk(id = 2, text = sharedPrefix + "BBB", timestamp = now)
+
+        val result = reranker.rerank(
+            // The unpinned copy is newer but must not evict the pinned one, else
+            // the fact would lose its threshold exemption / top-of-list slot.
+            candidates = listOf(pinnedOlder to 0.9f, unpinnedNewer to 0.9f),
+            nowMillis = now,
+            halfLifeDays = 30,
+            threshold = 0f,
+        )
+
+        assertEquals(listOf(1L), result.map { it.first.id })
+        assertTrue(result.single().first.isPinned)
+    }
+
+    @Test
     fun `given chunks differing within the first 80 chars when reranked then both survive`() {
         val a = chunk(id = 1, text = "A".repeat(40) + "left")
         val b = chunk(id = 2, text = "A".repeat(40) + "right")
