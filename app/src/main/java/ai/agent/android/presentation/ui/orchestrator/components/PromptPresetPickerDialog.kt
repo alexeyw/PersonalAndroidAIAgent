@@ -95,6 +95,12 @@ fun PromptPresetPickerDialog(
             selectedTags = selectedTag?.let { setOf(it) } ?: emptySet(),
         )
     }
+    // A selection is only applicable while its row survives the current tag
+    // filter. Changing the tag can hide the picked row; collapsing the id to
+    // null when it is absent from `filtered` disables the catalog "Use prompt"
+    // action and guards against applying a hidden preset from the previous
+    // filter.
+    val visibleSelectedRowId = selectedRowId?.takeIf { id -> filtered.any { it.id == id } }
 
     val strings = pickerStrings()
     val tagChips = buildTagChips(
@@ -123,7 +129,7 @@ fun PromptPresetPickerDialog(
         tagChips = tagChips,
         selectedTagFilter = selectedTag,
         rows = rows,
-        selectedRowId = selectedRowId,
+        selectedRowId = visibleSelectedRowId,
         emptyMessage = when {
             sourceList.isEmpty() && selectedTab == PromptPresetTab.BUNDLED ->
                 stringResource(R.string.prompt_preset_picker_empty_bundled)
@@ -146,8 +152,8 @@ fun PromptPresetPickerDialog(
             onPreview(preset.systemPrompt)
         },
         onUsePrompt = {
-            val pickedId = selectedRowId ?: return@PromptPresetPickerCallbacks
-            val preset = sourceList.firstOrNull { it.id == pickedId } ?: return@PromptPresetPickerCallbacks
+            val pickedId = visibleSelectedRowId ?: return@PromptPresetPickerCallbacks
+            val preset = filtered.firstOrNull { it.id == pickedId } ?: return@PromptPresetPickerCallbacks
             onApply(preset.systemPrompt)
             onDismiss()
         },
