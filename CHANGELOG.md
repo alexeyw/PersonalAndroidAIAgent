@@ -191,6 +191,19 @@ details.
 - **Dependency currency**: bumped `firebase-bom` 34.13.0 → 34.14.0 to clear
   the `GradleDependency` lint error gating `./gradlew check`.
 
+### Fixed
+
+- **Preset pickers no longer apply a hidden selection after a filter
+  change** (Phase 24). In `PresetPickerSheet` (pipeline presets) and
+  `PromptPresetPickerDialog` (prompt presets), selecting a preset and then
+  switching the tab / category / tag chip left the previous selection
+  active: the footer CTA stayed enabled on the non-null id and applied the
+  now-hidden preset instead of the row visible to the user. Both pickers now
+  require the selected id to still be present in the filtered list before
+  enabling and applying the action (`selectionVisible` /
+  `visibleSelectedRowId`), so the CTA disables when the pick scrolls out of
+  view and only ever instantiates a currently-visible preset.
+
 ### Build / coverage
 
 - **Coverage gate raised 70 % → 75 % LINE aggregate** (Phase 23 / Task 9/9).

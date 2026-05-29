@@ -146,6 +146,12 @@ fun PresetPickerSheet(
             HorizontalDivider(color = KnotworkTheme.extended.divider)
 
             val visible = state.filteredPresets
+            // A selection only counts while its row is still visible under the
+            // current tab / category. Switching the filter can hide the
+            // previously-picked preset; gating on membership in `visible`
+            // (instead of merely `selectedPresetId != null`) keeps the CTA from
+            // instantiating a preset the user can no longer see.
+            val selectionVisible = selectedPresetId != null && visible.any { it.id == selectedPresetId }
             // List takes the remaining space; weight(1f) is what lets the
             // footer Row underneath stay anchored to the sheet bottom.
             Box(modifier = Modifier.weight(1f)) {
@@ -196,10 +202,10 @@ fun PresetPickerSheet(
                         color = MaterialTheme.colorScheme.primary,
                     )
                 }
-                val ctaEnabled = selectedPresetId != null && !state.isLoading
+                val ctaEnabled = selectionVisible && !state.isLoading
                 TextButton(
                     enabled = ctaEnabled,
-                    onClick = { selectedPresetId?.let(onUsePreset) },
+                    onClick = { selectedPresetId?.takeIf { id -> visible.any { it.id == id } }?.let(onUsePreset) },
                     modifier = Modifier.testTag(tag = PRESET_PICKER_USE_TEST_TAG),
                 ) {
                     Icon(
