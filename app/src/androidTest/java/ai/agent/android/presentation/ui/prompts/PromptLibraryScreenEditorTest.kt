@@ -28,7 +28,7 @@ class PromptLibraryScreenEditorTest {
         val (vm, _) = mockPromptLibraryViewModel(
             initialUiState = PromptLibraryUiState(
                 editorDraft = PromptEditorDraft(
-                    id = 99L,
+                    id = "99",
                     name = "Existing prompt name",
                     category = "DECOMPOSITION",
                     body = "Existing prompt body",
