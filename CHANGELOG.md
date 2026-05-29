@@ -13,6 +13,23 @@ details.
 
 ## [Unreleased]
 
+### Added
+
+- **Memory UI extensions** (Phase 25 / Task 7/10):
+  - **Save to memory from chat** — the message long-press menu gains a
+    *Save to memory* action that embeds the message text with the active
+    `EmbeddingProvider` and stores it as a `Manual` chunk (new
+    `SaveMessageToMemoryUseCase`), confirming with a *Saved to memory* snackbar.
+  - **Memory filters** — the Memory screen adds a filter row: a date-range
+    chip group (All time / Last 7 days / Last 30 days), multi-select provenance
+    chips (Auto / Manual / Compaction), and a *Pinned only* toggle. Selections
+    persist in the ViewModel.
+  - **Bulk actions** — long-pressing a memory entry enters multi-select mode;
+    the top bar swaps to a bulk-action bar with *Pin selected* / *Unpin
+    selected* / *Export selected* (SAF JSON) / *Delete selected*.
+  `ExportMemoryBaseUseCase` now accepts an optional id subset so the *Export
+  selected* action reuses the existing portable JSON export format.
+
 ### Fixed
 
 - **Long-term memory now embeds every read and write with the active provider**

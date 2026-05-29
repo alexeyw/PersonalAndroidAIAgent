@@ -230,7 +230,7 @@ This file maps the contents of the main application package.
     - `RenamePipelineUseCase.kt` - Validates and applies a new display name to an existing pipeline; canonical name-validation gate (trim + length).
     - `MemoryCompactionUseCase.kt` - Runs one background memory-compaction pass: loads non-pinned chunks older than `memoryCompactionAgeDays`, clusters them via `KMeansClusterer`, and for each cluster of ≥ 3 runs a local-model consolidation prompt, embeds the summary with the active provider, saves it tagged `MemorySource.Compaction`, and deletes the originals. Best-effort: a blank reply or embedding failure skips only that cluster.
     - `RetrieveRelevantMemoryUseCase.kt` - Use case to retrieve memories.
-    - `MemoryExtractionUseCase.kt` - Distils durable facts (`{type, text}` JSON) from a finished conversation via one local-model pass, batch-embeds them with the active `EmbeddingProvider` (single `embed(List)` call), dedups (cosine ≥ 0.92) against stored + same-pass facts, and saves survivors tagged `MemorySource.ChatSession`. Reusable by the manual save path (Task 7).
+    - `MemoryExtractionUseCase.kt` - Distils durable facts (`{type, text}` JSON) from a finished conversation via one local-model pass, batch-embeds them with the active `EmbeddingProvider` (single `embed(List)` call), dedups (cosine ≥ 0.92) against stored + same-pass facts, and saves survivors tagged `MemorySource.ChatSession`. The manual "Save to memory" path uses the lighter `SaveMessageToMemoryUseCase` instead (no LLM distillation pass).
     - `SavePipelineAsPresetUseCase.kt` - Packages the currently-edited `PipelineGraph` into a user-saved `PipelinePreset` (validates name, runs `PipelineGraph.validate()`, enforces `isBundled=false`). Phase 24 / Task 1.
     - `SavePromptAsPresetUseCase.kt` - Packages a freshly-edited system prompt into a user-saved `PromptPreset`. Validates name (1..60), `systemPrompt` (non-blank, ≤ `MAX_SYSTEM_PROMPT_LENGTH`), and that the target `NodeType` is LLM-driven. Phase 24 / Task 4.
     - `SavePipelineUseCase.kt` - Use case to save a pipeline.
@@ -238,7 +238,8 @@ This file maps the contents of the main application package.
     - `TaskRouterUseCase.kt` - Use case to route tasks.
     - `ResetSamplingDefaultsUseCase.kt` - Resets temperature / top-K / top-P / repetition penalty / max context / max steps to the documented defaults.
     - `ClearAllMemoryUseCase.kt` - Wipes every memory chunk (pinned and unpinned). Gated behind the typed-confirm dialog.
-    - `ExportMemoryBaseUseCase.kt` - Serialises the memory table to a portable JSON blob. SAF-driven from `SettingsScreen`.
+    - `ExportMemoryBaseUseCase.kt` - Serialises the memory table to a portable JSON blob. SAF-driven from `SettingsScreen` (full table) and from the Memory screen's multi-select "Export selected" action (optional `ids` subset, Phase 25 / Task 7).
+    - `SaveMessageToMemoryUseCase.kt` - Direct-wrapper manual save path behind the chat "Save to memory" action (Phase 25 / Task 7): embeds the chosen text with the active `EmbeddingProvider` (via `EmbeddingProviderResolver`) and stores it tagged `MemorySource.Manual`. Returns `SaveToMemoryOutcome` (Saved / Skipped / Failed); blank input is skipped, embedding failures are swallowed for the caller's snackbar.
     - `ReembedAllMemoriesUseCase.kt` - Re-runs the active embedding engine over every chunk; streams `0f..1f` progress.
     - `TestBackendUseCase.kt` - Runs a fixed prompt-probe against the active local model and persists `TestProbeResult` so the Settings row keeps showing the latest throughput.
     - `GetSystemPromptVariableCatalogUseCase.kt` - Materialises the `$VARIABLE` chip catalog with live preview samples for the Settings → System instructions card.

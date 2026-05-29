@@ -1,6 +1,11 @@
 package ai.agent.android.presentation.ui.memory
 
+import ai.agent.android.R
 import ai.agent.android.domain.models.MemoryChunk
+import ai.agent.android.domain.models.MemorySource
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
@@ -11,14 +16,18 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.knotwork.design.screens.memory.MemoryCallbacks
 import app.knotwork.design.screens.memory.MemoryContent
+import app.knotwork.design.screens.memory.MemoryDateFilter
 import app.knotwork.design.screens.memory.MemoryEntryDetail
 import app.knotwork.design.screens.memory.MemoryRow
 import app.knotwork.design.screens.memory.MemorySortMode
+import app.knotwork.design.screens.memory.MemorySourceFilter
 import app.knotwork.design.screens.memory.MemoryViewState
 import app.knotwork.design.screens.memory.MemoryVisualState
 import kotlinx.coroutines.delay
@@ -29,16 +38,20 @@ import java.util.Date
 import java.util.Locale
 
 /**
- * Memory management screen — Phase 21 / Task 10 rewrite.
+ * Memory management screen — Phase 21 / Task 10 rewrite, extended in
+ * Phase 25 / Task 7 with manual provenance/date filtering and multi-select
+ * bulk-actions.
  *
  * The catalog `MemoryContent` composable owns the visual surface; this
- * screen subscribes to [MemoryViewModel], projects [MemoryUiState] to the
- * catalog [MemoryViewState], and forwards events back to the VM. The
- * legacy `Chat history` tab is dropped per Task 10 scope.
+ * screen subscribes to [MemoryViewModel], applies the active filters to the
+ * raw chunk list, projects the result to the catalog [MemoryViewState], and
+ * forwards events back to the VM. The legacy `Chat history` tab is dropped per
+ * Task 10 scope.
  */
 @Composable
 fun MemoryScreen(viewModel: MemoryViewModel = hiltViewModel(), onOpenChat: () -> Unit = {}, onBack: () -> Unit = {}) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val context = LocalContext.current
 
     var searchQuery by remember { mutableStateOf("") }
     val debouncedQuery = rememberDebouncedString(input = searchQuery, debounceMs = MEMORY_SEARCH_DEBOUNCE_MS)
@@ -46,8 +59,40 @@ fun MemoryScreen(viewModel: MemoryViewModel = hiltViewModel(), onOpenChat: () ->
     var expandedEntryId by remember { mutableStateOf<Long?>(null) }
     var editingEntryId by remember { mutableStateOf<Long?>(null) }
 
-    val allRows by remember(uiState.vectorMemories) {
-        derivedStateOf { uiState.vectorMemories.map { it.toMemoryRow() } }
+    val exportFilename = stringResource(R.string.memory_export_selected_filename)
+    val exportLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument(MIME_JSON),
+    ) { uri: Uri? ->
+        uri ?: return@rememberLauncherForActivityResult
+        val stream = runCatching { context.contentResolver.openOutputStream(uri) }.getOrNull()
+        if (stream != null) viewModel.exportSelectedTo(stream)
+    }
+
+    LaunchedEffect(viewModel) {
+        viewModel.exportRequests.collect { exportLauncher.launch(exportFilename) }
+    }
+
+    // Apply the persisted provenance / date / pinned filters to the raw chunk
+    // list before mapping to rows. `nowMillis` is read inside the derived
+    // computation so the date cut-off tracks recompositions.
+    val filteredChunks by remember(
+        uiState.vectorMemories,
+        uiState.dateFilter,
+        uiState.sourceFilters,
+        uiState.pinnedOnly,
+    ) {
+        derivedStateOf {
+            uiState.vectorMemories.applyFilters(
+                dateFilter = uiState.dateFilter,
+                sourceFilters = uiState.sourceFilters,
+                pinnedOnly = uiState.pinnedOnly,
+                nowMillis = System.currentTimeMillis(),
+            )
+        }
+    }
+
+    val allRows by remember(filteredChunks) {
+        derivedStateOf { filteredChunks.map { it.toMemoryRow() } }
     }
     val displayRows by remember(allRows, debouncedQuery, sortMode) {
         derivedStateOf {
@@ -81,7 +126,9 @@ fun MemoryScreen(viewModel: MemoryViewModel = hiltViewModel(), onOpenChat: () ->
     }
 
     val visualState = when {
-        allRows.isEmpty() -> MemoryVisualState.Empty
+        // Empty is driven by the underlying store, not the filtered view — an
+        // active filter that hides everything must not show the onboarding CTA.
+        uiState.vectorMemories.isEmpty() -> MemoryVisualState.Empty
         editingEntryId != null && expandedDetail != null -> MemoryVisualState.Editing
         expandedDetail != null -> MemoryVisualState.EntryExpanded
         debouncedQuery.isNotBlank() -> MemoryVisualState.Searching
@@ -94,6 +141,11 @@ fun MemoryScreen(viewModel: MemoryViewModel = hiltViewModel(), onOpenChat: () ->
         searchQuery = searchQuery,
         sortMode = sortMode,
         expandedEntry = expandedDetail,
+        dateFilter = uiState.dateFilter,
+        sourceFilters = uiState.sourceFilters,
+        pinnedOnly = uiState.pinnedOnly,
+        selectionMode = uiState.selectionMode,
+        selectedIds = uiState.selectedIds.map { it.toString() }.toSet(),
     )
 
     val callbacks = MemoryCallbacks(
@@ -124,11 +176,60 @@ fun MemoryScreen(viewModel: MemoryViewModel = hiltViewModel(), onOpenChat: () ->
         onErrorRetry = { viewModel.loadAllData() },
         onEmptyCta = onOpenChat,
         onClearSearch = { searchQuery = "" },
+        onDateFilterChange = viewModel::setDateFilter,
+        onSourceFilterToggle = viewModel::toggleSourceFilter,
+        onPinnedOnlyToggle = viewModel::togglePinnedOnly,
+        onEntryLongPress = { id -> id.toLongOrNull()?.let(viewModel::enterSelection) },
+        onToggleSelect = { id -> id.toLongOrNull()?.let(viewModel::toggleSelect) },
+        onExitSelection = viewModel::exitSelection,
+        onDeleteSelected = viewModel::deleteSelected,
+        onPinSelected = { viewModel.setSelectedPinned(pinned = true) },
+        onUnpinSelected = { viewModel.setSelectedPinned(pinned = false) },
+        onExportSelected = viewModel::requestExportSelected,
     )
 
     Box(modifier = Modifier.fillMaxSize().testTag(tag = MEMORY_ROOT_TEST_TAG)) {
         MemoryContent(state = viewState, callbacks = callbacks)
     }
+}
+
+/**
+ * Applies the active provenance / date / pinned filters to a chunk list.
+ *
+ * Semantics:
+ *  - [sourceFilters] empty ⇒ every source is included (resting surface).
+ *    `MemorySource.Unknown` (legacy backfill) maps to no category, so once any
+ *    source chip is lit those legacy chunks are hidden.
+ *  - [dateFilter] constrains by `timestamp >= nowMillis - window`.
+ *  - [pinnedOnly] keeps only pinned chunks.
+ *
+ * @param nowMillis Caller-supplied wall clock so this function stays testable.
+ */
+internal fun List<MemoryChunk>.applyFilters(
+    dateFilter: MemoryDateFilter,
+    sourceFilters: Set<MemorySourceFilter>,
+    pinnedOnly: Boolean,
+    nowMillis: Long,
+): List<MemoryChunk> {
+    val cutoff = when (dateFilter) {
+        MemoryDateFilter.All -> null
+        MemoryDateFilter.Last7Days -> nowMillis - DAYS_7_MILLIS
+        MemoryDateFilter.Last30Days -> nowMillis - DAYS_30_MILLIS
+    }
+    return filter { chunk ->
+        val dateOk = cutoff == null || chunk.timestamp >= cutoff
+        val sourceOk = sourceFilters.isEmpty() || chunk.source.toFilterCategory() in sourceFilters
+        val pinnedOk = !pinnedOnly || chunk.isPinned
+        dateOk && sourceOk && pinnedOk
+    }
+}
+
+/** Maps a domain [MemorySource] to its filter category, or `null` for legacy `Unknown`. */
+private fun MemorySource.toFilterCategory(): MemorySourceFilter? = when (this) {
+    is MemorySource.ChatSession -> MemorySourceFilter.Auto
+    MemorySource.Manual -> MemorySourceFilter.Manual
+    is MemorySource.Compaction -> MemorySourceFilter.Compaction
+    MemorySource.Unknown -> null
 }
 
 /**
@@ -184,3 +285,10 @@ private const val MEMORY_SEARCH_DEBOUNCE_MS = 200L
 
 /** Maximum characters preserved from the entry body when synthesising the row title. */
 private const val MEMORY_TITLE_MAX_CHARS = 60
+
+/** MIME type for the SAF "Export selected" document. */
+private const val MIME_JSON = "application/json"
+
+/** Milliseconds in 7 / 30 days — the date-range filter windows. */
+private const val DAYS_7_MILLIS = 7L * 24 * 60 * 60 * 1000
+private const val DAYS_30_MILLIS = 30L * 24 * 60 * 60 * 1000

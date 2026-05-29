@@ -21,10 +21,11 @@
     <!-- Trailing status glyph contentDescription when delivery failed. -->
     <string name="knotwork_chat_message_status_failed">Failed to send</string>
 
-    <!-- Long-press context menu item labels (Copy / Re-run / Rate). -->
+    <!-- Long-press context menu item labels (Copy / Re-run / Rate / Save to memory). -->
     <string name="knotwork_chat_message_action_copy">Copy</string>
     <string name="knotwork_chat_message_action_rerun">Re-run</string>
     <string name="knotwork_chat_message_action_rate">Rate</string>
+    <string name="knotwork_chat_message_action_save_to_memory">Save to memory</string>
 
     <!-- Retry button on the inline ChatContent.Error tile. -->
     <string name="knotwork_chat_message_error_retry">Retry</string>
@@ -342,6 +343,26 @@
     <string name="knotwork_memory_detail_unpin">Unpin</string>
     <string name="knotwork_memory_pinned_cd">Pinned</string>
     <string name="knotwork_memory_detail_close">Close</string>
+    <!-- Memory filter chips (date range / source / pinned-only). -->
+    <string name="knotwork_memory_filter_date_all">All time</string>
+    <string name="knotwork_memory_filter_date_7d">Last 7 days</string>
+    <string name="knotwork_memory_filter_date_30d">Last 30 days</string>
+    <string name="knotwork_memory_filter_source_auto">Auto</string>
+    <string name="knotwork_memory_filter_source_manual">Manual</string>
+    <string name="knotwork_memory_filter_source_compaction">Compaction</string>
+    <string name="knotwork_memory_filter_pinned_only">Pinned only</string>
+    <!-- Memory multi-select bulk-action bar. -->
+    <plurals name="knotwork_memory_selection_count">
+        <item quantity="one">%1$d selected</item>
+        <item quantity="other">%1$d selected</item>
+    </plurals>
+    <string name="knotwork_memory_selection_exit_cd">Exit selection</string>
+    <string name="knotwork_memory_selection_pin_all">Pin selected</string>
+    <string name="knotwork_memory_selection_unpin_all">Unpin selected</string>
+    <string name="knotwork_memory_selection_export">Export selected</string>
+    <string name="knotwork_memory_selection_delete">Delete selected</string>
+    <string name="knotwork_memory_selected_cd">Selected</string>
+    <string name="knotwork_memory_unselected_cd">Not selected</string>
 
     <!-- ============ Onboarding pager ============ -->
 

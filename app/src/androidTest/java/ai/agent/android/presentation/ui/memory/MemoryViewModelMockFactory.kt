@@ -8,6 +8,7 @@ package ai.agent.android.presentation.ui.memory
 import ai.agent.android.domain.models.MemoryChunk
 import io.mockk.every
 import io.mockk.mockk
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 
 /**
@@ -43,6 +44,7 @@ internal fun mockMemoryViewModel(
     val uiStateFlow = MutableStateFlow(initialUiState)
     val vm = mockk<MemoryViewModel>(relaxed = true)
     every { vm.uiState } returns uiStateFlow
+    every { vm.exportRequests } returns MutableSharedFlow()
     val handles = MemoryMockHandles(uiStateFlow = uiStateFlow)
     return vm to handles
 }

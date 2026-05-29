@@ -202,7 +202,12 @@ history is portable to any app that handles JSON or plain text.
 
 ### Copying a message
 
-Long-press any message bubble to copy its text to the clipboard.
+Long-press any message bubble to open its context menu. From there you
+can **Copy** the text to the clipboard, **Re-run** it (drop the text back
+into the composer), **Rate** the reply, or **Save to memory** — which
+stores the message verbatim in long-term memory as a manual entry and
+confirms with a *Saved to memory* snackbar. Saved entries show up under
+**More → Memory** with the **Manual** source.
 
 ---
 
@@ -666,9 +671,48 @@ or delete the results in **More → Memory → Vector Base**.
 Turn the toggle off if you would rather curate memory entirely by
 hand; extraction then stops and existing memories are left untouched.
 
+### Saving a memory by hand
+
+You don't have to wait for auto-extract. Long-press any chat message
+and choose **Save to memory** to store it immediately as a **Manual**
+entry (see [Copying a message](#copying-a-message)). Manual entries are
+embedded with whichever embedding provider is active, so they are
+searchable straight away.
+
+### Filtering memory
+
+The Memory screen has a filter row beneath the search bar:
+
+- **Date range** — *All time* (default), *Last 7 days*, or *Last 30
+  days*. Only one is active at a time.
+- **Source** — *Auto* (distilled from conversations), *Manual* (saved
+  by hand), and *Compaction* (produced by the background consolidation
+  pass). Tap to include a source; with none selected, every source is
+  shown.
+- **Pinned only** — show just the entries you have pinned.
+
+Filters combine, and your selection is kept while you stay on the
+screen.
+
+### Bulk actions
+
+Long-press a memory entry to enter **multi-select mode**. Tap further
+entries to add them to the selection; the top bar shows how many are
+selected and offers:
+
+- **Pin selected** / **Unpin selected** — pin or unpin every selected
+  entry at once.
+- **Export selected** — write the selected entries to a JSON file via
+  the system file picker (the same portable format as
+  **Settings → Memory → Export**).
+- **Delete selected** — remove every selected entry.
+
+Tap the close (✕) icon, or deselect the last entry, to leave
+multi-select mode.
+
 ### Compact Memory
 
-The **Vector Base** tab has a **Compact Memory** button. Tap it to
+The Memory screen has a **Compact Memory** action. Tap it to
 let the agent re-summarize and consolidate memory chunks — useful
 after a long string of conversations have produced overlapping
 fragments. Compaction is a single one-shot action; you can leave the

@@ -122,6 +122,26 @@ class MemoryContentSnapshotTest {
         MemoryContent(state = MemoryPreview.error())
     }
 
+    @Test
+    fun memory_filtered_light() = snapshot(name = "filtered", dark = false) {
+        MemoryContent(state = MemoryPreview.filtered())
+    }
+
+    @Test
+    fun memory_filtered_dark() = snapshot(name = "filtered", dark = true) {
+        MemoryContent(state = MemoryPreview.filtered())
+    }
+
+    @Test
+    fun memory_selecting_light() = snapshot(name = "selecting", dark = false) {
+        MemoryContent(state = MemoryPreview.selecting())
+    }
+
+    @Test
+    fun memory_selecting_dark() = snapshot(name = "selecting", dark = true) {
+        MemoryContent(state = MemoryPreview.selecting())
+    }
+
     private fun snapshot(name: String, dark: Boolean, content: @Composable () -> Unit) {
         composeTestRule.setContent {
             CompositionLocalProvider(LocalKnotworkA11y provides FixedKnotworkA11y(reducedMotion = true)) {
@@ -234,5 +254,21 @@ internal object MemoryPreview {
     fun error(): MemoryViewState = MemoryViewState(
         visualState = MemoryVisualState.Error,
         errorMessage = "Vector store unreachable: SQLCipher passphrase missing.",
+    )
+
+    /** Populated surface with a date-range + source filter active. */
+    fun filtered(): MemoryViewState = MemoryViewState(
+        visualState = MemoryVisualState.Populated,
+        entries = rows(),
+        dateFilter = MemoryDateFilter.Last7Days,
+        sourceFilters = setOf(MemorySourceFilter.Manual),
+    )
+
+    /** Multi-select mode with two of three rows selected and the bulk-action bar shown. */
+    fun selecting(): MemoryViewState = MemoryViewState(
+        visualState = MemoryVisualState.Populated,
+        entries = rows(),
+        selectionMode = true,
+        selectedIds = setOf("m1", "m3"),
     )
 }

@@ -21,7 +21,11 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.DeleteOutline
+import androidx.compose.material.icons.outlined.FileDownload
+import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.WarningAmber
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -43,6 +47,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -53,6 +58,7 @@ import app.knotwork.design.components.buttons.KnotworkSecondaryButton
 import app.knotwork.design.components.buttons.KnotworkTextButton
 import app.knotwork.design.components.chips.ChipStyle
 import app.knotwork.design.components.chips.KnotworkChip
+import app.knotwork.design.components.chips.KnotworkFilterChip
 import app.knotwork.design.components.lists.MemoryEntryRow
 import app.knotwork.design.components.misc.EmptyState
 import app.knotwork.design.components.misc.StripedPlaceholder
@@ -88,7 +94,11 @@ fun MemoryContent(
             containerColor = MaterialTheme.colorScheme.surface,
             topBar = {
                 app.knotwork.design.components.topbar.KnotworkTopAppBarShell {
-                    MemoryTopBar(onBack = callbacks.onBack)
+                    if (state.selectionMode) {
+                        MemorySelectionTopBar(selectedCount = state.selectedIds.size, callbacks = callbacks)
+                    } else {
+                        MemoryTopBar(onBack = callbacks.onBack)
+                    }
                 }
             },
             modifier = Modifier.fillMaxSize(),
@@ -136,12 +146,74 @@ private fun MemoryTopBar(onBack: () -> Unit) {
     )
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun MemorySelectionTopBar(selectedCount: Int, callbacks: MemoryCallbacks) {
+    TopAppBar(
+        title = {
+            Text(
+                text = pluralStringResource(
+                    R.plurals.knotwork_memory_selection_count,
+                    selectedCount,
+                    selectedCount,
+                ),
+                style = KnotworkTextStyles.TitleLg,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+        },
+        navigationIcon = {
+            IconButton(onClick = callbacks.onExitSelection) {
+                Icon(
+                    imageVector = Icons.Outlined.Close,
+                    contentDescription = stringResource(R.string.knotwork_memory_selection_exit_cd),
+                    tint = MaterialTheme.colorScheme.onSurface,
+                )
+            }
+        },
+        actions = {
+            IconButton(onClick = callbacks.onPinSelected) {
+                Icon(
+                    imageVector = Icons.Filled.PushPin,
+                    contentDescription = stringResource(R.string.knotwork_memory_selection_pin_all),
+                    tint = MaterialTheme.colorScheme.onSurface,
+                )
+            }
+            IconButton(onClick = callbacks.onUnpinSelected) {
+                Icon(
+                    imageVector = Icons.Outlined.PushPin,
+                    contentDescription = stringResource(R.string.knotwork_memory_selection_unpin_all),
+                    tint = MaterialTheme.colorScheme.onSurface,
+                )
+            }
+            IconButton(onClick = callbacks.onExportSelected) {
+                Icon(
+                    imageVector = Icons.Outlined.FileDownload,
+                    contentDescription = stringResource(R.string.knotwork_memory_selection_export),
+                    tint = MaterialTheme.colorScheme.onSurface,
+                )
+            }
+            IconButton(onClick = callbacks.onDeleteSelected) {
+                Icon(
+                    imageVector = Icons.Outlined.DeleteOutline,
+                    contentDescription = stringResource(R.string.knotwork_memory_selection_delete),
+                    tint = KnotworkTheme.extended.signalError,
+                )
+            }
+        },
+        colors = TopAppBarDefaults.topAppBarColors(
+            containerColor = MaterialTheme.colorScheme.surface,
+            titleContentColor = MaterialTheme.colorScheme.onSurface,
+        ),
+    )
+}
+
 @Composable
 private fun MemoryBody(state: MemoryViewState, callbacks: MemoryCallbacks, padding: PaddingValues) {
     Column(modifier = Modifier.fillMaxSize().padding(padding)) {
         if (state.visualState != MemoryVisualState.Error && state.visualState != MemoryVisualState.Empty) {
             MemorySearchField(query = state.searchQuery, onQueryChange = callbacks.onSearchQueryChange)
             MemorySortRow(active = state.sortMode, onChange = callbacks.onSortChange)
+            MemoryFilterRow(state = state, callbacks = callbacks)
         }
         when (state.visualState) {
             MemoryVisualState.Empty -> MemoryEmpty(callbacks = callbacks)
@@ -231,6 +303,57 @@ private fun MemorySortRow(active: MemorySortMode, onChange: (MemorySortMode) -> 
     }
 }
 
+/**
+ * Filter chip row beneath the sort chips: a single-select date-range group,
+ * a multi-select source group, and a pinned-only toggle. The catalog only
+ * reflects the active selection and emits toggle events — the screen owns the
+ * actual filtering (and the clock for date ranges).
+ */
+@Composable
+private fun MemoryFilterRow(state: MemoryViewState, callbacks: MemoryCallbacks) {
+    FlowRow(
+        horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp2),
+        verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp1),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = KnotworkTheme.spacing.sp4, vertical = KnotworkTheme.spacing.sp1),
+    ) {
+        MemoryDateFilter.entries.forEach { filter ->
+            val label = stringResource(
+                when (filter) {
+                    MemoryDateFilter.All -> R.string.knotwork_memory_filter_date_all
+                    MemoryDateFilter.Last7Days -> R.string.knotwork_memory_filter_date_7d
+                    MemoryDateFilter.Last30Days -> R.string.knotwork_memory_filter_date_30d
+                },
+            )
+            KnotworkFilterChip(
+                label = label,
+                selected = filter == state.dateFilter,
+                onClick = { callbacks.onDateFilterChange(filter) },
+            )
+        }
+        MemorySourceFilter.entries.forEach { source ->
+            val label = stringResource(
+                when (source) {
+                    MemorySourceFilter.Auto -> R.string.knotwork_memory_filter_source_auto
+                    MemorySourceFilter.Manual -> R.string.knotwork_memory_filter_source_manual
+                    MemorySourceFilter.Compaction -> R.string.knotwork_memory_filter_source_compaction
+                },
+            )
+            KnotworkFilterChip(
+                label = label,
+                selected = source in state.sourceFilters,
+                onClick = { callbacks.onSourceFilterToggle(source) },
+            )
+        }
+        KnotworkFilterChip(
+            label = stringResource(R.string.knotwork_memory_filter_pinned_only),
+            selected = state.pinnedOnly,
+            onClick = callbacks.onPinnedOnlyToggle,
+        )
+    }
+}
+
 @Composable
 private fun MemoryEmpty(callbacks: MemoryCallbacks) {
     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -294,13 +417,16 @@ private fun MemoryList(state: MemoryViewState, callbacks: MemoryCallbacks, showS
         verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp1),
     ) {
         items(items = state.entries, key = { it.id }) { row ->
+            val selected = row.id in state.selectedIds
             MemoryEntryRow(
                 title = row.title,
                 body = row.body,
                 tags = row.tags,
                 relevanceScore = row.relevanceScore,
                 lastAccessed = row.lastAccessed,
-                onClick = { callbacks.onEntryClick(row.id) },
+                onClick = {
+                    if (state.selectionMode) callbacks.onToggleSelect(row.id) else callbacks.onEntryClick(row.id)
+                },
                 // FLIP rank-shuffle: `LazyColumn.items(key = …)` already
                 // animates moves via `Modifier.animateItem`; bumping the
                 // duration here matches the spec's `motionLg` budget.
@@ -311,6 +437,9 @@ private fun MemoryList(state: MemoryViewState, callbacks: MemoryCallbacks, showS
                     placementSpec = tween(durationMillis = placementDuration),
                 ),
                 isPinned = row.isPinned,
+                selectionMode = state.selectionMode,
+                selected = selected,
+                onLongClick = { callbacks.onEntryLongPress(row.id) },
             )
         }
         if (showSkeleton) {

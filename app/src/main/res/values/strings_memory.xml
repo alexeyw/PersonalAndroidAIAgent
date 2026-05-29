@@ -13,4 +13,5 @@
     <string name="memory_delete_message_cd">Delete Message</string>
     <string name="memory_delete_memory_cd">Delete Memory</string>
     <string name="memory_embedding_size">Embedding size: %1$d dims</string>
+    <string name="memory_export_selected_filename">memory-selection.json</string>
 </resources>
