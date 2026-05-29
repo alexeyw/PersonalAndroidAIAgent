@@ -127,10 +127,17 @@ class MemoryCompactionScheduler @Inject constructor(
      * repeated calls (e.g. across activity recreation) register a single
      * collector thanks to [watchStarted].
      *
-     * The over-limit signal is de-duplicated to its rising edge
-     * ([distinctUntilChanged] on the boolean), so a sustained over-limit state
-     * triggers a single immediate run rather than a tight loop; any residue is
-     * left to the daily periodic job. Collection runs on [watchScope] for the
+     * The watch signal is the chunk count **while over the limit** (and `null`
+     * while within it), de-duplicated with [distinctUntilChanged]. This re-arms
+     * the trigger on every distinct over-limit count, not just the first rising
+     * edge: if an immediate run cannot drop the table below the ceiling (too few
+     * old candidates, model unavailable, …) a later insert that bumps the count
+     * still enqueues another pass, so the hard ceiling is not left unenforced
+     * until the much-more-constrained daily job happens to run. It still avoids a
+     * tight loop — an unchanged over-limit count emits nothing new, and
+     * [triggerImmediate] coalesces via `KEEP` while a run is in flight, so the
+     * worker simply drains the table step by step until it is within the limit
+     * or out of eligible candidates. Collection runs on [watchScope] for the
      * process lifetime.
      */
     fun startHardLimitWatch() {
@@ -138,9 +145,9 @@ class MemoryCompactionScheduler @Inject constructor(
         combine(
             memoryRepository.observeStats().map { it.chunkCount },
             settingsRepository.maxMemoryChunks,
-        ) { count, max -> count > max }
+        ) { count, max -> count.takeIf { it > max } }
             .distinctUntilChanged()
-            .onEach { overLimit -> if (overLimit) triggerImmediate() }
+            .onEach { overLimitCount -> if (overLimitCount != null) triggerImmediate() }
             .launchIn(watchScope)
     }
 

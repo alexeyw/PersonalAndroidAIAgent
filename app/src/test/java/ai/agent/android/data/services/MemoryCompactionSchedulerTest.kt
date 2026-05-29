@@ -115,6 +115,47 @@ class MemoryCompactionSchedulerTest {
     }
 
     @Test
+    fun `startHardLimitWatch re-arms when the count climbs further over the limit`() = runTest {
+        // The first immediate run could not drop below the ceiling; a later
+        // insert that bumps the count must enqueue another pass.
+        every { memoryRepository.observeStats() } returns
+            flowOf(stats(chunkCount = 6_000), stats(chunkCount = 7_000))
+        every { settingsRepository.maxMemoryChunks } returns flowOf(5_000)
+        scheduler.watchScope = this
+
+        scheduler.startHardLimitWatch()
+        advanceUntilIdle()
+
+        verify(exactly = 2) {
+            workManager.enqueueUniqueWork(
+                MemoryCompactionWorker.UNIQUE_IMMEDIATE_NAME,
+                ExistingWorkPolicy.KEEP,
+                any<OneTimeWorkRequest>(),
+            )
+        }
+    }
+
+    @Test
+    fun `startHardLimitWatch does not re-trigger on an unchanged over-limit count`() = runTest {
+        // A stuck-over-limit state that never changes must not loop.
+        every { memoryRepository.observeStats() } returns
+            flowOf(stats(chunkCount = 6_000), stats(chunkCount = 6_000))
+        every { settingsRepository.maxMemoryChunks } returns flowOf(5_000)
+        scheduler.watchScope = this
+
+        scheduler.startHardLimitWatch()
+        advanceUntilIdle()
+
+        verify(exactly = 1) {
+            workManager.enqueueUniqueWork(
+                MemoryCompactionWorker.UNIQUE_IMMEDIATE_NAME,
+                ExistingWorkPolicy.KEEP,
+                any<OneTimeWorkRequest>(),
+            )
+        }
+    }
+
+    @Test
     fun `startHardLimitWatch is idempotent across repeated calls`() = runTest {
         every { memoryRepository.observeStats() } returns flowOf(stats(chunkCount = 6_000))
         every { settingsRepository.maxMemoryChunks } returns flowOf(5_000)
