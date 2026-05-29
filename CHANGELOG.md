@@ -218,7 +218,38 @@ details.
   [`docs/static-analysis.md`](docs/static-analysis.md),
   [`docs/testing.md`](docs/testing.md).
 
+### Documentation
+
+- **Preset feature documented end-to-end** (Phase 24 / Task 9/9).
+  `docs/extending.md` §5 is restructured into "Add a bundled preset"
+  with a new pipeline-preset recipe (asset schema, `PresetCategory`
+  keys, `validate()` / variable-whitelist rules, the
+  `PipelinePresetCatalogValidationTest` registration step, and the
+  hand-maintained `BUILTIN_PIPELINE_PRESETS` mirror in
+  `pipeline-editor.html`) alongside the existing prompt-preset recipe,
+  plus two new rows in the synchronization table. `docs/user-guide.md`
+  gains a "Pipeline presets" section (bundled vs. Mine, cross-linked to
+  the browser editor). `DESCRIPTION.md` adds §8.3 (preset domain model,
+  repositories, bundled-vs-user lifecycle, Room migrations v23→v24 /
+  v24→v25, build-time guarantees) and §10.6 (preset flow in the
+  Library).
+
 ### Tests
+
+- **Preset end-to-end integration tests** (Phase 24 / Task 9/9). Two
+  pure-JVM suites that wire the real production classes together rather
+  than the shipped artefacts alone (which the catalogue tests already
+  pin): `PipelinePresetIntegrationTest` reads each bundled
+  `assets/presets/pipelines/*.json`, materialises it through the real
+  `LoadPipelineFromPresetUseCase` (asserting fresh ids + preserved
+  connections + zero validation errors), then runs the `local_only_qa`
+  preset through a real `GraphExecutionEngine` (only the
+  `LlmInferenceEngine` token stream stubbed) and asserts it reaches
+  `AgentOrchestratorState.Completed`. `PromptPresetIntegrationTest`
+  parses every bundled `assets/presets/prompts/*.json`, applies the
+  body to a `NodeModel.systemPrompt`, renders it through the real
+  `PromptTemplateEngine`, and asserts every registered `$VARIABLE` is
+  substituted (plus the escape / unknown-token contract).
 
 - **Compose `androidTest` coverage for the remaining `presentation.ui`
   surfaces — Memory / Settings / Tools / Onboarding / Prompt Library**
