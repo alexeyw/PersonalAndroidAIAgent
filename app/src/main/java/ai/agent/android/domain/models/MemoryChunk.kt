@@ -10,6 +10,8 @@ package ai.agent.android.domain.models
  * @property isPinned When `true`, the user pinned this chunk; pinned rows
  *   sort ahead of unpinned ones on the memory surface and survive future
  *   compaction passes.
+ * @property source Provenance of the chunk (auto-extracted from a chat,
+ *   saved manually, produced by compaction, or unknown for legacy rows).
  */
 data class MemoryChunk(
     val id: Long,
@@ -17,6 +19,7 @@ data class MemoryChunk(
     val embedding: FloatArray,
     val timestamp: Long,
     val isPinned: Boolean = false,
+    val source: MemorySource = MemorySource.Unknown,
 ) {
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
@@ -29,6 +32,7 @@ data class MemoryChunk(
         if (!embedding.contentEquals(other.embedding)) return false
         if (timestamp != other.timestamp) return false
         if (isPinned != other.isPinned) return false
+        if (source != other.source) return false
 
         return true
     }
@@ -39,6 +43,7 @@ data class MemoryChunk(
         result = 31 * result + embedding.contentHashCode()
         result = 31 * result + timestamp.hashCode()
         result = 31 * result + isPinned.hashCode()
+        result = 31 * result + source.hashCode()
         return result
     }
 }

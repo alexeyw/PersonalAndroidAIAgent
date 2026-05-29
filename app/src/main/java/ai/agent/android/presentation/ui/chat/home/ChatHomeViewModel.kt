@@ -15,6 +15,7 @@ import ai.agent.android.domain.repositories.ClarificationRepository
 import ai.agent.android.domain.repositories.LocalModelRepository
 import ai.agent.android.domain.repositories.PipelineRepository
 import ai.agent.android.domain.repositories.SettingsRepository
+import ai.agent.android.domain.services.MemoryAutoExtractionCoordinator
 import ai.agent.android.domain.usecases.AgentOrchestratorUseCase
 import ai.agent.android.domain.usecases.GetContextWindowUseCase
 import ai.agent.android.domain.usecases.LoadModelUseCase
@@ -105,6 +106,7 @@ class ChatHomeViewModel @Inject constructor(
     private val clarificationRepository: ClarificationRepository,
     private val localModelRepository: LocalModelRepository,
     private val loadModelUseCase: LoadModelUseCase,
+    private val memoryAutoExtractionCoordinator: MemoryAutoExtractionCoordinator,
 ) : ViewModel() {
 
     private val _currentSessionId: MutableStateFlow<String> = MutableStateFlow("")
@@ -847,6 +849,10 @@ class ChatHomeViewModel @Inject constructor(
                 clearPendingApprovalAndClarification()
                 _streamingTokens.value = 0
                 _state.value = if (_messages.value.isEmpty()) ChatHomeUiState.Empty else ChatHomeUiState.Idle
+                // Fire-and-forget: distil durable facts from the just-finished
+                // conversation into long-term memory. The coordinator debounces
+                // and owns its own scope, so this survives ViewModel teardown.
+                memoryAutoExtractionCoordinator.onPipelineCompleted(_currentSessionId.value)
             }
             is AgentOrchestratorState.Error -> {
                 clearPendingApprovalAndClarification()

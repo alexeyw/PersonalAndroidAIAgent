@@ -1,7 +1,9 @@
 package ai.agent.android.data.local
 
+import ai.agent.android.domain.models.MemorySource
 import ai.agent.android.domain.models.NodeContextConfig
 import androidx.room.TypeConverter
+import org.json.JSONArray
 import org.json.JSONException
 import org.json.JSONObject
 import timber.log.Timber
@@ -11,7 +13,8 @@ import timber.log.Timber
  *
  * Currently handles:
  * - [FloatArray] ↔ comma-separated [String] for vector embeddings;
- * - [NodeContextConfig] ↔ JSON [String] for per-node pipeline context flags.
+ * - [NodeContextConfig] ↔ JSON [String] for per-node pipeline context flags;
+ * - [MemorySource] ↔ JSON [String] for memory-chunk provenance.
  */
 class Converters {
 
@@ -86,11 +89,76 @@ class Converters {
         }
     }
 
+    /**
+     * Serialises a [MemorySource] to a compact JSON string for the single
+     * `memory_chunks.source` TEXT column. The discriminator lives under
+     * [KEY_TYPE]; variant-specific payload is added alongside it
+     * ([KEY_SESSION_ID] for [MemorySource.ChatSession], [KEY_IDS] for
+     * [MemorySource.Compaction]). The column is `NOT NULL`, so both directions
+     * are non-null.
+     *
+     * @param source The provenance to serialise.
+     * @return A JSON object string carrying the [MemorySource.type] key and any
+     * variant payload.
+     */
+    @TypeConverter
+    fun fromMemorySource(source: MemorySource): String = JSONObject().apply {
+        put(KEY_TYPE, source.type)
+        when (source) {
+            is MemorySource.ChatSession -> put(KEY_SESSION_ID, source.sessionId)
+            is MemorySource.Compaction -> put(KEY_IDS, JSONArray(source.originalChunkIds))
+            MemorySource.Manual, MemorySource.Unknown -> Unit
+        }
+    }.toString()
+
+    /**
+     * Deserialises a JSON string produced by [fromMemorySource] back into a
+     * [MemorySource].
+     *
+     * Defends against blank or malformed payloads (e.g. a hand-edited DB or a
+     * future wire key this build does not recognise): in every unrecoverable
+     * case it returns [MemorySource.Unknown], matching the JSON the migration
+     * writes for legacy rows. This keeps reads total — a single corrupt row
+     * never aborts a whole memory load.
+     *
+     * @param value The stored JSON string.
+     * @return The parsed provenance, or [MemorySource.Unknown] on any error.
+     */
+    @TypeConverter
+    fun toMemorySource(value: String): MemorySource {
+        if (value.isBlank()) return MemorySource.Unknown
+        return try {
+            val json = JSONObject(value)
+            when (json.optString(KEY_TYPE)) {
+                MemorySource.TYPE_CHAT_SESSION ->
+                    MemorySource.ChatSession(json.optString(KEY_SESSION_ID))
+                MemorySource.TYPE_MANUAL -> MemorySource.Manual
+                MemorySource.TYPE_COMPACTION -> {
+                    val idsJson = json.optJSONArray(KEY_IDS)
+                    val ids = buildList {
+                        if (idsJson != null) {
+                            for (i in 0 until idsJson.length()) add(idsJson.getLong(i))
+                        }
+                    }
+                    MemorySource.Compaction(ids)
+                }
+                else -> MemorySource.Unknown
+            }
+        } catch (e: JSONException) {
+            Timber.w(e, "Failed to parse MemorySource from value=%s, using Unknown", value)
+            MemorySource.Unknown
+        }
+    }
+
     private companion object {
         const val KEY_CHAT_HISTORY = "chatHistory"
         const val KEY_ORIGINAL_TASK = "originalTask"
         const val KEY_NODE_INPUT = "nodeInput"
         const val KEY_LONG_TERM_MEMORY = "longTermMemory"
         const val KEY_TOOL_RESULTS = "toolResults"
+
+        const val KEY_TYPE = "type"
+        const val KEY_SESSION_ID = "sessionId"
+        const val KEY_IDS = "ids"
     }
 }

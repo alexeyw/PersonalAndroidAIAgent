@@ -162,6 +162,7 @@ class ChatHomeViewModelTest {
         clarificationRepository,
         localModelRepository,
         loadModelUseCase,
+        mockk(relaxed = true),
     )
 
     @Test

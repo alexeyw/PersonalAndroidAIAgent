@@ -87,6 +87,9 @@ class SettingsManager @Inject constructor(private val dataStore: DataStore<Prefe
 
         // Phase 25 / Task 1 — Embedding provider abstraction.
         val ACTIVE_EMBEDDING_PROVIDER_ID = stringPreferencesKey("active_embedding_provider_id")
+
+        // Phase 25 / Task 2 — Memory write auto-extraction.
+        val AUTO_EXTRACT_ENABLED = booleanPreferencesKey("auto_extract_enabled")
     }
 
     override val isFirstLaunch: Flow<Boolean> = dataStore.data
@@ -648,6 +651,25 @@ class SettingsManager @Inject constructor(private val dataStore: DataStore<Prefe
     override suspend fun setActiveEmbeddingProviderId(id: String) {
         dataStore.edit { preferences ->
             preferences[PreferencesKeys.ACTIVE_EMBEDDING_PROVIDER_ID] = id
+        }
+    }
+
+    override val autoExtractEnabled: Flow<Boolean> = dataStore.data
+        .catch { exception ->
+            if (exception is IOException) {
+                Timber.e(exception, "Error reading preferences")
+                emit(emptyPreferences())
+            } else {
+                throw exception
+            }
+        }
+        .map { preferences ->
+            preferences[PreferencesKeys.AUTO_EXTRACT_ENABLED] ?: SettingsDefaults.AUTO_EXTRACT_ENABLED_DEFAULT
+        }
+
+    override suspend fun setAutoExtractEnabled(enabled: Boolean) {
+        dataStore.edit { preferences ->
+            preferences[PreferencesKeys.AUTO_EXTRACT_ENABLED] = enabled
         }
     }
 

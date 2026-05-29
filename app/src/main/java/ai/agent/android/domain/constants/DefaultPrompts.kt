@@ -332,6 +332,61 @@ object DefaultPrompts {
                 "Reply strictly with 'true' or 'false'."
     }
 
+    /**
+     * Prompts for the long-term memory **auto-extraction** pass
+     * ([ai.agent.android.domain.usecases.MemoryExtractionUseCase]).
+     *
+     * This is not tied to a pipeline [NodeType]: the use case runs the local
+     * model once after a conversation completes to distil durable facts from
+     * the recent dialogue.
+     */
+    object MemoryExtraction {
+        /**
+         * System prompt that instructs the local model to extract durable
+         * facts from a conversation as a strict JSON array.
+         *
+         * Authored conservatively on purpose: the model is told to extract
+         * **only** explicitly-stated, durable facts and to return an empty
+         * array `[]` when nothing qualifies, so a chatty exchange with no real
+         * facts does not pollute long-term memory with hallucinations. The
+         * `$DATE` placeholder is resolved at runtime by
+         * [ai.agent.android.domain.prompt.PromptTemplateEngine] to give the
+         * model temporal grounding when it normalises relative dates.
+         *
+         * Expected response: a JSON array (and nothing else) whose elements are
+         * objects of the shape `{"type": "preference"|"event"|"relation",
+         * "text": "<fact>"}`.
+         */
+        val SYSTEM_FALLBACK = """
+            You are a long-term memory extractor for a personal AI assistant.
+            Today's date is ${'$'}DATE.
+
+            Read the conversation below and extract durable facts worth
+            remembering about the user across future sessions. Only extract
+            facts that are EXPLICITLY stated by the user. Do NOT guess, infer,
+            or invent anything. Ignore small talk, transient context, and the
+            assistant's own statements.
+
+            Classify each fact with one of these types:
+            - "preference": a stable like, dislike, or setting (e.g. "prefers dark mode").
+            - "event": something that happened or will happen at a specific time.
+            - "relation": a relationship to a person, place, or thing.
+
+            Normalise relative dates (e.g. "tomorrow") to absolute dates using
+            today's date above.
+
+            Respond with STRICTLY valid JSON and NOTHING else: a JSON array of
+            objects with exactly the keys "type" and "text". If there are no
+            durable facts to remember, respond with an empty array: [].
+
+            Example:
+            [
+              {"type": "preference", "text": "Prefers dark mode in the UI"},
+              {"type": "relation", "text": "Has a brother named Alex"}
+            ]
+        """.trimIndent()
+    }
+
     /** Prompts for the [NodeType.QUEUE_PROCESSOR] iteration loop. */
     object QueueProcessor {
         /**

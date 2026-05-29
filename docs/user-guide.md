@@ -640,6 +640,26 @@ Open the **More** tab, tap **Memory**. The screen has two tabs:
   searches over. Each chunk is a small fragment distilled from a
   past conversation.
 
+### Auto-extract from conversations
+
+When **Settings → Memory → Auto-extract from conversations** is on
+(the default), the agent automatically tops up long-term memory for
+you. Shortly after a reply finishes (a ~30-second quiet period, so a
+fast back-and-forth is processed only once), it re-reads the recent
+conversation and distils the durable facts you stated — preferences,
+events, and relationships — into new memory chunks. Small talk, the
+assistant's own wording, and anything not explicitly stated are
+ignored, and a fact that closely matches one you already have is
+skipped rather than duplicated.
+
+Each new chunk is tagged with the chat it came from, so you can tell
+auto-saved memories apart from ones you saved by hand. You can watch
+this happen in the **Console** pane (the **Memory** filter) and review
+or delete the results in **More → Memory → Vector Base**.
+
+Turn the toggle off if you would rather curate memory entirely by
+hand; extraction then stops and existing memories are left untouched.
+
 ### Compact Memory
 
 The **Vector Base** tab has a **Compact Memory** button. Tap it to
@@ -736,10 +756,13 @@ Leaving every cloud row blank keeps the agent fully offline.
 
 ### Memory
 
-Four-cell stat grid — **Chunks / Size / Threads / Avg score** —
-plus an **Auto-summarize threshold** slider (`%` of the memory
-context budget) and an **Embedding model** row identifying the
-on-device encoder. The action trio:
+Four-cell stat grid — **Chunks / Size / Threads / Avg score** — an
+**Auto-extract from conversations** toggle (default on; distils
+durable facts from finished chats into memory — see
+[Auto-extract from conversations](#auto-extract-from-conversations)),
+an **Auto-summarize threshold** slider (`%` of the memory context
+budget), and an **Embedding model** row identifying the on-device
+encoder. The action trio:
 
 - **Export base** — opens a SAF picker; saves the entire memory
   table as a JSON blob.

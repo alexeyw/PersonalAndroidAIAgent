@@ -110,4 +110,13 @@ object SettingsDefaults {
      * provider's own id can never drift apart.
      */
     const val ACTIVE_EMBEDDING_PROVIDER_ID_DEFAULT: String = EmbeddingProvider.ID_USE
+
+    /**
+     * Default for the "Auto-extract from conversations" memory toggle. `true`
+     * so the long-term memory fills itself out of the box: after a pipeline run
+     * completes, [ai.agent.android.domain.usecases.MemoryExtractionUseCase]
+     * distils durable facts from the dialogue. Users who prefer to curate
+     * memory by hand can turn it off in Settings → Memory.
+     */
+    const val AUTO_EXTRACT_ENABLED_DEFAULT: Boolean = true
 }
