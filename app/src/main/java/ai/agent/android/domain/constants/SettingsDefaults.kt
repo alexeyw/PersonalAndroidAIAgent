@@ -1,5 +1,7 @@
 package ai.agent.android.domain.constants
 
+import ai.agent.android.domain.services.EmbeddingProvider
+
 /**
  * Canonical default values for every user-tunable setting that lives behind
  * [ai.agent.android.domain.repositories.SettingsRepository].
@@ -99,4 +101,13 @@ object SettingsDefaults {
      * the prompt past what an on-device model can fit in context.
      */
     const val SYSTEM_INSTRUCTIONS_CHAR_LIMIT: Int = 4_000
+
+    /**
+     * Default active embedding-provider id for the long-term memory subsystem.
+     *
+     * Mirrors [EmbeddingProvider.ID_USE] (the on-device Universal Sentence
+     * Encoder) — referenced rather than re-typed so the default and the
+     * provider's own id can never drift apart.
+     */
+    const val ACTIVE_EMBEDDING_PROVIDER_ID_DEFAULT: String = EmbeddingProvider.ID_USE
 }
