@@ -84,6 +84,9 @@ class SettingsManager @Inject constructor(private val dataStore: DataStore<Prefe
         )
         val LONG_RUNNING_TASKS_NOTIFICATIONS = booleanPreferencesKey("long_running_tasks_notifications")
         val LAST_TEST_PROBE_RESULT = stringPreferencesKey("last_test_probe_result")
+
+        // Phase 25 / Task 1 — Embedding provider abstraction.
+        val ACTIVE_EMBEDDING_PROVIDER_ID = stringPreferencesKey("active_embedding_provider_id")
     }
 
     override val isFirstLaunch: Flow<Boolean> = dataStore.data
@@ -625,6 +628,26 @@ class SettingsManager @Inject constructor(private val dataStore: DataStore<Prefe
     override suspend fun setLocalModelBackend(backend: String) {
         dataStore.edit { preferences ->
             preferences[PreferencesKeys.LOCAL_MODEL_BACKEND] = backend
+        }
+    }
+
+    override val activeEmbeddingProviderId: Flow<String> = dataStore.data
+        .catch { exception ->
+            if (exception is IOException) {
+                Timber.e(exception, "Error reading preferences")
+                emit(emptyPreferences())
+            } else {
+                throw exception
+            }
+        }
+        .map { preferences ->
+            preferences[PreferencesKeys.ACTIVE_EMBEDDING_PROVIDER_ID]
+                ?: SettingsDefaults.ACTIVE_EMBEDDING_PROVIDER_ID_DEFAULT
+        }
+
+    override suspend fun setActiveEmbeddingProviderId(id: String) {
+        dataStore.edit { preferences ->
+            preferences[PreferencesKeys.ACTIVE_EMBEDDING_PROVIDER_ID] = id
         }
     }
 

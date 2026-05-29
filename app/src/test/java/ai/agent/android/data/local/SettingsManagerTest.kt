@@ -61,6 +61,7 @@ class SettingsManagerTest {
     private val crashReportingEnabledKey = booleanPreferencesKey("crash_reporting_enabled")
     private val appFunctionRiskOverridesKey = stringPreferencesKey("app_function_risk_overrides")
     private val hasCompletedOnboardingKey = booleanPreferencesKey("has_completed_onboarding")
+    private val activeEmbeddingProviderIdKey = stringPreferencesKey("active_embedding_provider_id")
 
     @Test
     fun `isFirstLaunch returns true by default`() = runTest {
@@ -480,6 +481,56 @@ class SettingsManagerTest {
             assertEquals(1, onDisk.size)
             assertEquals("http://c", onDisk[0].url)
             assertEquals("Server C", onDisk[0].name)
+        } finally {
+            scope.cancel()
+        }
+    }
+
+    @Test
+    fun `activeEmbeddingProviderId returns on-device default when nothing stored`() = runTest {
+        val prefs = mockk<Preferences>()
+        every { prefs[activeEmbeddingProviderIdKey] } returns null
+        every { dataStore.data } returns flowOf(prefs)
+
+        val settingsManager = SettingsManager(dataStore)
+        val result = settingsManager.activeEmbeddingProviderId.first()
+
+        assertEquals(SettingsDefaults.ACTIVE_EMBEDDING_PROVIDER_ID_DEFAULT, result)
+        assertEquals("use", result)
+    }
+
+    @Test
+    fun `activeEmbeddingProviderId returns stored value`() = runTest {
+        val prefs = mockk<Preferences>()
+        every { prefs[activeEmbeddingProviderIdKey] } returns "openai_3_small"
+        every { dataStore.data } returns flowOf(prefs)
+
+        val settingsManager = SettingsManager(dataStore)
+        val result = settingsManager.activeEmbeddingProviderId.first()
+
+        assertEquals("openai_3_small", result)
+    }
+
+    @Test
+    fun `activeEmbeddingProviderId handles IOException and returns default`() = runTest {
+        every { dataStore.data } returns flow { throw IOException("Test") }
+
+        val settingsManager = SettingsManager(dataStore)
+        val result = settingsManager.activeEmbeddingProviderId.first()
+
+        assertEquals(SettingsDefaults.ACTIVE_EMBEDDING_PROVIDER_ID_DEFAULT, result)
+    }
+
+    @Test
+    fun `setActiveEmbeddingProviderId persists and round-trips through DataStore`() = runTest {
+        val (manager, scope) = freshManagerWithRealDataStore()
+        try {
+            // Default before any write.
+            assertEquals("use", manager.activeEmbeddingProviderId.first())
+
+            manager.setActiveEmbeddingProviderId("ollama")
+
+            assertEquals("ollama", manager.activeEmbeddingProviderId.first())
         } finally {
             scope.cancel()
         }

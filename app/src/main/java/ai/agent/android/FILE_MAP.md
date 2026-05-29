@@ -85,6 +85,11 @@ This file maps the contents of the main application package.
     - `AgentPowerManager.kt` - Manager for power states.
     - `AgentWorker.kt` - WorkManager worker for agent tasks.
     - `LongRunningTaskNotifierImpl.kt` - Notifier for the `LongRunningTasksChannel`; gated on the Settings → Notifications toggle.
+    - `embedding/` - `EmbeddingProvider` implementations and the Koog client seam.
+      - `KoogEmbedderFactory.kt` - Factory (+ default impl) building Koog OpenAI/Ollama embedding clients; `List<Double> → FloatArray` helper.
+      - `UseEmbeddingProvider.kt` - On-device USE provider (512-d) wrapping `TextEmbeddingEngine`, mutex-guarded.
+      - `CloudEmbeddingProvider.kt` - OpenAI `text-embedding-3-small` provider (1536-d) via Koog; on-device fallback when no key.
+      - `OllamaEmbeddingProvider.kt` - Ollama `nomic-embed-text` provider (768-d) via Koog; on-device fallback when no base URL.
   - `testing/` - Production-graph entry points used solely by instrumented tests.
     - `AppFunctionsE2ETestEntryPoint.kt` - Hilt `EntryPoint` exposing `ToolRepository`, `SettingsRepository`, and `ChatRepository` to `AppFunctionsEndToEndTest` so the test can reach the production singletons without a Hilt test component.
   - `tools/` - Tool and action implementations.
@@ -102,6 +107,7 @@ This file maps the contents of the main application package.
 - `di/` - Dependency Injection configurations (Hilt).
   - `AppModule.kt` - General app-level DI module.
   - `DataModule.kt` - Data layer DI module.
+  - `EmbeddingModule.kt` - Hilt multibinding for the `EmbeddingProvider` map (`use` / `openai_3_small` / `ollama`) and the `KoogEmbedderFactory` binding.
   - `LocalToolsModule.kt` - Hilt multibinding for `LocalToolExecutor` map and bindings for `CloudLlmClientFactory` / `CloudLlmModelResolver`.
   - `PromptTemplateModule.kt` - Hilt multibinding module for prompt variable providers.
 - `domain/` - Domain layer containing core business logic and Use Cases.
@@ -199,6 +205,8 @@ This file maps the contents of the main application package.
     - `ToolRepository.kt` - Tool repository interface.
   - `services/` - Domain-level services.
     - `ApprovalNotifier.kt` - Notifier for approval requests.
+    - `EmbeddingProvider.kt` - Text-embedding backend abstraction (`embed` / `dimension` / `id` / `displayName`) + provider-id constants and `EmbeddingException`.
+    - `EmbeddingProviderResolver.kt` - Resolves the active `EmbeddingProvider` from the Hilt map and `SettingsRepository.activeEmbeddingProviderId`, falling back to on-device USE.
   - `usecases/` - Business logic Use Cases.
     - `AgentOrchestratorUseCase.kt` - Use case for agent orchestration.
     - `AppInitializationUseCase.kt` - Cold-start orchestrator: streams `InitProgress` snapshots while running first-launch defaults, loading the LiteRT model, and prefetching pipelines / chat sessions / memory summaries. Drives the splash screen.

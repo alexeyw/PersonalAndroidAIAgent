@@ -508,6 +508,26 @@ interface SettingsRepository {
     suspend fun setLastTestProbeResult(result: TestProbeResult?)
 
     /**
+     * Id of the currently active embedding provider, matching one of the
+     * `EmbeddingProvider.ID_*` constants (e.g. `"use"`, `"openai_3_small"`,
+     * `"ollama"`). Drives which backend the long-term memory subsystem uses to
+     * turn text into vectors. Defaults to
+     * [SettingsDefaults.ACTIVE_EMBEDDING_PROVIDER_ID_DEFAULT] (on-device USE).
+     *
+     * If the persisted value no longer matches a registered provider,
+     * `EmbeddingProviderResolver` falls back to the on-device default at
+     * resolution time — the stored value is left untouched.
+     */
+    val activeEmbeddingProviderId: Flow<String>
+
+    /**
+     * Persists the active embedding provider id.
+     *
+     * @param id One of the `EmbeddingProvider.ID_*` constants.
+     */
+    suspend fun setActiveEmbeddingProviderId(id: String)
+
+    /**
      * Resets the local-generation sampling parameters back to the
      * documented defaults ([SettingsDefaults.TEMPERATURE_DEFAULT],
      * [SettingsDefaults.TOP_K_DEFAULT], [SettingsDefaults.TOP_P_DEFAULT],
