@@ -60,6 +60,20 @@ object SettingsDefaults {
     const val MEMORY_CHUNK_SEARCH_LIMIT_DEFAULT: Int = 1_000
 
     /**
+     * Default top-K for long-term memory retrieval: how many ranked chunks a
+     * single search returns into a node's context block. Distinct from
+     * [MEMORY_CHUNK_SEARCH_LIMIT_DEFAULT], which caps the *scanned* pool.
+     */
+    const val MEMORY_SEARCH_TOP_K_DEFAULT: Int = 5
+
+    /**
+     * Default minimum cosine-similarity score a memory chunk must reach to be
+     * surfaced during retrieval. Chunks below this are filtered out before
+     * reaching the prompt.
+     */
+    const val MEMORY_SEARCH_THRESHOLD_DEFAULT: Float = 0.55f
+
+    /**
      * Default Ollama-side context-window size (in tokens) assumed by
      * [ai.agent.android.data.local.ApiKeyManager] for any model whose
      * per-model override has not been configured.

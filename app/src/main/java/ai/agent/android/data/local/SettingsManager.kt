@@ -56,6 +56,9 @@ class SettingsManager @Inject constructor(private val dataStore: DataStore<Prefe
         val APP_FUNCTION_RISK_OVERRIDES = stringPreferencesKey("app_function_risk_overrides")
         val CURRENT_CHAT_SESSION_ID = stringPreferencesKey("current_chat_session_id")
         val MAX_MEMORY_CHUNKS_FOR_SEARCH = intPreferencesKey("max_memory_chunks_for_search")
+        val MEMORY_SEARCH_TOP_K = intPreferencesKey("memory_search_top_k")
+        val MEMORY_SEARCH_THRESHOLD =
+            androidx.datastore.preferences.core.floatPreferencesKey("memory_search_threshold")
         val LOCAL_MODEL_BACKEND = stringPreferencesKey("local_model_backend")
 
         /**
@@ -589,6 +592,46 @@ class SettingsManager @Inject constructor(private val dataStore: DataStore<Prefe
     override suspend fun setMaxMemoryChunksForSearch(limit: Int) {
         dataStore.edit { preferences ->
             preferences[PreferencesKeys.MAX_MEMORY_CHUNKS_FOR_SEARCH] = limit
+        }
+    }
+
+    override val memorySearchTopK: Flow<Int> = dataStore.data
+        .catch { exception ->
+            if (exception is IOException) {
+                Timber.e(exception, "Error reading preferences")
+                emit(emptyPreferences())
+            } else {
+                throw exception
+            }
+        }
+        .map { preferences ->
+            preferences[PreferencesKeys.MEMORY_SEARCH_TOP_K]
+                ?: SettingsDefaults.MEMORY_SEARCH_TOP_K_DEFAULT
+        }
+
+    override suspend fun setMemorySearchTopK(topK: Int) {
+        dataStore.edit { preferences ->
+            preferences[PreferencesKeys.MEMORY_SEARCH_TOP_K] = topK
+        }
+    }
+
+    override val memorySearchThreshold: Flow<Float> = dataStore.data
+        .catch { exception ->
+            if (exception is IOException) {
+                Timber.e(exception, "Error reading preferences")
+                emit(emptyPreferences())
+            } else {
+                throw exception
+            }
+        }
+        .map { preferences ->
+            preferences[PreferencesKeys.MEMORY_SEARCH_THRESHOLD]
+                ?: SettingsDefaults.MEMORY_SEARCH_THRESHOLD_DEFAULT
+        }
+
+    override suspend fun setMemorySearchThreshold(threshold: Float) {
+        dataStore.edit { preferences ->
+            preferences[PreferencesKeys.MEMORY_SEARCH_THRESHOLD] = threshold
         }
     }
 

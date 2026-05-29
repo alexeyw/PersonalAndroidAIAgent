@@ -13,8 +13,28 @@ details.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Long-term memory retrieval now uses the active embedding provider**
+  (Phase 25 / Task 3/10). `RetrieveRelevantMemoryUseCase` embedded the search
+  query with the fixed on-device Universal Sentence Encoder (512-d) while
+  auto-extraction (Task 2) stored chunks via the user-selected
+  `EmbeddingProvider` — so with a non-`use` provider active (OpenAI 1536-d,
+  Ollama 768-d) the query and stored vectors lived in different dimensions,
+  cosine similarity collapsed to `0`, and the `longTermMemory` node flag
+  surfaced nothing. Retrieval now resolves the same active provider via
+  `EmbeddingProviderResolver`, so enabling the flag actually injects relevant
+  memories into a node's context regardless of the chosen backend.
+
 ### Added
 
+- **Configurable memory retrieval tuning** (Phase 25 / Task 3/10). The
+  retrieval top-K and relevance threshold are no longer hard-coded:
+  `SettingsRepository.memorySearchTopK` (default 5) and
+  `memorySearchThreshold` (default 0.55) back them via DataStore.
+  `RetrieveRelevantMemoryUseCase` reads these by default (callers may still
+  override per-call). The Settings UI for these controls lands with the later
+  Settings/tuning task of this phase.
 - **Automatic memory extraction** (Phase 25 / Task 2/10). After a pipeline run
   completes, the agent now mines the conversation for durable facts and writes
   the novel ones into long-term memory — making the "remembers past chats"

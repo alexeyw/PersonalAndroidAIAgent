@@ -285,6 +285,41 @@ interface SettingsRepository {
     suspend fun setMaxMemoryChunksForSearch(limit: Int)
 
     /**
+     * A [Flow] emitting the maximum number of long-term memory chunks a single
+     * retrieval returns into a node's context (the "top-K" of the similarity
+     * search). Distinct from [maxMemoryChunksForSearch], which caps how many
+     * chunks are *scanned*; this caps how many survive ranking and reach the
+     * prompt. Defaults to `SettingsDefaults.MEMORY_SEARCH_TOP_K_DEFAULT` (5)
+     * for a fresh install.
+     */
+    val memorySearchTopK: Flow<Int>
+
+    /**
+     * Updates the long-term memory retrieval top-K.
+     *
+     * @param topK The new top-K; callers should keep it within a sane range
+     *   (validation of user-entered values lives in the Settings ViewModel).
+     */
+    suspend fun setMemorySearchTopK(topK: Int)
+
+    /**
+     * A [Flow] emitting the minimum cosine-similarity score (0.0–1.0) a memory
+     * chunk must reach to be considered relevant during retrieval. Chunks below
+     * this threshold are dropped before they reach a node's context. Defaults
+     * to `SettingsDefaults.MEMORY_SEARCH_THRESHOLD_DEFAULT` (0.55) for a fresh
+     * install.
+     */
+    val memorySearchThreshold: Flow<Float>
+
+    /**
+     * Updates the long-term memory retrieval similarity threshold.
+     *
+     * @param threshold The new threshold in the inclusive range 0.0–1.0;
+     *   validation of user-entered values lives in the Settings ViewModel.
+     */
+    suspend fun setMemorySearchThreshold(threshold: Float)
+
+    /**
      * A [Flow] emitting the wire key of the selected local-model backend
      * ([ai.agent.android.domain.models.LocalBackend.key]). Stored as a raw string for
      * backward compatibility with DataStore values written before the typed enum existed.

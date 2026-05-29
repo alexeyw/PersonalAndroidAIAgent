@@ -62,6 +62,9 @@ class SettingsManagerTest {
     private val appFunctionRiskOverridesKey = stringPreferencesKey("app_function_risk_overrides")
     private val hasCompletedOnboardingKey = booleanPreferencesKey("has_completed_onboarding")
     private val activeEmbeddingProviderIdKey = stringPreferencesKey("active_embedding_provider_id")
+    private val memorySearchTopKKey = androidx.datastore.preferences.core.intPreferencesKey("memory_search_top_k")
+    private val memorySearchThresholdKey =
+        androidx.datastore.preferences.core.floatPreferencesKey("memory_search_threshold")
 
     @Test
     fun `isFirstLaunch returns true by default`() = runTest {
@@ -143,6 +146,50 @@ class SettingsManagerTest {
         val settingsManager = SettingsManager(dataStore)
         val result = settingsManager.maxMemoryChunksForSearch.first()
         assertEquals(1000, result)
+    }
+
+    @Test
+    fun `memorySearchTopK returns default value`() = runTest {
+        val prefs = mockk<Preferences>()
+        every { prefs[memorySearchTopKKey] } returns null
+        every { dataStore.data } returns flowOf(prefs)
+
+        val settingsManager = SettingsManager(dataStore)
+        val result = settingsManager.memorySearchTopK.first()
+        assertEquals(SettingsDefaults.MEMORY_SEARCH_TOP_K_DEFAULT, result)
+    }
+
+    @Test
+    fun `memorySearchThreshold returns default value`() = runTest {
+        val prefs = mockk<Preferences>()
+        every { prefs[memorySearchThresholdKey] } returns null
+        every { dataStore.data } returns flowOf(prefs)
+
+        val settingsManager = SettingsManager(dataStore)
+        val result = settingsManager.memorySearchThreshold.first()
+        assertEquals(SettingsDefaults.MEMORY_SEARCH_THRESHOLD_DEFAULT, result)
+    }
+
+    @Test
+    fun `setMemorySearchTopK persists and is read back`() = runTest {
+        val (manager, scope) = freshManagerWithRealDataStore()
+        try {
+            manager.setMemorySearchTopK(12)
+            assertEquals(12, manager.memorySearchTopK.first())
+        } finally {
+            scope.cancel()
+        }
+    }
+
+    @Test
+    fun `setMemorySearchThreshold persists and is read back`() = runTest {
+        val (manager, scope) = freshManagerWithRealDataStore()
+        try {
+            manager.setMemorySearchThreshold(0.72f)
+            assertEquals(0.72f, manager.memorySearchThreshold.first())
+        } finally {
+            scope.cancel()
+        }
     }
 
     @Test

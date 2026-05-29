@@ -96,6 +96,31 @@ class MemoryRepositoryImplTest {
     }
 
     @Test
+    fun `given three chunks when query is close to one then that chunk ranks first by real cosine`() =
+        kotlinx.coroutines.test.runTest {
+            // Query points along the first axis; only the "Berlin" chunk lies
+            // near it, so the real cosine math must surface it on top with a
+            // near-1.0 score while the orthogonal/noisy chunks score far lower.
+            val queryEmbedding = floatArrayOf(1f, 0f, 0f)
+            val berlin = MemoryChunkEntity(1, "user lives in Berlin", "0.9,0.1,0.0", 3000L)
+            val coffee = MemoryChunkEntity(2, "user likes coffee", "0.0,1.0,0.0", 2000L)
+            val sky = MemoryChunkEntity(3, "the sky is blue", "0.2,0.2,0.95", 1000L)
+
+            io.mockk.coEvery { memoryDao.getRecentMemories(100) } returns listOf(coffee, sky, berlin)
+
+            val results = repository.findSimilarMemories(queryEmbedding, searchPoolLimit = 100, limit = 3)
+
+            assertEquals(3, results.size)
+            // Highest-similarity chunk first.
+            assertEquals(1L, results[0].first.id)
+            assertEquals("user lives in Berlin", results[0].first.text)
+            assertEquals(0.994f, results[0].second, 0.01f)
+            // The orthogonal "coffee" chunk scores ~0 and ranks last.
+            assertEquals(2L, results[2].first.id)
+            assertEquals(0.0f, results[2].second, 0.001f)
+        }
+
+    @Test
     fun `compactMemory calls dao deleteOldestMemories`() = kotlinx.coroutines.test.runTest {
         repository.compactMemory(500)
         io.mockk.coVerify(exactly = 1) { memoryDao.deleteOldestMemories(500) }
