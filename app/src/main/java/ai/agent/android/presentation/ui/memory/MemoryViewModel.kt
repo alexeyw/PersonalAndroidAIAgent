@@ -8,12 +8,14 @@ import ai.agent.android.domain.services.EmbeddingProviderResolver
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import timber.log.Timber
 import javax.inject.Inject
 
 /**
@@ -130,9 +132,19 @@ class MemoryViewModel @Inject constructor(
      */
     fun editVectorMemory(id: Long, newText: String) {
         viewModelScope.launch {
-            val newEmbedding = embeddingProviderResolver.resolve().embed(newText)
-            memoryRepository.updateMemory(id = id, text = newText, embedding = newEmbedding)
-            loadAllData()
+            // Embedding may hit the network when a cloud provider is active.
+            // Guard so a transient failure leaves the chunk untouched instead of
+            // crashing the app; rethrow CancellationException to preserve
+            // structured concurrency.
+            try {
+                val newEmbedding = embeddingProviderResolver.resolve().embed(newText)
+                memoryRepository.updateMemory(id = id, text = newText, embedding = newEmbedding)
+                loadAllData()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Timber.w(e, "Failed to re-embed edited memory $id; keeping the previous content")
+            }
         }
     }
 

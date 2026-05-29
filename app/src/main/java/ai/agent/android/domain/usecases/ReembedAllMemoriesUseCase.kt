@@ -2,6 +2,7 @@ package ai.agent.android.domain.usecases
 
 import ai.agent.android.domain.repositories.MemoryRepository
 import ai.agent.android.domain.services.EmbeddingProviderResolver
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
@@ -52,7 +53,13 @@ class ReembedAllMemoriesUseCase @Inject constructor(
                 .onSuccess { embedding ->
                     memoryRepository.updateMemory(memory.id, memory.text, embedding)
                 }
-                .onFailure { error -> Timber.w(error, "Failed to re-embed memory ${memory.id}") }
+                .onFailure { error ->
+                    // runCatching also traps CancellationException; rethrow it so
+                    // a cancelled re-embed actually halts instead of silently
+                    // grinding through the rest of the corpus.
+                    if (error is CancellationException) throw error
+                    Timber.w(error, "Failed to re-embed memory ${memory.id}")
+                }
             emit((index + 1).toFloat() / memories.size)
         }
     }.flowOn(Dispatchers.IO)

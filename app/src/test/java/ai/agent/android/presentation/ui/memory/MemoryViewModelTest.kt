@@ -158,6 +158,21 @@ class MemoryViewModelTest {
     }
 
     @Test
+    fun `editVectorMemory swallows embed failure and leaves the chunk unchanged`() = runTest {
+        // A cloud-backed embed can fail with a network error; the ViewModel must
+        // not crash and must not persist a half-applied edit.
+        coEvery { embeddingProvider.embed("boom") } throws RuntimeException("network down")
+
+        viewModel = MemoryViewModel(chatRepository, memoryRepository, settingsRepository, embeddingProviderResolver)
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        viewModel.editVectorMemory(id = 3L, newText = "boom")
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        coVerify(exactly = 0) { memoryRepository.updateMemory(any(), any(), any()) }
+    }
+
+    @Test
     fun `togglePinned flips current pinned state and persists`() = runTest {
         val unpinned = MemoryChunk(id = 5L, text = "x", embedding = floatArrayOf(0f), timestamp = 1L, isPinned = false)
         coEvery { memoryRepository.getAllMemories() } returns listOf(unpinned)
