@@ -1,6 +1,8 @@
 package ai.agent.android.domain.services
 
 import ai.agent.android.domain.constants.TimeAndIdConstants
+import ai.agent.android.domain.engine.TaskQueueManager
+import ai.agent.android.domain.models.AgentOrchestratorState
 import ai.agent.android.domain.repositories.ChatRepository
 import ai.agent.android.domain.repositories.SettingsRepository
 import ai.agent.android.domain.usecases.MemoryExtractionUseCase
@@ -28,6 +30,14 @@ import kotlin.coroutines.coroutineContext
  *    session (e.g. a multi-turn burst) collapse into a single extraction once
  *    the conversation goes quiet, instead of re-running the model every turn;
  *  - **short-circuits** when the `autoExtractEnabled` setting is off;
+ *  - **defers while the agent is busy** — extraction runs the local model, and
+ *    [ai.agent.android.domain.engine.LlmInferenceEngine] allows only one active
+ *    conversation (a new generation closes the previous one). If the user sent
+ *    another message during the debounce window, a foreground pipeline may be
+ *    streaming; running extraction then would tear down the in-flight user
+ *    response. So before extracting, the coordinator checks
+ *    [TaskQueueManager.globalState] and, if a pipeline is active, waits another
+ *    debounce window and re-checks rather than racing it;
  *  - fetches the session's messages and delegates to [MemoryExtractionUseCase].
  *
  * It owns its own [CoroutineScope] (a [SupervisorJob] on [Dispatchers.Default])
@@ -39,12 +49,16 @@ import kotlin.coroutines.coroutineContext
  * @property settingsRepository Source of the auto-extract toggle.
  * @property chatRepository Source of the session's messages to mine.
  * @property memoryExtractionUseCase The extraction pass itself.
+ * @property taskQueueManager Source of the agent-busy signal
+ *   ([TaskQueueManager.globalState]) used to defer extraction while a
+ *   foreground pipeline is generating on the shared inference engine.
  */
 @Singleton
 class MemoryAutoExtractionCoordinator @Inject constructor(
     private val settingsRepository: SettingsRepository,
     private val chatRepository: ChatRepository,
     private val memoryExtractionUseCase: MemoryExtractionUseCase,
+    private val taskQueueManager: TaskQueueManager,
 ) {
 
     /**
@@ -72,13 +86,22 @@ class MemoryAutoExtractionCoordinator @Inject constructor(
         pendingJobs[sessionId]?.cancel()
         pendingJobs[sessionId] = scope.launch {
             try {
-                delay(DEBOUNCE_MS)
-                // Read the toggle at extraction time so a user flipping it off
-                // during the debounce window still cancels the work.
-                if (!settingsRepository.autoExtractEnabled.first()) return@launch
+                // Wait for the conversation to go quiet, then make sure no
+                // foreground generation is in flight before touching the shared
+                // engine. While a pipeline is active, re-wait a debounce window
+                // and re-check instead of racing it — a new completion cancels
+                // and replaces this job, so the loop never outlives its session.
+                while (true) {
+                    delay(DEBOUNCE_MS)
+                    // Read the toggle at extraction time so a user flipping it
+                    // off during the debounce window still cancels the work.
+                    if (!settingsRepository.autoExtractEnabled.first()) return@launch
+                    if (isAgentBusy()) continue
 
-                val messages = chatRepository.getMessagesForSession(sessionId).first()
-                memoryExtractionUseCase(sessionId, messages)
+                    val messages = chatRepository.getMessagesForSession(sessionId).first()
+                    memoryExtractionUseCase(sessionId, messages)
+                    return@launch
+                }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -91,6 +114,23 @@ class MemoryAutoExtractionCoordinator @Inject constructor(
                 pendingJobs.remove(sessionId, coroutineContext[Job])
             }
         }
+    }
+
+    /**
+     * `true` when the agent is mid-run on the shared inference engine — i.e.
+     * [TaskQueueManager.globalState] is any non-terminal state. Mirrors the
+     * idle predicate `AgentIdleManager` uses (idle = `Idle` / `Completed` /
+     * `Error`); everything else (loading, streaming, awaiting approval, …)
+     * means a foreground generation could be holding the engine's single
+     * conversation.
+     */
+    private fun isAgentBusy(): Boolean = when (taskQueueManager.globalState.value) {
+        is AgentOrchestratorState.Idle,
+        is AgentOrchestratorState.Completed,
+        is AgentOrchestratorState.Error,
+        -> false
+
+        else -> true
     }
 
     private companion object {

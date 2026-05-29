@@ -208,7 +208,7 @@ This file maps the contents of the main application package.
     - `ApprovalNotifier.kt` - Notifier for approval requests.
     - `EmbeddingProvider.kt` - Text-embedding backend abstraction (`embed` / `dimension` / `id` / `displayName`) + provider-id constants and `EmbeddingException`.
     - `EmbeddingProviderResolver.kt` - Resolves the active `EmbeddingProvider` from the Hilt map and `SettingsRepository.activeEmbeddingProviderId`, falling back to on-device USE.
-    - `MemoryAutoExtractionCoordinator.kt` - App-scoped, debounced (30s/session) trigger that runs `MemoryExtractionUseCase` after a pipeline completes; short-circuits when `SettingsRepository.autoExtractEnabled` is off. Notified by `ChatHomeViewModel` on the terminal `Completed` state.
+    - `MemoryAutoExtractionCoordinator.kt` - App-scoped, debounced (30s/session) trigger that runs `MemoryExtractionUseCase` after a pipeline completes; short-circuits when `SettingsRepository.autoExtractEnabled` is off, and defers (re-waits a debounce window) while `TaskQueueManager.globalState` shows an active pipeline so it never races a foreground generation on the single-conversation engine. Notified by `ChatHomeViewModel` on the terminal `Completed` state.
   - `usecases/` - Business logic Use Cases.
     - `AgentOrchestratorUseCase.kt` - Use case for agent orchestration.
     - `AppInitializationUseCase.kt` - Cold-start orchestrator: streams `InitProgress` snapshots while running first-launch defaults, loading the LiteRT model, and prefetching pipelines / chat sessions / memory summaries. Drives the splash screen.

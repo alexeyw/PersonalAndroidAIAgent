@@ -1,5 +1,7 @@
 package ai.agent.android.domain.services
 
+import ai.agent.android.domain.engine.TaskQueueManager
+import ai.agent.android.domain.models.AgentOrchestratorState
 import ai.agent.android.domain.models.ChatMessage
 import ai.agent.android.domain.models.Role
 import ai.agent.android.domain.repositories.ChatRepository
@@ -10,6 +12,7 @@ import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -29,6 +32,8 @@ class MemoryAutoExtractionCoordinatorTest {
     private lateinit var settingsRepository: SettingsRepository
     private lateinit var chatRepository: ChatRepository
     private lateinit var memoryExtractionUseCase: MemoryExtractionUseCase
+    private lateinit var taskQueueManager: TaskQueueManager
+    private lateinit var globalState: MutableStateFlow<AgentOrchestratorState>
     private lateinit var coordinator: MemoryAutoExtractionCoordinator
 
     private val sessionId = "session-1"
@@ -42,9 +47,12 @@ class MemoryAutoExtractionCoordinatorTest {
         settingsRepository = mockk()
         chatRepository = mockk()
         memoryExtractionUseCase = mockk()
+        taskQueueManager = mockk()
+        globalState = MutableStateFlow(AgentOrchestratorState.Idle)
 
         every { settingsRepository.autoExtractEnabled } returns flowOf(true)
         every { chatRepository.getMessagesForSession(sessionId) } returns flowOf(messages)
+        every { taskQueueManager.globalState } returns globalState
         coEvery { memoryExtractionUseCase.invoke(any(), any()) } returns
             MemoryExtractionUseCase.MemoryExtractionOutcome.EMPTY
 
@@ -52,6 +60,7 @@ class MemoryAutoExtractionCoordinatorTest {
             settingsRepository = settingsRepository,
             chatRepository = chatRepository,
             memoryExtractionUseCase = memoryExtractionUseCase,
+            taskQueueManager = taskQueueManager,
         )
     }
 
@@ -101,5 +110,23 @@ class MemoryAutoExtractionCoordinatorTest {
         advanceUntilIdle()
 
         coVerify(exactly = 0) { memoryExtractionUseCase.invoke(any(), any()) }
+    }
+
+    @Test
+    fun `given agent busy when debounce elapses then defers extraction until idle`() = runTest {
+        coordinator.scope = this
+        // A foreground pipeline is generating when the debounce window elapses.
+        globalState.value = AgentOrchestratorState.Thinking("…")
+
+        coordinator.onPipelineCompleted(sessionId)
+        advanceTimeBy(31_000)
+        // Still busy → extraction must NOT race the in-flight generation.
+        coVerify(exactly = 0) { memoryExtractionUseCase.invoke(any(), any()) }
+
+        // The pipeline finishes; the next debounce re-check finds the agent
+        // idle and the deferred extraction finally runs — exactly once.
+        globalState.value = AgentOrchestratorState.Completed("done")
+        advanceUntilIdle()
+        coVerify(exactly = 1) { memoryExtractionUseCase.invoke(sessionId, messages) }
     }
 }

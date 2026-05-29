@@ -27,7 +27,9 @@ details.
     (cosine ≥ 0.92) of an existing chunk or another fact from the same pass.
   - A `MemoryAutoExtractionCoordinator` (domain, app-scoped) triggers the pass
     on pipeline completion with a 30 s per-session debounce, short-circuiting
-    when the toggle is off.
+    when the toggle is off and deferring while another pipeline is still
+    generating (the shared on-device engine allows only one active
+    conversation, so it must not race a foreground response).
   - Memory chunks now carry a typed `MemorySource`
     (`ChatSession` / `Manual` / `Compaction` / `Unknown`), persisted via a new
     `memory_chunks.source` column (Room migration 25 → 26, legacy rows backfilled
