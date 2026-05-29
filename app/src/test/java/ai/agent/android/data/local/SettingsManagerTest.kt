@@ -65,6 +65,10 @@ class SettingsManagerTest {
     private val memorySearchTopKKey = androidx.datastore.preferences.core.intPreferencesKey("memory_search_top_k")
     private val memorySearchThresholdKey =
         androidx.datastore.preferences.core.floatPreferencesKey("memory_search_threshold")
+    private val memoryCompactionEnabledKey = booleanPreferencesKey("memory_compaction_enabled")
+    private val memoryCompactionAgeDaysKey =
+        androidx.datastore.preferences.core.intPreferencesKey("memory_compaction_age_days")
+    private val maxMemoryChunksKey = androidx.datastore.preferences.core.intPreferencesKey("max_memory_chunks")
 
     @Test
     fun `isFirstLaunch returns true by default`() = runTest {
@@ -187,6 +191,72 @@ class SettingsManagerTest {
         try {
             manager.setMemorySearchThreshold(0.72f)
             assertEquals(0.72f, manager.memorySearchThreshold.first())
+        } finally {
+            scope.cancel()
+        }
+    }
+
+    @Test
+    fun `memoryCompactionEnabled returns default value`() = runTest {
+        val prefs = mockk<Preferences>()
+        every { prefs[memoryCompactionEnabledKey] } returns null
+        every { dataStore.data } returns flowOf(prefs)
+
+        val settingsManager = SettingsManager(dataStore)
+        val result = settingsManager.memoryCompactionEnabled.first()
+        assertEquals(SettingsDefaults.MEMORY_COMPACTION_ENABLED_DEFAULT, result)
+    }
+
+    @Test
+    fun `setMemoryCompactionEnabled persists and is read back`() = runTest {
+        val (manager, scope) = freshManagerWithRealDataStore()
+        try {
+            manager.setMemoryCompactionEnabled(false)
+            assertEquals(false, manager.memoryCompactionEnabled.first())
+        } finally {
+            scope.cancel()
+        }
+    }
+
+    @Test
+    fun `memoryCompactionAgeDays returns default value`() = runTest {
+        val prefs = mockk<Preferences>()
+        every { prefs[memoryCompactionAgeDaysKey] } returns null
+        every { dataStore.data } returns flowOf(prefs)
+
+        val settingsManager = SettingsManager(dataStore)
+        val result = settingsManager.memoryCompactionAgeDays.first()
+        assertEquals(SettingsDefaults.MEMORY_COMPACTION_AGE_DAYS_DEFAULT, result)
+    }
+
+    @Test
+    fun `setMemoryCompactionAgeDays persists and is read back`() = runTest {
+        val (manager, scope) = freshManagerWithRealDataStore()
+        try {
+            manager.setMemoryCompactionAgeDays(45)
+            assertEquals(45, manager.memoryCompactionAgeDays.first())
+        } finally {
+            scope.cancel()
+        }
+    }
+
+    @Test
+    fun `maxMemoryChunks returns default value`() = runTest {
+        val prefs = mockk<Preferences>()
+        every { prefs[maxMemoryChunksKey] } returns null
+        every { dataStore.data } returns flowOf(prefs)
+
+        val settingsManager = SettingsManager(dataStore)
+        val result = settingsManager.maxMemoryChunks.first()
+        assertEquals(SettingsDefaults.MAX_MEMORY_CHUNKS_DEFAULT, result)
+    }
+
+    @Test
+    fun `setMaxMemoryChunks persists and is read back`() = runTest {
+        val (manager, scope) = freshManagerWithRealDataStore()
+        try {
+            manager.setMaxMemoryChunks(8000)
+            assertEquals(8000, manager.maxMemoryChunks.first())
         } finally {
             scope.cancel()
         }

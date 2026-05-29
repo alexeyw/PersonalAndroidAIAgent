@@ -17,6 +17,13 @@ object TimeAndIdConstants {
     const val MS_PER_MINUTE: Long = 60_000L
 
     /**
+     * Number of milliseconds in one day. Used by the long-term memory
+     * compaction worker to translate a "consolidate chunks older than N days"
+     * age window into an absolute timestamp cutoff.
+     */
+    const val MS_PER_DAY: Long = 86_400_000L
+
+    /**
      * Size of the int-range used to derive an Android notification id from an
      * agent-internal hash. Both the publishing side
      * ([ai.agent.android.presentation.notifications.ApprovalNotificationManager])

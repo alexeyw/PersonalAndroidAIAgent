@@ -40,6 +40,23 @@ details.
 
 ### Added
 
+- **Background memory compaction** (Phase 25 / Task 5/10). A daily
+  `MemoryCompactionWorker` (WorkManager, constrained to charging + device-idle)
+  consolidates stale, redundant long-term memory so the `memory_chunks` table
+  does not balloon with near-duplicate facts over weeks of use. The pass loads
+  non-pinned chunks older than `memoryCompactionAgeDays` (default 30), clusters
+  them by embedding similarity with a new deterministic `KMeansClusterer`
+  (`k = max(1, floor(sqrt(N) / 2))`), and for every cluster of ≥ 3 chunks runs a
+  single local-model consolidation prompt
+  (`DefaultPrompts.MemoryCompaction`), embeds the summary with the active
+  provider, saves it tagged `MemorySource.Compaction` (carrying the merged ids),
+  and deletes the originals. Pinned chunks are never touched; a blank model
+  reply or an embedding error skips only that cluster (its originals are kept).
+  An out-of-schedule watch (`MemoryCompactionScheduler.startHardLimitWatch`)
+  triggers an immediate, relaxed-constraint pass when the table grows past
+  `maxMemoryChunks` (default 5000). New settings `memoryCompactionEnabled`
+  (default on), `memoryCompactionAgeDays` and `maxMemoryChunks` back the feature
+  (the Settings → Memory UI for them lands in Task 9).
 - **Memory retrieval re-ranking** (Phase 25 / Task 4/10). Raw cosine
   similarity is no longer the final word on what reaches the prompt. A new
   pure-domain `MemoryReranker` re-scores the full scored search pool before

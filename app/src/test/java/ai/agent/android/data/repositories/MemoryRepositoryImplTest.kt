@@ -172,4 +172,27 @@ class MemoryRepositoryImplTest {
         repository.setMemoryPinned(id = 7L, pinned = false)
         io.mockk.coVerify(exactly = 1) { memoryDao.setMemoryPinned(id = 7L, isPinned = false) }
     }
+
+    @Test
+    fun `getCompactionCandidates forwards cutoff and maps entities`() = kotlinx.coroutines.test.runTest {
+        val a = MemoryChunkEntity(1, "older fact", "1.0,0.0", 500L)
+        val b = MemoryChunkEntity(2, "another fact", "0.0,1.0", 400L)
+        io.mockk.coEvery { memoryDao.getCompactionCandidates(1000L) } returns listOf(a, b)
+
+        val result = repository.getCompactionCandidates(olderThanMillis = 1000L)
+
+        assertEquals(2, result.size)
+        assertEquals(listOf(1L, 2L), result.map { it.id })
+        io.mockk.coVerify(exactly = 1) { memoryDao.getCompactionCandidates(1000L) }
+    }
+
+    @Test
+    fun `countMemories forwards to dao`() = kotlinx.coroutines.test.runTest {
+        io.mockk.coEvery { memoryDao.countMemories() } returns 42
+
+        val result = repository.countMemories()
+
+        assertEquals(42, result)
+        io.mockk.coVerify(exactly = 1) { memoryDao.countMemories() }
+    }
 }
