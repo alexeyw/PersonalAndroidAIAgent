@@ -303,7 +303,7 @@ private fun MemorySortRow(active: MemorySortMode, onChange: (MemorySortMode) -> 
                     MemorySortMode.Alphabetical -> R.string.knotwork_memory_sort_alphabetical
                 },
             )
-            KnotworkChip(
+            KnotworkFilterChip(
                 label = label,
                 selected = mode == active,
                 onClick = { onChange(mode) },
