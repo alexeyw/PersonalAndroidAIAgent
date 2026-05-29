@@ -59,6 +59,7 @@ class SettingsManager @Inject constructor(private val dataStore: DataStore<Prefe
         val MEMORY_SEARCH_TOP_K = intPreferencesKey("memory_search_top_k")
         val MEMORY_SEARCH_THRESHOLD =
             androidx.datastore.preferences.core.floatPreferencesKey("memory_search_threshold")
+        val MEMORY_RECENCY_HALF_LIFE_DAYS = intPreferencesKey("memory_recency_half_life_days")
         val LOCAL_MODEL_BACKEND = stringPreferencesKey("local_model_backend")
 
         /**
@@ -632,6 +633,26 @@ class SettingsManager @Inject constructor(private val dataStore: DataStore<Prefe
     override suspend fun setMemorySearchThreshold(threshold: Float) {
         dataStore.edit { preferences ->
             preferences[PreferencesKeys.MEMORY_SEARCH_THRESHOLD] = threshold
+        }
+    }
+
+    override val memoryRecencyHalfLifeDays: Flow<Int> = dataStore.data
+        .catch { exception ->
+            if (exception is IOException) {
+                Timber.e(exception, "Error reading preferences")
+                emit(emptyPreferences())
+            } else {
+                throw exception
+            }
+        }
+        .map { preferences ->
+            preferences[PreferencesKeys.MEMORY_RECENCY_HALF_LIFE_DAYS]
+                ?: SettingsDefaults.MEMORY_RECENCY_HALF_LIFE_DAYS_DEFAULT
+        }
+
+    override suspend fun setMemoryRecencyHalfLifeDays(days: Int) {
+        dataStore.edit { preferences ->
+            preferences[PreferencesKeys.MEMORY_RECENCY_HALF_LIFE_DAYS] = days
         }
     }
 

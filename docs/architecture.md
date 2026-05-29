@@ -231,7 +231,10 @@ which subset is enabled:
 2. `--- Chat History ---` — numbered conversation history with
    `USER`/`AGENT` roles.
 3. `--- Long-Term Memory ---` — semantic-retrieval hits over past
-   memory chunks.
+   memory chunks. A vector search ranks chunks by cosine similarity;
+   `MemoryReranker` then re-scores the pool (recency decay, a pinned
+   boost, near-duplicate collapse, and a final-score threshold) before
+   the top-K hits are injected.
 4. `--- Tool Results ---` — outputs of every tool invocation made
    during the current run.
 5. `--- Previous Node Output ---` — the text produced by the
