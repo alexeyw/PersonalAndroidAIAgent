@@ -64,12 +64,15 @@ class PromptLibraryScreenListTest {
             MaterialTheme { PromptLibraryScreen(viewModel = vm) }
         }
 
-        // INTENT_ROUTER is the label of the other tab; tapping it fires
-        // the VM hook even though the screen doesn't yet re-render
+        // The category tab row lists every LLM-driven node type sorted, so
+        // `CLARIFICATION` is the leftmost tab — always on-screen in the
+        // `ScrollableTabRow` (unlike `INTENT_ROUTER`, which sits mid-row and
+        // can be scrolled off a phone-width viewport). Tapping a non-selected
+        // tab fires the VM hook even though the screen doesn't re-render
         // (state mutation is the ViewModel's job).
-        composeTestRule.onNodeWithText(text = "INTENT_ROUTER").performClick()
+        composeTestRule.onNodeWithText(text = "CLARIFICATION").performClick()
 
-        verify(exactly = 1) { vm.selectCategory(category = "INTENT_ROUTER") }
+        verify(exactly = 1) { vm.selectCategory(category = "CLARIFICATION") }
     }
 
     @Test
