@@ -1,10 +1,10 @@
 package ai.agent.android.presentation.ui.memory
 
-import ai.agent.android.domain.engine.TextEmbeddingEngine
 import ai.agent.android.domain.models.ChatMessage
 import ai.agent.android.domain.repositories.ChatRepository
 import ai.agent.android.domain.repositories.MemoryRepository
 import ai.agent.android.domain.repositories.SettingsRepository
+import ai.agent.android.domain.services.EmbeddingProviderResolver
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -26,7 +26,7 @@ class MemoryViewModel @Inject constructor(
     private val chatRepository: ChatRepository,
     private val memoryRepository: MemoryRepository,
     private val settingsRepository: SettingsRepository,
-    private val textEmbeddingEngine: TextEmbeddingEngine,
+    private val embeddingProviderResolver: EmbeddingProviderResolver,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(MemoryUiState(isLoading = true))
@@ -118,17 +118,19 @@ class MemoryViewModel @Inject constructor(
     }
 
     /**
-     * Replaces the body of a long-term memory chunk. Recomputes the
-     * embedding from the new text via [TextEmbeddingEngine] before persisting
-     * — re-embedding is required so semantic-search results stay coherent
-     * with the visible text.
+     * Replaces the body of a long-term memory chunk. Recomputes the embedding
+     * from the new text via the user's active embedding provider (resolved by
+     * [EmbeddingProviderResolver]) before persisting — re-embedding is required
+     * so semantic-search results stay coherent with the visible text, and using
+     * the active provider keeps the edited chunk in the same embedding space as
+     * the retrieval query.
      *
      * @param id Identifier of the chunk to update.
      * @param newText The new raw text content committed by the user.
      */
     fun editVectorMemory(id: Long, newText: String) {
         viewModelScope.launch {
-            val newEmbedding = textEmbeddingEngine.generateEmbedding(newText)
+            val newEmbedding = embeddingProviderResolver.resolve().embed(newText)
             memoryRepository.updateMemory(id = id, text = newText, embedding = newEmbedding)
             loadAllData()
         }

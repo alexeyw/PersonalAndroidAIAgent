@@ -2,10 +2,10 @@ package ai.agent.android.data.tools.local
 
 import ai.agent.android.data.engine.KoogClientFactory
 import ai.agent.android.data.engine.KoogModelMapper
-import ai.agent.android.domain.engine.TextEmbeddingEngine
 import ai.agent.android.domain.models.CloudProvider
 import ai.agent.android.domain.repositories.ApiKeyRepository
 import ai.agent.android.domain.repositories.MemoryRepository
+import ai.agent.android.domain.services.EmbeddingProviderResolver
 import ai.koog.prompt.dsl.prompt
 import ai.koog.prompt.executor.clients.anthropic.AnthropicModels
 import ai.koog.prompt.executor.clients.deepseek.DeepSeekModels
@@ -38,13 +38,15 @@ import javax.inject.Inject
  *
  * @property koogClientFactory A factory used to instantiate the appropriate external LLM client.
  * @property memoryRepository The repository responsible for persisting long-term memories.
- * @property textEmbeddingEngine The engine used to convert text into vector embeddings for semantic search.
+ * @property embeddingProviderResolver Resolves the user's active embedding provider so the saved
+ *   chunk shares the same embedding space as every other memory write — otherwise retrieval, which
+ *   embeds the query with that same active provider, could never match a delegated result.
  * @property apiKeyRepository The repository responsible for persisting selected model configurations.
  */
 class DelegateTaskTool @Inject constructor(
     private val koogClientFactory: KoogClientFactory,
     private val memoryRepository: MemoryRepository,
-    private val textEmbeddingEngine: TextEmbeddingEngine,
+    private val embeddingProviderResolver: EmbeddingProviderResolver,
     private val apiKeyRepository: ApiKeyRepository,
 ) {
 
@@ -123,9 +125,9 @@ class DelegateTaskTool @Inject constructor(
                 if (result.isNullOrBlank()) {
                     "Error: Task delegation to '${provider.id}' timed out or returned empty after 60 seconds."
                 } else {
-                    // Task succeeded. Generate embedding for the result.
+                    // Task succeeded. Embed the result with the active provider.
                     val responseText = result
-                    val embedding = textEmbeddingEngine.generateEmbedding(responseText)
+                    val embedding = embeddingProviderResolver.resolve().embed(responseText)
 
                     // Save to long-term memory so the local agent can recall it later
                     memoryRepository.saveMemory(responseText, embedding)

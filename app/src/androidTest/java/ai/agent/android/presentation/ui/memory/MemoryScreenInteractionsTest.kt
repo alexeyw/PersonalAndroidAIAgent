@@ -75,8 +75,8 @@ class MemoryScreenInteractionsTest {
         // role). The OutlinedTextField's draft is seeded from `detail.body`
         // so committing without typing still exercises the
         // `editVectorMemory` call site, which is the single entry point
-        // that triggers a re-embedding pass via
-        // `TextEmbeddingEngine.generateEmbedding`.
+        // that triggers a re-embedding pass via the active
+        // `EmbeddingProvider` (resolved by `EmbeddingProviderResolver`).
         composeTestRule.onNodeWithText(text = "Editable title").performClick()
         composeTestRule.onNodeWithText(text = editLabel).performClick()
         composeTestRule.onNodeWithText(text = editLabel).performClick()
