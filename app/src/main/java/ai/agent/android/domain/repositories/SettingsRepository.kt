@@ -528,6 +528,24 @@ interface SettingsRepository {
     suspend fun setActiveEmbeddingProviderId(id: String)
 
     /**
+     * `true` when the agent should automatically extract durable facts from a
+     * conversation into long-term memory after a pipeline run completes. Drives
+     * the "Auto-extract from conversations" toggle in Settings → Memory and is
+     * the short-circuit gate consulted by the auto-extraction trigger. Defaults
+     * to [ai.agent.android.domain.constants.SettingsDefaults.AUTO_EXTRACT_ENABLED_DEFAULT]
+     * (`true`).
+     */
+    val autoExtractEnabled: Flow<Boolean>
+
+    /**
+     * Persists the auto-extract memory toggle.
+     *
+     * @param enabled `true` to enable automatic memory extraction, `false` to
+     *   disable it (the trigger then short-circuits to a no-op).
+     */
+    suspend fun setAutoExtractEnabled(enabled: Boolean)
+
+    /**
      * Resets the local-generation sampling parameters back to the
      * documented defaults ([SettingsDefaults.TEMPERATURE_DEFAULT],
      * [SettingsDefaults.TOP_K_DEFAULT], [SettingsDefaults.TOP_P_DEFAULT],

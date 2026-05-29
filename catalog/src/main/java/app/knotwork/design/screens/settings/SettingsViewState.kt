@@ -182,6 +182,9 @@ data class MemoryStatCell(val label: String, val value: String)
 
 data class MemoryCardState(
     val stats: List<MemoryStatCell>,
+    val autoExtractEnabled: Boolean,
+    val autoExtractLabel: String,
+    val autoExtractSubtitle: String,
     val autoSummarizeThreshold: Int,
     val autoSummarizeLabel: String,
     val embeddingTitle: String,
@@ -316,6 +319,7 @@ class SettingsCallbacks(
     val onAddProviderClick: () -> Unit = {},
 
     // Memory.
+    val onAutoExtractToggle: (Boolean) -> Unit = {},
     val onAutoSummarizeChange: (Int) -> Unit = {},
     val onExportMemoryClick: () -> Unit = {},
     val onReembedClick: () -> Unit = {},

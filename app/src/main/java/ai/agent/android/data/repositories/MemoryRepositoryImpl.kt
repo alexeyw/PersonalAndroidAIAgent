@@ -4,6 +4,7 @@ import ai.agent.android.data.local.Converters
 import ai.agent.android.data.local.dao.MemoryDao
 import ai.agent.android.data.local.models.MemoryChunkEntity
 import ai.agent.android.domain.models.MemoryChunk
+import ai.agent.android.domain.models.MemorySource
 import ai.agent.android.domain.models.MemoryStats
 import ai.agent.android.domain.models.MemorySummary
 import ai.agent.android.domain.repositories.MemoryRepository
@@ -36,33 +37,22 @@ class MemoryRepositoryImpl @Inject constructor(private val memoryDao: MemoryDao,
      */
     private val recentSimilarityScores = MutableStateFlow<List<Float>>(emptyList())
 
-    override suspend fun saveMemory(text: String, embedding: FloatArray): Long = withContext(Dispatchers.IO) {
-        val embeddingString = converters.fromFloatArray(embedding)
-            ?: throw IllegalArgumentException("Failed to serialize embedding")
+    override suspend fun saveMemory(text: String, embedding: FloatArray, source: MemorySource): Long =
+        withContext(Dispatchers.IO) {
+            val embeddingString = converters.fromFloatArray(embedding)
+                ?: throw IllegalArgumentException("Failed to serialize embedding")
 
-        val entity = MemoryChunkEntity(
-            text = text,
-            embedding = embeddingString,
-            timestamp = System.currentTimeMillis(),
-        )
-        memoryDao.insertMemory(entity)
-    }
+            val entity = MemoryChunkEntity(
+                text = text,
+                embedding = embeddingString,
+                timestamp = System.currentTimeMillis(),
+                source = source,
+            )
+            memoryDao.insertMemory(entity)
+        }
 
     override suspend fun getAllMemories(): List<MemoryChunk> = withContext(Dispatchers.IO) {
-        memoryDao.getAllMemories().mapNotNull { entity ->
-            val embeddingArray = converters.toFloatArray(entity.embedding)
-            if (embeddingArray != null) {
-                MemoryChunk(
-                    id = entity.id,
-                    text = entity.text,
-                    embedding = embeddingArray,
-                    timestamp = entity.timestamp,
-                    isPinned = entity.isPinned,
-                )
-            } else {
-                null
-            }
-        }
+        memoryDao.getAllMemories().mapNotNull { entity -> entity.toMemoryChunkOrNull() }
     }
 
     override suspend fun getRecentMemorySummaries(limit: Int): List<MemorySummary> = if (limit <= 0) {
@@ -79,18 +69,7 @@ class MemoryRepositoryImpl @Inject constructor(private val memoryDao: MemoryDao,
         limit: Int,
     ): List<Pair<MemoryChunk, Float>> = withContext(Dispatchers.Default) {
         val recentMemories = memoryDao.getRecentMemories(searchPoolLimit).mapNotNull { entity ->
-            val embeddingArray = converters.toFloatArray(entity.embedding)
-            if (embeddingArray != null) {
-                MemoryChunk(
-                    id = entity.id,
-                    text = entity.text,
-                    embedding = embeddingArray,
-                    timestamp = entity.timestamp,
-                    isPinned = entity.isPinned,
-                )
-            } else {
-                null
-            }
+            entity.toMemoryChunkOrNull()
         }
 
         val ranked = recentMemories.map { memory ->
@@ -148,6 +127,26 @@ class MemoryRepositoryImpl @Inject constructor(private val memoryDao: MemoryDao,
             // and the UI then renders a dash for the THREADS stat cell.
             threadCount = 0,
             averageSimilarityScore = scores.takeIf { it.isNotEmpty() }?.average()?.toFloat(),
+        )
+    }
+
+    /**
+     * Maps a persisted [MemoryChunkEntity] to its domain [MemoryChunk],
+     * deserialising the comma-encoded embedding. Returns `null` when the
+     * embedding column cannot be parsed so a single corrupt row is skipped
+     * rather than aborting the whole load.
+     *
+     * @return The domain chunk, or `null` if the embedding failed to deserialise.
+     */
+    private fun MemoryChunkEntity.toMemoryChunkOrNull(): MemoryChunk? {
+        val embeddingArray = converters.toFloatArray(embedding) ?: return null
+        return MemoryChunk(
+            id = id,
+            text = text,
+            embedding = embeddingArray,
+            timestamp = timestamp,
+            isPinned = isPinned,
+            source = source,
         )
     }
 

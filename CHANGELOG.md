@@ -15,6 +15,33 @@ details.
 
 ### Added
 
+- **Automatic memory extraction** (Phase 25 / Task 2/10). After a pipeline run
+  completes, the agent now mines the conversation for durable facts and writes
+  the novel ones into long-term memory — making the "remembers past chats"
+  capability actually populate memory instead of relying on manual saves.
+  - A new `MemoryExtractionUseCase` (domain) runs the local model once with a
+    conservative, no-hallucination prompt
+    (`DefaultPrompts.MemoryExtraction.SYSTEM_FALLBACK`, `$DATE`-grounded) that
+    returns a JSON array of `{type, text}` facts; all facts are embedded in a
+    single batch `EmbeddingProvider.embed(List)` call (one cloud round-trip
+    instead of N) and each is saved only if it is not a near-duplicate
+    (cosine ≥ 0.92) of an existing chunk or another fact from the same pass.
+  - A `MemoryAutoExtractionCoordinator` (domain, app-scoped) triggers the pass
+    on pipeline completion with a 30 s per-session debounce, short-circuiting
+    when the toggle is off and deferring while another pipeline is still
+    generating.
+  - The on-device inference engine (`LiteRTLlmEngine`) now serialises every
+    generation behind a `Mutex`, since LiteRT-LM allows only one active
+    conversation — this prevents the background extraction pass and a
+    foreground response from concurrently tearing down each other's session
+    (which could crash the native layer).
+  - Memory chunks now carry a typed `MemorySource`
+    (`ChatSession` / `Manual` / `Compaction` / `Unknown`), persisted via a new
+    `memory_chunks.source` column (Room migration 25 → 26, legacy rows backfilled
+    to `Unknown`).
+  - New `Settings → Memory → Auto-extract from conversations` toggle
+    (`SettingsRepository.autoExtractEnabled`, default on) describing exactly what
+    is collected.
 - **Embedding provider abstraction** (Phase 25 / Task 1/10). Long-term memory
   no longer hard-codes the on-device Universal Sentence Encoder. A new
   `EmbeddingProvider` domain abstraction (`embed` / batch `embed` /

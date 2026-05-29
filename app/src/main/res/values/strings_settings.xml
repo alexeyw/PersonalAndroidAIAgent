@@ -53,6 +53,8 @@
     <string name="settings_memory_stat_threads">Threads</string>
     <string name="settings_memory_stat_avg_score">Avg score</string>
     <string name="settings_memory_stat_dash">—</string>
+    <string name="settings_memory_auto_extract_title">Auto-extract from conversations</string>
+    <string name="settings_memory_auto_extract_subtitle">After each chat, the agent saves durable facts you state (preferences, events, relationships) to long-term memory. Small talk is ignored.</string>
     <string name="settings_memory_auto_summarize_title">Auto-summarize threshold</string>
     <string name="settings_memory_embedding_title">Embedding model</string>
     <string name="settings_memory_embedding_subtitle">bge-small-en-v1.5 · 384 dim · on-device</string>

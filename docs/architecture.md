@@ -182,6 +182,15 @@ Step-by-step notes:
 8. The final agent reply (`isFinal = true`) is saved through the
    repository; the resulting `Flow` emission updates the `messages` flow
    exposed by `ChatHomeViewModel` and the UI re-composes.
+9. On the terminal `Completed` state, `ChatHomeViewModel` notifies the
+   app-scoped `MemoryAutoExtractionCoordinator` (domain service). After a
+   30-second per-session debounce — and only when
+   `SettingsRepository.autoExtractEnabled` is set — it runs
+   `MemoryExtractionUseCase`, which makes one local-model pass to distil
+   durable facts from the recent dialogue, embeds them with the active
+   `EmbeddingProvider`, drops near-duplicates, and writes survivors to
+   `memory_chunks` tagged with `MemorySource.ChatSession`. This is
+   fire-and-forget background work and never blocks or fails the chat.
 
 ---
 

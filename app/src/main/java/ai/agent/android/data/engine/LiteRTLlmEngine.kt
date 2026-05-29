@@ -20,6 +20,8 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import timber.log.Timber
 import java.io.File
@@ -42,6 +44,17 @@ class LiteRTLlmEngine @Inject constructor(
     private var engine: Engine? = null
     private var conversation: Conversation? = null
     private var _currentModelPath: String? = null
+
+    /**
+     * Serialises every [generateResponseStream] call. LiteRT-LM allows only
+     * one active [Conversation], and each generation tears the previous
+     * conversation down before opening a fresh one — so two overlapping
+     * generations (e.g. a foreground pipeline and a background memory-extraction
+     * pass) would corrupt each other's session and can crash the native layer.
+     * Holding this mutex for the whole stream guarantees one generation runs to
+     * completion (or is cancelled) before the next acquires the conversation.
+     */
+    private val generationMutex = Mutex()
 
     /**
      * Indicates whether the engine has been successfully initialized and is ready for use.
@@ -185,19 +198,25 @@ class LiteRTLlmEngine @Inject constructor(
         try {
             Timber.d("Starting inference for prompt: %s", prompt)
 
-            // LiteRT-LM allows only one active session. Since the Orchestrator manually
-            // supplies the full history context every time, we must close the old conversation
-            // and create a fresh one to prevent token accumulation and OOM crashes.
-            conversation?.close()
-            conversation = currentEngine.createConversation()
+            // Serialise the whole generation: closing/recreating the single
+            // conversation and streaming its tokens must not interleave with
+            // another concurrent generation (foreground pipeline vs background
+            // memory extraction), which would tear down an in-flight session.
+            generationMutex.withLock {
+                // LiteRT-LM allows only one active session. Since the Orchestrator manually
+                // supplies the full history context every time, we must close the old conversation
+                // and create a fresh one to prevent token accumulation and OOM crashes.
+                conversation?.close()
+                conversation = currentEngine.createConversation()
 
-            // Stream the tokens directly from the LiteRT-LM conversation
-            conversation?.let { conversation ->
-                conversation.sendMessageAsync(prompt).collect { chunk ->
-                    val textParts = chunk.contents.contents.filterIsInstance<Content.Text>()
-                    val text = textParts.joinToString("") { it.text }
-                    if (text.isNotEmpty()) {
-                        emit(text)
+                // Stream the tokens directly from the LiteRT-LM conversation
+                conversation?.let { conversation ->
+                    conversation.sendMessageAsync(prompt).collect { chunk ->
+                        val textParts = chunk.contents.contents.filterIsInstance<Content.Text>()
+                        val text = textParts.joinToString("") { it.text }
+                        if (text.isNotEmpty()) {
+                            emit(text)
+                        }
                     }
                 }
             }

@@ -1,6 +1,7 @@
 package ai.agent.android.domain.repositories
 
 import ai.agent.android.domain.models.MemoryChunk
+import ai.agent.android.domain.models.MemorySource
 import ai.agent.android.domain.models.MemoryStats
 import ai.agent.android.domain.models.MemorySummary
 import kotlinx.coroutines.flow.Flow
@@ -15,9 +16,13 @@ interface MemoryRepository {
      *
      * @param text The raw text to save.
      * @param embedding The float array vector representing the text.
+     * @param source Provenance of the chunk (which conversation / action it
+     *   came from). Defaults to [MemorySource.Manual] so existing direct-save
+     *   call sites — which represent a deliberate, user-attributable write —
+     *   keep a sensible attribution without each having to spell it out.
      * @return The ID of the saved memory chunk.
      */
-    suspend fun saveMemory(text: String, embedding: FloatArray): Long
+    suspend fun saveMemory(text: String, embedding: FloatArray, source: MemorySource = MemorySource.Manual): Long
 
     /**
      * Retrieves all saved memories.

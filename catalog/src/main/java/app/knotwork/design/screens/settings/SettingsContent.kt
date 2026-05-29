@@ -922,6 +922,13 @@ private fun MemoryCard(state: MemoryCardState, callbacks: SettingsCallbacks) {
                 }
             }
         }
+        IconToggleRow(
+            icon = Icons.Outlined.Bolt,
+            title = state.autoExtractLabel,
+            subtitle = state.autoExtractSubtitle,
+            checked = state.autoExtractEnabled,
+            onCheckedChange = callbacks.onAutoExtractToggle,
+        )
         Column(
             modifier = Modifier.fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp1),

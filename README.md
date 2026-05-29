@@ -106,7 +106,9 @@ configured it.
   directly into chat home.
 - Background execution as an Android Foreground Service with explicit idle
   and power-state management.
-- Long-term memory with semantic retrieval (RAG) over past conversations.
+- Long-term memory with semantic retrieval (RAG) over past conversations,
+  including automatic extraction of durable facts from finished conversations
+  (toggleable in Settings → Memory).
 - Standalone browser-based editor (`pipeline-editor.html`) for authoring
   and exporting pipelines without launching the app.
 - Opt-in Firebase Crashlytics for anonymous crash reporting — off by

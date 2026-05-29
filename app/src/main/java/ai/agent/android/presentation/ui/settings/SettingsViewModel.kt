@@ -194,6 +194,10 @@ class SettingsViewModel @Inject constructor(
             _uiState.update { it.copy(memoryStats = stats) }
         }.launchIn(viewModelScope)
 
+        settingsRepository.autoExtractEnabled.onEach { value ->
+            _uiState.update { it.copy(autoExtractEnabled = value) }
+        }.launchIn(viewModelScope)
+
         settingsRepository.autoSummarizeThreshold.onEach { value ->
             _uiState.update { it.copy(autoSummarizeThreshold = value) }
         }.launchIn(viewModelScope)
@@ -405,6 +409,18 @@ class SettingsViewModel @Inject constructor(
     fun providerForId(id: String): ProviderId? = ProviderId.entries.firstOrNull { it.cloudProvider.id == id }
 
     // ─── Memory ───────────────────────────────────────────────────────────
+
+    /**
+     * Persists the "Auto-extract from conversations" toggle. When enabled the
+     * agent distils durable facts into long-term memory after each pipeline run.
+     *
+     * @param enabled `true` to enable automatic extraction.
+     */
+    fun setAutoExtractEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsRepository.setAutoExtractEnabled(enabled)
+        }
+    }
 
     fun setAutoSummarizeThreshold(percent: Int) {
         viewModelScope.launch {

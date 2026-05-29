@@ -66,6 +66,7 @@ data class SettingsUiState(
     val testProbeInFlight: Boolean = false,
     val providers: List<ProviderSummary> = emptyList(),
     val memoryStats: MemoryStats = MemoryStats.EMPTY,
+    val autoExtractEnabled: Boolean = SettingsDefaults.AUTO_EXTRACT_ENABLED_DEFAULT,
     val autoSummarizeThreshold: Float = SettingsDefaults.AUTO_SUMMARIZE_THRESHOLD_DEFAULT,
     val reembedProgress: Float? = null,
     val longRunningTaskNotificationsEnabled: Boolean = true,

@@ -4,7 +4,8 @@
 
 package ai.agent.android.presentation.ui.prompts
 
-import ai.agent.android.domain.models.PromptTemplate
+import ai.agent.android.domain.models.NodeType
+import ai.agent.android.domain.models.PromptPreset
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -30,10 +31,24 @@ internal fun mockPromptLibraryViewModel(
     return vm to handles
 }
 
-/** Builds a [PromptTemplate] sample with the given identifiers. */
-internal fun samplePromptTemplate(
-    id: Long,
+/**
+ * Builds a user-saved [PromptPreset] sample with the given identifiers.
+ *
+ * Defaults to `isBundled = false` so the editor / delete / duplicate
+ * affordances render — bundled presets are read-only and the catalog hides
+ * those controls. The [category] is the [NodeType] name backing the preset.
+ */
+internal fun samplePromptPreset(
+    id: String,
     name: String,
     category: String = "DECOMPOSITION",
-    text: String = "$name body",
-): PromptTemplate = PromptTemplate(id = id, name = name, text = text, category = category)
+    body: String = "$name body",
+    isBundled: Boolean = false,
+): PromptPreset = PromptPreset(
+    id = id,
+    name = name,
+    description = "$name description",
+    nodeType = NodeType.valueOf(category),
+    systemPrompt = body,
+    isBundled = isBundled,
+)
