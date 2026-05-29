@@ -4293,11 +4293,21 @@
     }
 
     /**
-     * Per-browser, user-managed pipeline-preset catalogue. Same defensive
-     * localStorage pattern as the prompt-template library: a private-mode
-     * browser that throws on access degrades to an empty in-memory list.
+     * Session fallback for browsers where localStorage is unavailable
+     * (private mode, disabled storage, quota exceeded). `null` means
+     * "localStorage is the source of truth"; once a write fails it holds the
+     * live list so Save / Import / Delete stay usable for the rest of the
+     * session instead of silently reverting to an empty Mine tab.
+     */
+    let userPipelinePresetsFallback = null;
+
+    /**
+     * Per-browser, user-managed pipeline-preset catalogue. Reads from the
+     * in-memory fallback once a write has failed this session; otherwise
+     * from localStorage, degrading to an empty list if the read throws.
      */
     function loadUserPipelinePresets() {
+        if (userPipelinePresetsFallback !== null) return userPipelinePresetsFallback;
         try {
             const raw = localStorage.getItem(PIPELINE_PRESETS_STORAGE_KEY);
             if (!raw) return [];
@@ -4314,7 +4324,13 @@
     function saveUserPipelinePresets(list) {
         try {
             localStorage.setItem(PIPELINE_PRESETS_STORAGE_KEY, JSON.stringify(list));
-        } catch (_) { /* ignore */ }
+            // Write succeeded — localStorage is authoritative again.
+            userPipelinePresetsFallback = null;
+        } catch (_) {
+            // Storage unavailable: keep the list in memory so the Mine tab and
+            // subsequent loads reflect the action for this session.
+            userPipelinePresetsFallback = list;
+        }
     }
 
     /** Lower-case kebab slug used for preset ids and `.preset.json` filenames. */
