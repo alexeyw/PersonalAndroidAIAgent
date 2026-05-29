@@ -138,27 +138,44 @@ class MemoryExtractionUseCase @Inject constructor(
     private suspend fun persistNovelFacts(sessionId: String, facts: List<String>): MemoryExtractionOutcome {
         val searchPoolLimit = settingsRepository.maxMemoryChunksForSearch.first()
         val provider = embeddingProviderResolver.resolve()
+
+        // Embed every fact in a single batch call. Cloud providers turn this
+        // into one network round-trip instead of N (one per fact); on-device
+        // providers map over their single-text path. The result is
+        // index-aligned with [facts].
+        val embeddings = try {
+            provider.embed(facts)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Timber.tag(TAG).w(e, "Failed to embed extracted facts; skipping the pass")
+            return MemoryExtractionOutcome(parsed = facts.size, saved = 0, skippedDuplicates = 0)
+        }
+        if (embeddings.size != facts.size) {
+            // Defensive: a provider that breaks the index-alignment contract
+            // would mis-attribute embeddings to facts — drop the pass rather
+            // than persist scrambled vectors.
+            Timber.tag(TAG).w(
+                "Embedding count %d != fact count %d; skipping the pass",
+                embeddings.size,
+                facts.size,
+            )
+            return MemoryExtractionOutcome(parsed = facts.size, saved = 0, skippedDuplicates = 0)
+        }
+
         val source = MemorySource.ChatSession(sessionId)
         val acceptedEmbeddings = mutableListOf<FloatArray>()
         var saved = 0
         var skipped = 0
 
-        for (fact in facts) {
-            val embedding = try {
-                provider.embed(fact)
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                Timber.tag(TAG).w(e, "Failed to embed extracted fact; skipping it")
-                continue
-            }
-
+        for (i in facts.indices) {
+            val embedding = embeddings[i]
             if (isDuplicate(embedding, searchPoolLimit, acceptedEmbeddings)) {
                 skipped++
                 continue
             }
 
-            memoryRepository.saveMemory(text = fact, embedding = embedding, source = source)
+            memoryRepository.saveMemory(text = facts[i], embedding = embedding, source = source)
             acceptedEmbeddings += embedding
             saved++
         }

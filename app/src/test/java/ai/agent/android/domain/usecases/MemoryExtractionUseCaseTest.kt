@@ -16,7 +16,6 @@ import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
-import io.mockk.slot
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -61,7 +60,13 @@ class MemoryExtractionUseCaseTest {
         coEvery { loadModelUseCase.invoke(any()) } returns Result.Success(Unit)
         coEvery { promptTemplateEngine.render(any(), any()) } answers { firstArg() }
         coEvery { embeddingProviderResolver.resolve() } returns embeddingProvider
-        coEvery { embeddingProvider.embed(any<String>()) } returns floatArrayOf(1f, 0f)
+        // Default batch stub: one orthogonal (one-hot) vector per fact so
+        // facts are distinct by default. Index-aligned with the input list,
+        // matching the EmbeddingProvider.embed(List) contract.
+        coEvery { embeddingProvider.embed(any<List<String>>()) } answers {
+            val texts = firstArg<List<String>>()
+            texts.indices.map { i -> FloatArray(texts.size) { if (it == i) 1f else 0f } }
+        }
         every { settingsRepository.maxMemoryChunksForSearch } returns flowOf(1000)
         coEvery { memoryRepository.findSimilarMemories(any(), any(), any()) } returns emptyList()
         coEvery { memoryRepository.saveMemory(any(), any(), any()) } returns 1L
@@ -89,10 +94,8 @@ class MemoryExtractionUseCaseTest {
               {"type": "relation", "text": "Has a brother named Alex"}
             ]""",
         )
-        // Distinct (orthogonal) embeddings so the two facts are not collapsed
-        // as within-pass duplicates.
-        coEvery { embeddingProvider.embed("Prefers dark mode") } returns floatArrayOf(1f, 0f)
-        coEvery { embeddingProvider.embed("Has a brother named Alex") } returns floatArrayOf(0f, 1f)
+        // Default batch stub yields distinct (orthogonal) vectors per fact, so
+        // neither is collapsed as a within-pass duplicate.
 
         val outcome = useCase(sessionId, messages)
 
@@ -166,8 +169,8 @@ class MemoryExtractionUseCaseTest {
             ]""",
         )
         // Both facts embed to the same vector, so the second collides with the first within the pass.
-        val embeddingSlot = slot<String>()
-        coEvery { embeddingProvider.embed(capture(embeddingSlot)) } returns floatArrayOf(0.5f, 0.5f)
+        coEvery { embeddingProvider.embed(any<List<String>>()) } returns
+            listOf(floatArrayOf(0.5f, 0.5f), floatArrayOf(0.5f, 0.5f))
 
         val outcome = useCase(sessionId, messages)
 
@@ -197,20 +200,20 @@ class MemoryExtractionUseCaseTest {
     }
 
     @Test
-    fun `given embedding fails for a fact when invoke then skips that fact`() = runTest {
+    fun `given batch embedding fails when invoke then saves nothing and does not throw`() = runTest {
         stubReply(
             """[
               {"type": "preference", "text": "Likes tea"},
               {"type": "preference", "text": "Likes coffee"}
             ]""",
         )
-        coEvery { embeddingProvider.embed("Likes tea") } throws RuntimeException("boom")
-        coEvery { embeddingProvider.embed("Likes coffee") } returns floatArrayOf(0f, 1f)
+        // The batch embed endpoint is all-or-nothing; a failure drops the pass.
+        coEvery { embeddingProvider.embed(any<List<String>>()) } throws RuntimeException("boom")
 
         val outcome = useCase(sessionId, messages)
 
         assertEquals(2, outcome.parsed)
-        assertEquals(1, outcome.saved)
-        coVerify(exactly = 1) { memoryRepository.saveMemory("Likes coffee", any(), any()) }
+        assertEquals(0, outcome.saved)
+        coVerify(exactly = 0) { memoryRepository.saveMemory(any(), any(), any()) }
     }
 }

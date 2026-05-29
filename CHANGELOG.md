@@ -22,14 +22,19 @@ details.
   - A new `MemoryExtractionUseCase` (domain) runs the local model once with a
     conservative, no-hallucination prompt
     (`DefaultPrompts.MemoryExtraction.SYSTEM_FALLBACK`, `$DATE`-grounded) that
-    returns a JSON array of `{type, text}` facts; each fact is embedded with
-    the active `EmbeddingProvider` and saved only if it is not a near-duplicate
+    returns a JSON array of `{type, text}` facts; all facts are embedded in a
+    single batch `EmbeddingProvider.embed(List)` call (one cloud round-trip
+    instead of N) and each is saved only if it is not a near-duplicate
     (cosine ≥ 0.92) of an existing chunk or another fact from the same pass.
   - A `MemoryAutoExtractionCoordinator` (domain, app-scoped) triggers the pass
     on pipeline completion with a 30 s per-session debounce, short-circuiting
     when the toggle is off and deferring while another pipeline is still
-    generating (the shared on-device engine allows only one active
-    conversation, so it must not race a foreground response).
+    generating.
+  - The on-device inference engine (`LiteRTLlmEngine`) now serialises every
+    generation behind a `Mutex`, since LiteRT-LM allows only one active
+    conversation — this prevents the background extraction pass and a
+    foreground response from concurrently tearing down each other's session
+    (which could crash the native layer).
   - Memory chunks now carry a typed `MemorySource`
     (`ChatSession` / `Manual` / `Compaction` / `Unknown`), persisted via a new
     `memory_chunks.source` column (Room migration 25 → 26, legacy rows backfilled

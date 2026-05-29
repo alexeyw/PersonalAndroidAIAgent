@@ -97,7 +97,7 @@ class MemoryExtractionIntegrationTest {
 
     @Test
     fun extraction_persistsFactWithChatSessionSource() = runBlocking {
-        coEvery { embeddingProvider.embed(any<String>()) } returns floatArrayOf(1f, 0f, 0f)
+        coEvery { embeddingProvider.embed(any<List<String>>()) } returns listOf(floatArrayOf(1f, 0f, 0f))
 
         val outcome = useCase(sessionId, messages)
 
@@ -112,7 +112,7 @@ class MemoryExtractionIntegrationTest {
     @Test
     fun extraction_skipsFactAlreadyStored() = runBlocking {
         val embedding = floatArrayOf(0f, 1f, 0f)
-        coEvery { embeddingProvider.embed(any<String>()) } returns embedding
+        coEvery { embeddingProvider.embed(any<List<String>>()) } returns listOf(embedding)
         // Pre-seed an identical chunk; the real cosine search must flag the
         // extracted fact as a duplicate (similarity 1.0 >= 0.92).
         repository.saveMemory("Prefers dark mode", embedding, MemorySource.Manual)
