@@ -1,3 +1,4 @@
+import ai.agent.android.buildtools.BrowserEditorConstantsGenerator
 import dev.detekt.gradle.Detekt
 
 /**
@@ -483,6 +484,89 @@ val checkNoInternalFqn by tasks.registering {
     }
 }
 tasks.named("check") { dependsOn(checkNoInternalFqn) }
+
+// Phase 24 / Task 8/9 — browser pipeline-editor constant sync automation.
+//
+// `pipeline-editor.html` mirrors a slice of the Android domain (node types,
+// prompt variables, available tools, default prompts). Those mirrors used to be
+// kept in sync by review alone and drifted (Task 6). `generateBrowserEditorConstants`
+// regenerates the `AUTO-GEN` blocks straight from the domain sources;
+// `verifyBrowserEditorConstants` (wired into `check`) fails the build if the
+// committed HTML has drifted. The pure generation logic lives in
+// `buildSrc` (`BrowserEditorConstantsGenerator`) and is unit-tested there.
+val browserEditorHtmlFile = file("$rootDir/pipeline-editor.html")
+val browserEditorNodeTypeFile =
+    file("$projectDir/src/main/java/ai/agent/android/domain/models/NodeType.kt")
+val browserEditorDefaultPromptsFile =
+    file("$projectDir/src/main/java/ai/agent/android/domain/constants/DefaultPrompts.kt")
+val browserEditorPromptModuleFile =
+    file("$projectDir/src/main/java/ai/agent/android/di/PromptTemplateModule.kt")
+val browserEditorToolsModuleFile =
+    file("$projectDir/src/main/java/ai/agent/android/di/LocalToolsModule.kt")
+// Provider `KEY` constants + tool `TOOL_NAME` constants the generator must resolve.
+val browserEditorClassSourceFiles: Set<File> = buildSet {
+    addAll(fileTree("$projectDir/src/main/java/ai/agent/android/data/prompt") { include("**/*.kt") }.files)
+    addAll(fileTree("$projectDir/src/main/java/ai/agent/android/data/tools/local") { include("**/*.kt") }.files)
+}
+// Every file whose content feeds the generated blocks; drives up-to-date checks.
+val browserEditorInputFiles: Set<File> = browserEditorClassSourceFiles + setOf(
+    browserEditorNodeTypeFile,
+    browserEditorDefaultPromptsFile,
+    browserEditorPromptModuleFile,
+    browserEditorToolsModuleFile,
+)
+
+val generateBrowserEditorConstants by tasks.registering {
+    group = "build"
+    description =
+        "Regenerates the AUTO-GEN constant blocks in pipeline-editor.html from the Android domain sources."
+    inputs.files(browserEditorInputFiles)
+    inputs.file(browserEditorHtmlFile)
+    outputs.file(browserEditorHtmlFile)
+    doLast {
+        val current = browserEditorHtmlFile.readText()
+        val rendered = BrowserEditorConstantsGenerator.render(
+            html = current,
+            nodeTypeSource = browserEditorNodeTypeFile.readText(),
+            defaultPromptsSource = browserEditorDefaultPromptsFile.readText(),
+            promptTemplateModuleSource = browserEditorPromptModuleFile.readText(),
+            localToolsModuleSource = browserEditorToolsModuleFile.readText(),
+            classSources = browserEditorClassSourceFiles.associate { it.nameWithoutExtension to it.readText() },
+        )
+        if (rendered != current) {
+            browserEditorHtmlFile.writeText(rendered)
+            logger.lifecycle("pipeline-editor.html: regenerated AUTO-GEN constants.")
+        } else {
+            logger.lifecycle("pipeline-editor.html: AUTO-GEN constants already up to date.")
+        }
+    }
+}
+
+val verifyBrowserEditorConstants by tasks.registering {
+    group = "verification"
+    description =
+        "Fails the build if pipeline-editor.html AUTO-GEN constant blocks have drifted from the Android domain sources."
+    inputs.files(browserEditorInputFiles)
+    inputs.file(browserEditorHtmlFile)
+    doLast {
+        val drifted = BrowserEditorConstantsGenerator.drift(
+            html = browserEditorHtmlFile.readText(),
+            nodeTypeSource = browserEditorNodeTypeFile.readText(),
+            defaultPromptsSource = browserEditorDefaultPromptsFile.readText(),
+            promptTemplateModuleSource = browserEditorPromptModuleFile.readText(),
+            localToolsModuleSource = browserEditorToolsModuleFile.readText(),
+            classSources = browserEditorClassSourceFiles.associate { it.nameWithoutExtension to it.readText() },
+        )
+        if (drifted.isNotEmpty()) {
+            throw GradleException(
+                "pipeline-editor.html is out of sync with the Android domain sources.\n" +
+                    "Drifted AUTO-GEN block(s): ${drifted.joinToString(", ")}.\n" +
+                    "Run `./gradlew :app:generateBrowserEditorConstants` and commit the updated pipeline-editor.html.",
+            )
+        }
+    }
+}
+tasks.named("check") { dependsOn(verifyBrowserEditorConstants) }
 
 dependencies {
     // Phase 21 / Task 1/11: design-system module — `KnotworkTheme` (currently

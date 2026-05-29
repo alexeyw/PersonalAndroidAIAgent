@@ -15,6 +15,20 @@ details.
 
 ### Added
 
+- **Browser-editor constant sync automation** (Phase 24 / Task 8/9). The
+  `:app:generateBrowserEditorConstants` Gradle task regenerates the
+  `NODE_TYPES`, `PROMPT_VARIABLES`, `AVAILABLE_TOOLS` and
+  `DEFAULT_SYSTEM_PROMPTS` blocks of `pipeline-editor.html` straight from the
+  Android domain sources (`NodeType.kt`, `DefaultPrompts.kt`,
+  `PromptTemplateModule.kt`, `LocalToolsModule.kt`), injecting them between
+  `AUTO-GEN` markers. `:app:verifyBrowserEditorConstants` — wired into
+  `./gradlew check` — fails the build if the committed HTML has drifted,
+  replacing the previous review-only "KEEP IN SYNC" rule that had let those
+  mirrors diverge (Task 6). The pure generation logic lives in `buildSrc`
+  (`BrowserEditorConstantsGenerator`) with its own JUnit suite; editor-only
+  metadata (palette order, colours, icons, tool labels) is cross-checked
+  against the domain set so adding a `NodeType`/tool without metadata fails
+  generation.
 - **Pipeline presets — browser editor** (Phase 24 / Task 7/9). The
   standalone `pipeline-editor.html` gains a `📚 Presets` top-bar button
   opening a modal with **Bundled** and **Mine** tabs:
