@@ -15,12 +15,14 @@ import ai.koog.prompt.llm.LLMCapability
 import ai.koog.prompt.llm.LLMProvider
 import ai.koog.prompt.llm.LLModel
 import ai.koog.prompt.streaming.StreamFrame
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
+import timber.log.Timber
 import javax.inject.Inject
 
 /**
@@ -125,16 +127,30 @@ class DelegateTaskTool @Inject constructor(
                 if (result.isNullOrBlank()) {
                     "Error: Task delegation to '${provider.id}' timed out or returned empty after 60 seconds."
                 } else {
-                    // Task succeeded. Embed the result with the active provider.
                     val responseText = result
-                    val embedding = embeddingProviderResolver.resolve().embed(responseText)
+                    // Persisting to long-term memory is a best-effort side effect:
+                    // the embed call can hit the network under a cloud provider and
+                    // fail. Never let that discard the hard-won delegated result —
+                    // catch and report, but still return the response to the caller.
+                    // CancellationException is rethrown to preserve structured
+                    // concurrency.
+                    val savedToMemory = try {
+                        val embedding = embeddingProviderResolver.resolve().embed(responseText)
+                        memoryRepository.saveMemory(responseText, embedding)
+                        true
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        Timber.w(e, "Failed to persist delegated result to memory; returning the result anyway")
+                        false
+                    }
 
-                    // Save to long-term memory so the local agent can recall it later
-                    memoryRepository.saveMemory(responseText, embedding)
-
-                    "Success: Task completed by '${provider.id}' and saved to memory. " +
+                    val memoryNote = if (savedToMemory) "and saved to memory" else "(memory save failed)"
+                    "Success: Task completed by '${provider.id}' $memoryNote. " +
                         "Summary of response: ${responseText.take(RESPONSE_PREVIEW_CHAR_LIMIT)}..."
                 }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 "Error: Task delegation failed due to an exception: ${e.message}"
             }

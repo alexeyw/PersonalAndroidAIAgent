@@ -85,6 +85,31 @@ class DelegateTaskToolTest {
     }
 
     @Test
+    fun `executeDelegation still returns the delegated result when memory embedding fails`() {
+        runTest {
+            val targetModel = "anthropic"
+            val taskDescription = "Write a hello world app"
+            val mockResponseText = "Here is your hello world app"
+
+            coEvery { koogClientFactory.createAnthropicExecutor() } returns mockClient
+            coEvery { mockClient.models() } returns emptyList()
+            every { mockClient.llmProvider() } returns mockk(relaxed = true)
+            coEvery { mockClient.executeStreaming(any<Prompt>(), any<LLModel>()) } returns
+                kotlinx.coroutines.flow.flowOf(StreamFrame.TextDelta(mockResponseText))
+
+            // The (cloud) embedding call fails — the secondary memory write must
+            // not discard the primary delegated result.
+            coEvery { embeddingProvider.embed(mockResponseText) } throws RuntimeException("embedding backend down")
+
+            val result = delegateTaskTool.executeDelegation(taskDescription, targetModel)
+
+            assertTrue(result.startsWith("Success: Task completed"))
+            assertTrue(result.contains("memory save failed"))
+            coVerify(exactly = 0) { memoryRepository.saveMemory(any(), any()) }
+        }
+    }
+
+    @Test
     fun `executeDelegation returns error when target model is unsupported`() = runTest {
         val result = delegateTaskTool.executeDelegation("Task", "unknown_model")
         assertTrue(result.startsWith("Error: Unsupported target model"))
