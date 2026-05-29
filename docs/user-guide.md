@@ -321,6 +321,25 @@ speed-dial:
   hit **Use this preset** to spawn a fresh pipeline from the template
   and jump into the editor.
 
+### Pipeline presets
+
+A **pipeline preset** is a reusable template of a whole graph. Two kinds
+exist:
+
+- **Bundled** — a handful of curated starter presets that ship with the
+  app (local-only Q&A, cloud assist, tool-using ReAct, multi-step
+  research, clarify-then-act, routed local/cloud). They are read-only.
+- **Mine** — presets you create yourself with **Save as preset** (from a
+  pipeline's `⋮` menu). These live in the app's local database.
+
+Spawn a pipeline from a preset with the FAB's **+ From preset** option
+(see above); loading a preset always creates a *fresh* pipeline with new
+ids, so the template is never modified. Presets are interchangeable with
+the [browser pipeline editor](#browser-pipeline-editor): a bundled preset
+can be exported as a `*.preset.json` file (see below) and imported into
+the editor, and the editor can export its own `*.preset.json` for import
+back into the app.
+
 ### Managing presets
 
 Open **More → Library** to manage every pipeline preset. Bundled
