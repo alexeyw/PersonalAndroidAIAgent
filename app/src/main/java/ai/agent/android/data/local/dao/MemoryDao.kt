@@ -66,6 +66,27 @@ interface MemoryDao {
     suspend fun setMemoryPinned(id: Long, isPinned: Boolean)
 
     /**
+     * Replaces the comma-separated tag list of a single chunk. The text and
+     * embedding are untouched — tag edits do not require re-embedding.
+     *
+     * @param id Identifier of the chunk to update.
+     * @param tagsCsv New comma-separated tag list (empty string clears tags).
+     */
+    @Query("UPDATE memory_chunks SET tagsCsv = :tagsCsv WHERE id = :id")
+    suspend fun setMemoryTags(id: Long, tagsCsv: String)
+
+    /**
+     * Records that the given chunks were just retrieved into a pipeline run's
+     * Long-Term Memory context: increments each chunk's `useCount` and stamps
+     * `lastUsedAt`. Backs the detail sheet's "Used in N replies" line.
+     *
+     * @param ids Identifiers of the chunks that were injected.
+     * @param atMillis Epoch-millis to stamp as the most-recent use time.
+     */
+    @Query("UPDATE memory_chunks SET useCount = useCount + 1, lastUsedAt = :atMillis WHERE id IN (:ids)")
+    suspend fun recordUsage(ids: List<Long>, atMillis: Long)
+
+    /**
      * Retrieves a limited number of the most recent memory chunks from the database.
      * This is used to load a bounded number of embeddings into memory for vector similarity search.
      *

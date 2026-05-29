@@ -105,7 +105,7 @@ class DelegateTaskToolTest {
 
             assertTrue(result.startsWith("Success: Task completed"))
             assertTrue(result.contains("memory save failed"))
-            coVerify(exactly = 0) { memoryRepository.saveMemory(any(), any()) }
+            coVerify(exactly = 0) { memoryRepository.saveMemory(any(), any(), any(), any()) }
         }
     }
 
@@ -113,7 +113,7 @@ class DelegateTaskToolTest {
     fun `executeDelegation returns error when target model is unsupported`() = runTest {
         val result = delegateTaskTool.executeDelegation("Task", "unknown_model")
         assertTrue(result.startsWith("Error: Unsupported target model"))
-        coVerify(exactly = 0) { memoryRepository.saveMemory(any(), any()) }
+        coVerify(exactly = 0) { memoryRepository.saveMemory(any(), any(), any(), any()) }
     }
 
     @Test
@@ -121,7 +121,7 @@ class DelegateTaskToolTest {
         coEvery { koogClientFactory.createAnthropicExecutor() } returns null
         val result = delegateTaskTool.executeDelegation("Task", "anthropic")
         assertTrue(result.startsWith("Error: Client for"))
-        coVerify(exactly = 0) { memoryRepository.saveMemory(any(), any()) }
+        coVerify(exactly = 0) { memoryRepository.saveMemory(any(), any(), any(), any()) }
     }
 
     @Test
@@ -136,7 +136,7 @@ class DelegateTaskToolTest {
             val result = delegateTaskTool.executeDelegation("Task", "anthropic")
 
             assertTrue(result.startsWith("Error: Task delegation failed"))
-            coVerify(exactly = 0) { memoryRepository.saveMemory(any(), any()) }
+            coVerify(exactly = 0) { memoryRepository.saveMemory(any(), any(), any(), any()) }
         }
     }
 }

@@ -54,7 +54,7 @@ class SaveMessageToMemoryUseCaseTest {
         val outcome = useCase("   ")
 
         assertEquals(SaveToMemoryOutcome.Skipped, outcome)
-        coVerify(exactly = 0) { memoryRepository.saveMemory(any(), any(), any()) }
+        coVerify(exactly = 0) { memoryRepository.saveMemory(any(), any(), any(), any()) }
     }
 
     @Test
@@ -66,6 +66,6 @@ class SaveMessageToMemoryUseCaseTest {
 
         assertTrue(outcome is SaveToMemoryOutcome.Failed)
         assertEquals(boom, (outcome as SaveToMemoryOutcome.Failed).cause)
-        coVerify(exactly = 0) { memoryRepository.saveMemory(any(), any(), any()) }
+        coVerify(exactly = 0) { memoryRepository.saveMemory(any(), any(), any(), any()) }
     }
 }

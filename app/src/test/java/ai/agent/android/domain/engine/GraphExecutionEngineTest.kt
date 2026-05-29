@@ -36,6 +36,7 @@ import ai.agent.android.domain.repositories.ChatRepository
 import ai.agent.android.domain.repositories.ClarificationRepository
 import ai.agent.android.domain.repositories.CrashReportingRepository
 import ai.agent.android.domain.repositories.LocalModelRepository
+import ai.agent.android.domain.repositories.MemoryRepository
 import ai.agent.android.domain.repositories.MetricsRepository
 import ai.agent.android.domain.repositories.NetworkActivityTracker
 import ai.agent.android.domain.repositories.SettingsRepository
@@ -83,6 +84,7 @@ class GraphExecutionEngineTest {
     private lateinit var clarificationRepository: ClarificationRepository
     private lateinit var crashReportingRepository: CrashReportingRepository
     private lateinit var localModelRepository: LocalModelRepository
+    private lateinit var memoryRepository: MemoryRepository
 
     private lateinit var engine: GraphExecutionEngine
     private lateinit var promptTemplateEngine: PromptTemplateEngine
@@ -108,6 +110,7 @@ class GraphExecutionEngineTest {
         loadModelUseCase = mockk()
         crashReportingRepository = mockk(relaxed = true)
         localModelRepository = mockk(relaxed = true)
+        memoryRepository = mockk(relaxed = true)
         clarificationRepository = mockk()
         // The resolver is exercised whenever a CLOUD node fires; default to a sensible
         // Koog model so each individual test does not have to wire it up.
@@ -195,6 +198,7 @@ class GraphExecutionEngineTest {
             retrieveRelevantMemoryUseCase,
             crashReportingRepository,
             localModelRepository,
+            memoryRepository,
         )
 
         coEvery { getContextWindowUseCase(sessionId) } returns ""
@@ -423,6 +427,7 @@ class GraphExecutionEngineTest {
             PromptTemplateEngine(),
             emptySet(),
             NodeContextBuilder(),
+            mockk(relaxed = true),
             mockk(relaxed = true),
             mockk(relaxed = true),
             mockk(relaxed = true),
@@ -858,6 +863,7 @@ class GraphExecutionEngineTest {
             retrieveRelevantMemoryUseCase,
             crashReportingRepository,
             localModelRepository,
+            memoryRepository,
         )
 
         val inputNode = NodeModel("input", NodeType.INPUT, 0f, 0f)
@@ -1031,6 +1037,7 @@ class GraphExecutionEngineTest {
                 retrieveRelevantMemoryUseCase,
                 crashReportingRepository,
                 localModelRepository,
+            memoryRepository,
             )
 
             // Generate a question with two options; the first one is the default the

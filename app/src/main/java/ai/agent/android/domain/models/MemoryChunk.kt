@@ -12,6 +12,14 @@ package ai.agent.android.domain.models
  *   compaction passes.
  * @property source Provenance of the chunk (auto-extracted from a chat,
  *   saved manually, produced by compaction, or unknown for legacy rows).
+ * @property tags Free-form labels attached to the chunk (e.g. the
+ *   auto-extraction fact type `fact` / `preference` / `project`, or
+ *   user-added tags). Lower-case, kebab-case by convention; may be empty.
+ * @property useCount Number of times this chunk has been injected into a
+ *   pipeline run's Long-Term Memory context block. Drives the detail sheet's
+ *   "Used in N replies" line; `0` for chunks never retrieved.
+ * @property lastUsedAt Epoch-millis of the most recent retrieval, or `null`
+ *   if the chunk has never been used.
  */
 data class MemoryChunk(
     val id: Long,
@@ -20,6 +28,9 @@ data class MemoryChunk(
     val timestamp: Long,
     val isPinned: Boolean = false,
     val source: MemorySource = MemorySource.Unknown,
+    val tags: List<String> = emptyList(),
+    val useCount: Int = 0,
+    val lastUsedAt: Long? = null,
 ) {
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
@@ -33,6 +44,9 @@ data class MemoryChunk(
         if (timestamp != other.timestamp) return false
         if (isPinned != other.isPinned) return false
         if (source != other.source) return false
+        if (tags != other.tags) return false
+        if (useCount != other.useCount) return false
+        if (lastUsedAt != other.lastUsedAt) return false
 
         return true
     }
@@ -44,6 +58,9 @@ data class MemoryChunk(
         result = 31 * result + timestamp.hashCode()
         result = 31 * result + isPinned.hashCode()
         result = 31 * result + source.hashCode()
+        result = 31 * result + tags.hashCode()
+        result = 31 * result + useCount
+        result = 31 * result + (lastUsedAt?.hashCode() ?: 0)
         return result
     }
 }

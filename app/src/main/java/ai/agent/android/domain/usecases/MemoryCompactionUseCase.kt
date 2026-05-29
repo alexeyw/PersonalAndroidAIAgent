@@ -116,6 +116,11 @@ class MemoryCompactionUseCase @Inject constructor(
                 }
             }
 
+            // A real pass ran (we got past the candidate-count gate), so stamp
+            // the last-compacted time for the Memory stats card — even when no
+            // cluster met the size floor, the user/worker did exercise compaction.
+            settingsRepository.setMemoryLastCompactedAt(nowMillis)
+
             MemoryCompactionOutcome(
                 clustersProcessed = clustersProcessed,
                 chunksConsolidated = chunksConsolidated,

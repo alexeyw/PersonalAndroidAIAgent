@@ -37,7 +37,12 @@ class MemoryRepositoryImpl @Inject constructor(private val memoryDao: MemoryDao,
      */
     private val recentSimilarityScores = MutableStateFlow<List<Float>>(emptyList())
 
-    override suspend fun saveMemory(text: String, embedding: FloatArray, source: MemorySource): Long =
+    override suspend fun saveMemory(
+        text: String,
+        embedding: FloatArray,
+        source: MemorySource,
+        tags: List<String>,
+    ): Long =
         withContext(Dispatchers.IO) {
             val embeddingString = converters.fromFloatArray(embedding)
                 ?: throw IllegalArgumentException("Failed to serialize embedding")
@@ -47,6 +52,7 @@ class MemoryRepositoryImpl @Inject constructor(private val memoryDao: MemoryDao,
                 embedding = embeddingString,
                 timestamp = System.currentTimeMillis(),
                 source = source,
+                tagsCsv = tags.toTagsCsv(),
             )
             memoryDao.insertMemory(entity)
         }
@@ -123,6 +129,17 @@ class MemoryRepositoryImpl @Inject constructor(private val memoryDao: MemoryDao,
         memoryDao.setMemoryPinned(id = id, isPinned = pinned)
     }
 
+    override suspend fun setMemoryTags(id: Long, tags: List<String>) = withContext(Dispatchers.IO) {
+        memoryDao.setMemoryTags(id = id, tagsCsv = tags.toTagsCsv())
+    }
+
+    override suspend fun recordUsage(ids: List<Long>, atMillis: Long) {
+        if (ids.isEmpty()) return
+        withContext(Dispatchers.IO) {
+            memoryDao.recordUsage(ids = ids, atMillis = atMillis)
+        }
+    }
+
     override suspend fun deleteAllMemories() = withContext(Dispatchers.IO) {
         memoryDao.deleteAllMemories()
         recentSimilarityScores.value = emptyList()
@@ -160,8 +177,23 @@ class MemoryRepositoryImpl @Inject constructor(private val memoryDao: MemoryDao,
             timestamp = timestamp,
             isPinned = isPinned,
             source = source,
+            tags = tagsCsv.toTagList(),
+            useCount = useCount,
+            lastUsedAt = lastUsedAt,
         )
     }
+
+    /**
+     * Encodes a tag list to the comma-separated form stored in `tagsCsv`.
+     * Blanks are dropped and surrounding whitespace trimmed so a round-trip
+     * through [toTagList] is stable.
+     */
+    private fun List<String>.toTagsCsv(): String =
+        mapNotNull { it.trim().ifEmpty { null } }.joinToString(separator = ",")
+
+    /** Decodes the comma-separated `tagsCsv` column back into a tag list. */
+    private fun String.toTagList(): List<String> =
+        split(",").mapNotNull { it.trim().ifEmpty { null } }
 
     /**
      * Calculates the cosine similarity between two vectors.

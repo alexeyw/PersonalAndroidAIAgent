@@ -285,6 +285,20 @@ interface SettingsRepository {
     suspend fun setMaxMemoryChunksForSearch(limit: Int)
 
     /**
+     * A [Flow] emitting the epoch-millis of the most recent successful memory
+     * compaction pass (manual or background), or `0L` when compaction has
+     * never run. Powers the "compacted N ago" line on the Memory stats card.
+     */
+    val memoryLastCompactedAt: Flow<Long>
+
+    /**
+     * Records the time a compaction pass finished.
+     *
+     * @param millis Epoch-millis to store as the most-recent compaction time.
+     */
+    suspend fun setMemoryLastCompactedAt(millis: Long)
+
+    /**
      * A [Flow] emitting the maximum number of long-term memory chunks a single
      * retrieval returns into a node's context (the "top-K" of the similarity
      * search). Distinct from [maxMemoryChunksForSearch], which caps how many

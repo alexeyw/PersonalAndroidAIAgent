@@ -135,7 +135,7 @@ class MemoryExtractionUseCase @Inject constructor(
      * @param facts Parsed candidate facts.
      * @return Outcome counters for the pass.
      */
-    private suspend fun persistNovelFacts(sessionId: String, facts: List<String>): MemoryExtractionOutcome {
+    private suspend fun persistNovelFacts(sessionId: String, facts: List<ExtractedFact>): MemoryExtractionOutcome {
         val searchPoolLimit = settingsRepository.maxMemoryChunksForSearch.first()
         val provider = embeddingProviderResolver.resolve()
 
@@ -144,7 +144,7 @@ class MemoryExtractionUseCase @Inject constructor(
         // providers map over their single-text path. The result is
         // index-aligned with [facts].
         val embeddings = try {
-            provider.embed(facts)
+            provider.embed(facts.map { it.text })
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -175,7 +175,14 @@ class MemoryExtractionUseCase @Inject constructor(
                 continue
             }
 
-            memoryRepository.saveMemory(text = facts[i], embedding = embedding, source = source)
+            memoryRepository.saveMemory(
+                text = facts[i].text,
+                embedding = embedding,
+                source = source,
+                // Persist the fact type as a tag so the Memory surface can
+                // render it (e.g. `fact` / `preference` / `project`).
+                tags = listOf(facts[i].type),
+            )
             acceptedEmbeddings += embedding
             saved++
         }
@@ -219,7 +226,7 @@ class MemoryExtractionUseCase @Inject constructor(
      * @param reply Raw model output.
      * @return The extracted fact texts (possibly empty).
      */
-    private fun parseFacts(reply: String): List<String> {
+    private fun parseFacts(reply: String): List<ExtractedFact> {
         val jsonArrayText = extractJsonArray(reply) ?: return emptyList()
         return try {
             val array = JSONArray(jsonArrayText)
@@ -229,7 +236,7 @@ class MemoryExtractionUseCase @Inject constructor(
                     val type = obj.optString(KEY_TYPE).trim().lowercase()
                     val text = obj.optString(KEY_TEXT).trim()
                     if (text.isNotEmpty() && type in VALID_FACT_TYPES) {
-                        add(text)
+                        add(ExtractedFact(type = type, text = text))
                     }
                 }
             }
@@ -238,6 +245,12 @@ class MemoryExtractionUseCase @Inject constructor(
             emptyList()
         }
     }
+
+    /**
+     * One parsed extraction fact: its [type] (a [VALID_FACT_TYPES] member,
+     * persisted as a tag) and its durable [text].
+     */
+    private data class ExtractedFact(val type: String, val text: String)
 
     /**
      * Isolates the JSON array substring from a model reply, tolerating
