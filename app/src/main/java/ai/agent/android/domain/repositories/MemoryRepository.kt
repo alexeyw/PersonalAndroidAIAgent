@@ -70,6 +70,25 @@ interface MemoryRepository {
     suspend fun compactMemory(keepLimit: Int)
 
     /**
+     * Retrieves the non-pinned chunks older than [olderThanMillis] — the
+     * candidate set for the background compaction worker. Pinned chunks are
+     * never returned (they are exempt from consolidation), and chunks younger
+     * than the cutoff are excluded so recent facts keep their exact wording.
+     *
+     * @param olderThanMillis Exclusive upper bound on a chunk's timestamp.
+     * @return Candidate chunks ordered newest-first.
+     */
+    suspend fun getCompactionCandidates(olderThanMillis: Long): List<MemoryChunk>
+
+    /**
+     * One-shot total count of stored chunks (pinned and unpinned). Backs the
+     * compaction scheduler's hard-limit check.
+     *
+     * @return The number of stored memory chunks.
+     */
+    suspend fun countMemories(): Int
+
+    /**
      * Deletes a memory chunk by its unique ID.
      *
      * @param id The ID of the memory chunk to delete.

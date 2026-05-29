@@ -94,6 +94,11 @@ class SettingsManager @Inject constructor(private val dataStore: DataStore<Prefe
 
         // Phase 25 / Task 2 — Memory write auto-extraction.
         val AUTO_EXTRACT_ENABLED = booleanPreferencesKey("auto_extract_enabled")
+
+        // Phase 25 / Task 5 — Background memory compaction.
+        val MEMORY_COMPACTION_ENABLED = booleanPreferencesKey("memory_compaction_enabled")
+        val MEMORY_COMPACTION_AGE_DAYS = intPreferencesKey("memory_compaction_age_days")
+        val MAX_MEMORY_CHUNKS = intPreferencesKey("max_memory_chunks")
     }
 
     override val isFirstLaunch: Flow<Boolean> = dataStore.data
@@ -730,6 +735,66 @@ class SettingsManager @Inject constructor(private val dataStore: DataStore<Prefe
         .map { preferences ->
             preferences[PreferencesKeys.AUTO_EXTRACT_ENABLED] ?: SettingsDefaults.AUTO_EXTRACT_ENABLED_DEFAULT
         }
+
+    override val memoryCompactionEnabled: Flow<Boolean> = dataStore.data
+        .catch { exception ->
+            if (exception is IOException) {
+                Timber.e(exception, "Error reading preferences")
+                emit(emptyPreferences())
+            } else {
+                throw exception
+            }
+        }
+        .map { preferences ->
+            preferences[PreferencesKeys.MEMORY_COMPACTION_ENABLED]
+                ?: SettingsDefaults.MEMORY_COMPACTION_ENABLED_DEFAULT
+        }
+
+    override suspend fun setMemoryCompactionEnabled(enabled: Boolean) {
+        dataStore.edit { preferences ->
+            preferences[PreferencesKeys.MEMORY_COMPACTION_ENABLED] = enabled
+        }
+    }
+
+    override val memoryCompactionAgeDays: Flow<Int> = dataStore.data
+        .catch { exception ->
+            if (exception is IOException) {
+                Timber.e(exception, "Error reading preferences")
+                emit(emptyPreferences())
+            } else {
+                throw exception
+            }
+        }
+        .map { preferences ->
+            preferences[PreferencesKeys.MEMORY_COMPACTION_AGE_DAYS]
+                ?: SettingsDefaults.MEMORY_COMPACTION_AGE_DAYS_DEFAULT
+        }
+
+    override suspend fun setMemoryCompactionAgeDays(days: Int) {
+        dataStore.edit { preferences ->
+            preferences[PreferencesKeys.MEMORY_COMPACTION_AGE_DAYS] = days
+        }
+    }
+
+    override val maxMemoryChunks: Flow<Int> = dataStore.data
+        .catch { exception ->
+            if (exception is IOException) {
+                Timber.e(exception, "Error reading preferences")
+                emit(emptyPreferences())
+            } else {
+                throw exception
+            }
+        }
+        .map { preferences ->
+            preferences[PreferencesKeys.MAX_MEMORY_CHUNKS]
+                ?: SettingsDefaults.MAX_MEMORY_CHUNKS_DEFAULT
+        }
+
+    override suspend fun setMaxMemoryChunks(limit: Int) {
+        dataStore.edit { preferences ->
+            preferences[PreferencesKeys.MAX_MEMORY_CHUNKS] = limit
+        }
+    }
 
     override suspend fun setAutoExtractEnabled(enabled: Boolean) {
         dataStore.edit { preferences ->

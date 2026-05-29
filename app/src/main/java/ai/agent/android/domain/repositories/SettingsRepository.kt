@@ -599,6 +599,61 @@ interface SettingsRepository {
     suspend fun setAutoExtractEnabled(enabled: Boolean)
 
     /**
+     * `true` when the background memory-compaction worker is allowed to run.
+     * Drives the "Background compaction" toggle in Settings → Memory and is the
+     * short-circuit gate consulted by `MemoryCompactionWorker` at run time (a
+     * user flipping it off while a run is queued still cancels the work).
+     * Defaults to
+     * [ai.agent.android.domain.constants.SettingsDefaults.MEMORY_COMPACTION_ENABLED_DEFAULT]
+     * (`true`).
+     */
+    val memoryCompactionEnabled: Flow<Boolean>
+
+    /**
+     * Persists the background memory-compaction toggle.
+     *
+     * @param enabled `true` to enable background compaction, `false` to disable
+     *   it (the worker then short-circuits to a no-op).
+     */
+    suspend fun setMemoryCompactionEnabled(enabled: Boolean)
+
+    /**
+     * Age threshold, in days, beyond which a non-pinned chunk becomes eligible
+     * for compaction. Chunks younger than this keep their exact wording; only
+     * older ones are clustered and consolidated. Defaults to
+     * [ai.agent.android.domain.constants.SettingsDefaults.MEMORY_COMPACTION_AGE_DAYS_DEFAULT]
+     * (30).
+     */
+    val memoryCompactionAgeDays: Flow<Int>
+
+    /**
+     * Persists the compaction age window.
+     *
+     * @param days The new age threshold in days; callers should keep it within
+     *   a sane range (validation of user-entered values lives in the Settings
+     *   ViewModel).
+     */
+    suspend fun setMemoryCompactionAgeDays(days: Int)
+
+    /**
+     * Hard ceiling on the total number of stored memory chunks. When the table
+     * grows past this, compaction is triggered out-of-schedule to keep the
+     * database bounded. Defaults to
+     * [ai.agent.android.domain.constants.SettingsDefaults.MAX_MEMORY_CHUNKS_DEFAULT]
+     * (5000).
+     */
+    val maxMemoryChunks: Flow<Int>
+
+    /**
+     * Persists the max-chunks hard limit.
+     *
+     * @param limit The new hard limit; callers should keep it within a sane
+     *   range (validation of user-entered values lives in the Settings
+     *   ViewModel).
+     */
+    suspend fun setMaxMemoryChunks(limit: Int)
+
+    /**
      * Resets the local-generation sampling parameters back to the
      * documented defaults ([SettingsDefaults.TEMPERATURE_DEFAULT],
      * [SettingsDefaults.TOP_K_DEFAULT], [SettingsDefaults.TOP_P_DEFAULT],

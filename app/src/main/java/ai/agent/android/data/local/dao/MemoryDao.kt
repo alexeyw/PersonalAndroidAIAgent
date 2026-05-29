@@ -109,6 +109,32 @@ interface MemoryDao {
     suspend fun deleteOldestMemories(keepLimit: Int)
 
     /**
+     * Retrieves the non-pinned memory chunks older than a given timestamp —
+     * the candidate set for background compaction.
+     *
+     * Pinned chunks (`isPinned = 1`) are excluded so they are never touched by
+     * consolidation, and fresh chunks (`timestamp >= :olderThan`) are excluded
+     * so recently-learned facts keep their exact wording. The full embedding
+     * payload is returned because the compaction worker clusters on it.
+     *
+     * @param olderThan Exclusive upper bound on `timestamp`; only rows strictly
+     *   older than this are returned.
+     * @return Candidate chunks ordered newest-first.
+     */
+    @Query("SELECT * FROM memory_chunks WHERE isPinned = 0 AND timestamp < :olderThan ORDER BY timestamp DESC")
+    suspend fun getCompactionCandidates(olderThan: Long): List<MemoryChunkEntity>
+
+    /**
+     * One-shot count of every stored memory chunk (pinned and unpinned). Used
+     * by the compaction scheduler's hard-limit check; distinct from the
+     * reactive [observeChunkCount] used by the Settings stats card.
+     *
+     * @return The total number of rows in `memory_chunks`.
+     */
+    @Query("SELECT COUNT(*) FROM memory_chunks")
+    suspend fun countMemories(): Int
+
+    /**
      * Removes every memory chunk from the table — including pinned entries.
      * Backs the Settings → Memory → Clear destructive action. Pinned-or-not
      * is intentionally ignored because the user has explicitly confirmed

@@ -98,6 +98,17 @@ class MemoryRepositoryImpl @Inject constructor(private val memoryDao: MemoryDao,
         memoryDao.deleteOldestMemories(keepLimit)
     }
 
+    override suspend fun getCompactionCandidates(olderThanMillis: Long): List<MemoryChunk> =
+        withContext(Dispatchers.IO) {
+            memoryDao.getCompactionCandidates(olderThanMillis).mapNotNull { entity ->
+                entity.toMemoryChunkOrNull()
+            }
+        }
+
+    override suspend fun countMemories(): Int = withContext(Dispatchers.IO) {
+        memoryDao.countMemories()
+    }
+
     override suspend fun deleteMemory(id: Long) = withContext(Dispatchers.IO) {
         memoryDao.deleteMemoryById(id)
     }

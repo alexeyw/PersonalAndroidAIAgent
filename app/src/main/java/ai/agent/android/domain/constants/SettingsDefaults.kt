@@ -146,4 +146,40 @@ object SettingsDefaults {
      * memory by hand can turn it off in Settings → Memory.
      */
     const val AUTO_EXTRACT_ENABLED_DEFAULT: Boolean = true
+
+    /**
+     * Default for the background memory-compaction toggle. `true` so the
+     * long-term memory keeps itself tidy out of the box: a daily worker
+     * (`MemoryCompactionWorker`, charging + idle only) clusters old non-pinned
+     * chunks and consolidates each dense cluster into a single summary chunk.
+     * Users who prefer their raw facts untouched can turn it off in
+     * Settings → Memory (UI lands in Phase 25 / Task 9).
+     */
+    const val MEMORY_COMPACTION_ENABLED_DEFAULT: Boolean = true
+
+    /**
+     * Default age, in days, after which a non-pinned chunk becomes a candidate
+     * for compaction. Fresh chunks are left alone so recently-learned facts
+     * keep their exact wording; only stale ones are eligible for clustering.
+     */
+    const val MEMORY_COMPACTION_AGE_DAYS_DEFAULT: Int = 30
+
+    /** Lower bound enforced when the user edits the compaction age window. */
+    const val MEMORY_COMPACTION_AGE_DAYS_MIN: Int = 7
+
+    /** Upper bound enforced when the user edits the compaction age window. */
+    const val MEMORY_COMPACTION_AGE_DAYS_MAX: Int = 90
+
+    /**
+     * Hard ceiling on the total number of stored memory chunks. When the table
+     * grows past this, compaction is triggered out-of-schedule (without waiting
+     * for the daily charging-and-idle window) to keep the database bounded.
+     */
+    const val MAX_MEMORY_CHUNKS_DEFAULT: Int = 5_000
+
+    /** Lower bound enforced when the user edits the max-chunks hard limit. */
+    const val MAX_MEMORY_CHUNKS_MIN: Int = 1_000
+
+    /** Upper bound enforced when the user edits the max-chunks hard limit. */
+    const val MAX_MEMORY_CHUNKS_MAX: Int = 20_000
 }
