@@ -240,8 +240,14 @@ The pane has three tabs:
 
 - **Console log** — every `[TAG] message` event from the current
   session in chronological order with millisecond timestamps. A row
-  of filter chips at the top lets you narrow to **All / Nodes / Tools
-  / Memory / Errors**.
+  of source filter chips at the top lets you narrow by origin —
+  **NODE / TOOL / MEMORY / RUNTIME / USER** — each toggling
+  independently. The **MEMORY** chip isolates long-term-memory
+  retrievals: each one is logged as
+  `Memory: query='…' → N hits (score, …)`, echoing the query, how many
+  chunks were surfaced, and their similarity scores. Turn on
+  **Settings → Privacy → Verbose memory logging** to expand each line
+  with a per-hit text snippet and score.
 - **Pipeline trace** — a structured view of the pipeline run as a tree
   of node spans (name, duration, status). Useful for understanding
   *why* a particular branch fired or a node was skipped.
@@ -783,6 +789,11 @@ encoder. The action trio:
   device meta + active pipeline / model identifiers to Firebase
   Crashlytics. Off by default; debug builds never report. Full
   policy in [SECURITY.md](../SECURITY.md).
+- **Verbose memory logging** — off by default. When on, the agent
+  console expands every memory-retrieval line with a per-hit text
+  snippet and similarity score (see [Console](#console)), and the
+  background compaction pass logs which chunks it merged. A local
+  diagnostic only — nothing leaves the device.
 - **Reset all settings** — typed-confirm dialog that restores
   every preference to defaults (API keys, downloaded models, and
   memory are untouched).

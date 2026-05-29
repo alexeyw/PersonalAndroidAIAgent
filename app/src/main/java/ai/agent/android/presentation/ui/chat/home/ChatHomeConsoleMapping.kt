@@ -65,7 +65,7 @@ fun ConsoleEvent.toConsoleLine(): ConsoleLine = ConsoleLine(
 internal fun ConsoleEventType.toConsoleSource(): ConsoleSource = when (this) {
     ConsoleEventType.NodeExecution -> ConsoleSource.NODE
     ConsoleEventType.ToolCall -> ConsoleSource.TOOL
-    ConsoleEventType.MemoryAccess -> ConsoleSource.RUNTIME
+    ConsoleEventType.MemoryAccess -> ConsoleSource.MEMORY
     ConsoleEventType.SystemMessage -> ConsoleSource.RUNTIME
     ConsoleEventType.Error -> ConsoleSource.RUNTIME
 }

@@ -140,8 +140,8 @@ class GraphExecutionEngine @Inject constructor(
             var memoizedMemories: List<MemoryChunk>? = null
             suspend fun resolveMemoriesOnce(): List<MemoryChunk> {
                 memoizedMemories?.let { return it }
-                val retrieved: List<MemoryChunk> = try {
-                    retrieveRelevantMemoryUseCase(userPrompt)
+                val scored: List<Pair<MemoryChunk, Float>> = try {
+                    retrieveRelevantMemoryUseCase.retrieveScored(userPrompt)
                 } catch (e: kotlinx.coroutines.CancellationException) {
                     // Memory retrieval suspends (embedding + DB lookup). Swallowing
                     // cancellation here would let the parent flow keep running after
@@ -151,11 +151,12 @@ class GraphExecutionEngine @Inject constructor(
                     Timber.tag("PipelineDebug").w(e, "Failed to retrieve long-term memories; continuing without them")
                     emptyList()
                 }
+                val verbose = settingsRepository.verboseMemoryLoggingEnabled.first()
                 pushConsole(
                     ConsoleEventType.MemoryAccess,
-                    "Memory: ${retrieved.size} chunk(s) retrieved",
+                    MemoryAccessLogFormatter.format(query = userPrompt, hits = scored, verbose = verbose),
                 )
-                return retrieved.also { memoizedMemories = it }
+                return scored.map { it.first }.also { memoizedMemories = it }
             }
             // Tool invocations are accumulated as TOOL nodes complete and surfaced
             // via the `--- Tool Results ---` block on later nodes that opt in.

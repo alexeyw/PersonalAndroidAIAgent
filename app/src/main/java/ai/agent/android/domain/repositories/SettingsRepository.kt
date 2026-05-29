@@ -618,6 +618,28 @@ interface SettingsRepository {
     suspend fun setMemoryCompactionEnabled(enabled: Boolean)
 
     /**
+     * `true` when long-term memory operations should emit verbose diagnostics.
+     * Drives the "Verbose memory logging" toggle in Settings → Privacy.
+     *
+     * When enabled, [ai.agent.android.domain.engine.GraphExecutionEngine] expands
+     * each `MemoryAccess` console event with a per-hit snippet and similarity
+     * score, and [ai.agent.android.domain.usecases.MemoryCompactionUseCase] logs
+     * the cluster membership of every consolidation. Off by default to keep the
+     * console and logcat quiet for users who do not need the detail. Defaults to
+     * [ai.agent.android.domain.constants.SettingsDefaults.VERBOSE_MEMORY_LOGGING_ENABLED_DEFAULT]
+     * (`false`).
+     */
+    val verboseMemoryLoggingEnabled: Flow<Boolean>
+
+    /**
+     * Persists the verbose memory logging toggle.
+     *
+     * @param enabled `true` to enable verbose memory diagnostics, `false` to fall
+     *   back to the terse one-line summaries.
+     */
+    suspend fun setVerboseMemoryLoggingEnabled(enabled: Boolean)
+
+    /**
      * Age threshold, in days, beyond which a non-pinned chunk becomes eligible
      * for compaction. Chunks younger than this keep their exact wording; only
      * older ones are clustered and consolidated. Defaults to

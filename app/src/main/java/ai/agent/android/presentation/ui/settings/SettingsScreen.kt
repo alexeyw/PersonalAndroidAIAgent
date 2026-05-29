@@ -290,7 +290,10 @@ private fun buildViewState(uiState: SettingsUiState, context: android.content.Co
         reembedProgressPercent = uiState.reembedProgress?.let { (it * MAX_PERCENT).roundToInt() },
     )
     val notifications = NotificationsCardState(longRunningEnabled = uiState.longRunningTaskNotificationsEnabled)
-    val privacy = PrivacyCardState(crashReportingEnabled = uiState.crashReportingEnabled)
+    val privacy = PrivacyCardState(
+        crashReportingEnabled = uiState.crashReportingEnabled,
+        verboseMemoryLoggingEnabled = uiState.verboseMemoryLoggingEnabled,
+    )
     val destructive = uiState.pendingDestructive?.let { kind ->
         DestructiveActionState(
             title = stringResource(
@@ -396,6 +399,7 @@ private fun buildCallbacks(
     onClearMemoryClick = viewModel::stageClearMemory,
     onLongRunningToggle = viewModel::setLongRunningTaskNotificationsEnabled,
     onCrashReportingToggle = viewModel::setCrashReportingEnabled,
+    onVerboseMemoryLoggingToggle = viewModel::setVerboseMemoryLoggingEnabled,
     onResetSettingsClick = viewModel::stageResetSettings,
     onRestartClick = onRestart,
     onDestructiveTypedConfirmChange = viewModel::updateDestructiveTypedInput,

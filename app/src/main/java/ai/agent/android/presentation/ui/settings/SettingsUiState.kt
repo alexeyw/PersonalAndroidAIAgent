@@ -39,6 +39,8 @@ import ai.agent.android.domain.models.ToolApprovalPolicy
  *   otherwise `0f..1f`.
  * @property longRunningTaskNotificationsEnabled Mirror of the toggle.
  * @property crashReportingEnabled Mirror of the toggle.
+ * @property verboseMemoryLoggingEnabled Mirror of the verbose memory logging
+ *   toggle (Settings → Privacy).
  * @property restartRequired `true` after the user changed an
  *   inference-backend / Ollama base URL that requires a process restart.
  * @property pendingDestructive Currently staged destructive action,
@@ -71,6 +73,7 @@ data class SettingsUiState(
     val reembedProgress: Float? = null,
     val longRunningTaskNotificationsEnabled: Boolean = true,
     val crashReportingEnabled: Boolean = false,
+    val verboseMemoryLoggingEnabled: Boolean = SettingsDefaults.VERBOSE_MEMORY_LOGGING_ENABLED_DEFAULT,
     val restartRequired: Boolean = false,
     val pendingDestructive: PendingDestructiveAction? = null,
     val destructiveTypedInput: String = "",

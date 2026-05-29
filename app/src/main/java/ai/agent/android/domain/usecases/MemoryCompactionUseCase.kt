@@ -82,6 +82,7 @@ class MemoryCompactionUseCase @Inject constructor(
         withContext(Dispatchers.Default) {
             val ageDays = settingsRepository.memoryCompactionAgeDays.first()
             val cutoff = nowMillis - ageDays.toLong() * TimeAndIdConstants.MS_PER_DAY
+            val verboseLogging = settingsRepository.verboseMemoryLoggingEnabled.first()
 
             val candidates = memoryRepository.getCompactionCandidates(cutoff)
             if (candidates.size < MIN_CHUNKS_TO_COMPACT) {
@@ -108,7 +109,7 @@ class MemoryCompactionUseCase @Inject constructor(
             for (cluster in clusters) {
                 if (cluster.size < MIN_CLUSTER_SIZE) continue
                 val members = cluster.map { candidates[it] }
-                if (consolidateCluster(systemPrompt, members)) {
+                if (consolidateCluster(systemPrompt, members, verboseLogging)) {
                     clustersProcessed++
                     chunksConsolidated += members.size
                     chunksCreated++
@@ -132,9 +133,17 @@ class MemoryCompactionUseCase @Inject constructor(
      *
      * @param systemPrompt Pre-rendered consolidation system prompt.
      * @param members The chunks in this cluster (size already validated ≥ floor).
+     * @param verboseLogging When `true`, logs the cluster membership (the merged
+     *   chunk ids) of every successful consolidation for observability. Gated on
+     *   `SettingsRepository.verboseMemoryLoggingEnabled` so the logcat stays quiet
+     *   by default.
      * @return `true` if the cluster was consolidated and its originals removed.
      */
-    private suspend fun consolidateCluster(systemPrompt: String, members: List<MemoryChunk>): Boolean {
+    private suspend fun consolidateCluster(
+        systemPrompt: String,
+        members: List<MemoryChunk>,
+        verboseLogging: Boolean,
+    ): Boolean {
         val summary = runInference(systemPrompt, members).trim()
         if (summary.isEmpty()) return false
 
@@ -147,6 +156,13 @@ class MemoryCompactionUseCase @Inject constructor(
                 source = MemorySource.Compaction(originalChunkIds = originalIds),
             )
             originalIds.forEach { memoryRepository.deleteMemory(it) }
+            if (verboseLogging) {
+                Timber.tag(TAG).d(
+                    "Compaction cluster: merged ids %s (%d chunks) → 1 summary",
+                    originalIds,
+                    members.size,
+                )
+            }
             true
         } catch (e: CancellationException) {
             throw e

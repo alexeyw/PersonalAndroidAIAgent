@@ -49,11 +49,11 @@ class ChatHomeConsoleMappingTest {
     }
 
     @Test
-    fun `given MemoryAccess event when mapping then source RUNTIME and level Info`() {
+    fun `given MemoryAccess event when mapping then source MEMORY and level Info`() {
         val line = ConsoleEvent(timestamp = 0L, type = ConsoleEventType.MemoryAccess, message = "Memory: 3 chunks")
             .toConsoleLine()
 
-        assertEquals(ConsoleSource.RUNTIME, line.source)
+        assertEquals(ConsoleSource.MEMORY, line.source)
         assertEquals(ConsoleLevel.Info, line.level)
     }
 

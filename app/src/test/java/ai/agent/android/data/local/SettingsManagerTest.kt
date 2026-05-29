@@ -66,6 +66,7 @@ class SettingsManagerTest {
     private val memorySearchThresholdKey =
         androidx.datastore.preferences.core.floatPreferencesKey("memory_search_threshold")
     private val memoryCompactionEnabledKey = booleanPreferencesKey("memory_compaction_enabled")
+    private val verboseMemoryLoggingEnabledKey = booleanPreferencesKey("verbose_memory_logging_enabled")
     private val memoryCompactionAgeDaysKey =
         androidx.datastore.preferences.core.intPreferencesKey("memory_compaction_age_days")
     private val maxMemoryChunksKey = androidx.datastore.preferences.core.intPreferencesKey("max_memory_chunks")
@@ -213,6 +214,28 @@ class SettingsManagerTest {
         try {
             manager.setMemoryCompactionEnabled(false)
             assertEquals(false, manager.memoryCompactionEnabled.first())
+        } finally {
+            scope.cancel()
+        }
+    }
+
+    @Test
+    fun `verboseMemoryLoggingEnabled returns default value`() = runTest {
+        val prefs = mockk<Preferences>()
+        every { prefs[verboseMemoryLoggingEnabledKey] } returns null
+        every { dataStore.data } returns flowOf(prefs)
+
+        val settingsManager = SettingsManager(dataStore)
+        val result = settingsManager.verboseMemoryLoggingEnabled.first()
+        assertEquals(SettingsDefaults.VERBOSE_MEMORY_LOGGING_ENABLED_DEFAULT, result)
+    }
+
+    @Test
+    fun `setVerboseMemoryLoggingEnabled persists and is read back`() = runTest {
+        val (manager, scope) = freshManagerWithRealDataStore()
+        try {
+            manager.setVerboseMemoryLoggingEnabled(true)
+            assertEquals(true, manager.verboseMemoryLoggingEnabled.first())
         } finally {
             scope.cancel()
         }

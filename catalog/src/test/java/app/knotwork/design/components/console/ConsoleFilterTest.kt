@@ -31,8 +31,18 @@ class ConsoleFilterTest {
         val filter = ConsoleFilter(sources = setOf(ConsoleSource.TOOL))
         assertTrue(filter.matches(line(ConsoleSource.TOOL)))
         assertFalse(filter.matches(line(ConsoleSource.NODE)))
+        assertFalse(filter.matches(line(ConsoleSource.MEMORY)))
         assertFalse(filter.matches(line(ConsoleSource.RUNTIME)))
         assertFalse(filter.matches(line(ConsoleSource.USER)))
+    }
+
+    @Test
+    fun `memory-only filter keeps memory lines and drops the rest`() {
+        val filter = ConsoleFilter(sources = setOf(ConsoleSource.MEMORY))
+        assertTrue(filter.matches(line(ConsoleSource.MEMORY)))
+        assertFalse(filter.matches(line(ConsoleSource.NODE)))
+        assertFalse(filter.matches(line(ConsoleSource.TOOL)))
+        assertFalse(filter.matches(line(ConsoleSource.RUNTIME)))
     }
 
     @Test

@@ -308,6 +308,8 @@
 
     <string name="knotwork_settings_crash_reporting_label">Send anonymous crash reports</string>
     <string name="knotwork_settings_crash_reporting_hint">Help improve stability by sharing anonymous crash data.</string>
+    <string name="knotwork_settings_verbose_memory_logging_label">Verbose memory logging</string>
+    <string name="knotwork_settings_verbose_memory_logging_hint">Show memory retrieval hits and scores in the console, and log compaction details.</string>
     <string name="knotwork_settings_reset_button">Reset all settings</string>
 
     <string name="knotwork_settings_restart_required">Backend change requires restart.</string>
