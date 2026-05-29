@@ -1163,6 +1163,69 @@ class GraphExecutionEngineTest {
         }
 
     @Test
+    fun `given LITE_RT with longTermMemory flag when executed then retrieved chunk reaches the prompt`() = runTest {
+        every { settingsRepository.pipelineMaxSteps } returns flowOf(15)
+
+        // The retrieval use case is resolved once per run, keyed off the user
+        // prompt; stub it to surface exactly one relevant chunk.
+        coEvery { retrieveRelevantMemoryUseCase(any()) } returns listOf(
+            MemoryChunk(
+                id = 7L,
+                text = "user prefers dark mode",
+                embedding = FloatArray(0),
+                timestamp = 0L,
+            ),
+        )
+
+        val inputNode = NodeModel("input", NodeType.INPUT, 0f, 0f)
+        val llmNode = NodeModel(
+            id = "llm",
+            type = NodeType.LITE_RT,
+            x = 0f,
+            y = 0f,
+            // Only Long-Term Memory is enabled, so the assembled prompt must
+            // carry that block and nothing else.
+            contextConfig = NodeContextConfig(
+                chatHistory = false,
+                originalTask = false,
+                nodeInput = false,
+                longTermMemory = true,
+                toolResults = false,
+            ),
+        )
+        val outputNode = NodeModel("output", NodeType.OUTPUT, 0f, 0f, systemPrompt = null)
+
+        val graph = PipelineGraph(
+            id = "g1",
+            name = "Long-Term Memory Flag Test",
+            nodes = listOf(inputNode, llmNode, outputNode),
+            connections = listOf(
+                ConnectionModel("c1", "input", "llm"),
+                ConnectionModel("c2", "llm", "output"),
+            ),
+        )
+
+        every { llmEngine.generateResponseStream(any()) } returns flowOf("ok")
+
+        engine(sessionId, "what's my UI preference?", graph).toList()
+
+        // The LITE_RT prompt must carry the Long-Term Memory block with the
+        // retrieved chunk text, and no other context block headers.
+        io.mockk.verify {
+            llmEngine.generateResponseStream(
+                match {
+                    it.contains("--- Long-Term Memory ---") &&
+                        it.contains("user prefers dark mode") &&
+                        !it.contains("--- Original Task ---") &&
+                        !it.contains("--- Chat History ---") &&
+                        !it.contains("--- Tool Results ---") &&
+                        !it.contains("--- Previous Node Output ---")
+                },
+            )
+        }
+    }
+
+    @Test
     fun `given TOOL node configured as auto when executed then resolved tool name reaches downstream`() = runTest {
         every { settingsRepository.pipelineMaxSteps } returns flowOf(15)
         every { settingsRepository.toolApprovalPolicy } returns flowOf(ToolApprovalPolicy.SensitiveOrDestructive)

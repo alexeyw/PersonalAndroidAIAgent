@@ -13,8 +13,40 @@ details.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Long-term memory now embeds every read and write with the active provider**
+  (Phase 25 / Task 3/10). Retrieval embedded the search query with the fixed
+  on-device Universal Sentence Encoder (512-d) while auto-extraction (Task 2)
+  stored chunks via the user-selected `EmbeddingProvider` — so with a non-`use`
+  provider active (OpenAI 1536-d, Ollama 768-d) query and stored vectors lived
+  in different dimensions, cosine similarity collapsed to `0`, and the
+  `longTermMemory` node flag surfaced nothing. All memory paths now resolve the
+  same active provider via `EmbeddingProviderResolver`:
+  - `RetrieveRelevantMemoryUseCase` (read) — so enabling the flag actually
+    injects relevant memories regardless of the chosen backend.
+  - `DelegateTaskTool` (delegated-result write), `MemoryViewModel.editVectorMemory`
+    (inline edit re-embed) and `ReembedAllMemoriesUseCase` (Settings → Memory →
+    Re-embed) — previously these persisted 512-d USE vectors that a non-`use`
+    query could never match. Re-embed remains the canonical way to migrate the
+    whole corpus into a newly selected provider's space.
+- **Memory retrieval is skipped when no executed node requests it**
+  (Phase 25 / Task 3/10). `GraphExecutionEngine` previously embedded the user
+  prompt at run start unconditionally. It now resolves long-term memory lazily —
+  at most once, the first time an executed node actually opts into the
+  `longTermMemory` context block — so graphs with memory disabled never embed
+  the prompt, sparing avoidable cloud-embedding latency/cost and not shipping
+  the prompt to an embedding backend the user did not enable memory for.
+
 ### Added
 
+- **Configurable memory retrieval tuning** (Phase 25 / Task 3/10). The
+  retrieval top-K and relevance threshold are no longer hard-coded:
+  `SettingsRepository.memorySearchTopK` (default 5) and
+  `memorySearchThreshold` (default 0.55) back them via DataStore.
+  `RetrieveRelevantMemoryUseCase` reads these by default (callers may still
+  override per-call). The Settings UI for these controls lands with the later
+  Settings/tuning task of this phase.
 - **Automatic memory extraction** (Phase 25 / Task 2/10). After a pipeline run
   completes, the agent now mines the conversation for durable facts and writes
   the novel ones into long-term memory — making the "remembers past chats"

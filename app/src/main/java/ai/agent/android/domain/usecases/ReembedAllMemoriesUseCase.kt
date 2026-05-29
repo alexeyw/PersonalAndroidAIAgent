@@ -1,7 +1,8 @@
 package ai.agent.android.domain.usecases
 
-import ai.agent.android.domain.engine.TextEmbeddingEngine
 import ai.agent.android.domain.repositories.MemoryRepository
+import ai.agent.android.domain.services.EmbeddingProviderResolver
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
@@ -10,9 +11,15 @@ import timber.log.Timber
 import javax.inject.Inject
 
 /**
- * Re-runs the active [TextEmbeddingEngine] over every stored memory
+ * Re-runs the user's active embedding provider over every stored memory
  * chunk and writes the fresh embedding back. Backs the Settings →
  * Memory → Re-embed action.
+ *
+ * This is the canonical way to repair embedding-space drift after the user
+ * switches embedding providers: chunks written under a previous provider (a
+ * different dimension) would otherwise never match a query embedded with the
+ * new active provider. The provider is resolved once up front so the whole
+ * batch lands in a single, consistent space.
  *
  * Streams progress as a fraction `0f..1f` so the UI can render an
  * inline progress indicator without polling. Emits a final `1f` once
@@ -25,7 +32,7 @@ import javax.inject.Inject
  */
 class ReembedAllMemoriesUseCase @Inject constructor(
     private val memoryRepository: MemoryRepository,
-    private val embeddingEngine: TextEmbeddingEngine,
+    private val embeddingProviderResolver: EmbeddingProviderResolver,
 ) {
     /**
      * @return A cold [Flow] that begins at `0f` and ticks up to `1f` as
@@ -40,12 +47,19 @@ class ReembedAllMemoriesUseCase @Inject constructor(
             return@flow
         }
         emit(0f)
+        val provider = embeddingProviderResolver.resolve()
         memories.forEachIndexed { index, memory ->
-            runCatching { embeddingEngine.generateEmbedding(memory.text) }
+            runCatching { provider.embed(memory.text) }
                 .onSuccess { embedding ->
                     memoryRepository.updateMemory(memory.id, memory.text, embedding)
                 }
-                .onFailure { error -> Timber.w(error, "Failed to re-embed memory ${memory.id}") }
+                .onFailure { error ->
+                    // runCatching also traps CancellationException; rethrow it so
+                    // a cancelled re-embed actually halts instead of silently
+                    // grinding through the rest of the corpus.
+                    if (error is CancellationException) throw error
+                    Timber.w(error, "Failed to re-embed memory ${memory.id}")
+                }
             emit((index + 1).toFloat() / memories.size)
         }
     }.flowOn(Dispatchers.IO)

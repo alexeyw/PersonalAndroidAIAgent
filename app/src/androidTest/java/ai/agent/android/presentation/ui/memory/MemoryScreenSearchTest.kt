@@ -25,7 +25,7 @@ import app.knotwork.design.R as KnotworkR
  * dispatcher-agnostic equivalent.
  *
  * State is plumbed via [mockMemoryViewModel] so we don't touch the real
- * `MemoryRepository` / `TextEmbeddingEngine` graph.
+ * `MemoryRepository` / `EmbeddingProviderResolver` graph.
  */
 class MemoryScreenSearchTest {
 

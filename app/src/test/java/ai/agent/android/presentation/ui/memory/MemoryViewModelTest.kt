@@ -1,12 +1,13 @@
 package ai.agent.android.presentation.ui.memory
 
-import ai.agent.android.domain.engine.TextEmbeddingEngine
 import ai.agent.android.domain.models.ChatMessage
 import ai.agent.android.domain.models.MemoryChunk
 import ai.agent.android.domain.models.Role
 import ai.agent.android.domain.repositories.ChatRepository
 import ai.agent.android.domain.repositories.MemoryRepository
 import ai.agent.android.domain.repositories.SettingsRepository
+import ai.agent.android.domain.services.EmbeddingProvider
+import ai.agent.android.domain.services.EmbeddingProviderResolver
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
@@ -32,7 +33,8 @@ class MemoryViewModelTest {
     private lateinit var chatRepository: ChatRepository
     private lateinit var memoryRepository: MemoryRepository
     private lateinit var settingsRepository: SettingsRepository
-    private lateinit var textEmbeddingEngine: TextEmbeddingEngine
+    private lateinit var embeddingProviderResolver: EmbeddingProviderResolver
+    private lateinit var embeddingProvider: EmbeddingProvider
     private lateinit var viewModel: MemoryViewModel
 
     private val testDispatcher = StandardTestDispatcher()
@@ -43,7 +45,9 @@ class MemoryViewModelTest {
         chatRepository = mockk(relaxed = true)
         memoryRepository = mockk(relaxed = true)
         settingsRepository = mockk(relaxed = true)
-        textEmbeddingEngine = mockk(relaxed = true)
+        embeddingProviderResolver = mockk(relaxed = true)
+        embeddingProvider = mockk(relaxed = true)
+        coEvery { embeddingProviderResolver.resolve() } returns embeddingProvider
         coEvery { settingsRepository.maxMemoryChunksForSearch } returns flowOf(1000)
     }
 
@@ -64,7 +68,7 @@ class MemoryViewModelTest {
         coEvery { chatRepository.getMessagesForSession(sessionId) } returns flowOf(messages)
 
         // Act
-        viewModel = MemoryViewModel(chatRepository, memoryRepository, settingsRepository, textEmbeddingEngine)
+        viewModel = MemoryViewModel(chatRepository, memoryRepository, settingsRepository, embeddingProviderResolver)
         testDispatcher.scheduler.advanceUntilIdle()
 
         // Assert
@@ -77,7 +81,7 @@ class MemoryViewModelTest {
 
     @Test
     fun `deleteChatSession calls repository and reloads data`() = runTest {
-        viewModel = MemoryViewModel(chatRepository, memoryRepository, settingsRepository, textEmbeddingEngine)
+        viewModel = MemoryViewModel(chatRepository, memoryRepository, settingsRepository, embeddingProviderResolver)
         testDispatcher.scheduler.advanceUntilIdle()
 
         viewModel.deleteChatSession("session-1")
@@ -89,7 +93,7 @@ class MemoryViewModelTest {
 
     @Test
     fun `deleteChatMessage calls repository and reloads data`() = runTest {
-        viewModel = MemoryViewModel(chatRepository, memoryRepository, settingsRepository, textEmbeddingEngine)
+        viewModel = MemoryViewModel(chatRepository, memoryRepository, settingsRepository, embeddingProviderResolver)
         testDispatcher.scheduler.advanceUntilIdle()
 
         viewModel.deleteChatMessage(100L)
@@ -101,7 +105,7 @@ class MemoryViewModelTest {
 
     @Test
     fun `deleteVectorMemory calls repository and reloads data`() = runTest {
-        viewModel = MemoryViewModel(chatRepository, memoryRepository, settingsRepository, textEmbeddingEngine)
+        viewModel = MemoryViewModel(chatRepository, memoryRepository, settingsRepository, embeddingProviderResolver)
         testDispatcher.scheduler.advanceUntilIdle()
 
         viewModel.deleteVectorMemory(200L)
@@ -113,7 +117,7 @@ class MemoryViewModelTest {
 
     @Test
     fun `compactMemory calls repository and reloads data`() = runTest {
-        viewModel = MemoryViewModel(chatRepository, memoryRepository, settingsRepository, textEmbeddingEngine)
+        viewModel = MemoryViewModel(chatRepository, memoryRepository, settingsRepository, embeddingProviderResolver)
         testDispatcher.scheduler.advanceUntilIdle()
 
         viewModel.compactMemory()
@@ -125,7 +129,7 @@ class MemoryViewModelTest {
 
     @Test
     fun `setTab updates currentTab state`() = runTest {
-        viewModel = MemoryViewModel(chatRepository, memoryRepository, settingsRepository, textEmbeddingEngine)
+        viewModel = MemoryViewModel(chatRepository, memoryRepository, settingsRepository, embeddingProviderResolver)
 
         viewModel.setTab(1)
         assertEquals(1, viewModel.uiState.value.currentTab)
@@ -137,15 +141,15 @@ class MemoryViewModelTest {
     @Test
     fun `editVectorMemory regenerates embedding and persists update`() = runTest {
         val newEmbedding = floatArrayOf(0.42f, -0.13f, 0.99f)
-        coEvery { textEmbeddingEngine.generateEmbedding("edited body") } returns newEmbedding
+        coEvery { embeddingProvider.embed("edited body") } returns newEmbedding
 
-        viewModel = MemoryViewModel(chatRepository, memoryRepository, settingsRepository, textEmbeddingEngine)
+        viewModel = MemoryViewModel(chatRepository, memoryRepository, settingsRepository, embeddingProviderResolver)
         testDispatcher.scheduler.advanceUntilIdle()
 
         viewModel.editVectorMemory(id = 11L, newText = "edited body")
         testDispatcher.scheduler.advanceUntilIdle()
 
-        coVerify(exactly = 1) { textEmbeddingEngine.generateEmbedding("edited body") }
+        coVerify(exactly = 1) { embeddingProvider.embed("edited body") }
         coVerify(exactly = 1) {
             memoryRepository.updateMemory(id = 11L, text = "edited body", embedding = newEmbedding)
         }
@@ -154,11 +158,26 @@ class MemoryViewModelTest {
     }
 
     @Test
+    fun `editVectorMemory swallows embed failure and leaves the chunk unchanged`() = runTest {
+        // A cloud-backed embed can fail with a network error; the ViewModel must
+        // not crash and must not persist a half-applied edit.
+        coEvery { embeddingProvider.embed("boom") } throws RuntimeException("network down")
+
+        viewModel = MemoryViewModel(chatRepository, memoryRepository, settingsRepository, embeddingProviderResolver)
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        viewModel.editVectorMemory(id = 3L, newText = "boom")
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        coVerify(exactly = 0) { memoryRepository.updateMemory(any(), any(), any()) }
+    }
+
+    @Test
     fun `togglePinned flips current pinned state and persists`() = runTest {
         val unpinned = MemoryChunk(id = 5L, text = "x", embedding = floatArrayOf(0f), timestamp = 1L, isPinned = false)
         coEvery { memoryRepository.getAllMemories() } returns listOf(unpinned)
 
-        viewModel = MemoryViewModel(chatRepository, memoryRepository, settingsRepository, textEmbeddingEngine)
+        viewModel = MemoryViewModel(chatRepository, memoryRepository, settingsRepository, embeddingProviderResolver)
         testDispatcher.scheduler.advanceUntilIdle()
 
         viewModel.togglePinned(id = 5L)
@@ -172,7 +191,7 @@ class MemoryViewModelTest {
         val pinned = MemoryChunk(id = 9L, text = "p", embedding = floatArrayOf(0f), timestamp = 2L, isPinned = true)
         coEvery { memoryRepository.getAllMemories() } returns listOf(pinned)
 
-        viewModel = MemoryViewModel(chatRepository, memoryRepository, settingsRepository, textEmbeddingEngine)
+        viewModel = MemoryViewModel(chatRepository, memoryRepository, settingsRepository, embeddingProviderResolver)
         testDispatcher.scheduler.advanceUntilIdle()
 
         viewModel.togglePinned(id = 9L)
@@ -183,7 +202,7 @@ class MemoryViewModelTest {
 
     @Test
     fun `togglePinned ignores unknown ids`() = runTest {
-        viewModel = MemoryViewModel(chatRepository, memoryRepository, settingsRepository, textEmbeddingEngine)
+        viewModel = MemoryViewModel(chatRepository, memoryRepository, settingsRepository, embeddingProviderResolver)
         testDispatcher.scheduler.advanceUntilIdle()
 
         viewModel.togglePinned(id = 9999L)

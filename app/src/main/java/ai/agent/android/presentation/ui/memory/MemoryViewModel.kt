@@ -1,19 +1,21 @@
 package ai.agent.android.presentation.ui.memory
 
-import ai.agent.android.domain.engine.TextEmbeddingEngine
 import ai.agent.android.domain.models.ChatMessage
 import ai.agent.android.domain.repositories.ChatRepository
 import ai.agent.android.domain.repositories.MemoryRepository
 import ai.agent.android.domain.repositories.SettingsRepository
+import ai.agent.android.domain.services.EmbeddingProviderResolver
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import timber.log.Timber
 import javax.inject.Inject
 
 /**
@@ -26,7 +28,7 @@ class MemoryViewModel @Inject constructor(
     private val chatRepository: ChatRepository,
     private val memoryRepository: MemoryRepository,
     private val settingsRepository: SettingsRepository,
-    private val textEmbeddingEngine: TextEmbeddingEngine,
+    private val embeddingProviderResolver: EmbeddingProviderResolver,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(MemoryUiState(isLoading = true))
@@ -118,19 +120,31 @@ class MemoryViewModel @Inject constructor(
     }
 
     /**
-     * Replaces the body of a long-term memory chunk. Recomputes the
-     * embedding from the new text via [TextEmbeddingEngine] before persisting
-     * — re-embedding is required so semantic-search results stay coherent
-     * with the visible text.
+     * Replaces the body of a long-term memory chunk. Recomputes the embedding
+     * from the new text via the user's active embedding provider (resolved by
+     * [EmbeddingProviderResolver]) before persisting — re-embedding is required
+     * so semantic-search results stay coherent with the visible text, and using
+     * the active provider keeps the edited chunk in the same embedding space as
+     * the retrieval query.
      *
      * @param id Identifier of the chunk to update.
      * @param newText The new raw text content committed by the user.
      */
     fun editVectorMemory(id: Long, newText: String) {
         viewModelScope.launch {
-            val newEmbedding = textEmbeddingEngine.generateEmbedding(newText)
-            memoryRepository.updateMemory(id = id, text = newText, embedding = newEmbedding)
-            loadAllData()
+            // Embedding may hit the network when a cloud provider is active.
+            // Guard so a transient failure leaves the chunk untouched instead of
+            // crashing the app; rethrow CancellationException to preserve
+            // structured concurrency.
+            try {
+                val newEmbedding = embeddingProviderResolver.resolve().embed(newText)
+                memoryRepository.updateMemory(id = id, text = newText, embedding = newEmbedding)
+                loadAllData()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Timber.w(e, "Failed to re-embed edited memory $id; keeping the previous content")
+            }
         }
     }
 

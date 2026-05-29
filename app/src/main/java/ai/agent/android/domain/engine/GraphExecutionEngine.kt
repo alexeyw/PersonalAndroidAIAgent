@@ -129,23 +129,34 @@ class GraphExecutionEngine @Inject constructor(
             val queueResults = mutableListOf<String>()
             val traceSteps = mutableListOf<AgentOrchestratorState.TraceStep>()
 
-            // Memory retrieval is keyed off the immutable userPrompt; resolve once and
-            // reuse to avoid re-embedding the same query for every node iteration.
-            val relevantMemories: List<MemoryChunk> = try {
-                retrieveRelevantMemoryUseCase(userPrompt)
-            } catch (e: kotlinx.coroutines.CancellationException) {
-                // Memory retrieval suspends (embedding + DB lookup). Swallowing
-                // cancellation here would let the parent flow keep running after
-                // the caller cancelled, breaking structured concurrency.
-                throw e
-            } catch (e: Exception) {
-                Timber.tag("PipelineDebug").w(e, "Failed to retrieve long-term memories; continuing without them")
-                emptyList()
+            // Long-term memory is retrieved lazily and at most once per run, keyed
+            // off the immutable userPrompt. Only the first *executed* node that
+            // actually opts into the `--- Long-Term Memory ---` block
+            // (`contextConfig.longTermMemory`) triggers the query embedding. A
+            // graph where no executed node requests memory never embeds the prompt
+            // at all — sparing avoidable embedding-provider latency/cost and not
+            // shipping the prompt to a cloud embedding backend the user did not ask
+            // memory for.
+            var memoizedMemories: List<MemoryChunk>? = null
+            suspend fun resolveMemoriesOnce(): List<MemoryChunk> {
+                memoizedMemories?.let { return it }
+                val retrieved: List<MemoryChunk> = try {
+                    retrieveRelevantMemoryUseCase(userPrompt)
+                } catch (e: kotlinx.coroutines.CancellationException) {
+                    // Memory retrieval suspends (embedding + DB lookup). Swallowing
+                    // cancellation here would let the parent flow keep running after
+                    // the caller cancelled, breaking structured concurrency.
+                    throw e
+                } catch (e: Exception) {
+                    Timber.tag("PipelineDebug").w(e, "Failed to retrieve long-term memories; continuing without them")
+                    emptyList()
+                }
+                pushConsole(
+                    ConsoleEventType.MemoryAccess,
+                    "Memory: ${retrieved.size} chunk(s) retrieved",
+                )
+                return retrieved.also { memoizedMemories = it }
             }
-            pushConsole(
-                ConsoleEventType.MemoryAccess,
-                "Memory: ${relevantMemories.size} chunk(s) retrieved",
-            )
             // Tool invocations are accumulated as TOOL nodes complete and surfaced
             // via the `--- Tool Results ---` block on later nodes that opt in.
             val toolInvocationResults = mutableListOf<ToolInvocationResult>()
@@ -191,12 +202,20 @@ class GraphExecutionEngine @Inject constructor(
                 // (no systemPrompt) is also passed through so it forwards the upstream
                 // result verbatim instead of leaking context headers to the user.
                 val executorInput = if (shouldComposeContext(currentNode)) {
+                    // Embed + search only when this node actually renders the
+                    // memory block; otherwise pass an empty list so retrieval is
+                    // never triggered on its behalf.
+                    val memoryEntries = if (currentNode.contextConfig.longTermMemory) {
+                        resolveMemoriesOnce()
+                    } else {
+                        emptyList()
+                    }
                     val executionContext = PipelineExecutionContext(
                         originalUserMessage = userPrompt,
                         chatHistory = chatRepository.getMessagesForSession(sessionId).first(),
                         previousNodeOutput = currentInputText,
                         toolResults = toolInvocationResults.toList(),
-                        memoryEntries = relevantMemories,
+                        memoryEntries = memoryEntries,
                     )
                     // No fallback to currentInputText: an empty result is the
                     // intended outcome of a sparse config (e.g. only toolResults=true

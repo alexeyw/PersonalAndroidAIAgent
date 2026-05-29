@@ -2,10 +2,10 @@ package ai.agent.android.data.tools.local
 
 import ai.agent.android.data.engine.KoogClientFactory
 import ai.agent.android.data.engine.KoogModelMapper
-import ai.agent.android.domain.engine.TextEmbeddingEngine
 import ai.agent.android.domain.models.CloudProvider
 import ai.agent.android.domain.repositories.ApiKeyRepository
 import ai.agent.android.domain.repositories.MemoryRepository
+import ai.agent.android.domain.services.EmbeddingProviderResolver
 import ai.koog.prompt.dsl.prompt
 import ai.koog.prompt.executor.clients.anthropic.AnthropicModels
 import ai.koog.prompt.executor.clients.deepseek.DeepSeekModels
@@ -15,12 +15,14 @@ import ai.koog.prompt.llm.LLMCapability
 import ai.koog.prompt.llm.LLMProvider
 import ai.koog.prompt.llm.LLModel
 import ai.koog.prompt.streaming.StreamFrame
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
+import timber.log.Timber
 import javax.inject.Inject
 
 /**
@@ -38,13 +40,15 @@ import javax.inject.Inject
  *
  * @property koogClientFactory A factory used to instantiate the appropriate external LLM client.
  * @property memoryRepository The repository responsible for persisting long-term memories.
- * @property textEmbeddingEngine The engine used to convert text into vector embeddings for semantic search.
+ * @property embeddingProviderResolver Resolves the user's active embedding provider so the saved
+ *   chunk shares the same embedding space as every other memory write — otherwise retrieval, which
+ *   embeds the query with that same active provider, could never match a delegated result.
  * @property apiKeyRepository The repository responsible for persisting selected model configurations.
  */
 class DelegateTaskTool @Inject constructor(
     private val koogClientFactory: KoogClientFactory,
     private val memoryRepository: MemoryRepository,
-    private val textEmbeddingEngine: TextEmbeddingEngine,
+    private val embeddingProviderResolver: EmbeddingProviderResolver,
     private val apiKeyRepository: ApiKeyRepository,
 ) {
 
@@ -123,16 +127,30 @@ class DelegateTaskTool @Inject constructor(
                 if (result.isNullOrBlank()) {
                     "Error: Task delegation to '${provider.id}' timed out or returned empty after 60 seconds."
                 } else {
-                    // Task succeeded. Generate embedding for the result.
                     val responseText = result
-                    val embedding = textEmbeddingEngine.generateEmbedding(responseText)
+                    // Persisting to long-term memory is a best-effort side effect:
+                    // the embed call can hit the network under a cloud provider and
+                    // fail. Never let that discard the hard-won delegated result —
+                    // catch and report, but still return the response to the caller.
+                    // CancellationException is rethrown to preserve structured
+                    // concurrency.
+                    val savedToMemory = try {
+                        val embedding = embeddingProviderResolver.resolve().embed(responseText)
+                        memoryRepository.saveMemory(responseText, embedding)
+                        true
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        Timber.w(e, "Failed to persist delegated result to memory; returning the result anyway")
+                        false
+                    }
 
-                    // Save to long-term memory so the local agent can recall it later
-                    memoryRepository.saveMemory(responseText, embedding)
-
-                    "Success: Task completed by '${provider.id}' and saved to memory. " +
+                    val memoryNote = if (savedToMemory) "and saved to memory" else "(memory save failed)"
+                    "Success: Task completed by '${provider.id}' $memoryNote. " +
                         "Summary of response: ${responseText.take(RESPONSE_PREVIEW_CHAR_LIMIT)}..."
                 }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 "Error: Task delegation failed due to an exception: ${e.message}"
             }
