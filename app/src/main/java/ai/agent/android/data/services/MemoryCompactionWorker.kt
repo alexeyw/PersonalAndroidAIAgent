@@ -1,5 +1,7 @@
 package ai.agent.android.data.services
 
+import ai.agent.android.domain.engine.TaskQueueManager
+import ai.agent.android.domain.models.AgentOrchestratorState
 import ai.agent.android.domain.repositories.SettingsRepository
 import ai.agent.android.domain.usecases.MemoryCompactionUseCase
 import android.content.Context
@@ -23,9 +25,22 @@ import timber.log.Timber
  * clustering and consolidation to [MemoryCompactionUseCase] — mirroring how
  * [AgentWorker] delegates to its orchestrator use case.
  *
+ * **Engine coordination.** Compaction runs the local model, and
+ * [ai.agent.android.domain.engine.LlmInferenceEngine] allows only one active
+ * conversation — a concurrent generation would tear down or corrupt an
+ * in-flight foreground response. The out-of-schedule (hard-limit) path runs
+ * with relaxed constraints and so can fire while the user is actively chatting,
+ * so the worker checks [TaskQueueManager.globalState] and **defers**
+ * ([Result.retry]) while a pipeline is mid-run, mirroring the busy gate in
+ * [ai.agent.android.domain.services.MemoryAutoExtractionCoordinator]. The
+ * periodic path is already charging + idle, but the same guard covers it
+ * harmlessly.
+ *
  * @property memoryCompactionUseCase The compaction pass itself.
  * @property settingsRepository Source of the compaction toggle, re-read on every
  *   run so a user disabling the feature cancels an already-queued job.
+ * @property taskQueueManager Source of the agent-busy signal used to defer the
+ *   pass while a foreground pipeline is generating on the shared engine.
  */
 @HiltWorker
 class MemoryCompactionWorker @AssistedInject constructor(
@@ -33,6 +48,7 @@ class MemoryCompactionWorker @AssistedInject constructor(
     @Assisted workerParams: WorkerParameters,
     private val memoryCompactionUseCase: MemoryCompactionUseCase,
     private val settingsRepository: SettingsRepository,
+    private val taskQueueManager: TaskQueueManager,
 ) : CoroutineWorker(context, workerParams) {
 
     /**
@@ -46,6 +62,13 @@ class MemoryCompactionWorker @AssistedInject constructor(
         if (!settingsRepository.memoryCompactionEnabled.first()) {
             Timber.tag(TAG).d("Memory compaction disabled; skipping run")
             return Result.success()
+        }
+
+        // Never touch the shared inference engine while a foreground pipeline is
+        // generating — defer and let WorkManager re-attempt once it goes idle.
+        if (isAgentBusy()) {
+            Timber.tag(TAG).d("Agent busy; deferring memory compaction")
+            return Result.retry()
         }
 
         return try {
@@ -63,6 +86,23 @@ class MemoryCompactionWorker @AssistedInject constructor(
             Timber.tag(TAG).e(e, "Memory compaction run failed")
             Result.retry()
         }
+    }
+
+    /**
+     * `true` when the agent is mid-run on the shared inference engine — i.e.
+     * [TaskQueueManager.globalState] is any non-terminal state. Mirrors the idle
+     * predicate used by `AgentIdleManager` / `MemoryAutoExtractionCoordinator`
+     * (idle = `Idle` / `Completed` / `Error`); everything else (loading,
+     * streaming, awaiting approval, …) means a foreground generation could be
+     * holding the engine's single conversation.
+     */
+    private fun isAgentBusy(): Boolean = when (taskQueueManager.globalState.value) {
+        is AgentOrchestratorState.Idle,
+        is AgentOrchestratorState.Completed,
+        is AgentOrchestratorState.Error,
+        -> false
+
+        else -> true
     }
 
     companion object {

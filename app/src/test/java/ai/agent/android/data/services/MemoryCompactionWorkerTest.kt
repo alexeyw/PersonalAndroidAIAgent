@@ -1,5 +1,7 @@
 package ai.agent.android.data.services
 
+import ai.agent.android.domain.engine.TaskQueueManager
+import ai.agent.android.domain.models.AgentOrchestratorState
 import ai.agent.android.domain.repositories.SettingsRepository
 import ai.agent.android.domain.usecases.MemoryCompactionUseCase
 import android.content.Context
@@ -11,6 +13,7 @@ import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -34,12 +37,16 @@ class MemoryCompactionWorkerTest {
     private lateinit var context: Context
     private lateinit var useCase: MemoryCompactionUseCase
     private lateinit var settingsRepository: SettingsRepository
+    private lateinit var taskQueueManager: TaskQueueManager
 
     @Before
     fun setup() {
         context = RuntimeEnvironment.getApplication()
         useCase = mockk()
         settingsRepository = mockk()
+        taskQueueManager = mockk()
+        // Default: agent idle, so compaction is allowed to proceed.
+        every { taskQueueManager.globalState } returns MutableStateFlow(AgentOrchestratorState.Idle)
     }
 
     private fun workerFactory(): WorkerFactory = object : WorkerFactory() {
@@ -47,7 +54,8 @@ class MemoryCompactionWorkerTest {
             appContext: Context,
             workerClassName: String,
             workerParameters: WorkerParameters,
-        ): ListenableWorker = MemoryCompactionWorker(appContext, workerParameters, useCase, settingsRepository)
+        ): ListenableWorker =
+            MemoryCompactionWorker(appContext, workerParameters, useCase, settingsRepository, taskQueueManager)
     }
 
     private fun buildWorker(): MemoryCompactionWorker = TestListenableWorkerBuilder<MemoryCompactionWorker>(context)
@@ -77,6 +85,17 @@ class MemoryCompactionWorkerTest {
 
         assertEquals(ListenableWorker.Result.success(), result)
         coVerify(exactly = 1) { useCase.invoke(any()) }
+    }
+
+    @Test
+    fun `given the agent is busy when doWork runs then defers without compacting`() = runTest {
+        every { settingsRepository.memoryCompactionEnabled } returns flowOf(true)
+        every { taskQueueManager.globalState } returns MutableStateFlow(AgentOrchestratorState.Loading)
+
+        val result = buildWorker().doWork()
+
+        assertEquals(ListenableWorker.Result.retry(), result)
+        coVerify(exactly = 0) { useCase.invoke(any()) }
     }
 
     @Test
