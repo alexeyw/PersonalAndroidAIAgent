@@ -133,6 +133,14 @@ details.
     generic per-type entries. The popover filters built-ins by the node's
     `NodeType`, matching the Android Prompt Library; each row carries the
     preset description as a hover tooltip.
+  - `IF_CONDITION` presets are routed to the **condition-prompt** field, not
+    `systemPrompt`: the IF picker lives on the "Classification prompt" field
+    (which maps to `NodeModel.conditionPrompt` — the only field
+    `EvaluateIfConditionUseCase` reads for branching), and the IF node no
+    longer renders a `systemPrompt` field at all, mirroring
+    `NodeConfigForms.IfConditionFormBody`. Previously an IF preset populated
+    an ignored `systemPrompt` and left `conditionPrompt` empty, so the
+    imported node fell through to `false`.
   - `AVAILABLE_TOOLS` (TOOL-node config) re-synced with the
     `LocalToolExecutor` registry: `web_search` → `search_tool`, plus the
     previously-missing `schedule_task`. The ids now equal the executors'

@@ -1462,10 +1462,20 @@
             placeholder: NODE_TYPE_BY_ID[typeId].label,
         }));
 
-        fields.push(systemPromptField({
-            value: data.systemPrompt ?? '',
-            typeId,
-        }));
+        // IF_CONDITION carries no systemPrompt on the runtime path (its
+        // branching reads `conditionPrompt` only — see EvaluateIfConditionUseCase),
+        // so — mirroring NodeConfigForms.IfConditionFormBody — it gets no
+        // systemPrompt field; the prompt picker lives on the condition field below.
+        if (typeId !== 'IF_CONDITION') {
+            fields.push(promptFieldWithLibrary({
+                value: data.systemPrompt ?? '',
+                fieldId: 'systemPrompt',
+                label: 'System prompt',
+                presetNodeType: typeId,
+                showVariableChips: true,
+                rows: 4,
+            }));
+        }
 
         switch (typeId) {
             case 'CLOUD':
@@ -1509,10 +1519,17 @@
                 // and migrated to systemPrompt when nodes are loaded.
                 break;
             case 'IF_CONDITION':
-                fields.push(textareaField({
-                    id: 'conditionPrompt',
-                    label: 'Classification prompt',
+                // The condition prompt is the IF node's prompt-bearing field:
+                // EvaluateIfConditionUseCase runs the LLM on `conditionPrompt`
+                // (never `systemPrompt`), so the IF preset picker attaches here.
+                // No variable chips — IF condition prompts are not routed
+                // through PromptTemplateEngine (see DESCRIPTION.md §5).
+                fields.push(promptFieldWithLibrary({
                     value: data.conditionPrompt ?? '',
+                    fieldId: 'conditionPrompt',
+                    label: 'Classification prompt',
+                    presetNodeType: 'IF_CONDITION',
+                    showVariableChips: false,
                     rows: 3,
                 }));
                 fields.push(textField({
@@ -1568,34 +1585,53 @@
     }
 
     /**
-     * Specialised textarea for the system prompt — adds a row of variable
-     * chips ($DATE, $TIME, ...) and a "📚 Prompts" picker above the
-     * textarea. Clicking a chip splices the token at the current caret;
-     * picking a template replaces the textarea content (after a confirm
-     * if it's non-empty).
+     * Prompt-bearing textarea with a "📚 Prompts" picker (and, optionally, a
+     * row of `$VARIABLE` chips). Picking a preset replaces the textarea
+     * content (after a confirm if it is non-empty); clicking a chip splices
+     * the token at the current caret.
+     *
+     * The picker is wired to a *preset category*, not blindly to the node
+     * type, because the field a preset belongs to is not always
+     * `systemPrompt`. On Android the IF_CONDITION prompt-preset category is
+     * applied to `NodeModel.conditionPrompt` (the LLM-classified condition),
+     * NOT `systemPrompt` — `EvaluateIfConditionUseCase` only ever reads
+     * `conditionPrompt`. So the IF picker lives on the condition field here
+     * too, mirroring `NodeConfigForms.IfConditionFormBody`.
+     *
+     * @param value           Initial textarea value.
+     * @param fieldId          `data-field` key the value is saved under.
+     * @param label            Field label.
+     * @param presetNodeType   Category to filter `BUILTIN_PROMPT_TEMPLATES`
+     *                         by (a `NodeType` id), or `null` for no presets.
+     * @param showVariableChips Whether to render the `$VARIABLE` chip row.
+     * @param rows             Textarea row count.
      */
-    function systemPromptField({ value, typeId }) {
-        const wrap = fieldWrap('System prompt');
+    function promptFieldWithLibrary({ value, fieldId, label, presetNodeType, showVariableChips, rows }) {
+        const wrap = fieldWrap(label);
         const ta = document.createElement('textarea');
-        ta.dataset.field = 'systemPrompt';
-        ta.rows = 4;
+        ta.dataset.field = fieldId;
+        ta.rows = rows || 4;
         ta.value = value ?? '';
 
         const toolbarRow = document.createElement('div');
         toolbarRow.className = 'prompt-toolbar';
 
-        // Variable chips on the left
-        const chips = document.createElement('div');
-        chips.className = 'variable-chips';
-        PROMPT_VARIABLES.forEach(name => {
-            const chip = document.createElement('button');
-            chip.type = 'button';
-            chip.className = 'variable-chip';
-            chip.textContent = '$' + name;
-            chip.addEventListener('click', () => insertAtCaret(ta, '$' + name));
-            chips.appendChild(chip);
-        });
-        toolbarRow.appendChild(chips);
+        // Variable chips on the left (only for fields whose text is routed
+        // through PromptTemplateEngine at runtime — IF condition prompts are
+        // not, so their field omits the chips).
+        if (showVariableChips) {
+            const chips = document.createElement('div');
+            chips.className = 'variable-chips';
+            PROMPT_VARIABLES.forEach(name => {
+                const chip = document.createElement('button');
+                chip.type = 'button';
+                chip.className = 'variable-chip';
+                chip.textContent = '$' + name;
+                chip.addEventListener('click', () => insertAtCaret(ta, '$' + name));
+                chips.appendChild(chip);
+            });
+            toolbarRow.appendChild(chips);
+        }
 
         // Prompts picker on the right
         const promptsBtn = document.createElement('button');
@@ -1633,7 +1669,7 @@
             closePopover();
         };
         const openPopover = () => {
-            renderPromptsPopover(popover, ta, typeId, () => closePopover());
+            renderPromptsPopover(popover, ta, presetNodeType, () => closePopover());
             popover.hidden = false;
             popoverOpen = true;
             promptsBtn.setAttribute('aria-expanded', 'true');
@@ -1655,7 +1691,7 @@
      * a user template can call back into this function to reflect the new
      * list without rebuilding the whole dialog.
      */
-    function renderPromptsPopover(popover, textarea, typeId, closeFn) {
+    function renderPromptsPopover(popover, textarea, presetNodeType, closeFn) {
         popover.innerHTML = '';
 
         const builtinSection = document.createElement('div');
@@ -1665,15 +1701,19 @@
         builtinTitle.textContent = 'Built-in';
         builtinSection.appendChild(builtinTitle);
 
-        // Offer only the bundled presets whose nodeType matches the node
-        // being edited — same per-NodeType filtering the Android Prompt
-        // Library applies. Node types with no bundled preset (INPUT, TOOL,
-        // QUEUE_PROCESSOR) fall back to the "Reset to type default" row below.
-        const relevant = BUILTIN_PROMPT_TEMPLATES.filter(t => t.nodeType === typeId);
+        // Offer only the bundled presets in this field's category — same
+        // per-NodeType filtering the Android Prompt Library applies. Note the
+        // category is the field's preset class, which is not always the node
+        // type: the IF_CONDITION category is wired to the condition-prompt
+        // field, so a node's systemPrompt field passes `presetNodeType=null`
+        // for IF and shows no presets there.
+        const relevant = presetNodeType
+            ? BUILTIN_PROMPT_TEMPLATES.filter(t => t.nodeType === presetNodeType)
+            : [];
         if (relevant.length === 0) {
             const empty = document.createElement('div');
             empty.className = 'prompts-empty';
-            empty.textContent = 'No built-in presets for this node type.';
+            empty.textContent = 'No built-in presets for this field.';
             builtinSection.appendChild(empty);
         } else {
             relevant.forEach(t => {
@@ -1685,12 +1725,12 @@
             });
         }
 
-        // Per-type "Reset to type default" — only meaningful for types that
-        // ship a default in DEFAULT_SYSTEM_PROMPTS.
-        if (DEFAULT_SYSTEM_PROMPTS[typeId]) {
+        // Per-type "Reset to type default" — only meaningful for categories
+        // that ship a default in DEFAULT_SYSTEM_PROMPTS.
+        if (presetNodeType && DEFAULT_SYSTEM_PROMPTS[presetNodeType]) {
             builtinSection.appendChild(promptItemRow({
-                label: `Reset to ${typeId} default`,
-                onPick: () => applyPromptTemplate(textarea, DEFAULT_SYSTEM_PROMPTS[typeId], closeFn),
+                label: `Reset to ${presetNodeType} default`,
+                onPick: () => applyPromptTemplate(textarea, DEFAULT_SYSTEM_PROMPTS[presetNodeType], closeFn),
             }));
         }
         popover.appendChild(builtinSection);
