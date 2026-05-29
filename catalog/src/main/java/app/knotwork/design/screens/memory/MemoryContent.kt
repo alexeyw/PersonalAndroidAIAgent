@@ -210,7 +210,16 @@ private fun MemorySelectionTopBar(selectedCount: Int, callbacks: MemoryCallbacks
 @Composable
 private fun MemoryBody(state: MemoryViewState, callbacks: MemoryCallbacks, padding: PaddingValues) {
     Column(modifier = Modifier.fillMaxSize().padding(padding)) {
-        if (state.visualState != MemoryVisualState.Error && state.visualState != MemoryVisualState.Empty) {
+        // Hide the search / sort / filter chrome while multi-selecting. These
+        // controls narrow `state.entries`; if the user changed them mid-selection
+        // a selected row could vanish from the list while its id lingered in
+        // `selectedIds`, so a bulk action would silently affect a hidden entry.
+        // Freezing the chrome during selection keeps `selectedIds` a subset of
+        // the visible rows (contextual-action-bar pattern).
+        val showHeaderChrome = state.visualState != MemoryVisualState.Error &&
+            state.visualState != MemoryVisualState.Empty &&
+            !state.selectionMode
+        if (showHeaderChrome) {
             MemorySearchField(query = state.searchQuery, onQueryChange = callbacks.onSearchQueryChange)
             MemorySortRow(active = state.sortMode, onChange = callbacks.onSortChange)
             MemoryFilterRow(state = state, callbacks = callbacks)
