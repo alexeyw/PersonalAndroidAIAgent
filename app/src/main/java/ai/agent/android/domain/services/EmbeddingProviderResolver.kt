@@ -27,25 +27,42 @@ class EmbeddingProviderResolver @Inject constructor(
 ) {
 
     /**
-     * Returns the provider matching the persisted active id.
+     * Returns the provider that should serve the current request.
      *
-     * If the persisted id does not match any registered provider — e.g. a
-     * provider was removed in an app update, or the stored value is stale —
-     * this falls back to the always-present on-device default
-     * ([EmbeddingProvider.ID_USE]) and logs a warning, rather than throwing,
-     * so memory operations degrade gracefully instead of crashing.
+     * Falls back to the always-present on-device default
+     * ([EmbeddingProvider.ID_USE]) — logging the reason — in two cases, so
+     * memory operations degrade gracefully instead of crashing or returning
+     * mis-dimensioned vectors:
+     *  - the persisted id does not match any registered provider (e.g. a
+     *    provider was removed in an app update, or the value is stale);
+     *  - the selected provider is currently unavailable
+     *    ([EmbeddingProvider.isAvailable] is `false`, e.g. a cloud provider
+     *    with no API key configured). Performing the fallback here — rather
+     *    than inside the provider — keeps each provider's declared
+     *    [EmbeddingProvider.dimension] honest: the returned provider always
+     *    produces vectors of its own dimension.
      *
-     * @return The active [EmbeddingProvider]; never null.
+     * @return The provider to use; never null.
      */
     suspend fun resolve(): EmbeddingProvider {
         val activeId = settingsRepository.activeEmbeddingProviderId.first()
-        return providers[activeId] ?: run {
+        val active = providers[activeId]
+        if (active == null) {
             Timber.w(
                 "Unknown embedding provider id '%s'; falling back to '%s'",
                 activeId,
                 EmbeddingProvider.ID_USE,
             )
-            providers.getValue(EmbeddingProvider.ID_USE)
+            return providers.getValue(EmbeddingProvider.ID_USE)
         }
+        if (!active.isAvailable()) {
+            Timber.i(
+                "Embedding provider '%s' is unavailable; falling back to '%s'",
+                activeId,
+                EmbeddingProvider.ID_USE,
+            )
+            return providers.getValue(EmbeddingProvider.ID_USE)
+        }
+        return active
     }
 }

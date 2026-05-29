@@ -1,6 +1,5 @@
 package ai.agent.android.data.services.embedding
 
-import ai.agent.android.domain.engine.TextEmbeddingEngine
 import ai.agent.android.domain.repositories.ApiKeyRepository
 import ai.agent.android.domain.services.EmbeddingException
 import ai.agent.android.domain.services.EmbeddingProvider
@@ -13,35 +12,50 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import kotlin.coroutines.cancellation.CancellationException
 
 /**
  * Unit tests for [OllamaEmbeddingProvider].
  *
- * The Koog Ollama client is faked via [KoogEmbedderFactory]; the on-device
- * fallback is a real [UseEmbeddingProvider] over a mocked engine.
+ * The Koog Ollama client is faked via [KoogEmbedderFactory]; the provider does
+ * no internal fallback, so a missing base URL fails loudly here.
  */
 class OllamaEmbeddingProviderTest {
 
     private val embedderFactory = mockk<KoogEmbedderFactory>()
     private val apiKeyRepository = mockk<ApiKeyRepository>()
-    private val fallbackEngine = mockk<TextEmbeddingEngine>()
-    private val fallback = UseEmbeddingProvider(fallbackEngine)
     private val client = mockk<LLMEmbeddingProviderAPI>()
 
     private lateinit var provider: OllamaEmbeddingProvider
 
     @Before
     fun setup() {
-        provider = OllamaEmbeddingProvider(embedderFactory, apiKeyRepository, fallback)
+        provider = OllamaEmbeddingProvider(embedderFactory, apiKeyRepository)
     }
 
     @Test
     fun `exposes the Ollama identity and 768 dimension`() {
         assertEquals(EmbeddingProvider.ID_OLLAMA, provider.id)
         assertEquals(768, provider.dimension)
+    }
+
+    @Test
+    fun `isAvailable is true when a base url is configured`() = runTest {
+        every { apiKeyRepository.getOllamaBaseUrl() } returns flowOf("http://host:11434")
+        assertTrue(provider.isAvailable())
+    }
+
+    @Test
+    fun `isAvailable is false when the base url is missing or blank`() = runTest {
+        every { apiKeyRepository.getOllamaBaseUrl() } returns flowOf(null)
+        assertFalse(provider.isAvailable())
+
+        every { apiKeyRepository.getOllamaBaseUrl() } returns flowOf("  ")
+        assertFalse(provider.isAvailable())
     }
 
     @Test
@@ -58,13 +72,12 @@ class OllamaEmbeddingProviderTest {
     }
 
     @Test
-    fun `embed with no base url falls back to the on-device provider`() = runTest {
+    fun `embed without a base url throws EmbeddingException`() = runTest {
         every { apiKeyRepository.getOllamaBaseUrl() } returns flowOf(null)
-        coEvery { fallbackEngine.generateEmbedding("hi") } returns floatArrayOf(3f)
 
-        val result = provider.embed("hi")
+        val thrown = runCatching { provider.embed("hi") }.exceptionOrNull()
 
-        assertArrayEquals(floatArrayOf(3f), result, 0f)
+        assertTrue(thrown is EmbeddingException)
         coVerify(exactly = 0) { embedderFactory.ollamaClient(any()) }
     }
 
@@ -77,6 +90,17 @@ class OllamaEmbeddingProviderTest {
         val thrown = runCatching { provider.embed("hi") }.exceptionOrNull()
 
         assertTrue(thrown is EmbeddingException)
+    }
+
+    @Test
+    fun `embed rethrows CancellationException without wrapping`() = runTest {
+        every { apiKeyRepository.getOllamaBaseUrl() } returns flowOf("http://host:11434")
+        every { embedderFactory.ollamaClient(any()) } returns client
+        coEvery { client.embed(any<List<String>>(), any()) } throws CancellationException("cancelled")
+
+        val thrown = runCatching { provider.embed("hi") }.exceptionOrNull()
+
+        assertTrue(thrown is CancellationException)
     }
 
     @Test

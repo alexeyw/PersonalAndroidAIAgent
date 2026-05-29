@@ -46,6 +46,22 @@ interface EmbeddingProvider {
     val dimension: Int
 
     /**
+     * Whether this provider can currently serve embedding requests.
+     *
+     * Cloud-backed providers return `false` when their required configuration
+     * is missing (e.g. no API key, no server URL). [EmbeddingProviderResolver]
+     * consults this and substitutes the always-available on-device default
+     * rather than returning a provider that would either throw or — worse —
+     * silently produce vectors of a different [dimension]. A provider that is
+     * returned by the resolver therefore always honours its declared
+     * [dimension].
+     *
+     * @return `true` if [embed] can be expected to succeed against this
+     *   provider's own backend.
+     */
+    suspend fun isAvailable(): Boolean
+
+    /**
      * Computes the embedding vector for a single piece of [text].
      *
      * @param text The input string to embed. May be empty, in which case the

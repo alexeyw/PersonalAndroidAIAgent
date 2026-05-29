@@ -1,6 +1,5 @@
 package ai.agent.android.data.services.embedding
 
-import ai.agent.android.domain.engine.TextEmbeddingEngine
 import ai.agent.android.domain.repositories.ApiKeyRepository
 import ai.agent.android.domain.services.EmbeddingException
 import ai.agent.android.domain.services.EmbeddingProvider
@@ -13,36 +12,51 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import kotlin.coroutines.cancellation.CancellationException
 
 /**
  * Unit tests for [CloudEmbeddingProvider].
  *
  * The Koog client is faked via [KoogEmbedderFactory], so no real HTTP request
- * is ever issued. The on-device fallback is a **real** [UseEmbeddingProvider]
- * over a mocked engine, exercising the genuine fallback path.
+ * is ever issued. The provider performs no internal fallback — that lives in
+ * `EmbeddingProviderResolver` — so a missing key fails loudly here.
  */
 class CloudEmbeddingProviderTest {
 
     private val embedderFactory = mockk<KoogEmbedderFactory>()
     private val apiKeyRepository = mockk<ApiKeyRepository>()
-    private val fallbackEngine = mockk<TextEmbeddingEngine>()
-    private val fallback = UseEmbeddingProvider(fallbackEngine)
     private val client = mockk<LLMEmbeddingProviderAPI>()
 
     private lateinit var provider: CloudEmbeddingProvider
 
     @Before
     fun setup() {
-        provider = CloudEmbeddingProvider(embedderFactory, apiKeyRepository, fallback)
+        provider = CloudEmbeddingProvider(embedderFactory, apiKeyRepository)
     }
 
     @Test
     fun `exposes the OpenAI identity and 1536 dimension`() {
         assertEquals(EmbeddingProvider.ID_OPENAI_3_SMALL, provider.id)
         assertEquals(1536, provider.dimension)
+    }
+
+    @Test
+    fun `isAvailable is true when a key is configured`() = runTest {
+        every { apiKeyRepository.getOpenAIKey() } returns flowOf("sk-test")
+        assertTrue(provider.isAvailable())
+    }
+
+    @Test
+    fun `isAvailable is false when the key is missing or blank`() = runTest {
+        every { apiKeyRepository.getOpenAIKey() } returns flowOf(null)
+        assertFalse(provider.isAvailable())
+
+        every { apiKeyRepository.getOpenAIKey() } returns flowOf("   ")
+        assertFalse(provider.isAvailable())
     }
 
     @Test
@@ -73,24 +87,13 @@ class CloudEmbeddingProviderTest {
     }
 
     @Test
-    fun `embed with no key falls back to the on-device provider`() = runTest {
+    fun `embed without a key throws EmbeddingException`() = runTest {
         every { apiKeyRepository.getOpenAIKey() } returns flowOf(null)
-        coEvery { fallbackEngine.generateEmbedding("hello") } returns floatArrayOf(9f)
 
-        val result = provider.embed("hello")
+        val thrown = runCatching { provider.embed("hello") }.exceptionOrNull()
 
-        assertArrayEquals(floatArrayOf(9f), result, 0f)
+        assertTrue(thrown is EmbeddingException)
         coVerify(exactly = 0) { embedderFactory.openAiClient(any()) }
-    }
-
-    @Test
-    fun `embed with a blank key falls back to the on-device provider`() = runTest {
-        every { apiKeyRepository.getOpenAIKey() } returns flowOf("   ")
-        coEvery { fallbackEngine.generateEmbedding(any()) } returns floatArrayOf(7f)
-
-        val result = provider.embed(listOf("x"))
-
-        assertArrayEquals(floatArrayOf(7f), result[0], 0f)
     }
 
     @Test
@@ -103,6 +106,17 @@ class CloudEmbeddingProviderTest {
 
         assertTrue(thrown is EmbeddingException)
         assertEquals("boom", thrown?.cause?.message)
+    }
+
+    @Test
+    fun `embed rethrows CancellationException without wrapping`() = runTest {
+        every { apiKeyRepository.getOpenAIKey() } returns flowOf("sk-test")
+        every { embedderFactory.openAiClient(any()) } returns client
+        coEvery { client.embed(any<List<String>>(), any()) } throws CancellationException("cancelled")
+
+        val thrown = runCatching { provider.embed("hello") }.exceptionOrNull()
+
+        assertTrue(thrown is CancellationException)
     }
 
     @Test

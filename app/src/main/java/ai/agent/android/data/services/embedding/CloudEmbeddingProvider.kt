@@ -8,6 +8,7 @@ import kotlinx.coroutines.flow.firstOrNull
 import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlin.coroutines.cancellation.CancellationException
 
 /**
  * Cloud [EmbeddingProvider] backed by OpenAI `text-embedding-3-small` (1536-d),
@@ -15,21 +16,21 @@ import javax.inject.Singleton
  *
  * Reusing the Koog client (the same transport `KoogClientFactory` uses for chat
  * completions) means no bespoke HTTP code and consistent auth/timeout handling.
- * When no OpenAI key is configured, this provider transparently falls back to
- * the on-device [UseEmbeddingProvider] so memory operations keep working
- * offline — note the resulting vectors then have the USE dimension (512), not
- * 1536; reconciling stored vectors after a provider switch is handled by the
- * later re-embedding tasks of this phase.
+ *
+ * This provider never silently falls back to another backend: doing so would
+ * break its [dimension] contract (a caller sizing buffers on `dimension = 1536`
+ * must not receive a 512-d on-device vector). When no key is configured
+ * [isAvailable] reports `false` so `EmbeddingProviderResolver` substitutes the
+ * on-device default *before* this provider is ever returned; if [embed] is
+ * nonetheless called without a key it fails loudly with an [EmbeddingException].
  *
  * @property embedderFactory Builds the underlying Koog embedding client.
  * @property apiKeyRepository Source of the OpenAI API key.
- * @property fallback On-device provider used when no key is configured.
  */
 @Singleton
 class CloudEmbeddingProvider @Inject constructor(
     private val embedderFactory: KoogEmbedderFactory,
     private val apiKeyRepository: ApiKeyRepository,
-    private val fallback: UseEmbeddingProvider,
 ) : EmbeddingProvider {
 
     override val id: String = EmbeddingProvider.ID_OPENAI_3_SMALL
@@ -38,24 +39,25 @@ class CloudEmbeddingProvider @Inject constructor(
 
     override val dimension: Int = DIMENSION
 
+    /** Available only when a non-blank OpenAI API key is configured. */
+    override suspend fun isAvailable(): Boolean = !apiKeyRepository.getOpenAIKey().firstOrNull().isNullOrBlank()
+
     override suspend fun embed(text: String): FloatArray = embed(listOf(text)).first()
 
     /**
      * Embeds [texts] via OpenAI's batch embeddings endpoint in a single
      * request, mapping each returned `List<Double>` to a [FloatArray].
      *
-     * Falls back to the on-device provider when no API key is set. Any
-     * transport or API failure is wrapped in an [EmbeddingException] rather
-     * than being swallowed, so callers can distinguish a genuine failure from
-     * the offline-fallback case.
+     * @throws EmbeddingException If no API key is configured, or the transport
+     *   / API call fails. [CancellationException] is rethrown unchanged so
+     *   coroutine cancellation is not swallowed.
      */
     override suspend fun embed(texts: List<String>): List<FloatArray> {
         if (texts.isEmpty()) return emptyList()
 
         val key = apiKeyRepository.getOpenAIKey().firstOrNull()
         if (key.isNullOrBlank()) {
-            Timber.i("CloudEmbeddingProvider: no OpenAI key configured; using on-device fallback")
-            return fallback.embed(texts)
+            throw EmbeddingException("OpenAI API key is not configured")
         }
 
         val client = embedderFactory.openAiClient(key)
@@ -63,6 +65,7 @@ class CloudEmbeddingProvider @Inject constructor(
             client.embed(texts, OpenAIModels.Embeddings.TextEmbedding3Small)
                 .map { it.toFloatVector() }
         }.getOrElse { throwable ->
+            if (throwable is CancellationException) throw throwable
             Timber.e(throwable, "OpenAI embedding request failed")
             throw EmbeddingException("OpenAI embedding request failed", throwable)
         }

@@ -24,15 +24,20 @@ details.
   - `use` — on-device MediaPipe Universal Sentence Encoder (512-d), the
     default; needs no network or API key.
   - `openai_3_small` — OpenAI `text-embedding-3-small` (1536-d) via the
-    existing Koog OpenAI client; falls back to on-device when no key is set.
+    existing Koog OpenAI client.
   - `ollama` — local-network Ollama `nomic-embed-text` (768-d) via the Koog
-    Ollama client; falls back to on-device when no base URL is configured.
+    Ollama client.
 
   The active backend is persisted in the new
   `SettingsRepository.activeEmbeddingProviderId` setting (default `"use"`).
-  Cloud/Ollama failures surface as a typed `EmbeddingException`. Existing
-  embedding consumers are unchanged in this task; migrating them onto the
-  resolver lands with the later memory tasks of this phase.
+  Each provider reports `isAvailable()` (cloud providers require a configured
+  key / base URL); when the selected provider is unavailable the resolver
+  substitutes the on-device default — keeping each provider's declared
+  `dimension` honest rather than silently returning mis-dimensioned vectors.
+  Backend failures surface as a typed `EmbeddingException`, and coroutine
+  cancellation is propagated unwrapped. Existing embedding consumers are
+  unchanged in this task; migrating them onto the resolver lands with the
+  later memory tasks of this phase.
 - **Browser-editor constant sync automation** (Phase 24 / Task 8/9). The
   `:app:generateBrowserEditorConstants` Gradle task regenerates the
   `NODE_TYPES`, `PROMPT_VARIABLES`, `AVAILABLE_TOOLS` and

@@ -34,6 +34,9 @@ class UseEmbeddingProvider @Inject constructor(private val engine: TextEmbedding
 
     override val dimension: Int = DIMENSION
 
+    /** The on-device model is always available — no credentials, no network. */
+    override suspend fun isAvailable(): Boolean = true
+
     override suspend fun embed(text: String): FloatArray = mutex.withLock { engine.generateEmbedding(text) }
 
     /**

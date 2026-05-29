@@ -8,6 +8,7 @@ import kotlinx.coroutines.flow.firstOrNull
 import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlin.coroutines.cancellation.CancellationException
 
 /**
  * Local-network [EmbeddingProvider] backed by an Ollama server running the
@@ -18,19 +19,18 @@ import javax.inject.Singleton
  * the on-device USE model without sending data to a third-party cloud. It
  * reuses the Ollama base URL configured for chat in [ApiKeyRepository].
  *
- * When no base URL is configured it falls back to the on-device
- * [UseEmbeddingProvider]; the same dimension caveat as the cloud provider
- * applies (USE produces 512-d vectors, not 768-d).
+ * Like the cloud provider, it never silently falls back to another backend
+ * (that would break its [dimension] contract): when no base URL is configured
+ * [isAvailable] reports `false` so `EmbeddingProviderResolver` substitutes the
+ * on-device default; a key-less [embed] call fails with an [EmbeddingException].
  *
  * @property embedderFactory Builds the underlying Koog Ollama client.
  * @property apiKeyRepository Source of the Ollama base URL.
- * @property fallback On-device provider used when no base URL is configured.
  */
 @Singleton
 class OllamaEmbeddingProvider @Inject constructor(
     private val embedderFactory: KoogEmbedderFactory,
     private val apiKeyRepository: ApiKeyRepository,
-    private val fallback: UseEmbeddingProvider,
 ) : EmbeddingProvider {
 
     override val id: String = EmbeddingProvider.ID_OLLAMA
@@ -39,22 +39,25 @@ class OllamaEmbeddingProvider @Inject constructor(
 
     override val dimension: Int = DIMENSION
 
+    /** Available only when a non-blank Ollama base URL is configured. */
+    override suspend fun isAvailable(): Boolean = !apiKeyRepository.getOllamaBaseUrl().firstOrNull().isNullOrBlank()
+
     override suspend fun embed(text: String): FloatArray = embed(listOf(text)).first()
 
     /**
      * Embeds [texts] via the Ollama server's batch embedding call, mapping each
      * returned `List<Double>` to a [FloatArray].
      *
-     * Falls back to the on-device provider when no base URL is set; any
-     * transport or server failure is wrapped in an [EmbeddingException].
+     * @throws EmbeddingException If no base URL is configured, or the transport
+     *   / server call fails. [CancellationException] is rethrown unchanged so
+     *   coroutine cancellation is not swallowed.
      */
     override suspend fun embed(texts: List<String>): List<FloatArray> {
         if (texts.isEmpty()) return emptyList()
 
         val baseUrl = apiKeyRepository.getOllamaBaseUrl().firstOrNull()
         if (baseUrl.isNullOrBlank()) {
-            Timber.i("OllamaEmbeddingProvider: no base URL configured; using on-device fallback")
-            return fallback.embed(texts)
+            throw EmbeddingException("Ollama base URL is not configured")
         }
 
         val client = embedderFactory.ollamaClient(baseUrl)
@@ -62,6 +65,7 @@ class OllamaEmbeddingProvider @Inject constructor(
             client.embed(texts, OllamaModels.Embeddings.NOMIC_EMBED_TEXT)
                 .map { it.toFloatVector() }
         }.getOrElse { throwable ->
+            if (throwable is CancellationException) throw throwable
             Timber.e(throwable, "Ollama embedding request failed")
             throw EmbeddingException("Ollama embedding request failed", throwable)
         }
