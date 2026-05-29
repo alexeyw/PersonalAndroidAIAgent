@@ -1,0 +1,84 @@
+{
+  "schemaVersion": 1,
+  "id": "cloud_assist",
+  "name": "Cloud-assisted chat",
+  "description": "Cloud LLM with full conversation history and long-term memory. Use when you need broader knowledge, longer context, or stronger reasoning than the on-device model can offer.",
+  "category": "cloud",
+  "tags": ["cloud", "chat", "history"],
+  "updatedAt": 1748304000000,
+  "nodes": [
+    {
+      "id": "input",
+      "type": "INPUT",
+      "position": { "x": 80.0, "y": 200.0 },
+      "label": "Input",
+      "config": {
+        "systemPrompt": null,
+        "cloudProvider": null,
+        "modelPath": null,
+        "toolName": null,
+        "clarificationTimeoutMs": null,
+        "conditionPrompt": null,
+        "conditionKeywords": null,
+        "conditionComplexity": null
+      },
+      "contextConfig": {
+        "chatHistory": false,
+        "originalTask": false,
+        "nodeInput": true,
+        "longTermMemory": false,
+        "toolResults": false
+      }
+    },
+    {
+      "id": "cloud",
+      "type": "CLOUD",
+      "position": { "x": 320.0, "y": 200.0 },
+      "label": "Cloud LLM",
+      "config": {
+        "systemPrompt": "You are a knowledgeable cloud assistant available to the user on their Android device. The current date is $DATE and the local time is $TIME. Use the conversation history above to keep continuity across turns. Reply in well-structured prose; cite concrete facts and explain reasoning when it helps the user.",
+        "cloudProvider": "auto",
+        "modelPath": null,
+        "toolName": null,
+        "clarificationTimeoutMs": null,
+        "conditionPrompt": null,
+        "conditionKeywords": null,
+        "conditionComplexity": null
+      },
+      "contextConfig": {
+        "chatHistory": true,
+        "originalTask": true,
+        "nodeInput": true,
+        "longTermMemory": true,
+        "toolResults": false
+      }
+    },
+    {
+      "id": "output",
+      "type": "OUTPUT",
+      "position": { "x": 560.0, "y": 200.0 },
+      "label": "Reply",
+      "config": {
+        "systemPrompt": null,
+        "cloudProvider": null,
+        "modelPath": null,
+        "toolName": null,
+        "clarificationTimeoutMs": null,
+        "conditionPrompt": null,
+        "conditionKeywords": null,
+        "conditionComplexity": null
+      },
+      "contextConfig": {
+        "chatHistory": true,
+        "originalTask": true,
+        "nodeInput": true,
+        "longTermMemory": true,
+        "toolResults": true
+      }
+    }
+  ],
+  "connections": [
+    { "id": "c1", "fromNodeId": "input", "toNodeId": "cloud", "label": null },
+    { "id": "c2", "fromNodeId": "cloud", "toNodeId": "output", "label": null }
+  ]
+}

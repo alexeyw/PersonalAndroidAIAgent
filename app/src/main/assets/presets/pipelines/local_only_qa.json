@@ -1,0 +1,84 @@
+{
+  "schemaVersion": 1,
+  "id": "local_only_qa",
+  "name": "Local-only Q&A",
+  "description": "Single-turn answers handled entirely by the on-device model. No network, no tools. Best for quick factual questions when you want privacy and predictable latency.",
+  "category": "local",
+  "tags": ["offline", "qa", "starter"],
+  "updatedAt": 1748304000000,
+  "nodes": [
+    {
+      "id": "input",
+      "type": "INPUT",
+      "position": { "x": 80.0, "y": 200.0 },
+      "label": "Input",
+      "config": {
+        "systemPrompt": null,
+        "cloudProvider": null,
+        "modelPath": null,
+        "toolName": null,
+        "clarificationTimeoutMs": null,
+        "conditionPrompt": null,
+        "conditionKeywords": null,
+        "conditionComplexity": null
+      },
+      "contextConfig": {
+        "chatHistory": false,
+        "originalTask": false,
+        "nodeInput": true,
+        "longTermMemory": false,
+        "toolResults": false
+      }
+    },
+    {
+      "id": "lite_rt",
+      "type": "LITE_RT",
+      "position": { "x": 320.0, "y": 200.0 },
+      "label": "Local LLM",
+      "config": {
+        "systemPrompt": "You are a concise on-device assistant running on $MODEL. Today is $DATE. Answer the user's question directly in one or two short paragraphs. Do not invent facts; if you do not know, say so plainly.",
+        "cloudProvider": null,
+        "modelPath": null,
+        "toolName": null,
+        "clarificationTimeoutMs": null,
+        "conditionPrompt": null,
+        "conditionKeywords": null,
+        "conditionComplexity": null
+      },
+      "contextConfig": {
+        "chatHistory": false,
+        "originalTask": true,
+        "nodeInput": true,
+        "longTermMemory": false,
+        "toolResults": false
+      }
+    },
+    {
+      "id": "output",
+      "type": "OUTPUT",
+      "position": { "x": 560.0, "y": 200.0 },
+      "label": "Reply",
+      "config": {
+        "systemPrompt": null,
+        "cloudProvider": null,
+        "modelPath": null,
+        "toolName": null,
+        "clarificationTimeoutMs": null,
+        "conditionPrompt": null,
+        "conditionKeywords": null,
+        "conditionComplexity": null
+      },
+      "contextConfig": {
+        "chatHistory": true,
+        "originalTask": true,
+        "nodeInput": true,
+        "longTermMemory": true,
+        "toolResults": true
+      }
+    }
+  ],
+  "connections": [
+    { "id": "c1", "fromNodeId": "input", "toNodeId": "lite_rt", "label": null },
+    { "id": "c2", "fromNodeId": "lite_rt", "toNodeId": "output", "label": null }
+  ]
+}

@@ -22,12 +22,6 @@ enum class PipelineLibraryVisualState {
     /** Default surface with one or more pipelines listed. */
     Populated,
 
-    /**
-     * Search text is non-empty. Rows are pre-filtered; if the result is empty
-     * the body switches to a "no matches" tile.
-     */
-    Filtering,
-
     /** One row is in its swipe-revealed state; visual only — gestures live in `:app`. */
     SwipeOpen,
 
@@ -128,10 +122,8 @@ enum class PipelineSecondaryLineKind {
  * @property pipelines rows passed through to the list body; empty when
  * [visualState] is [PipelineLibraryVisualState.Empty] /
  * [PipelineLibraryVisualState.Loading] / [PipelineLibraryVisualState.Error].
- * @property totalCount total number of pipelines before filtering — used to
- * render the "12 of 47" subtitle in the filtering state.
- * @property searchQuery current value of the inline search field. Always
- * present even when empty; the field is sticky regardless of state.
+ * @property totalCount total number of pipelines persisted (snapshot for
+ * the top-bar subtitle).
  * @property activeFilter currently-selected filter chip.
  * @property errorMessage user-visible error text rendered in
  * [PipelineLibraryVisualState.Error]; `null` otherwise.
@@ -143,7 +135,6 @@ data class PipelineLibraryViewState(
     val pipelines: List<PipelineLibraryRow> = emptyList(),
     val totalCount: Int = pipelines.size,
     val defaultCount: Int = pipelines.count { it.isDefault },
-    val searchQuery: String = "",
     val activeFilter: PipelineLibraryFilter = PipelineLibraryFilter.All,
     val errorMessage: String? = null,
     val selectedCount: Int = 0,
@@ -165,7 +156,6 @@ data class PipelineLibraryViewState(
  */
 @Suppress("LongParameterList") // Mirrors user-visible affordances; collapsing further hides intent.
 class PipelineLibraryCallbacks(
-    val onSearchQueryChange: (String) -> Unit = {},
     val onFilterChange: (PipelineLibraryFilter) -> Unit = {},
     val onPipelineClick: (String) -> Unit = {},
     val onPipelineLongPress: (String) -> Unit = {},
@@ -178,13 +168,12 @@ class PipelineLibraryCallbacks(
     val onSetAsDefault: (String) -> Unit = {},
     val onRename: (String) -> Unit = {},
     val onExportJson: (String) -> Unit = {},
+    val onSaveAsPreset: (String) -> Unit = {},
     val onImportJson: () -> Unit = {},
     val onOpenDrawer: () -> Unit = {},
-    val onOpenSearch: () -> Unit = {},
     val onTopOverflow: () -> Unit = {},
     val onNewPipeline: () -> Unit = {},
     val onBrowseTemplates: () -> Unit = {},
-    val onClearSearch: () -> Unit = {},
     val onErrorRetry: () -> Unit = {},
     val onErrorReport: () -> Unit = {},
     val onMultiSelectCancel: () -> Unit = {},

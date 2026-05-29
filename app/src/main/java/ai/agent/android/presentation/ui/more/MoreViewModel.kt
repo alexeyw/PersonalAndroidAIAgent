@@ -5,11 +5,13 @@ import ai.agent.android.domain.engine.TaskQueueManager
 import ai.agent.android.domain.models.AgentOrchestratorState
 import ai.agent.android.domain.models.LocalModel
 import ai.agent.android.domain.models.MemoryStats
-import ai.agent.android.domain.models.PromptTemplate
+import ai.agent.android.domain.models.PipelinePreset
+import ai.agent.android.domain.models.PromptPreset
 import ai.agent.android.domain.repositories.LocalModelRepository
 import ai.agent.android.domain.repositories.MemoryRepository
 import ai.agent.android.domain.repositories.NetworkActivityTracker
-import ai.agent.android.domain.repositories.PromptRepository
+import ai.agent.android.domain.repositories.PipelinePresetRepository
+import ai.agent.android.domain.repositories.PromptPresetRepository
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -37,15 +39,22 @@ import javax.inject.Inject
 class MoreViewModel @Inject constructor(
     memoryRepository: MemoryRepository,
     private val localModelRepository: LocalModelRepository,
-    private val promptRepository: PromptRepository,
+    private val promptPresetRepository: PromptPresetRepository,
     private val taskQueueManager: TaskQueueManager,
     private val networkActivityTracker: NetworkActivityTracker,
+    pipelinePresetRepository: PipelinePresetRepository,
 ) : ViewModel() {
 
     val uiState: StateFlow<MoreUiState> = combine(
         memoryRepository.observeStats(),
         localModelRepository.getAllModels(),
-        promptRepository.getAllPrompts(),
+        // Combined bundled + user catalogue — mirrors what the Prompt
+        // Library screen actually renders so the subtitle counter is
+        // consistent with the screen the row links to.
+        combine(
+            promptPresetRepository.getBundledPresets(),
+            promptPresetRepository.getUserPresets(),
+        ) { bundled, user -> bundled + user },
         taskQueueManager.activeSessionsState,
         networkActivityTracker.lastOutboundAt,
         // Independent wall-clock ticker so the footer privacy pill
@@ -55,6 +64,7 @@ class MoreViewModel @Inject constructor(
         // status text would stay stuck on whatever it was at the last
         // memory / model / prompt / task / network-activity emission.
         statusTicker(),
+        pipelinePresetRepository.getUserPresets(),
     ) { values -> reduceUiState(values = values) }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(STATE_STOP_TIMEOUT_MS),
@@ -72,10 +82,11 @@ class MoreViewModel @Inject constructor(
     private fun reduceUiState(values: Array<Any?>): MoreUiState {
         val memStats = values[0] as MemoryStats
         val models = values[1] as List<LocalModel>
-        val prompts = values[2] as List<PromptTemplate>
+        val prompts = values[2] as List<PromptPreset>
         val activeSessions = values[3] as Map<*, AgentOrchestratorState>
         val lastNetwork = values[4] as Long?
         val now = values[5] as Long
+        val userPresets = values[6] as List<PipelinePreset>
         val active = models.firstOrNull { it.isActive }
         val runningCount = activeSessions.values.count {
             it is AgentOrchestratorState.Thinking ||
@@ -85,7 +96,10 @@ class MoreViewModel @Inject constructor(
         return MoreUiState(
             memorySubtitle = formatMemoryStats(memStats.chunkCount, memStats.totalBytes),
             modelsSubtitle = if (active != null) "${active.name} · active" else "no model installed",
-            promptsSubtitle = formatPromptsStats(prompts.map { it.category }.distinct().size, prompts.size),
+            // Categories = distinct `NodeType`s present in the catalogue.
+            // The Library renders all LLM-driven node types as tabs and shows
+            // bundled + user presets under each, so this is the same shape.
+            promptsSubtitle = formatPromptsStats(prompts.map { it.nodeType }.distinct().size, prompts.size),
             tasksSubtitle = if (runningCount == 0 && queuedCount == 0) {
                 "none"
             } else {
@@ -93,6 +107,7 @@ class MoreViewModel @Inject constructor(
             },
             tasksBadge = runningCount,
             aboutSubtitle = "v${BuildConfig.VERSION_NAME} · build ${BuildConfig.VERSION_CODE}",
+            librarySubtitle = formatLibraryStats(userPresets.size),
             networkStatusText = formatNetworkStatus(now, lastNetwork),
             networkStatusOk = lastNetwork == null ||
                 (now - lastNetwork) > FRESH_NETWORK_WINDOW_MS,
@@ -166,6 +181,18 @@ internal fun formatMemoryStats(chunkCount: Int, totalBytes: Long): String {
  */
 internal fun formatPromptsStats(categoriesCount: Int, promptsCount: Int): String =
     "$categoriesCount categories · $promptsCount prompts"
+
+/**
+ * Format the Library row subtitle.
+ *
+ * @param userPresetCount Number of user-saved pipeline presets (bundled
+ *   presets are not surfaced here because they are not user-owned).
+ */
+internal fun formatLibraryStats(userPresetCount: Int): String = when (userPresetCount) {
+    0 -> "no saved presets"
+    1 -> "1 saved preset"
+    else -> "$userPresetCount saved presets"
+}
 
 /**
  * Compute the network-status footer text from the [lastOutboundAt]

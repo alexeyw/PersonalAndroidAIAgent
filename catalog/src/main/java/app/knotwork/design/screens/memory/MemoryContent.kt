@@ -251,7 +251,7 @@ private fun MemoryNoMatches(callbacks: MemoryCallbacks, query: String) {
             subtitle = stringResource(R.string.knotwork_memory_no_match_subtitle) +
                 (if (query.isNotEmpty()) " (\"$query\")" else ""),
             illustration = { /* no striped illustration */ },
-            ctaLabel = stringResource(R.string.knotwork_library_no_match_clear),
+            ctaLabel = stringResource(R.string.knotwork_memory_no_match_clear),
             onCtaClick = callbacks.onClearSearch,
         )
     }

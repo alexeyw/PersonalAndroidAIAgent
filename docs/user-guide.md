@@ -305,10 +305,49 @@ per-pipeline menu:
   first.
 - **Set as default** — make this pipeline the fallback for any chat
   that has no explicit binding.
+- **Save as preset** — package the pipeline as a reusable template
+  with a name, description, category and tags. Saved presets show up
+  under **More → Library** and in the **+ From preset** picker.
 
-Tap the **+** button (floating action button) to create a new
-pipeline. New pipelines start as a minimal `INPUT → OUTPUT` graph so
-that they are valid immediately.
+Tap the **+** button (floating action button) to expand the two-way
+speed-dial:
+
+- **+ New pipeline** — create a blank pipeline. New pipelines start as
+  a minimal `INPUT → OUTPUT` graph so that they are valid immediately.
+- **+ From preset** — opens the **Pipeline presets** picker with a
+  **Bundled** tab (curated starter presets that ship with the app) and
+  a **Mine** tab (presets you have saved yourself). Use the category
+  chips to narrow the list, tap a card to see its graph preview, then
+  hit **Use this preset** to spawn a fresh pipeline from the template
+  and jump into the editor.
+
+### Pipeline presets
+
+A **pipeline preset** is a reusable template of a whole graph. Two kinds
+exist:
+
+- **Bundled** — a handful of curated starter presets that ship with the
+  app (local-only Q&A, cloud assist, tool-using ReAct, multi-step
+  research, clarify-then-act, routed local/cloud). They are read-only.
+- **Mine** — presets you create yourself with **Save as preset** (from a
+  pipeline's `⋮` menu). These live in the app's local database.
+
+Spawn a pipeline from a preset with the FAB's **+ From preset** option
+(see above); loading a preset always creates a *fresh* pipeline with new
+ids, so the template is never modified. Presets are interchangeable with
+the [browser pipeline editor](#browser-pipeline-editor): a bundled preset
+can be exported as a `*.preset.json` file (see below) and imported into
+the editor, and the editor can export its own `*.preset.json` for import
+back into the app.
+
+### Managing presets
+
+Open **More → Library** to manage every pipeline preset. Bundled
+presets are read-only — they can be exported as JSON (for example to
+import them in the browser pipeline editor) but not renamed or
+deleted. Your own presets expose a `⋮` overflow with **Rename**,
+**Export JSON** (writes a `*.preset.json` file via the system file
+picker), and **Delete** (asks to confirm).
 
 For a marketing-style preview of this screen see
 [`docs/images/hero-pipeline-library.png`](images/hero-pipeline-library.png)
@@ -430,6 +469,34 @@ $MEMORY_SUMMARY
 
 To emit a literal `$KEY` (for example, when you want to write
 documentation inside the prompt), escape the dollar sign as `\$KEY`.
+
+### Prompt presets
+
+Every prompt-bearing field in a node's configuration sheet has two
+small icons next to its label:
+
+- **📚 Library** — opens a picker scoped to the current node's type.
+  The picker has two tabs:
+  - **Bundled** — curated, read-only prompt templates that ship with
+    the app (e.g. *Concise assistant*, *Step-by-step reasoner*,
+    *JSON structured output*, *Keyword classifier*, *Dependency-aware
+    decomposition*).
+  - **Mine** — prompt templates you've saved yourself (see 💾 below).
+  Use the search box to filter by name, or tap the tag chips to narrow
+  the list further. Every row exposes two actions:
+  - **Preview** — renders the prompt with `$VARIABLE` placeholders
+    substituted at the current moment so you can see the final text
+    before applying.
+  - **Apply** — replaces the field's current value with the preset's
+    body and closes the picker.
+- **💾 Save as preset** — captures the current draft as a new entry in
+  the **Mine** tab. You enter a name (max 60 chars), an optional
+  description, and optional comma-separated tags. The preset's node
+  type is inferred from the field you saved from, so it'll only show
+  up in the picker when you open it on a matching node type later.
+
+User presets live in the app's local database; bundled presets ship
+with the APK and are never modified.
 
 ---
 

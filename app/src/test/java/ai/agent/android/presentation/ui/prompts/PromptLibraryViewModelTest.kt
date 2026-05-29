@@ -1,12 +1,12 @@
 package ai.agent.android.presentation.ui.prompts
 
-import ai.agent.android.domain.models.PromptTemplate
+import ai.agent.android.domain.models.NodeType
+import ai.agent.android.domain.models.PromptPreset
 import ai.agent.android.domain.prompt.PromptSegment
 import ai.agent.android.domain.prompt.PromptTemplateEngine
 import ai.agent.android.domain.prompt.PromptVariableProvider
-import ai.agent.android.domain.usecases.DeletePromptTemplateUseCase
-import ai.agent.android.domain.usecases.GetPromptTemplatesUseCase
-import ai.agent.android.domain.usecases.SavePromptTemplateUseCase
+import ai.agent.android.domain.repositories.PromptPresetRepository
+import ai.agent.android.domain.usecases.SavePromptAsPresetUseCase
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -20,6 +20,7 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -27,9 +28,8 @@ import org.junit.Test
 @OptIn(ExperimentalCoroutinesApi::class)
 class PromptLibraryViewModelTest {
 
-    private lateinit var getPromptTemplatesUseCase: GetPromptTemplatesUseCase
-    private lateinit var savePromptTemplateUseCase: SavePromptTemplateUseCase
-    private lateinit var deletePromptTemplateUseCase: DeletePromptTemplateUseCase
+    private lateinit var promptPresetRepository: PromptPresetRepository
+    private lateinit var savePromptAsPresetUseCase: SavePromptAsPresetUseCase
     private lateinit var promptTemplateEngine: PromptTemplateEngine
     private lateinit var providerDate: PromptVariableProvider
     private lateinit var providerTime: PromptVariableProvider
@@ -37,18 +37,32 @@ class PromptLibraryViewModelTest {
 
     private val testDispatcher = StandardTestDispatcher()
 
+    private val bundledA = PromptPreset(
+        id = "bundled-a",
+        name = "Concise assistant",
+        description = "Short answers.",
+        nodeType = NodeType.LITE_RT,
+        systemPrompt = "You are concise.",
+        tags = listOf("concise"),
+        isBundled = true,
+    )
+    private val userA = PromptPreset(
+        id = "user-a",
+        name = "My LiteRt preset",
+        description = "",
+        nodeType = NodeType.LITE_RT,
+        systemPrompt = "You are friendly.",
+        isBundled = false,
+    )
+
     @Before
     fun setup() {
         Dispatchers.setMain(testDispatcher)
-        getPromptTemplatesUseCase = mockk()
-        savePromptTemplateUseCase = mockk()
-        deletePromptTemplateUseCase = mockk()
-
-        val initialPrompts = listOf(
-            PromptTemplate(1, "Test", "Content", "TOOL"),
-        )
-        coEvery { getPromptTemplatesUseCase() } returns flowOf(initialPrompts)
-
+        promptPresetRepository = mockk(relaxed = true) {
+            every { getBundledPresets() } returns flowOf(listOf(bundledA))
+            every { getUserPresets() } returns flowOf(listOf(userA))
+        }
+        savePromptAsPresetUseCase = mockk()
         promptTemplateEngine = mockk()
         providerDate = mockk {
             every { key() } returns "DATE"
@@ -60,9 +74,8 @@ class PromptLibraryViewModelTest {
         }
 
         viewModel = PromptLibraryViewModel(
-            getPromptTemplatesUseCase,
-            savePromptTemplateUseCase,
-            deletePromptTemplateUseCase,
+            promptPresetRepository,
+            savePromptAsPresetUseCase,
             promptTemplateEngine,
             setOf(providerDate, providerTime),
         )
@@ -74,40 +87,38 @@ class PromptLibraryViewModelTest {
     }
 
     @Test
-    fun `init loads prompts successfully`() = runTest {
+    fun `init loads bundled and user presets`() = runTest {
         testDispatcher.scheduler.advanceUntilIdle()
 
         val state = viewModel.uiState.value
         assertEquals(false, state.isLoading)
-        assertEquals(1, state.promptTemplates.size)
-        assertEquals("Test", state.promptTemplates[0].name)
+        assertEquals(listOf(bundledA), state.bundledPresets)
+        assertEquals(listOf(userA), state.userPresets)
     }
 
     @Test
-    fun `savePrompt calls use case`() = runTest {
-        val prompt = PromptTemplate(2, "New", "New content", "SUMMARY")
-        coEvery { savePromptTemplateUseCase(any()) } returns Unit
-
-        viewModel.savePrompt(prompt)
+    fun `deletePrompt forwards user-preset deletions to repository`() = runTest {
         testDispatcher.scheduler.advanceUntilIdle()
 
-        coVerify(exactly = 1) { savePromptTemplateUseCase(prompt) }
+        viewModel.deletePrompt(userA.id)
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        coVerify(exactly = 1) { promptPresetRepository.deleteUserPreset(userA.id) }
     }
 
     @Test
-    fun `deletePrompt calls use case`() = runTest {
-        coEvery { deletePromptTemplateUseCase(any()) } returns Unit
-
-        viewModel.deletePrompt(1)
+    fun `deletePrompt refuses to delete a bundled preset`() = runTest {
         testDispatcher.scheduler.advanceUntilIdle()
 
-        coVerify(exactly = 1) { deletePromptTemplateUseCase(1) }
+        viewModel.deletePrompt(bundledA.id)
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        coVerify(exactly = 0) { promptPresetRepository.deleteUserPreset(any()) }
     }
 
     @Test
     fun `availableVariables are derived from injected providers and sorted`() {
         val state = viewModel.uiState.value
-
         assertEquals(listOf("\$DATE", "\$TIME"), state.availableVariables)
     }
 
@@ -138,5 +149,59 @@ class PromptLibraryViewModelTest {
         viewModel.dismissPromptPreview()
 
         assertEquals(PromptPreviewState.Hidden, viewModel.uiState.value.previewState)
+    }
+
+    @Test
+    fun `saveEditor passes existingId for an in-place update`() = runTest {
+        testDispatcher.scheduler.advanceUntilIdle()
+        coEvery {
+            savePromptAsPresetUseCase(
+                systemPrompt = any(),
+                name = any(),
+                description = any(),
+                nodeType = any(),
+                tags = any(),
+                existingId = any(),
+            )
+        } returns Result.success(userA.id)
+
+        viewModel.openEditor(promptId = userA.id)
+        viewModel.onEditorBodyChange("Updated body.")
+        viewModel.saveEditor()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        coVerify(exactly = 1) {
+            savePromptAsPresetUseCase(
+                systemPrompt = "Updated body.",
+                name = userA.name,
+                description = userA.description,
+                nodeType = NodeType.LITE_RT,
+                tags = userA.tags,
+                existingId = userA.id,
+            )
+        }
+    }
+
+    @Test
+    fun `saveEditor refuses invalid category`() = runTest {
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        viewModel.openEditor(promptId = null)
+        viewModel.onEditorCategoryChange("TOOL") // not LLM-driven
+        viewModel.onEditorBodyChange("body")
+        viewModel.saveEditor()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertNotNull(viewModel.uiState.value.errorMessage)
+        coVerify(exactly = 0) {
+            savePromptAsPresetUseCase(
+                systemPrompt = any(),
+                name = any(),
+                description = any(),
+                nodeType = any(),
+                tags = any(),
+                existingId = any(),
+            )
+        }
     }
 }

@@ -12,6 +12,7 @@ import ai.agent.android.presentation.ui.more.MoreScreen
 import ai.agent.android.presentation.ui.onboarding.OnboardingScreen
 import ai.agent.android.presentation.ui.orchestrator.OrchestratorViewModel
 import ai.agent.android.presentation.ui.orchestrator.PipelineLibraryScreen
+import ai.agent.android.presentation.ui.orchestrator.presets.PipelinePresetsManagerScreen
 import ai.agent.android.presentation.ui.pipeline.editor.PipelineEditorScreen
 import ai.agent.android.presentation.ui.prompts.PromptLibraryScreen
 import ai.agent.android.presentation.ui.settings.SettingsScreen
@@ -264,7 +265,11 @@ fun AppNavGraph(navController: NavHostController, showOnboarding: Boolean, modif
                 onNavigateToSettings = { navController.navigate(NavRoutes.SETTINGS) },
                 onNavigateToPrompts = { navController.navigate(NavRoutes.PROMPTS) },
                 onNavigateToAbout = { navController.navigate(NavRoutes.ABOUT) },
+                onNavigateToLibrary = { navController.navigate(NavRoutes.PIPELINE_PRESETS) },
             )
+        }
+        composable(NavRoutes.PIPELINE_PRESETS) {
+            PipelinePresetsManagerScreen(onBack = { navController.popBackStack() })
         }
         composable(NavRoutes.MEMORY) {
             MemoryScreen(onBack = { navController.popBackStack() })

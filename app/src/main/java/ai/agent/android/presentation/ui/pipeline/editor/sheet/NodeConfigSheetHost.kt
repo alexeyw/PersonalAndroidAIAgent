@@ -34,7 +34,8 @@ internal fun NodeConfigSheetHost(
     onSave: (NodeConfig) -> Unit,
     availableToolIds: List<String>,
     availableModels: List<LocalModelOption>,
-    onPickFromLibrary: (category: String, apply: (String) -> Unit) -> Unit,
+    onPickFromLibrary: (category: String, currentPrompt: String, apply: (String) -> Unit) -> Unit,
+    onSavePreset: (category: String, currentPrompt: String) -> Unit,
     extraSection: (@Composable () -> Unit)? = null,
 ) {
     NodeConfigSheet(
@@ -46,6 +47,7 @@ internal fun NodeConfigSheetHost(
         availableToolIds = availableToolIds,
         availableModels = availableModels,
         onPickFromLibrary = onPickFromLibrary,
+        onSavePreset = onSavePreset,
         extraSection = extraSection,
     )
 }

@@ -8,7 +8,7 @@
 
     Keys follow `orchestrator_<context>_<purpose>`.
 -->
-<resources>
+<resources xmlns:tools="http://schemas.android.com/tools">
     <!-- Screen titles -->
     <string name="orchestrator_library_title">Pipelines</string>
 
@@ -39,9 +39,32 @@
     <string name="orchestrator_feedback_pipeline_deleted">Pipeline deleted</string>
     <string name="orchestrator_feedback_pipeline_created">Pipeline created</string>
 
-    <!-- Prompt library dialog -->
-    <string name="orchestrator_prompt_library_title">Prompt Library</string>
-    <string name="orchestrator_prompt_library_empty">No prompts found in library. Save custom prompts from the configuration dialog.</string>
+    <!-- Prompt-preset picker (Phase 24 / Task 5) -->
+    <string name="prompt_preset_picker_title">Prompt presets</string>
+    <string name="prompt_preset_picker_subtitle">%1$s · pick a preset for this node</string>
+    <string name="prompt_preset_picker_tab_bundled">Bundled</string>
+    <string name="prompt_preset_picker_tab_mine">Mine</string>
+    <string name="prompt_preset_picker_all_chip">All</string>
+    <string name="prompt_preset_picker_current_badge">CURRENT</string>
+    <string name="prompt_preset_picker_tokens_suffix">tok</string>
+    <string name="prompt_preset_picker_empty_bundled">No bundled presets for this node type.</string>
+    <string name="prompt_preset_picker_empty_mine">You haven\'t saved any presets for this node type.</string>
+    <string name="prompt_preset_picker_empty_filtered">No presets match the current filter.</string>
+    <string name="prompt_preset_picker_action_preview">Preview</string>
+    <string name="prompt_preset_picker_action_use_prompt">Use prompt</string>
+    <string name="prompt_preset_picker_action_cancel">Cancel</string>
+
+    <!-- Save-as-prompt-preset dialog (Phase 24 / Task 5) -->
+    <string name="prompt_preset_save_dialog_title">Save as preset</string>
+    <string name="prompt_preset_save_dialog_subtitle">Target node type: %1$s</string>
+    <string name="prompt_preset_save_field_name">Name</string>
+    <string name="prompt_preset_save_field_description">Description (optional)</string>
+    <string name="prompt_preset_save_field_tags">Tags (comma-separated, optional)</string>
+    <string name="prompt_preset_save_field_tags_hint">e.g. concise, reasoning, json</string>
+    <string name="prompt_preset_save_action_save">Save</string>
+    <string name="prompt_preset_save_action_cancel">Cancel</string>
+    <string name="prompt_preset_save_error_blank_prompt">Cannot save an empty system prompt.</string>
+    <string name="prompt_preset_save_error_name_too_long" tools:ignore="PluralsCandidate">Name must be at most %1$d characters</string>
 
     <!-- Node context-config section -->
     <string name="orchestrator_context_section_title">Input Data</string>
@@ -56,4 +79,51 @@
     <string name="orchestrator_context_tool_results_label">Tool results</string>
     <string name="orchestrator_context_tool_results_hint">Data returned by tools in the current step</string>
     <string name="orchestrator_context_hint">Fewer inputs make the node faster and cheaper. Enable only what\'s needed.</string>
+
+    <!-- Phase 24 / Task 3 — Pipeline presets UI -->
+    <!-- Library speed-dial -->
+    <string name="orchestrator_library_speed_dial_new">New</string>
+    <string name="orchestrator_library_speed_dial_new_pipeline">+ New pipeline</string>
+    <string name="orchestrator_library_speed_dial_from_preset">+ From preset</string>
+
+    <!-- Preset picker sheet -->
+    <string name="orchestrator_preset_picker_title">Choose a preset</string>
+    <string name="orchestrator_preset_picker_tab_bundled">Bundled</string>
+    <string name="orchestrator_preset_picker_tab_mine">Mine</string>
+    <string name="orchestrator_preset_picker_chip_all">All</string>
+    <string name="orchestrator_preset_picker_empty">No presets match this filter.</string>
+    <string name="orchestrator_preset_picker_use">Use this preset</string>
+    <string name="orchestrator_preset_picker_loaded">Preset loaded into editor</string>
+
+    <!-- Save as preset dialog -->
+    <string name="orchestrator_preset_save_title">Save as preset</string>
+    <string name="orchestrator_preset_save_name_label">Name</string>
+    <string name="orchestrator_preset_save_description_label">Description</string>
+    <string name="orchestrator_preset_save_category_label">Category</string>
+    <string name="orchestrator_preset_save_tags_label">Tags (comma-separated)</string>
+    <string name="orchestrator_preset_save_success">Preset saved</string>
+    <string name="orchestrator_prompt_preset_save_success">Prompt preset saved</string>
+
+    <!-- Preset categories -->
+    <string name="orchestrator_preset_category_local">Local</string>
+    <string name="orchestrator_preset_category_cloud">Cloud</string>
+    <string name="orchestrator_preset_category_hybrid">Hybrid</string>
+    <string name="orchestrator_preset_category_tool">Tool</string>
+    <string name="orchestrator_preset_category_research">Research</string>
+    <string name="orchestrator_preset_category_other">Other</string>
+
+    <!-- Preset manager screen -->
+    <string name="orchestrator_preset_manager_title">Pipeline presets</string>
+    <string name="orchestrator_preset_manager_subtitle" tools:ignore="PluralsCandidate">%1$d bundled · %2$d saved</string>
+    <string name="orchestrator_preset_manager_bundled_empty">No bundled presets are available.</string>
+    <string name="orchestrator_preset_manager_user_empty">You haven\'t saved any presets yet. Save a pipeline as preset from the editor or the library overflow menu.</string>
+    <string name="orchestrator_preset_manager_action_rename">Rename</string>
+    <string name="orchestrator_preset_manager_action_export">Export JSON</string>
+    <string name="orchestrator_preset_manager_action_delete">Delete</string>
+    <string name="orchestrator_preset_manager_rename_title">Rename preset</string>
+    <string name="orchestrator_preset_manager_rename_blank">Preset name cannot be blank</string>
+    <string name="orchestrator_preset_manager_renamed">Preset renamed</string>
+    <string name="orchestrator_preset_manager_deleted">Preset deleted</string>
+    <string name="orchestrator_preset_manager_delete_title">Delete preset?</string>
+    <string name="orchestrator_preset_manager_delete_confirm">Delete the preset \"%1$s\"? This cannot be undone.</string>
 </resources>

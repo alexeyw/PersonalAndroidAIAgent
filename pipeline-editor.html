@@ -756,6 +756,216 @@
             outline: 2px solid var(--danger);
             outline-offset: 2px;
         }
+
+        /* ---- Pipeline preset library + save dialogs (Phase 24 / Task 7) ---- */
+        dialog#preset-library,
+        dialog#preset-save {
+            border: 1px solid var(--border);
+            background: var(--bg);
+            color: var(--text);
+            border-radius: 10px;
+            padding: 0;
+            box-shadow: 0 12px 32px rgba(0,0,0,0.5);
+        }
+        dialog#preset-library::backdrop,
+        dialog#preset-save::backdrop { background: rgba(0,0,0,0.55); }
+
+        dialog#preset-library {
+            width: 640px;
+            max-width: 92vw;
+            max-height: 88vh;
+        }
+        .preset-shell {
+            display: flex;
+            flex-direction: column;
+            max-height: inherit;
+        }
+        dialog#preset-library header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 14px 18px;
+            border-bottom: 1px solid var(--border);
+        }
+        dialog#preset-library header .icon { font-size: 18px; }
+        dialog#preset-library header .title { font-size: 14px; font-weight: 600; }
+        .preset-close {
+            margin-left: auto;
+            background: transparent;
+            border: none;
+            color: var(--text-dim);
+            font-size: 16px;
+            cursor: pointer;
+            padding: 2px 6px;
+            border-radius: 6px;
+        }
+        .preset-close:hover { background: var(--bg-soft); color: var(--text); }
+
+        .preset-tabs {
+            display: flex;
+            gap: 4px;
+            padding: 10px 18px 0;
+        }
+        .preset-tab {
+            background: transparent;
+            border: none;
+            border-bottom: 2px solid transparent;
+            color: var(--text-dim);
+            font-size: 13px;
+            padding: 6px 10px;
+            cursor: pointer;
+        }
+        .preset-tab:hover { color: var(--text); }
+        .preset-tab.is-active {
+            color: var(--text);
+            border-bottom-color: var(--accent);
+            font-weight: 600;
+        }
+
+        .preset-list {
+            flex: 1;
+            overflow-y: auto;
+            padding: 14px 18px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        .preset-card {
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 12px 14px;
+            background: var(--bg-soft);
+        }
+        .preset-card-head {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 4px;
+        }
+        .preset-card-name { font-size: 14px; font-weight: 600; }
+        .preset-badge {
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            padding: 2px 7px;
+            border-radius: 999px;
+            border: 1px solid var(--border);
+            color: var(--text-dim);
+        }
+        .preset-card-desc {
+            font-size: 12px;
+            color: var(--text-dim);
+            line-height: 1.45;
+            margin: 0 0 8px;
+        }
+        .preset-tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px;
+            margin-bottom: 8px;
+        }
+        .preset-tag {
+            font-size: 10px;
+            color: var(--text-dim);
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            padding: 1px 6px;
+        }
+        .preset-card-actions {
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+        }
+        .preset-card-actions button {
+            background: var(--bg);
+            color: var(--text);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 5px 10px;
+            font-size: 12px;
+            cursor: pointer;
+        }
+        .preset-card-actions button:hover { border-color: var(--accent); }
+        .preset-card-actions button.primary {
+            background: var(--accent);
+            border-color: var(--accent);
+            color: #fff;
+        }
+        .preset-card-actions button.danger { color: var(--danger); }
+        .preset-card-actions button.danger:hover { border-color: var(--danger); }
+        .preset-empty {
+            color: var(--text-dim);
+            font-size: 13px;
+            text-align: center;
+            padding: 28px 12px;
+            line-height: 1.5;
+        }
+
+        dialog#preset-library footer,
+        dialog#preset-save footer {
+            display: flex;
+            justify-content: flex-end;
+            gap: 8px;
+            padding: 12px 18px;
+            border-top: 1px solid var(--border);
+        }
+        dialog#preset-library footer button,
+        dialog#preset-save footer button {
+            background: var(--bg-soft);
+            color: var(--text);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 7px 14px;
+            font-size: 13px;
+            cursor: pointer;
+        }
+        dialog#preset-library footer button:hover,
+        dialog#preset-save footer button:hover { border-color: var(--accent); }
+        dialog#preset-library footer button.primary,
+        dialog#preset-save footer button.primary {
+            background: var(--accent);
+            border-color: var(--accent);
+            color: #fff;
+        }
+        dialog#preset-library footer { justify-content: space-between; }
+
+        dialog#preset-save { width: 460px; max-width: 92vw; }
+        dialog#preset-save form { display: flex; flex-direction: column; }
+        dialog#preset-save header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 14px 18px;
+            border-bottom: 1px solid var(--border);
+        }
+        dialog#preset-save header .icon { font-size: 18px; }
+        dialog#preset-save header .title { font-size: 14px; font-weight: 600; }
+        dialog#preset-save .body {
+            padding: 14px 18px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        dialog#preset-save .field { display: flex; flex-direction: column; gap: 4px; }
+        dialog#preset-save .field > label { font-size: 12px; color: var(--text-dim); }
+        dialog#preset-save .field-hint { text-transform: none; letter-spacing: 0; }
+        dialog#preset-save input[type="text"],
+        dialog#preset-save select,
+        dialog#preset-save textarea {
+            background: var(--bg-soft);
+            color: var(--text);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 7px 9px;
+            font-size: 13px;
+            font-family: inherit;
+        }
+        dialog#preset-save input[type="text"]:focus,
+        dialog#preset-save select:focus,
+        dialog#preset-save textarea:focus { border-color: var(--accent); outline: none; }
+        dialog#preset-save textarea { resize: vertical; }
+        .preset-save-error { color: var(--danger); font-size: 12px; margin: 0; }
     </style>
 </head>
 <body>
@@ -772,7 +982,9 @@
             <button id="btn-autolayout" title="Auto-layout the graph (left-to-right by topological depth)">🪄 Auto-layout</button>
             <button id="btn-export" title="Export pipeline JSON">📤 Export JSON</button>
             <button id="btn-import" title="Import pipeline JSON">📥 Import JSON</button>
+            <button id="btn-presets" title="Browse and manage pipeline presets">📚 Presets</button>
             <input id="file-import" type="file" accept="application/json,.json" hidden>
+            <input id="file-import-preset" type="file" accept="application/json,.json,.preset.json" hidden>
             <span class="name-label">Name</span>
             <input id="pipeline-name" type="text" placeholder="Untitled pipeline">
             <span class="spacer"></span>
@@ -813,6 +1025,61 @@
     </form>
 </dialog>
 
+<!-- Pipeline preset library (Phase 24 / Task 7): bundled catalogue + per-browser
+     "Mine" presets stored in localStorage. Load instantiates a preset onto the
+     canvas; Export writes a `.preset.json`; Import adds a file to "Mine". -->
+<dialog id="preset-library">
+    <div class="preset-shell">
+        <header>
+            <span class="icon">📚</span>
+            <span class="title">Pipeline presets</span>
+            <button type="button" class="preset-close" data-role="close" title="Close (Esc)">✕</button>
+        </header>
+        <nav class="preset-tabs" data-role="tabs">
+            <button type="button" class="preset-tab is-active" data-tab="bundled">Bundled</button>
+            <button type="button" class="preset-tab" data-tab="mine">Mine</button>
+        </nav>
+        <div class="preset-list" data-role="list"></div>
+        <footer>
+            <button type="button" data-role="import">📥 Import preset…</button>
+            <button type="button" class="primary" data-role="save-current">💾 Save canvas as preset…</button>
+        </footer>
+    </div>
+</dialog>
+
+<!-- Save-as-preset metadata form raised by "Save canvas as preset…". -->
+<dialog id="preset-save">
+    <form method="dialog">
+        <header>
+            <span class="icon">💾</span>
+            <span class="title">Save canvas as preset</span>
+        </header>
+        <div class="body">
+            <div class="field">
+                <label for="preset-save-name">Name</label>
+                <input id="preset-save-name" type="text" maxlength="60" placeholder="My pipeline preset">
+            </div>
+            <div class="field">
+                <label for="preset-save-category">Category</label>
+                <select id="preset-save-category"></select>
+            </div>
+            <div class="field">
+                <label for="preset-save-tags">Tags <span class="field-hint">(comma-separated)</span></label>
+                <input id="preset-save-tags" type="text" placeholder="offline, qa, starter">
+            </div>
+            <div class="field">
+                <label for="preset-save-description">Description</label>
+                <textarea id="preset-save-description" rows="3" placeholder="What this preset does and when to pick it."></textarea>
+            </div>
+            <p class="preset-save-error" data-role="error" hidden></p>
+        </div>
+        <footer>
+            <button type="button" data-role="cancel">Cancel</button>
+            <button type="button" class="primary" data-role="confirm">Save preset</button>
+        </footer>
+    </form>
+</dialog>
+
 <script src="https://cdn.jsdelivr.net/npm/drawflow@0.0.60/dist/drawflow.min.js"></script>
 <script>
     'use strict';
@@ -824,20 +1091,22 @@
      *  shape: INPUT 0/1, OUTPUT 1/0, IF_CONDITION & QUEUE_PROCESSOR 1/2,
      *  everything else 1/1.
      * -------------------------------------------------------------------- */
+    /* AUTO-GEN:NODE_TYPES — generated by :app:generateBrowserEditorConstants. DO NOT EDIT BY HAND. */
     const NODE_TYPES = [
-        { id: 'INPUT',           label: 'Input',           color: '#607D8B', icon: '▶',  inputs: 0, outputs: 1 },
-        { id: 'OUTPUT',          label: 'Output',          color: '#F44336', icon: '⏹',  inputs: 1, outputs: 0 },
-        { id: 'LITE_RT',         label: 'LiteRT',          color: '#4CAF50', icon: '🧠', inputs: 1, outputs: 1 },
-        { id: 'CLOUD',           label: 'Cloud',           color: '#2196F3', icon: '☁',  inputs: 1, outputs: 1 },
-        { id: 'TOOL',            label: 'Tool',            color: '#FF9800', icon: '🛠', inputs: 1, outputs: 1 },
-        { id: 'IF_CONDITION',    label: 'If Condition',    color: '#FFC107', icon: '❓', inputs: 1, outputs: 2 },
-        { id: 'INTENT_ROUTER',   label: 'Intent Router',   color: '#E91E63', icon: '🧭', inputs: 1, outputs: 1 },
-        { id: 'DECOMPOSITION',   label: 'Decomposition',   color: '#3F51B5', icon: '🧩', inputs: 1, outputs: 1 },
-        { id: 'QUEUE_PROCESSOR', label: 'Queue Processor', color: '#795548', icon: '🔁', inputs: 1, outputs: 2 },
-        { id: 'EVALUATION',      label: 'Evaluation',      color: '#009688', icon: '✅', inputs: 1, outputs: 1 },
-        { id: 'SUMMARY',         label: 'Summary',         color: '#8BC34A', icon: '📝', inputs: 1, outputs: 1 },
-        { id: 'CLARIFICATION',   label: 'Clarification',   color: '#9C27B0', icon: '💬', inputs: 1, outputs: 1 },
+        { id: "INPUT", label: "Input", color: "#607D8B", icon: "▶", inputs: 0, outputs: 1 },
+        { id: "OUTPUT", label: "Output", color: "#F44336", icon: "⏹", inputs: 1, outputs: 0 },
+        { id: "LITE_RT", label: "LiteRT", color: "#4CAF50", icon: "🧠", inputs: 1, outputs: 1 },
+        { id: "CLOUD", label: "Cloud", color: "#2196F3", icon: "☁", inputs: 1, outputs: 1 },
+        { id: "TOOL", label: "Tool", color: "#FF9800", icon: "🛠", inputs: 1, outputs: 1 },
+        { id: "IF_CONDITION", label: "If Condition", color: "#FFC107", icon: "❓", inputs: 1, outputs: 2 },
+        { id: "INTENT_ROUTER", label: "Intent Router", color: "#E91E63", icon: "🧭", inputs: 1, outputs: 1 },
+        { id: "DECOMPOSITION", label: "Decomposition", color: "#3F51B5", icon: "🧩", inputs: 1, outputs: 1 },
+        { id: "QUEUE_PROCESSOR", label: "Queue Processor", color: "#795548", icon: "🔁", inputs: 1, outputs: 2 },
+        { id: "EVALUATION", label: "Evaluation", color: "#009688", icon: "✅", inputs: 1, outputs: 1 },
+        { id: "SUMMARY", label: "Summary", color: "#8BC34A", icon: "📝", inputs: 1, outputs: 1 },
+        { id: "CLARIFICATION", label: "Clarification", color: "#9C27B0", icon: "💬", inputs: 1, outputs: 1 },
     ];
+    /* /AUTO-GEN:NODE_TYPES */
     const NODE_TYPE_BY_ID = Object.fromEntries(NODE_TYPES.map(t => [t.id, t]));
 
     /* -------------------------------------------------------------------- *
@@ -850,41 +1119,20 @@
      *  with a different baseline than the same node type produced by the
      *  Android UI. See DESCRIPTION.md §8 (Pipeline Editor → Sync rule).
      * -------------------------------------------------------------------- */
-    const SYSTEM_PROMPT_PREFIX = 'You are a helpful AI assistant running on an Android device.';
+    /* AUTO-GEN:DEFAULT_PROMPTS — generated by :app:generateBrowserEditorConstants. DO NOT EDIT BY HAND. */
+    const SYSTEM_PROMPT_PREFIX = "You are a helpful AI assistant running on an Android device.";
 
     const DEFAULT_SYSTEM_PROMPTS = {
         LITE_RT: SYSTEM_PROMPT_PREFIX,
         CLOUD: SYSTEM_PROMPT_PREFIX,
-        INTENT_ROUTER:
-            'You are an Intent Router. Analyze the user input and determine its category. ' +
-            'Output strictly ONE of the following keywords:\n' +
-            '- Simple (if it\'s a simple chat message or greeting)\n' +
-            '- Data (if it requires searching the web or current data)\n' +
-            '- Complex (if it requires complex coding, math, or deep reasoning)\n' +
-            '- Task (if it\'s a multi-step task or requires executing an action/tool)',
-        DECOMPOSITION:
-            'You are a Task Decomposer. Break down the given complex task into a list of ' +
-            'simpler, actionable subtasks. Output the result as a JSON array of strings.',
-        EVALUATION:
-            'You are a Task Evaluator. Analyze the result of the executed subtask and ' +
-            'determine if it was successful. If not, explain what went wrong and how to fix it.',
-        SUMMARY:
-            'You are a Summarizer. Given the results of multiple executed subtasks, provide ' +
-            'a concise and comprehensive summary of the overall outcome.',
-        OUTPUT:
-            'You are a Formatter. Please format the provided input text into a clear, ' +
-            'readable markdown response for the user.',
-        CLARIFICATION:
-            'You are a Clarification Generator. Inspect the user\'s request and the upstream ' +
-            'context, then craft ONE concise clarifying question that would help the agent ' +
-            'proceed. If a small set of likely answers is obvious, list them as options; ' +
-            'otherwise return an empty array to ask for free-form input. Output STRICTLY valid ' +
-            'JSON with this shape and nothing else:\n' +
-            '{\n' +
-            '  "question": "<the question to ask the user>",\n' +
-            '  "options": ["<option 1>", "<option 2>"]\n' +
-            '}',
+        INTENT_ROUTER: "You are an Intent Router. Analyze the user input and determine its category. Output strictly ONE of the following keywords:\n- Simple (if it's a simple chat message or greeting)\n- Data (if it requires searching the web or current data)\n- Complex (if it requires complex coding, math, or deep reasoning)\n- Task (if it's a multi-step task or requires executing an action/tool)",
+        DECOMPOSITION: "You are a Task Decomposer. Break down the given complex task into a list of simpler, actionable subtasks. Output the result as a JSON array of strings.",
+        EVALUATION: "You are a Task Evaluator. Analyze the result of the executed subtask and determine if it was successful. If not, explain what went wrong and how to fix it.",
+        SUMMARY: "You are a Summarizer. Given the results of multiple executed subtasks, provide a concise and comprehensive summary of the overall outcome.",
+        OUTPUT: "You are a Formatter. Please format the provided input text into a clear, readable markdown response for the user.",
+        CLARIFICATION: "You are a Clarification Generator. Inspect the user's request and the upstream context, then craft ONE concise clarifying question that would help the agent proceed. If a small set of likely answers is obvious, list them as options; otherwise return an empty array to ask for free-form input. Output STRICTLY valid JSON with this shape and nothing else:\n{\n  \"question\": \"<the question to ask the user>\",\n  \"options\": [\"<option 1>\", \"<option 2>\"]\n}",
     };
+    /* /AUTO-GEN:DEFAULT_PROMPTS */
 
     /**
      * Tokens recognised by `PromptTemplateEngine` on Android. Surfaced as
@@ -898,23 +1146,285 @@
      * harmless because the runtime simply leaves unknown tokens verbatim
      * with a warning.
      */
-    const PROMPT_VARIABLES = ['DATE', 'TIME', 'TOOLS', 'MODEL', 'MEMORY_SUMMARY', 'LANG', 'LOCATION', 'USER', 'DEVICE'];
+    /* AUTO-GEN:PROMPT_VARIABLES — generated by :app:generateBrowserEditorConstants. DO NOT EDIT BY HAND. */
+    const PROMPT_VARIABLES = ["DATE", "TIME", "TOOLS", "MODEL", "MEMORY_SUMMARY", "LANG", "LOCATION", "USER", "DEVICE"];
+    /* /AUTO-GEN:PROMPT_VARIABLES */
 
     /**
      * Built-in prompt library exposed by the "📚 Prompts" popover in the
-     * config dialog. Each entry maps to one of the per-type defaults so
-     * users can instantly seed a node with a known-good prompt or recover
-     * from an experimental edit. KEEP IN SYNC with DEFAULT_SYSTEM_PROMPTS
-     * — see DESCRIPTION.md §8.
+     * config dialog. Mirrors the bundled prompt-preset catalogue shipped in
+     * the Android APK under `assets/presets/prompts/*.json` (Phase 24 /
+     * Task 4) — one entry per bundled preset, keyed by `nodeType` so the
+     * popover can offer only the presets relevant to the node being edited
+     * (same per-NodeType filtering the Android Prompt Library applies).
+     *
+     * `content` is the preset's `systemPrompt`, copied verbatim including
+     * its `$VARIABLE` placeholders (resolved at runtime on the device).
+     *
+     * KEEP IN SYNC with `assets/presets/prompts/`. See DESCRIPTION.md §8.2.
      */
     const BUILTIN_PROMPT_TEMPLATES = [
-        { name: 'LiteRT / Cloud baseline', content: DEFAULT_SYSTEM_PROMPTS.LITE_RT },
-        { name: 'Intent Router',           content: DEFAULT_SYSTEM_PROMPTS.INTENT_ROUTER },
-        { name: 'Decomposition',           content: DEFAULT_SYSTEM_PROMPTS.DECOMPOSITION },
-        { name: 'Evaluation',              content: DEFAULT_SYSTEM_PROMPTS.EVALUATION },
-        { name: 'Summary',                 content: DEFAULT_SYSTEM_PROMPTS.SUMMARY },
-        { name: 'Output formatter',        content: DEFAULT_SYSTEM_PROMPTS.OUTPUT },
-        { name: 'Clarification',           content: DEFAULT_SYSTEM_PROMPTS.CLARIFICATION },
+        // LITE_RT
+        {
+            id: 'litert_concise_assistant', nodeType: 'LITE_RT', name: 'Concise assistant',
+            description: 'Single-paragraph, no-preamble answers. Best for quick factual questions when latency matters.',
+            content:
+                "You are a concise on-device assistant running on $MODEL. Today is $DATE. Answer the user's " +
+                'question directly in at most two short paragraphs. Skip greetings, restatement of the question, ' +
+                'and meta-commentary. If you do not know, say so plainly in one sentence.',
+        },
+        {
+            id: 'litert_memory_aware_reply', nodeType: 'LITE_RT', name: 'Memory-aware reply',
+            description: "Personalises the answer using the agent's long-term memory summary.",
+            content:
+                'You are an on-device assistant for $USER, running on $MODEL. Today is $DATE.\n\n' +
+                'Recent long-term memory:\n$MEMORY_SUMMARY\n\n' +
+                "Use the memory entries only when they are directly relevant to the user's request. Do not invent " +
+                'memories that are not listed above. If the memory is empty or irrelevant, answer from the ' +
+                'conversation context alone. Keep the answer focused and under three short paragraphs.',
+        },
+        {
+            id: 'litert_step_by_step_reasoner', nodeType: 'LITE_RT', name: 'Step-by-step reasoner',
+            description: 'Walks through the problem with numbered intermediate steps before delivering the final answer.',
+            content:
+                "You are a careful on-device reasoner running on $MODEL. Today is $DATE. Solve the user's request " +
+                'by working through it explicitly:\n\n' +
+                '1. State the question in your own words.\n' +
+                '2. List the relevant facts you will use.\n' +
+                '3. Reason step by step, numbering each step.\n' +
+                '4. Conclude with a clearly marked "Answer:" line.\n\n' +
+                'Keep the whole response under twelve numbered steps.',
+        },
+        // CLOUD
+        {
+            id: 'cloud_capable_analyst', nodeType: 'CLOUD', name: 'Capable analyst',
+            description: 'Cloud-grade analytical reasoning for multi-faceted questions and structured comparisons.',
+            content:
+                'You are a senior analyst with broad domain knowledge. Today is $DATE.\n\n' +
+                "Analyse the user's request with intellectual rigour:\n" +
+                '- Identify the key sub-questions.\n' +
+                '- Compare alternatives or perspectives where they exist.\n' +
+                '- Cite concrete trade-offs and edge cases.\n' +
+                '- Distinguish between consensus knowledge and your own inference.\n\n' +
+                'Deliver the answer in clean prose with optional short bullet lists for comparisons. Do not pad ' +
+                'with disclaimers.',
+        },
+        {
+            id: 'cloud_web_savvy_researcher', nodeType: 'CLOUD', name: 'Web-savvy researcher',
+            description: 'Cloud-grade researcher framing for tool-augmented pipelines and source-aware answers.',
+            content:
+                'You are a research assistant collaborating with a tool-augmented agent. Today is $DATE. ' +
+                'Locale: $LANG, $LOCATION.\n\n' +
+                'When the upstream context already contains search hits or tool output, ground your answer in those ' +
+                'snippets and quote sparingly. When it does not, answer from your own knowledge and flag claims that ' +
+                'would benefit from verification with "[needs source]".\n\n' +
+                'Structure: a one-line bottom-line up top, then the supporting reasoning, then any caveats. Avoid ' +
+                'speculation about events after your knowledge cutoff.',
+        },
+        // INTENT_ROUTER
+        {
+            id: 'router_keyword_classifier', nodeType: 'INTENT_ROUTER', name: 'Keyword classifier',
+            description: 'Strict single-keyword router compatible with the default INTENT_ROUTER contract.',
+            content:
+                'You are an Intent Router. Analyse the user input and determine which category it belongs to.\n\n' +
+                'Output EXACTLY ONE of these keywords on a single line, with no extra text, punctuation, or ' +
+                'quotation marks:\n\n' +
+                '- Simple — a direct factual question that the local model can answer alone.\n' +
+                '- Data — a question that requires retrieving information from chat history or long-term memory.\n' +
+                '- Complex — a multi-step reasoning task that benefits from decomposition.\n' +
+                '- Task — an actionable request that requires using tools.',
+        },
+        {
+            id: 'router_tool_first', nodeType: 'INTENT_ROUTER', name: 'Tool-first router',
+            description: 'Biases the router toward the Task branch whenever any available tool could plausibly help.',
+            content:
+                'You are an Intent Router for a tool-augmented agent. Available tools right now:\n$TOOLS\n\n' +
+                'Classify the user input into ONE of: Simple, Data, Complex, Task. Output the keyword on a single ' +
+                'line, with no extra text.\n\n' +
+                'Decision priority:\n' +
+                '1. If any tool above could plausibly help fulfil the request — output Task.\n' +
+                '2. Else if the request needs multi-step reasoning — output Complex.\n' +
+                '3. Else if it depends on chat history or stored memory — output Data.\n' +
+                '4. Otherwise — output Simple.',
+        },
+        // DECOMPOSITION
+        {
+            id: 'decomposition_json_subtasks', nodeType: 'DECOMPOSITION', name: 'JSON subtasks',
+            description: 'Strict JSON array of subtask strings — drop-in default for the queue processor.',
+            content:
+                "You are a Task Decomposer. Break the user's request into the smallest set of actionable, " +
+                'independently-completable subtasks.\n\n' +
+                'Output EXACTLY a JSON array of strings, with no surrounding prose and no markdown code fence. ' +
+                'Example:\n\n["step one description", "step two description", "step three description"]\n\n' +
+                'Rules:\n' +
+                '- Between 2 and 7 subtasks; merge trivial steps.\n' +
+                '- Each subtask is a single imperative sentence.\n' +
+                '- Subtasks are ordered by execution dependency.',
+        },
+        {
+            id: 'decomposition_dependency_aware', nodeType: 'DECOMPOSITION', name: 'Dependency-aware subtasks',
+            description: 'JSON array of subtasks, each prefixed with its prerequisites so downstream nodes can sequence them.',
+            content:
+                'You are a Task Decomposer. Break the request into subtasks and surface their dependencies inline ' +
+                'so the queue processor can sequence them correctly.\n\n' +
+                'Output EXACTLY a JSON array of strings, with no surrounding prose or markdown fence. Each string ' +
+                'follows this template:\n\n' +
+                '"[deps:none] do the first thing"\n' +
+                '"[deps:1] do the second thing"\n' +
+                '"[deps:1,2] do the third thing"\n\n' +
+                'Rules:\n' +
+                '- 2 to 7 subtasks total.\n' +
+                '- Indices in `deps:` refer to the 1-based position of earlier subtasks in this same array.\n' +
+                '- Use `deps:none` for subtasks that can run first.\n' +
+                '- Each subtask body after the bracket is a single imperative sentence.',
+        },
+        // EVALUATION
+        {
+            id: 'evaluation_pass_fail_judge', nodeType: 'EVALUATION', name: 'Pass/fail JSON judge',
+            description: 'Binary success verdict in strict JSON — compatible with the default EVALUATION contract.',
+            content:
+                'You are a Task Evaluator. Decide whether the executed subtask produced an acceptable outcome ' +
+                'relative to the original goal.\n\n' +
+                'Output EXACTLY a single JSON object on one line, with no surrounding prose or markdown fence:\n\n' +
+                '{"success": true, "reason": "<one short sentence>"}\n\nor\n\n' +
+                '{"success": false, "reason": "<one short sentence>"}\n\n' +
+                'Rules:\n' +
+                '- `success` is a boolean. No "partial" or "unclear" — pick the closer side.\n' +
+                '- `reason` cites the specific evidence from the subtask output that drove the verdict.',
+        },
+        {
+            id: 'evaluation_scored_critic', nodeType: 'EVALUATION', name: 'Scored critic',
+            description: 'Returns a 0–10 quality score plus an improvement suggestion in strict JSON.',
+            content:
+                "You are a Task Critic. Score the executed subtask's output against the original goal and propose " +
+                'a concrete improvement.\n\n' +
+                'Output EXACTLY a single JSON object, with no surrounding prose or markdown fence:\n\n' +
+                '{"score": <integer 0..10>, "verdict": "pass|retry|fail", "improvement": "<one actionable ' +
+                'suggestion>"}\n\n' +
+                'Rules:\n' +
+                '- `score`: 0 = no progress, 10 = fully solved.\n' +
+                '- `verdict`: pass when score >= 7, retry when 4..6, fail when <= 3.\n' +
+                '- `improvement`: a single actionable sentence the executor could apply next iteration. Use "none" ' +
+                'when the verdict is pass.',
+        },
+        // SUMMARY
+        {
+            id: 'summary_bullet_recap', nodeType: 'SUMMARY', name: 'Bullet recap',
+            description: 'Condenses upstream outputs into a tight bullet list of the key points.',
+            content:
+                'You are a summariser. Collapse the upstream content into at most seven concise bullets that ' +
+                'capture the essential conclusions only.\n\n' +
+                'Rules:\n' +
+                '- Each bullet is one short sentence, no sub-bullets.\n' +
+                '- Drop redundancy across upstream outputs — merge equivalent points.\n' +
+                '- Preserve numbers, names, and identifiers verbatim.\n' +
+                '- End with a single "Bottom line:" sentence summarising the overall outcome.',
+        },
+        {
+            id: 'summary_detailed_narrative', nodeType: 'SUMMARY', name: 'Detailed narrative',
+            description: 'Weaves the upstream subtask outputs into a coherent multi-paragraph narrative.',
+            content:
+                'You are a synthesis writer. Combine the upstream subtask outputs into a coherent narrative that a ' +
+                'reader can follow without seeing the originals.\n\n' +
+                'Structure:\n' +
+                "- Opening paragraph: the user's original goal and what was attempted.\n" +
+                "- Body paragraphs: each subtask's contribution, in execution order, with quoted figures or names " +
+                'preserved verbatim.\n' +
+                '- Closing paragraph: the consolidated conclusion and any unresolved gaps.\n\n' +
+                'Use plain prose. Do not introduce facts that are not present in the upstream content.',
+        },
+        // OUTPUT
+        {
+            id: 'output_plain_conversational', nodeType: 'OUTPUT', name: 'Plain conversational',
+            description: 'Friendly, paragraph-style reply with no markdown decoration.',
+            content:
+                'You are the final-output formatter. Restate the upstream content as a friendly, conversational ' +
+                'reply for $USER. Use plain prose only — no headings, no bullet lists, no code fences, no emoji. ' +
+                'Keep the tone warm but professional. Do not add new factual claims; only rephrase what the ' +
+                'upstream node produced.',
+        },
+        {
+            id: 'output_markdown_with_sections', nodeType: 'OUTPUT', name: 'Markdown with sections',
+            description: 'Renders the answer as well-structured markdown with headings, lists, and emphasis.',
+            content:
+                'You are the final-output formatter. Render the upstream content as well-structured markdown:\n\n' +
+                '- Use `##` for top-level sections only when the content has multiple distinct topics.\n' +
+                '- Prefer bullet lists for enumerable items; use numbered lists for ordered steps.\n' +
+                '- Use **bold** for the single most important phrase per section, sparingly.\n' +
+                '- Wrap code, commands, and file paths in backticks.\n' +
+                '- Do not invent sections that the upstream content does not justify.\n\n' +
+                'Preserve every factual detail from the upstream output; only change the formatting.',
+        },
+        {
+            id: 'output_json_structured', nodeType: 'OUTPUT', name: 'JSON-structured',
+            description: 'Emits the answer as a strict JSON object for downstream tooling.',
+            content:
+                'You are the final-output formatter for a machine-readable consumer. Convert the upstream content ' +
+                'into a single JSON object with this shape:\n\n' +
+                '{\n  "answer": "<the human-readable answer as one string>",\n' +
+                '  "confidence": "low|medium|high",\n' +
+                '  "sources": ["<short identifier per source, if any>"]\n}\n\n' +
+                'Rules:\n' +
+                '- Output ONLY the JSON object. No prose, no markdown fence.\n' +
+                '- Use double-quoted strings throughout.\n' +
+                '- If no sources are available, use an empty array.\n' +
+                '- Estimate confidence from how much of the answer is directly supported by the upstream context.',
+        },
+        // CLARIFICATION
+        {
+            id: 'clarification_multiple_choice', nodeType: 'CLARIFICATION', name: 'Multiple-choice question',
+            description: 'Emits a clarifying question with 2–4 concrete answer options for the user to tap.',
+            content:
+                'You are a Clarification Generator. Inspect the upstream context and craft ONE concise question ' +
+                'that, once answered, lets the agent proceed unambiguously.\n\n' +
+                'Output EXACTLY a single JSON object, with no surrounding prose and no markdown code fence:\n\n' +
+                '{"question": "<the clarifying question>", "options": ["<option 1>", "<option 2>", "<option 3>"]}\n\n' +
+                'Rules:\n' +
+                '- 2 to 4 options, each a short noun phrase.\n' +
+                '- Options must be mutually exclusive and collectively cover the realistic cases.\n' +
+                '- The question must be answerable by choosing exactly one option.',
+        },
+        {
+            id: 'clarification_open_ended', nodeType: 'CLARIFICATION', name: 'Open-ended clarifier',
+            description: 'Asks a single open-ended clarifying question with no pre-baked answer options.',
+            content:
+                'You are a Clarification Generator. Inspect the upstream context and craft ONE concise open-ended ' +
+                "question that, once answered in the user's own words, lets the agent proceed unambiguously.\n\n" +
+                'Output EXACTLY a single JSON object, with no surrounding prose and no markdown code fence:\n\n' +
+                '{"question": "<the clarifying question>", "options": []}\n\n' +
+                'Rules:\n' +
+                '- The question must address the single most blocking ambiguity. Do not ask multi-part or stacked ' +
+                'questions.\n' +
+                '- The `options` array must be empty — the UI will render a free-text input.\n' +
+                '- Avoid yes/no questions; phrase the question so the answer carries the information the agent needs.',
+        },
+        // IF_CONDITION
+        {
+            id: 'if_question_vs_command', nodeType: 'IF_CONDITION', name: 'Is question, not command',
+            description: 'True when the upstream text is an information-seeking question rather than an instruction to perform an action.',
+            content:
+                'The upstream text is an information-seeking question (the user wants an answer or explanation) ' +
+                'rather than a directive to execute an action, change state, or run a tool.',
+        },
+        {
+            id: 'if_needs_external_info', nodeType: 'IF_CONDITION', name: 'Needs external lookup',
+            description: 'True when answering the request requires live external information (web search, current ' +
+                "events, fresh data) beyond the model's training cut-off.",
+            content:
+                'Answering the upstream request well requires live, time-sensitive information from outside the ' +
+                "model's training corpus — for example: today's weather or news, current prices, schedules, " +
+                'scores, version numbers, status of a deployed system, or any other fact that can plausibly change ' +
+                'after $DATE.',
+        },
+        {
+            id: 'if_destructive_intent', nodeType: 'IF_CONDITION', name: 'Destructive or sensitive action',
+            description: 'True when fulfilling the request would modify, delete, send, purchase, or otherwise mutate user data or external state.',
+            content:
+                'Fulfilling the upstream request would mutate state visible to the user or to third parties — for ' +
+                'example: deleting or overwriting files, sending email or messages, posting on the ' +
+                "user's behalf, making a purchase, modifying calendar / contacts / system settings, or invoking " +
+                'any tool whose effect is not purely read-only.',
+        },
     ];
 
     /**
@@ -945,11 +1455,913 @@
         } catch (_) { /* ignore */ }
     }
 
+    /**
+     * Bundled pipeline-preset catalogue surfaced by the "📚 Presets"
+     * modal (Phase 24 / Task 7). Each entry is a full preset document in
+     * the `.preset.json` format owned by
+     * `domain/pipelineio/PipelinePresetJsonSerializer.kt` — a strict
+     * superset of the pipeline JSON with three extra top-level fields
+     * (`category`, `tags`, `description`). The 6 documents below are
+     * copied verbatim from the Android APK assets under
+     * `assets/presets/pipelines/*.json`.
+     *
+     * KEEP IN SYNC with `assets/presets/pipelines/`. Phase 24 / Task 8
+     * will replace this hand-maintained block with a gradle-generated
+     * one (`generateBrowserEditorConstants`). See DESCRIPTION.md §8.2.
+     */
+    const BUILTIN_PIPELINE_PRESETS = [
+        {
+            "schemaVersion": 1,
+            "id": "local_only_qa",
+            "name": "Local-only Q&A",
+            "description": "Single-turn answers handled entirely by the on-device model. No network, no tools. Best for quick factual questions when you want privacy and predictable latency.",
+            "category": "local",
+            "tags": [
+                "offline",
+                "qa",
+                "starter"
+            ],
+            "updatedAt": 1748304000000,
+            "nodes": [
+                {
+                    "id": "input",
+                    "type": "INPUT",
+                    "position": {
+                        "x": 80.0,
+                        "y": 200.0
+                    },
+                    "label": "Input",
+                    "config": {
+                        "systemPrompt": null,
+                        "cloudProvider": null,
+                        "modelPath": null,
+                        "toolName": null,
+                        "clarificationTimeoutMs": null,
+                        "conditionPrompt": null,
+                        "conditionKeywords": null,
+                        "conditionComplexity": null
+                    },
+                    "contextConfig": {
+                        "chatHistory": false,
+                        "originalTask": false,
+                        "nodeInput": true,
+                        "longTermMemory": false,
+                        "toolResults": false
+                    }
+                },
+                {
+                    "id": "lite_rt",
+                    "type": "LITE_RT",
+                    "position": {
+                        "x": 320.0,
+                        "y": 200.0
+                    },
+                    "label": "Local LLM",
+                    "config": {
+                        "systemPrompt": "You are a concise on-device assistant running on $MODEL. Today is $DATE. Answer the user's question directly in one or two short paragraphs. Do not invent facts; if you do not know, say so plainly.",
+                        "cloudProvider": null,
+                        "modelPath": null,
+                        "toolName": null,
+                        "clarificationTimeoutMs": null,
+                        "conditionPrompt": null,
+                        "conditionKeywords": null,
+                        "conditionComplexity": null
+                    },
+                    "contextConfig": {
+                        "chatHistory": false,
+                        "originalTask": true,
+                        "nodeInput": true,
+                        "longTermMemory": false,
+                        "toolResults": false
+                    }
+                },
+                {
+                    "id": "output",
+                    "type": "OUTPUT",
+                    "position": {
+                        "x": 560.0,
+                        "y": 200.0
+                    },
+                    "label": "Reply",
+                    "config": {
+                        "systemPrompt": null,
+                        "cloudProvider": null,
+                        "modelPath": null,
+                        "toolName": null,
+                        "clarificationTimeoutMs": null,
+                        "conditionPrompt": null,
+                        "conditionKeywords": null,
+                        "conditionComplexity": null
+                    },
+                    "contextConfig": {
+                        "chatHistory": true,
+                        "originalTask": true,
+                        "nodeInput": true,
+                        "longTermMemory": true,
+                        "toolResults": true
+                    }
+                }
+            ],
+            "connections": [
+                {
+                    "id": "c1",
+                    "fromNodeId": "input",
+                    "toNodeId": "lite_rt",
+                    "label": null
+                },
+                {
+                    "id": "c2",
+                    "fromNodeId": "lite_rt",
+                    "toNodeId": "output",
+                    "label": null
+                }
+            ]
+        },
+        {
+            "schemaVersion": 1,
+            "id": "cloud_assist",
+            "name": "Cloud-assisted chat",
+            "description": "Cloud LLM with full conversation history and long-term memory. Use when you need broader knowledge, longer context, or stronger reasoning than the on-device model can offer.",
+            "category": "cloud",
+            "tags": [
+                "cloud",
+                "chat",
+                "history"
+            ],
+            "updatedAt": 1748304000000,
+            "nodes": [
+                {
+                    "id": "input",
+                    "type": "INPUT",
+                    "position": {
+                        "x": 80.0,
+                        "y": 200.0
+                    },
+                    "label": "Input",
+                    "config": {
+                        "systemPrompt": null,
+                        "cloudProvider": null,
+                        "modelPath": null,
+                        "toolName": null,
+                        "clarificationTimeoutMs": null,
+                        "conditionPrompt": null,
+                        "conditionKeywords": null,
+                        "conditionComplexity": null
+                    },
+                    "contextConfig": {
+                        "chatHistory": false,
+                        "originalTask": false,
+                        "nodeInput": true,
+                        "longTermMemory": false,
+                        "toolResults": false
+                    }
+                },
+                {
+                    "id": "cloud",
+                    "type": "CLOUD",
+                    "position": {
+                        "x": 320.0,
+                        "y": 200.0
+                    },
+                    "label": "Cloud LLM",
+                    "config": {
+                        "systemPrompt": "You are a knowledgeable cloud assistant available to the user on their Android device. The current date is $DATE and the local time is $TIME. Use the conversation history above to keep continuity across turns. Reply in well-structured prose; cite concrete facts and explain reasoning when it helps the user.",
+                        "cloudProvider": "auto",
+                        "modelPath": null,
+                        "toolName": null,
+                        "clarificationTimeoutMs": null,
+                        "conditionPrompt": null,
+                        "conditionKeywords": null,
+                        "conditionComplexity": null
+                    },
+                    "contextConfig": {
+                        "chatHistory": true,
+                        "originalTask": true,
+                        "nodeInput": true,
+                        "longTermMemory": true,
+                        "toolResults": false
+                    }
+                },
+                {
+                    "id": "output",
+                    "type": "OUTPUT",
+                    "position": {
+                        "x": 560.0,
+                        "y": 200.0
+                    },
+                    "label": "Reply",
+                    "config": {
+                        "systemPrompt": null,
+                        "cloudProvider": null,
+                        "modelPath": null,
+                        "toolName": null,
+                        "clarificationTimeoutMs": null,
+                        "conditionPrompt": null,
+                        "conditionKeywords": null,
+                        "conditionComplexity": null
+                    },
+                    "contextConfig": {
+                        "chatHistory": true,
+                        "originalTask": true,
+                        "nodeInput": true,
+                        "longTermMemory": true,
+                        "toolResults": true
+                    }
+                }
+            ],
+            "connections": [
+                {
+                    "id": "c1",
+                    "fromNodeId": "input",
+                    "toNodeId": "cloud",
+                    "label": null
+                },
+                {
+                    "id": "c2",
+                    "fromNodeId": "cloud",
+                    "toNodeId": "output",
+                    "label": null
+                }
+            ]
+        },
+        {
+            "schemaVersion": 1,
+            "id": "routed_local_cloud",
+            "name": "Routed local + cloud",
+            "description": "An intent router classifies the request and sends simple queries to the on-device model and complex ones to the cloud. Balances latency and capability without the user having to choose.",
+            "category": "hybrid",
+            "tags": [
+                "routing",
+                "hybrid",
+                "intent"
+            ],
+            "updatedAt": 1748304000000,
+            "nodes": [
+                {
+                    "id": "input",
+                    "type": "INPUT",
+                    "position": {
+                        "x": 80.0,
+                        "y": 200.0
+                    },
+                    "label": "Input",
+                    "config": {
+                        "systemPrompt": null,
+                        "cloudProvider": null,
+                        "modelPath": null,
+                        "toolName": null,
+                        "clarificationTimeoutMs": null,
+                        "conditionPrompt": null,
+                        "conditionKeywords": null,
+                        "conditionComplexity": null
+                    },
+                    "contextConfig": {
+                        "chatHistory": false,
+                        "originalTask": false,
+                        "nodeInput": true,
+                        "longTermMemory": false,
+                        "toolResults": false
+                    }
+                },
+                {
+                    "id": "router",
+                    "type": "INTENT_ROUTER",
+                    "position": {
+                        "x": 320.0,
+                        "y": 200.0
+                    },
+                    "label": "Router",
+                    "config": {
+                        "systemPrompt": "Classify the user's request. Output EXACTLY one keyword: Simple (greetings, small talk, single-step factual questions the on-device model can answer) or Complex (multi-step reasoning, research, code, anything that benefits from a larger model). Today is $DATE. Reply with the single keyword and nothing else.",
+                        "cloudProvider": null,
+                        "modelPath": null,
+                        "toolName": null,
+                        "clarificationTimeoutMs": null,
+                        "conditionPrompt": null,
+                        "conditionKeywords": null,
+                        "conditionComplexity": null
+                    },
+                    "contextConfig": {
+                        "chatHistory": true,
+                        "originalTask": true,
+                        "nodeInput": true,
+                        "longTermMemory": false,
+                        "toolResults": false
+                    }
+                },
+                {
+                    "id": "lite_rt",
+                    "type": "LITE_RT",
+                    "position": {
+                        "x": 560.0,
+                        "y": 100.0
+                    },
+                    "label": "Local LLM",
+                    "config": {
+                        "systemPrompt": "You are a concise on-device assistant running on $MODEL. Today is $DATE. Answer the user's question directly in one short paragraph.",
+                        "cloudProvider": null,
+                        "modelPath": null,
+                        "toolName": null,
+                        "clarificationTimeoutMs": null,
+                        "conditionPrompt": null,
+                        "conditionKeywords": null,
+                        "conditionComplexity": null
+                    },
+                    "contextConfig": {
+                        "chatHistory": false,
+                        "originalTask": true,
+                        "nodeInput": true,
+                        "longTermMemory": false,
+                        "toolResults": false
+                    }
+                },
+                {
+                    "id": "cloud",
+                    "type": "CLOUD",
+                    "position": {
+                        "x": 560.0,
+                        "y": 320.0
+                    },
+                    "label": "Cloud LLM",
+                    "config": {
+                        "systemPrompt": "You are a cloud assistant handling a request the on-device router flagged as Complex. The current date is $DATE. Use the conversation history to keep continuity. Reason step by step internally, then reply with a thorough, well-structured answer.",
+                        "cloudProvider": "auto",
+                        "modelPath": null,
+                        "toolName": null,
+                        "clarificationTimeoutMs": null,
+                        "conditionPrompt": null,
+                        "conditionKeywords": null,
+                        "conditionComplexity": null
+                    },
+                    "contextConfig": {
+                        "chatHistory": true,
+                        "originalTask": true,
+                        "nodeInput": true,
+                        "longTermMemory": true,
+                        "toolResults": false
+                    }
+                },
+                {
+                    "id": "output",
+                    "type": "OUTPUT",
+                    "position": {
+                        "x": 800.0,
+                        "y": 200.0
+                    },
+                    "label": "Reply",
+                    "config": {
+                        "systemPrompt": null,
+                        "cloudProvider": null,
+                        "modelPath": null,
+                        "toolName": null,
+                        "clarificationTimeoutMs": null,
+                        "conditionPrompt": null,
+                        "conditionKeywords": null,
+                        "conditionComplexity": null
+                    },
+                    "contextConfig": {
+                        "chatHistory": true,
+                        "originalTask": true,
+                        "nodeInput": true,
+                        "longTermMemory": true,
+                        "toolResults": true
+                    }
+                }
+            ],
+            "connections": [
+                {
+                    "id": "c1",
+                    "fromNodeId": "input",
+                    "toNodeId": "router",
+                    "label": null
+                },
+                {
+                    "id": "c2",
+                    "fromNodeId": "router",
+                    "toNodeId": "lite_rt",
+                    "label": "Simple"
+                },
+                {
+                    "id": "c3",
+                    "fromNodeId": "router",
+                    "toNodeId": "cloud",
+                    "label": "Complex"
+                },
+                {
+                    "id": "c4",
+                    "fromNodeId": "lite_rt",
+                    "toNodeId": "output",
+                    "label": null
+                },
+                {
+                    "id": "c5",
+                    "fromNodeId": "cloud",
+                    "toNodeId": "output",
+                    "label": null
+                }
+            ]
+        },
+        {
+            "schemaVersion": 1,
+            "id": "tool_using_react",
+            "name": "Tool-using ReAct agent",
+            "description": "Local model reasons about which tool to call, the tool runs (auto-selected from the registry), and a summariser folds the tool output back into a final answer. Good template for action-oriented tasks.",
+            "category": "tool",
+            "tags": [
+                "tools",
+                "react",
+                "agent"
+            ],
+            "updatedAt": 1748304000000,
+            "nodes": [
+                {
+                    "id": "input",
+                    "type": "INPUT",
+                    "position": {
+                        "x": 80.0,
+                        "y": 200.0
+                    },
+                    "label": "Input",
+                    "config": {
+                        "systemPrompt": null,
+                        "cloudProvider": null,
+                        "modelPath": null,
+                        "toolName": null,
+                        "clarificationTimeoutMs": null,
+                        "conditionPrompt": null,
+                        "conditionKeywords": null,
+                        "conditionComplexity": null
+                    },
+                    "contextConfig": {
+                        "chatHistory": false,
+                        "originalTask": false,
+                        "nodeInput": true,
+                        "longTermMemory": false,
+                        "toolResults": false
+                    }
+                },
+                {
+                    "id": "lite_rt",
+                    "type": "LITE_RT",
+                    "position": {
+                        "x": 320.0,
+                        "y": 200.0
+                    },
+                    "label": "Reasoner",
+                    "config": {
+                        "systemPrompt": "You are a reasoning agent deciding whether a tool is needed to answer the user. Today is $DATE. Available tools:\n$TOOLS\n\nThink step by step. If a tool can produce more reliable or fresher information than your own knowledge, output a single short sentence describing what you want the tool to do. Otherwise produce a direct answer. Keep the output under three sentences.",
+                        "cloudProvider": null,
+                        "modelPath": null,
+                        "toolName": null,
+                        "clarificationTimeoutMs": null,
+                        "conditionPrompt": null,
+                        "conditionKeywords": null,
+                        "conditionComplexity": null
+                    },
+                    "contextConfig": {
+                        "chatHistory": false,
+                        "originalTask": true,
+                        "nodeInput": true,
+                        "longTermMemory": false,
+                        "toolResults": false
+                    }
+                },
+                {
+                    "id": "tool",
+                    "type": "TOOL",
+                    "position": {
+                        "x": 560.0,
+                        "y": 200.0
+                    },
+                    "label": "Tool",
+                    "config": {
+                        "systemPrompt": null,
+                        "cloudProvider": null,
+                        "modelPath": null,
+                        "toolName": null,
+                        "clarificationTimeoutMs": null,
+                        "conditionPrompt": null,
+                        "conditionKeywords": null,
+                        "conditionComplexity": null
+                    },
+                    "contextConfig": {
+                        "chatHistory": false,
+                        "originalTask": false,
+                        "nodeInput": true,
+                        "longTermMemory": false,
+                        "toolResults": false
+                    }
+                },
+                {
+                    "id": "summary",
+                    "type": "SUMMARY",
+                    "position": {
+                        "x": 800.0,
+                        "y": 200.0
+                    },
+                    "label": "Summariser",
+                    "config": {
+                        "systemPrompt": "You synthesise the result of a tool invocation into a final reply for the user. Quote the concrete facts the tool returned and answer the user's original question directly. If the tool failed or returned nothing useful, say so plainly.",
+                        "cloudProvider": null,
+                        "modelPath": null,
+                        "toolName": null,
+                        "clarificationTimeoutMs": null,
+                        "conditionPrompt": null,
+                        "conditionKeywords": null,
+                        "conditionComplexity": null
+                    },
+                    "contextConfig": {
+                        "chatHistory": false,
+                        "originalTask": true,
+                        "nodeInput": true,
+                        "longTermMemory": false,
+                        "toolResults": true
+                    }
+                },
+                {
+                    "id": "output",
+                    "type": "OUTPUT",
+                    "position": {
+                        "x": 1040.0,
+                        "y": 200.0
+                    },
+                    "label": "Reply",
+                    "config": {
+                        "systemPrompt": null,
+                        "cloudProvider": null,
+                        "modelPath": null,
+                        "toolName": null,
+                        "clarificationTimeoutMs": null,
+                        "conditionPrompt": null,
+                        "conditionKeywords": null,
+                        "conditionComplexity": null
+                    },
+                    "contextConfig": {
+                        "chatHistory": true,
+                        "originalTask": true,
+                        "nodeInput": true,
+                        "longTermMemory": true,
+                        "toolResults": true
+                    }
+                }
+            ],
+            "connections": [
+                {
+                    "id": "c1",
+                    "fromNodeId": "input",
+                    "toNodeId": "lite_rt",
+                    "label": null
+                },
+                {
+                    "id": "c2",
+                    "fromNodeId": "lite_rt",
+                    "toNodeId": "tool",
+                    "label": null
+                },
+                {
+                    "id": "c3",
+                    "fromNodeId": "tool",
+                    "toNodeId": "summary",
+                    "label": null
+                },
+                {
+                    "id": "c4",
+                    "fromNodeId": "summary",
+                    "toNodeId": "output",
+                    "label": null
+                }
+            ]
+        },
+        {
+            "schemaVersion": 1,
+            "id": "multi_step_research",
+            "name": "Multi-step research",
+            "description": "Decomposes the request into subtasks, then loops over each subtask through a cloud LLM via the queue processor. The Done branch leaves the loop and produces the final answer.",
+            "category": "research",
+            "tags": [
+                "research",
+                "decomposition",
+                "cloud",
+                "loop"
+            ],
+            "updatedAt": 1748304000000,
+            "nodes": [
+                {
+                    "id": "input",
+                    "type": "INPUT",
+                    "position": {
+                        "x": 80.0,
+                        "y": 200.0
+                    },
+                    "label": "Input",
+                    "config": {
+                        "systemPrompt": null,
+                        "cloudProvider": null,
+                        "modelPath": null,
+                        "toolName": null,
+                        "clarificationTimeoutMs": null,
+                        "conditionPrompt": null,
+                        "conditionKeywords": null,
+                        "conditionComplexity": null
+                    },
+                    "contextConfig": {
+                        "chatHistory": false,
+                        "originalTask": false,
+                        "nodeInput": true,
+                        "longTermMemory": false,
+                        "toolResults": false
+                    }
+                },
+                {
+                    "id": "decomposition",
+                    "type": "DECOMPOSITION",
+                    "position": {
+                        "x": 320.0,
+                        "y": 200.0
+                    },
+                    "label": "Decomposition",
+                    "config": {
+                        "systemPrompt": "You are a task decomposer. Break the user's request into a short ordered list of independent research subtasks (typically 2-5). Today is $DATE. Output STRICTLY a JSON array of plain-text strings — no prose, no keys, no trailing commentary.",
+                        "cloudProvider": null,
+                        "modelPath": null,
+                        "toolName": null,
+                        "clarificationTimeoutMs": null,
+                        "conditionPrompt": null,
+                        "conditionKeywords": null,
+                        "conditionComplexity": null
+                    },
+                    "contextConfig": {
+                        "chatHistory": false,
+                        "originalTask": true,
+                        "nodeInput": true,
+                        "longTermMemory": false,
+                        "toolResults": false
+                    }
+                },
+                {
+                    "id": "queue",
+                    "type": "QUEUE_PROCESSOR",
+                    "position": {
+                        "x": 560.0,
+                        "y": 200.0
+                    },
+                    "label": "Queue",
+                    "config": {
+                        "systemPrompt": null,
+                        "cloudProvider": null,
+                        "modelPath": null,
+                        "toolName": null,
+                        "clarificationTimeoutMs": null,
+                        "conditionPrompt": null,
+                        "conditionKeywords": null,
+                        "conditionComplexity": null
+                    },
+                    "contextConfig": {
+                        "chatHistory": false,
+                        "originalTask": true,
+                        "nodeInput": true,
+                        "longTermMemory": false,
+                        "toolResults": false
+                    }
+                },
+                {
+                    "id": "cloud",
+                    "type": "CLOUD",
+                    "position": {
+                        "x": 800.0,
+                        "y": 100.0
+                    },
+                    "label": "Researcher",
+                    "config": {
+                        "systemPrompt": "You are a research assistant working on ONE subtask at a time within a larger plan. Today is $DATE. Investigate the current subtask thoroughly and return concrete findings in two or three short paragraphs. Previously completed subtask results, when present, appear above the current subtask — reuse them rather than restarting research.",
+                        "cloudProvider": "auto",
+                        "modelPath": null,
+                        "toolName": null,
+                        "clarificationTimeoutMs": null,
+                        "conditionPrompt": null,
+                        "conditionKeywords": null,
+                        "conditionComplexity": null
+                    },
+                    "contextConfig": {
+                        "chatHistory": false,
+                        "originalTask": true,
+                        "nodeInput": true,
+                        "longTermMemory": false,
+                        "toolResults": false
+                    }
+                },
+                {
+                    "id": "output",
+                    "type": "OUTPUT",
+                    "position": {
+                        "x": 800.0,
+                        "y": 320.0
+                    },
+                    "label": "Reply",
+                    "config": {
+                        "systemPrompt": null,
+                        "cloudProvider": null,
+                        "modelPath": null,
+                        "toolName": null,
+                        "clarificationTimeoutMs": null,
+                        "conditionPrompt": null,
+                        "conditionKeywords": null,
+                        "conditionComplexity": null
+                    },
+                    "contextConfig": {
+                        "chatHistory": true,
+                        "originalTask": true,
+                        "nodeInput": true,
+                        "longTermMemory": true,
+                        "toolResults": true
+                    }
+                }
+            ],
+            "connections": [
+                {
+                    "id": "c1",
+                    "fromNodeId": "input",
+                    "toNodeId": "decomposition",
+                    "label": null
+                },
+                {
+                    "id": "c2",
+                    "fromNodeId": "decomposition",
+                    "toNodeId": "queue",
+                    "label": null
+                },
+                {
+                    "id": "c3",
+                    "fromNodeId": "queue",
+                    "toNodeId": "cloud",
+                    "label": "Item"
+                },
+                {
+                    "id": "c4",
+                    "fromNodeId": "cloud",
+                    "toNodeId": "queue",
+                    "label": null
+                },
+                {
+                    "id": "c5",
+                    "fromNodeId": "queue",
+                    "toNodeId": "output",
+                    "label": "Done"
+                }
+            ]
+        },
+        {
+            "schemaVersion": 1,
+            "id": "clarify_then_act",
+            "name": "Clarify, then act",
+            "description": "Pauses to ask one clarifying question when the request is ambiguous, then answers locally with the disambiguated input. Useful when the user's intent is often underspecified.",
+            "category": "hybrid",
+            "tags": [
+                "clarification",
+                "local",
+                "interactive"
+            ],
+            "updatedAt": 1748304000000,
+            "nodes": [
+                {
+                    "id": "input",
+                    "type": "INPUT",
+                    "position": {
+                        "x": 80.0,
+                        "y": 200.0
+                    },
+                    "label": "Input",
+                    "config": {
+                        "systemPrompt": null,
+                        "cloudProvider": null,
+                        "modelPath": null,
+                        "toolName": null,
+                        "clarificationTimeoutMs": null,
+                        "conditionPrompt": null,
+                        "conditionKeywords": null,
+                        "conditionComplexity": null
+                    },
+                    "contextConfig": {
+                        "chatHistory": false,
+                        "originalTask": false,
+                        "nodeInput": true,
+                        "longTermMemory": false,
+                        "toolResults": false
+                    }
+                },
+                {
+                    "id": "clarify",
+                    "type": "CLARIFICATION",
+                    "position": {
+                        "x": 320.0,
+                        "y": 200.0
+                    },
+                    "label": "Clarify",
+                    "config": {
+                        "systemPrompt": "Inspect the user's request. If anything important is ambiguous, craft ONE concise clarifying question and propose 2-3 short, mutually exclusive options. Today is $DATE. Output STRICTLY valid JSON of shape: {\"question\": \"...\", \"options\": [\"...\", \"...\"]}. If nothing needs clarifying, output an empty options array and a question that confirms intent in one line.",
+                        "cloudProvider": null,
+                        "modelPath": null,
+                        "toolName": null,
+                        "clarificationTimeoutMs": 60000,
+                        "conditionPrompt": null,
+                        "conditionKeywords": null,
+                        "conditionComplexity": null
+                    },
+                    "contextConfig": {
+                        "chatHistory": false,
+                        "originalTask": true,
+                        "nodeInput": true,
+                        "longTermMemory": false,
+                        "toolResults": false
+                    }
+                },
+                {
+                    "id": "lite_rt",
+                    "type": "LITE_RT",
+                    "position": {
+                        "x": 560.0,
+                        "y": 200.0
+                    },
+                    "label": "Local LLM",
+                    "config": {
+                        "systemPrompt": "You are an on-device assistant running on $MODEL. Today is $DATE. The user's clarified request appears below; answer it directly in one or two short paragraphs.",
+                        "cloudProvider": null,
+                        "modelPath": null,
+                        "toolName": null,
+                        "clarificationTimeoutMs": null,
+                        "conditionPrompt": null,
+                        "conditionKeywords": null,
+                        "conditionComplexity": null
+                    },
+                    "contextConfig": {
+                        "chatHistory": false,
+                        "originalTask": true,
+                        "nodeInput": true,
+                        "longTermMemory": false,
+                        "toolResults": false
+                    }
+                },
+                {
+                    "id": "output",
+                    "type": "OUTPUT",
+                    "position": {
+                        "x": 800.0,
+                        "y": 200.0
+                    },
+                    "label": "Reply",
+                    "config": {
+                        "systemPrompt": null,
+                        "cloudProvider": null,
+                        "modelPath": null,
+                        "toolName": null,
+                        "clarificationTimeoutMs": null,
+                        "conditionPrompt": null,
+                        "conditionKeywords": null,
+                        "conditionComplexity": null
+                    },
+                    "contextConfig": {
+                        "chatHistory": true,
+                        "originalTask": true,
+                        "nodeInput": true,
+                        "longTermMemory": true,
+                        "toolResults": true
+                    }
+                }
+            ],
+            "connections": [
+                {
+                    "id": "c1",
+                    "fromNodeId": "input",
+                    "toNodeId": "clarify",
+                    "label": null
+                },
+                {
+                    "id": "c2",
+                    "fromNodeId": "clarify",
+                    "toNodeId": "lite_rt",
+                    "label": null
+                },
+                {
+                    "id": "c3",
+                    "fromNodeId": "lite_rt",
+                    "toNodeId": "output",
+                    "label": null
+                }
+            ]
+        }
+    ];
+
     /* -------------------------------------------------------------------- *
      *  Cloud providers and tool registry
-     *  Provider list mirrors the values accepted by NodeModel.cloudProvider.
-     *  AVAILABLE_TOOLS is a static list edited in this file — extend as the
-     *  app's tool registry grows.
+     *  Provider list mirrors ai.agent.android.domain.models.CloudProvider
+     *  (openai / anthropic / google / deepseek / ollama) plus the `auto`
+     *  UI sentinel (CloudProvider.AUTO_KEY). KEEP IN SYNC with that enum.
+     *
+     *  AVAILABLE_TOOLS mirrors the LocalToolExecutor registry multibound in
+     *  di/LocalToolsModule.kt — the ids MUST equal the executors' TOOL_NAME
+     *  constants (SearchTool, DelegateTaskExecutor, ScheduleTaskExecutor),
+     *  otherwise a TOOL node built here will not match any on-device tool.
+     *  KEEP IN SYNC as the registry grows. See DESCRIPTION.md §8.2.
      * -------------------------------------------------------------------- */
     const CLOUD_PROVIDERS = [
         { id: 'auto',      label: 'Auto' },
@@ -957,12 +2369,16 @@
         { id: 'anthropic', label: 'Anthropic' },
         { id: 'google',    label: 'Google' },
         { id: 'deepseek',  label: 'DeepSeek' },
+        { id: 'ollama',    label: 'Ollama' },
     ];
 
+    /* AUTO-GEN:AVAILABLE_TOOLS — generated by :app:generateBrowserEditorConstants. DO NOT EDIT BY HAND. */
     const AVAILABLE_TOOLS = [
-        { id: 'web_search',    label: 'Web Search' },
-        { id: 'delegate_task', label: 'Delegate Task' },
+        { id: "search_tool", label: "Search (Wikipedia)" },
+        { id: "delegate_task", label: "Delegate Task" },
+        { id: "schedule_task", label: "Schedule Task" },
     ];
+    /* /AUTO-GEN:AVAILABLE_TOOLS */
 
     /* -------------------------------------------------------------------- *
      *  NodeContextConfig defaults — port of
@@ -1194,10 +2610,20 @@
             placeholder: NODE_TYPE_BY_ID[typeId].label,
         }));
 
-        fields.push(systemPromptField({
-            value: data.systemPrompt ?? '',
-            typeId,
-        }));
+        // IF_CONDITION carries no systemPrompt on the runtime path (its
+        // branching reads `conditionPrompt` only — see EvaluateIfConditionUseCase),
+        // so — mirroring NodeConfigForms.IfConditionFormBody — it gets no
+        // systemPrompt field; the prompt picker lives on the condition field below.
+        if (typeId !== 'IF_CONDITION') {
+            fields.push(promptFieldWithLibrary({
+                value: data.systemPrompt ?? '',
+                fieldId: 'systemPrompt',
+                label: 'System prompt',
+                presetNodeType: typeId,
+                showVariableChips: true,
+                rows: 4,
+            }));
+        }
 
         switch (typeId) {
             case 'CLOUD':
@@ -1241,10 +2667,17 @@
                 // and migrated to systemPrompt when nodes are loaded.
                 break;
             case 'IF_CONDITION':
-                fields.push(textareaField({
-                    id: 'conditionPrompt',
-                    label: 'Classification prompt',
+                // The condition prompt is the IF node's prompt-bearing field:
+                // EvaluateIfConditionUseCase runs the LLM on `conditionPrompt`
+                // (never `systemPrompt`), so the IF preset picker attaches here.
+                // No variable chips — IF condition prompts are not routed
+                // through PromptTemplateEngine (see DESCRIPTION.md §5).
+                fields.push(promptFieldWithLibrary({
                     value: data.conditionPrompt ?? '',
+                    fieldId: 'conditionPrompt',
+                    label: 'Classification prompt',
+                    presetNodeType: 'IF_CONDITION',
+                    showVariableChips: false,
                     rows: 3,
                 }));
                 fields.push(textField({
@@ -1300,34 +2733,53 @@
     }
 
     /**
-     * Specialised textarea for the system prompt — adds a row of variable
-     * chips ($DATE, $TIME, ...) and a "📚 Prompts" picker above the
-     * textarea. Clicking a chip splices the token at the current caret;
-     * picking a template replaces the textarea content (after a confirm
-     * if it's non-empty).
+     * Prompt-bearing textarea with a "📚 Prompts" picker (and, optionally, a
+     * row of `$VARIABLE` chips). Picking a preset replaces the textarea
+     * content (after a confirm if it is non-empty); clicking a chip splices
+     * the token at the current caret.
+     *
+     * The picker is wired to a *preset category*, not blindly to the node
+     * type, because the field a preset belongs to is not always
+     * `systemPrompt`. On Android the IF_CONDITION prompt-preset category is
+     * applied to `NodeModel.conditionPrompt` (the LLM-classified condition),
+     * NOT `systemPrompt` — `EvaluateIfConditionUseCase` only ever reads
+     * `conditionPrompt`. So the IF picker lives on the condition field here
+     * too, mirroring `NodeConfigForms.IfConditionFormBody`.
+     *
+     * @param value           Initial textarea value.
+     * @param fieldId          `data-field` key the value is saved under.
+     * @param label            Field label.
+     * @param presetNodeType   Category to filter `BUILTIN_PROMPT_TEMPLATES`
+     *                         by (a `NodeType` id), or `null` for no presets.
+     * @param showVariableChips Whether to render the `$VARIABLE` chip row.
+     * @param rows             Textarea row count.
      */
-    function systemPromptField({ value, typeId }) {
-        const wrap = fieldWrap('System prompt');
+    function promptFieldWithLibrary({ value, fieldId, label, presetNodeType, showVariableChips, rows }) {
+        const wrap = fieldWrap(label);
         const ta = document.createElement('textarea');
-        ta.dataset.field = 'systemPrompt';
-        ta.rows = 4;
+        ta.dataset.field = fieldId;
+        ta.rows = rows || 4;
         ta.value = value ?? '';
 
         const toolbarRow = document.createElement('div');
         toolbarRow.className = 'prompt-toolbar';
 
-        // Variable chips on the left
-        const chips = document.createElement('div');
-        chips.className = 'variable-chips';
-        PROMPT_VARIABLES.forEach(name => {
-            const chip = document.createElement('button');
-            chip.type = 'button';
-            chip.className = 'variable-chip';
-            chip.textContent = '$' + name;
-            chip.addEventListener('click', () => insertAtCaret(ta, '$' + name));
-            chips.appendChild(chip);
-        });
-        toolbarRow.appendChild(chips);
+        // Variable chips on the left (only for fields whose text is routed
+        // through PromptTemplateEngine at runtime — IF condition prompts are
+        // not, so their field omits the chips).
+        if (showVariableChips) {
+            const chips = document.createElement('div');
+            chips.className = 'variable-chips';
+            PROMPT_VARIABLES.forEach(name => {
+                const chip = document.createElement('button');
+                chip.type = 'button';
+                chip.className = 'variable-chip';
+                chip.textContent = '$' + name;
+                chip.addEventListener('click', () => insertAtCaret(ta, '$' + name));
+                chips.appendChild(chip);
+            });
+            toolbarRow.appendChild(chips);
+        }
 
         // Prompts picker on the right
         const promptsBtn = document.createElement('button');
@@ -1365,7 +2817,7 @@
             closePopover();
         };
         const openPopover = () => {
-            renderPromptsPopover(popover, ta, typeId, () => closePopover());
+            renderPromptsPopover(popover, ta, presetNodeType, () => closePopover());
             popover.hidden = false;
             popoverOpen = true;
             promptsBtn.setAttribute('aria-expanded', 'true');
@@ -1387,7 +2839,7 @@
      * a user template can call back into this function to reflect the new
      * list without rebuilding the whole dialog.
      */
-    function renderPromptsPopover(popover, textarea, typeId, closeFn) {
+    function renderPromptsPopover(popover, textarea, presetNodeType, closeFn) {
         popover.innerHTML = '';
 
         const builtinSection = document.createElement('div');
@@ -1397,19 +2849,36 @@
         builtinTitle.textContent = 'Built-in';
         builtinSection.appendChild(builtinTitle);
 
-        BUILTIN_PROMPT_TEMPLATES.forEach(t => {
-            builtinSection.appendChild(promptItemRow({
-                label: t.name,
-                onPick: () => applyPromptTemplate(textarea, t.content, closeFn),
-            }));
-        });
+        // Offer only the bundled presets in this field's category — same
+        // per-NodeType filtering the Android Prompt Library applies. Note the
+        // category is the field's preset class, which is not always the node
+        // type: the IF_CONDITION category is wired to the condition-prompt
+        // field, so a node's systemPrompt field passes `presetNodeType=null`
+        // for IF and shows no presets there.
+        const relevant = presetNodeType
+            ? BUILTIN_PROMPT_TEMPLATES.filter(t => t.nodeType === presetNodeType)
+            : [];
+        if (relevant.length === 0) {
+            const empty = document.createElement('div');
+            empty.className = 'prompts-empty';
+            empty.textContent = 'No built-in presets for this field.';
+            builtinSection.appendChild(empty);
+        } else {
+            relevant.forEach(t => {
+                builtinSection.appendChild(promptItemRow({
+                    label: t.name,
+                    title: t.description,
+                    onPick: () => applyPromptTemplate(textarea, t.content, closeFn),
+                }));
+            });
+        }
 
-        // Per-type "Reset to type default" — only meaningful for types that
-        // ship a default in DEFAULT_SYSTEM_PROMPTS.
-        if (DEFAULT_SYSTEM_PROMPTS[typeId]) {
+        // Per-type "Reset to type default" — only meaningful for categories
+        // that ship a default in DEFAULT_SYSTEM_PROMPTS.
+        if (presetNodeType && DEFAULT_SYSTEM_PROMPTS[presetNodeType]) {
             builtinSection.appendChild(promptItemRow({
-                label: `Reset to ${typeId} default`,
-                onPick: () => applyPromptTemplate(textarea, DEFAULT_SYSTEM_PROMPTS[typeId], closeFn),
+                label: `Reset to ${presetNodeType} default`,
+                onPick: () => applyPromptTemplate(textarea, DEFAULT_SYSTEM_PROMPTS[presetNodeType], closeFn),
             }));
         }
         popover.appendChild(builtinSection);
@@ -1472,16 +2941,18 @@
 
     /**
      * Renders one row of the prompts list — clickable label, optional
-     * delete `[×]`. Buttons keep `type="button"` so Enter triggers a
-     * native click rather than form submission.
+     * `title` hover tooltip (e.g. a built-in preset's description), optional
+     * delete `[×]`. Buttons keep `type="button"` so Enter triggers a native
+     * click rather than form submission.
      */
-    function promptItemRow({ label, onPick, onDelete }) {
+    function promptItemRow({ label, title, onPick, onDelete }) {
         const row = document.createElement('div');
         row.className = 'prompts-row';
         const pick = document.createElement('button');
         pick.type = 'button';
         pick.className = 'prompts-row-pick';
         pick.textContent = label;
+        if (title) pick.title = title;
         pick.addEventListener('click', onPick);
         row.appendChild(pick);
         if (onDelete) {
@@ -2775,6 +4246,379 @@
         return 'output_1';
     }
 
+    /* ==================================================================== *
+     *  Pipeline presets (Phase 24 / Task 7)
+     *
+     *  A preset is a `.preset.json` document — a strict superset of the
+     *  pipeline JSON owned by PipelineJsonSerializer, with three extra
+     *  top-level fields (`category`, `tags`, `description`) mirroring
+     *  domain/pipelineio/PipelinePresetJsonSerializer.kt. The "📚 Presets"
+     *  modal exposes the bundled catalogue (BUILTIN_PIPELINE_PRESETS) and a
+     *  per-browser "Mine" catalogue persisted in localStorage.
+     * ==================================================================== */
+    const PIPELINE_PRESETS_STORAGE_KEY = 'pipeline-editor-pipeline-presets';
+
+    /**
+     * Preset categories — mirror ai.agent.android.domain.models.PresetCategory
+     * (key = lower-case enum name). KEEP IN SYNC. See DESCRIPTION.md §8.2.
+     */
+    const PRESET_CATEGORIES = [
+        { key: 'local',    label: 'Local' },
+        { key: 'cloud',    label: 'Cloud' },
+        { key: 'hybrid',   label: 'Hybrid' },
+        { key: 'tool',     label: 'Tool' },
+        { key: 'research', label: 'Research' },
+        { key: 'other',    label: 'Other' },
+    ];
+
+    /** Decodes a category wire key to its label, falling back to "Other". */
+    function presetCategoryLabel(key) {
+        const found = PRESET_CATEGORIES.find(c => c.key === (key || 'other'));
+        return found ? found.label : 'Other';
+    }
+
+    /**
+     * Session fallback for browsers where localStorage is unavailable
+     * (private mode, disabled storage, quota exceeded). `null` means
+     * "localStorage is the source of truth"; once a write fails it holds the
+     * live list so Save / Import / Delete stay usable for the rest of the
+     * session instead of silently reverting to an empty Mine tab.
+     */
+    let userPipelinePresetsFallback = null;
+
+    /**
+     * Per-browser, user-managed pipeline-preset catalogue. Reads from the
+     * in-memory fallback once a write has failed this session; otherwise
+     * from localStorage, degrading to an empty list if the read throws.
+     */
+    function loadUserPipelinePresets() {
+        if (userPipelinePresetsFallback !== null) return userPipelinePresetsFallback;
+        try {
+            const raw = localStorage.getItem(PIPELINE_PRESETS_STORAGE_KEY);
+            if (!raw) return [];
+            const parsed = JSON.parse(raw);
+            if (!Array.isArray(parsed)) return [];
+            // Keep only documents that at least carry a nodes array — anything
+            // else could not round-trip back onto the canvas.
+            return parsed.filter(p => p && typeof p === 'object' && Array.isArray(p.nodes));
+        } catch (_) {
+            return [];
+        }
+    }
+
+    function saveUserPipelinePresets(list) {
+        try {
+            localStorage.setItem(PIPELINE_PRESETS_STORAGE_KEY, JSON.stringify(list));
+            // Write succeeded — localStorage is authoritative again.
+            userPipelinePresetsFallback = null;
+        } catch (_) {
+            // Storage unavailable: keep the list in memory so the Mine tab and
+            // subsequent loads reflect the action for this session.
+            userPipelinePresetsFallback = list;
+        }
+    }
+
+    /** Lower-case kebab slug used for preset ids and `.preset.json` filenames. */
+    function slugifyPresetId(name) {
+        const base = (name || '').toLowerCase().trim()
+            .replace(/[^a-z0-9]+/g, '-')
+            .replace(/^-+|-+$/g, '');
+        return base || 'preset';
+    }
+
+    /**
+     * Builds a `.preset.json` document from the current canvas. Reuses
+     * exportToJson() for the graph half (so it stays in lock-step with the
+     * pipeline schema) and layers the three preset-only fields on top.
+     */
+    function exportToPresetJson(meta) {
+        const doc = exportToJson();
+        if (meta && meta.name) doc.name = meta.name;
+        doc.id = (meta && meta.id) || slugifyPresetId((meta && meta.name) || doc.name);
+        doc.description = (meta && meta.description) || '';
+        doc.category = (meta && meta.category) || 'other';
+        doc.tags = (meta && Array.isArray(meta.tags)) ? meta.tags : [];
+        return doc;
+    }
+
+    /** Downloads a preset document as `<id>.preset.json`. */
+    function downloadPresetJson(doc) {
+        const blob = new Blob([JSON.stringify(doc, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = (doc.id || slugifyPresetId(doc.name)) + '.preset.json';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    }
+
+    /**
+     * Light structural validation for an imported `.preset.json` before it
+     * is stored in the "Mine" catalogue. Mirrors the guards in
+     * importFromJson so a malformed file is rejected cleanly instead of
+     * surfacing later when the user tries to load it onto the canvas.
+     */
+    function parsePresetDoc(text) {
+        let doc;
+        try {
+            doc = JSON.parse(text);
+        } catch (e) {
+            return { error: 'Failed to parse JSON: ' + e.message };
+        }
+        if (!doc || typeof doc !== 'object' || Array.isArray(doc)) {
+            return { error: 'File does not contain a valid JSON document.' };
+        }
+        if (doc.nodes != null && !Array.isArray(doc.nodes)) {
+            return { error: '"nodes" must be an array.' };
+        }
+        if (doc.connections != null && !Array.isArray(doc.connections)) {
+            return { error: '"connections" must be an array.' };
+        }
+        const nodes = doc.nodes || [];
+        for (let i = 0; i < nodes.length; i++) {
+            const n = nodes[i];
+            if (!n || typeof n !== 'object' || Array.isArray(n)) return { error: `nodes[${i}] is not an object.` };
+            if (typeof n.id !== 'string' || !n.id) return { error: `nodes[${i}].id is missing.` };
+            if (typeof n.type !== 'string' || !NODE_TYPE_BY_ID[n.type]) {
+                return { error: `nodes[${i}] has unknown type "${n.type}".` };
+            }
+        }
+        return { doc };
+    }
+
+    /**
+     * Shows the schema-version mismatch confirmation for an imported preset.
+     * Returns true to proceed. (The canvas-load path relies on
+     * importFromJson's own mismatch dialog instead, to avoid a double
+     * prompt.)
+     */
+    function confirmPresetSchema(doc) {
+        if (doc.schemaVersion === CURRENT_SCHEMA_VERSION) return true;
+        const newer = typeof doc.schemaVersion === 'number' && doc.schemaVersion > CURRENT_SCHEMA_VERSION;
+        return confirm(
+            `This preset was created by a ${newer ? 'newer' : 'different'} editor version ` +
+            `(schemaVersion=${doc.schemaVersion}, expected ${CURRENT_SCHEMA_VERSION}). ` +
+            `Some configuration may not round-trip cleanly. Import anyway?`,
+        );
+    }
+
+    /* ---- Modal wiring ---- */
+    const presetDialog = document.getElementById('preset-library');
+    const presetSaveDialog = document.getElementById('preset-save');
+    const presetBtn = document.getElementById('btn-presets');
+    const fileImportPresetInput = document.getElementById('file-import-preset');
+    let presetActiveTab = 'bundled';
+
+    /** Builds one preset card (name, category badge, description, tags, actions). */
+    function renderPresetCard(doc, isMine, index) {
+        const card = document.createElement('div');
+        card.className = 'preset-card';
+
+        const head = document.createElement('div');
+        head.className = 'preset-card-head';
+        const nameEl = document.createElement('span');
+        nameEl.className = 'preset-card-name';
+        nameEl.textContent = doc.name || 'Untitled preset';
+        const badge = document.createElement('span');
+        badge.className = 'preset-badge';
+        badge.textContent = presetCategoryLabel(doc.category);
+        head.appendChild(nameEl);
+        head.appendChild(badge);
+        card.appendChild(head);
+
+        if (doc.description) {
+            const desc = document.createElement('p');
+            desc.className = 'preset-card-desc';
+            desc.textContent = doc.description;
+            card.appendChild(desc);
+        }
+
+        const tags = Array.isArray(doc.tags) ? doc.tags : [];
+        if (tags.length) {
+            const tagsRow = document.createElement('div');
+            tagsRow.className = 'preset-tags';
+            tags.forEach(tg => {
+                const t = document.createElement('span');
+                t.className = 'preset-tag';
+                t.textContent = tg;
+                tagsRow.appendChild(t);
+            });
+            card.appendChild(tagsRow);
+        }
+
+        const actions = document.createElement('div');
+        actions.className = 'preset-card-actions';
+
+        const loadBtn = document.createElement('button');
+        loadBtn.type = 'button';
+        loadBtn.className = 'primary';
+        loadBtn.textContent = 'Load';
+        loadBtn.addEventListener('click', () => loadPresetOntoCanvas(doc));
+        actions.appendChild(loadBtn);
+
+        const exportRowBtn = document.createElement('button');
+        exportRowBtn.type = 'button';
+        exportRowBtn.textContent = 'Export';
+        exportRowBtn.addEventListener('click', () => downloadPresetJson(doc));
+        actions.appendChild(exportRowBtn);
+
+        if (isMine) {
+            const delBtn = document.createElement('button');
+            delBtn.type = 'button';
+            delBtn.className = 'danger';
+            delBtn.textContent = 'Delete';
+            delBtn.addEventListener('click', () => deleteUserPreset(index));
+            actions.appendChild(delBtn);
+        }
+        card.appendChild(actions);
+        return card;
+    }
+
+    /** Re-renders the active tab's list and reflects the tab selection. */
+    function renderPresetList() {
+        presetDialog.querySelectorAll('.preset-tab').forEach(t => {
+            t.classList.toggle('is-active', t.dataset.tab === presetActiveTab);
+        });
+        const list = presetDialog.querySelector('[data-role="list"]');
+        list.innerHTML = '';
+        const isMine = presetActiveTab === 'mine';
+        const items = isMine ? loadUserPipelinePresets() : BUILTIN_PIPELINE_PRESETS;
+        if (!items.length) {
+            const empty = document.createElement('div');
+            empty.className = 'preset-empty';
+            empty.textContent = isMine
+                ? 'No saved presets yet. Build a graph and tap "Save canvas as preset…", or import a .preset.json file.'
+                : 'No bundled presets available.';
+            list.appendChild(empty);
+            return;
+        }
+        items.forEach((doc, index) => list.appendChild(renderPresetCard(doc, isMine, index)));
+    }
+
+    function openPresetLibrary() {
+        renderPresetList();
+        presetDialog.showModal();
+    }
+
+    /**
+     * Instantiates a preset onto the canvas. We strip the `id` so
+     * importFromJson mints a fresh pipeline id (mirroring how Android
+     * regenerates ids when materialising a preset), then delegate to
+     * importFromJson for the graph rebuild, name restore and schema-mismatch
+     * dialog.
+     */
+    function loadPresetOntoCanvas(doc) {
+        presetDialog.close();
+        importFromJson(Object.assign({}, doc, { id: undefined }));
+    }
+
+    function deleteUserPreset(index) {
+        const list = loadUserPipelinePresets();
+        if (index < 0 || index >= list.length) return;
+        const name = list[index].name || 'this preset';
+        if (!confirm(`Delete preset "${name}"? This cannot be undone.`)) return;
+        list.splice(index, 1);
+        saveUserPipelinePresets(list);
+        renderPresetList();
+    }
+
+    /* ---- Import preset → "Mine" (non-destructive; never touches canvas) ---- */
+    fileImportPresetInput.addEventListener('change', e => {
+        const file = e.target.files && e.target.files[0];
+        if (!file) return;
+        fileImportPresetInput.value = '';
+        const reader = new FileReader();
+        reader.onload = () => {
+            const res = parsePresetDoc(reader.result);
+            if (res.error) {
+                alert('Failed to import preset: ' + res.error);
+                return;
+            }
+            if (!confirmPresetSchema(res.doc)) return;
+            const list = loadUserPipelinePresets();
+            list.unshift(Object.assign({}, res.doc, {
+                id: res.doc.id || generateUuid(),
+                savedAt: Date.now(),
+            }));
+            saveUserPipelinePresets(list);
+            presetActiveTab = 'mine';
+            renderPresetList();
+        };
+        reader.onerror = () => alert('Failed to read file.');
+        reader.readAsText(file);
+    });
+
+    /* ---- Save canvas as preset ---- */
+    function openSavePresetDialog() {
+        if (validateGraph().errors.length > 0) {
+            alert('Fix the validation errors before saving this graph as a preset.');
+            return;
+        }
+        const sel = document.getElementById('preset-save-category');
+        if (!sel.options.length) {
+            PRESET_CATEGORIES.forEach(c => {
+                const o = document.createElement('option');
+                o.value = c.key;
+                o.textContent = c.label;
+                sel.appendChild(o);
+            });
+        }
+        document.getElementById('preset-save-name').value = (nameInput.value || '').trim();
+        document.getElementById('preset-save-tags').value = '';
+        document.getElementById('preset-save-description').value = '';
+        sel.value = 'other';
+        const err = presetSaveDialog.querySelector('[data-role="error"]');
+        err.hidden = true;
+        err.textContent = '';
+        presetSaveDialog.showModal();
+    }
+
+    function commitSavePreset() {
+        const err = presetSaveDialog.querySelector('[data-role="error"]');
+        const name = (document.getElementById('preset-save-name').value || '').trim();
+        if (!name) {
+            err.textContent = 'Name is required.';
+            err.hidden = false;
+            return;
+        }
+        // 60-char cap matches MAX_NAME_LENGTH in the Android save use-cases.
+        if (name.length > 60) {
+            err.textContent = 'Name must be 60 characters or fewer.';
+            err.hidden = false;
+            return;
+        }
+        const tags = (document.getElementById('preset-save-tags').value || '')
+            .split(',').map(t => t.trim()).filter(Boolean);
+        const doc = exportToPresetJson({
+            id: generateUuid(),
+            name,
+            category: document.getElementById('preset-save-category').value || 'other',
+            tags,
+            description: (document.getElementById('preset-save-description').value || '').trim(),
+        });
+        const list = loadUserPipelinePresets();
+        list.unshift(Object.assign({}, doc, { savedAt: Date.now() }));
+        saveUserPipelinePresets(list);
+        presetSaveDialog.close();
+        presetActiveTab = 'mine';
+        renderPresetList();
+    }
+
+    presetBtn.addEventListener('click', openPresetLibrary);
+    presetDialog.querySelector('[data-role="close"]').addEventListener('click', () => presetDialog.close());
+    presetDialog.querySelectorAll('.preset-tab').forEach(t => {
+        t.addEventListener('click', () => {
+            presetActiveTab = t.dataset.tab;
+            renderPresetList();
+        });
+    });
+    presetDialog.querySelector('[data-role="import"]').addEventListener('click', () => fileImportPresetInput.click());
+    presetDialog.querySelector('[data-role="save-current"]').addEventListener('click', openSavePresetDialog);
+    presetSaveDialog.querySelector('[data-role="cancel"]').addEventListener('click', () => presetSaveDialog.close());
+    presetSaveDialog.querySelector('[data-role="confirm"]').addEventListener('click', commitSavePreset);
+
     // Re-validation on dialog save and on undo/redo lives inside the
     // original commitDialog / applySnapshot bodies (see below) — function
     // declarations are hoisted so they can call runValidation() defined
@@ -2791,6 +4635,9 @@
     window.__validate = validateGraph;
     window.__exportJson = exportToJson;
     window.__importJson = importFromJson;
+    window.__exportPresetJson = exportToPresetJson;
+    window.__pipelinePresets = BUILTIN_PIPELINE_PRESETS;
+    window.__openPresetLibrary = openPresetLibrary;
 </script>
 </body>
 </html>

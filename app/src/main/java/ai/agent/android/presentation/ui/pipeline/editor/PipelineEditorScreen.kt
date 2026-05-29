@@ -5,9 +5,13 @@ import ai.agent.android.domain.models.NodeContextConfig
 import ai.agent.android.domain.models.NodeType
 import ai.agent.android.domain.models.PipelineGraph
 import ai.agent.android.presentation.ui.common.resolve
+import ai.agent.android.presentation.ui.components.PromptPreviewBottomSheet
 import ai.agent.android.presentation.ui.orchestrator.OrchestratorViewModel
+import ai.agent.android.presentation.ui.orchestrator.PromptPreviewState
 import ai.agent.android.presentation.ui.orchestrator.components.NodeContextConfigSection
-import ai.agent.android.presentation.ui.orchestrator.components.PromptLibraryDialog
+import ai.agent.android.presentation.ui.orchestrator.components.PromptPresetPickerDialog
+import ai.agent.android.presentation.ui.orchestrator.components.SavePromptAsPresetDialog
+import ai.agent.android.presentation.ui.orchestrator.presets.SaveAsPresetDialog
 import ai.agent.android.presentation.ui.pipeline.editor.canvas.formatScalePercent
 import ai.agent.android.presentation.ui.pipeline.editor.config.NodeConfigCodec
 import ai.agent.android.presentation.ui.pipeline.editor.config.NodeTypeMapper
@@ -29,6 +33,7 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.Redo
 import androidx.compose.material.icons.automirrored.outlined.Undo
+import androidx.compose.material.icons.outlined.Bookmarks
 import androidx.compose.material.icons.outlined.ContentPaste
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Edit
@@ -114,16 +119,23 @@ fun PipelineEditorScreen(viewModel: OrchestratorViewModel, onBack: () -> Unit) {
     var pendingEdgeDelete by remember { mutableStateOf<String?>(null) }
     // When the user taps the 📚 button on a prompt-bearing field inside NodeConfigSheet, the
     // catalog form invokes onPickFromLibrary(category, apply). We stash both here, render the
-    // existing PromptLibraryDialog filtered by category, and on selection call back `apply`
+    // PromptPresetPickerDialog filtered by the node type, and on Apply call back `apply`
     // (the form's "set this field" lambda). Stays as a single state because only one library
     // request can be pending at a time (the sheet is modal and the dialog stacks on top).
     var pendingLibrary by remember { mutableStateOf<PendingPromptLibrary?>(null) }
+    // When the user taps the 💾 button on a prompt-bearing field, the catalog form invokes
+    // onSavePreset(category, currentPrompt). We stash both here and render
+    // SavePromptAsPresetDialog; on confirm the VM dispatches SavePromptAsPresetUseCase.
+    var pendingSavePreset by remember { mutableStateOf<PendingSavePromptPreset?>(null) }
     // Overflow DropdownMenu visibility — opened from the toolbar's overflow callback,
     // dismissed by tap-outside or by clicking any menu item.
     var overflowOpen by remember { mutableStateOf(false) }
     // Rename-node dialog state — set to the target node id when the user picks
     // "Rename node…" from the overflow menu (requires exactly one node selected).
     var pendingRenameNodeId by remember { mutableStateOf<String?>(null) }
+    // Save-as-preset dialog state — true while the dialog is visible, dismissed
+    // on cancel or after submission.
+    var saveAsPresetOpen by remember { mutableStateOf(false) }
     // Screen-local clock driving the [RunStatusBanner] elapsed-seconds metric.
     // Reset to 0 every time a new run starts; ticks ~10 Hz while running so the
     // banner reads ~"4.2 s" rather than jumping by whole seconds. Stops when
@@ -556,6 +568,16 @@ fun PipelineEditorScreen(viewModel: OrchestratorViewModel, onBack: () -> Unit) {
                     },
                 )
                 DropdownMenuItem(
+                    text = { Text(stringResource(R.string.pipeline_editor_overflow_save_as_preset)) },
+                    onClick = {
+                        overflowOpen = false
+                        saveAsPresetOpen = true
+                    },
+                    leadingIcon = {
+                        Icon(Icons.Outlined.Bookmarks, contentDescription = null)
+                    },
+                )
+                DropdownMenuItem(
                     text = { Text(stringResource(R.string.pipeline_editor_overflow_auto_layout)) },
                     onClick = {
                         overflowOpen = false
@@ -700,8 +722,28 @@ fun PipelineEditorScreen(viewModel: OrchestratorViewModel, onBack: () -> Unit) {
                             isActive = model.isActive,
                         )
                     },
-                    onPickFromLibrary = { category, apply ->
-                        pendingLibrary = PendingPromptLibrary(category = category, apply = apply)
+                    onPickFromLibrary = { category, currentPrompt, apply ->
+                        // Categories emitted by the catalog are always LLM-driven NodeType
+                        // names (`"LITE_RT"` etc.); see NodeConfigForms — non-LLM forms
+                        // never expose the 📚 button. Defensive `runCatching` so a future
+                        // typo in the catalog doesn't crash the editor.
+                        val type = runCatching { NodeType.valueOf(category) }.getOrNull()
+                        if (type != null) {
+                            pendingLibrary = PendingPromptLibrary(
+                                nodeType = type,
+                                currentPrompt = currentPrompt,
+                                apply = apply,
+                            )
+                        }
+                    },
+                    onSavePreset = { category, currentPrompt ->
+                        val type = runCatching { NodeType.valueOf(category) }.getOrNull()
+                        if (type != null) {
+                            pendingSavePreset = PendingSavePromptPreset(
+                                nodeType = type,
+                                systemPrompt = currentPrompt,
+                            )
+                        }
                     },
                     extraSection = {
                         // Bind the legacy `NodeContextConfigSection` ("Input
@@ -747,13 +789,54 @@ fun PipelineEditorScreen(viewModel: OrchestratorViewModel, onBack: () -> Unit) {
 
         val libraryRequest = pendingLibrary
         if (libraryRequest != null) {
-            PromptLibraryDialog(
-                prompts = uiState.promptTemplates.filter { it.category == libraryRequest.category },
-                onPromptSelected = { picked ->
+            val bundled by viewModel
+                .bundledPresetsForType(libraryRequest.nodeType)
+                .collectAsState(initial = emptyList())
+            val mine by viewModel
+                .userPresetsForType(libraryRequest.nodeType)
+                .collectAsState(initial = emptyList())
+            PromptPresetPickerDialog(
+                nodeType = libraryRequest.nodeType,
+                bundled = bundled,
+                mine = mine,
+                currentPrompt = libraryRequest.currentPrompt,
+                onApply = { picked ->
                     libraryRequest.apply(picked)
                     pendingLibrary = null
                 },
-                onDismissRequest = { pendingLibrary = null },
+                onPreview = { prompt -> viewModel.requestPromptPreview(prompt) },
+                onDismiss = { pendingLibrary = null },
+            )
+        }
+
+        val savePresetRequest = pendingSavePreset
+        if (savePresetRequest != null) {
+            SavePromptAsPresetDialog(
+                nodeType = savePresetRequest.nodeType,
+                systemPromptPreview = savePresetRequest.systemPrompt,
+                onConfirm = { result ->
+                    viewModel.saveCurrentPromptAsPreset(
+                        systemPrompt = savePresetRequest.systemPrompt,
+                        name = result.name,
+                        description = result.description,
+                        nodeType = savePresetRequest.nodeType,
+                        tags = result.tags,
+                    )
+                    pendingSavePreset = null
+                },
+                onDismiss = { pendingSavePreset = null },
+            )
+        }
+
+        // Prompt preview bottom sheet — driven by `previewState`. Rendered as long
+        // as the picker dialog or any other surface in the editor requests a
+        // preview (loading -> ready -> hidden). The sheet content is empty
+        // (segments = null) until the engine finishes resolving variables.
+        val previewState = uiState.previewState
+        if (previewState !is PromptPreviewState.Hidden) {
+            PromptPreviewBottomSheet(
+                segments = (previewState as? PromptPreviewState.Ready)?.segments,
+                onDismiss = { viewModel.dismissPromptPreview() },
             )
         }
 
@@ -794,6 +877,22 @@ fun PipelineEditorScreen(viewModel: OrchestratorViewModel, onBack: () -> Unit) {
                     },
                 )
             }
+        }
+
+        if (saveAsPresetOpen) {
+            SaveAsPresetDialog(
+                initialName = pipeline.name,
+                onDismiss = { saveAsPresetOpen = false },
+                onConfirm = { result ->
+                    viewModel.saveCurrentAsPreset(
+                        name = result.name,
+                        description = result.description,
+                        category = result.category,
+                        tags = result.tags,
+                    )
+                    saveAsPresetOpen = false
+                },
+            )
         }
 
         val edgeToDelete = pendingEdgeDelete
@@ -880,11 +979,19 @@ private fun rememberToolbarSubtitle(
 }
 
 /**
- * Pending prompt-library request raised by the catalog sheet's 📚 button. [category]
- * scopes which `PromptTemplate`s show up in the picker; [apply] is the form's "set this
- * field" lambda, invoked when the user picks a prompt.
+ * Pending prompt-library request raised by the catalog sheet's 📚 button. [nodeType]
+ * scopes which `PromptPreset`s show up in the picker; [currentPrompt] is the field's
+ * current draft so the picker can mark the matching row as `CURRENT`; [apply] is the
+ * form's "set this field" lambda, invoked when the user picks a preset.
  */
-private data class PendingPromptLibrary(val category: String, val apply: (String) -> Unit)
+private data class PendingPromptLibrary(val nodeType: NodeType, val currentPrompt: String, val apply: (String) -> Unit)
+
+/**
+ * Pending save-as-prompt-preset request raised by the catalog sheet's 💾 button.
+ * [systemPrompt] is the current draft captured at click time; [nodeType] is the
+ * active node's type, both forwarded to `SavePromptAsPresetUseCase` on submit.
+ */
+private data class PendingSavePromptPreset(val nodeType: NodeType, val systemPrompt: String)
 
 /** Identifies the set of edge ids that should animate in run-trace mode. */
 private fun activeRunningEdges(activeNodeId: String?, graph: PipelineGraph): Set<String> {

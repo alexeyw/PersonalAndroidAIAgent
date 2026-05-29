@@ -167,6 +167,56 @@ class AppDatabaseMigrationTest {
     }
 
     @Test
+    fun migrate23to24_createsPipelinePresetsTableWithExpectedColumns() {
+        // Open the DB at v23 with a single placeholder table so the
+        // SupportSQLiteOpenHelper has something to create — the migration
+        // itself only adds a new table, so v23 contents are irrelevant.
+        openAtVersion(version = 23, createSql = listOf(V22_MEMORY_CHUNKS)) { /* no seed needed */ }
+
+        openAtVersion(version = 24, createSql = emptyList()) { db ->
+            AppDatabase.MIGRATION_23_24.migrate(db)
+
+            // Round-trip an insert + select to assert every column exists
+            // with the expected type and nullability contract.
+            db.execSQL(
+                "INSERT INTO pipeline_presets" +
+                    "(id, name, description, categoryKey, graphJson, tagsCsv, createdAt) " +
+                    "VALUES('p1', 'Test', 'desc', 'local', '{}', 'a,b', 42)",
+            )
+            db.query("SELECT id, name, description, categoryKey, graphJson, tagsCsv, createdAt FROM pipeline_presets")
+                .use { c ->
+                    assertTrue(c.moveToFirst())
+                    assertEquals("p1", c.getString(c.getColumnIndexOrThrow("id")))
+                    assertEquals("Test", c.getString(c.getColumnIndexOrThrow("name")))
+                    assertEquals("desc", c.getString(c.getColumnIndexOrThrow("description")))
+                    assertEquals("local", c.getString(c.getColumnIndexOrThrow("categoryKey")))
+                    assertEquals("{}", c.getString(c.getColumnIndexOrThrow("graphJson")))
+                    assertEquals("a,b", c.getString(c.getColumnIndexOrThrow("tagsCsv")))
+                    assertEquals(42L, c.getLong(c.getColumnIndexOrThrow("createdAt")))
+                }
+        }
+    }
+
+    @Test
+    fun migrate23to24_isAdditiveAndLeavesExistingTablesUntouched() {
+        openAtVersion(version = 23, createSql = listOf(V22_MEMORY_CHUNKS)) { db ->
+            db.execSQL(
+                "INSERT INTO memory_chunks(text, embedding, timestamp) " +
+                    "VALUES('preserved', '0.1', 7)",
+            )
+        }
+
+        openAtVersion(version = 24, createSql = emptyList()) { db ->
+            AppDatabase.MIGRATION_23_24.migrate(db)
+            db.query("SELECT text, timestamp FROM memory_chunks").use { c ->
+                assertTrue(c.moveToFirst())
+                assertEquals("preserved", c.getString(0))
+                assertEquals(7L, c.getLong(1))
+            }
+        }
+    }
+
+    @Test
     fun migrateAll_17_to_23_preservesDataAcrossEveryStep() {
         // Bootstraps the v17 baseline with the full set of tables that the
         // six migrations under test touch (chat sessions/messages exist

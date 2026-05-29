@@ -3,11 +3,11 @@
     <!-- Prompt library screen (Knotwork redesign — Phase 22 / Task 15). -->
     <string name="prompts_screen_title">Prompt library</string>
     <string name="prompts_subtitle_format" tools:ignore="PluralsCandidate">%1$d categories · %2$d prompts</string>
-    <string name="prompts_search_cd">Search prompts</string>
     <string name="prompts_back_cd">Back</string>
     <string name="prompts_fab_cd">Add prompt</string>
     <string name="prompts_edit_cd">Edit prompt</string>
     <string name="prompts_delete_cd">Delete prompt</string>
+    <string name="prompts_preview_cd">Preview prompt</string>
     <string name="prompts_duplicate">Duplicate</string>
     <string name="prompts_used_by_format" tools:ignore="PluralsCandidate">used by %1$d pipelines</string>
     <string name="prompts_empty_title">No prompts yet</string>
@@ -24,6 +24,7 @@
     <string name="prompts_editor_body_label">PROMPT TEXT</string>
     <string name="prompts_editor_body_placeholder">Write the prompt here…</string>
     <string name="prompts_editor_insert_label">INSERT</string>
+    <string name="prompts_editor_category_invalid">Pick an LLM-driven node type (LITE_RT, CLOUD, OUTPUT, SUMMARY, INTENT_ROUTER, DECOMPOSITION, EVALUATION, CLARIFICATION).</string>
     <string name="prompts_editor_footer_format" tools:ignore="PluralsCandidate">Used by %1$d pipelines · changes apply on next run</string>
     <string name="prompts_editor_close_cd">Close editor</string>
 </resources>

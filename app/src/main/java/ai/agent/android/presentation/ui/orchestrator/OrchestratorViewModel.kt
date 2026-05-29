@@ -11,12 +11,15 @@ import ai.agent.android.domain.models.PipelineGraph
 import ai.agent.android.domain.models.PipelineImportOutcome
 import ai.agent.android.domain.models.PipelineValidationError
 import ai.agent.android.domain.models.PipelineValidationException
+import ai.agent.android.domain.models.PresetCategory
+import ai.agent.android.domain.models.PromptPreset
 import ai.agent.android.domain.models.PromptTemplate
 import ai.agent.android.domain.pipelineio.PipelineJsonSerializer
 import ai.agent.android.domain.prompt.PromptTemplateEngine
 import ai.agent.android.domain.prompt.PromptVariableProvider
 import ai.agent.android.domain.repositories.ApiKeyRepository
 import ai.agent.android.domain.repositories.LocalModelRepository
+import ai.agent.android.domain.repositories.PromptPresetRepository
 import ai.agent.android.domain.repositories.SettingsRepository
 import ai.agent.android.domain.repositories.ToolRepository
 import ai.agent.android.domain.usecases.CreatePipelineUseCase
@@ -26,12 +29,15 @@ import ai.agent.android.domain.usecases.GetPromptTemplatesUseCase
 import ai.agent.android.domain.usecases.ImportPipelineUseCase
 import ai.agent.android.domain.usecases.LoadPipelineUseCase
 import ai.agent.android.domain.usecases.RenamePipelineUseCase
+import ai.agent.android.domain.usecases.SavePipelineAsPresetUseCase
 import ai.agent.android.domain.usecases.SavePipelineUseCase
+import ai.agent.android.domain.usecases.SavePromptAsPresetUseCase
 import ai.agent.android.domain.usecases.SavePromptTemplateUseCase
 import ai.agent.android.presentation.ui.common.UiText
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -39,6 +45,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.util.UUID
@@ -70,11 +77,14 @@ class OrchestratorViewModel @Inject constructor(
     private val createPipelineUseCase: CreatePipelineUseCase,
     private val getPromptTemplatesUseCase: GetPromptTemplatesUseCase,
     private val savePromptTemplateUseCase: SavePromptTemplateUseCase,
+    private val savePipelineAsPresetUseCase: SavePipelineAsPresetUseCase,
+    private val savePromptAsPresetUseCase: SavePromptAsPresetUseCase,
     private val apiKeyRepository: ApiKeyRepository,
     private val toolRepository: ToolRepository,
     private val localModelRepository: LocalModelRepository,
     private val settingsRepository: SettingsRepository,
     private val promptTemplateEngine: PromptTemplateEngine,
+    private val promptPresetRepository: PromptPresetRepository,
     private val promptVariableProviders: Set<@JvmSuppressWildcards PromptVariableProvider>,
 ) : ViewModel() {
 
@@ -912,6 +922,25 @@ class OrchestratorViewModel @Inject constructor(
     }
 
     /**
+     * Cold flow of bundled prompt presets targeting [nodeType], for the
+     * `PromptPresetPickerDialog`'s Bundled tab. The dialog calls
+     * `collectAsState(initial = emptyList())` so a brief empty render is
+     * acceptable while the first asset-decode pass resolves.
+     *
+     * Pure delegation to [PromptPresetRepository] — kept here so the picker
+     * does not need to depend on the data layer directly.
+     */
+    fun bundledPresetsForType(nodeType: NodeType): Flow<List<PromptPreset>> =
+        promptPresetRepository.getPresetsForType(nodeType).map { all -> all.filter { it.isBundled } }
+
+    /**
+     * Cold flow of user-saved prompt presets targeting [nodeType], for the
+     * `PromptPresetPickerDialog`'s Mine tab.
+     */
+    fun userPresetsForType(nodeType: NodeType): Flow<List<PromptPreset>> =
+        promptPresetRepository.getPresetsForType(nodeType).map { all -> all.filter { !it.isBundled } }
+
+    /**
      * Renders [template] through [PromptTemplateEngine] and exposes the resulting
      * segments via [OrchestratorUiState.previewState].
      *
@@ -1016,6 +1045,127 @@ class OrchestratorViewModel @Inject constructor(
      * can render the same copy without re-implementing the mapping.
      */
     fun labelFor(error: PipelineValidationError): UiText = validationErrorAsUiText(error)
+
+    /**
+     * Packages the currently-edited pipeline (whatever is loaded into the
+     * editor) as a user preset via [SavePipelineAsPresetUseCase]. Surfaces
+     * a success / failure message through [OrchestratorUiState.feedbackMessage]
+     * / [OrchestratorUiState.errorMessage] so the calling screen (editor)
+     * doesn't need its own Snackbar plumbing.
+     */
+    fun saveCurrentAsPreset(
+        name: String,
+        description: String,
+        category: PresetCategory,
+        tags: List<String> = emptyList(),
+    ) {
+        viewModelScope.launch {
+            val result = savePipelineAsPresetUseCase(
+                graph = _uiState.value.currentPipeline,
+                name = name,
+                description = description,
+                category = category,
+                tags = tags,
+            )
+            _uiState.update { state ->
+                val error = result.exceptionOrNull()?.let(::messageForSaveError)
+                state.copy(
+                    errorMessage = error,
+                    feedbackMessage = if (error == null) {
+                        UiText(R.string.orchestrator_preset_save_success)
+                    } else {
+                        state.feedbackMessage
+                    },
+                )
+            }
+        }
+    }
+
+    /**
+     * Packages an existing library pipeline ([pipelineId]) as a user
+     * preset. Resolves the graph through [LoadPipelineUseCase.getPipelineById]
+     * before delegating to [SavePipelineAsPresetUseCase], so the editor
+     * does not need to be loaded with the source pipeline first.
+     */
+    fun saveAsPresetFromLibrary(
+        pipelineId: String,
+        name: String,
+        description: String,
+        category: PresetCategory,
+        tags: List<String> = emptyList(),
+    ) {
+        viewModelScope.launch {
+            val pipeline = loadPipelineUseCase.getPipelineById(pipelineId)
+            if (pipeline == null) {
+                _uiState.update { it.copy(errorMessage = UiText(R.string.errors_orchestrator_pipeline_not_found)) }
+                return@launch
+            }
+            val result = savePipelineAsPresetUseCase(
+                graph = pipeline,
+                name = name,
+                description = description,
+                category = category,
+                tags = tags,
+            )
+            _uiState.update { state ->
+                val error = result.exceptionOrNull()?.let(::messageForSaveError)
+                state.copy(
+                    errorMessage = error,
+                    feedbackMessage = if (error == null) {
+                        UiText(R.string.orchestrator_preset_save_success)
+                    } else {
+                        state.feedbackMessage
+                    },
+                )
+            }
+        }
+    }
+
+    /**
+     * Packages a freshly-edited system prompt as a user prompt preset via
+     * [SavePromptAsPresetUseCase] (Phase 24 / Task 4). Invoked by
+     * `PipelineEditorScreen` from the 💾 button on prompt-bearing fields
+     * inside `NodeConfigSheet` (Phase 24 / Task 5).
+     *
+     * Errors are reported through [OrchestratorUiState.errorMessage] /
+     * [OrchestratorUiState.feedbackMessage] using the same channel as
+     * pipeline-preset saves.
+     *
+     * @param systemPrompt The raw prompt template to save.
+     * @param name Display name for the preset.
+     * @param description Free-form description.
+     * @param nodeType The node type this preset targets. Must be LLM-driven
+     *   (validated by [SavePromptAsPresetUseCase]).
+     * @param tags Lower-case kebab-case tags.
+     */
+    fun saveCurrentPromptAsPreset(
+        systemPrompt: String,
+        name: String,
+        description: String,
+        nodeType: NodeType,
+        tags: List<String> = emptyList(),
+    ) {
+        viewModelScope.launch {
+            val result = savePromptAsPresetUseCase(
+                systemPrompt = systemPrompt,
+                name = name,
+                description = description,
+                nodeType = nodeType,
+                tags = tags,
+            )
+            _uiState.update { state ->
+                val error = result.exceptionOrNull()?.let(::messageForSaveError)
+                state.copy(
+                    errorMessage = error,
+                    feedbackMessage = if (error == null) {
+                        UiText(R.string.orchestrator_prompt_preset_save_success)
+                    } else {
+                        state.feedbackMessage
+                    },
+                )
+            }
+        }
+    }
 
     private companion object {
         /**

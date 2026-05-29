@@ -12,6 +12,7 @@
 /app/build
 /catalog/build
 /tools-probe/build
+/buildSrc/build
 /captures
 .externalNativeBuild
 .cxx

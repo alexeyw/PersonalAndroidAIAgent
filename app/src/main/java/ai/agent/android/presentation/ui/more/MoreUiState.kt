@@ -14,6 +14,7 @@ package ai.agent.android.presentation.ui.more
  * @property metricsSubtitle constant `"tok/s · latency · battery"`.
  * @property settingsSubtitle constant `"system prompt · LLM params · keys"`.
  * @property aboutSubtitle e.g. `"v0.1 · build 1"`.
+ * @property librarySubtitle e.g. `"3 saved presets"` or `"no saved presets"`.
  * @property networkStatusText footer line, e.g. `"on-device · no network calls in last 14 m"`.
  * @property networkStatusOk drives the footer-dot colour.
  */
@@ -26,6 +27,7 @@ data class MoreUiState(
     val metricsSubtitle: String = "tok/s · latency · battery",
     val settingsSubtitle: String = "system prompt · LLM params · keys",
     val aboutSubtitle: String = "—",
+    val librarySubtitle: String = "—",
     val networkStatusText: String = "",
     val networkStatusOk: Boolean = true,
 )

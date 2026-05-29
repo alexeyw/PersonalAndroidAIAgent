@@ -20,14 +20,25 @@ enum class PromptLibraryVisualState {
 /**
  * Per-prompt list-card content surfaced by `PromptLibraryContent`.
  *
- * @property id stable database id.
+ * @property id stable identifier.
  * @property category category label rendered in the leading chip.
- * @property name prompt display name (bold title).
+ * @property name prompt display name (bold title). Wraps onto multiple
+ *   lines — the card never truncates the name.
  * @property body raw prompt text including `$VAR` tokens. The catalog
- * renderer highlights placeholders inline via [PromptLibraryContent].
+ *   renderer highlights placeholders inline via [PromptLibraryContent].
  * @property usedByCount how many pipelines reference this prompt.
+ * @property isReadOnly `true` hides destructive affordances (Edit + Delete)
+ *   so the row only exposes Preview / Duplicate. Used for bundled-preset
+ *   rows that the user is not allowed to mutate.
  */
-data class PromptRow(val id: Long, val category: String, val name: String, val body: String, val usedByCount: Int)
+data class PromptRow(
+    val id: String,
+    val category: String,
+    val name: String,
+    val body: String,
+    val usedByCount: Int,
+    val isReadOnly: Boolean = false,
+)
 
 /**
  * Editor-sheet body. Mirrors the "Edit prompt" mockup.
@@ -39,7 +50,7 @@ data class PromptRow(val id: Long, val category: String, val name: String, val b
  * @property usedByCount surfaced in the footer hint when [id] is non-null.
  */
 data class PromptEditorState(
-    val id: Long? = null,
+    val id: String? = null,
     val name: String = "",
     val category: String = "",
     val body: String = "",
@@ -83,9 +94,10 @@ class PromptLibraryCallbacks(
     val onSearch: () -> Unit = {},
     val onCategorySelected: (String) -> Unit = {},
     val onNewPrompt: () -> Unit = {},
-    val onEditPrompt: (Long) -> Unit = {},
-    val onDeletePrompt: (Long) -> Unit = {},
-    val onDuplicatePrompt: (Long) -> Unit = {},
+    val onEditPrompt: (String) -> Unit = {},
+    val onDeletePrompt: (String) -> Unit = {},
+    val onDuplicatePrompt: (String) -> Unit = {},
+    val onPreviewPrompt: (String) -> Unit = {},
     val onEditorNameChange: (String) -> Unit = {},
     val onEditorCategoryChange: (String) -> Unit = {},
     val onEditorBodyChange: (String) -> Unit = {},

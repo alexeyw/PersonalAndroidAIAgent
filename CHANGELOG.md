@@ -13,6 +13,197 @@ details.
 
 ## [Unreleased]
 
+### Added
+
+- **Browser-editor constant sync automation** (Phase 24 / Task 8/9). The
+  `:app:generateBrowserEditorConstants` Gradle task regenerates the
+  `NODE_TYPES`, `PROMPT_VARIABLES`, `AVAILABLE_TOOLS` and
+  `DEFAULT_SYSTEM_PROMPTS` blocks of `pipeline-editor.html` straight from the
+  Android domain sources (`NodeType.kt`, `DefaultPrompts.kt`,
+  `PromptTemplateModule.kt`, `LocalToolsModule.kt`), injecting them between
+  `AUTO-GEN` markers. `:app:verifyBrowserEditorConstants` — wired into
+  `./gradlew check` — fails the build if the committed HTML has drifted,
+  replacing the previous review-only "KEEP IN SYNC" rule that had let those
+  mirrors diverge (Task 6). The pure generation logic lives in `buildSrc`
+  (`BrowserEditorConstantsGenerator`) with its own JUnit suite; editor-only
+  metadata (palette order, colours, icons, tool labels) is cross-checked
+  against the domain set so adding a `NodeType`/tool without metadata fails
+  generation.
+- **Pipeline presets — browser editor** (Phase 24 / Task 7/9). The
+  standalone `pipeline-editor.html` gains a `📚 Presets` top-bar button
+  opening a modal with **Bundled** and **Mine** tabs:
+  - **Bundled** mirrors the 6 starter presets shipped in the APK under
+    `assets/presets/pipelines/*.json`, inlined as the
+    `BUILTIN_PIPELINE_PRESETS` JS constant (Task 8 will replace the
+    hand-maintained block with a gradle-generated one).
+  - **Mine** lists per-browser presets persisted in `localStorage`
+    (degrades to an empty in-memory list in private-mode browsers).
+  - Each card offers **Load** (materialises the preset onto the canvas
+    via the existing `importFromJson` path, with a freshly-minted
+    pipeline id) and **Export** (downloads `<id>.preset.json`); Mine
+    cards also offer **Delete**. The modal footer adds **Import
+    preset…** (parses a `.preset.json`, runs a schema-version mismatch
+    confirm when needed, and stores it under Mine without touching the
+    canvas) and **Save canvas as preset…** (a name / category / tags /
+    description form, 60-char name cap matching
+    `SavePipelineAsPresetUseCase`).
+  - The `.preset.json` format is a strict superset of the pipeline JSON
+    — same `schemaVersion` / `id` / `name` / `updatedAt` / `nodes` /
+    `connections` plus `category` / `tags` / `description` — matching
+    `PipelinePresetJsonSerializer.kt`, so files round-trip between the
+    browser editor and the Android app.
+
+- **Prompt presets — UI** (Phase 24 / Task 5/9). Wires the bundled and
+  user-saved prompt-preset catalogue (Task 4) into the two production
+  surfaces:
+  - The pipeline editor's `NodeConfigSheet` gets a 📚 / 💾 pair on
+    every prompt-bearing field. 📚 opens a new Knotwork-styled
+    `PromptPresetPickerSheet` (modal bottom sheet) filtered by the
+    active node's `NodeType`, with **Bundled** / **Mine** tabs, a
+    leading `All N` chip + per-tag filter chips, 200 ms debounced
+    search by name, radio-style row selection, a per-row magnifier
+    preview, a `● CURRENT` pill on the row whose prompt matches the
+    field's current value, and a sticky bottom `Cancel / ✓ Use prompt`
+    bar. The Preview action surfaces the existing
+    `PromptPreviewBottomSheet` with full `$VARIABLE` substitution. 💾
+    captures the current draft as a user preset via a
+    name / description / tags dialog routed through
+    `SavePromptAsPresetUseCase`.
+  - The standalone **Prompt library** screen (More → Library) now
+    surfaces the same `PromptPreset` catalogue (bundled + user) in
+    place of the legacy `PromptTemplate` source. Bundled rows are
+    read-only (delete is silently a no-op); user rows can be edited
+    via the existing bottom-sheet editor — saves go through
+    `SavePromptAsPresetUseCase` with `existingId` (new upsert path)
+    so an edit replaces the same preset in place. Duplicate writes a
+    new user preset with a `(copy)` suffix; the source preset can be
+    bundled, which is the canonical path for "start customising a
+    bundled template".
+  Replaces the legacy `PromptLibraryDialog` (Knotwork-styled
+  `AlertDialog`) that was backed by the older `PromptTemplate` model.
+
+- **Prompt presets — domain model & bundled catalogue** (Phase 24 /
+  Task 4/9). New first-class entity for reusable system-prompt templates,
+  attached to a single LLM-driven `NodeType` (LITE_RT, CLOUD, OUTPUT,
+  SUMMARY, INTENT_ROUTER, DECOMPOSITION, EVALUATION, CLARIFICATION).
+  Bundled presets ship inside the APK at `assets/presets/prompts/` (18
+  starter prompts — 2–3 per LLM-driven type, including
+  `litert_concise_assistant`, `output_markdown_with_sections`,
+  `router_keyword_classifier`, `decomposition_json_subtasks`,
+  `clarification_multiple_choice`, …) and are loaded read-only via
+  `LocalPromptPresetRepositoryImpl`. User-saved presets land in a new
+  `prompt_presets` Room table (schema v25), created and observed
+  through `PromptPresetDao` / `PromptPresetRepository`. The new
+  `SavePromptAsPresetUseCase` is the single entry point for the
+  user-save flow — it validates name (1..60 chars), `systemPrompt`
+  (≤ 8000 chars, `PromptPresetConstants.MAX_SYSTEM_PROMPT_LENGTH`), and
+  the target `NodeType`. The catalogue ships behind a
+  `PromptPresetCatalogValidationTest` (JVM unit) that pins the filename
+  set, asserts every `nodeType` is LLM-driven, every `$VARIABLE`
+  resolves against the registered provider whitelist, every
+  `systemPrompt` fits within the soft limit, and every LLM-driven type
+  has at least one bundled preset. The Prompt-Library UI rewiring that
+  actually surfaces this catalogue lives in Task 5/9.
+
+- **Pipeline presets — UI** (Phase 24 / Task 3/9). Surfaces the Phase 24
+  preset catalogue end-to-end through three user-facing entry points:
+  - **Speed-dial FAB** on the pipeline library — replaces the single
+    "+ New pipeline" FAB with a two-action speed-dial (`+ New pipeline` /
+    `+ From preset`). The "+ From preset" action opens a new modal
+    `PresetPickerSheet` with Bundled / Mine tabs, `PresetCategory`
+    filter chips, and a one-line `INPUT → LITE_RT → OUTPUT` graph
+    preview on every card. Tapping "Use this preset" materialises a
+    fresh pipeline via `LoadPipelineFromPresetUseCase` and routes the
+    user straight into the editor.
+  - **Save as preset** action — exposed in both the pipeline-library
+    row overflow menu and the editor overflow. Opens a dialog
+    capturing name / description / category / tags, then persists via
+    `SavePipelineAsPresetUseCase`.
+  - **More → Library** — new `PipelinePresetsManagerScreen` reachable
+    from the More tab. Bundled presets render as read-only rows;
+    user presets expose Rename / Export-JSON (via SAF) / Delete with
+    a destructive-confirm dialog.
+
+- **Bundled pipeline-preset catalogue** (Phase 24 / Task 2/9). Ships six
+  curated starter presets under `assets/presets/pipelines/` covering the
+  typical entry-point scenarios: `local_only_qa` (offline INPUT → LITE_RT →
+  OUTPUT), `cloud_assist` (cloud with chat history + long-term memory),
+  `tool_using_react` (reasoner → tool → summariser chain),
+  `multi_step_research` (DECOMPOSITION → QUEUE_PROCESSOR with an explicit
+  `Item` / `Done` fan-out plus a back-edge that loops each subtask through
+  a cloud researcher), `clarify_then_act` (CLARIFICATION gate before a
+  local reply) and `routed_local_cloud` (INTENT_ROUTER sending simple
+  requests on-device and complex ones to the cloud). A new
+  `PipelinePresetCatalogValidationTest` (JVM unit) parses every bundled
+  file, runs `PipelineGraph.validate()` over each embedded graph, and
+  verifies that every `$VARIABLE` token resolves against the registered
+  `PromptVariableProvider` set in `di/PromptTemplateModule.kt` — so adding
+  a broken preset, an unknown variable, or accidentally deleting one of
+  the six fails the build.
+
+- **Pipeline preset — domain model and storage** (Phase 24 / Task 1/9).
+  Introduces `PipelinePreset` as a reusable pre-built pipeline template
+  with two persistence tiers:
+  - **Bundled** presets ship inside the APK under
+    `assets/presets/pipelines/*.json` (catalogue files filled in by
+    Task 2/9; Task 1 wires the loader and lays the empty directory).
+  - **User** presets are persisted in a new `pipeline_presets` Room
+    table (schema **v23 → v24** via `MIGRATION_23_24`).
+  `LoadPipelineFromPresetUseCase` materialises a preset into a concrete
+  pipeline with fresh ids (regenerated for the pipeline, every node, and
+  every connection — orphan connections are dropped, mirroring
+  `DuplicatePipelineUseCase`). `SavePipelineAsPresetUseCase` packages the
+  current graph into a user preset after validating the name (1..60 chars)
+  and running `PipelineGraph.validate()`. The new
+  `PipelinePresetJsonSerializer` delegates the embedded graph half to
+  `PipelineJsonSerializer`, keeping the preset and pipeline formats
+  forever in sync.
+
+### Changed
+
+- **Browser pipeline editor — full sync sweep** (Phase 24 / Task 6/9).
+  Re-synced `pipeline-editor.html` with the Android source of truth after
+  the Phase 20–24 drift:
+  - `BUILTIN_PROMPT_TEMPLATES` (the 📚 Prompts popover) now mirrors the
+    21-entry bundled prompt-preset catalogue from
+    `assets/presets/prompts/` (Task 4) verbatim — `systemPrompt`,
+    name, and description copied byte-for-byte — replacing the 7 legacy
+    generic per-type entries. The popover filters built-ins by the node's
+    `NodeType`, matching the Android Prompt Library; each row carries the
+    preset description as a hover tooltip.
+  - `IF_CONDITION` presets are routed to the **condition-prompt** field, not
+    `systemPrompt`: the IF picker lives on the "Classification prompt" field
+    (which maps to `NodeModel.conditionPrompt` — the only field
+    `EvaluateIfConditionUseCase` reads for branching), and the IF node no
+    longer renders a `systemPrompt` field at all, mirroring
+    `NodeConfigForms.IfConditionFormBody`. Previously an IF preset populated
+    an ignored `systemPrompt` and left `conditionPrompt` empty, so the
+    imported node fell through to `false`.
+  - `AVAILABLE_TOOLS` (TOOL-node config) re-synced with the
+    `LocalToolExecutor` registry: `web_search` → `search_tool`, plus the
+    previously-missing `schedule_task`. The ids now equal the executors'
+    `TOOL_NAME` constants so TOOL nodes built in the browser resolve
+    on-device.
+  - `CLOUD_PROVIDERS` gains `ollama`, matching the `CloudProvider` enum.
+  - Verified in-sync (no change needed): `PROMPT_VARIABLES` (9 variables),
+    `DEFAULT_SYSTEM_PROMPTS`, `NODE_TYPES`, `NODE_TYPE_TOOLTIPS`,
+    `defaultContextConfig`, and the `schemaVersion: 1` JSON node contract.
+- **Dependency currency**: bumped `firebase-bom` 34.13.0 → 34.14.0 to clear
+  the `GradleDependency` lint error gating `./gradlew check`.
+
+### Fixed
+
+- **Preset pickers no longer apply a hidden selection after a filter
+  change** (Phase 24). In `PresetPickerSheet` (pipeline presets) and
+  `PromptPresetPickerDialog` (prompt presets), selecting a preset and then
+  switching the tab / category / tag chip left the previous selection
+  active: the footer CTA stayed enabled on the non-null id and applied the
+  now-hidden preset instead of the row visible to the user. Both pickers now
+  require the selected id to still be present in the filtered list before
+  enabling and applying the action (`selectionVisible` /
+  `visibleSelectedRowId`), so the CTA disables when the pick scrolls out of
+  view and only ever instantiates a currently-visible preset.
+
 ### Build / coverage
 
 - **Coverage gate raised 70 % → 75 % LINE aggregate** (Phase 23 / Task 9/9).
@@ -40,7 +231,38 @@ details.
   [`docs/static-analysis.md`](docs/static-analysis.md),
   [`docs/testing.md`](docs/testing.md).
 
+### Documentation
+
+- **Preset feature documented end-to-end** (Phase 24 / Task 9/9).
+  `docs/extending.md` §5 is restructured into "Add a bundled preset"
+  with a new pipeline-preset recipe (asset schema, `PresetCategory`
+  keys, `validate()` / variable-whitelist rules, the
+  `PipelinePresetCatalogValidationTest` registration step, and the
+  hand-maintained `BUILTIN_PIPELINE_PRESETS` mirror in
+  `pipeline-editor.html`) alongside the existing prompt-preset recipe,
+  plus two new rows in the synchronization table. `docs/user-guide.md`
+  gains a "Pipeline presets" section (bundled vs. Mine, cross-linked to
+  the browser editor). `DESCRIPTION.md` adds §8.3 (preset domain model,
+  repositories, bundled-vs-user lifecycle, Room migrations v23→v24 /
+  v24→v25, build-time guarantees) and §10.6 (preset flow in the
+  Library).
+
 ### Tests
+
+- **Preset end-to-end integration tests** (Phase 24 / Task 9/9). Two
+  pure-JVM suites that wire the real production classes together rather
+  than the shipped artefacts alone (which the catalogue tests already
+  pin): `PipelinePresetIntegrationTest` reads each bundled
+  `assets/presets/pipelines/*.json`, materialises it through the real
+  `LoadPipelineFromPresetUseCase` (asserting fresh ids + preserved
+  connections + zero validation errors), then runs the `local_only_qa`
+  preset through a real `GraphExecutionEngine` (only the
+  `LlmInferenceEngine` token stream stubbed) and asserts it reaches
+  `AgentOrchestratorState.Completed`. `PromptPresetIntegrationTest`
+  parses every bundled `assets/presets/prompts/*.json`, applies the
+  body to a `NodeModel.systemPrompt`, renders it through the real
+  `PromptTemplateEngine`, and asserts every registered `$VARIABLE` is
+  substituted (plus the escape / unknown-token contract).
 
 - **Compose `androidTest` coverage for the remaining `presentation.ui`
   surfaces — Memory / Settings / Tools / Onboarding / Prompt Library**

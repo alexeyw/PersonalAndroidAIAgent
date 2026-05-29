@@ -4,6 +4,8 @@ import ai.agent.android.data.local.dao.ChatDao
 import ai.agent.android.data.local.dao.LocalModelDao
 import ai.agent.android.data.local.dao.MemoryDao
 import ai.agent.android.data.local.dao.PipelineDao
+import ai.agent.android.data.local.dao.PipelinePresetDao
+import ai.agent.android.data.local.dao.PromptPresetDao
 import ai.agent.android.data.local.dao.PromptTemplateDao
 import ai.agent.android.data.local.dao.TraceStepDao
 import ai.agent.android.data.local.models.ChatMessageEntity
@@ -13,6 +15,8 @@ import ai.agent.android.data.local.models.LocalModelEntity
 import ai.agent.android.data.local.models.MemoryChunkEntity
 import ai.agent.android.data.local.models.NodeEntity
 import ai.agent.android.data.local.models.PipelineEntity
+import ai.agent.android.data.local.models.PipelinePresetEntity
+import ai.agent.android.data.local.models.PromptPresetEntity
 import ai.agent.android.data.local.models.PromptTemplateEntity
 import ai.agent.android.data.local.models.TraceStepEntity
 import androidx.room.Database
@@ -37,8 +41,10 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         ConnectionEntity::class,
         PromptTemplateEntity::class,
         TraceStepEntity::class,
+        PipelinePresetEntity::class,
+        PromptPresetEntity::class,
     ],
-    version = 23,
+    version = 25,
     exportSchema = true,
 )
 @TypeConverters(Converters::class)
@@ -84,6 +90,22 @@ abstract class AppDatabase : RoomDatabase() {
      * @return The [TraceStepDao] instance.
      */
     abstract fun traceStepDao(): TraceStepDao
+
+    /**
+     * Provides access to the [PipelinePresetDao] backing the user-saved
+     * pipeline-preset catalogue (Phase 24 / Task 1).
+     *
+     * @return The [PipelinePresetDao] instance.
+     */
+    abstract fun pipelinePresetDao(): PipelinePresetDao
+
+    /**
+     * Provides access to the [PromptPresetDao] backing the user-saved
+     * prompt-preset catalogue (Phase 24 / Task 4).
+     *
+     * @return The [PromptPresetDao] instance.
+     */
+    abstract fun promptPresetDao(): PromptPresetDao
 
     companion object {
         /**
@@ -339,6 +361,63 @@ abstract class AppDatabase : RoomDatabase() {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL(
                     "ALTER TABLE `memory_chunks` ADD COLUMN `isPinned` INTEGER NOT NULL DEFAULT 0",
+                )
+            }
+        }
+
+        /**
+         * Migration from version 23 to 24 (Phase 24 / Task 1 — Pipeline
+         * presets).
+         *
+         * Adds the `pipeline_presets` table backing the user-saved
+         * preset catalogue. Bundled presets live in
+         * `assets/presets/pipelines` and never reach this table.
+         *
+         * The graph is stored as a JSON blob produced by
+         * `PipelinePresetJsonSerializer.serialize(...)` so preset rows
+         * are self-contained and the existing pipeline schema can evolve
+         * independently of stored presets.
+         */
+        val MIGRATION_23_24 = object : Migration(23, 24) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `pipeline_presets` (
+                        `id` TEXT PRIMARY KEY NOT NULL,
+                        `name` TEXT NOT NULL,
+                        `description` TEXT NOT NULL,
+                        `categoryKey` TEXT NOT NULL,
+                        `graphJson` TEXT NOT NULL,
+                        `tagsCsv` TEXT NOT NULL,
+                        `createdAt` INTEGER NOT NULL
+                    )
+                    """.trimIndent(),
+                )
+            }
+        }
+
+        /**
+         * Migration from version 24 to 25 (Phase 24 / Task 4 — Prompt
+         * presets).
+         *
+         * Adds the `prompt_presets` table backing the user-saved
+         * prompt-preset catalogue. Bundled presets live in
+         * `assets/presets/prompts` and never reach this table.
+         */
+        val MIGRATION_24_25 = object : Migration(24, 25) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `prompt_presets` (
+                        `id` TEXT PRIMARY KEY NOT NULL,
+                        `name` TEXT NOT NULL,
+                        `description` TEXT NOT NULL,
+                        `nodeTypeKey` TEXT NOT NULL,
+                        `systemPrompt` TEXT NOT NULL,
+                        `tagsCsv` TEXT NOT NULL,
+                        `createdAt` INTEGER NOT NULL
+                    )
+                    """.trimIndent(),
                 )
             }
         }

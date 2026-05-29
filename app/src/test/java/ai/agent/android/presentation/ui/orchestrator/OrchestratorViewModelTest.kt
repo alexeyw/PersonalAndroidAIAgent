@@ -9,11 +9,14 @@ import ai.agent.android.domain.models.NodeType
 import ai.agent.android.domain.models.PipelineGraph
 import ai.agent.android.domain.models.PipelineValidationError
 import ai.agent.android.domain.models.PipelineValidationException
+import ai.agent.android.domain.models.PresetCategory
+import ai.agent.android.domain.models.PromptPreset
 import ai.agent.android.domain.prompt.PromptSegment
 import ai.agent.android.domain.prompt.PromptTemplateEngine
 import ai.agent.android.domain.prompt.PromptVariableProvider
 import ai.agent.android.domain.repositories.ApiKeyRepository
 import ai.agent.android.domain.repositories.LocalModelRepository
+import ai.agent.android.domain.repositories.PromptPresetRepository
 import ai.agent.android.domain.repositories.SettingsRepository
 import ai.agent.android.domain.repositories.ToolRepository
 import ai.agent.android.domain.usecases.CreatePipelineUseCase
@@ -23,7 +26,9 @@ import ai.agent.android.domain.usecases.GetPromptTemplatesUseCase
 import ai.agent.android.domain.usecases.ImportPipelineUseCase
 import ai.agent.android.domain.usecases.LoadPipelineUseCase
 import ai.agent.android.domain.usecases.RenamePipelineUseCase
+import ai.agent.android.domain.usecases.SavePipelineAsPresetUseCase
 import ai.agent.android.domain.usecases.SavePipelineUseCase
+import ai.agent.android.domain.usecases.SavePromptAsPresetUseCase
 import ai.agent.android.domain.usecases.SavePromptTemplateUseCase
 import ai.agent.android.presentation.ui.common.UiText
 import io.mockk.coEvery
@@ -56,11 +61,14 @@ class OrchestratorViewModelTest {
     private lateinit var createPipelineUseCase: CreatePipelineUseCase
     private lateinit var getPromptTemplatesUseCase: GetPromptTemplatesUseCase
     private lateinit var savePromptTemplateUseCase: SavePromptTemplateUseCase
+    private lateinit var savePipelineAsPresetUseCase: SavePipelineAsPresetUseCase
+    private lateinit var savePromptAsPresetUseCase: SavePromptAsPresetUseCase
     private lateinit var apiKeyRepository: ApiKeyRepository
     private lateinit var toolRepository: ToolRepository
     private lateinit var localModelRepository: LocalModelRepository
     private lateinit var settingsRepository: SettingsRepository
     private lateinit var promptTemplateEngine: PromptTemplateEngine
+    private lateinit var promptPresetRepository: PromptPresetRepository
     private lateinit var providerDate: PromptVariableProvider
     private lateinit var providerTime: PromptVariableProvider
     private lateinit var viewModel: OrchestratorViewModel
@@ -84,6 +92,11 @@ class OrchestratorViewModelTest {
         createPipelineUseCase = mockk()
         getPromptTemplatesUseCase = mockk()
         savePromptTemplateUseCase = mockk()
+        savePipelineAsPresetUseCase = mockk()
+        savePromptAsPresetUseCase = mockk()
+        promptPresetRepository = mockk(relaxed = true) {
+            every { getPresetsForType(any()) } returns flowOf(emptyList())
+        }
         apiKeyRepository = mockk()
         toolRepository = mockk()
         localModelRepository = mockk()
@@ -122,11 +135,14 @@ class OrchestratorViewModelTest {
             createPipelineUseCase,
             getPromptTemplatesUseCase,
             savePromptTemplateUseCase,
+            savePipelineAsPresetUseCase,
+            savePromptAsPresetUseCase,
             apiKeyRepository,
             toolRepository,
             localModelRepository,
             settingsRepository,
             promptTemplateEngine,
+            promptPresetRepository,
             setOf(providerDate, providerTime),
         )
     }
@@ -992,5 +1008,220 @@ class OrchestratorViewModelTest {
             PipelineValidationError.NodeEmptyContext(nodeId = "missing"),
         )
         errors.forEach { err -> assertNotNull(viewModel.labelFor(err)) }
+    }
+
+    // ─── Phase 24 / Task 3 — Save-as-preset ─────────────────────────────
+
+    @Test
+    fun `saveCurrentAsPreset packages current pipeline through SavePipelineAsPresetUseCase`() = runTest {
+        // Given
+        coEvery {
+            savePipelineAsPresetUseCase(
+                any(),
+                any(),
+                any(),
+                any(),
+                any(),
+            )
+        } returns Result.success("preset-1")
+
+        // Sanity: VM starts with a scratch pipeline; load a valid graph first.
+        val nodeIn = NodeModel(id = "in", type = NodeType.INPUT, x = 0f, y = 0f, contextConfig = NodeContextConfig())
+        val nodeOut = NodeModel(id = "out", type = NodeType.OUTPUT, x = 0f, y = 0f, contextConfig = NodeContextConfig())
+        val conn = ConnectionModel(id = "c1", sourceNodeId = "in", targetNodeId = "out")
+        val pipeline =
+            PipelineGraph(id = "p1", name = "Demo", nodes = listOf(nodeIn, nodeOut), connections = listOf(conn))
+        viewModel.replaceCurrentPipeline(pipeline)
+
+        // When
+        viewModel.saveCurrentAsPreset(
+            name = "My preset",
+            description = "demo",
+            category = PresetCategory.LOCAL,
+            tags = listOf("offline"),
+        )
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        // Then
+        coVerify(exactly = 1) {
+            savePipelineAsPresetUseCase(
+                graph = pipeline,
+                name = "My preset",
+                description = "demo",
+                category = PresetCategory.LOCAL,
+                tags = listOf("offline"),
+            )
+        }
+        assertNotNull(viewModel.uiState.value.feedbackMessage)
+    }
+
+    @Test
+    fun `saveCurrentAsPreset surfaces validation error to errorMessage`() = runTest {
+        coEvery {
+            savePipelineAsPresetUseCase(any(), any(), any(), any(), any())
+        } returns Result.failure(IllegalArgumentException("Preset name must not be blank"))
+
+        viewModel.saveCurrentAsPreset(
+            name = " ",
+            description = "",
+            category = PresetCategory.OTHER,
+        )
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        val msg = viewModel.uiState.value.errorMessage
+        assertTrue(msg is UiText.Dynamic)
+    }
+
+    @Test
+    fun `saveAsPresetFromLibrary loads pipeline by id and forwards to the use case`() = runTest {
+        // Given
+        val nodeIn = NodeModel(id = "in", type = NodeType.INPUT, x = 0f, y = 0f, contextConfig = NodeContextConfig())
+        val nodeOut = NodeModel(id = "out", type = NodeType.OUTPUT, x = 0f, y = 0f, contextConfig = NodeContextConfig())
+        val conn = ConnectionModel(id = "c1", sourceNodeId = "in", targetNodeId = "out")
+        val src = PipelineGraph(id = "p9", name = "Source", nodes = listOf(nodeIn, nodeOut), connections = listOf(conn))
+        coEvery { loadPipelineUseCase.getPipelineById("p9") } returns src
+        coEvery {
+            savePipelineAsPresetUseCase(any(), any(), any(), any(), any())
+        } returns Result.success("preset-9")
+
+        // When
+        viewModel.saveAsPresetFromLibrary(
+            pipelineId = "p9",
+            name = "From library",
+            description = "",
+            category = PresetCategory.HYBRID,
+            tags = emptyList(),
+        )
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        // Then
+        coVerify(exactly = 1) {
+            savePipelineAsPresetUseCase(
+                graph = src,
+                name = "From library",
+                description = "",
+                category = PresetCategory.HYBRID,
+                tags = emptyList(),
+            )
+        }
+    }
+
+    @Test
+    fun `saveAsPresetFromLibrary surfaces pipeline-not-found error`() = runTest {
+        coEvery { loadPipelineUseCase.getPipelineById("missing") } returns null
+
+        viewModel.saveAsPresetFromLibrary(
+            pipelineId = "missing",
+            name = "x",
+            description = "",
+            category = PresetCategory.OTHER,
+        )
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertNotNull(viewModel.uiState.value.errorMessage)
+    }
+
+    // ─── Phase 24 / Task 5 — Prompt preset surface ────────────────────────────
+
+    @Test
+    fun `bundledPresetsForType returns only bundled presets`() = runTest {
+        val bundled = PromptPreset(
+            id = "b1",
+            name = "Bundled",
+            description = "",
+            nodeType = NodeType.LITE_RT,
+            systemPrompt = "You are helpful.",
+            isBundled = true,
+        )
+        val user = bundled.copy(id = "u1", name = "Mine", isBundled = false)
+        every { promptPresetRepository.getPresetsForType(NodeType.LITE_RT) } returns
+            flowOf(listOf(bundled, user))
+
+        val emitted = mutableListOf<List<PromptPreset>>()
+        viewModel.bundledPresetsForType(NodeType.LITE_RT)
+            .collect { emitted += it }
+
+        assertEquals(1, emitted.last().size)
+        assertEquals("b1", emitted.last().first().id)
+    }
+
+    @Test
+    fun `userPresetsForType returns only user presets`() = runTest {
+        val bundled = PromptPreset(
+            id = "b1",
+            name = "Bundled",
+            description = "",
+            nodeType = NodeType.CLOUD,
+            systemPrompt = "You are helpful.",
+            isBundled = true,
+        )
+        val user = bundled.copy(id = "u1", name = "Mine", isBundled = false)
+        every { promptPresetRepository.getPresetsForType(NodeType.CLOUD) } returns
+            flowOf(listOf(bundled, user))
+
+        val emitted = mutableListOf<List<PromptPreset>>()
+        viewModel.userPresetsForType(NodeType.CLOUD)
+            .collect { emitted += it }
+
+        assertEquals(1, emitted.last().size)
+        assertEquals("u1", emitted.last().first().id)
+    }
+
+    @Test
+    fun `saveCurrentPromptAsPreset sets feedback message on success`() = runTest {
+        coEvery {
+            savePromptAsPresetUseCase(
+                systemPrompt = any(),
+                name = any(),
+                description = any(),
+                nodeType = any(),
+                tags = any(),
+            )
+        } returns Result.success("preset-1")
+
+        viewModel.saveCurrentPromptAsPreset(
+            systemPrompt = "You are concise.",
+            name = "Concise assistant",
+            description = "",
+            nodeType = NodeType.LITE_RT,
+            tags = listOf("concise"),
+        )
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertEquals(null, state.errorMessage)
+        assertNotNull(state.feedbackMessage)
+        coVerify(exactly = 1) {
+            savePromptAsPresetUseCase(
+                systemPrompt = "You are concise.",
+                name = "Concise assistant",
+                description = "",
+                nodeType = NodeType.LITE_RT,
+                tags = listOf("concise"),
+            )
+        }
+    }
+
+    @Test
+    fun `saveCurrentPromptAsPreset surfaces error on failure`() = runTest {
+        coEvery {
+            savePromptAsPresetUseCase(
+                systemPrompt = any(),
+                name = any(),
+                description = any(),
+                nodeType = any(),
+                tags = any(),
+            )
+        } returns Result.failure(IllegalArgumentException("Preset name must not be blank"))
+
+        viewModel.saveCurrentPromptAsPreset(
+            systemPrompt = "ignored",
+            name = "",
+            description = "",
+            nodeType = NodeType.LITE_RT,
+        )
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertNotNull(viewModel.uiState.value.errorMessage)
     }
 }

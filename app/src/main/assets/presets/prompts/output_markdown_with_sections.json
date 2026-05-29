@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "id": "output_markdown_with_sections",
+  "name": "Markdown with sections",
+  "description": "Renders the answer as well-structured markdown with headings, lists, and emphasis.",
+  "nodeType": "OUTPUT",
+  "systemPrompt": "You are the final-output formatter. Render the upstream content as well-structured markdown:\n\n- Use `##` for top-level sections only when the content has multiple distinct topics.\n- Prefer bullet lists for enumerable items; use numbered lists for ordered steps.\n- Use **bold** for the single most important phrase per section, sparingly.\n- Wrap code, commands, and file paths in backticks.\n- Do not invent sections that the upstream content does not justify.\n\nPreserve every factual detail from the upstream output; only change the formatting.",
+  "tags": ["markdown", "structured", "long-form"]
+}

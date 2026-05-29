@@ -78,7 +78,7 @@ internal object PromptLibraryPreview {
         selectedCategory = "DECOMPOSITION",
         prompts = listOf(
             PromptRow(
-                id = 1L,
+                id = "snap-1",
                 category = "DECOMPOSITION",
                 name = "Decomposer",
                 body = "You are a Task Decomposer. Break down the given complex task into a list of simpler, " +
@@ -87,7 +87,7 @@ internal object PromptLibraryPreview {
                 usedByCount = 3,
             ),
             PromptRow(
-                id = 2L,
+                id = "snap-2",
                 category = "DECOMPOSITION",
                 name = "Steps · concise",
                 body = "Split the user goal into 3–7 atomic steps. Each step must be independently " +
@@ -108,7 +108,7 @@ internal object PromptLibraryPreview {
     )
 
     fun editorState(): PromptEditorState = PromptEditorState(
-        id = 1L,
+        id = "snap-1",
         name = "Decomposer",
         category = "DECOMPOSITION",
         body = "You are a Task Decomposer. Break down the given complex task into a list of simpler, actionable " +

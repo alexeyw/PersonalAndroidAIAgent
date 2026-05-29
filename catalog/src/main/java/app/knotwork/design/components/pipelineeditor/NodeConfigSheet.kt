@@ -61,7 +61,8 @@ fun NodeConfigSheet(
     onSave: (NodeConfig) -> Unit,
     availableToolIds: List<String> = emptyList(),
     availableModels: List<LocalModelOption> = emptyList(),
-    onPickFromLibrary: ((category: String, apply: (String) -> Unit) -> Unit)? = null,
+    onPickFromLibrary: ((category: String, currentPrompt: String, apply: (String) -> Unit) -> Unit)? = null,
+    onSavePreset: ((category: String, currentPrompt: String) -> Unit)? = null,
     extraSection: (@Composable () -> Unit)? = null,
 ) {
     // `skipPartiallyExpanded = true` opens the sheet at its full height immediately
@@ -81,6 +82,7 @@ fun NodeConfigSheet(
             availableToolIds = availableToolIds,
             availableModels = availableModels,
             onPickFromLibrary = onPickFromLibrary,
+            onSavePreset = onSavePreset,
             extraSection = extraSection,
         )
     }
@@ -113,7 +115,8 @@ private fun ScrollableNodeConfigSheetBody(
     onSave: (NodeConfig) -> Unit,
     availableToolIds: List<String>,
     availableModels: List<LocalModelOption>,
-    onPickFromLibrary: ((category: String, apply: (String) -> Unit) -> Unit)?,
+    onPickFromLibrary: ((category: String, currentPrompt: String, apply: (String) -> Unit) -> Unit)?,
+    onSavePreset: ((category: String, currentPrompt: String) -> Unit)?,
     extraSection: (@Composable () -> Unit)?,
 ) {
     val scrollState = rememberScrollState()
@@ -132,6 +135,7 @@ private fun ScrollableNodeConfigSheetBody(
             availableToolIds = availableToolIds,
             availableModels = availableModels,
             onPickFromLibrary = onPickFromLibrary,
+            onSavePreset = onSavePreset,
         )
         // App-provided section that the catalog isn't allowed to model (e.g.
         // `NodeContextConfigSection` — depends on a domain `NodeContextConfig`).
@@ -169,7 +173,8 @@ fun NodeConfigSheetBody(
     onSave: (NodeConfig) -> Unit,
     availableToolIds: List<String> = emptyList(),
     availableModels: List<LocalModelOption> = emptyList(),
-    onPickFromLibrary: ((category: String, apply: (String) -> Unit) -> Unit)? = null,
+    onPickFromLibrary: ((category: String, currentPrompt: String, apply: (String) -> Unit) -> Unit)? = null,
+    onSavePreset: ((category: String, currentPrompt: String) -> Unit)? = null,
     extraSection: (@Composable () -> Unit)? = null,
 ) {
     Column(
@@ -186,6 +191,7 @@ fun NodeConfigSheetBody(
             availableToolIds = availableToolIds,
             availableModels = availableModels,
             onPickFromLibrary = onPickFromLibrary,
+            onSavePreset = onSavePreset,
         )
         extraSection?.invoke()
         Spacer(modifier = Modifier.size(KnotworkTheme.spacing.sp2))
