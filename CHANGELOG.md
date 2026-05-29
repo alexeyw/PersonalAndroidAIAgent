@@ -121,6 +121,38 @@ details.
   `PipelineJsonSerializer`, keeping the preset and pipeline formats
   forever in sync.
 
+### Changed
+
+- **Browser pipeline editor — full sync sweep** (Phase 24 / Task 6/9).
+  Re-synced `pipeline-editor.html` with the Android source of truth after
+  the Phase 20–24 drift:
+  - `BUILTIN_PROMPT_TEMPLATES` (the 📚 Prompts popover) now mirrors the
+    21-entry bundled prompt-preset catalogue from
+    `assets/presets/prompts/` (Task 4) verbatim — `systemPrompt`,
+    name, and description copied byte-for-byte — replacing the 7 legacy
+    generic per-type entries. The popover filters built-ins by the node's
+    `NodeType`, matching the Android Prompt Library; each row carries the
+    preset description as a hover tooltip.
+  - `IF_CONDITION` presets are routed to the **condition-prompt** field, not
+    `systemPrompt`: the IF picker lives on the "Classification prompt" field
+    (which maps to `NodeModel.conditionPrompt` — the only field
+    `EvaluateIfConditionUseCase` reads for branching), and the IF node no
+    longer renders a `systemPrompt` field at all, mirroring
+    `NodeConfigForms.IfConditionFormBody`. Previously an IF preset populated
+    an ignored `systemPrompt` and left `conditionPrompt` empty, so the
+    imported node fell through to `false`.
+  - `AVAILABLE_TOOLS` (TOOL-node config) re-synced with the
+    `LocalToolExecutor` registry: `web_search` → `search_tool`, plus the
+    previously-missing `schedule_task`. The ids now equal the executors'
+    `TOOL_NAME` constants so TOOL nodes built in the browser resolve
+    on-device.
+  - `CLOUD_PROVIDERS` gains `ollama`, matching the `CloudProvider` enum.
+  - Verified in-sync (no change needed): `PROMPT_VARIABLES` (9 variables),
+    `DEFAULT_SYSTEM_PROMPTS`, `NODE_TYPES`, `NODE_TYPE_TOOLTIPS`,
+    `defaultContextConfig`, and the `schemaVersion: 1` JSON node contract.
+- **Dependency currency**: bumped `firebase-bom` 34.13.0 → 34.14.0 to clear
+  the `GradleDependency` lint error gating `./gradlew check`.
+
 ### Build / coverage
 
 - **Coverage gate raised 70 % → 75 % LINE aggregate** (Phase 23 / Task 9/9).
