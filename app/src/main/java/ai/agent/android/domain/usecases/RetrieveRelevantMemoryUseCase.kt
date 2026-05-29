@@ -4,6 +4,7 @@ import ai.agent.android.domain.models.MemoryChunk
 import ai.agent.android.domain.repositories.MemoryRepository
 import ai.agent.android.domain.repositories.SettingsRepository
 import ai.agent.android.domain.services.EmbeddingProviderResolver
+import ai.agent.android.domain.services.MemoryReranker
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
@@ -11,14 +12,22 @@ import javax.inject.Inject
 
 /**
  * Use case for retrieving the most relevant long-term memories for a given user
- * query. It embeds the query into a vector and runs a cosine-similarity search
- * against the stored memory chunks, then keeps only the hits that clear the
- * configured relevance threshold.
+ * query. It embeds the query into a vector, runs a cosine-similarity search
+ * against the stored memory chunks, re-ranks the full scored pool through
+ * [MemoryReranker] (recency weighting, pinned boost, deduplication, threshold
+ * filtering), and returns the top-K survivors.
  *
  * This is the query-string façade over the lower-level vector search
  * ([MemoryRepository.findSimilarMemories], which takes a raw embedding). It is
  * the single entry point used by the pipeline ([ai.agent.android.domain.engine.GraphExecutionEngine]
  * resolves it once per run, keyed off the immutable user prompt).
+ *
+ * **Why re-rank here, not in the repository.** [MemoryRepository.findSimilarMemories]
+ * is shared with [MemoryExtractionUseCase]'s near-duplicate detection, which
+ * needs raw cosine similarity untouched. Re-ranking therefore lives in this
+ * retrieval-only path. The search is asked for the *full* scored pool (top-K is
+ * applied **after** re-ranking) so a pinned or fresh chunk that ranks below the
+ * raw-cosine top-K can still be promoted into the final result.
  *
  * **Why the resolver, not a fixed engine.** The query *must* be embedded with
  * the same provider that produced the stored chunks' embeddings — otherwise the
@@ -31,12 +40,15 @@ import javax.inject.Inject
  * @property embeddingProviderResolver Resolves the user's active embedding
  *   provider (with graceful on-device fallback).
  * @property memoryRepository Backing store exposing the raw vector search.
- * @property settingsRepository Source of the default top-K / threshold when the
- *   caller does not override them.
+ * @property memoryReranker Applies recency / pinned / dedup / threshold rules to
+ *   the raw search hits.
+ * @property settingsRepository Source of the default top-K / threshold /
+ *   recency half-life when the caller does not override them.
  */
 class RetrieveRelevantMemoryUseCase @Inject constructor(
     private val embeddingProviderResolver: EmbeddingProviderResolver,
     private val memoryRepository: MemoryRepository,
+    private val memoryReranker: MemoryReranker,
     private val settingsRepository: SettingsRepository,
 ) {
     /**
@@ -46,11 +58,11 @@ class RetrieveRelevantMemoryUseCase @Inject constructor(
      * @param limit Maximum number of memories to return. When `null` (the
      *   default), `SettingsRepository.memorySearchTopK` is used. Provided as an
      *   explicit override mainly for tests.
-     * @param threshold Minimum cosine-similarity score (0.0–1.0) a memory must
-     *   reach to be kept. When `null` (the default),
+     * @param threshold Minimum final (post-rerank) score a memory must reach to
+     *   be kept. Pinned chunks bypass this filter. When `null` (the default),
      *   `SettingsRepository.memorySearchThreshold` is used.
-     * @return Relevant [MemoryChunk]s that clear the threshold, ordered by
-     *   descending similarity.
+     * @return Relevant [MemoryChunk]s ordered best-first (pinned chunks first,
+     *   then by descending final score), capped at the effective top-K.
      */
     suspend operator fun invoke(query: String, limit: Int? = null, threshold: Float? = null): List<MemoryChunk> =
         withContext(Dispatchers.Default) {
@@ -61,10 +73,22 @@ class RetrieveRelevantMemoryUseCase @Inject constructor(
 
             val effectiveLimit = limit ?: settingsRepository.memorySearchTopK.first()
             val effectiveThreshold = threshold ?: settingsRepository.memorySearchThreshold.first()
+            val halfLifeDays = settingsRepository.memoryRecencyHalfLifeDays.first()
             val searchPoolLimit = settingsRepository.maxMemoryChunksForSearch.first()
 
-            memoryRepository.findSimilarMemories(queryEmbedding, searchPoolLimit, effectiveLimit)
-                .filter { it.second >= effectiveThreshold }
+            // Pull the full scored pool (not just the raw-cosine top-K) so the
+            // re-ranker can promote a pinned or fresh chunk that the raw search
+            // would have left just outside the top-K. Top-K is applied last.
+            memoryRepository.findSimilarMemories(queryEmbedding, searchPoolLimit, limit = searchPoolLimit)
+                .let { candidates ->
+                    memoryReranker.rerank(
+                        candidates = candidates,
+                        nowMillis = System.currentTimeMillis(),
+                        halfLifeDays = halfLifeDays,
+                        threshold = effectiveThreshold,
+                    )
+                }
+                .take(effectiveLimit)
                 .map { it.first }
         }
 }

@@ -74,6 +74,19 @@ object SettingsDefaults {
     const val MEMORY_SEARCH_THRESHOLD_DEFAULT: Float = 0.55f
 
     /**
+     * Default recency half-life, in days, used by the memory re-ranker: a
+     * non-pinned chunk this old keeps half of its raw cosine similarity. Lower
+     * values bias retrieval harder towards fresh facts.
+     */
+    const val MEMORY_RECENCY_HALF_LIFE_DAYS_DEFAULT: Int = 30
+
+    /** Lower bound enforced when the user edits the recency half-life. */
+    const val MEMORY_RECENCY_HALF_LIFE_DAYS_MIN: Int = 7
+
+    /** Upper bound enforced when the user edits the recency half-life. */
+    const val MEMORY_RECENCY_HALF_LIFE_DAYS_MAX: Int = 180
+
+    /**
      * Default Ollama-side context-window size (in tokens) assumed by
      * [ai.agent.android.data.local.ApiKeyManager] for any model whose
      * per-model override has not been configured.

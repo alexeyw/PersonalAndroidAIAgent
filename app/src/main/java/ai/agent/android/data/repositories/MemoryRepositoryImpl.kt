@@ -79,10 +79,12 @@ class MemoryRepositoryImpl @Inject constructor(private val memoryDao: MemoryDao,
             .sortedByDescending { it.second }
             .take(limit)
 
-        // Record the top-k scores so the Settings stats card surfaces a
-        // representative recency-weighted average. Bounded so the average
-        // tracks recent behaviour rather than the lifetime mean.
-        val newScores = ranked.map { it.second }
+        // Record the strongest few scores so the Settings stats card surfaces a
+        // representative average. Only the head of the ranked list is sampled
+        // (not the whole returned set): retrieval now asks for the full scored
+        // pool to feed re-ranking, and folding hundreds of low-similarity tail
+        // scores into the window would drag the AVG SCORE cell toward zero.
+        val newScores = ranked.take(STATS_SAMPLE_SIZE).map { it.second }
         if (newScores.isNotEmpty()) {
             recentSimilarityScores.update { previous ->
                 (previous + newScores).takeLast(RECENT_SIMILARITY_WINDOW)
@@ -181,5 +183,12 @@ class MemoryRepositoryImpl @Inject constructor(private val memoryDao: MemoryDao,
     private companion object {
         /** Number of recent cosine-similarity scores tracked for the AVG SCORE stat cell. */
         const val RECENT_SIMILARITY_WINDOW: Int = 32
+
+        /**
+         * Per-call cap on how many of the ranked scores feed the AVG SCORE
+         * window. Keeps the stat anchored to the strongest hits even when a
+         * caller requests a large pool for re-ranking.
+         */
+        const val STATS_SAMPLE_SIZE: Int = 5
     }
 }

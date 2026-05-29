@@ -40,6 +40,26 @@ details.
 
 ### Added
 
+- **Memory retrieval re-ranking** (Phase 25 / Task 4/10). Raw cosine
+  similarity is no longer the final word on what reaches the prompt. A new
+  pure-domain `MemoryReranker` re-scores the full scored search pool before
+  the top-K cut, applying four deterministic rules:
+  - **Recency weighting** — a non-pinned chunk's score decays with age
+    (`final = similarity * (1 - 0.5 * daysSince / halfLife)`, floored at 0),
+    so a stale chunk no longer crowds out a fresher one. The half-life is
+    configurable via the new `SettingsRepository.memoryRecencyHalfLifeDays`
+    (default 30 days; Settings UI lands with the later Settings/tuning task).
+  - **Pinned boost** — pinned chunks skip decay, gain a flat `+0.2`, sort
+    ahead of every non-pinned chunk, and are exempt from the threshold filter,
+    so a deliberately curated fact is always surfaced.
+  - **Deduplication** — chunks sharing their first 80 characters collapse to
+    the newest survivor, sparing the limited context budget.
+  - **Threshold filter** — applied to the *final* (post-rerank) score.
+  Re-ranking lives in `RetrieveRelevantMemoryUseCase` (the retrieval-only
+  path), leaving `MemoryRepository.findSimilarMemories` raw for
+  `MemoryExtractionUseCase`'s near-duplicate detection. The use case now pulls
+  the full scored pool so a pinned or fresh chunk just outside the raw-cosine
+  top-K can still be promoted.
 - **Configurable memory retrieval tuning** (Phase 25 / Task 3/10). The
   retrieval top-K and relevance threshold are no longer hard-coded:
   `SettingsRepository.memorySearchTopK` (default 5) and

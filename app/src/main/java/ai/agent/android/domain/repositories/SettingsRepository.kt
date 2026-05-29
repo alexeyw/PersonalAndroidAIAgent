@@ -320,6 +320,24 @@ interface SettingsRepository {
     suspend fun setMemorySearchThreshold(threshold: Float)
 
     /**
+     * A [Flow] emitting the recency half-life (in days) used by the long-term
+     * memory re-ranker. A non-pinned chunk this old keeps half of its raw
+     * cosine similarity; freshness wins ties below it and is penalised above
+     * it. Defaults to `SettingsDefaults.MEMORY_RECENCY_HALF_LIFE_DAYS_DEFAULT`
+     * (30) for a fresh install.
+     */
+    val memoryRecencyHalfLifeDays: Flow<Int>
+
+    /**
+     * Updates the long-term memory recency half-life.
+     *
+     * @param days The new half-life in days; callers should keep it within a
+     *   sane range (validation of user-entered values lives in the Settings
+     *   ViewModel).
+     */
+    suspend fun setMemoryRecencyHalfLifeDays(days: Int)
+
+    /**
      * A [Flow] emitting the wire key of the selected local-model backend
      * ([ai.agent.android.domain.models.LocalBackend.key]). Stored as a raw string for
      * backward compatibility with DataStore values written before the typed enum existed.
