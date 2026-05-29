@@ -15,6 +15,30 @@ details.
 
 ### Added
 
+- **Pipeline presets — browser editor** (Phase 24 / Task 7/9). The
+  standalone `pipeline-editor.html` gains a `📚 Presets` top-bar button
+  opening a modal with **Bundled** and **Mine** tabs:
+  - **Bundled** mirrors the 6 starter presets shipped in the APK under
+    `assets/presets/pipelines/*.json`, inlined as the
+    `BUILTIN_PIPELINE_PRESETS` JS constant (Task 8 will replace the
+    hand-maintained block with a gradle-generated one).
+  - **Mine** lists per-browser presets persisted in `localStorage`
+    (degrades to an empty in-memory list in private-mode browsers).
+  - Each card offers **Load** (materialises the preset onto the canvas
+    via the existing `importFromJson` path, with a freshly-minted
+    pipeline id) and **Export** (downloads `<id>.preset.json`); Mine
+    cards also offer **Delete**. The modal footer adds **Import
+    preset…** (parses a `.preset.json`, runs a schema-version mismatch
+    confirm when needed, and stores it under Mine without touching the
+    canvas) and **Save canvas as preset…** (a name / category / tags /
+    description form, 60-char name cap matching
+    `SavePipelineAsPresetUseCase`).
+  - The `.preset.json` format is a strict superset of the pipeline JSON
+    — same `schemaVersion` / `id` / `name` / `updatedAt` / `nodes` /
+    `connections` plus `category` / `tags` / `description` — matching
+    `PipelinePresetJsonSerializer.kt`, so files round-trip between the
+    browser editor and the Android app.
+
 - **Prompt presets — UI** (Phase 24 / Task 5/9). Wires the bundled and
   user-saved prompt-preset catalogue (Task 4) into the two production
   surfaces:

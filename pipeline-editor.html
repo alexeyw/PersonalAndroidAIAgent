@@ -756,6 +756,216 @@
             outline: 2px solid var(--danger);
             outline-offset: 2px;
         }
+
+        /* ---- Pipeline preset library + save dialogs (Phase 24 / Task 7) ---- */
+        dialog#preset-library,
+        dialog#preset-save {
+            border: 1px solid var(--border);
+            background: var(--bg);
+            color: var(--text);
+            border-radius: 10px;
+            padding: 0;
+            box-shadow: 0 12px 32px rgba(0,0,0,0.5);
+        }
+        dialog#preset-library::backdrop,
+        dialog#preset-save::backdrop { background: rgba(0,0,0,0.55); }
+
+        dialog#preset-library {
+            width: 640px;
+            max-width: 92vw;
+            max-height: 88vh;
+        }
+        .preset-shell {
+            display: flex;
+            flex-direction: column;
+            max-height: inherit;
+        }
+        dialog#preset-library header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 14px 18px;
+            border-bottom: 1px solid var(--border);
+        }
+        dialog#preset-library header .icon { font-size: 18px; }
+        dialog#preset-library header .title { font-size: 14px; font-weight: 600; }
+        .preset-close {
+            margin-left: auto;
+            background: transparent;
+            border: none;
+            color: var(--text-dim);
+            font-size: 16px;
+            cursor: pointer;
+            padding: 2px 6px;
+            border-radius: 6px;
+        }
+        .preset-close:hover { background: var(--bg-soft); color: var(--text); }
+
+        .preset-tabs {
+            display: flex;
+            gap: 4px;
+            padding: 10px 18px 0;
+        }
+        .preset-tab {
+            background: transparent;
+            border: none;
+            border-bottom: 2px solid transparent;
+            color: var(--text-dim);
+            font-size: 13px;
+            padding: 6px 10px;
+            cursor: pointer;
+        }
+        .preset-tab:hover { color: var(--text); }
+        .preset-tab.is-active {
+            color: var(--text);
+            border-bottom-color: var(--accent);
+            font-weight: 600;
+        }
+
+        .preset-list {
+            flex: 1;
+            overflow-y: auto;
+            padding: 14px 18px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        .preset-card {
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 12px 14px;
+            background: var(--bg-soft);
+        }
+        .preset-card-head {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 4px;
+        }
+        .preset-card-name { font-size: 14px; font-weight: 600; }
+        .preset-badge {
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            padding: 2px 7px;
+            border-radius: 999px;
+            border: 1px solid var(--border);
+            color: var(--text-dim);
+        }
+        .preset-card-desc {
+            font-size: 12px;
+            color: var(--text-dim);
+            line-height: 1.45;
+            margin: 0 0 8px;
+        }
+        .preset-tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px;
+            margin-bottom: 8px;
+        }
+        .preset-tag {
+            font-size: 10px;
+            color: var(--text-dim);
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            padding: 1px 6px;
+        }
+        .preset-card-actions {
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+        }
+        .preset-card-actions button {
+            background: var(--bg);
+            color: var(--text);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 5px 10px;
+            font-size: 12px;
+            cursor: pointer;
+        }
+        .preset-card-actions button:hover { border-color: var(--accent); }
+        .preset-card-actions button.primary {
+            background: var(--accent);
+            border-color: var(--accent);
+            color: #fff;
+        }
+        .preset-card-actions button.danger { color: var(--danger); }
+        .preset-card-actions button.danger:hover { border-color: var(--danger); }
+        .preset-empty {
+            color: var(--text-dim);
+            font-size: 13px;
+            text-align: center;
+            padding: 28px 12px;
+            line-height: 1.5;
+        }
+
+        dialog#preset-library footer,
+        dialog#preset-save footer {
+            display: flex;
+            justify-content: flex-end;
+            gap: 8px;
+            padding: 12px 18px;
+            border-top: 1px solid var(--border);
+        }
+        dialog#preset-library footer button,
+        dialog#preset-save footer button {
+            background: var(--bg-soft);
+            color: var(--text);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 7px 14px;
+            font-size: 13px;
+            cursor: pointer;
+        }
+        dialog#preset-library footer button:hover,
+        dialog#preset-save footer button:hover { border-color: var(--accent); }
+        dialog#preset-library footer button.primary,
+        dialog#preset-save footer button.primary {
+            background: var(--accent);
+            border-color: var(--accent);
+            color: #fff;
+        }
+        dialog#preset-library footer { justify-content: space-between; }
+
+        dialog#preset-save { width: 460px; max-width: 92vw; }
+        dialog#preset-save form { display: flex; flex-direction: column; }
+        dialog#preset-save header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 14px 18px;
+            border-bottom: 1px solid var(--border);
+        }
+        dialog#preset-save header .icon { font-size: 18px; }
+        dialog#preset-save header .title { font-size: 14px; font-weight: 600; }
+        dialog#preset-save .body {
+            padding: 14px 18px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        dialog#preset-save .field { display: flex; flex-direction: column; gap: 4px; }
+        dialog#preset-save .field > label { font-size: 12px; color: var(--text-dim); }
+        dialog#preset-save .field-hint { text-transform: none; letter-spacing: 0; }
+        dialog#preset-save input[type="text"],
+        dialog#preset-save select,
+        dialog#preset-save textarea {
+            background: var(--bg-soft);
+            color: var(--text);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 7px 9px;
+            font-size: 13px;
+            font-family: inherit;
+        }
+        dialog#preset-save input[type="text"]:focus,
+        dialog#preset-save select:focus,
+        dialog#preset-save textarea:focus { border-color: var(--accent); outline: none; }
+        dialog#preset-save textarea { resize: vertical; }
+        .preset-save-error { color: var(--danger); font-size: 12px; margin: 0; }
     </style>
 </head>
 <body>
@@ -772,7 +982,9 @@
             <button id="btn-autolayout" title="Auto-layout the graph (left-to-right by topological depth)">🪄 Auto-layout</button>
             <button id="btn-export" title="Export pipeline JSON">📤 Export JSON</button>
             <button id="btn-import" title="Import pipeline JSON">📥 Import JSON</button>
+            <button id="btn-presets" title="Browse and manage pipeline presets">📚 Presets</button>
             <input id="file-import" type="file" accept="application/json,.json" hidden>
+            <input id="file-import-preset" type="file" accept="application/json,.json,.preset.json" hidden>
             <span class="name-label">Name</span>
             <input id="pipeline-name" type="text" placeholder="Untitled pipeline">
             <span class="spacer"></span>
@@ -809,6 +1021,61 @@
         <footer>
             <button type="button" data-role="cancel">Cancel</button>
             <button type="button" class="primary" data-role="save">Save</button>
+        </footer>
+    </form>
+</dialog>
+
+<!-- Pipeline preset library (Phase 24 / Task 7): bundled catalogue + per-browser
+     "Mine" presets stored in localStorage. Load instantiates a preset onto the
+     canvas; Export writes a `.preset.json`; Import adds a file to "Mine". -->
+<dialog id="preset-library">
+    <div class="preset-shell">
+        <header>
+            <span class="icon">📚</span>
+            <span class="title">Pipeline presets</span>
+            <button type="button" class="preset-close" data-role="close" title="Close (Esc)">✕</button>
+        </header>
+        <nav class="preset-tabs" data-role="tabs">
+            <button type="button" class="preset-tab is-active" data-tab="bundled">Bundled</button>
+            <button type="button" class="preset-tab" data-tab="mine">Mine</button>
+        </nav>
+        <div class="preset-list" data-role="list"></div>
+        <footer>
+            <button type="button" data-role="import">📥 Import preset…</button>
+            <button type="button" class="primary" data-role="save-current">💾 Save canvas as preset…</button>
+        </footer>
+    </div>
+</dialog>
+
+<!-- Save-as-preset metadata form raised by "Save canvas as preset…". -->
+<dialog id="preset-save">
+    <form method="dialog">
+        <header>
+            <span class="icon">💾</span>
+            <span class="title">Save canvas as preset</span>
+        </header>
+        <div class="body">
+            <div class="field">
+                <label for="preset-save-name">Name</label>
+                <input id="preset-save-name" type="text" maxlength="60" placeholder="My pipeline preset">
+            </div>
+            <div class="field">
+                <label for="preset-save-category">Category</label>
+                <select id="preset-save-category"></select>
+            </div>
+            <div class="field">
+                <label for="preset-save-tags">Tags <span class="field-hint">(comma-separated)</span></label>
+                <input id="preset-save-tags" type="text" placeholder="offline, qa, starter">
+            </div>
+            <div class="field">
+                <label for="preset-save-description">Description</label>
+                <textarea id="preset-save-description" rows="3" placeholder="What this preset does and when to pick it."></textarea>
+            </div>
+            <p class="preset-save-error" data-role="error" hidden></p>
+        </div>
+        <footer>
+            <button type="button" data-role="cancel">Cancel</button>
+            <button type="button" class="primary" data-role="confirm">Save preset</button>
         </footer>
     </form>
 </dialog>
@@ -1204,6 +1471,902 @@
             localStorage.setItem(PROMPT_TEMPLATES_STORAGE_KEY, JSON.stringify(list));
         } catch (_) { /* ignore */ }
     }
+
+    /**
+     * Bundled pipeline-preset catalogue surfaced by the "📚 Presets"
+     * modal (Phase 24 / Task 7). Each entry is a full preset document in
+     * the `.preset.json` format owned by
+     * `domain/pipelineio/PipelinePresetJsonSerializer.kt` — a strict
+     * superset of the pipeline JSON with three extra top-level fields
+     * (`category`, `tags`, `description`). The 6 documents below are
+     * copied verbatim from the Android APK assets under
+     * `assets/presets/pipelines/*.json`.
+     *
+     * KEEP IN SYNC with `assets/presets/pipelines/`. Phase 24 / Task 8
+     * will replace this hand-maintained block with a gradle-generated
+     * one (`generateBrowserEditorConstants`). See DESCRIPTION.md §8.2.
+     */
+    const BUILTIN_PIPELINE_PRESETS = [
+        {
+            "schemaVersion": 1,
+            "id": "local_only_qa",
+            "name": "Local-only Q&A",
+            "description": "Single-turn answers handled entirely by the on-device model. No network, no tools. Best for quick factual questions when you want privacy and predictable latency.",
+            "category": "local",
+            "tags": [
+                "offline",
+                "qa",
+                "starter"
+            ],
+            "updatedAt": 1748304000000,
+            "nodes": [
+                {
+                    "id": "input",
+                    "type": "INPUT",
+                    "position": {
+                        "x": 80.0,
+                        "y": 200.0
+                    },
+                    "label": "Input",
+                    "config": {
+                        "systemPrompt": null,
+                        "cloudProvider": null,
+                        "modelPath": null,
+                        "toolName": null,
+                        "clarificationTimeoutMs": null,
+                        "conditionPrompt": null,
+                        "conditionKeywords": null,
+                        "conditionComplexity": null
+                    },
+                    "contextConfig": {
+                        "chatHistory": false,
+                        "originalTask": false,
+                        "nodeInput": true,
+                        "longTermMemory": false,
+                        "toolResults": false
+                    }
+                },
+                {
+                    "id": "lite_rt",
+                    "type": "LITE_RT",
+                    "position": {
+                        "x": 320.0,
+                        "y": 200.0
+                    },
+                    "label": "Local LLM",
+                    "config": {
+                        "systemPrompt": "You are a concise on-device assistant running on $MODEL. Today is $DATE. Answer the user's question directly in one or two short paragraphs. Do not invent facts; if you do not know, say so plainly.",
+                        "cloudProvider": null,
+                        "modelPath": null,
+                        "toolName": null,
+                        "clarificationTimeoutMs": null,
+                        "conditionPrompt": null,
+                        "conditionKeywords": null,
+                        "conditionComplexity": null
+                    },
+                    "contextConfig": {
+                        "chatHistory": false,
+                        "originalTask": true,
+                        "nodeInput": true,
+                        "longTermMemory": false,
+                        "toolResults": false
+                    }
+                },
+                {
+                    "id": "output",
+                    "type": "OUTPUT",
+                    "position": {
+                        "x": 560.0,
+                        "y": 200.0
+                    },
+                    "label": "Reply",
+                    "config": {
+                        "systemPrompt": null,
+                        "cloudProvider": null,
+                        "modelPath": null,
+                        "toolName": null,
+                        "clarificationTimeoutMs": null,
+                        "conditionPrompt": null,
+                        "conditionKeywords": null,
+                        "conditionComplexity": null
+                    },
+                    "contextConfig": {
+                        "chatHistory": true,
+                        "originalTask": true,
+                        "nodeInput": true,
+                        "longTermMemory": true,
+                        "toolResults": true
+                    }
+                }
+            ],
+            "connections": [
+                {
+                    "id": "c1",
+                    "fromNodeId": "input",
+                    "toNodeId": "lite_rt",
+                    "label": null
+                },
+                {
+                    "id": "c2",
+                    "fromNodeId": "lite_rt",
+                    "toNodeId": "output",
+                    "label": null
+                }
+            ]
+        },
+        {
+            "schemaVersion": 1,
+            "id": "cloud_assist",
+            "name": "Cloud-assisted chat",
+            "description": "Cloud LLM with full conversation history and long-term memory. Use when you need broader knowledge, longer context, or stronger reasoning than the on-device model can offer.",
+            "category": "cloud",
+            "tags": [
+                "cloud",
+                "chat",
+                "history"
+            ],
+            "updatedAt": 1748304000000,
+            "nodes": [
+                {
+                    "id": "input",
+                    "type": "INPUT",
+                    "position": {
+                        "x": 80.0,
+                        "y": 200.0
+                    },
+                    "label": "Input",
+                    "config": {
+                        "systemPrompt": null,
+                        "cloudProvider": null,
+                        "modelPath": null,
+                        "toolName": null,
+                        "clarificationTimeoutMs": null,
+                        "conditionPrompt": null,
+                        "conditionKeywords": null,
+                        "conditionComplexity": null
+                    },
+                    "contextConfig": {
+                        "chatHistory": false,
+                        "originalTask": false,
+                        "nodeInput": true,
+                        "longTermMemory": false,
+                        "toolResults": false
+                    }
+                },
+                {
+                    "id": "cloud",
+                    "type": "CLOUD",
+                    "position": {
+                        "x": 320.0,
+                        "y": 200.0
+                    },
+                    "label": "Cloud LLM",
+                    "config": {
+                        "systemPrompt": "You are a knowledgeable cloud assistant available to the user on their Android device. The current date is $DATE and the local time is $TIME. Use the conversation history above to keep continuity across turns. Reply in well-structured prose; cite concrete facts and explain reasoning when it helps the user.",
+                        "cloudProvider": "auto",
+                        "modelPath": null,
+                        "toolName": null,
+                        "clarificationTimeoutMs": null,
+                        "conditionPrompt": null,
+                        "conditionKeywords": null,
+                        "conditionComplexity": null
+                    },
+                    "contextConfig": {
+                        "chatHistory": true,
+                        "originalTask": true,
+                        "nodeInput": true,
+                        "longTermMemory": true,
+                        "toolResults": false
+                    }
+                },
+                {
+                    "id": "output",
+                    "type": "OUTPUT",
+                    "position": {
+                        "x": 560.0,
+                        "y": 200.0
+                    },
+                    "label": "Reply",
+                    "config": {
+                        "systemPrompt": null,
+                        "cloudProvider": null,
+                        "modelPath": null,
+                        "toolName": null,
+                        "clarificationTimeoutMs": null,
+                        "conditionPrompt": null,
+                        "conditionKeywords": null,
+                        "conditionComplexity": null
+                    },
+                    "contextConfig": {
+                        "chatHistory": true,
+                        "originalTask": true,
+                        "nodeInput": true,
+                        "longTermMemory": true,
+                        "toolResults": true
+                    }
+                }
+            ],
+            "connections": [
+                {
+                    "id": "c1",
+                    "fromNodeId": "input",
+                    "toNodeId": "cloud",
+                    "label": null
+                },
+                {
+                    "id": "c2",
+                    "fromNodeId": "cloud",
+                    "toNodeId": "output",
+                    "label": null
+                }
+            ]
+        },
+        {
+            "schemaVersion": 1,
+            "id": "routed_local_cloud",
+            "name": "Routed local + cloud",
+            "description": "An intent router classifies the request and sends simple queries to the on-device model and complex ones to the cloud. Balances latency and capability without the user having to choose.",
+            "category": "hybrid",
+            "tags": [
+                "routing",
+                "hybrid",
+                "intent"
+            ],
+            "updatedAt": 1748304000000,
+            "nodes": [
+                {
+                    "id": "input",
+                    "type": "INPUT",
+                    "position": {
+                        "x": 80.0,
+                        "y": 200.0
+                    },
+                    "label": "Input",
+                    "config": {
+                        "systemPrompt": null,
+                        "cloudProvider": null,
+                        "modelPath": null,
+                        "toolName": null,
+                        "clarificationTimeoutMs": null,
+                        "conditionPrompt": null,
+                        "conditionKeywords": null,
+                        "conditionComplexity": null
+                    },
+                    "contextConfig": {
+                        "chatHistory": false,
+                        "originalTask": false,
+                        "nodeInput": true,
+                        "longTermMemory": false,
+                        "toolResults": false
+                    }
+                },
+                {
+                    "id": "router",
+                    "type": "INTENT_ROUTER",
+                    "position": {
+                        "x": 320.0,
+                        "y": 200.0
+                    },
+                    "label": "Router",
+                    "config": {
+                        "systemPrompt": "Classify the user's request. Output EXACTLY one keyword: Simple (greetings, small talk, single-step factual questions the on-device model can answer) or Complex (multi-step reasoning, research, code, anything that benefits from a larger model). Today is $DATE. Reply with the single keyword and nothing else.",
+                        "cloudProvider": null,
+                        "modelPath": null,
+                        "toolName": null,
+                        "clarificationTimeoutMs": null,
+                        "conditionPrompt": null,
+                        "conditionKeywords": null,
+                        "conditionComplexity": null
+                    },
+                    "contextConfig": {
+                        "chatHistory": true,
+                        "originalTask": true,
+                        "nodeInput": true,
+                        "longTermMemory": false,
+                        "toolResults": false
+                    }
+                },
+                {
+                    "id": "lite_rt",
+                    "type": "LITE_RT",
+                    "position": {
+                        "x": 560.0,
+                        "y": 100.0
+                    },
+                    "label": "Local LLM",
+                    "config": {
+                        "systemPrompt": "You are a concise on-device assistant running on $MODEL. Today is $DATE. Answer the user's question directly in one short paragraph.",
+                        "cloudProvider": null,
+                        "modelPath": null,
+                        "toolName": null,
+                        "clarificationTimeoutMs": null,
+                        "conditionPrompt": null,
+                        "conditionKeywords": null,
+                        "conditionComplexity": null
+                    },
+                    "contextConfig": {
+                        "chatHistory": false,
+                        "originalTask": true,
+                        "nodeInput": true,
+                        "longTermMemory": false,
+                        "toolResults": false
+                    }
+                },
+                {
+                    "id": "cloud",
+                    "type": "CLOUD",
+                    "position": {
+                        "x": 560.0,
+                        "y": 320.0
+                    },
+                    "label": "Cloud LLM",
+                    "config": {
+                        "systemPrompt": "You are a cloud assistant handling a request the on-device router flagged as Complex. The current date is $DATE. Use the conversation history to keep continuity. Reason step by step internally, then reply with a thorough, well-structured answer.",
+                        "cloudProvider": "auto",
+                        "modelPath": null,
+                        "toolName": null,
+                        "clarificationTimeoutMs": null,
+                        "conditionPrompt": null,
+                        "conditionKeywords": null,
+                        "conditionComplexity": null
+                    },
+                    "contextConfig": {
+                        "chatHistory": true,
+                        "originalTask": true,
+                        "nodeInput": true,
+                        "longTermMemory": true,
+                        "toolResults": false
+                    }
+                },
+                {
+                    "id": "output",
+                    "type": "OUTPUT",
+                    "position": {
+                        "x": 800.0,
+                        "y": 200.0
+                    },
+                    "label": "Reply",
+                    "config": {
+                        "systemPrompt": null,
+                        "cloudProvider": null,
+                        "modelPath": null,
+                        "toolName": null,
+                        "clarificationTimeoutMs": null,
+                        "conditionPrompt": null,
+                        "conditionKeywords": null,
+                        "conditionComplexity": null
+                    },
+                    "contextConfig": {
+                        "chatHistory": true,
+                        "originalTask": true,
+                        "nodeInput": true,
+                        "longTermMemory": true,
+                        "toolResults": true
+                    }
+                }
+            ],
+            "connections": [
+                {
+                    "id": "c1",
+                    "fromNodeId": "input",
+                    "toNodeId": "router",
+                    "label": null
+                },
+                {
+                    "id": "c2",
+                    "fromNodeId": "router",
+                    "toNodeId": "lite_rt",
+                    "label": "Simple"
+                },
+                {
+                    "id": "c3",
+                    "fromNodeId": "router",
+                    "toNodeId": "cloud",
+                    "label": "Complex"
+                },
+                {
+                    "id": "c4",
+                    "fromNodeId": "lite_rt",
+                    "toNodeId": "output",
+                    "label": null
+                },
+                {
+                    "id": "c5",
+                    "fromNodeId": "cloud",
+                    "toNodeId": "output",
+                    "label": null
+                }
+            ]
+        },
+        {
+            "schemaVersion": 1,
+            "id": "tool_using_react",
+            "name": "Tool-using ReAct agent",
+            "description": "Local model reasons about which tool to call, the tool runs (auto-selected from the registry), and a summariser folds the tool output back into a final answer. Good template for action-oriented tasks.",
+            "category": "tool",
+            "tags": [
+                "tools",
+                "react",
+                "agent"
+            ],
+            "updatedAt": 1748304000000,
+            "nodes": [
+                {
+                    "id": "input",
+                    "type": "INPUT",
+                    "position": {
+                        "x": 80.0,
+                        "y": 200.0
+                    },
+                    "label": "Input",
+                    "config": {
+                        "systemPrompt": null,
+                        "cloudProvider": null,
+                        "modelPath": null,
+                        "toolName": null,
+                        "clarificationTimeoutMs": null,
+                        "conditionPrompt": null,
+                        "conditionKeywords": null,
+                        "conditionComplexity": null
+                    },
+                    "contextConfig": {
+                        "chatHistory": false,
+                        "originalTask": false,
+                        "nodeInput": true,
+                        "longTermMemory": false,
+                        "toolResults": false
+                    }
+                },
+                {
+                    "id": "lite_rt",
+                    "type": "LITE_RT",
+                    "position": {
+                        "x": 320.0,
+                        "y": 200.0
+                    },
+                    "label": "Reasoner",
+                    "config": {
+                        "systemPrompt": "You are a reasoning agent deciding whether a tool is needed to answer the user. Today is $DATE. Available tools:\n$TOOLS\n\nThink step by step. If a tool can produce more reliable or fresher information than your own knowledge, output a single short sentence describing what you want the tool to do. Otherwise produce a direct answer. Keep the output under three sentences.",
+                        "cloudProvider": null,
+                        "modelPath": null,
+                        "toolName": null,
+                        "clarificationTimeoutMs": null,
+                        "conditionPrompt": null,
+                        "conditionKeywords": null,
+                        "conditionComplexity": null
+                    },
+                    "contextConfig": {
+                        "chatHistory": false,
+                        "originalTask": true,
+                        "nodeInput": true,
+                        "longTermMemory": false,
+                        "toolResults": false
+                    }
+                },
+                {
+                    "id": "tool",
+                    "type": "TOOL",
+                    "position": {
+                        "x": 560.0,
+                        "y": 200.0
+                    },
+                    "label": "Tool",
+                    "config": {
+                        "systemPrompt": null,
+                        "cloudProvider": null,
+                        "modelPath": null,
+                        "toolName": null,
+                        "clarificationTimeoutMs": null,
+                        "conditionPrompt": null,
+                        "conditionKeywords": null,
+                        "conditionComplexity": null
+                    },
+                    "contextConfig": {
+                        "chatHistory": false,
+                        "originalTask": false,
+                        "nodeInput": true,
+                        "longTermMemory": false,
+                        "toolResults": false
+                    }
+                },
+                {
+                    "id": "summary",
+                    "type": "SUMMARY",
+                    "position": {
+                        "x": 800.0,
+                        "y": 200.0
+                    },
+                    "label": "Summariser",
+                    "config": {
+                        "systemPrompt": "You synthesise the result of a tool invocation into a final reply for the user. Quote the concrete facts the tool returned and answer the user's original question directly. If the tool failed or returned nothing useful, say so plainly.",
+                        "cloudProvider": null,
+                        "modelPath": null,
+                        "toolName": null,
+                        "clarificationTimeoutMs": null,
+                        "conditionPrompt": null,
+                        "conditionKeywords": null,
+                        "conditionComplexity": null
+                    },
+                    "contextConfig": {
+                        "chatHistory": false,
+                        "originalTask": true,
+                        "nodeInput": true,
+                        "longTermMemory": false,
+                        "toolResults": true
+                    }
+                },
+                {
+                    "id": "output",
+                    "type": "OUTPUT",
+                    "position": {
+                        "x": 1040.0,
+                        "y": 200.0
+                    },
+                    "label": "Reply",
+                    "config": {
+                        "systemPrompt": null,
+                        "cloudProvider": null,
+                        "modelPath": null,
+                        "toolName": null,
+                        "clarificationTimeoutMs": null,
+                        "conditionPrompt": null,
+                        "conditionKeywords": null,
+                        "conditionComplexity": null
+                    },
+                    "contextConfig": {
+                        "chatHistory": true,
+                        "originalTask": true,
+                        "nodeInput": true,
+                        "longTermMemory": true,
+                        "toolResults": true
+                    }
+                }
+            ],
+            "connections": [
+                {
+                    "id": "c1",
+                    "fromNodeId": "input",
+                    "toNodeId": "lite_rt",
+                    "label": null
+                },
+                {
+                    "id": "c2",
+                    "fromNodeId": "lite_rt",
+                    "toNodeId": "tool",
+                    "label": null
+                },
+                {
+                    "id": "c3",
+                    "fromNodeId": "tool",
+                    "toNodeId": "summary",
+                    "label": null
+                },
+                {
+                    "id": "c4",
+                    "fromNodeId": "summary",
+                    "toNodeId": "output",
+                    "label": null
+                }
+            ]
+        },
+        {
+            "schemaVersion": 1,
+            "id": "multi_step_research",
+            "name": "Multi-step research",
+            "description": "Decomposes the request into subtasks, then loops over each subtask through a cloud LLM via the queue processor. The Done branch leaves the loop and produces the final answer.",
+            "category": "research",
+            "tags": [
+                "research",
+                "decomposition",
+                "cloud",
+                "loop"
+            ],
+            "updatedAt": 1748304000000,
+            "nodes": [
+                {
+                    "id": "input",
+                    "type": "INPUT",
+                    "position": {
+                        "x": 80.0,
+                        "y": 200.0
+                    },
+                    "label": "Input",
+                    "config": {
+                        "systemPrompt": null,
+                        "cloudProvider": null,
+                        "modelPath": null,
+                        "toolName": null,
+                        "clarificationTimeoutMs": null,
+                        "conditionPrompt": null,
+                        "conditionKeywords": null,
+                        "conditionComplexity": null
+                    },
+                    "contextConfig": {
+                        "chatHistory": false,
+                        "originalTask": false,
+                        "nodeInput": true,
+                        "longTermMemory": false,
+                        "toolResults": false
+                    }
+                },
+                {
+                    "id": "decomposition",
+                    "type": "DECOMPOSITION",
+                    "position": {
+                        "x": 320.0,
+                        "y": 200.0
+                    },
+                    "label": "Decomposition",
+                    "config": {
+                        "systemPrompt": "You are a task decomposer. Break the user's request into a short ordered list of independent research subtasks (typically 2-5). Today is $DATE. Output STRICTLY a JSON array of plain-text strings — no prose, no keys, no trailing commentary.",
+                        "cloudProvider": null,
+                        "modelPath": null,
+                        "toolName": null,
+                        "clarificationTimeoutMs": null,
+                        "conditionPrompt": null,
+                        "conditionKeywords": null,
+                        "conditionComplexity": null
+                    },
+                    "contextConfig": {
+                        "chatHistory": false,
+                        "originalTask": true,
+                        "nodeInput": true,
+                        "longTermMemory": false,
+                        "toolResults": false
+                    }
+                },
+                {
+                    "id": "queue",
+                    "type": "QUEUE_PROCESSOR",
+                    "position": {
+                        "x": 560.0,
+                        "y": 200.0
+                    },
+                    "label": "Queue",
+                    "config": {
+                        "systemPrompt": null,
+                        "cloudProvider": null,
+                        "modelPath": null,
+                        "toolName": null,
+                        "clarificationTimeoutMs": null,
+                        "conditionPrompt": null,
+                        "conditionKeywords": null,
+                        "conditionComplexity": null
+                    },
+                    "contextConfig": {
+                        "chatHistory": false,
+                        "originalTask": true,
+                        "nodeInput": true,
+                        "longTermMemory": false,
+                        "toolResults": false
+                    }
+                },
+                {
+                    "id": "cloud",
+                    "type": "CLOUD",
+                    "position": {
+                        "x": 800.0,
+                        "y": 100.0
+                    },
+                    "label": "Researcher",
+                    "config": {
+                        "systemPrompt": "You are a research assistant working on ONE subtask at a time within a larger plan. Today is $DATE. Investigate the current subtask thoroughly and return concrete findings in two or three short paragraphs. Previously completed subtask results, when present, appear above the current subtask — reuse them rather than restarting research.",
+                        "cloudProvider": "auto",
+                        "modelPath": null,
+                        "toolName": null,
+                        "clarificationTimeoutMs": null,
+                        "conditionPrompt": null,
+                        "conditionKeywords": null,
+                        "conditionComplexity": null
+                    },
+                    "contextConfig": {
+                        "chatHistory": false,
+                        "originalTask": true,
+                        "nodeInput": true,
+                        "longTermMemory": false,
+                        "toolResults": false
+                    }
+                },
+                {
+                    "id": "output",
+                    "type": "OUTPUT",
+                    "position": {
+                        "x": 800.0,
+                        "y": 320.0
+                    },
+                    "label": "Reply",
+                    "config": {
+                        "systemPrompt": null,
+                        "cloudProvider": null,
+                        "modelPath": null,
+                        "toolName": null,
+                        "clarificationTimeoutMs": null,
+                        "conditionPrompt": null,
+                        "conditionKeywords": null,
+                        "conditionComplexity": null
+                    },
+                    "contextConfig": {
+                        "chatHistory": true,
+                        "originalTask": true,
+                        "nodeInput": true,
+                        "longTermMemory": true,
+                        "toolResults": true
+                    }
+                }
+            ],
+            "connections": [
+                {
+                    "id": "c1",
+                    "fromNodeId": "input",
+                    "toNodeId": "decomposition",
+                    "label": null
+                },
+                {
+                    "id": "c2",
+                    "fromNodeId": "decomposition",
+                    "toNodeId": "queue",
+                    "label": null
+                },
+                {
+                    "id": "c3",
+                    "fromNodeId": "queue",
+                    "toNodeId": "cloud",
+                    "label": "Item"
+                },
+                {
+                    "id": "c4",
+                    "fromNodeId": "cloud",
+                    "toNodeId": "queue",
+                    "label": null
+                },
+                {
+                    "id": "c5",
+                    "fromNodeId": "queue",
+                    "toNodeId": "output",
+                    "label": "Done"
+                }
+            ]
+        },
+        {
+            "schemaVersion": 1,
+            "id": "clarify_then_act",
+            "name": "Clarify, then act",
+            "description": "Pauses to ask one clarifying question when the request is ambiguous, then answers locally with the disambiguated input. Useful when the user's intent is often underspecified.",
+            "category": "hybrid",
+            "tags": [
+                "clarification",
+                "local",
+                "interactive"
+            ],
+            "updatedAt": 1748304000000,
+            "nodes": [
+                {
+                    "id": "input",
+                    "type": "INPUT",
+                    "position": {
+                        "x": 80.0,
+                        "y": 200.0
+                    },
+                    "label": "Input",
+                    "config": {
+                        "systemPrompt": null,
+                        "cloudProvider": null,
+                        "modelPath": null,
+                        "toolName": null,
+                        "clarificationTimeoutMs": null,
+                        "conditionPrompt": null,
+                        "conditionKeywords": null,
+                        "conditionComplexity": null
+                    },
+                    "contextConfig": {
+                        "chatHistory": false,
+                        "originalTask": false,
+                        "nodeInput": true,
+                        "longTermMemory": false,
+                        "toolResults": false
+                    }
+                },
+                {
+                    "id": "clarify",
+                    "type": "CLARIFICATION",
+                    "position": {
+                        "x": 320.0,
+                        "y": 200.0
+                    },
+                    "label": "Clarify",
+                    "config": {
+                        "systemPrompt": "Inspect the user's request. If anything important is ambiguous, craft ONE concise clarifying question and propose 2-3 short, mutually exclusive options. Today is $DATE. Output STRICTLY valid JSON of shape: {\"question\": \"...\", \"options\": [\"...\", \"...\"]}. If nothing needs clarifying, output an empty options array and a question that confirms intent in one line.",
+                        "cloudProvider": null,
+                        "modelPath": null,
+                        "toolName": null,
+                        "clarificationTimeoutMs": 60000,
+                        "conditionPrompt": null,
+                        "conditionKeywords": null,
+                        "conditionComplexity": null
+                    },
+                    "contextConfig": {
+                        "chatHistory": false,
+                        "originalTask": true,
+                        "nodeInput": true,
+                        "longTermMemory": false,
+                        "toolResults": false
+                    }
+                },
+                {
+                    "id": "lite_rt",
+                    "type": "LITE_RT",
+                    "position": {
+                        "x": 560.0,
+                        "y": 200.0
+                    },
+                    "label": "Local LLM",
+                    "config": {
+                        "systemPrompt": "You are an on-device assistant running on $MODEL. Today is $DATE. The user's clarified request appears below; answer it directly in one or two short paragraphs.",
+                        "cloudProvider": null,
+                        "modelPath": null,
+                        "toolName": null,
+                        "clarificationTimeoutMs": null,
+                        "conditionPrompt": null,
+                        "conditionKeywords": null,
+                        "conditionComplexity": null
+                    },
+                    "contextConfig": {
+                        "chatHistory": false,
+                        "originalTask": true,
+                        "nodeInput": true,
+                        "longTermMemory": false,
+                        "toolResults": false
+                    }
+                },
+                {
+                    "id": "output",
+                    "type": "OUTPUT",
+                    "position": {
+                        "x": 800.0,
+                        "y": 200.0
+                    },
+                    "label": "Reply",
+                    "config": {
+                        "systemPrompt": null,
+                        "cloudProvider": null,
+                        "modelPath": null,
+                        "toolName": null,
+                        "clarificationTimeoutMs": null,
+                        "conditionPrompt": null,
+                        "conditionKeywords": null,
+                        "conditionComplexity": null
+                    },
+                    "contextConfig": {
+                        "chatHistory": true,
+                        "originalTask": true,
+                        "nodeInput": true,
+                        "longTermMemory": true,
+                        "toolResults": true
+                    }
+                }
+            ],
+            "connections": [
+                {
+                    "id": "c1",
+                    "fromNodeId": "input",
+                    "toNodeId": "clarify",
+                    "label": null
+                },
+                {
+                    "id": "c2",
+                    "fromNodeId": "clarify",
+                    "toNodeId": "lite_rt",
+                    "label": null
+                },
+                {
+                    "id": "c3",
+                    "fromNodeId": "lite_rt",
+                    "toNodeId": "output",
+                    "label": null
+                }
+            ]
+        }
+    ];
 
     /* -------------------------------------------------------------------- *
      *  Cloud providers and tool registry
@@ -3098,6 +4261,363 @@
         return 'output_1';
     }
 
+    /* ==================================================================== *
+     *  Pipeline presets (Phase 24 / Task 7)
+     *
+     *  A preset is a `.preset.json` document — a strict superset of the
+     *  pipeline JSON owned by PipelineJsonSerializer, with three extra
+     *  top-level fields (`category`, `tags`, `description`) mirroring
+     *  domain/pipelineio/PipelinePresetJsonSerializer.kt. The "📚 Presets"
+     *  modal exposes the bundled catalogue (BUILTIN_PIPELINE_PRESETS) and a
+     *  per-browser "Mine" catalogue persisted in localStorage.
+     * ==================================================================== */
+    const PIPELINE_PRESETS_STORAGE_KEY = 'pipeline-editor-pipeline-presets';
+
+    /**
+     * Preset categories — mirror ai.agent.android.domain.models.PresetCategory
+     * (key = lower-case enum name). KEEP IN SYNC. See DESCRIPTION.md §8.2.
+     */
+    const PRESET_CATEGORIES = [
+        { key: 'local',    label: 'Local' },
+        { key: 'cloud',    label: 'Cloud' },
+        { key: 'hybrid',   label: 'Hybrid' },
+        { key: 'tool',     label: 'Tool' },
+        { key: 'research', label: 'Research' },
+        { key: 'other',    label: 'Other' },
+    ];
+
+    /** Decodes a category wire key to its label, falling back to "Other". */
+    function presetCategoryLabel(key) {
+        const found = PRESET_CATEGORIES.find(c => c.key === (key || 'other'));
+        return found ? found.label : 'Other';
+    }
+
+    /**
+     * Per-browser, user-managed pipeline-preset catalogue. Same defensive
+     * localStorage pattern as the prompt-template library: a private-mode
+     * browser that throws on access degrades to an empty in-memory list.
+     */
+    function loadUserPipelinePresets() {
+        try {
+            const raw = localStorage.getItem(PIPELINE_PRESETS_STORAGE_KEY);
+            if (!raw) return [];
+            const parsed = JSON.parse(raw);
+            if (!Array.isArray(parsed)) return [];
+            // Keep only documents that at least carry a nodes array — anything
+            // else could not round-trip back onto the canvas.
+            return parsed.filter(p => p && typeof p === 'object' && Array.isArray(p.nodes));
+        } catch (_) {
+            return [];
+        }
+    }
+
+    function saveUserPipelinePresets(list) {
+        try {
+            localStorage.setItem(PIPELINE_PRESETS_STORAGE_KEY, JSON.stringify(list));
+        } catch (_) { /* ignore */ }
+    }
+
+    /** Lower-case kebab slug used for preset ids and `.preset.json` filenames. */
+    function slugifyPresetId(name) {
+        const base = (name || '').toLowerCase().trim()
+            .replace(/[^a-z0-9]+/g, '-')
+            .replace(/^-+|-+$/g, '');
+        return base || 'preset';
+    }
+
+    /**
+     * Builds a `.preset.json` document from the current canvas. Reuses
+     * exportToJson() for the graph half (so it stays in lock-step with the
+     * pipeline schema) and layers the three preset-only fields on top.
+     */
+    function exportToPresetJson(meta) {
+        const doc = exportToJson();
+        if (meta && meta.name) doc.name = meta.name;
+        doc.id = (meta && meta.id) || slugifyPresetId((meta && meta.name) || doc.name);
+        doc.description = (meta && meta.description) || '';
+        doc.category = (meta && meta.category) || 'other';
+        doc.tags = (meta && Array.isArray(meta.tags)) ? meta.tags : [];
+        return doc;
+    }
+
+    /** Downloads a preset document as `<id>.preset.json`. */
+    function downloadPresetJson(doc) {
+        const blob = new Blob([JSON.stringify(doc, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = (doc.id || slugifyPresetId(doc.name)) + '.preset.json';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    }
+
+    /**
+     * Light structural validation for an imported `.preset.json` before it
+     * is stored in the "Mine" catalogue. Mirrors the guards in
+     * importFromJson so a malformed file is rejected cleanly instead of
+     * surfacing later when the user tries to load it onto the canvas.
+     */
+    function parsePresetDoc(text) {
+        let doc;
+        try {
+            doc = JSON.parse(text);
+        } catch (e) {
+            return { error: 'Failed to parse JSON: ' + e.message };
+        }
+        if (!doc || typeof doc !== 'object' || Array.isArray(doc)) {
+            return { error: 'File does not contain a valid JSON document.' };
+        }
+        if (doc.nodes != null && !Array.isArray(doc.nodes)) {
+            return { error: '"nodes" must be an array.' };
+        }
+        if (doc.connections != null && !Array.isArray(doc.connections)) {
+            return { error: '"connections" must be an array.' };
+        }
+        const nodes = doc.nodes || [];
+        for (let i = 0; i < nodes.length; i++) {
+            const n = nodes[i];
+            if (!n || typeof n !== 'object' || Array.isArray(n)) return { error: `nodes[${i}] is not an object.` };
+            if (typeof n.id !== 'string' || !n.id) return { error: `nodes[${i}].id is missing.` };
+            if (typeof n.type !== 'string' || !NODE_TYPE_BY_ID[n.type]) {
+                return { error: `nodes[${i}] has unknown type "${n.type}".` };
+            }
+        }
+        return { doc };
+    }
+
+    /**
+     * Shows the schema-version mismatch confirmation for an imported preset.
+     * Returns true to proceed. (The canvas-load path relies on
+     * importFromJson's own mismatch dialog instead, to avoid a double
+     * prompt.)
+     */
+    function confirmPresetSchema(doc) {
+        if (doc.schemaVersion === CURRENT_SCHEMA_VERSION) return true;
+        const newer = typeof doc.schemaVersion === 'number' && doc.schemaVersion > CURRENT_SCHEMA_VERSION;
+        return confirm(
+            `This preset was created by a ${newer ? 'newer' : 'different'} editor version ` +
+            `(schemaVersion=${doc.schemaVersion}, expected ${CURRENT_SCHEMA_VERSION}). ` +
+            `Some configuration may not round-trip cleanly. Import anyway?`,
+        );
+    }
+
+    /* ---- Modal wiring ---- */
+    const presetDialog = document.getElementById('preset-library');
+    const presetSaveDialog = document.getElementById('preset-save');
+    const presetBtn = document.getElementById('btn-presets');
+    const fileImportPresetInput = document.getElementById('file-import-preset');
+    let presetActiveTab = 'bundled';
+
+    /** Builds one preset card (name, category badge, description, tags, actions). */
+    function renderPresetCard(doc, isMine, index) {
+        const card = document.createElement('div');
+        card.className = 'preset-card';
+
+        const head = document.createElement('div');
+        head.className = 'preset-card-head';
+        const nameEl = document.createElement('span');
+        nameEl.className = 'preset-card-name';
+        nameEl.textContent = doc.name || 'Untitled preset';
+        const badge = document.createElement('span');
+        badge.className = 'preset-badge';
+        badge.textContent = presetCategoryLabel(doc.category);
+        head.appendChild(nameEl);
+        head.appendChild(badge);
+        card.appendChild(head);
+
+        if (doc.description) {
+            const desc = document.createElement('p');
+            desc.className = 'preset-card-desc';
+            desc.textContent = doc.description;
+            card.appendChild(desc);
+        }
+
+        const tags = Array.isArray(doc.tags) ? doc.tags : [];
+        if (tags.length) {
+            const tagsRow = document.createElement('div');
+            tagsRow.className = 'preset-tags';
+            tags.forEach(tg => {
+                const t = document.createElement('span');
+                t.className = 'preset-tag';
+                t.textContent = tg;
+                tagsRow.appendChild(t);
+            });
+            card.appendChild(tagsRow);
+        }
+
+        const actions = document.createElement('div');
+        actions.className = 'preset-card-actions';
+
+        const loadBtn = document.createElement('button');
+        loadBtn.type = 'button';
+        loadBtn.className = 'primary';
+        loadBtn.textContent = 'Load';
+        loadBtn.addEventListener('click', () => loadPresetOntoCanvas(doc));
+        actions.appendChild(loadBtn);
+
+        const exportRowBtn = document.createElement('button');
+        exportRowBtn.type = 'button';
+        exportRowBtn.textContent = 'Export';
+        exportRowBtn.addEventListener('click', () => downloadPresetJson(doc));
+        actions.appendChild(exportRowBtn);
+
+        if (isMine) {
+            const delBtn = document.createElement('button');
+            delBtn.type = 'button';
+            delBtn.className = 'danger';
+            delBtn.textContent = 'Delete';
+            delBtn.addEventListener('click', () => deleteUserPreset(index));
+            actions.appendChild(delBtn);
+        }
+        card.appendChild(actions);
+        return card;
+    }
+
+    /** Re-renders the active tab's list and reflects the tab selection. */
+    function renderPresetList() {
+        presetDialog.querySelectorAll('.preset-tab').forEach(t => {
+            t.classList.toggle('is-active', t.dataset.tab === presetActiveTab);
+        });
+        const list = presetDialog.querySelector('[data-role="list"]');
+        list.innerHTML = '';
+        const isMine = presetActiveTab === 'mine';
+        const items = isMine ? loadUserPipelinePresets() : BUILTIN_PIPELINE_PRESETS;
+        if (!items.length) {
+            const empty = document.createElement('div');
+            empty.className = 'preset-empty';
+            empty.textContent = isMine
+                ? 'No saved presets yet. Build a graph and tap "Save canvas as preset…", or import a .preset.json file.'
+                : 'No bundled presets available.';
+            list.appendChild(empty);
+            return;
+        }
+        items.forEach((doc, index) => list.appendChild(renderPresetCard(doc, isMine, index)));
+    }
+
+    function openPresetLibrary() {
+        renderPresetList();
+        presetDialog.showModal();
+    }
+
+    /**
+     * Instantiates a preset onto the canvas. We strip the `id` so
+     * importFromJson mints a fresh pipeline id (mirroring how Android
+     * regenerates ids when materialising a preset), then delegate to
+     * importFromJson for the graph rebuild, name restore and schema-mismatch
+     * dialog.
+     */
+    function loadPresetOntoCanvas(doc) {
+        presetDialog.close();
+        importFromJson(Object.assign({}, doc, { id: undefined }));
+    }
+
+    function deleteUserPreset(index) {
+        const list = loadUserPipelinePresets();
+        if (index < 0 || index >= list.length) return;
+        const name = list[index].name || 'this preset';
+        if (!confirm(`Delete preset "${name}"? This cannot be undone.`)) return;
+        list.splice(index, 1);
+        saveUserPipelinePresets(list);
+        renderPresetList();
+    }
+
+    /* ---- Import preset → "Mine" (non-destructive; never touches canvas) ---- */
+    fileImportPresetInput.addEventListener('change', e => {
+        const file = e.target.files && e.target.files[0];
+        if (!file) return;
+        fileImportPresetInput.value = '';
+        const reader = new FileReader();
+        reader.onload = () => {
+            const res = parsePresetDoc(reader.result);
+            if (res.error) {
+                alert('Failed to import preset: ' + res.error);
+                return;
+            }
+            if (!confirmPresetSchema(res.doc)) return;
+            const list = loadUserPipelinePresets();
+            list.unshift(Object.assign({}, res.doc, {
+                id: res.doc.id || generateUuid(),
+                savedAt: Date.now(),
+            }));
+            saveUserPipelinePresets(list);
+            presetActiveTab = 'mine';
+            renderPresetList();
+        };
+        reader.onerror = () => alert('Failed to read file.');
+        reader.readAsText(file);
+    });
+
+    /* ---- Save canvas as preset ---- */
+    function openSavePresetDialog() {
+        if (validateGraph().errors.length > 0) {
+            alert('Fix the validation errors before saving this graph as a preset.');
+            return;
+        }
+        const sel = document.getElementById('preset-save-category');
+        if (!sel.options.length) {
+            PRESET_CATEGORIES.forEach(c => {
+                const o = document.createElement('option');
+                o.value = c.key;
+                o.textContent = c.label;
+                sel.appendChild(o);
+            });
+        }
+        document.getElementById('preset-save-name').value = (nameInput.value || '').trim();
+        document.getElementById('preset-save-tags').value = '';
+        document.getElementById('preset-save-description').value = '';
+        sel.value = 'other';
+        const err = presetSaveDialog.querySelector('[data-role="error"]');
+        err.hidden = true;
+        err.textContent = '';
+        presetSaveDialog.showModal();
+    }
+
+    function commitSavePreset() {
+        const err = presetSaveDialog.querySelector('[data-role="error"]');
+        const name = (document.getElementById('preset-save-name').value || '').trim();
+        if (!name) {
+            err.textContent = 'Name is required.';
+            err.hidden = false;
+            return;
+        }
+        // 60-char cap matches MAX_NAME_LENGTH in the Android save use-cases.
+        if (name.length > 60) {
+            err.textContent = 'Name must be 60 characters or fewer.';
+            err.hidden = false;
+            return;
+        }
+        const tags = (document.getElementById('preset-save-tags').value || '')
+            .split(',').map(t => t.trim()).filter(Boolean);
+        const doc = exportToPresetJson({
+            id: generateUuid(),
+            name,
+            category: document.getElementById('preset-save-category').value || 'other',
+            tags,
+            description: (document.getElementById('preset-save-description').value || '').trim(),
+        });
+        const list = loadUserPipelinePresets();
+        list.unshift(Object.assign({}, doc, { savedAt: Date.now() }));
+        saveUserPipelinePresets(list);
+        presetSaveDialog.close();
+        presetActiveTab = 'mine';
+        renderPresetList();
+    }
+
+    presetBtn.addEventListener('click', openPresetLibrary);
+    presetDialog.querySelector('[data-role="close"]').addEventListener('click', () => presetDialog.close());
+    presetDialog.querySelectorAll('.preset-tab').forEach(t => {
+        t.addEventListener('click', () => {
+            presetActiveTab = t.dataset.tab;
+            renderPresetList();
+        });
+    });
+    presetDialog.querySelector('[data-role="import"]').addEventListener('click', () => fileImportPresetInput.click());
+    presetDialog.querySelector('[data-role="save-current"]').addEventListener('click', openSavePresetDialog);
+    presetSaveDialog.querySelector('[data-role="cancel"]').addEventListener('click', () => presetSaveDialog.close());
+    presetSaveDialog.querySelector('[data-role="confirm"]').addEventListener('click', commitSavePreset);
+
     // Re-validation on dialog save and on undo/redo lives inside the
     // original commitDialog / applySnapshot bodies (see below) — function
     // declarations are hoisted so they can call runValidation() defined
@@ -3114,6 +4634,9 @@
     window.__validate = validateGraph;
     window.__exportJson = exportToJson;
     window.__importJson = importFromJson;
+    window.__exportPresetJson = exportToPresetJson;
+    window.__pipelinePresets = BUILTIN_PIPELINE_PRESETS;
+    window.__openPresetLibrary = openPresetLibrary;
 </script>
 </body>
 </html>
