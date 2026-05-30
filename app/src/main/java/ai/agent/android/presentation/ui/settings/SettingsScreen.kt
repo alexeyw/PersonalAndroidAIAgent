@@ -508,14 +508,18 @@ private fun memoryParamSliders(uiState: SettingsUiState, locale: Locale): List<M
         value = uiState.maxMemoryChunks,
         min = SettingsDefaults.MAX_MEMORY_CHUNKS_MIN,
         max = SettingsDefaults.MAX_MEMORY_CHUNKS_MAX,
-        steps = MAX_CHUNKS_SLIDER_STEPS,
     ),
 )
 
 /**
  * Builds an integer-valued memory tuning slider. The range is `[min, max]`
- * mapped onto floats; [steps] defaults to one discrete stop per unit so the
- * slider snaps to whole values, and is overridden for the coarse max-chunks row.
+ * mapped onto floats and the slider is kept **continuous** (`steps = 0`):
+ * `onMemoryParamChange` rounds the dragged float back to an `Int` before it
+ * reaches the setter, which gives whole-number increments at the user's drag
+ * resolution without asking Material3 to allocate one tick composable per
+ * integer (a `steps = max - min - 1` slider over a wide range — e.g. the
+ * 1 000..20 000 max-chunks span — would freeze the main thread; see the same
+ * note on `NodeConfigForms`' integer slider).
  */
 private fun intMemoryParam(
     id: String,
@@ -524,14 +528,13 @@ private fun intMemoryParam(
     value: Int,
     min: Int,
     max: Int,
-    steps: Int = max - min - 1,
 ): MemoryParamSlider = MemoryParamSlider(
     id = id,
     title = title,
     valueLabel = valueLabel,
     value = value.toFloat(),
     valueRange = min.toFloat()..max.toFloat(),
-    steps = steps,
+    steps = 0,
 )
 
 /**
@@ -679,11 +682,3 @@ private const val MEMORY_PARAM_THRESHOLD = "memory_threshold"
 private const val MEMORY_PARAM_HALF_LIFE = "memory_half_life"
 private const val MEMORY_PARAM_COMPACTION_AGE = "memory_compaction_age"
 private const val MEMORY_PARAM_MAX_CHUNKS = "memory_max_chunks"
-
-/**
- * Discrete steps for the max-chunks slider: 1 000-chunk increments across the
- * `[MIN, MAX]` span. `steps` counts the intermediate stops, so it is the number
- * of 1 000-chunk intervals minus one.
- */
-private const val MAX_CHUNKS_SLIDER_STEPS =
-    (SettingsDefaults.MAX_MEMORY_CHUNKS_MAX - SettingsDefaults.MAX_MEMORY_CHUNKS_MIN) / 1_000 - 1

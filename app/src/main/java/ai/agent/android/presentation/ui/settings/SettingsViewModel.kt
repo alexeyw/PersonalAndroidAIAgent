@@ -786,8 +786,26 @@ class SettingsViewModel @Inject constructor(
             settingsRepository.setAutoSummarizeThreshold(SettingsDefaults.AUTO_SUMMARIZE_THRESHOLD_DEFAULT)
             settingsRepository.setLongRunningTaskNotificationsEnabled(true)
             settingsRepository.setSystemPromptPrefix("")
+            resetMemoryTuningDefaults()
             emitSnackbar(appContext.getString(R.string.settings_reset_button))
         }
+    }
+
+    /**
+     * Restores every Settings → Memory tuning control to its documented default
+     * so "Reset settings" reverts the whole Memory card (not just the sampling
+     * sliders). Mirrors the bounds-free defaults in [SettingsDefaults]; the
+     * embedding provider returns to the on-device USE default.
+     */
+    private suspend fun resetMemoryTuningDefaults() {
+        settingsRepository.setAutoExtractEnabled(SettingsDefaults.AUTO_EXTRACT_ENABLED_DEFAULT)
+        settingsRepository.setMemorySearchTopK(SettingsDefaults.MEMORY_SEARCH_TOP_K_DEFAULT)
+        settingsRepository.setMemorySearchThreshold(SettingsDefaults.MEMORY_SEARCH_THRESHOLD_DEFAULT)
+        settingsRepository.setMemoryRecencyHalfLifeDays(SettingsDefaults.MEMORY_RECENCY_HALF_LIFE_DAYS_DEFAULT)
+        settingsRepository.setMemoryCompactionEnabled(SettingsDefaults.MEMORY_COMPACTION_ENABLED_DEFAULT)
+        settingsRepository.setMemoryCompactionAgeDays(SettingsDefaults.MEMORY_COMPACTION_AGE_DAYS_DEFAULT)
+        settingsRepository.setMaxMemoryChunks(SettingsDefaults.MAX_MEMORY_CHUNKS_DEFAULT)
+        settingsRepository.setActiveEmbeddingProviderId(SettingsDefaults.ACTIVE_EMBEDDING_PROVIDER_ID_DEFAULT)
     }
 
     // ─── Notifications + privacy ─────────────────────────────────────────

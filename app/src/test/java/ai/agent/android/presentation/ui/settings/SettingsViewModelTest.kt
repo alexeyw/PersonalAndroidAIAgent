@@ -471,6 +471,24 @@ class SettingsViewModelTest {
     }
 
     @Test
+    fun `confirmDestructive ResetSettings also reverts memory tuning to defaults`() = runTest {
+        every { context.getString(ai.agent.android.R.string.settings_destructive_typed_keyword) } returns "yes"
+        advanceUntilIdle()
+        viewModel.stageResetSettings()
+        viewModel.updateDestructiveTypedInput("yes")
+        viewModel.confirmDestructive()
+        advanceUntilIdle()
+        coVerify { settings.setAutoExtractEnabled(SettingsDefaults.AUTO_EXTRACT_ENABLED_DEFAULT) }
+        coVerify { settings.setMemorySearchTopK(SettingsDefaults.MEMORY_SEARCH_TOP_K_DEFAULT) }
+        coVerify { settings.setMemorySearchThreshold(SettingsDefaults.MEMORY_SEARCH_THRESHOLD_DEFAULT) }
+        coVerify { settings.setMemoryRecencyHalfLifeDays(SettingsDefaults.MEMORY_RECENCY_HALF_LIFE_DAYS_DEFAULT) }
+        coVerify { settings.setMemoryCompactionEnabled(SettingsDefaults.MEMORY_COMPACTION_ENABLED_DEFAULT) }
+        coVerify { settings.setMemoryCompactionAgeDays(SettingsDefaults.MEMORY_COMPACTION_AGE_DAYS_DEFAULT) }
+        coVerify { settings.setMaxMemoryChunks(SettingsDefaults.MAX_MEMORY_CHUNKS_DEFAULT) }
+        coVerify { settings.setActiveEmbeddingProviderId(SettingsDefaults.ACTIVE_EMBEDDING_PROVIDER_ID_DEFAULT) }
+    }
+
+    @Test
     fun `cancelDestructive clears pending state`() = runTest {
         advanceUntilIdle()
         viewModel.stageClearMemory()
