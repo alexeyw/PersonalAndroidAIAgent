@@ -134,8 +134,9 @@ object MemoryJsonSerializer {
         for (i in 0 until chunksJson.length()) {
             val chunkJson = chunksJson.optJSONObject(i)
                 ?: return MemoryImportOutcome.Failure("Malformed chunk at index $i")
-            val chunk = parseChunk(chunkJson, i) ?: return MemoryImportOutcome.Failure(
-                "Chunk at index $i is missing a required field (text / embedding / timestamp)",
+            val chunk = parseChunk(chunkJson) ?: return MemoryImportOutcome.Failure(
+                "Chunk at index $i has a missing or malformed required field " +
+                    "(text / embedding / timestamp); embedding must be a non-empty array of finite numbers",
             )
             chunks.add(chunk)
         }
@@ -157,15 +158,25 @@ object MemoryJsonSerializer {
     }
 
     /**
-     * Parses a single chunk object. Returns `null` when a required field
-     * (`text`, `embedding`, or `timestamp`) is absent so the caller can fail
-     * the whole import with an index-tagged message.
+     * Parses a single chunk object, returning `null` (so the caller fails the
+     * whole import with an index-tagged message) when:
+     *  - a required field (`text`, `embedding`, `timestamp`) is absent; or
+     *  - the embedding is not a non-empty array of finite numbers. A blank
+     *    embedding would serialise to a zero-length vector that reads back as a
+     *    dropped row, and a non-numeric entry would become `NaN` and poison
+     *    cosine similarity — both are rejected up front rather than stored.
      */
-    private fun parseChunk(json: JSONObject, index: Int): MemoryChunk? {
+    private fun parseChunk(json: JSONObject): MemoryChunk? {
         if (!json.has(KEY_TEXT) || !json.has(KEY_EMBEDDING) || !json.has(KEY_TIMESTAMP)) return null
         val text = json.optString(KEY_TEXT)
         val embeddingJson = json.optJSONArray(KEY_EMBEDDING) ?: return null
-        val embedding = FloatArray(embeddingJson.length()) { idx -> embeddingJson.optDouble(idx).toFloat() }
+        if (embeddingJson.length() == 0) return null
+        val embedding = FloatArray(embeddingJson.length())
+        for (idx in 0 until embeddingJson.length()) {
+            val value = embeddingJson.optDouble(idx, Double.NaN)
+            if (value.isNaN() || value.isInfinite()) return null
+            embedding[idx] = value.toFloat()
+        }
         val timestamp = json.optLong(KEY_TIMESTAMP)
         val tagsJson = json.optJSONArray(KEY_TAGS)
         val tags = if (tagsJson == null) {
@@ -174,10 +185,11 @@ object MemoryJsonSerializer {
             (0 until tagsJson.length()).mapNotNull { idx -> tagsJson.optString(idx).takeIf { it.isNotBlank() } }
         }
         return MemoryChunk(
-            // Default to a synthetic negative id only when none was stored; the
-            // import use case re-keys on insert anyway, but a stable id lets the
-            // Merge strategy dedupe against existing rows.
-            id = json.optLong(KEY_ID, index.toLong()),
+            // A missing id defaults to 0 so Room auto-assigns a fresh primary key
+            // on insert; an explicit positive id would collide with existing
+            // auto-increment rows (silently dropped by the Merge dedupe filter or
+            // overwritten under Replace's REPLACE-on-conflict).
+            id = json.optLong(KEY_ID, 0L),
             text = text,
             embedding = embedding,
             timestamp = timestamp,

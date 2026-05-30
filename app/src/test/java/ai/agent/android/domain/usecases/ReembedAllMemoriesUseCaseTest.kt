@@ -30,7 +30,7 @@ class ReembedAllMemoriesUseCaseTest {
 
         val emissions = ReembedAllMemoriesUseCase(repo, resolver)().toList()
         assertEquals(listOf(0f, 0.5f, 1f), emissions)
-        coVerify(exactly = 2) { repo.updateMemory(any(), any(), any()) }
+        coVerify(exactly = 2) { repo.markMemoryReembedded(any(), any()) }
     }
 
     @Test
@@ -68,7 +68,7 @@ class ReembedAllMemoriesUseCaseTest {
 
         // Progress still reaches 1f; the failed chunk is simply not written.
         assertEquals(listOf(0f, 1f), emissions)
-        coVerify(exactly = 0) { repo.updateMemory(any(), any(), any()) }
+        coVerify(exactly = 0) { repo.markMemoryReembedded(any(), any()) }
     }
 
     @Test
@@ -92,7 +92,7 @@ class ReembedAllMemoriesUseCaseTest {
 
         // CancellationException must not be swallowed by runCatching.
         assertTrue("Expected CancellationException to propagate", thrown is CancellationException)
-        coVerify(exactly = 0) { repo.updateMemory(any(), any(), any()) }
+        coVerify(exactly = 0) { repo.markMemoryReembedded(any(), any()) }
     }
 
     @Test

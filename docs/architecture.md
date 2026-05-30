@@ -206,14 +206,24 @@ uses, so the on-disk encoding and the column stay identical.
 Import (`MemoryImportUseCase`) parses the file (`Success` /
 `SchemaMismatch` / `Failure`) and reconciles it under a user-chosen
 strategy: **Merge** (insert only ids not already present) or **Replace**
-(wipe then load), preserving each chunk's id, provenance, pin state and
-tags. When the document's embedding provider differs from the importing
+(an atomic wipe-and-load, a no-op when the document carries no chunks),
+preserving each chunk's id, provenance, pin state and tags. The parser
+rejects chunks with a malformed embedding (empty array / non-finite
+value) so a corrupt vector never reaches the store.
+
+When the document's embedding provider differs from the importing
 device's active provider the inserted vectors live in an incompatible
-space, so each chunk is flagged `needsReembedding`. The next retrieval
-calls `RecomputePendingEmbeddingsUseCase` (gated by a cheap `COUNT`),
-which batch-embeds the pending chunks' text with the active provider and
-clears the flag — so transferred memories become findable lazily, on
-first use, without a manual re-embed pass.
+space, so each chunk is flagged `needsReembedding` and the import
+schedules a background pass through the `MemoryReembedScheduler` domain
+seam. `MemoryReembedWorker` (a WorkManager `@HiltWorker`, mirroring
+`MemoryCompactionWorker`) then runs `RecomputePendingEmbeddingsUseCase`
+off the hot path — batch-embedding the pending chunks with the active
+provider and clearing the flag — with WorkManager retry/backoff if the
+provider is temporarily unavailable. Retrieval never blocks on this; it
+simply tolerates the not-yet-repaired chunks (whose cross-space vectors
+score ~0) until the worker finishes. The manual *Settings → Memory →
+Re-embed* action shares the same flag-clearing write so the two repair
+paths converge.
 
 ---
 

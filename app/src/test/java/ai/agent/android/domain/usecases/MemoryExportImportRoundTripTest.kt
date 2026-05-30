@@ -10,6 +10,7 @@ import ai.agent.android.domain.models.MemorySummary
 import ai.agent.android.domain.repositories.MemoryRepository
 import ai.agent.android.domain.repositories.SettingsRepository
 import ai.agent.android.domain.services.EmbeddingProvider
+import ai.agent.android.domain.services.MemoryReembedScheduler
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.flow.Flow
@@ -28,6 +29,8 @@ import java.io.ByteArrayOutputStream
  * strategy, and the id/provenance preservation all compose.
  */
 class MemoryExportImportRoundTripTest {
+
+    private val scheduler = mockk<MemoryReembedScheduler>(relaxed = true)
 
     @Test
     fun `export then wipe then import Replace reproduces the original store`() = runTest {
@@ -55,7 +58,7 @@ class MemoryExportImportRoundTripTest {
         val settings = mockk<SettingsRepository>()
         every { settings.activeEmbeddingProviderId } returns flowOf(EmbeddingProvider.ID_USE)
         val export = ExportMemoryBaseUseCase(store, settings)
-        val importUseCase = MemoryImportUseCase(store)
+        val importUseCase = MemoryImportUseCase(store, scheduler)
 
         val out = ByteArrayOutputStream()
         export(out)
@@ -88,9 +91,7 @@ class MemoryExportImportRoundTripTest {
             MemoryChunk(id = 2, text = "fresh", embedding = floatArrayOf(0.2f), timestamp = 2L),
         )
 
-        val settings = mockk<SettingsRepository>()
-        every { settings.activeEmbeddingProviderId } returns flowOf(EmbeddingProvider.ID_USE)
-        val importUseCase = MemoryImportUseCase(store)
+        val importUseCase = MemoryImportUseCase(store, scheduler)
         val document = MemoryExportDocument(EmbeddingProvider.ID_USE, 0L, incoming)
 
         val result = importUseCase.import(document, MemoryImportStrategy.Merge, EmbeddingProvider.ID_USE)
@@ -121,6 +122,11 @@ private class InMemoryMemoryStore : MemoryRepository {
     override suspend fun getExistingMemoryIds(): Set<Long> = rows.map { it.id }.toSet()
 
     override suspend fun insertImportedMemories(chunks: List<MemoryChunk>, needsReembedding: Boolean) {
+        rows.addAll(chunks)
+    }
+
+    override suspend fun replaceImportedMemories(chunks: List<MemoryChunk>, needsReembedding: Boolean) {
+        rows.clear()
         rows.addAll(chunks)
     }
 
@@ -161,8 +167,6 @@ private class InMemoryMemoryStore : MemoryRepository {
     override suspend fun setMemoryTags(id: Long, tags: List<String>) = throw NotImplementedError()
 
     override suspend fun recordUsage(ids: List<Long>, atMillis: Long) = throw NotImplementedError()
-
-    override suspend fun countMemoriesNeedingReembedding(): Int = rows.size
 
     override suspend fun getMemoriesNeedingReembedding(): List<MemoryChunk> = throw NotImplementedError()
 

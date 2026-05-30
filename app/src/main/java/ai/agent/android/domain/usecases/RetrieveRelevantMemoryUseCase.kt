@@ -44,17 +44,12 @@ import javax.inject.Inject
  *   the raw search hits.
  * @property settingsRepository Source of the default top-K / threshold /
  *   recency half-life when the caller does not override them.
- * @property recomputePendingEmbeddings Repairs chunks imported under a different
- *   embedding provider before the search runs, so freshly-imported memories
- *   become findable on the first retrieval. A no-op (one cheap `COUNT`) when
- *   nothing is pending.
  */
 class RetrieveRelevantMemoryUseCase @Inject constructor(
     private val embeddingProviderResolver: EmbeddingProviderResolver,
     private val memoryRepository: MemoryRepository,
     private val memoryReranker: MemoryReranker,
     private val settingsRepository: SettingsRepository,
-    private val recomputePendingEmbeddings: RecomputePendingEmbeddingsUseCase,
 ) {
     /**
      * Executes the retrieval process.
@@ -97,11 +92,10 @@ class RetrieveRelevantMemoryUseCase @Inject constructor(
         limit: Int? = null,
         threshold: Float? = null,
     ): List<Pair<MemoryChunk, Float>> = withContext(Dispatchers.Default) {
-        // Repair any chunks imported under a different provider before searching,
-        // so they share the active provider's embedding space (cheap no-op when
-        // nothing is pending). Without this, imported memories would be invisible
-        // until an explicit re-embed.
-        recomputePendingEmbeddings()
+        // Chunks imported under a different provider are repaired off the hot
+        // path by MemoryReembedWorker (scheduled at import time); retrieval just
+        // tolerates not-yet-repaired chunks (their cross-space vectors score ~0)
+        // rather than blocking here on a potentially large re-embed.
 
         // Embed the query with the user's active provider so it shares the
         // stored chunks' embedding space.

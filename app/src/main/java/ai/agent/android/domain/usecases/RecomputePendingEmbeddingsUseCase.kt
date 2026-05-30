@@ -9,25 +9,26 @@ import timber.log.Timber
 import javax.inject.Inject
 
 /**
- * Re-embeds the memory chunks that were imported under a different embedding
- * provider, repairing their vector space lazily on the next retrieval.
+ * Re-embeds the memory chunks flagged `needsReembedding` (those imported under a
+ * different embedding provider) with the active provider, so their stored
+ * vectors re-enter the active embedding space and become retrievable.
  *
- * The memory import flow flags every chunk it loads under a mismatched provider
- * with `needsReembedding`; until repaired their stored vectors live in an
- * incompatible space and can never match a query (cross-dimension cosine
- * similarity collapses to `0`). [RetrieveRelevantMemoryUseCase] invokes this
- * use case before each search so the imported memories become findable the
- * first time the user asks for something — the "re-computed lazily on first
- * retrieval" contract surfaced in the import warning.
+ * This runs **off the hot path**, driven by a background WorkManager job
+ * ([ai.agent.android.data.services.MemoryReembedWorker]) that an import schedules
+ * via [ai.agent.android.domain.services.MemoryReembedScheduler]. Retrieval never
+ * calls it directly, so a large or temporarily-failing repair can never stall a
+ * pipeline run or a search keystroke.
  *
- * The common path is cheap: a single `COUNT` short-circuits when nothing is
- * pending. When chunks do need repair, their texts are embedded in one batch
- * call with the active provider, then each fresh vector is written back and the
- * flag cleared. Per-chunk failures are logged and skipped so one bad row never
- * aborts a retrieval; cancellation is propagated.
+ * Failure handling is split deliberately:
+ *  - a **batch-embed failure** (provider offline, etc.) propagates so the worker
+ *    can return `Result.retry()` and let WorkManager back off and re-attempt —
+ *    the chunks stay flagged and are repaired on a later run rather than silently
+ *    abandoned;
+ *  - a **per-chunk persist failure** is logged and skipped so one bad row does
+ *    not abort the rest of the batch.
  *
- * @property memoryRepository Backing store exposing the pending-chunk queries
- *   and the write-back.
+ * @property memoryRepository Backing store exposing the pending-chunk query and
+ *   the per-chunk write-back.
  * @property embeddingProviderResolver Resolves the user's active embedding
  *   provider (with graceful on-device fallback).
  */
@@ -36,26 +37,20 @@ class RecomputePendingEmbeddingsUseCase @Inject constructor(
     private val embeddingProviderResolver: EmbeddingProviderResolver,
 ) {
     /**
-     * Repairs every pending chunk, or returns immediately when none are
-     * flagged. Safe to call on every retrieval.
+     * Repairs every pending chunk in one batch. A no-op when none are flagged.
      *
      * @return The number of chunks successfully re-embedded.
+     * @throws ai.agent.android.domain.services.EmbeddingException if the batch
+     *   embedding call fails (propagated so the caller can retry).
      */
     suspend operator fun invoke(): Int = withContext(Dispatchers.IO) {
-        if (memoryRepository.countMemoriesNeedingReembedding() == 0) return@withContext 0
-
         val pending = memoryRepository.getMemoriesNeedingReembedding()
         if (pending.isEmpty()) return@withContext 0
 
         val provider = embeddingProviderResolver.resolve()
-        val embeddings = try {
-            provider.embed(pending.map { it.text })
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            Timber.w(e, "Batch re-embedding of %d imported chunks failed", pending.size)
-            return@withContext 0
-        }
+        // Let a batch-embed failure propagate: the worker turns it into a
+        // backed-off retry, leaving the chunks flagged for a later attempt.
+        val embeddings = provider.embed(pending.map { it.text })
 
         var repaired = 0
         pending.forEachIndexed { index, chunk ->

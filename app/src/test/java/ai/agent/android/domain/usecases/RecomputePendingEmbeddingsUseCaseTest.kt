@@ -15,8 +15,8 @@ import org.junit.Before
 import org.junit.Test
 
 /**
- * Unit tests for [RecomputePendingEmbeddingsUseCase] — the lazy re-embedding of
- * chunks imported under a different provider.
+ * Unit tests for [RecomputePendingEmbeddingsUseCase] — the background re-embed
+ * pass run by the worker.
  */
 class RecomputePendingEmbeddingsUseCaseTest {
 
@@ -40,19 +40,17 @@ class RecomputePendingEmbeddingsUseCaseTest {
 
     @Test
     fun `returns zero without touching the provider when nothing is pending`() = runTest {
-        coEvery { repository.countMemoriesNeedingReembedding() } returns 0
+        coEvery { repository.getMemoriesNeedingReembedding() } returns emptyList()
 
         val repaired = useCase()
 
         assertEquals(0, repaired)
         coVerify(exactly = 0) { resolver.resolve() }
-        coVerify(exactly = 0) { repository.getMemoriesNeedingReembedding() }
     }
 
     @Test
     fun `batch-embeds pending chunks and clears their flags`() = runTest {
         val pending = listOf(chunk(1, "alpha"), chunk(2, "beta"))
-        coEvery { repository.countMemoriesNeedingReembedding() } returns 2
         coEvery { repository.getMemoriesNeedingReembedding() } returns pending
         val fresh = listOf(floatArrayOf(1f, 1f), floatArrayOf(2f, 2f))
         coEvery { provider.embed(listOf("alpha", "beta")) } returns fresh
@@ -66,14 +64,18 @@ class RecomputePendingEmbeddingsUseCaseTest {
     }
 
     @Test
-    fun `returns zero when the batch embedding fails`() = runTest {
-        coEvery { repository.countMemoriesNeedingReembedding() } returns 1
+    fun `propagates the batch embedding failure so the worker can retry`() = runTest {
         coEvery { repository.getMemoriesNeedingReembedding() } returns listOf(chunk(1, "alpha"))
         coEvery { provider.embed(any<List<String>>()) } throws RuntimeException("offline")
 
-        val repaired = useCase()
+        var thrown: Throwable? = null
+        try {
+            useCase()
+        } catch (e: RuntimeException) {
+            thrown = e
+        }
 
-        assertEquals(0, repaired)
+        assertEquals("offline", thrown?.message)
         coVerify(exactly = 0) { repository.markMemoryReembedded(any(), any()) }
     }
 }

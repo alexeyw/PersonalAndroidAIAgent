@@ -242,10 +242,24 @@ class MemoryRepositoryImplTest {
     }
 
     @Test
-    fun `countMemoriesNeedingReembedding forwards to dao`() = kotlinx.coroutines.test.runTest {
-        io.mockk.coEvery { memoryDao.countNeedingReembedding() } returns 4
+    fun `replaceImportedMemories maps chunks and forwards to dao replaceAll`() = kotlinx.coroutines.test.runTest {
+        val captured = io.mockk.slot<List<MemoryChunkEntity>>()
+        io.mockk.coEvery { memoryDao.replaceAll(capture(captured)) } returns Unit
+        val chunk = MemoryChunk(
+            id = 5,
+            text = "replace me",
+            embedding = floatArrayOf(0.3f),
+            timestamp = 7L,
+            source = MemorySource.ChatSession("s"),
+        )
 
-        assertEquals(4, repository.countMemoriesNeedingReembedding())
+        repository.replaceImportedMemories(listOf(chunk), needsReembedding = false)
+
+        val entity = captured.captured.single()
+        assertEquals(5L, entity.id)
+        assertEquals("replace me", entity.text)
+        assertEquals(MemorySource.ChatSession("s"), entity.source)
+        assertEquals(false, entity.needsReembedding)
     }
 
     @Test

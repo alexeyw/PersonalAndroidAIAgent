@@ -51,7 +51,13 @@ class ReembedAllMemoriesUseCase @Inject constructor(
         memories.forEachIndexed { index, memory ->
             runCatching { provider.embed(memory.text) }
                 .onSuccess { embedding ->
-                    memoryRepository.updateMemory(memory.id, memory.text, embedding)
+                    // markMemoryReembedded (not updateMemory) so this manual pass
+                    // also clears any `needsReembedding` flag left by an import
+                    // under a different provider — otherwise the two repair paths
+                    // diverge and the background worker would re-embed these rows
+                    // again. The text is unchanged by a re-embed, so only the
+                    // vector needs writing.
+                    memoryRepository.markMemoryReembedded(memory.id, embedding)
                 }
                 .onFailure { error ->
                     // runCatching also traps CancellationException; rethrow it so

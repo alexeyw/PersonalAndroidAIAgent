@@ -107,6 +107,35 @@ class MemoryJsonSerializerTest {
     }
 
     @Test
+    fun `parse rejects an empty embedding array`() {
+        val json = """
+            {"schemaVersion":1,"embeddingProviderId":"use","exportedAt":0,
+             "chunks":[{"id":1,"text":"x","embedding":[],"timestamp":5}]}
+        """.trimIndent()
+        assertTrue(MemoryJsonSerializer.parse(json) is MemoryImportOutcome.Failure)
+    }
+
+    @Test
+    fun `parse rejects a non-numeric embedding entry`() {
+        val json = """
+            {"schemaVersion":1,"embeddingProviderId":"use","exportedAt":0,
+             "chunks":[{"id":1,"text":"x","embedding":[0.1,"oops",0.2],"timestamp":5}]}
+        """.trimIndent()
+        assertTrue(MemoryJsonSerializer.parse(json) is MemoryImportOutcome.Failure)
+    }
+
+    @Test
+    fun `parse defaults a missing id to zero so Room assigns a fresh key`() {
+        val json = """
+            {"schemaVersion":1,"embeddingProviderId":"use","exportedAt":0,
+             "chunks":[{"text":"x","embedding":[0.1],"timestamp":5}]}
+        """.trimIndent()
+        val outcome = MemoryJsonSerializer.parse(json)
+        assertTrue(outcome is MemoryImportOutcome.Success)
+        assertEquals(0L, (outcome as MemoryImportOutcome.Success).document.chunks.single().id)
+    }
+
+    @Test
     fun `parse defaults optional fields when absent`() {
         val json = """
             {"schemaVersion":1,"embeddingProviderId":"use","exportedAt":0,

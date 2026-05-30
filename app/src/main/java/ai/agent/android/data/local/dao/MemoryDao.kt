@@ -36,6 +36,19 @@ interface MemoryDao {
     suspend fun insertMemories(chunks: List<MemoryChunkEntity>)
 
     /**
+     * Atomically replaces the whole table with [chunks]: deletes every row then
+     * inserts the batch in one transaction, so a Replace import can never leave
+     * the store empty if the insert fails partway.
+     *
+     * @param chunks The replacement rows.
+     */
+    @Transaction
+    suspend fun replaceAll(chunks: List<MemoryChunkEntity>) {
+        deleteAllMemories()
+        insertMemories(chunks)
+    }
+
+    /**
      * Projects the ids of every stored chunk. Backs the import Merge strategy's
      * duplicate check without deserialising any embeddings.
      *
@@ -200,16 +213,6 @@ interface MemoryDao {
      */
     @Query("DELETE FROM memory_chunks")
     suspend fun deleteAllMemories()
-
-    /**
-     * One-shot count of chunks awaiting re-embedding (those imported under a
-     * different embedding provider). Lets the retrieval path cheaply skip the
-     * lazy-recompute step in the common case where nothing is pending.
-     *
-     * @return The number of rows with `needsReembedding = 1`.
-     */
-    @Query("SELECT COUNT(*) FROM memory_chunks WHERE needsReembedding = 1")
-    suspend fun countNeedingReembedding(): Int
 
     /**
      * Retrieves every chunk awaiting re-embedding. The full embedding payload

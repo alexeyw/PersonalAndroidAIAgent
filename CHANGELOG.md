@@ -28,10 +28,11 @@ details.
     provenance, pin state, and tags.
   - **Provider-mismatch handling** — when the file was exported under a
     different embedding provider, imported chunks are flagged `needsReembedding`
-    and re-computed lazily with the active provider on the next retrieval (new
-    `RecomputePendingEmbeddingsUseCase`, wired into
-    `RetrieveRelevantMemoryUseCase`), so transferred memories become findable
-    without a manual re-embed.
+    and re-computed with the active provider by a background WorkManager job
+    (new `MemoryReembedWorker` + `RecomputePendingEmbeddingsUseCase`, scheduled
+    at import time), so transferred memories become findable off the hot path
+    without stalling retrieval or needing a manual re-embed. The manual
+    *Settings → Memory → Re-embed* action now also clears the flag.
 - **Memory screen redesign** (Phase 25 / Task 7/10) — a full rework of the
   long-term-memory surface:
   - **Save to memory from chat** — the message long-press menu gains a

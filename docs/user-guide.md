@@ -735,9 +735,10 @@ and import the file on the new one:
 
 If the file was exported with a **different embedding provider** than the
 one the new device is using, the app shows a notice and re-computes the
-affected embeddings automatically the first time memory is searched —
-so the transferred entries become findable without any manual step. (You
-can still force an immediate pass with **Settings → Memory → Re-embed**.)
+affected embeddings automatically in the background after import — so the
+transferred entries become findable without any manual step (give it a
+moment to finish before searching). You can also force an immediate pass
+with **Settings → Memory → Re-embed**.
 
 ### Clearing context
 

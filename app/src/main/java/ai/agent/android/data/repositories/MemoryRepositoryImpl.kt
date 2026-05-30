@@ -164,30 +164,40 @@ class MemoryRepositoryImpl @Inject constructor(private val memoryDao: MemoryDao,
     override suspend fun insertImportedMemories(chunks: List<MemoryChunk>, needsReembedding: Boolean) {
         if (chunks.isEmpty()) return
         withContext(Dispatchers.IO) {
-            val entities = chunks.mapNotNull { chunk ->
-                val embeddingString = converters.fromFloatArray(chunk.embedding) ?: return@mapNotNull null
-                MemoryChunkEntity(
-                    id = chunk.id,
-                    text = chunk.text,
-                    embedding = embeddingString,
-                    timestamp = chunk.timestamp,
-                    isPinned = chunk.isPinned,
-                    source = chunk.source,
-                    tagsCsv = TagsCsv.encode(chunk.tags),
-                    needsReembedding = needsReembedding,
-                )
-            }
-            memoryDao.insertMemories(entities)
+            memoryDao.insertMemories(chunks.toImportEntities(needsReembedding))
         }
     }
 
-    override suspend fun countMemoriesNeedingReembedding(): Int = withContext(Dispatchers.IO) {
-        memoryDao.countNeedingReembedding()
-    }
+    override suspend fun replaceImportedMemories(chunks: List<MemoryChunk>, needsReembedding: Boolean) =
+        withContext(Dispatchers.IO) {
+            memoryDao.replaceAll(chunks.toImportEntities(needsReembedding))
+        }
 
     override suspend fun getMemoriesNeedingReembedding(): List<MemoryChunk> = withContext(Dispatchers.IO) {
         memoryDao.getMemoriesNeedingReembedding().mapNotNull { entity -> entity.toMemoryChunkOrNull() }
     }
+
+    /**
+     * Maps imported domain chunks to entities, preserving id / timestamp /
+     * provenance / pin state / tags and resetting per-device usage telemetry.
+     * Chunks whose embedding cannot be serialised are dropped (their embedding
+     * is already validated non-empty by the import parser, so this is a defensive
+     * guard rather than an expected path).
+     */
+    private fun List<MemoryChunk>.toImportEntities(needsReembedding: Boolean): List<MemoryChunkEntity> =
+        mapNotNull { chunk ->
+            val embeddingString = converters.fromFloatArray(chunk.embedding) ?: return@mapNotNull null
+            MemoryChunkEntity(
+                id = chunk.id,
+                text = chunk.text,
+                embedding = embeddingString,
+                timestamp = chunk.timestamp,
+                isPinned = chunk.isPinned,
+                source = chunk.source,
+                tagsCsv = TagsCsv.encode(chunk.tags),
+                needsReembedding = needsReembedding,
+            )
+        }
 
     override suspend fun markMemoryReembedded(id: Long, embedding: FloatArray) = withContext(Dispatchers.IO) {
         val embeddingString = converters.fromFloatArray(embedding)

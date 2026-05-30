@@ -5,6 +5,7 @@ import ai.agent.android.domain.models.MemoryExportDocument
 import ai.agent.android.domain.models.MemoryImportOutcome
 import ai.agent.android.domain.models.MemoryImportStrategy
 import ai.agent.android.domain.repositories.MemoryRepository
+import ai.agent.android.domain.services.MemoryReembedScheduler
 import javax.inject.Inject
 
 /**
@@ -23,10 +24,15 @@ import javax.inject.Inject
  * and lets the UI raise a strategy / compatibility dialog before any mutation.
  *
  * @property memoryRepository Backing store for the existing-id lookup, the
- *   destructive clear used by [MemoryImportStrategy.Replace], and the bulk
+ *   transactional replace used by [MemoryImportStrategy.Replace], and the bulk
  *   insert.
+ * @property reembedScheduler Enqueues the background re-embed pass when the
+ *   imported chunks were flagged for re-embedding (provider mismatch).
  */
-class MemoryImportUseCase @Inject constructor(private val memoryRepository: MemoryRepository) {
+class MemoryImportUseCase @Inject constructor(
+    private val memoryRepository: MemoryRepository,
+    private val reembedScheduler: MemoryReembedScheduler,
+) {
 
     /**
      * Parses [jsonText] into a [MemoryImportOutcome] without persisting
@@ -40,21 +46,24 @@ class MemoryImportUseCase @Inject constructor(private val memoryRepository: Memo
     /**
      * Reconciles [document] with the local store under [strategy].
      *
-     * - [MemoryImportStrategy.Replace] wipes every existing chunk first, so the
-     *   store becomes an exact copy of the file.
+     * - [MemoryImportStrategy.Replace] atomically wipes every existing chunk and
+     *   loads the file's chunks, so the store becomes an exact copy of the file.
+     *   A document with no chunks is a no-op: the existing store is left intact
+     *   rather than wiped with nothing to load.
      * - [MemoryImportStrategy.Merge] keeps existing chunks and inserts only
      *   those whose id is not already present (duplicates are skipped).
      *
      * When [document]'s `embeddingProviderId` differs from [activeProviderId]
      * the imported vectors live in an incompatible space, so every inserted
-     * chunk is flagged for lazy re-embedding on the next retrieval.
+     * chunk is flagged for re-embedding and a background re-embed pass is
+     * scheduled (the worker repairs them off the hot path).
      *
      * @param document The parsed document to import.
      * @param strategy How to reconcile with the existing store.
      * @param activeProviderId Id of the importing device's active embedding
      *   provider.
      * @return A [MemoryImportResult] describing how many chunks were imported
-     *   and skipped, and whether re-embedding is pending.
+     *   and skipped, and whether a re-embed was scheduled.
      */
     suspend fun import(
         document: MemoryExportDocument,
@@ -64,19 +73,29 @@ class MemoryImportUseCase @Inject constructor(private val memoryRepository: Memo
         val needsReembedding = document.embeddingProviderId != activeProviderId
         val toInsert = when (strategy) {
             MemoryImportStrategy.Replace -> {
-                memoryRepository.deleteAllMemories()
+                // Guard: never wipe the store when there is nothing to load.
+                if (document.chunks.isEmpty()) {
+                    return MemoryImportResult(imported = 0, skipped = 0, needsReembedding = false)
+                }
+                memoryRepository.replaceImportedMemories(document.chunks, needsReembedding)
                 document.chunks
             }
             MemoryImportStrategy.Merge -> {
                 val existing = memoryRepository.getExistingMemoryIds()
-                document.chunks.filter { it.id !in existing }
+                val fresh = document.chunks.filter { it.id == 0L || it.id !in existing }
+                memoryRepository.insertImportedMemories(fresh, needsReembedding)
+                fresh
             }
         }
-        memoryRepository.insertImportedMemories(toInsert, needsReembedding)
+        // Schedule the background repair only when chunks landed under a
+        // mismatched provider; nothing to do otherwise.
+        if (needsReembedding && toInsert.isNotEmpty()) {
+            reembedScheduler.schedule()
+        }
         return MemoryImportResult(
             imported = toInsert.size,
             skipped = document.chunks.size - toInsert.size,
-            needsReembedding = needsReembedding,
+            needsReembedding = needsReembedding && toInsert.isNotEmpty(),
         )
     }
 }

@@ -112,7 +112,7 @@ configured it.
   message, and a redesigned memory manager — provenance breakdown, category
   filters, semantic search with relevance scores, inline edit + tags, manual
   add, one-tap compaction with an estimate, and JSON export / import
-  (Merge or Replace, with lazy re-embedding when the source device used a
+  (Merge or Replace, with background re-embedding when the source device used a
   different embedding provider).
 - Standalone browser-based editor (`pipeline-editor.html`) for authoring
   and exporting pipelines without launching the app.
