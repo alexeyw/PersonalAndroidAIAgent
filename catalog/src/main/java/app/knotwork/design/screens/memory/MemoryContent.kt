@@ -6,6 +6,7 @@ package app.knotwork.design.screens.memory
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -633,6 +634,17 @@ private fun MemoryDetailSheet(detail: MemoryEntryDetail, editing: Boolean, callb
     var newTag by remember(detail.id, editing) { mutableStateOf("") }
 
     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.BottomCenter) {
+        // Scrim — dims the surface behind the sheet and dismisses on tap-outside.
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.scrim.copy(alpha = 0.32f))
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                    onClick = callbacks.onCloseDetail,
+                ),
+        )
         Surface(
             color = KnotworkTheme.extended.surface1,
             tonalElevation = KnotworkTheme.elevation.el3,
