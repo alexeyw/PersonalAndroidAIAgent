@@ -263,6 +263,13 @@ class MemoryRepositoryImplTest {
     }
 
     @Test
+    fun `countMemoriesNeedingReembedding forwards to dao`() = kotlinx.coroutines.test.runTest {
+        io.mockk.coEvery { memoryDao.countNeedingReembedding() } returns 4
+
+        assertEquals(4, repository.countMemoriesNeedingReembedding())
+    }
+
+    @Test
     fun `markMemoryReembedded serializes embedding and forwards to dao`() = kotlinx.coroutines.test.runTest {
         val embedding = floatArrayOf(0.5f, 0.6f)
         val expected = converters.fromFloatArray(embedding)

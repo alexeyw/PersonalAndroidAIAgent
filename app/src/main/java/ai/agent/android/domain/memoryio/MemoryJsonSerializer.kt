@@ -166,9 +166,13 @@ object MemoryJsonSerializer {
      *    dropped row, and a non-numeric entry would become `NaN` and poison
      *    cosine similarity — both are rejected up front rather than stored.
      */
+    @Suppress("ReturnCount")
     private fun parseChunk(json: JSONObject): MemoryChunk? {
         if (!json.has(KEY_TEXT) || !json.has(KEY_EMBEDDING) || !json.has(KEY_TIMESTAMP)) return null
+        // optString returns "" for an explicit JSON null, so a blank check also
+        // rejects `"text": null` — a memory with no text is meaningless.
         val text = json.optString(KEY_TEXT)
+        if (text.isBlank()) return null
         val embeddingJson = json.optJSONArray(KEY_EMBEDDING) ?: return null
         if (embeddingJson.length() == 0) return null
         val embedding = FloatArray(embeddingJson.length())

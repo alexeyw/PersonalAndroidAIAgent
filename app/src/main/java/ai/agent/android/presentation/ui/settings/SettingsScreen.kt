@@ -12,10 +12,13 @@ import ai.agent.android.presentation.common.DisplayFormat
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
@@ -25,10 +28,12 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import app.knotwork.design.screens.settings.ApproveToolCallsOption
 import app.knotwork.design.screens.settings.DestructiveActionKind
@@ -175,38 +180,48 @@ private fun MemoryImportDialog(
             )
         }
     }
+    // Three actions don't fit AlertDialog's two button slots cleanly, so the
+    // body hosts the destructive Replace as its own full-width, error-tinted
+    // button, leaving Merge (the safe default) in the primary confirm slot and
+    // Cancel in the dismiss slot — one slot per semantic action, no cramming.
     AlertDialog(
         onDismissRequest = onCancel,
         title = { Text(stringResource(R.string.settings_memory_import_dialog_title)) },
         text = {
-            Text(
-                buildString {
-                    append(
-                        stringResource(
-                            R.string.settings_memory_import_dialog_body,
-                            pending.document.chunks.size,
-                        ),
-                    )
-                    warnings.forEach { warning ->
-                        append("\n\n")
-                        append(warning)
-                    }
-                },
-            )
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(
+                    buildString {
+                        append(
+                            stringResource(
+                                R.string.settings_memory_import_dialog_body,
+                                pending.document.chunks.size,
+                            ),
+                        )
+                        warnings.forEach { warning ->
+                            append("\n\n")
+                            append(warning)
+                        }
+                    },
+                )
+                TextButton(
+                    onClick = onReplace,
+                    modifier = Modifier.align(Alignment.End),
+                    colors = ButtonDefaults.textButtonColors(
+                        contentColor = MaterialTheme.colorScheme.error,
+                    ),
+                ) {
+                    Text(stringResource(R.string.settings_memory_import_replace))
+                }
+            }
         },
         confirmButton = {
-            TextButton(onClick = onReplace) {
-                Text(stringResource(R.string.settings_memory_import_replace))
+            TextButton(onClick = onMerge) {
+                Text(stringResource(R.string.settings_memory_import_merge))
             }
         },
         dismissButton = {
-            Row {
-                TextButton(onClick = onCancel) {
-                    Text(stringResource(R.string.settings_memory_import_cancel))
-                }
-                TextButton(onClick = onMerge) {
-                    Text(stringResource(R.string.settings_memory_import_merge))
-                }
+            TextButton(onClick = onCancel) {
+                Text(stringResource(R.string.settings_memory_import_cancel))
             }
         },
     )

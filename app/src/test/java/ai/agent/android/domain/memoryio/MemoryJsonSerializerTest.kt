@@ -125,6 +125,36 @@ class MemoryJsonSerializerTest {
     }
 
     @Test
+    fun `parse rejects a chunk with explicit null text`() {
+        val json = """
+            {"schemaVersion":1,"embeddingProviderId":"use","exportedAt":0,
+             "chunks":[{"id":1,"text":null,"embedding":[0.1],"timestamp":5}]}
+        """.trimIndent()
+        assertTrue(MemoryJsonSerializer.parse(json) is MemoryImportOutcome.Failure)
+    }
+
+    @Test
+    fun `parse rejects a chunk with blank text`() {
+        val json = """
+            {"schemaVersion":1,"embeddingProviderId":"use","exportedAt":0,
+             "chunks":[{"id":1,"text":"  ","embedding":[0.1],"timestamp":5}]}
+        """.trimIndent()
+        assertTrue(MemoryJsonSerializer.parse(json) is MemoryImportOutcome.Failure)
+    }
+
+    @Test
+    fun `parse does not throw on a malformed compaction ids entry`() {
+        // A non-numeric ids element must not escape parse() as a JSONException;
+        // it resolves to 0 and the chunk still parses.
+        val json = """
+            {"schemaVersion":1,"embeddingProviderId":"use","exportedAt":0,
+             "chunks":[{"id":1,"text":"x","embedding":[0.1],"timestamp":5,
+                        "source":{"type":"compaction","ids":["oops"]}}]}
+        """.trimIndent()
+        assertTrue(MemoryJsonSerializer.parse(json) is MemoryImportOutcome.Success)
+    }
+
+    @Test
     fun `parse defaults a missing id to zero so Room assigns a fresh key`() {
         val json = """
             {"schemaVersion":1,"embeddingProviderId":"use","exportedAt":0,

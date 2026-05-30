@@ -18,9 +18,15 @@ import javax.inject.Singleton
  * Relaxed constraints (battery-not-low only) so the repair runs promptly after
  * an import rather than waiting for charge/idle — a freshly imported memory
  * should become searchable soon. Exponential backoff lets a transient provider
- * failure retry without hammering. [ExistingWorkPolicy.KEEP] coalesces repeated
- * imports onto a single in-flight pass (the worker drains all pending chunks in
- * one run regardless of how many imports queued it).
+ * failure retry without hammering.
+ *
+ * [ExistingWorkPolicy.APPEND_OR_REPLACE] (not `KEEP`): if a pass is already
+ * running, `KEEP` would drop a second import's enqueue, and that running pass —
+ * which snapshotted the pending set before the second import — would never see
+ * the newly-flagged chunks, stranding them. `APPEND_OR_REPLACE` instead chains a
+ * fresh drain after the current pass (and runs immediately if the previous run
+ * had failed/cancelled), so every import is guaranteed a pass that sees its
+ * chunks.
  *
  * @property workManager The WorkManager instance the pass is enqueued on.
  */
@@ -40,7 +46,7 @@ class WorkManagerMemoryReembedScheduler @Inject constructor(private val workMana
 
         workManager.enqueueUniqueWork(
             MemoryReembedWorker.UNIQUE_NAME,
-            ExistingWorkPolicy.KEEP,
+            ExistingWorkPolicy.APPEND_OR_REPLACE,
             request,
         )
         Timber.tag(TAG).d("Scheduled background memory re-embed pass")

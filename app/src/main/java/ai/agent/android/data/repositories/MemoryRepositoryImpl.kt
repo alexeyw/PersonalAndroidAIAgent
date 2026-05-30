@@ -173,6 +173,10 @@ class MemoryRepositoryImpl @Inject constructor(private val memoryDao: MemoryDao,
             memoryDao.replaceAll(chunks.toImportEntities(needsReembedding))
         }
 
+    override suspend fun countMemoriesNeedingReembedding(): Int = withContext(Dispatchers.IO) {
+        memoryDao.countNeedingReembedding()
+    }
+
     override suspend fun getMemoriesNeedingReembedding(): List<MemoryChunk> = withContext(Dispatchers.IO) {
         memoryDao.getMemoriesNeedingReembedding().mapNotNull { entity -> entity.toMemoryChunkOrNull() }
     }

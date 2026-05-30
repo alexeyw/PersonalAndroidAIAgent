@@ -17,7 +17,7 @@ class WorkManagerMemoryReembedSchedulerTest {
     private fun scheduler() = WorkManagerMemoryReembedScheduler(workManager)
 
     @Test
-    fun `schedule enqueues a unique one-time re-embed work request that coalesces`() {
+    fun `schedule enqueues a unique one-time re-embed work request that re-arms a fresh drain`() {
         val nameSlot = slot<String>()
         val policySlot = slot<ExistingWorkPolicy>()
         every {
@@ -30,6 +30,8 @@ class WorkManagerMemoryReembedSchedulerTest {
             workManager.enqueueUniqueWork(any(), any<ExistingWorkPolicy>(), any<OneTimeWorkRequest>())
         }
         assertEquals(MemoryReembedWorker.UNIQUE_NAME, nameSlot.captured)
-        assertEquals(ExistingWorkPolicy.KEEP, policySlot.captured)
+        // APPEND_OR_REPLACE (not KEEP): a second import must chain a fresh pass
+        // after the current one so its newly-flagged chunks are not stranded.
+        assertEquals(ExistingWorkPolicy.APPEND_OR_REPLACE, policySlot.captured)
     }
 }

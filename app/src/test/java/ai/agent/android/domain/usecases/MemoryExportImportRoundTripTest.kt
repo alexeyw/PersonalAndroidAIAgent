@@ -168,6 +168,8 @@ private class InMemoryMemoryStore : MemoryRepository {
 
     override suspend fun recordUsage(ids: List<Long>, atMillis: Long) = throw NotImplementedError()
 
+    override suspend fun countMemoriesNeedingReembedding(): Int = 0
+
     override suspend fun getMemoriesNeedingReembedding(): List<MemoryChunk> = throw NotImplementedError()
 
     override suspend fun markMemoryReembedded(id: Long, embedding: FloatArray) = throw NotImplementedError()

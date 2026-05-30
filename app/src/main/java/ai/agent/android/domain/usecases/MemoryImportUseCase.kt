@@ -1,6 +1,7 @@
 package ai.agent.android.domain.usecases
 
 import ai.agent.android.domain.memoryio.MemoryJsonSerializer
+import ai.agent.android.domain.models.MemoryChunk
 import ai.agent.android.domain.models.MemoryExportDocument
 import ai.agent.android.domain.models.MemoryImportOutcome
 import ai.agent.android.domain.models.MemoryImportStrategy
@@ -77,26 +78,47 @@ class MemoryImportUseCase @Inject constructor(
                 if (document.chunks.isEmpty()) {
                     return MemoryImportResult(imported = 0, skipped = 0, needsReembedding = false)
                 }
-                memoryRepository.replaceImportedMemories(document.chunks, needsReembedding)
-                document.chunks
+                val deduped = document.chunks.dedupById()
+                memoryRepository.replaceImportedMemories(deduped, needsReembedding)
+                deduped
             }
             MemoryImportStrategy.Merge -> {
                 val existing = memoryRepository.getExistingMemoryIds()
-                val fresh = document.chunks.filter { it.id == 0L || it.id !in existing }
+                // id == 0 → always insert (Room auto-assigns a fresh key); a
+                // positive id is inserted only if not already stored. Dedup by id
+                // so two file chunks sharing an id (which REPLACE-on-conflict would
+                // collapse to one row) are counted as one insert, not two.
+                val fresh = document.chunks.filter { it.id == 0L || it.id !in existing }.dedupById()
                 memoryRepository.insertImportedMemories(fresh, needsReembedding)
                 fresh
             }
         }
         // Schedule the background repair only when chunks landed under a
         // mismatched provider; nothing to do otherwise.
-        if (needsReembedding && toInsert.isNotEmpty()) {
+        val scheduledReembed = needsReembedding && toInsert.isNotEmpty()
+        if (scheduledReembed) {
             reembedScheduler.schedule()
         }
         return MemoryImportResult(
             imported = toInsert.size,
             skipped = document.chunks.size - toInsert.size,
-            needsReembedding = needsReembedding && toInsert.isNotEmpty(),
+            needsReembedding = scheduledReembed,
         )
+    }
+
+    /**
+     * Drops file-internal duplicate ids so the reported `imported` count matches
+     * the rows actually persisted: `@Insert(onConflict = REPLACE)` collapses two
+     * chunks sharing a positive id into a single row (last wins). Chunks with
+     * `id == 0` are never deduped — each gets its own auto-assigned key.
+     */
+    private fun List<MemoryChunk>.dedupById(): List<MemoryChunk> {
+        val byId = LinkedHashMap<Long, MemoryChunk>()
+        val autoAssigned = ArrayList<MemoryChunk>()
+        for (chunk in this) {
+            if (chunk.id == 0L) autoAssigned.add(chunk) else byId[chunk.id] = chunk
+        }
+        return byId.values + autoAssigned
     }
 }
 

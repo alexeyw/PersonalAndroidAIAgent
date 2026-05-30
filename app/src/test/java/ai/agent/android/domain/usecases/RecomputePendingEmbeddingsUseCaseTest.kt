@@ -64,6 +64,20 @@ class RecomputePendingEmbeddingsUseCaseTest {
     }
 
     @Test
+    fun `skips a batch without writing when the provider returns a misaligned shorter list`() = runTest {
+        val pending = listOf(chunk(1, "alpha"), chunk(2, "beta"))
+        coEvery { repository.getMemoriesNeedingReembedding() } returns pending
+        // Provider violates the index-aligned contract (1 vector for 2 inputs):
+        // writing would misalign vectors, so nothing must be persisted.
+        coEvery { provider.embed(listOf("alpha", "beta")) } returns listOf(floatArrayOf(1f, 1f))
+
+        val repaired = useCase()
+
+        assertEquals(0, repaired)
+        coVerify(exactly = 0) { repository.markMemoryReembedded(any(), any()) }
+    }
+
+    @Test
     fun `propagates the batch embedding failure so the worker can retry`() = runTest {
         coEvery { repository.getMemoriesNeedingReembedding() } returns listOf(chunk(1, "alpha"))
         coEvery { provider.embed(any<List<String>>()) } throws RuntimeException("offline")

@@ -68,7 +68,11 @@ object MemorySourceJson {
                 val idsJson = json.optJSONArray(KEY_IDS)
                 val ids = buildList {
                     if (idsJson != null) {
-                        for (i in 0 until idsJson.length()) add(idsJson.getLong(i))
+                        // optLong (not getLong) keeps decode total: a non-numeric
+                        // entry resolves to 0 instead of throwing, so a malformed
+                        // `ids` array never breaks the caller's "never throws"
+                        // contract (e.g. MemoryJsonSerializer.parse).
+                        for (i in 0 until idsJson.length()) add(idsJson.optLong(i))
                     }
                 }
                 MemorySource.Compaction(ids)

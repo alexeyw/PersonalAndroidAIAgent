@@ -199,6 +199,15 @@ interface MemoryRepository {
     suspend fun replaceImportedMemories(chunks: List<MemoryChunk>, needsReembedding: Boolean)
 
     /**
+     * One-shot count of chunks awaiting re-embedding. Backs the cheap startup
+     * re-arm check that re-schedules the background re-embed worker when a prior
+     * one-off pass was lost or exhausted its retries.
+     *
+     * @return The number of chunks flagged `needsReembedding`.
+     */
+    suspend fun countMemoriesNeedingReembedding(): Int
+
+    /**
      * Retrieves the chunks awaiting re-embedding (imported under a different
      * provider). Their stored embeddings are in an incompatible space until
      * re-computed by the background re-embed worker.

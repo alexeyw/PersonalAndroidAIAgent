@@ -83,6 +83,21 @@ class MemoryImportUseCaseTest {
     }
 
     @Test
+    fun `Replace dedupes file-internal duplicate ids so the count matches stored rows`() = runTest {
+        val captured = slot<List<MemoryChunk>>()
+        coEvery { repository.replaceImportedMemories(capture(captured), any()) } just Runs
+
+        // Two chunks share id=5; @Insert REPLACE would collapse them to one row,
+        // so imported must report 1, not 2.
+        val doc = document("use", listOf(chunk(5), chunk(5), chunk(6)))
+        val result = useCase.import(doc, MemoryImportStrategy.Replace, activeProviderId = "use")
+
+        assertEquals(2, result.imported)
+        assertEquals(1, result.skipped)
+        assertEquals(listOf(5L, 6L), captured.captured.map { it.id })
+    }
+
+    @Test
     fun `Replace transactionally replaces with every chunk`() = runTest {
         val captured = slot<List<MemoryChunk>>()
         coEvery { repository.replaceImportedMemories(capture(captured), any()) } just Runs

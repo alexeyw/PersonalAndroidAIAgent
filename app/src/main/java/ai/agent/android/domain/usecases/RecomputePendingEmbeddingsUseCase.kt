@@ -48,22 +48,46 @@ class RecomputePendingEmbeddingsUseCase @Inject constructor(
         if (pending.isEmpty()) return@withContext 0
 
         val provider = embeddingProviderResolver.resolve()
-        // Let a batch-embed failure propagate: the worker turns it into a
-        // backed-off retry, leaving the chunks flagged for a later attempt.
-        val embeddings = provider.embed(pending.map { it.text })
-
         var repaired = 0
-        pending.forEachIndexed { index, chunk ->
-            val embedding = embeddings.getOrNull(index) ?: return@forEachIndexed
-            try {
-                memoryRepository.markMemoryReembedded(chunk.id, embedding)
-                repaired++
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                Timber.w(e, "Failed to persist re-embedding for memory %d", chunk.id)
+        // Re-embed in bounded batches rather than one giant call: caps the
+        // request/payload size (a cloud provider would otherwise exceed its
+        // token/payload limit or time out on a multi-thousand-chunk import) and
+        // the peak memory of an on-device pass. A batch failure propagates so the
+        // worker retries with backoff, while the batches already persisted below
+        // preserve their progress across that retry.
+        for (batch in pending.chunked(BATCH_SIZE)) {
+            val embeddings = provider.embed(batch.map { it.text })
+            if (embeddings.size != batch.size) {
+                // The provider broke the index-aligned contract. Writing now would
+                // assign the wrong vector to a chunk, so skip the whole batch
+                // (chunks stay flagged for a later re-arm) rather than corrupt it.
+                Timber.w(
+                    "Re-embed batch size mismatch: requested %d, got %d; skipping batch to avoid misalignment",
+                    batch.size,
+                    embeddings.size,
+                )
+                continue
+            }
+            batch.forEachIndexed { index, chunk ->
+                try {
+                    memoryRepository.markMemoryReembedded(chunk.id, embeddings[index])
+                    repaired++
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    Timber.w(e, "Failed to persist re-embedding for memory %d", chunk.id)
+                }
             }
         }
         repaired
+    }
+
+    private companion object {
+        /**
+         * Chunks re-embedded per provider call. Bounds request size and peak
+         * memory; each batch's writes are committed before the next call, so a
+         * failure mid-corpus does not discard earlier progress.
+         */
+        const val BATCH_SIZE = 64
     }
 }

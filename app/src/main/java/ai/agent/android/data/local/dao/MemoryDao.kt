@@ -215,6 +215,17 @@ interface MemoryDao {
     suspend fun deleteAllMemories()
 
     /**
+     * One-shot count of chunks awaiting re-embedding. Backs the cheap startup
+     * re-arm check (`MainActivity`) that re-schedules the re-embed worker when a
+     * previous one-off was lost (process killed before WorkManager persisted it)
+     * or exhausted its retries — without loading every pending row + embedding.
+     *
+     * @return The number of rows with `needsReembedding = 1`.
+     */
+    @Query("SELECT COUNT(*) FROM memory_chunks WHERE needsReembedding = 1")
+    suspend fun countNeedingReembedding(): Int
+
+    /**
      * Retrieves every chunk awaiting re-embedding. The full embedding payload
      * is returned for symmetry with [getAllMemories]; the recompute use case
      * only needs the text but the mapper is shared.

@@ -215,15 +215,21 @@ When the document's embedding provider differs from the importing
 device's active provider the inserted vectors live in an incompatible
 space, so each chunk is flagged `needsReembedding` and the import
 schedules a background pass through the `MemoryReembedScheduler` domain
-seam. `MemoryReembedWorker` (a WorkManager `@HiltWorker`, mirroring
-`MemoryCompactionWorker`) then runs `RecomputePendingEmbeddingsUseCase`
-off the hot path — batch-embedding the pending chunks with the active
-provider and clearing the flag — with WorkManager retry/backoff if the
-provider is temporarily unavailable. Retrieval never blocks on this; it
-simply tolerates the not-yet-repaired chunks (whose cross-space vectors
-score ~0) until the worker finishes. The manual *Settings → Memory →
-Re-embed* action shares the same flag-clearing write so the two repair
-paths converge.
+seam (`APPEND_OR_REPLACE` so a second import always chains a fresh drain
+rather than being coalesced away while a pass runs). `MemoryReembedWorker`
+(a WorkManager `@HiltWorker`, mirroring `MemoryCompactionWorker`) then runs
+`RecomputePendingEmbeddingsUseCase` off the hot path — re-embedding the
+pending chunks in bounded batches (so a multi-thousand-chunk import neither
+issues one oversized request nor loses progress on a mid-corpus failure)
+and clearing the flag — with WorkManager retry/backoff if the provider is
+temporarily unavailable. Retrieval never blocks on this; it simply
+tolerates the not-yet-repaired chunks (whose cross-space vectors score ~0)
+until the worker finishes. As a safety net for a one-off pass that was lost
+(process killed before the enqueue persisted) or exhausted its retries,
+`MainActivity` re-arms the worker on cold start whenever
+`countMemoriesNeedingReembedding()` is non-zero. The manual *Settings →
+Memory → Re-embed* action shares the same flag-clearing write so the two
+repair paths converge.
 
 ---
 
