@@ -25,6 +25,26 @@ interface MemoryDao {
     suspend fun insertMemory(memoryChunk: MemoryChunkEntity): Long
 
     /**
+     * Inserts a batch of memory chunks in a single transaction. Used by the
+     * memory import path; rows carrying an explicit non-zero `id` keep that id
+     * (so a round-trip preserves identity), while `id = 0` rows are
+     * auto-assigned. Conflicting ids are replaced.
+     *
+     * @param chunks The chunks to insert.
+     */
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertMemories(chunks: List<MemoryChunkEntity>)
+
+    /**
+     * Projects the ids of every stored chunk. Backs the import Merge strategy's
+     * duplicate check without deserialising any embeddings.
+     *
+     * @return All stored chunk ids.
+     */
+    @Query("SELECT id FROM memory_chunks")
+    suspend fun getAllIds(): List<Long>
+
+    /**
      * Retrieves all memory chunks from the database.
      * This is used to load embeddings into memory for vector similarity search.
      *
@@ -180,6 +200,37 @@ interface MemoryDao {
      */
     @Query("DELETE FROM memory_chunks")
     suspend fun deleteAllMemories()
+
+    /**
+     * One-shot count of chunks awaiting re-embedding (those imported under a
+     * different embedding provider). Lets the retrieval path cheaply skip the
+     * lazy-recompute step in the common case where nothing is pending.
+     *
+     * @return The number of rows with `needsReembedding = 1`.
+     */
+    @Query("SELECT COUNT(*) FROM memory_chunks WHERE needsReembedding = 1")
+    suspend fun countNeedingReembedding(): Int
+
+    /**
+     * Retrieves every chunk awaiting re-embedding. The full embedding payload
+     * is returned for symmetry with [getAllMemories]; the recompute use case
+     * only needs the text but the mapper is shared.
+     *
+     * @return Chunks with `needsReembedding = 1`.
+     */
+    @Query("SELECT * FROM memory_chunks WHERE needsReembedding = 1")
+    suspend fun getMemoriesNeedingReembedding(): List<MemoryChunkEntity>
+
+    /**
+     * Writes a freshly-computed embedding back to a chunk and clears its
+     * `needsReembedding` flag, so a once-imported chunk is repaired exactly
+     * once. The `text` and `timestamp` are untouched.
+     *
+     * @param id Identifier of the chunk to repair.
+     * @param embedding Serialized embedding vector produced by the active provider.
+     */
+    @Query("UPDATE memory_chunks SET embedding = :embedding, needsReembedding = 0 WHERE id = :id")
+    suspend fun markReembedded(id: Long, embedding: String)
 
     /**
      * Live count of stored memory chunks. Powers the Settings → Memory

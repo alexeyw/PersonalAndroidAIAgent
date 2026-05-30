@@ -3,6 +3,9 @@ package ai.agent.android.presentation.ui.settings
 import ai.agent.android.R
 import ai.agent.android.domain.constants.SettingsDefaults
 import ai.agent.android.domain.models.CloudProvider
+import ai.agent.android.domain.models.MemoryExportDocument
+import ai.agent.android.domain.models.MemoryImportOutcome
+import ai.agent.android.domain.models.MemoryImportStrategy
 import ai.agent.android.domain.models.ProviderId
 import ai.agent.android.domain.models.ProviderSummary
 import ai.agent.android.domain.models.ToolApprovalPolicy
@@ -15,6 +18,8 @@ import ai.agent.android.domain.repositories.SettingsRepository
 import ai.agent.android.domain.usecases.ClearAllMemoryUseCase
 import ai.agent.android.domain.usecases.ExportMemoryBaseUseCase
 import ai.agent.android.domain.usecases.GetSystemPromptVariableCatalogUseCase
+import ai.agent.android.domain.usecases.MemoryImportResult
+import ai.agent.android.domain.usecases.MemoryImportUseCase
 import ai.agent.android.domain.usecases.ReembedAllMemoriesUseCase
 import ai.agent.android.domain.usecases.ResetSamplingDefaultsUseCase
 import ai.agent.android.domain.usecases.TestBackendUseCase
@@ -23,6 +28,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -32,7 +38,9 @@ import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import timber.log.Timber
+import java.io.InputStream
 import java.io.OutputStream
 import javax.inject.Inject
 
@@ -67,6 +75,7 @@ class SettingsViewModel @Inject constructor(
     private val resetSamplingDefaultsUseCase: ResetSamplingDefaultsUseCase,
     private val clearAllMemoryUseCase: ClearAllMemoryUseCase,
     private val exportMemoryBaseUseCase: ExportMemoryBaseUseCase,
+    private val memoryImportUseCase: MemoryImportUseCase,
     private val reembedAllMemoriesUseCase: ReembedAllMemoriesUseCase,
     private val getSystemPromptVariableCatalogUseCase: GetSystemPromptVariableCatalogUseCase,
 ) : ViewModel() {
@@ -446,6 +455,100 @@ class SettingsViewModel @Inject constructor(
                 Timber.w(error, "Memory export failed")
                 emitSnackbar(appContext.getString(R.string.settings_memory_export_failed, error.message.orEmpty()))
             }
+        }
+    }
+
+    /**
+     * Parses a memory export file from the supplied [InputStream] and, on a
+     * usable parse, stages the import dialog (strategy choice + any
+     * provider/schema warnings). A failed parse surfaces an error snackbar and
+     * stages nothing.
+     *
+     * Called by the screen after the SAF open-document launcher returns a
+     * readable URI. The stream is fully read and closed here; persistence is
+     * deferred to [confirmImport] once the user picks a strategy.
+     *
+     * @param source Readable stream over the user-selected JSON file.
+     */
+    fun importMemory(source: InputStream) {
+        viewModelScope.launch {
+            val jsonText = runCatching {
+                withContext(Dispatchers.IO) { source.bufferedReader().use { it.readText() } }
+            }.getOrElse { error ->
+                Timber.w(error, "Memory import: failed to read file")
+                emitSnackbar(appContext.getString(R.string.settings_memory_import_failed, error.message.orEmpty()))
+                return@launch
+            }
+
+            when (val outcome = memoryImportUseCase.parse(jsonText)) {
+                is MemoryImportOutcome.Failure -> {
+                    emitSnackbar(appContext.getString(R.string.settings_memory_import_failed, outcome.message))
+                }
+                is MemoryImportOutcome.Success -> stagePendingImport(outcome.document, schemaMismatch = false)
+                is MemoryImportOutcome.SchemaMismatch ->
+                    stagePendingImport(outcome.document, schemaMismatch = true)
+            }
+        }
+    }
+
+    /**
+     * Stages [document] for the import dialog, computing whether the file's
+     * embedding provider differs from the one active on this device.
+     */
+    private suspend fun stagePendingImport(document: MemoryExportDocument, schemaMismatch: Boolean) {
+        val activeProviderId = settingsRepository.activeEmbeddingProviderId.first()
+        _uiState.update {
+            it.copy(
+                pendingImport = PendingMemoryImport(
+                    document = document,
+                    providerMismatch = document.embeddingProviderId != activeProviderId,
+                    schemaMismatch = schemaMismatch,
+                ),
+            )
+        }
+    }
+
+    /**
+     * Imports the staged document under [strategy], clears the dialog, and
+     * surfaces a result snackbar. No-op when nothing is staged.
+     *
+     * @param strategy Merge (skip duplicate ids) or Replace (wipe then load).
+     */
+    fun confirmImport(strategy: MemoryImportStrategy) {
+        val pending = _uiState.value.pendingImport ?: return
+        _uiState.update { it.copy(pendingImport = null) }
+        viewModelScope.launch {
+            runCatching {
+                val activeProviderId = settingsRepository.activeEmbeddingProviderId.first()
+                memoryImportUseCase.import(pending.document, strategy, activeProviderId)
+            }.onSuccess { result ->
+                emitSnackbar(importResultMessage(result))
+            }.onFailure { error ->
+                Timber.w(error, "Memory import failed")
+                emitSnackbar(appContext.getString(R.string.settings_memory_import_failed, error.message.orEmpty()))
+            }
+        }
+    }
+
+    /** Dismisses the import dialog without importing anything. */
+    fun cancelImport() {
+        _uiState.update { it.copy(pendingImport = null) }
+    }
+
+    /**
+     * Composes the post-import snackbar, appending the re-embedding note when
+     * the imported chunks were flagged for lazy re-computation.
+     */
+    private fun importResultMessage(result: MemoryImportResult): String {
+        val base = appContext.getString(
+            R.string.settings_memory_import_success,
+            result.imported,
+            result.skipped,
+        )
+        return if (result.needsReembedding) {
+            base + " " + appContext.getString(R.string.settings_memory_import_reembed_note)
+        } else {
+            base
         }
     }
 

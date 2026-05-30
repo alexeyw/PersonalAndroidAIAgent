@@ -29,6 +29,7 @@ class RetrieveRelevantMemoryUseCaseTest {
     private lateinit var provider: EmbeddingProvider
     private lateinit var memoryRepository: MemoryRepository
     private lateinit var settingsRepository: SettingsRepository
+    private lateinit var recomputePendingEmbeddings: RecomputePendingEmbeddingsUseCase
     private lateinit var useCase: RetrieveRelevantMemoryUseCase
 
     private val searchPoolLimit = 1_000
@@ -43,13 +44,16 @@ class RetrieveRelevantMemoryUseCaseTest {
         provider = mockk()
         memoryRepository = mockk()
         settingsRepository = mockk()
+        recomputePendingEmbeddings = mockk()
         useCase = RetrieveRelevantMemoryUseCase(
             embeddingProviderResolver,
             memoryRepository,
             MemoryReranker(),
             settingsRepository,
+            recomputePendingEmbeddings,
         )
 
+        coEvery { recomputePendingEmbeddings() } returns 0
         coEvery { embeddingProviderResolver.resolve() } returns provider
         coEvery { settingsRepository.maxMemoryChunksForSearch } returns flowOf(searchPoolLimit)
         coEvery { settingsRepository.memorySearchTopK } returns flowOf(settingsTopK)
@@ -179,5 +183,19 @@ class RetrieveRelevantMemoryUseCaseTest {
         val result = useCase(query, limit = 1)
 
         assertEquals(listOf(pinned), result)
+    }
+
+    @Test
+    fun `invoke recomputes pending embeddings before searching so imported chunks become findable`() = runTest {
+        val query = "q"
+        val queryEmbedding = floatArrayOf(0.5f)
+        coEvery { provider.embed(query) } returns queryEmbedding
+        coEvery {
+            memoryRepository.findSimilarMemories(queryEmbedding, searchPoolLimit, searchPoolLimit)
+        } returns emptyList()
+
+        useCase(query)
+
+        coVerify(exactly = 1) { recomputePendingEmbeddings() }
     }
 }

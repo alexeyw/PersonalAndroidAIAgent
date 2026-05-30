@@ -14,6 +14,7 @@ import ai.agent.android.domain.repositories.SettingsRepository
 import ai.agent.android.domain.usecases.ClearAllMemoryUseCase
 import ai.agent.android.domain.usecases.ExportMemoryBaseUseCase
 import ai.agent.android.domain.usecases.GetSystemPromptVariableCatalogUseCase
+import ai.agent.android.domain.usecases.MemoryImportUseCase
 import ai.agent.android.domain.usecases.PromptVariableCatalogEntry
 import ai.agent.android.domain.usecases.ReembedAllMemoriesUseCase
 import ai.agent.android.domain.usecases.ResetSamplingDefaultsUseCase
@@ -65,6 +66,7 @@ class SettingsViewModelTest {
     private val resetSampling = mockk<ResetSamplingDefaultsUseCase>(relaxed = true)
     private val clearMemory = mockk<ClearAllMemoryUseCase>(relaxed = true)
     private val exportMemory = mockk<ExportMemoryBaseUseCase>(relaxed = true)
+    private val memoryImport = mockk<MemoryImportUseCase>(relaxed = true)
     private val reembed = mockk<ReembedAllMemoriesUseCase>(relaxed = true)
     private val variableCatalog = mockk<GetSystemPromptVariableCatalogUseCase>(relaxed = true)
 
@@ -359,6 +361,7 @@ class SettingsViewModelTest {
         resetSamplingDefaultsUseCase = resetSampling,
         clearAllMemoryUseCase = clearMemory,
         exportMemoryBaseUseCase = exportMemory,
+        memoryImportUseCase = memoryImport,
         reembedAllMemoriesUseCase = reembed,
         getSystemPromptVariableCatalogUseCase = variableCatalog,
     )

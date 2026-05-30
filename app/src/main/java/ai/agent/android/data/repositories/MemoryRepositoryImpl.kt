@@ -157,6 +157,44 @@ class MemoryRepositoryImpl @Inject constructor(private val memoryDao: MemoryDao,
         recentSimilarityScores.value = emptyList()
     }
 
+    override suspend fun getExistingMemoryIds(): Set<Long> = withContext(Dispatchers.IO) {
+        memoryDao.getAllIds().toSet()
+    }
+
+    override suspend fun insertImportedMemories(chunks: List<MemoryChunk>, needsReembedding: Boolean) {
+        if (chunks.isEmpty()) return
+        withContext(Dispatchers.IO) {
+            val entities = chunks.mapNotNull { chunk ->
+                val embeddingString = converters.fromFloatArray(chunk.embedding) ?: return@mapNotNull null
+                MemoryChunkEntity(
+                    id = chunk.id,
+                    text = chunk.text,
+                    embedding = embeddingString,
+                    timestamp = chunk.timestamp,
+                    isPinned = chunk.isPinned,
+                    source = chunk.source,
+                    tagsCsv = TagsCsv.encode(chunk.tags),
+                    needsReembedding = needsReembedding,
+                )
+            }
+            memoryDao.insertMemories(entities)
+        }
+    }
+
+    override suspend fun countMemoriesNeedingReembedding(): Int = withContext(Dispatchers.IO) {
+        memoryDao.countNeedingReembedding()
+    }
+
+    override suspend fun getMemoriesNeedingReembedding(): List<MemoryChunk> = withContext(Dispatchers.IO) {
+        memoryDao.getMemoriesNeedingReembedding().mapNotNull { entity -> entity.toMemoryChunkOrNull() }
+    }
+
+    override suspend fun markMemoryReembedded(id: Long, embedding: FloatArray) = withContext(Dispatchers.IO) {
+        val embeddingString = converters.fromFloatArray(embedding)
+            ?: throw IllegalArgumentException("Failed to serialize embedding")
+        memoryDao.markReembedded(id = id, embedding = embeddingString)
+    }
+
     override fun observeStats(): Flow<MemoryStats> = combine(
         memoryDao.observeChunkCount(),
         memoryDao.observeTotalBytes(),

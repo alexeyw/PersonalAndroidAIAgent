@@ -1,0 +1,189 @@
+package ai.agent.android.domain.memoryio
+
+import ai.agent.android.domain.models.MemoryChunk
+import ai.agent.android.domain.models.MemoryExportDocument
+import ai.agent.android.domain.models.MemoryImportOutcome
+import org.json.JSONArray
+import org.json.JSONException
+import org.json.JSONObject
+
+/**
+ * Two-way mapper between the long-term memory table and the portable JSON
+ * document used to move an agent's memory between devices.
+ *
+ * ### Schema (version 1)
+ *
+ * ```
+ * {
+ *   "schemaVersion": 1,
+ *   "embeddingProviderId": "use",
+ *   "exportedAt": 1717000000000,
+ *   "chunks": [
+ *     {
+ *       "id": 42,
+ *       "text": "I prefer dark mode.",
+ *       "embedding": [0.12, -0.04, ...],
+ *       "source": { "type": "manual" },
+ *       "timestamp": 1716990000000,
+ *       "isPinned": false,
+ *       "tags": ["preference"]
+ *     }
+ *   ]
+ * }
+ * ```
+ *
+ * `embeddingProviderId` records which [ai.agent.android.domain.services.EmbeddingProvider]
+ * produced the stored vectors so the importer can detect a vector-space
+ * mismatch. The per-chunk `source` object reuses [MemorySourceJson] so its
+ * encoding stays identical to the Room `source` column. Transient usage
+ * telemetry (`useCount` / `lastUsedAt`) is intentionally omitted — it is
+ * per-device and not meaningful after a transfer.
+ *
+ * Uses `org.json` per the project's API conventions. [parse] never throws —
+ * every error becomes a [MemoryImportOutcome.Failure] with a human-readable
+ * message.
+ */
+object MemoryJsonSerializer {
+
+    /**
+     * Current schema version emitted by [serialize]. Older readers surface a
+     * [MemoryImportOutcome.SchemaMismatch] rather than silently dropping fields.
+     */
+    const val CURRENT_SCHEMA_VERSION: Int = 1
+
+    private const val KEY_SCHEMA_VERSION = "schemaVersion"
+    private const val KEY_PROVIDER_ID = "embeddingProviderId"
+    private const val KEY_EXPORTED_AT = "exportedAt"
+    private const val KEY_CHUNKS = "chunks"
+    private const val KEY_ID = "id"
+    private const val KEY_TEXT = "text"
+    private const val KEY_EMBEDDING = "embedding"
+    private const val KEY_SOURCE = "source"
+    private const val KEY_TIMESTAMP = "timestamp"
+    private const val KEY_IS_PINNED = "isPinned"
+    private const val KEY_TAGS = "tags"
+
+    /**
+     * Renders [chunks] into the schema-versioned JSON form.
+     *
+     * @param chunks The memory chunks to serialise.
+     * @param embeddingProviderId Id of the active embedding provider — stamped
+     *   on the document so an importing device can detect a vector-space
+     *   mismatch.
+     * @param exportedAt Epoch-millis to record as the export time.
+     * @return JSON text suitable for writing to a file.
+     */
+    fun serialize(chunks: List<MemoryChunk>, embeddingProviderId: String, exportedAt: Long): String {
+        val chunksJson = JSONArray()
+        for (chunk in chunks) {
+            val embeddingJson = JSONArray()
+            for (value in chunk.embedding) embeddingJson.put(value.toDouble())
+            val tagsJson = JSONArray()
+            for (tag in chunk.tags) tagsJson.put(tag)
+            chunksJson.put(
+                JSONObject().apply {
+                    put(KEY_ID, chunk.id)
+                    put(KEY_TEXT, chunk.text)
+                    put(KEY_EMBEDDING, embeddingJson)
+                    put(KEY_SOURCE, MemorySourceJson.encode(chunk.source))
+                    put(KEY_TIMESTAMP, chunk.timestamp)
+                    put(KEY_IS_PINNED, chunk.isPinned)
+                    put(KEY_TAGS, tagsJson)
+                },
+            )
+        }
+        return JSONObject().apply {
+            put(KEY_SCHEMA_VERSION, CURRENT_SCHEMA_VERSION)
+            put(KEY_PROVIDER_ID, embeddingProviderId)
+            put(KEY_EXPORTED_AT, exportedAt)
+            put(KEY_CHUNKS, chunksJson)
+        }.toString()
+    }
+
+    /**
+     * Parses [jsonText] into a [MemoryExportDocument] and reports the outcome.
+     *
+     * Never throws: malformed JSON, a missing `schemaVersion` / `embeddingProviderId`,
+     * or a chunk missing its required `text` / `embedding` / `timestamp` all
+     * resolve to [MemoryImportOutcome.Failure]. A clean parse whose version
+     * differs from [CURRENT_SCHEMA_VERSION] yields [MemoryImportOutcome.SchemaMismatch].
+     *
+     * @param jsonText Raw JSON text.
+     * @return The parse outcome the UI should branch on.
+     */
+    @Suppress("ReturnCount")
+    fun parse(jsonText: String): MemoryImportOutcome {
+        val root: JSONObject = try {
+            JSONObject(jsonText)
+        } catch (e: JSONException) {
+            return MemoryImportOutcome.Failure("Invalid JSON: ${e.message}")
+        }
+
+        val foundVersion = root.optInt(KEY_SCHEMA_VERSION, -1)
+        if (foundVersion == -1) {
+            return MemoryImportOutcome.Failure("Missing schemaVersion field")
+        }
+        val providerId = root.optString(KEY_PROVIDER_ID).takeIf { it.isNotBlank() }
+            ?: return MemoryImportOutcome.Failure("Missing or blank embeddingProviderId field")
+        val exportedAt = root.optLong(KEY_EXPORTED_AT, 0L)
+
+        val chunksJson = root.optJSONArray(KEY_CHUNKS)
+            ?: return MemoryImportOutcome.Failure("Missing chunks array")
+
+        val chunks = ArrayList<MemoryChunk>(chunksJson.length())
+        for (i in 0 until chunksJson.length()) {
+            val chunkJson = chunksJson.optJSONObject(i)
+                ?: return MemoryImportOutcome.Failure("Malformed chunk at index $i")
+            val chunk = parseChunk(chunkJson, i) ?: return MemoryImportOutcome.Failure(
+                "Chunk at index $i is missing a required field (text / embedding / timestamp)",
+            )
+            chunks.add(chunk)
+        }
+
+        val document = MemoryExportDocument(
+            embeddingProviderId = providerId,
+            exportedAt = exportedAt,
+            chunks = chunks,
+        )
+        return if (foundVersion != CURRENT_SCHEMA_VERSION) {
+            MemoryImportOutcome.SchemaMismatch(
+                document = document,
+                foundVersion = foundVersion,
+                expectedVersion = CURRENT_SCHEMA_VERSION,
+            )
+        } else {
+            MemoryImportOutcome.Success(document)
+        }
+    }
+
+    /**
+     * Parses a single chunk object. Returns `null` when a required field
+     * (`text`, `embedding`, or `timestamp`) is absent so the caller can fail
+     * the whole import with an index-tagged message.
+     */
+    private fun parseChunk(json: JSONObject, index: Int): MemoryChunk? {
+        if (!json.has(KEY_TEXT) || !json.has(KEY_EMBEDDING) || !json.has(KEY_TIMESTAMP)) return null
+        val text = json.optString(KEY_TEXT)
+        val embeddingJson = json.optJSONArray(KEY_EMBEDDING) ?: return null
+        val embedding = FloatArray(embeddingJson.length()) { idx -> embeddingJson.optDouble(idx).toFloat() }
+        val timestamp = json.optLong(KEY_TIMESTAMP)
+        val tagsJson = json.optJSONArray(KEY_TAGS)
+        val tags = if (tagsJson == null) {
+            emptyList()
+        } else {
+            (0 until tagsJson.length()).mapNotNull { idx -> tagsJson.optString(idx).takeIf { it.isNotBlank() } }
+        }
+        return MemoryChunk(
+            // Default to a synthetic negative id only when none was stored; the
+            // import use case re-keys on insert anyway, but a stable id lets the
+            // Merge strategy dedupe against existing rows.
+            id = json.optLong(KEY_ID, index.toLong()),
+            text = text,
+            embedding = embedding,
+            timestamp = timestamp,
+            isPinned = json.optBoolean(KEY_IS_PINNED, false),
+            source = MemorySourceJson.decode(json.optJSONObject(KEY_SOURCE)),
+            tags = tags,
+        )
+    }
+}

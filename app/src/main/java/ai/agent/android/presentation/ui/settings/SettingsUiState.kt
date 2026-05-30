@@ -4,6 +4,7 @@ import ai.agent.android.domain.constants.SettingsDefaults
 import ai.agent.android.domain.models.ActiveModelMeta
 import ai.agent.android.domain.models.Identity
 import ai.agent.android.domain.models.LocalBackend
+import ai.agent.android.domain.models.MemoryExportDocument
 import ai.agent.android.domain.models.MemoryStats
 import ai.agent.android.domain.models.ProviderSummary
 import ai.agent.android.domain.models.TestProbeResult
@@ -77,7 +78,25 @@ data class SettingsUiState(
     val restartRequired: Boolean = false,
     val pendingDestructive: PendingDestructiveAction? = null,
     val destructiveTypedInput: String = "",
+    val pendingImport: PendingMemoryImport? = null,
     val snackbarMessage: String? = null,
+)
+
+/**
+ * A successfully-parsed memory import file awaiting the user's strategy choice
+ * in the import dialog.
+ *
+ * @property document The parsed export document to import once confirmed.
+ * @property providerMismatch `true` when the file was exported under a
+ *   different embedding provider than the one active on this device — the
+ *   dialog then warns that embeddings will be re-computed on first retrieval.
+ * @property schemaMismatch `true` when the file's `schemaVersion` differs from
+ *   what this build expects (best-effort parse); the dialog warns accordingly.
+ */
+data class PendingMemoryImport(
+    val document: MemoryExportDocument,
+    val providerMismatch: Boolean,
+    val schemaMismatch: Boolean,
 )
 
 /**

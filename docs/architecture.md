@@ -60,7 +60,7 @@ Each layer maps onto concrete packages:
 | Layer          | Packages                                                                                          |
 |----------------|---------------------------------------------------------------------------------------------------|
 | `presentation` | `presentation/ui/{about,chat,memory,models,monitoring,more,onboarding,orchestrator,pipeline/editor,prompts,settings,splash,taskmonitor,tools}`, `presentation/ui/navigation`, `presentation/{components,state,theme,notifications,receivers}` |
-| `domain`       | `domain/{usecases,engine,models,repositories,prompt,constants,services,pipelineio}`               |
+| `domain`       | `domain/{usecases,engine,models,repositories,prompt,constants,services,pipelineio,promptio,memoryio}` |
 | `data`         | `data/{engine,local,repositories,prompt,mcp,services,tools,network,mappers,logging}`              |
 
 Cross-layer wiring is handled by **Hilt**. Modules in `di/` provide
@@ -191,6 +191,29 @@ Step-by-step notes:
    `EmbeddingProvider`, drops near-duplicates, and writes survivors to
    `memory_chunks` tagged with `MemorySource.ChatSession`. This is
    fire-and-forget background work and never blocks or fails the chat.
+
+### 2.1. Memory export / import and lazy re-embedding
+
+Long-term memory is portable between devices. The `domain/memoryio`
+gateway (`MemoryJsonSerializer`) serialises `memory_chunks` to a
+`schemaVersion: 1` JSON document — stamped with the active
+`embeddingProviderId` and an `exportedAt` timestamp — driven from
+**Settings → Memory → Export** through a SAF stream
+(`ExportMemoryBaseUseCase`). The provenance field reuses
+`MemorySourceJson`, the same codec the Room `source` column converter
+uses, so the on-disk encoding and the column stay identical.
+
+Import (`MemoryImportUseCase`) parses the file (`Success` /
+`SchemaMismatch` / `Failure`) and reconciles it under a user-chosen
+strategy: **Merge** (insert only ids not already present) or **Replace**
+(wipe then load), preserving each chunk's id, provenance, pin state and
+tags. When the document's embedding provider differs from the importing
+device's active provider the inserted vectors live in an incompatible
+space, so each chunk is flagged `needsReembedding`. The next retrieval
+calls `RecomputePendingEmbeddingsUseCase` (gated by a cheap `COUNT`),
+which batch-embeds the pending chunks' text with the active provider and
+clears the flag — so transferred memories become findable lazily, on
+first use, without a manual re-embed pass.
 
 ---
 

@@ -165,6 +165,55 @@ interface MemoryRepository {
     suspend fun deleteAllMemories()
 
     /**
+     * Returns the ids of every stored chunk. Backs the import Merge strategy's
+     * duplicate check; avoids deserialising embeddings just to read ids.
+     *
+     * @return All stored chunk ids as a set.
+     */
+    suspend fun getExistingMemoryIds(): Set<Long>
+
+    /**
+     * Bulk-inserts imported chunks, preserving each chunk's id, text,
+     * embedding, timestamp, provenance, pin state, and tags. Usage telemetry
+     * (`useCount` / `lastUsedAt`) is reset because it does not survive a
+     * transfer.
+     *
+     * @param chunks The chunks to insert (already filtered by the chosen
+     *   [ai.agent.android.domain.models.MemoryImportStrategy]).
+     * @param needsReembedding When `true`, every inserted chunk is flagged for
+     *   lazy re-embedding because the file was exported under a different
+     *   embedding provider.
+     */
+    suspend fun insertImportedMemories(chunks: List<MemoryChunk>, needsReembedding: Boolean)
+
+    /**
+     * One-shot count of chunks awaiting re-embedding. Lets the retrieval path
+     * cheaply skip the lazy-recompute step when nothing is pending.
+     *
+     * @return The number of chunks flagged `needsReembedding`.
+     */
+    suspend fun countMemoriesNeedingReembedding(): Int
+
+    /**
+     * Retrieves the chunks awaiting re-embedding (imported under a different
+     * provider). Their stored embeddings are in an incompatible space until
+     * re-computed.
+     *
+     * @return Chunks flagged `needsReembedding`.
+     */
+    suspend fun getMemoriesNeedingReembedding(): List<MemoryChunk>
+
+    /**
+     * Writes a freshly-computed embedding back to a chunk and clears its
+     * re-embedding flag, repairing an imported chunk exactly once. The text
+     * and timestamp are untouched.
+     *
+     * @param id Identifier of the chunk to repair.
+     * @param embedding The new vector embedding produced by the active provider.
+     */
+    suspend fun markMemoryReembedded(id: Long, embedding: FloatArray)
+
+    /**
      * Live snapshot of the aggregate stats rendered in the Settings →
      * Memory card. Emits a fresh value whenever the underlying table
      * mutates; consumers should `collectAsState` or `stateIn` it.

@@ -15,6 +15,23 @@ details.
 
 ### Added
 
+- **Memory export / import** (Phase 25 / Task 8/10) — move an agent's
+  long-term memory between devices:
+  - **Export** — *Settings → Memory → Export* writes the table to a
+    `schemaVersion: 1` JSON file via the Storage Access Framework, stamped with
+    the active embedding provider id and an export timestamp (new
+    `domain/memoryio/MemoryJsonSerializer`; the existing `ExportMemoryBaseUseCase`
+    now emits the richer document, including per-chunk provenance and tags).
+  - **Import** — *Settings → Memory → Import* parses a file and offers a
+    **Merge** (keep existing, skip duplicate ids) or **Replace all** (wipe then
+    load) strategy (new `MemoryImportUseCase`), preserving each chunk's id,
+    provenance, pin state, and tags.
+  - **Provider-mismatch handling** — when the file was exported under a
+    different embedding provider, imported chunks are flagged `needsReembedding`
+    and re-computed lazily with the active provider on the next retrieval (new
+    `RecomputePendingEmbeddingsUseCase`, wired into
+    `RetrieveRelevantMemoryUseCase`), so transferred memories become findable
+    without a manual re-embed.
 - **Memory screen redesign** (Phase 25 / Task 7/10) — a full rework of the
   long-term-memory surface:
   - **Save to memory from chat** — the message long-press menu gains a
