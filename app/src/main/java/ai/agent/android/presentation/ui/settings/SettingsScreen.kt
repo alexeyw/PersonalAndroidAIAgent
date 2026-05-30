@@ -37,12 +37,14 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import app.knotwork.design.screens.settings.ApproveToolCallsOption
 import app.knotwork.design.screens.settings.DestructiveActionKind
 import app.knotwork.design.screens.settings.DestructiveActionState
+import app.knotwork.design.screens.settings.EmbeddingOptionRow
 import app.knotwork.design.screens.settings.ExternalProvidersCardState
 import app.knotwork.design.screens.settings.IdentityCardState
 import app.knotwork.design.screens.settings.LlmParameterSlider
 import app.knotwork.design.screens.settings.LlmParametersCardState
 import app.knotwork.design.screens.settings.LocalModelCardState
 import app.knotwork.design.screens.settings.MemoryCardState
+import app.knotwork.design.screens.settings.MemoryParamSlider
 import app.knotwork.design.screens.settings.MemoryStatCell
 import app.knotwork.design.screens.settings.NotificationsCardState
 import app.knotwork.design.screens.settings.PrivacyCardState
@@ -384,12 +386,22 @@ private fun buildViewState(uiState: SettingsUiState, context: android.content.Co
         autoExtractSubtitle = stringResource(R.string.settings_memory_auto_extract_subtitle),
         autoSummarizeThreshold = (uiState.autoSummarizeThreshold * MAX_PERCENT).roundToInt(),
         autoSummarizeLabel = stringResource(R.string.settings_memory_auto_summarize_title),
+        params = memoryParamSliders(uiState, locale),
+        compactionEnabled = uiState.memoryCompactionEnabled,
+        compactionLabel = stringResource(R.string.settings_memory_compaction_title),
+        compactionSubtitle = stringResource(R.string.settings_memory_compaction_subtitle),
         embeddingTitle = stringResource(R.string.settings_memory_embedding_title),
-        embeddingSubtitle = stringResource(R.string.settings_memory_embedding_subtitle),
+        embeddingOptions = uiState.embeddingProviderOptions.map { EmbeddingOptionRow(it.id, it.displayName) },
+        selectedEmbeddingId = uiState.activeEmbeddingProviderId,
+        selectedEmbeddingLabel = uiState.embeddingProviderOptions
+            .firstOrNull { it.id == uiState.activeEmbeddingProviderId }
+            ?.displayName
+            ?: uiState.activeEmbeddingProviderId,
         exportLabel = stringResource(R.string.settings_memory_export),
         importLabel = stringResource(R.string.settings_memory_import),
         reembedLabel = stringResource(R.string.settings_memory_reembed),
         clearLabel = stringResource(R.string.settings_memory_clear),
+        validationError = uiState.memoryValidationError?.let { memoryValidationMessage(it, context) },
         reembedProgressPercent = uiState.reembedProgress?.let { (it * MAX_PERCENT).roundToInt() },
     )
     val notifications = NotificationsCardState(longRunningEnabled = uiState.longRunningTaskNotificationsEnabled)
@@ -449,6 +461,119 @@ private fun buildViewState(uiState: SettingsUiState, context: android.content.Co
     )
 }
 
+/**
+ * Builds the five Memory-tuning slider rows from the persisted state. Each
+ * row's [MemoryParamSlider.id] is matched in `buildCallbacks` to route the
+ * drag back to the corresponding validated ViewModel setter. Ranges mirror the
+ * `MIN`/`MAX` bounds in [SettingsDefaults]; integer rows use one discrete step
+ * per unit, the threshold row stays continuous.
+ */
+@Composable
+private fun memoryParamSliders(uiState: SettingsUiState, locale: Locale): List<MemoryParamSlider> = listOf(
+    intMemoryParam(
+        id = MEMORY_PARAM_TOP_K,
+        title = stringResource(R.string.settings_memory_param_top_k_title),
+        valueLabel = uiState.memorySearchTopK.toString(),
+        value = uiState.memorySearchTopK,
+        min = SettingsDefaults.MEMORY_SEARCH_TOP_K_MIN,
+        max = SettingsDefaults.MEMORY_SEARCH_TOP_K_MAX,
+    ),
+    MemoryParamSlider(
+        id = MEMORY_PARAM_THRESHOLD,
+        title = stringResource(R.string.settings_memory_param_threshold_title),
+        valueLabel = String.format(locale, "%.2f", uiState.memorySearchThreshold),
+        value = uiState.memorySearchThreshold,
+        valueRange = SettingsDefaults.MEMORY_SEARCH_THRESHOLD_MIN..SettingsDefaults.MEMORY_SEARCH_THRESHOLD_MAX,
+    ),
+    intMemoryParam(
+        id = MEMORY_PARAM_HALF_LIFE,
+        title = stringResource(R.string.settings_memory_param_half_life_title),
+        valueLabel = stringResource(R.string.settings_memory_param_days_value, uiState.memoryRecencyHalfLifeDays),
+        value = uiState.memoryRecencyHalfLifeDays,
+        min = SettingsDefaults.MEMORY_RECENCY_HALF_LIFE_DAYS_MIN,
+        max = SettingsDefaults.MEMORY_RECENCY_HALF_LIFE_DAYS_MAX,
+    ),
+    intMemoryParam(
+        id = MEMORY_PARAM_COMPACTION_AGE,
+        title = stringResource(R.string.settings_memory_param_compaction_age_title),
+        valueLabel = stringResource(R.string.settings_memory_param_days_value, uiState.memoryCompactionAgeDays),
+        value = uiState.memoryCompactionAgeDays,
+        min = SettingsDefaults.MEMORY_COMPACTION_AGE_DAYS_MIN,
+        max = SettingsDefaults.MEMORY_COMPACTION_AGE_DAYS_MAX,
+    ),
+    intMemoryParam(
+        id = MEMORY_PARAM_MAX_CHUNKS,
+        title = stringResource(R.string.settings_memory_param_max_chunks_title),
+        valueLabel = String.format(locale, "%,d", uiState.maxMemoryChunks),
+        value = uiState.maxMemoryChunks,
+        min = SettingsDefaults.MAX_MEMORY_CHUNKS_MIN,
+        max = SettingsDefaults.MAX_MEMORY_CHUNKS_MAX,
+    ),
+)
+
+/**
+ * Builds an integer-valued memory tuning slider. The range is `[min, max]`
+ * mapped onto floats and the slider is kept **continuous** (`steps = 0`):
+ * `onMemoryParamChange` rounds the dragged float back to an `Int` before it
+ * reaches the setter, which gives whole-number increments at the user's drag
+ * resolution without asking Material3 to allocate one tick composable per
+ * integer (a `steps = max - min - 1` slider over a wide range — e.g. the
+ * 1 000..20 000 max-chunks span — would freeze the main thread; see the same
+ * note on `NodeConfigForms`' integer slider).
+ */
+private fun intMemoryParam(
+    id: String,
+    title: String,
+    valueLabel: String,
+    value: Int,
+    min: Int,
+    max: Int,
+): MemoryParamSlider = MemoryParamSlider(
+    id = id,
+    title = title,
+    valueLabel = valueLabel,
+    value = value.toFloat(),
+    valueRange = min.toFloat()..max.toFloat(),
+    steps = 0,
+)
+
+/**
+ * Maps a rejected memory edit to its localized inline error message. The
+ * threshold message interpolates the float bounds; the rest interpolate
+ * integer bounds.
+ */
+private fun memoryValidationMessage(error: MemoryValidationError, context: android.content.Context): String =
+    when (error) {
+        MemoryValidationError.SearchTopK -> context.getString(
+            R.string.settings_memory_validation_top_k,
+            SettingsDefaults.MEMORY_SEARCH_TOP_K_MIN,
+            SettingsDefaults.MEMORY_SEARCH_TOP_K_MAX,
+        )
+        MemoryValidationError.SearchThreshold -> context.getString(
+            R.string.settings_memory_validation_threshold,
+            String.format(Locale.US, "%.2f", SettingsDefaults.MEMORY_SEARCH_THRESHOLD_MIN),
+            String.format(Locale.US, "%.2f", SettingsDefaults.MEMORY_SEARCH_THRESHOLD_MAX),
+        )
+        MemoryValidationError.RecencyHalfLife -> context.getString(
+            R.string.settings_memory_validation_half_life,
+            SettingsDefaults.MEMORY_RECENCY_HALF_LIFE_DAYS_MIN,
+            SettingsDefaults.MEMORY_RECENCY_HALF_LIFE_DAYS_MAX,
+        )
+        MemoryValidationError.CompactionAge -> context.getString(
+            R.string.settings_memory_validation_compaction_age,
+            SettingsDefaults.MEMORY_COMPACTION_AGE_DAYS_MIN,
+            SettingsDefaults.MEMORY_COMPACTION_AGE_DAYS_MAX,
+        )
+        MemoryValidationError.MaxChunks -> context.getString(
+            R.string.settings_memory_validation_max_chunks,
+            SettingsDefaults.MAX_MEMORY_CHUNKS_MIN,
+            SettingsDefaults.MAX_MEMORY_CHUNKS_MAX,
+        )
+        MemoryValidationError.UnknownEmbeddingProvider -> context.getString(
+            R.string.settings_memory_validation_unknown_provider,
+        )
+    }
+
 @Composable
 @Suppress("LongParameterList")
 private fun buildCallbacks(
@@ -498,6 +623,17 @@ private fun buildCallbacks(
     onAddProviderClick = onOpenAddProvider,
     onAutoExtractToggle = viewModel::setAutoExtractEnabled,
     onAutoSummarizeChange = viewModel::setAutoSummarizeThreshold,
+    onMemoryParamChange = { id, value ->
+        when (id) {
+            MEMORY_PARAM_TOP_K -> viewModel.setMemorySearchTopK(value.roundToInt())
+            MEMORY_PARAM_THRESHOLD -> viewModel.setMemorySearchThreshold(value)
+            MEMORY_PARAM_HALF_LIFE -> viewModel.setMemoryRecencyHalfLifeDays(value.roundToInt())
+            MEMORY_PARAM_COMPACTION_AGE -> viewModel.setMemoryCompactionAgeDays(value.roundToInt())
+            MEMORY_PARAM_MAX_CHUNKS -> viewModel.setMaxMemoryChunks(value.roundToInt())
+        }
+    },
+    onMemoryCompactionToggle = viewModel::setMemoryCompactionEnabled,
+    onEmbeddingProviderSelected = viewModel::setActiveEmbeddingProviderId,
     onExportMemoryClick = onExportClick,
     onImportMemoryClick = onImportClick,
     onReembedClick = viewModel::runReembed,
@@ -539,3 +675,10 @@ private fun formatTestProbe(uiState: SettingsUiState, context: android.content.C
 private const val MIME_JSON = "application/json"
 private const val MS_PER_SECOND_F = 1_000f
 private const val MAX_PERCENT = 100
+
+// Stable ids matching each Memory-tuning slider row to its ViewModel setter.
+private const val MEMORY_PARAM_TOP_K = "memory_top_k"
+private const val MEMORY_PARAM_THRESHOLD = "memory_threshold"
+private const val MEMORY_PARAM_HALF_LIFE = "memory_half_life"
+private const val MEMORY_PARAM_COMPACTION_AGE = "memory_compaction_age"
+private const val MEMORY_PARAM_MAX_CHUNKS = "memory_max_chunks"

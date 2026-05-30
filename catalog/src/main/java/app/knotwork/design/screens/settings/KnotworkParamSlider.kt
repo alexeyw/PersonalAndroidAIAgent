@@ -16,21 +16,19 @@ import app.knotwork.design.tokens.KnotworkTextStyles
 
 /**
  * Branded labelled slider used for every numeric parameter row inside
- * `SettingsContent` (temperature, top-K, top-P, max context, max steps,
- * memory-summary default limit).
+ * `SettingsContent` (LLM parameters, the memory tuning sliders, and the
+ * auto-summarize threshold), so all of them render at identical density.
  *
  * Visual contract:
- *  - `TitleMd` label on the left, brand-primary mono value label on the
- *    right edge (mirrors the spec mockup).
- *  - Material `Slider` tinted via `MaterialTheme.colorScheme.primary` on
- *    the active track / thumb / ticks and `KnotworkTheme.extended.surface3`
- *    on the inactive track.
+ *  - `BodySm` SemiBold label on the left, muted `MonoSm` value label on the
+ *    right edge.
+ *  - `KnotworkCompactSlider` beneath (compact pill thumb, 4 dp track).
  *
  * The composable is stateless: callers provide both the current [value]
  * and the [valueLabel] string (so the row can pluralise or format the
  * displayed number).
  *
- * @param label row title rendered in `TitleMd`.
+ * @param label row title rendered in `BodySm` SemiBold.
  * @param valueLabel pre-formatted current value (e.g. `"0.7"`, `"4096 tok"`).
  * @param value current slider position.
  * @param onValueChange callback invoked while the user drags.
@@ -40,6 +38,8 @@ import app.knotwork.design.tokens.KnotworkTextStyles
  *  the slider continuous.
  * @param enabled `false` puts the slider in a read-only state during a
  *  `PendingChange` transition.
+ * @param errorText optional validation message rendered beneath the slider
+ *  (e.g. for the pipeline node-config fields); `null` (default) shows nothing.
  */
 @Suppress("LongParameterList") // Stable public API; each parameter maps to a row attribute.
 @Composable
@@ -52,9 +52,10 @@ fun KnotworkParamSlider(
     modifier: Modifier = Modifier,
     steps: Int = 0,
     enabled: Boolean = true,
+    errorText: String? = null,
 ) {
     Column(
-        modifier = modifier,
+        modifier = modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp1),
     ) {
         Row(
@@ -63,20 +64,16 @@ fun KnotworkParamSlider(
         ) {
             Text(
                 text = label,
-                style = KnotworkTextStyles.TitleMd.copy(fontWeight = FontWeight.SemiBold),
+                style = KnotworkTextStyles.BodySm.copy(fontWeight = FontWeight.SemiBold),
                 color = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.weight(1f),
             )
             Text(
                 text = valueLabel,
-                style = KnotworkTextStyles.MonoBase.copy(fontWeight = FontWeight.SemiBold),
-                color = MaterialTheme.colorScheme.primary,
+                style = KnotworkTextStyles.MonoSm,
+                color = KnotworkTheme.extended.onSurfaceMuted,
             )
         }
-        // Brand-standard `KnotworkCompactSlider` — same compact pill thumb
-        // and 4 dp track that the inline Settings slider used to roll
-        // privately. Now shared with NodeConfigSheet / future surfaces so
-        // every slider in the app has identical visual density.
         KnotworkCompactSlider(
             value = value,
             onValueChange = onValueChange,
@@ -84,5 +81,12 @@ fun KnotworkParamSlider(
             steps = steps,
             enabled = enabled,
         )
+        if (errorText != null) {
+            Text(
+                text = errorText,
+                style = KnotworkTextStyles.BodySm,
+                color = KnotworkTheme.extended.signalError,
+            )
+        }
     }
 }

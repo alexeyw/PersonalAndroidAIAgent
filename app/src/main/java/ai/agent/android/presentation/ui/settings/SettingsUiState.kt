@@ -36,6 +36,24 @@ import ai.agent.android.domain.models.ToolApprovalPolicy
  * @property memoryStats Live aggregate counters.
  * @property autoSummarizeThreshold Fraction (0..1) for the threshold
  *   slider.
+ * @property memorySearchTopK How many ranked chunks a single retrieval
+ *   returns into a node's context block.
+ * @property memorySearchThreshold Minimum cosine-similarity score a chunk
+ *   must reach to be surfaced during retrieval.
+ * @property memoryRecencyHalfLifeDays Recency half-life (days) used by the
+ *   memory re-ranker.
+ * @property memoryCompactionEnabled Whether the daily background compaction
+ *   pass is enabled.
+ * @property memoryCompactionAgeDays Age (days) after which a non-pinned chunk
+ *   becomes a compaction candidate.
+ * @property maxMemoryChunks Hard ceiling on the number of stored chunks.
+ * @property activeEmbeddingProviderId Wire id of the selected embedding
+ *   provider.
+ * @property embeddingProviderOptions Available embedding providers (id +
+ *   display name) for the Memory-section dropdown.
+ * @property memoryValidationError Transient validation error surfaced when a
+ *   memory-tuning mutator rejects an out-of-range / unknown value; `null` when
+ *   the last edit was accepted.
  * @property reembedProgress `null` when no re-embed job is in flight;
  *   otherwise `0f..1f`.
  * @property longRunningTaskNotificationsEnabled Mirror of the toggle.
@@ -71,6 +89,15 @@ data class SettingsUiState(
     val memoryStats: MemoryStats = MemoryStats.EMPTY,
     val autoExtractEnabled: Boolean = SettingsDefaults.AUTO_EXTRACT_ENABLED_DEFAULT,
     val autoSummarizeThreshold: Float = SettingsDefaults.AUTO_SUMMARIZE_THRESHOLD_DEFAULT,
+    val memorySearchTopK: Int = SettingsDefaults.MEMORY_SEARCH_TOP_K_DEFAULT,
+    val memorySearchThreshold: Float = SettingsDefaults.MEMORY_SEARCH_THRESHOLD_DEFAULT,
+    val memoryRecencyHalfLifeDays: Int = SettingsDefaults.MEMORY_RECENCY_HALF_LIFE_DAYS_DEFAULT,
+    val memoryCompactionEnabled: Boolean = SettingsDefaults.MEMORY_COMPACTION_ENABLED_DEFAULT,
+    val memoryCompactionAgeDays: Int = SettingsDefaults.MEMORY_COMPACTION_AGE_DAYS_DEFAULT,
+    val maxMemoryChunks: Int = SettingsDefaults.MAX_MEMORY_CHUNKS_DEFAULT,
+    val activeEmbeddingProviderId: String = SettingsDefaults.ACTIVE_EMBEDDING_PROVIDER_ID_DEFAULT,
+    val embeddingProviderOptions: List<EmbeddingProviderOption> = emptyList(),
+    val memoryValidationError: MemoryValidationError? = null,
     val reembedProgress: Float? = null,
     val longRunningTaskNotificationsEnabled: Boolean = true,
     val crashReportingEnabled: Boolean = false,
@@ -98,6 +125,30 @@ data class PendingMemoryImport(
     val providerMismatch: Boolean,
     val schemaMismatch: Boolean,
 )
+
+/**
+ * One selectable embedding provider in the Memory-section dropdown.
+ *
+ * @property id Stable wire id persisted via
+ *   [ai.agent.android.domain.repositories.SettingsRepository.activeEmbeddingProviderId]
+ *   (e.g. `"use"`).
+ * @property displayName Human-readable provider label rendered in the dropdown.
+ */
+data class EmbeddingProviderOption(val id: String, val displayName: String)
+
+/**
+ * Which memory-tuning mutator rejected its last input. Surfaced through
+ * [SettingsUiState.memoryValidationError] so the screen can show an inline
+ * error and the value stays unpersisted.
+ */
+enum class MemoryValidationError {
+    SearchTopK,
+    SearchThreshold,
+    RecencyHalfLife,
+    CompactionAge,
+    MaxChunks,
+    UnknownEmbeddingProvider,
+}
 
 /**
  * One `$VARIABLE` chip in the System instructions card.
