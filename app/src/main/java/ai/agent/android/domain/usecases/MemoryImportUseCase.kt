@@ -84,11 +84,12 @@ class MemoryImportUseCase @Inject constructor(
             }
             MemoryImportStrategy.Merge -> {
                 val existing = memoryRepository.getExistingMemoryIds()
-                // id == 0 → always insert (Room auto-assigns a fresh key); a
-                // positive id is inserted only if not already stored. Dedup by id
-                // so two file chunks sharing an id (which REPLACE-on-conflict would
-                // collapse to one row) are counted as one insert, not two.
-                val fresh = document.chunks.filter { it.id == 0L || it.id !in existing }.dedupById()
+                // Drop chunks whose id is already stored. id == 0 always passes
+                // (existing holds only real positive row ids) and dedupById then
+                // keeps every id-0 chunk while collapsing positive-id duplicates
+                // within the file, so the count matches what REPLACE-on-conflict
+                // actually persists.
+                val fresh = document.chunks.filter { it.id !in existing }.dedupById()
                 memoryRepository.insertImportedMemories(fresh, needsReembedding)
                 fresh
             }

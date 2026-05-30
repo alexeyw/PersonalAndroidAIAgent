@@ -19,4 +19,16 @@ interface MemoryReembedScheduler {
      * coalesce so a pass already queued (or running) is not duplicated.
      */
     fun schedule()
+
+    /**
+     * Re-arms the re-embed pass iff chunks are still flagged `needsReembedding` —
+     * a self-heal for a one-off pass that was lost (process killed before
+     * WorkManager persisted the enqueue) or exhausted its retries.
+     *
+     * Owning this check here (rather than in a single UI entry point) keeps
+     * recovery independent of which surface — `MainActivity`, the foreground
+     * service, … — happens to start the process. A no-op (one cheap `COUNT`,
+     * nothing enqueued) when nothing is pending.
+     */
+    suspend fun rearmIfPending()
 }

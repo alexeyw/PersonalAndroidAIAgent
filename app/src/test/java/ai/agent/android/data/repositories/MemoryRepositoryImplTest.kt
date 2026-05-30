@@ -263,6 +263,29 @@ class MemoryRepositoryImplTest {
     }
 
     @Test
+    fun `getMemoriesNeedingReembedding returns a corrupt-embedding row instead of dropping it`() =
+        kotlinx.coroutines.test.runTest {
+            // A row with an unparseable embedding string would otherwise be
+            // dropped, leaving it flagged forever while the COUNT keeps re-arming
+            // the worker. It must be returned (with an empty embedding) so the
+            // re-embed pass can repair it from text and clear the flag.
+            val corrupt = MemoryChunkEntity(
+                id = 1,
+                text = "still has text",
+                embedding = "not,a,float",
+                timestamp = 10L,
+                needsReembedding = true,
+            )
+            io.mockk.coEvery { memoryDao.getMemoriesNeedingReembedding() } returns listOf(corrupt)
+
+            val result = repository.getMemoriesNeedingReembedding()
+
+            assertEquals(1, result.size)
+            assertEquals("still has text", result[0].text)
+            assertEquals(0, result[0].embedding.size)
+        }
+
+    @Test
     fun `countMemoriesNeedingReembedding forwards to dao`() = kotlinx.coroutines.test.runTest {
         io.mockk.coEvery { memoryDao.countNeedingReembedding() } returns 4
 

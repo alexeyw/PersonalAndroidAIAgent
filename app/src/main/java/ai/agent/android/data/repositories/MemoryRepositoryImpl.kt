@@ -178,7 +178,28 @@ class MemoryRepositoryImpl @Inject constructor(private val memoryDao: MemoryDao,
     }
 
     override suspend fun getMemoriesNeedingReembedding(): List<MemoryChunk> = withContext(Dispatchers.IO) {
-        memoryDao.getMemoriesNeedingReembedding().mapNotNull { entity -> entity.toMemoryChunkOrNull() }
+        // Deliberately lenient (no `mapNotNull` drop): the re-embed pass recomputes
+        // the vector from `text` and ignores the stored embedding, so a row whose
+        // embedding string is unparseable must still be returned — otherwise it
+        // would be dropped here yet keep counting in `countNeedingReembedding`,
+        // re-arming the worker on every startup as a permanent no-op. A bad
+        // embedding falls back to an empty array (the caller never reads it).
+        memoryDao.getMemoriesNeedingReembedding().map { entity ->
+            MemoryChunk(
+                id = entity.id,
+                text = entity.text,
+                // runCatching: toFloatArray throws on a non-numeric string and
+                // returns null on a blank one; either way a corrupt embedding
+                // falls back to empty so the row is still returned and repaired.
+                embedding = runCatching { converters.toFloatArray(entity.embedding) }.getOrNull() ?: FloatArray(0),
+                timestamp = entity.timestamp,
+                isPinned = entity.isPinned,
+                source = entity.source,
+                tags = TagsCsv.decode(entity.tagsCsv),
+                useCount = entity.useCount,
+                lastUsedAt = entity.lastUsedAt,
+            )
+        }
     }
 
     /**

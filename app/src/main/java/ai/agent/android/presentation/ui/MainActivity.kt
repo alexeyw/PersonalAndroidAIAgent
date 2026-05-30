@@ -2,7 +2,6 @@ package ai.agent.android.presentation.ui
 
 import ai.agent.android.data.services.AgentForegroundService
 import ai.agent.android.data.services.MemoryCompactionScheduler
-import ai.agent.android.domain.repositories.MemoryRepository
 import ai.agent.android.domain.repositories.SettingsRepository
 import ai.agent.android.domain.services.MemoryReembedScheduler
 import ai.agent.android.presentation.state.TransientMessageRelay
@@ -45,8 +44,6 @@ class MainActivity : ComponentActivity() {
     @Inject lateinit var transientMessageRelay: TransientMessageRelay
 
     @Inject lateinit var memoryCompactionScheduler: MemoryCompactionScheduler
-
-    @Inject lateinit var memoryRepository: MemoryRepository
 
     @Inject lateinit var memoryReembedScheduler: MemoryReembedScheduler
 
@@ -91,15 +88,11 @@ class MainActivity : ComponentActivity() {
         lifecycleScope.launch(Dispatchers.Default) {
             memoryCompactionScheduler.schedulePeriodic()
             memoryCompactionScheduler.startHardLimitWatch()
-            // Re-arm the import re-embed pass if a previous one-off was lost
-            // (process killed before WorkManager persisted the enqueue) or
-            // exhausted its retries, so chunks imported under a different
-            // embedding provider are never stranded needsReembedding=1 with no
-            // scheduled pass. Gated by a cheap COUNT so the common case (nothing
-            // pending) costs one query and enqueues nothing.
-            if (memoryRepository.countMemoriesNeedingReembedding() > 0) {
-                memoryReembedScheduler.schedule()
-            }
+            // Self-heal: re-arm the import re-embed pass if a prior one-off was
+            // lost or exhausted its retries. The check lives in the scheduler so
+            // recovery isn't tied to this one entry point (the foreground service
+            // re-arms too).
+            memoryReembedScheduler.rearmIfPending()
         }
 
         // Phase 21 / Task 1/11: pin transparent status- and navigation-bar

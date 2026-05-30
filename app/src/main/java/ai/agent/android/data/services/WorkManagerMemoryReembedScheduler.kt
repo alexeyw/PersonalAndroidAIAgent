@@ -1,5 +1,6 @@
 package ai.agent.android.data.services
 
+import ai.agent.android.domain.repositories.MemoryRepository
 import ai.agent.android.domain.services.MemoryReembedScheduler
 import androidx.work.BackoffPolicy
 import androidx.work.Constraints
@@ -29,10 +30,13 @@ import javax.inject.Singleton
  * chunks.
  *
  * @property workManager The WorkManager instance the pass is enqueued on.
+ * @property memoryRepository Source of the pending-chunk count for [rearmIfPending].
  */
 @Singleton
-class WorkManagerMemoryReembedScheduler @Inject constructor(private val workManager: WorkManager) :
-    MemoryReembedScheduler {
+class WorkManagerMemoryReembedScheduler @Inject constructor(
+    private val workManager: WorkManager,
+    private val memoryRepository: MemoryRepository,
+) : MemoryReembedScheduler {
 
     override fun schedule() {
         val constraints = Constraints.Builder()
@@ -50,6 +54,13 @@ class WorkManagerMemoryReembedScheduler @Inject constructor(private val workMana
             request,
         )
         Timber.tag(TAG).d("Scheduled background memory re-embed pass")
+    }
+
+    override suspend fun rearmIfPending() {
+        if (memoryRepository.countMemoriesNeedingReembedding() > 0) {
+            Timber.tag(TAG).d("Pending re-embed chunks found on startup; re-arming the pass")
+            schedule()
+        }
     }
 
     private companion object {

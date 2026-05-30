@@ -69,12 +69,12 @@ class MemoryImportUseCaseTest {
 
     @Test
     fun `Merge always inserts id-less chunks`() = runTest {
-        coEvery { repository.getExistingMemoryIds() } returns setOf(0L, 1L)
+        coEvery { repository.getExistingMemoryIds() } returns setOf(1L)
         val captured = slot<List<MemoryChunk>>()
         coEvery { repository.insertImportedMemories(capture(captured), any()) } just Runs
 
-        // Two id-less (id == 0) chunks must both be inserted even though 0 is in
-        // the existing-id set — Room auto-assigns fresh keys for them.
+        // Two id-less (id == 0) chunks must both be inserted (Room auto-assigns
+        // fresh keys); dedupById keeps every id-0 chunk rather than collapsing.
         val doc = document("use", listOf(chunk(0), chunk(0)))
         val result = useCase.import(doc, MemoryImportStrategy.Merge, activeProviderId = "use")
 

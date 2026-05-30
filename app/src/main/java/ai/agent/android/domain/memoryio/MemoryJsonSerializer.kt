@@ -135,8 +135,8 @@ object MemoryJsonSerializer {
             val chunkJson = chunksJson.optJSONObject(i)
                 ?: return MemoryImportOutcome.Failure("Malformed chunk at index $i")
             val chunk = parseChunk(chunkJson) ?: return MemoryImportOutcome.Failure(
-                "Chunk at index $i has a missing or malformed required field " +
-                    "(text / embedding / timestamp); embedding must be a non-empty array of finite numbers",
+                "Chunk at index $i has a missing or malformed required field: text must be non-blank, " +
+                    "embedding a non-empty array of finite numbers, and timestamp a positive epoch-millis value",
             )
             chunks.add(chunk)
         }
@@ -161,10 +161,15 @@ object MemoryJsonSerializer {
      * Parses a single chunk object, returning `null` (so the caller fails the
      * whole import with an index-tagged message) when:
      *  - a required field (`text`, `embedding`, `timestamp`) is absent; or
-     *  - the embedding is not a non-empty array of finite numbers. A blank
+     *  - `text` is blank; or
+     *  - the embedding is not a non-empty array of finite numbers (a blank
      *    embedding would serialise to a zero-length vector that reads back as a
      *    dropped row, and a non-numeric entry would become `NaN` and poison
-     *    cosine similarity — both are rejected up front rather than stored.
+     *    cosine similarity); or
+     *  - `timestamp` is not a positive epoch-millis value. `optLong` coerces a
+     *    non-numeric / null `timestamp` to `0`, which would store the memory at
+     *    epoch 1970 — maximally stale to the recency re-ranker and an immediate
+     *    compaction-deletion candidate — so it is rejected like the other fields.
      */
     @Suppress("ReturnCount")
     private fun parseChunk(json: JSONObject): MemoryChunk? {
@@ -182,6 +187,7 @@ object MemoryJsonSerializer {
             embedding[idx] = value.toFloat()
         }
         val timestamp = json.optLong(KEY_TIMESTAMP)
+        if (timestamp <= 0L) return null
         val tagsJson = json.optJSONArray(KEY_TAGS)
         val tags = if (tagsJson == null) {
             emptyList()

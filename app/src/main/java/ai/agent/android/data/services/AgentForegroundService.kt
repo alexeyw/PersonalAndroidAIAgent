@@ -4,6 +4,7 @@ import ai.agent.android.domain.constants.NotificationChannels
 import ai.agent.android.domain.engine.LlmInferenceEngine
 import ai.agent.android.domain.models.AgentOrchestratorState
 import ai.agent.android.domain.repositories.PowerStateRepository
+import ai.agent.android.domain.services.MemoryReembedScheduler
 import ai.agent.android.domain.usecases.AgentOrchestratorUseCase
 import android.app.Notification
 import android.app.NotificationChannel
@@ -57,6 +58,14 @@ class AgentForegroundService : Service() {
     @Inject
     lateinit var workManager: WorkManager
 
+    /**
+     * Re-arms the background memory re-embed pass on startup when chunks remain
+     * flagged — covers the case where the OS restarts this service without
+     * `MainActivity` ever being created.
+     */
+    @Inject
+    lateinit var memoryReembedScheduler: MemoryReembedScheduler
+
     private val serviceScope = CoroutineScope(Dispatchers.Main + Job())
     private lateinit var idleManager: AgentIdleManager
     private lateinit var powerManager: AgentPowerManager
@@ -95,6 +104,10 @@ class AgentForegroundService : Service() {
             workManager = workManager,
         )
         powerManager.startObserving()
+
+        // Self-heal the import re-embed pass even when the process is brought up
+        // via the service rather than MainActivity (e.g. an OS service restart).
+        serviceScope.launch(Dispatchers.IO) { memoryReembedScheduler.rearmIfPending() }
 
         serviceScope.launch {
             agentOrchestratorUseCase.globalState.collectLatest { state ->

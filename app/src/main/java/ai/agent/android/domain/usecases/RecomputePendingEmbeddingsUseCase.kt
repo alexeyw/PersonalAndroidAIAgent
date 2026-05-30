@@ -61,10 +61,15 @@ class RecomputePendingEmbeddingsUseCase @Inject constructor(
                 // The provider broke the index-aligned contract. Writing now would
                 // assign the wrong vector to a chunk, so skip the whole batch
                 // (chunks stay flagged for a later re-arm) rather than corrupt it.
-                Timber.w(
-                    "Re-embed batch size mismatch: requested %d, got %d; skipping batch to avoid misalignment",
+                // Logged at error level — a deterministic mismatch is a provider
+                // bug that no retry can fix, so it must be diagnosable rather than
+                // silently swallowed.
+                Timber.e(
+                    "Re-embed batch size mismatch: requested %d, got %d; %d chunk(s) left unrepaired " +
+                        "(provider violated the index-aligned embed() contract)",
                     batch.size,
                     embeddings.size,
+                    batch.size,
                 )
                 continue
             }

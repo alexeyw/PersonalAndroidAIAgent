@@ -143,6 +143,24 @@ class MemoryJsonSerializerTest {
     }
 
     @Test
+    fun `parse rejects a non-numeric timestamp`() {
+        val json = """
+            {"schemaVersion":1,"embeddingProviderId":"use","exportedAt":0,
+             "chunks":[{"id":1,"text":"x","embedding":[0.1],"timestamp":"oops"}]}
+        """.trimIndent()
+        assertTrue(MemoryJsonSerializer.parse(json) is MemoryImportOutcome.Failure)
+    }
+
+    @Test
+    fun `parse rejects a non-positive timestamp`() {
+        val json = """
+            {"schemaVersion":1,"embeddingProviderId":"use","exportedAt":0,
+             "chunks":[{"id":1,"text":"x","embedding":[0.1],"timestamp":0}]}
+        """.trimIndent()
+        assertTrue(MemoryJsonSerializer.parse(json) is MemoryImportOutcome.Failure)
+    }
+
+    @Test
     fun `parse does not throw on a malformed compaction ids entry`() {
         // A non-numeric ids element must not escape parse() as a JSONException;
         // it resolves to 0 and the chunk still parses.

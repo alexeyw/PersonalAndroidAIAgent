@@ -14,7 +14,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonDefaults
@@ -28,7 +28,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
@@ -180,43 +179,43 @@ private fun MemoryImportDialog(
             )
         }
     }
-    // Three actions don't fit AlertDialog's two button slots cleanly, so the
-    // body hosts the destructive Replace as its own full-width, error-tinted
-    // button, leaving Merge (the safe default) in the primary confirm slot and
-    // Cancel in the dismiss slot — one slot per semantic action, no cramming.
+    // The two strategy actions share the confirm slot (Merge as the safe
+    // default, Replace error-tinted as the destructive choice); Cancel takes the
+    // dismiss slot. Keeping all three in AlertDialog's button slots gives them
+    // the standard button-row spacing/insets instead of a button floating in the
+    // body text.
     AlertDialog(
         onDismissRequest = onCancel,
         title = { Text(stringResource(R.string.settings_memory_import_dialog_title)) },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text(
-                    buildString {
-                        append(
-                            stringResource(
-                                R.string.settings_memory_import_dialog_body,
-                                pending.document.chunks.size,
-                            ),
-                        )
-                        warnings.forEach { warning ->
-                            append("\n\n")
-                            append(warning)
-                        }
-                    },
-                )
+            Text(
+                buildString {
+                    append(
+                        stringResource(
+                            R.string.settings_memory_import_dialog_body,
+                            pending.document.chunks.size,
+                        ),
+                    )
+                    warnings.forEach { warning ->
+                        append("\n\n")
+                        append(warning)
+                    }
+                },
+            )
+        },
+        confirmButton = {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                TextButton(onClick = onMerge) {
+                    Text(stringResource(R.string.settings_memory_import_merge))
+                }
                 TextButton(
                     onClick = onReplace,
-                    modifier = Modifier.align(Alignment.End),
                     colors = ButtonDefaults.textButtonColors(
                         contentColor = MaterialTheme.colorScheme.error,
                     ),
                 ) {
                     Text(stringResource(R.string.settings_memory_import_replace))
                 }
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = onMerge) {
-                Text(stringResource(R.string.settings_memory_import_merge))
             }
         },
         dismissButton = {
