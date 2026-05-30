@@ -187,10 +187,8 @@ class MemoryScreenMappingTest {
     }
 
     @Test
-    fun `errorMessage maps to the Error visual state`() {
-        val state = MemoryUiState(memories = listOf(chunk(1)), errorMessage = "boom")
-        val vs = state.toViewState(now)
-        assertEquals(MemoryVisualState.Error, vs.visualState)
-        assertEquals("boom", vs.errorMessage)
+    fun `loadFailed maps to the Error visual state`() {
+        val state = MemoryUiState(memories = listOf(chunk(1)), loadFailed = true)
+        assertEquals(MemoryVisualState.Error, state.toViewState(now).visualState)
     }
 }

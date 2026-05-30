@@ -1,5 +1,6 @@
 package ai.agent.android.presentation.ui.memory
 
+import ai.agent.android.R
 import ai.agent.android.domain.models.MemoryChunk
 import ai.agent.android.domain.models.MemorySource
 import ai.agent.android.domain.usecases.CompactionEstimate
@@ -9,13 +10,19 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.knotwork.design.screens.memory.CompactionEstimateView
@@ -48,6 +55,7 @@ import kotlin.math.roundToInt
 fun MemoryScreen(viewModel: MemoryViewModel = hiltViewModel(), onOpenChat: () -> Unit = {}, onBack: () -> Unit = {}) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    val snackbarHostState = remember { SnackbarHostState() }
 
     val exportLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.CreateDocument(MIME_JSON),
@@ -60,6 +68,20 @@ fun MemoryScreen(viewModel: MemoryViewModel = hiltViewModel(), onOpenChat: () ->
         viewModel.exportRequests.collect { exportLauncher.launch(EXPORT_FILENAME) }
     }
 
+    val loadErrorText = stringResource(R.string.memory_msg_load_error)
+    val addErrorText = stringResource(R.string.memory_msg_add_error)
+    val editErrorText = stringResource(R.string.memory_msg_edit_error)
+    LaunchedEffect(viewModel) {
+        viewModel.messageEvents.collect { message ->
+            val text = when (message) {
+                MemoryMessage.LoadError -> loadErrorText
+                MemoryMessage.AddError -> addErrorText
+                MemoryMessage.EditError -> editErrorText
+            }
+            snackbarHostState.showSnackbar(text)
+        }
+    }
+
     // The expensive list projection (filter / group / sort / breakdown / chip
     // counts) is memoised only on the fields that affect it, so search
     // keystrokes and dialog-visibility toggles don't re-run the O(N) work.
@@ -70,19 +92,20 @@ fun MemoryScreen(viewModel: MemoryViewModel = hiltViewModel(), onOpenChat: () ->
         uiState.dateFilter,
         uiState.searchResults,
         uiState.searchActive,
+        uiState.searchQuery,
         uiState.expandedId,
         uiState.editing,
         uiState.totalBytes,
         uiState.lastCompactedAt,
         uiState.sessionNames,
-        uiState.errorMessage,
+        uiState.loadFailed,
     ) {
         uiState.toViewState(nowMillis = System.currentTimeMillis())
     }
+    // Dialog visibility + the loaded estimate are intentionally excluded from
+    // the memo keys (toggling them must not re-run the O(N) projection); they
+    // are overlaid here cheaply on every recomposition.
     val viewState = listViewState.copy(
-        searchQuery = uiState.searchQuery,
-        searchEmpty =
-        uiState.searchActive && uiState.searchQuery.isNotBlank() && uiState.searchResults?.isEmpty() == true,
         compactDialogVisible = uiState.compactDialogVisible,
         compactEstimate = uiState.compactEstimate?.toView(),
         addDialogVisible = uiState.addDialogVisible,
@@ -116,6 +139,11 @@ fun MemoryScreen(viewModel: MemoryViewModel = hiltViewModel(), onOpenChat: () ->
 
     Box(modifier = Modifier.fillMaxSize().testTag(tag = MEMORY_ROOT_TEST_TAG)) {
         MemoryContent(state = viewState, callbacks = callbacks)
+        // Above the "Add memory" FAB so the two don't overlap.
+        SnackbarHost(
+            hostState = snackbarHostState,
+            modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = SNACKBAR_BOTTOM_INSET),
+        )
     }
 }
 
@@ -126,7 +154,7 @@ fun MemoryScreen(viewModel: MemoryViewModel = hiltViewModel(), onOpenChat: () ->
 internal fun MemoryUiState.toViewState(nowMillis: Long): MemoryViewState {
     val expanded = expandedId?.let { id -> memories.firstOrNull { it.id == id } }
     val visualState = when {
-        errorMessage != null -> MemoryVisualState.Error
+        loadFailed -> MemoryVisualState.Error
         expanded != null && editing -> MemoryVisualState.Editing
         expanded != null -> MemoryVisualState.EntryExpanded
         memories.isEmpty() -> MemoryVisualState.Empty
@@ -138,16 +166,16 @@ internal fun MemoryUiState.toViewState(nowMillis: Long): MemoryViewState {
         // Search results are a single relevance-ordered list (the order
         // retrieveScored returns) — no time bucketing, which would scatter the
         // ranking the search header advertises. Blank title = no section header.
-        val rows = (searchResults ?: emptyList()).map { (chunk, score) -> chunk to score as Float? }
-        if (rows.isEmpty()) {
+        val hits = searchResults ?: emptyList()
+        if (hits.isEmpty()) {
             emptyList()
         } else {
             listOf(
                 MemorySection(
                     title = "",
-                    count = rows.size,
-                    rows = rows.map {
-                        it.toRow(nowMillis)
+                    count = hits.size,
+                    rows = hits.map {
+                        it.first.toRow(it.second, nowMillis)
                     },
                 ),
             )
@@ -160,6 +188,9 @@ internal fun MemoryUiState.toViewState(nowMillis: Long): MemoryViewState {
         buildSections(scored, sortMode, nowMillis)
     }
 
+    // Dialog visibility + the loaded estimate are authored live by the screen
+    // (they are not in the projection's memo keys), so they are left at their
+    // defaults here; the screen overlays them. See MemoryScreen's `.copy(...)`.
     return MemoryViewState(
         visualState = visualState,
         header = buildHeader(nowMillis),
@@ -168,16 +199,17 @@ internal fun MemoryUiState.toViewState(nowMillis: Long): MemoryViewState {
         sortMode = sortMode,
         dateFilter = dateFilter,
         searchActive = searchActive,
-        searchEmpty = searchActive && searchQuery.isNotBlank() && searchResults?.isEmpty() == true,
+        searchEmpty = searchEmpty(),
         searchQuery = searchQuery,
         sections = sections,
         expandedEntry = expanded?.toDetail(nowMillis, sessionNames),
-        errorMessage = errorMessage,
-        compactDialogVisible = compactDialogVisible,
-        compactEstimate = compactEstimate?.toView(),
-        addDialogVisible = addDialogVisible,
+        errorMessage = null,
     )
 }
+
+/** Single source of truth for "a search ran and returned nothing" — used by toViewState and the screen. */
+internal fun MemoryUiState.searchEmpty(): Boolean =
+    searchActive && searchQuery.isNotBlank() && searchResults?.isEmpty() == true
 
 private fun MemoryUiState.buildHeader(nowMillis: Long): MemoryStatsHeader {
     val total = memories.size
@@ -256,24 +288,25 @@ private fun buildSections(
         if (bucket.isEmpty()) {
             null
         } else {
-            MemorySection(title = title, count = bucket.size, rows = bucket.sorted().map { it.toRow(nowMillis) })
+            MemorySection(
+                title = title,
+                count = bucket.size,
+                rows = bucket.sorted().map { it.first.toRow(it.second, nowMillis) },
+            )
         }
     }
 }
 
-private fun Pair<MemoryChunk, Float?>.toRow(nowMillis: Long): MemoryRow {
-    val chunk = first
-    return MemoryRow(
-        id = chunk.id.toString(),
-        title = chunk.title(),
-        body = chunk.text,
-        sourceKind = chunk.source.toKind(),
-        tags = chunk.tags,
-        relevanceScore = second?.let { String.format(Locale.US, "%.2f", it) },
-        timestampLabel = relativeShort(nowMillis - chunk.timestamp),
-        isPinned = chunk.isPinned,
-    )
-}
+private fun MemoryChunk.toRow(score: Float?, nowMillis: Long): MemoryRow = MemoryRow(
+    id = id.toString(),
+    title = title(),
+    body = text,
+    sourceKind = source.toKind(),
+    tags = tags,
+    relevanceScore = score?.let { String.format(Locale.US, "%.2f", it) },
+    timestampLabel = relativeShort(nowMillis - timestamp),
+    isPinned = isPinned,
+)
 
 private fun MemoryChunk.toDetail(nowMillis: Long, sessionNames: Map<String, String>): MemoryEntryDetail {
     val learnedFrom = (source as? MemorySource.ChatSession)?.sessionId?.let { id ->
@@ -354,6 +387,9 @@ internal const val MEMORY_ROOT_TEST_TAG = "memory_screen_root"
 private const val MEMORY_TITLE_MAX_CHARS = 60
 private const val MIME_JSON = "application/json"
 private const val EXPORT_FILENAME = "memory-base.json"
+
+/** Bottom inset that lifts the snackbar clear of the "Add memory" FAB. */
+private val SNACKBAR_BOTTOM_INSET = 88.dp
 
 private const val MINUTE_MS = 60_000L
 private const val MINUTES_PER_HOUR = 60L

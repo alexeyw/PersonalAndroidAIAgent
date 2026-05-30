@@ -16,7 +16,6 @@ import ai.agent.android.domain.usecases.MemoryCompactionUseCase
 import ai.agent.android.domain.usecases.RetrieveRelevantMemoryUseCase
 import ai.agent.android.domain.usecases.SaveMessageToMemoryUseCase
 import ai.agent.android.domain.usecases.SaveToMemoryOutcome
-import ai.agent.android.presentation.state.TransientMessageRelay
 import app.knotwork.design.screens.memory.MemoryCategory
 import app.knotwork.design.screens.memory.MemoryDateFilter
 import app.knotwork.design.screens.memory.MemorySortMode
@@ -28,6 +27,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
@@ -53,7 +53,6 @@ class MemoryViewModelTest {
     private lateinit var memoryCompactionUseCase: MemoryCompactionUseCase
     private lateinit var estimateCompactionUseCase: EstimateCompactionUseCase
     private lateinit var retrieveRelevantMemoryUseCase: RetrieveRelevantMemoryUseCase
-    private lateinit var transientMessageRelay: TransientMessageRelay
     private lateinit var viewModel: MemoryViewModel
 
     private val testDispatcher = StandardTestDispatcher()
@@ -80,7 +79,6 @@ class MemoryViewModelTest {
         memoryCompactionUseCase = mockk(relaxed = true)
         estimateCompactionUseCase = mockk(relaxed = true)
         retrieveRelevantMemoryUseCase = mockk(relaxed = true)
-        transientMessageRelay = mockk(relaxed = true)
 
         coEvery { embeddingProviderResolver.resolve() } returns embeddingProvider
         coEvery { memoryRepository.getAllMemories() } returns emptyList()
@@ -103,8 +101,15 @@ class MemoryViewModelTest {
         memoryCompactionUseCase,
         estimateCompactionUseCase,
         retrieveRelevantMemoryUseCase,
-        transientMessageRelay,
     )
+
+    private fun TestScope.collectMessages(): MutableList<MemoryMessage> {
+        val events = mutableListOf<MemoryMessage>()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            viewModel.messageEvents.collect { events.add(it) }
+        }
+        return events
+    }
 
     @Test
     fun `loadAllData populates memories size and resolves session names`() = runTest {
@@ -121,7 +126,7 @@ class MemoryViewModelTest {
         testDispatcher.scheduler.advanceUntilIdle()
 
         val state = viewModel.uiState.value
-        assertFalse(state.isLoading)
+        assertFalse(state.loadFailed)
         assertEquals(2, state.memories.size)
         assertEquals(4096L, state.totalBytes)
         assertEquals(123L, state.lastCompactedAt)
@@ -223,17 +228,22 @@ class MemoryViewModelTest {
     }
 
     @Test
-    fun `commitEdit on embed failure posts a message and reloads without persisting`() = runTest {
+    fun `commitEdit on embed failure emits an EditError and keeps the edit sheet open`() = runTest {
         coEvery { embeddingProvider.embed(any<String>()) } throws RuntimeException("offline")
 
         viewModel = createViewModel()
         testDispatcher.scheduler.advanceUntilIdle()
+        val messages = collectMessages()
+        viewModel.editEntry(7L)
 
         viewModel.commitEdit(id = 7L, body = "boom", tags = emptyList())
         testDispatcher.scheduler.advanceUntilIdle()
 
         coVerify(exactly = 0) { memoryRepository.updateMemoryWithTags(any(), any(), any(), any()) }
-        coVerify(exactly = 1) { transientMessageRelay.post(any()) }
+        assertEquals(listOf(MemoryMessage.EditError), messages)
+        // The draft survives: the sheet stays open in edit mode.
+        assertEquals(7L, viewModel.uiState.value.expandedId)
+        assertTrue(viewModel.uiState.value.editing)
     }
 
     @Test
@@ -294,15 +304,19 @@ class MemoryViewModelTest {
     }
 
     @Test
-    fun `confirmAdd on Failed outcome posts a message and does not reload`() = runTest {
+    fun `confirmAdd on Failed outcome emits an AddError and keeps the dialog open`() = runTest {
         coEvery { saveMessageToMemoryUseCase("boom") } returns SaveToMemoryOutcome.Failed(RuntimeException("offline"))
         viewModel = createViewModel()
         testDispatcher.scheduler.advanceUntilIdle()
+        val messages = collectMessages()
+        viewModel.showAddDialog()
 
         viewModel.confirmAdd("boom")
         testDispatcher.scheduler.advanceUntilIdle()
 
-        coVerify(exactly = 1) { transientMessageRelay.post(any()) }
+        assertEquals(listOf(MemoryMessage.AddError), messages)
+        // The dialog stays open so the typed text survives for retry.
+        assertTrue(viewModel.uiState.value.addDialogVisible)
         // Only the init load ran; a failed add does not trigger a reload.
         coVerify(exactly = 1) { memoryRepository.getAllMemories() }
     }

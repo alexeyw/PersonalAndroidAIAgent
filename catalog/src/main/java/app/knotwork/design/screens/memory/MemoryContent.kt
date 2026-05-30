@@ -117,7 +117,7 @@ fun MemoryContent(
             contentWindowInsets = WindowInsets(0, 0, 0, 0),
             topBar = {
                 app.knotwork.design.components.topbar.KnotworkTopAppBarShell {
-                    MemoryTopBar(searching = state.visualState == MemoryVisualState.Searching, callbacks = callbacks)
+                    MemoryTopBar(searching = state.searchActive, callbacks = callbacks)
                 }
             },
             floatingActionButton = {

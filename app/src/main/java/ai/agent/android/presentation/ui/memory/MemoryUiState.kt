@@ -15,7 +15,6 @@ import app.knotwork.design.screens.memory.MemorySortMode
  * @property totalBytes On-disk size of the memory table.
  * @property lastCompactedAt Epoch-millis of the last compaction (`0` = never).
  * @property sessionNames Session id → display name, for the detail "Learned from" line.
- * @property isLoading Whether a load is in flight.
  * @property selectedCategory Active category chip.
  * @property sortMode Active sort mode.
  * @property dateFilter Active date-range filter.
@@ -27,14 +26,14 @@ import app.knotwork.design.screens.memory.MemorySortMode
  * @property compactDialogVisible Whether the Compact confirm dialog is shown.
  * @property compactEstimate Loaded compaction estimate (`null` while loading).
  * @property addDialogVisible Whether the Add-memory dialog is shown.
- * @property errorMessage Non-null when a load failed; drives the Error/Retry state.
+ * @property loadFailed `true` when an initial/explicit load failed; drives the
+ *   Error/Retry state (a silent post-mutation refresh failure does not set it).
  */
 data class MemoryUiState(
     val memories: List<MemoryChunk> = emptyList(),
     val totalBytes: Long = 0L,
     val lastCompactedAt: Long = 0L,
     val sessionNames: Map<String, String> = emptyMap(),
-    val isLoading: Boolean = false,
     val selectedCategory: MemoryCategory = MemoryCategory.All,
     val sortMode: MemorySortMode = MemorySortMode.Recent,
     val dateFilter: MemoryDateFilter = MemoryDateFilter.All,
@@ -46,5 +45,5 @@ data class MemoryUiState(
     val compactDialogVisible: Boolean = false,
     val compactEstimate: CompactionEstimate? = null,
     val addDialogVisible: Boolean = false,
-    val errorMessage: String? = null,
+    val loadFailed: Boolean = false,
 )

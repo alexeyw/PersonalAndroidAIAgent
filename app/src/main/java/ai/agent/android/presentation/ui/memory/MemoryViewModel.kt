@@ -11,7 +11,6 @@ import ai.agent.android.domain.usecases.MemoryCompactionUseCase
 import ai.agent.android.domain.usecases.RetrieveRelevantMemoryUseCase
 import ai.agent.android.domain.usecases.SaveMessageToMemoryUseCase
 import ai.agent.android.domain.usecases.SaveToMemoryOutcome
-import ai.agent.android.presentation.state.TransientMessageRelay
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.knotwork.design.screens.memory.MemoryCategory
@@ -53,10 +52,9 @@ class MemoryViewModel @Inject constructor(
     private val memoryCompactionUseCase: MemoryCompactionUseCase,
     private val estimateCompactionUseCase: EstimateCompactionUseCase,
     private val retrieveRelevantMemoryUseCase: RetrieveRelevantMemoryUseCase,
-    private val transientMessageRelay: TransientMessageRelay,
 ) : ViewModel() {
 
-    private val _uiState = MutableStateFlow(MemoryUiState(isLoading = true))
+    private val _uiState = MutableStateFlow(MemoryUiState())
 
     /** The current UI state of the Memory screen. */
     val uiState: StateFlow<MemoryUiState> = _uiState.asStateFlow()
@@ -66,16 +64,37 @@ class MemoryViewModel @Inject constructor(
     /** One-shot signal asking the screen to open the SAF document picker for full export. */
     val exportRequests: SharedFlow<Unit> = _exportRequests.asSharedFlow()
 
+    private val _messageEvents = MutableSharedFlow<MemoryMessage>(extraBufferCapacity = 1)
+
+    /**
+     * One-shot snackbar events. The screen resolves each [MemoryMessage] to a
+     * localised string and shows it — keeping user-facing copy in the resource
+     * layer rather than the ViewModel.
+     */
+    val messageEvents: SharedFlow<MemoryMessage> = _messageEvents.asSharedFlow()
+
     private var searchJob: Job? = null
 
     init {
         loadAllData()
     }
 
-    /** Loads chunks, table size, last-compacted time, and originating session names. */
-    fun loadAllData() {
+    /**
+     * Loads the surface from scratch (init / explicit Retry). A read failure
+     * surfaces the full-screen Error/Retry state.
+     */
+    fun loadAllData() = load(surfaceError = true)
+
+    /**
+     * Silent post-mutation refresh: re-reads the table after a delete / pin /
+     * edit / compaction / add. A transient read failure here must NOT flip the
+     * whole screen to Error (that would mask a mutation that already
+     * succeeded) — it just logs and leaves the current list in place.
+     */
+    private fun refresh() = load(surfaceError = false)
+
+    private fun load(surfaceError: Boolean) {
         viewModelScope.launch {
-            _uiState.update { it.copy(isLoading = true, errorMessage = null) }
             try {
                 val memories = memoryRepository.getAllMemories()
                 val totalBytes = memoryRepository.observeStats().first().totalBytes
@@ -88,17 +107,18 @@ class MemoryViewModel @Inject constructor(
                         totalBytes = totalBytes,
                         lastCompactedAt = lastCompactedAt,
                         sessionNames = sessionNames,
-                        isLoading = false,
-                        errorMessage = null,
+                        loadFailed = false,
                     )
                 }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                // A read failure (DB/decryption) must surface the Error/Retry
-                // state instead of leaving the screen stuck on a stale list.
                 Timber.w(e, "Failed to load memory")
-                _uiState.update { it.copy(isLoading = false, errorMessage = LOAD_ERROR_MESSAGE) }
+                if (surfaceError) {
+                    _uiState.update { it.copy(loadFailed = true) }
+                } else {
+                    _messageEvents.tryEmit(MemoryMessage.LoadError)
+                }
             }
         }
     }
@@ -187,8 +207,10 @@ class MemoryViewModel @Inject constructor(
      * Commits an edit: re-embeds [body] with the active provider, then persists
      * the text, embedding, and tags **atomically** (one transaction) so the
      * write can never half-apply. On a re-embed or persistence failure the
-     * chunk is left untouched, the user is told via a snackbar, and the surface
-     * reloads so it reflects the database rather than a stale draft.
+     * chunk is left untouched and the **edit sheet stays open with the draft
+     * intact** (a snackbar explains the failure), so a recoverable error — e.g.
+     * an offline cloud provider — is one tap away from retry instead of
+     * discarding the user's typing.
      */
     fun commitEdit(id: Long, body: String, tags: List<String>) {
         viewModelScope.launch {
@@ -196,14 +218,13 @@ class MemoryViewModel @Inject constructor(
                 val embedding = embeddingProviderResolver.resolve().embed(body)
                 memoryRepository.updateMemoryWithTags(id = id, text = body, embedding = embedding, tags = tags)
                 _uiState.update { it.copy(editing = false, expandedId = null) }
-                loadAllData()
+                refresh()
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
+                // Keep the sheet open in edit mode so the draft survives.
                 Timber.w(e, "Failed to commit memory edit for $id")
-                transientMessageRelay.post(EDIT_ERROR_MESSAGE)
-                _uiState.update { it.copy(editing = false, expandedId = null) }
-                loadAllData()
+                _messageEvents.tryEmit(MemoryMessage.EditError)
             }
         }
     }
@@ -213,7 +234,7 @@ class MemoryViewModel @Inject constructor(
         viewModelScope.launch {
             memoryRepository.deleteMemory(id)
             _uiState.update { it.copy(expandedId = null, editing = false) }
-            loadAllData()
+            refresh()
         }
     }
 
@@ -222,7 +243,7 @@ class MemoryViewModel @Inject constructor(
         viewModelScope.launch {
             val current = _uiState.value.memories.firstOrNull { it.id == id } ?: return@launch
             memoryRepository.setMemoryPinned(id = id, pinned = !current.isPinned)
-            loadAllData()
+            refresh()
         }
     }
 
@@ -240,13 +261,13 @@ class MemoryViewModel @Inject constructor(
         _uiState.update { it.copy(compactDialogVisible = false) }
     }
 
-    /** Runs the real compaction pass, then reloads. */
+    /** Runs the real compaction pass, then refreshes. */
     fun confirmCompact() {
-        _uiState.update { it.copy(compactDialogVisible = false, isLoading = true) }
+        _uiState.update { it.copy(compactDialogVisible = false) }
         viewModelScope.launch {
             runCatching { memoryCompactionUseCase() }
                 .onFailure { Timber.w(it, "Manual compaction failed") }
-            loadAllData()
+            refresh()
         }
     }
 
@@ -261,18 +282,21 @@ class MemoryViewModel @Inject constructor(
     }
 
     /**
-     * Saves a manual memory entry from [text]. On success the surface reloads;
-     * on a Failed outcome (e.g. an offline cloud embedding provider) the user is
-     * told via a snackbar instead of the add silently vanishing. A blank input
-     * (Skipped) is a no-op.
+     * Saves a manual memory entry from [text]. The Add dialog stays open until
+     * the save resolves: on success it closes and the surface refreshes; on a
+     * Failed outcome (e.g. an offline cloud embedding provider) it **stays open
+     * with the typed text intact** and a snackbar explains the failure, so the
+     * user can retry without re-typing. A blank input (Skipped) just closes.
      */
     fun confirmAdd(text: String) {
-        _uiState.update { it.copy(addDialogVisible = false) }
         viewModelScope.launch {
             when (saveMessageToMemoryUseCase(text)) {
-                is SaveToMemoryOutcome.Saved -> loadAllData()
-                is SaveToMemoryOutcome.Failed -> transientMessageRelay.post(ADD_ERROR_MESSAGE)
-                SaveToMemoryOutcome.Skipped -> Unit
+                is SaveToMemoryOutcome.Saved -> {
+                    _uiState.update { it.copy(addDialogVisible = false) }
+                    refresh()
+                }
+                is SaveToMemoryOutcome.Failed -> _messageEvents.tryEmit(MemoryMessage.AddError)
+                SaveToMemoryOutcome.Skipped -> _uiState.update { it.copy(addDialogVisible = false) }
             }
         }
     }
@@ -293,10 +317,21 @@ class MemoryViewModel @Inject constructor(
     private companion object {
         const val SEARCH_DEBOUNCE_MS = 300L
         const val SEARCH_RESULT_LIMIT = 50
-
-        // User-visible snackbar messages routed through TransientMessageRelay.
-        const val LOAD_ERROR_MESSAGE = "Couldn't load memory"
-        const val ADD_ERROR_MESSAGE = "Couldn't save to memory"
-        const val EDIT_ERROR_MESSAGE = "Couldn't save the edit"
     }
+}
+
+/**
+ * One-shot snackbar messages the Memory screen resolves to localised strings.
+ * Modelled as an enum so user-facing copy lives in the resource layer, not the
+ * ViewModel.
+ */
+enum class MemoryMessage {
+    /** A background refresh after a mutation failed (the mutation itself succeeded). */
+    LoadError,
+
+    /** A manual "Add memory" save failed (e.g. an offline cloud embedding provider). */
+    AddError,
+
+    /** An inline edit failed to persist (the draft is kept in the open sheet). */
+    EditError,
 }
