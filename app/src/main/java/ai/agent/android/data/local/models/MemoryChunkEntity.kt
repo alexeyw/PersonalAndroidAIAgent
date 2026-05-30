@@ -27,6 +27,11 @@ import androidx.room.PrimaryKey
  *   migration (default `0`).
  * @property lastUsedAt Epoch-millis of the most recent retrieval, or `null`
  *   if never used. Added by the 26 → 27 migration (nullable, default `NULL`).
+ * @property needsReembedding When `true`, the chunk's stored [embedding] was
+ *   produced by a different embedding provider (it was imported from a device
+ *   whose active provider differed) and lives in an incompatible vector space.
+ *   It is therefore re-computed lazily with the active provider on the next
+ *   retrieval. Added by the 27 → 28 migration (default `0`).
  */
 @Entity(tableName = "memory_chunks")
 data class MemoryChunkEntity(
@@ -44,6 +49,8 @@ data class MemoryChunkEntity(
     val useCount: Int = 0,
     @ColumnInfo(name = "lastUsedAt")
     val lastUsedAt: Long? = null,
+    @ColumnInfo(name = "needsReembedding", defaultValue = "0")
+    val needsReembedding: Boolean = false,
 ) {
     companion object {
         /**

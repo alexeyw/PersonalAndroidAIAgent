@@ -165,6 +165,68 @@ interface MemoryRepository {
     suspend fun deleteAllMemories()
 
     /**
+     * Returns the ids of every stored chunk. Backs the import Merge strategy's
+     * duplicate check; avoids deserialising embeddings just to read ids.
+     *
+     * @return All stored chunk ids as a set.
+     */
+    suspend fun getExistingMemoryIds(): Set<Long>
+
+    /**
+     * Bulk-inserts imported chunks (the Merge strategy), preserving each chunk's
+     * id, text, embedding, timestamp, provenance, pin state, and tags. Usage
+     * telemetry (`useCount` / `lastUsedAt`) is reset because it does not survive
+     * a transfer.
+     *
+     * @param chunks The chunks to insert (already filtered against existing ids).
+     * @param needsReembedding When `true`, every inserted chunk is flagged for
+     *   background re-embedding because the file was exported under a different
+     *   embedding provider.
+     */
+    suspend fun insertImportedMemories(chunks: List<MemoryChunk>, needsReembedding: Boolean)
+
+    /**
+     * Atomically replaces the entire memory table with [chunks] (the Replace
+     * strategy): the wipe and the bulk insert run in a single transaction, so a
+     * failure mid-insert never leaves the store empty. Field preservation and
+     * the [needsReembedding] flag match [insertImportedMemories].
+     *
+     * @param chunks The chunks to load (must be non-empty; the caller guards
+     *   against wiping with nothing to insert).
+     * @param needsReembedding When `true`, every loaded chunk is flagged for
+     *   background re-embedding.
+     */
+    suspend fun replaceImportedMemories(chunks: List<MemoryChunk>, needsReembedding: Boolean)
+
+    /**
+     * One-shot count of chunks awaiting re-embedding. Backs the cheap startup
+     * re-arm check that re-schedules the background re-embed worker when a prior
+     * one-off pass was lost or exhausted its retries.
+     *
+     * @return The number of chunks flagged `needsReembedding`.
+     */
+    suspend fun countMemoriesNeedingReembedding(): Int
+
+    /**
+     * Retrieves the chunks awaiting re-embedding (imported under a different
+     * provider). Their stored embeddings are in an incompatible space until
+     * re-computed by the background re-embed worker.
+     *
+     * @return Chunks flagged `needsReembedding`.
+     */
+    suspend fun getMemoriesNeedingReembedding(): List<MemoryChunk>
+
+    /**
+     * Writes a freshly-computed embedding back to a chunk and clears its
+     * re-embedding flag, repairing an imported chunk exactly once. The text
+     * and timestamp are untouched.
+     *
+     * @param id Identifier of the chunk to repair.
+     * @param embedding The new vector embedding produced by the active provider.
+     */
+    suspend fun markMemoryReembedded(id: Long, embedding: FloatArray)
+
+    /**
      * Live snapshot of the aggregate stats rendered in the Settings →
      * Memory card. Emits a fresh value whenever the underlying table
      * mutates; consumers should `collectAsState` or `stateIn` it.

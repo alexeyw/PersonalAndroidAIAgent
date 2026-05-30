@@ -27,6 +27,7 @@ import ai.agent.android.data.repositories.PowerStateRepositoryImpl
 import ai.agent.android.data.repositories.PromptRepositoryImpl
 import ai.agent.android.data.repositories.ToolRepositoryImpl
 import ai.agent.android.data.services.LongRunningTaskNotifierImpl
+import ai.agent.android.data.services.WorkManagerMemoryReembedScheduler
 import ai.agent.android.domain.engine.LlmInferenceEngine
 import ai.agent.android.domain.engine.TaskQueueManager
 import ai.agent.android.domain.engine.TextEmbeddingEngine
@@ -50,6 +51,7 @@ import ai.agent.android.domain.repositories.PromptRepository
 import ai.agent.android.domain.repositories.SettingsRepository
 import ai.agent.android.domain.repositories.ToolRepository
 import ai.agent.android.domain.services.LongRunningTaskNotifier
+import ai.agent.android.domain.services.MemoryReembedScheduler
 import dagger.Binds
 import dagger.Module
 import dagger.hilt.InstallIn
@@ -66,6 +68,7 @@ import javax.inject.Singleton
  */
 @Module
 @InstallIn(SingletonComponent::class)
+@Suppress("TooManyFunctions") // Binding-only module: one @Binds per data-layer implementation.
 abstract class DataModule {
 
     /**
@@ -258,4 +261,13 @@ abstract class DataModule {
     @Binds
     @Singleton
     abstract fun bindLongRunningTaskNotifier(notifier: LongRunningTaskNotifierImpl): LongRunningTaskNotifier
+
+    /**
+     * Binds [WorkManagerMemoryReembedScheduler] to [MemoryReembedScheduler] —
+     * enqueues the background re-embed pass that repairs chunks imported under a
+     * different embedding provider (Phase 25 / Task 8).
+     */
+    @Binds
+    @Singleton
+    abstract fun bindMemoryReembedScheduler(scheduler: WorkManagerMemoryReembedScheduler): MemoryReembedScheduler
 }

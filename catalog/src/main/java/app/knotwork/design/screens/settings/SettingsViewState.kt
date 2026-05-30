@@ -190,6 +190,7 @@ data class MemoryCardState(
     val embeddingTitle: String,
     val embeddingSubtitle: String,
     val exportLabel: String,
+    val importLabel: String,
     val reembedLabel: String,
     val clearLabel: String,
     /** Re-embed progress in `0..100`, or `null` when no re-embed is in flight. */
@@ -327,6 +328,7 @@ class SettingsCallbacks(
     val onAutoExtractToggle: (Boolean) -> Unit = {},
     val onAutoSummarizeChange: (Int) -> Unit = {},
     val onExportMemoryClick: () -> Unit = {},
+    val onImportMemoryClick: () -> Unit = {},
     val onReembedClick: () -> Unit = {},
     val onClearMemoryClick: () -> Unit = {},
 

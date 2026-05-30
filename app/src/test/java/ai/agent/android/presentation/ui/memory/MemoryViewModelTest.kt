@@ -336,6 +336,6 @@ class MemoryViewModelTest {
         val stream = ByteArrayOutputStream()
         viewModel.exportAllTo(stream)
         testDispatcher.scheduler.advanceUntilIdle()
-        coVerify(exactly = 1) { exportMemoryBaseUseCase(target = stream, ids = null) }
+        coVerify(exactly = 1) { exportMemoryBaseUseCase(target = stream, ids = null, nowMillis = any()) }
     }
 }

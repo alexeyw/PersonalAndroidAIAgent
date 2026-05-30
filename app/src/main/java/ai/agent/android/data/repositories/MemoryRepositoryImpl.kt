@@ -157,6 +157,79 @@ class MemoryRepositoryImpl @Inject constructor(private val memoryDao: MemoryDao,
         recentSimilarityScores.value = emptyList()
     }
 
+    override suspend fun getExistingMemoryIds(): Set<Long> = withContext(Dispatchers.IO) {
+        memoryDao.getAllIds().toSet()
+    }
+
+    override suspend fun insertImportedMemories(chunks: List<MemoryChunk>, needsReembedding: Boolean) {
+        if (chunks.isEmpty()) return
+        withContext(Dispatchers.IO) {
+            memoryDao.insertMemories(chunks.toImportEntities(needsReembedding))
+        }
+    }
+
+    override suspend fun replaceImportedMemories(chunks: List<MemoryChunk>, needsReembedding: Boolean) =
+        withContext(Dispatchers.IO) {
+            memoryDao.replaceAll(chunks.toImportEntities(needsReembedding))
+        }
+
+    override suspend fun countMemoriesNeedingReembedding(): Int = withContext(Dispatchers.IO) {
+        memoryDao.countNeedingReembedding()
+    }
+
+    override suspend fun getMemoriesNeedingReembedding(): List<MemoryChunk> = withContext(Dispatchers.IO) {
+        // Deliberately lenient (no `mapNotNull` drop): the re-embed pass recomputes
+        // the vector from `text` and ignores the stored embedding, so a row whose
+        // embedding string is unparseable must still be returned — otherwise it
+        // would be dropped here yet keep counting in `countNeedingReembedding`,
+        // re-arming the worker on every startup as a permanent no-op. A bad
+        // embedding falls back to an empty array (the caller never reads it).
+        memoryDao.getMemoriesNeedingReembedding().map { entity ->
+            MemoryChunk(
+                id = entity.id,
+                text = entity.text,
+                // runCatching: toFloatArray throws on a non-numeric string and
+                // returns null on a blank one; either way a corrupt embedding
+                // falls back to empty so the row is still returned and repaired.
+                embedding = runCatching { converters.toFloatArray(entity.embedding) }.getOrNull() ?: FloatArray(0),
+                timestamp = entity.timestamp,
+                isPinned = entity.isPinned,
+                source = entity.source,
+                tags = TagsCsv.decode(entity.tagsCsv),
+                useCount = entity.useCount,
+                lastUsedAt = entity.lastUsedAt,
+            )
+        }
+    }
+
+    /**
+     * Maps imported domain chunks to entities, preserving id / timestamp /
+     * provenance / pin state / tags and resetting per-device usage telemetry.
+     * Chunks whose embedding cannot be serialised are dropped (their embedding
+     * is already validated non-empty by the import parser, so this is a defensive
+     * guard rather than an expected path).
+     */
+    private fun List<MemoryChunk>.toImportEntities(needsReembedding: Boolean): List<MemoryChunkEntity> =
+        mapNotNull { chunk ->
+            val embeddingString = converters.fromFloatArray(chunk.embedding) ?: return@mapNotNull null
+            MemoryChunkEntity(
+                id = chunk.id,
+                text = chunk.text,
+                embedding = embeddingString,
+                timestamp = chunk.timestamp,
+                isPinned = chunk.isPinned,
+                source = chunk.source,
+                tagsCsv = TagsCsv.encode(chunk.tags),
+                needsReembedding = needsReembedding,
+            )
+        }
+
+    override suspend fun markMemoryReembedded(id: Long, embedding: FloatArray) = withContext(Dispatchers.IO) {
+        val embeddingString = converters.fromFloatArray(embedding)
+            ?: throw IllegalArgumentException("Failed to serialize embedding")
+        memoryDao.markReembedded(id = id, embedding = embeddingString)
+    }
+
     override fun observeStats(): Flow<MemoryStats> = combine(
         memoryDao.observeChunkCount(),
         memoryDao.observeTotalBytes(),

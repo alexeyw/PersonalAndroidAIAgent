@@ -92,6 +92,11 @@ class RetrieveRelevantMemoryUseCase @Inject constructor(
         limit: Int? = null,
         threshold: Float? = null,
     ): List<Pair<MemoryChunk, Float>> = withContext(Dispatchers.Default) {
+        // Chunks imported under a different provider are repaired off the hot
+        // path by MemoryReembedWorker (scheduled at import time); retrieval just
+        // tolerates not-yet-repaired chunks (their cross-space vectors score ~0)
+        // rather than blocking here on a potentially large re-embed.
+
         // Embed the query with the user's active provider so it shares the
         // stored chunks' embedding space.
         val provider = embeddingProviderResolver.resolve()

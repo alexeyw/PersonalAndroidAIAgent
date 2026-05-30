@@ -5,16 +5,24 @@ import ai.agent.android.R
 import ai.agent.android.domain.constants.SettingsDefaults
 import ai.agent.android.domain.models.ActiveModelMeta
 import ai.agent.android.domain.models.LocalBackend
+import ai.agent.android.domain.models.MemoryImportStrategy
 import ai.agent.android.domain.models.ProviderId
 import ai.agent.android.domain.models.ToolApprovalPolicy
 import ai.agent.android.presentation.common.DisplayFormat
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -24,6 +32,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import app.knotwork.design.screens.settings.ApproveToolCallsOption
 import app.knotwork.design.screens.settings.DestructiveActionKind
@@ -88,6 +97,14 @@ fun SettingsScreen(
         if (stream != null) viewModel.exportMemoryBase(stream)
     }
 
+    val importLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument(),
+    ) { uri: Uri? ->
+        uri ?: return@rememberLauncherForActivityResult
+        val stream = runCatching { context.contentResolver.openInputStream(uri) }.getOrNull()
+        if (stream != null) viewModel.importMemory(stream)
+    }
+
     LaunchedEffect(uiState.snackbarMessage) {
         val message = uiState.snackbarMessage ?: return@LaunchedEffect
         snackbarHostState.showSnackbar(message)
@@ -106,6 +123,7 @@ fun SettingsScreen(
             ProviderId.entries.firstOrNull { it.cloudProvider.id == id }?.let(onOpenProvider)
         },
         onExportClick = { exportLauncher.launch(exportFilename) },
+        onImportClick = { importLauncher.launch(arrayOf(MIME_JSON)) },
         onRestart = {
             viewModel.acknowledgeRestart()
             // No-arg overload — ProcessPhoenix resolves the app's launcher
@@ -121,8 +139,91 @@ fun SettingsScreen(
 
     Box(modifier = modifier.fillMaxSize()) {
         SettingsContent(state = viewState, callbacks = callbacks)
+        uiState.pendingImport?.let { pending ->
+            MemoryImportDialog(
+                pending = pending,
+                onMerge = { viewModel.confirmImport(MemoryImportStrategy.Merge) },
+                onReplace = { viewModel.confirmImport(MemoryImportStrategy.Replace) },
+                onCancel = viewModel::cancelImport,
+            )
+        }
         SnackbarHost(hostState = snackbarHostState)
     }
+}
+
+/**
+ * Strategy-choice dialog raised after a memory import file parses. Lets the
+ * user pick Merge (keep existing, skip duplicate ids) or Replace (wipe then
+ * load), and surfaces provider / schema mismatch warnings.
+ *
+ * @param pending Parsed document plus the mismatch flags driving the warnings.
+ * @param onMerge Invoked when the user confirms the non-destructive merge.
+ * @param onReplace Invoked when the user confirms the destructive replace.
+ * @param onCancel Invoked on dismiss / Cancel.
+ */
+@Composable
+private fun MemoryImportDialog(
+    pending: PendingMemoryImport,
+    onMerge: () -> Unit,
+    onReplace: () -> Unit,
+    onCancel: () -> Unit,
+) {
+    val warnings = buildList {
+        if (pending.schemaMismatch) add(stringResource(R.string.settings_memory_import_schema_warning))
+        if (pending.providerMismatch) {
+            add(
+                stringResource(
+                    R.string.settings_memory_import_provider_warning,
+                    pending.document.embeddingProviderId,
+                ),
+            )
+        }
+    }
+    // The two strategy actions share the confirm slot (Merge as the safe
+    // default, Replace error-tinted as the destructive choice); Cancel takes the
+    // dismiss slot. Keeping all three in AlertDialog's button slots gives them
+    // the standard button-row spacing/insets instead of a button floating in the
+    // body text.
+    AlertDialog(
+        onDismissRequest = onCancel,
+        title = { Text(stringResource(R.string.settings_memory_import_dialog_title)) },
+        text = {
+            Text(
+                buildString {
+                    append(
+                        stringResource(
+                            R.string.settings_memory_import_dialog_body,
+                            pending.document.chunks.size,
+                        ),
+                    )
+                    warnings.forEach { warning ->
+                        append("\n\n")
+                        append(warning)
+                    }
+                },
+            )
+        },
+        confirmButton = {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                TextButton(onClick = onMerge) {
+                    Text(stringResource(R.string.settings_memory_import_merge))
+                }
+                TextButton(
+                    onClick = onReplace,
+                    colors = ButtonDefaults.textButtonColors(
+                        contentColor = MaterialTheme.colorScheme.error,
+                    ),
+                ) {
+                    Text(stringResource(R.string.settings_memory_import_replace))
+                }
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onCancel) {
+                Text(stringResource(R.string.settings_memory_import_cancel))
+            }
+        },
+    )
 }
 
 @Composable
@@ -286,6 +387,7 @@ private fun buildViewState(uiState: SettingsUiState, context: android.content.Co
         embeddingTitle = stringResource(R.string.settings_memory_embedding_title),
         embeddingSubtitle = stringResource(R.string.settings_memory_embedding_subtitle),
         exportLabel = stringResource(R.string.settings_memory_export),
+        importLabel = stringResource(R.string.settings_memory_import),
         reembedLabel = stringResource(R.string.settings_memory_reembed),
         clearLabel = stringResource(R.string.settings_memory_clear),
         reembedProgressPercent = uiState.reembedProgress?.let { (it * MAX_PERCENT).roundToInt() },
@@ -357,6 +459,7 @@ private fun buildCallbacks(
     onOpenSearch: () -> Unit,
     onProviderClick: (String) -> Unit,
     onExportClick: () -> Unit,
+    onImportClick: () -> Unit,
     onRestart: () -> Unit,
 ): SettingsCallbacks = SettingsCallbacks(
     onBack = onBack,
@@ -396,6 +499,7 @@ private fun buildCallbacks(
     onAutoExtractToggle = viewModel::setAutoExtractEnabled,
     onAutoSummarizeChange = viewModel::setAutoSummarizeThreshold,
     onExportMemoryClick = onExportClick,
+    onImportMemoryClick = onImportClick,
     onReembedClick = viewModel::runReembed,
     onClearMemoryClick = viewModel::stageClearMemory,
     onLongRunningToggle = viewModel::setLongRunningTaskNotificationsEnabled,

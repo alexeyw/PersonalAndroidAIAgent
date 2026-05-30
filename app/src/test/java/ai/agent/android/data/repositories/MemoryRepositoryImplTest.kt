@@ -3,6 +3,8 @@ package ai.agent.android.data.repositories
 import ai.agent.android.data.local.Converters
 import ai.agent.android.data.local.dao.MemoryDao
 import ai.agent.android.data.local.models.MemoryChunkEntity
+import ai.agent.android.domain.models.MemoryChunk
+import ai.agent.android.domain.models.MemorySource
 import ai.agent.android.domain.models.MemorySummary
 import io.mockk.mockk
 import org.junit.Assert.assertEquals
@@ -194,5 +196,109 @@ class MemoryRepositoryImplTest {
 
         assertEquals(42, result)
         io.mockk.coVerify(exactly = 1) { memoryDao.countMemories() }
+    }
+
+    @Test
+    fun `getExistingMemoryIds returns the dao id set`() = kotlinx.coroutines.test.runTest {
+        io.mockk.coEvery { memoryDao.getAllIds() } returns listOf(1L, 2L, 3L)
+
+        val ids = repository.getExistingMemoryIds()
+
+        assertEquals(setOf(1L, 2L, 3L), ids)
+    }
+
+    @Test
+    fun `insertImportedMemories preserves id, provenance, pin state and flags re-embedding`() =
+        kotlinx.coroutines.test.runTest {
+            val captured = io.mockk.slot<List<MemoryChunkEntity>>()
+            io.mockk.coEvery { memoryDao.insertMemories(capture(captured)) } returns Unit
+            val chunk = MemoryChunk(
+                id = 9,
+                text = "imported",
+                embedding = floatArrayOf(0.1f, 0.2f),
+                timestamp = 1_234L,
+                isPinned = true,
+                source = MemorySource.Manual,
+                tags = listOf("preference"),
+            )
+
+            repository.insertImportedMemories(listOf(chunk), needsReembedding = true)
+
+            val entity = captured.captured.single()
+            assertEquals(9L, entity.id)
+            assertEquals("imported", entity.text)
+            assertEquals(1_234L, entity.timestamp)
+            assertEquals(true, entity.isPinned)
+            assertEquals(MemorySource.Manual, entity.source)
+            assertEquals("preference", entity.tagsCsv)
+            assertEquals(true, entity.needsReembedding)
+            assertEquals(converters.fromFloatArray(floatArrayOf(0.1f, 0.2f)), entity.embedding)
+        }
+
+    @Test
+    fun `insertImportedMemories is a no-op for an empty list`() = kotlinx.coroutines.test.runTest {
+        repository.insertImportedMemories(emptyList(), needsReembedding = false)
+        io.mockk.coVerify(exactly = 0) { memoryDao.insertMemories(any()) }
+    }
+
+    @Test
+    fun `replaceImportedMemories maps chunks and forwards to dao replaceAll`() = kotlinx.coroutines.test.runTest {
+        val captured = io.mockk.slot<List<MemoryChunkEntity>>()
+        io.mockk.coEvery { memoryDao.replaceAll(capture(captured)) } returns Unit
+        val chunk = MemoryChunk(
+            id = 5,
+            text = "replace me",
+            embedding = floatArrayOf(0.3f),
+            timestamp = 7L,
+            source = MemorySource.ChatSession("s"),
+        )
+
+        repository.replaceImportedMemories(listOf(chunk), needsReembedding = false)
+
+        val entity = captured.captured.single()
+        assertEquals(5L, entity.id)
+        assertEquals("replace me", entity.text)
+        assertEquals(MemorySource.ChatSession("s"), entity.source)
+        assertEquals(false, entity.needsReembedding)
+    }
+
+    @Test
+    fun `getMemoriesNeedingReembedding returns a corrupt-embedding row instead of dropping it`() =
+        kotlinx.coroutines.test.runTest {
+            // A row with an unparseable embedding string would otherwise be
+            // dropped, leaving it flagged forever while the COUNT keeps re-arming
+            // the worker. It must be returned (with an empty embedding) so the
+            // re-embed pass can repair it from text and clear the flag.
+            val corrupt = MemoryChunkEntity(
+                id = 1,
+                text = "still has text",
+                embedding = "not,a,float",
+                timestamp = 10L,
+                needsReembedding = true,
+            )
+            io.mockk.coEvery { memoryDao.getMemoriesNeedingReembedding() } returns listOf(corrupt)
+
+            val result = repository.getMemoriesNeedingReembedding()
+
+            assertEquals(1, result.size)
+            assertEquals("still has text", result[0].text)
+            assertEquals(0, result[0].embedding.size)
+        }
+
+    @Test
+    fun `countMemoriesNeedingReembedding forwards to dao`() = kotlinx.coroutines.test.runTest {
+        io.mockk.coEvery { memoryDao.countNeedingReembedding() } returns 4
+
+        assertEquals(4, repository.countMemoriesNeedingReembedding())
+    }
+
+    @Test
+    fun `markMemoryReembedded serializes embedding and forwards to dao`() = kotlinx.coroutines.test.runTest {
+        val embedding = floatArrayOf(0.5f, 0.6f)
+        val expected = converters.fromFloatArray(embedding)
+
+        repository.markMemoryReembedded(id = 3L, embedding = embedding)
+
+        io.mockk.coVerify(exactly = 1) { memoryDao.markReembedded(id = 3L, embedding = expected!!) }
     }
 }

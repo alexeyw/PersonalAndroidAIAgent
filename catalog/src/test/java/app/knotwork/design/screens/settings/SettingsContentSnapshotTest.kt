@@ -162,6 +162,7 @@ internal object SettingsPreview {
         embeddingTitle = "Embedding model",
         embeddingSubtitle = "bge-small-en-v1.5 · 384 dim · on-device",
         exportLabel = "Export base",
+        importLabel = "Import",
         reembedLabel = "Re-embed",
         clearLabel = "Clear",
         reembedProgressPercent = null,

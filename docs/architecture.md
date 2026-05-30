@@ -60,7 +60,7 @@ Each layer maps onto concrete packages:
 | Layer          | Packages                                                                                          |
 |----------------|---------------------------------------------------------------------------------------------------|
 | `presentation` | `presentation/ui/{about,chat,memory,models,monitoring,more,onboarding,orchestrator,pipeline/editor,prompts,settings,splash,taskmonitor,tools}`, `presentation/ui/navigation`, `presentation/{components,state,theme,notifications,receivers}` |
-| `domain`       | `domain/{usecases,engine,models,repositories,prompt,constants,services,pipelineio}`               |
+| `domain`       | `domain/{usecases,engine,models,repositories,prompt,constants,services,pipelineio,promptio,memoryio}` |
 | `data`         | `data/{engine,local,repositories,prompt,mcp,services,tools,network,mappers,logging}`              |
 
 Cross-layer wiring is handled by **Hilt**. Modules in `di/` provide
@@ -191,6 +191,45 @@ Step-by-step notes:
    `EmbeddingProvider`, drops near-duplicates, and writes survivors to
    `memory_chunks` tagged with `MemorySource.ChatSession`. This is
    fire-and-forget background work and never blocks or fails the chat.
+
+### 2.1. Memory export / import and lazy re-embedding
+
+Long-term memory is portable between devices. The `domain/memoryio`
+gateway (`MemoryJsonSerializer`) serialises `memory_chunks` to a
+`schemaVersion: 1` JSON document — stamped with the active
+`embeddingProviderId` and an `exportedAt` timestamp — driven from
+**Settings → Memory → Export** through a SAF stream
+(`ExportMemoryBaseUseCase`). The provenance field reuses
+`MemorySourceJson`, the same codec the Room `source` column converter
+uses, so the on-disk encoding and the column stay identical.
+
+Import (`MemoryImportUseCase`) parses the file (`Success` /
+`SchemaMismatch` / `Failure`) and reconciles it under a user-chosen
+strategy: **Merge** (insert only ids not already present) or **Replace**
+(an atomic wipe-and-load, a no-op when the document carries no chunks),
+preserving each chunk's id, provenance, pin state and tags. The parser
+rejects chunks with a malformed embedding (empty array / non-finite
+value) so a corrupt vector never reaches the store.
+
+When the document's embedding provider differs from the importing
+device's active provider the inserted vectors live in an incompatible
+space, so each chunk is flagged `needsReembedding` and the import
+schedules a background pass through the `MemoryReembedScheduler` domain
+seam (`APPEND_OR_REPLACE` so a second import always chains a fresh drain
+rather than being coalesced away while a pass runs). `MemoryReembedWorker`
+(a WorkManager `@HiltWorker`, mirroring `MemoryCompactionWorker`) then runs
+`RecomputePendingEmbeddingsUseCase` off the hot path — re-embedding the
+pending chunks in bounded batches (so a multi-thousand-chunk import neither
+issues one oversized request nor loses progress on a mid-corpus failure)
+and clearing the flag — with WorkManager retry/backoff if the provider is
+temporarily unavailable. Retrieval never blocks on this; it simply
+tolerates the not-yet-repaired chunks (whose cross-space vectors score ~0)
+until the worker finishes. As a safety net for a one-off pass that was lost
+(process killed before the enqueue persisted) or exhausted its retries,
+`MainActivity` re-arms the worker on cold start whenever
+`countMemoriesNeedingReembedding()` is non-zero. The manual *Settings →
+Memory → Re-embed* action shares the same flag-clearing write so the two
+repair paths converge.
 
 ---
 

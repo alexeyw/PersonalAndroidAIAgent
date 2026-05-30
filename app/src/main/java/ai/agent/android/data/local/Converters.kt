@@ -1,9 +1,9 @@
 package ai.agent.android.data.local
 
+import ai.agent.android.domain.memoryio.MemorySourceJson
 import ai.agent.android.domain.models.MemorySource
 import ai.agent.android.domain.models.NodeContextConfig
 import androidx.room.TypeConverter
-import org.json.JSONArray
 import org.json.JSONException
 import org.json.JSONObject
 import timber.log.Timber
@@ -91,25 +91,17 @@ class Converters {
 
     /**
      * Serialises a [MemorySource] to a compact JSON string for the single
-     * `memory_chunks.source` TEXT column. The discriminator lives under
-     * [KEY_TYPE]; variant-specific payload is added alongside it
-     * ([KEY_SESSION_ID] for [MemorySource.ChatSession], [KEY_IDS] for
-     * [MemorySource.Compaction]). The column is `NOT NULL`, so both directions
-     * are non-null.
+     * `memory_chunks.source` TEXT column. Delegates the wire shape to
+     * [MemorySourceJson] so the column encoding stays byte-identical to the
+     * memory export file. The column is `NOT NULL`, so both directions are
+     * non-null.
      *
      * @param source The provenance to serialise.
      * @return A JSON object string carrying the [MemorySource.type] key and any
      * variant payload.
      */
     @TypeConverter
-    fun fromMemorySource(source: MemorySource): String = JSONObject().apply {
-        put(KEY_TYPE, source.type)
-        when (source) {
-            is MemorySource.ChatSession -> put(KEY_SESSION_ID, source.sessionId)
-            is MemorySource.Compaction -> put(KEY_IDS, JSONArray(source.originalChunkIds))
-            MemorySource.Manual, MemorySource.Unknown -> Unit
-        }
-    }.toString()
+    fun fromMemorySource(source: MemorySource): String = MemorySourceJson.encode(source).toString()
 
     /**
      * Deserialises a JSON string produced by [fromMemorySource] back into a
@@ -128,22 +120,7 @@ class Converters {
     fun toMemorySource(value: String): MemorySource {
         if (value.isBlank()) return MemorySource.Unknown
         return try {
-            val json = JSONObject(value)
-            when (json.optString(KEY_TYPE)) {
-                MemorySource.TYPE_CHAT_SESSION ->
-                    MemorySource.ChatSession(json.optString(KEY_SESSION_ID))
-                MemorySource.TYPE_MANUAL -> MemorySource.Manual
-                MemorySource.TYPE_COMPACTION -> {
-                    val idsJson = json.optJSONArray(KEY_IDS)
-                    val ids = buildList {
-                        if (idsJson != null) {
-                            for (i in 0 until idsJson.length()) add(idsJson.getLong(i))
-                        }
-                    }
-                    MemorySource.Compaction(ids)
-                }
-                else -> MemorySource.Unknown
-            }
+            MemorySourceJson.decode(JSONObject(value))
         } catch (e: JSONException) {
             Timber.w(e, "Failed to parse MemorySource from value=%s, using Unknown", value)
             MemorySource.Unknown
@@ -156,9 +133,5 @@ class Converters {
         const val KEY_NODE_INPUT = "nodeInput"
         const val KEY_LONG_TERM_MEMORY = "longTermMemory"
         const val KEY_TOOL_RESULTS = "toolResults"
-
-        const val KEY_TYPE = "type"
-        const val KEY_SESSION_ID = "sessionId"
-        const val KEY_IDS = "ids"
     }
 }

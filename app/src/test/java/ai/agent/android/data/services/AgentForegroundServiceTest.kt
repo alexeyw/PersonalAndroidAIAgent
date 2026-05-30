@@ -6,6 +6,7 @@ import ai.agent.android.domain.models.AgentOrchestratorState
 import ai.agent.android.domain.models.PowerState
 import ai.agent.android.domain.models.ToolRisk
 import ai.agent.android.domain.repositories.PowerStateRepository
+import ai.agent.android.domain.services.MemoryReembedScheduler
 import ai.agent.android.domain.usecases.AgentOrchestratorUseCase
 import android.app.NotificationManager
 import android.content.Context
@@ -60,6 +61,7 @@ class AgentForegroundServiceTest {
     private lateinit var engine: LlmInferenceEngine
     private lateinit var powerStateRepository: PowerStateRepository
     private lateinit var workManager: WorkManager
+    private lateinit var memoryReembedScheduler: MemoryReembedScheduler
     private lateinit var globalState: MutableStateFlow<AgentOrchestratorState>
 
     @Before
@@ -73,6 +75,7 @@ class AgentForegroundServiceTest {
         engine = mockk(relaxed = true)
         powerStateRepository = mockk(relaxed = true)
         workManager = mockk(relaxed = true)
+        memoryReembedScheduler = mockk(relaxed = true)
 
         globalState = MutableStateFlow(AgentOrchestratorState.Loading)
         every { orchestrator.globalState } returns globalState
@@ -104,6 +107,7 @@ class AgentForegroundServiceTest {
         service.llmEngine = engine
         service.powerStateRepository = powerStateRepository
         service.workManager = workManager
+        service.memoryReembedScheduler = memoryReembedScheduler
         return controller
     }
 

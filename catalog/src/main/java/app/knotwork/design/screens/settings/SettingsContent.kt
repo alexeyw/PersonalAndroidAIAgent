@@ -983,6 +983,17 @@ private fun MemoryCard(state: MemoryCardState, callbacks: SettingsCallbacks) {
                 modifier = Modifier.weight(1f),
             )
             KnotworkSecondaryButton(
+                text = state.importLabel,
+                onClick = callbacks.onImportMemoryClick,
+                size = app.knotwork.design.components.buttons.KnotworkButtonSize.Sm,
+                modifier = Modifier.weight(1f),
+            )
+        }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp2),
+        ) {
+            KnotworkSecondaryButton(
                 text = state.reembedLabel,
                 onClick = callbacks.onReembedClick,
                 size = app.knotwork.design.components.buttons.KnotworkButtonSize.Sm,
