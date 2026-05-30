@@ -574,33 +574,59 @@ private fun LlmParametersCard(state: LlmParametersCardState, callbacks: Settings
         },
     ) {
         state.sliders.forEach { slider ->
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .testTag(SLIDER_ROW_TAG_PREFIX + slider.id),
-                verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp1),
-            ) {
-                Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = slider.title,
-                        style = KnotworkTextStyles.BodySm.copy(fontWeight = FontWeight.SemiBold),
-                        color = MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier.weight(1f),
-                    )
-                    Text(
-                        text = slider.valueLabel,
-                        style = KnotworkTextStyles.MonoSm,
-                        color = KnotworkTheme.extended.onSurfaceMuted,
-                    )
-                }
-                KnotworkCompactSlider(
-                    value = slider.value,
-                    onValueChange = { newValue -> callbacks.onSliderChange(slider.id, newValue) },
-                    valueRange = slider.valueRange,
-                    steps = slider.steps,
-                )
-            }
+            ParamSliderRow(
+                title = slider.title,
+                valueLabel = slider.valueLabel,
+                value = slider.value,
+                valueRange = slider.valueRange,
+                steps = slider.steps,
+                onValueChange = { newValue -> callbacks.onSliderChange(slider.id, newValue) },
+                modifier = Modifier.testTag(SLIDER_ROW_TAG_PREFIX + slider.id),
+            )
         }
+    }
+}
+
+/**
+ * Shared labelled-slider row used by the LLM-parameters and Memory cards so
+ * every numeric setting renders with identical density: a `BodySm` SemiBold
+ * title on the left, a `MonoSm` muted value on the right, and a
+ * `KnotworkCompactSlider` beneath. Stateless — the caller supplies the
+ * pre-formatted [valueLabel].
+ */
+@Composable
+private fun ParamSliderRow(
+    title: String,
+    valueLabel: String,
+    value: Float,
+    valueRange: ClosedFloatingPointRange<Float>,
+    steps: Int,
+    onValueChange: (Float) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp1),
+    ) {
+        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = title,
+                style = KnotworkTextStyles.BodySm.copy(fontWeight = FontWeight.SemiBold),
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.weight(1f),
+            )
+            Text(
+                text = valueLabel,
+                style = KnotworkTextStyles.MonoSm,
+                color = KnotworkTheme.extended.onSurfaceMuted,
+            )
+        }
+        KnotworkCompactSlider(
+            value = value,
+            onValueChange = onValueChange,
+            valueRange = valueRange,
+            steps = steps,
+        )
     }
 }
 
@@ -955,16 +981,14 @@ private fun MemoryCard(state: MemoryCardState, callbacks: SettingsCallbacks) {
             )
         }
         state.params.forEach { param ->
-            KnotworkParamSlider(
-                label = param.title,
+            ParamSliderRow(
+                title = param.title,
                 valueLabel = param.valueLabel,
                 value = param.value,
-                onValueChange = { newValue -> callbacks.onMemoryParamChange(param.id, newValue) },
                 valueRange = param.valueRange,
                 steps = param.steps,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .testTag(MEMORY_PARAM_ROW_TAG_PREFIX + param.id),
+                onValueChange = { newValue -> callbacks.onMemoryParamChange(param.id, newValue) },
+                modifier = Modifier.testTag(MEMORY_PARAM_ROW_TAG_PREFIX + param.id),
             )
         }
         IconToggleRow(

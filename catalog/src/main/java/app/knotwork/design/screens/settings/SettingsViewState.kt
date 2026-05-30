@@ -189,8 +189,9 @@ data class MemoryStatCell(val label: String, val value: String)
 data class EmbeddingOptionRow(val id: String, val label: String)
 
 /**
- * One tunable numeric memory parameter rendered as a `KnotworkParamSlider`
- * row inside the Memory card.
+ * One tunable numeric memory parameter rendered as a labelled slider row
+ * (`ParamSliderRow`) inside the Memory card — the same density as the
+ * LLM-parameters card.
  *
  * @property id Stable id for the row — used as the LazyColumn key, the test
  *   tag, and the discriminator passed back through
