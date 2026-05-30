@@ -42,20 +42,19 @@ class MemoryRepositoryImpl @Inject constructor(private val memoryDao: MemoryDao,
         embedding: FloatArray,
         source: MemorySource,
         tags: List<String>,
-    ): Long =
-        withContext(Dispatchers.IO) {
-            val embeddingString = converters.fromFloatArray(embedding)
-                ?: throw IllegalArgumentException("Failed to serialize embedding")
+    ): Long = withContext(Dispatchers.IO) {
+        val embeddingString = converters.fromFloatArray(embedding)
+            ?: throw IllegalArgumentException("Failed to serialize embedding")
 
-            val entity = MemoryChunkEntity(
-                text = text,
-                embedding = embeddingString,
-                timestamp = System.currentTimeMillis(),
-                source = source,
-                tagsCsv = tags.toTagsCsv(),
-            )
-            memoryDao.insertMemory(entity)
-        }
+        val entity = MemoryChunkEntity(
+            text = text,
+            embedding = embeddingString,
+            timestamp = System.currentTimeMillis(),
+            source = source,
+            tagsCsv = tags.toTagsCsv(),
+        )
+        memoryDao.insertMemory(entity)
+    }
 
     override suspend fun getAllMemories(): List<MemoryChunk> = withContext(Dispatchers.IO) {
         memoryDao.getAllMemories().mapNotNull { entity -> entity.toMemoryChunkOrNull() }
@@ -192,8 +191,7 @@ class MemoryRepositoryImpl @Inject constructor(private val memoryDao: MemoryDao,
         mapNotNull { it.trim().ifEmpty { null } }.joinToString(separator = ",")
 
     /** Decodes the comma-separated `tagsCsv` column back into a tag list. */
-    private fun String.toTagList(): List<String> =
-        split(",").mapNotNull { it.trim().ifEmpty { null } }
+    private fun String.toTagList(): List<String> = split(",").mapNotNull { it.trim().ifEmpty { null } }
 
     /**
      * Calculates the cosine similarity between two vectors.

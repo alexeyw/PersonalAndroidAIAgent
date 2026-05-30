@@ -239,7 +239,8 @@ This file maps the contents of the main application package.
     - `ResetSamplingDefaultsUseCase.kt` - Resets temperature / top-K / top-P / repetition penalty / max context / max steps to the documented defaults.
     - `ClearAllMemoryUseCase.kt` - Wipes every memory chunk (pinned and unpinned). Gated behind the typed-confirm dialog.
     - `ExportMemoryBaseUseCase.kt` - Serialises the memory table to a portable JSON blob. SAF-driven from `SettingsScreen` (full table) and from the Memory screen's multi-select "Export selected" action (optional `ids` subset, Phase 25 / Task 7).
-    - `SaveMessageToMemoryUseCase.kt` - Direct-wrapper manual save path behind the chat "Save to memory" action (Phase 25 / Task 7): embeds the chosen text with the active `EmbeddingProvider` (via `EmbeddingProviderResolver`) and stores it tagged `MemorySource.Manual`. Returns `SaveToMemoryOutcome` (Saved / Skipped / Failed); blank input is skipped, embedding failures are swallowed for the caller's snackbar.
+    - `SaveMessageToMemoryUseCase.kt` - Direct-wrapper manual save path behind the chat "Save to memory" action and the Memory screen's Add-memory dialog (Phase 25 / Task 7): embeds the chosen text with the active `EmbeddingProvider` (via `EmbeddingProviderResolver`) and stores it tagged `MemorySource.Manual`. Returns `SaveToMemoryOutcome` (Saved / Skipped / Failed); blank input is skipped, embedding failures are swallowed for the caller's snackbar.
+    - `EstimateCompactionUseCase.kt` - LLM-free preview of a prospective compaction pass (Phase 25 / Task 7): loads the same candidate set as `MemoryCompactionUseCase`, derives the clusterer's `k`, and returns a `CompactionEstimate` (≈ removed chunks / freed bytes / runtime) for the Memory screen's "Compact memory?" confirm dialog.
     - `ReembedAllMemoriesUseCase.kt` - Re-runs the active embedding engine over every chunk; streams `0f..1f` progress.
     - `TestBackendUseCase.kt` - Runs a fixed prompt-probe against the active local model and persists `TestProbeResult` so the Settings row keeps showing the latest throughput.
     - `GetSystemPromptVariableCatalogUseCase.kt` - Materialises the `$VARIABLE` chip catalog with live preview samples for the Settings → System instructions card.
@@ -286,10 +287,10 @@ This file maps the contents of the main application package.
         - `ChatHomeStateMapping.kt` - Pure-Kotlin mapper from `ChatHomeUiState` to the catalog `ChatHomeViewState`, plus debug-picker fixtures and the `DebugStateIds` constants.
         - `ChatHomeConsoleMapping.kt` - Pure-Kotlin mappers from the domain orchestrator output to the catalog console-pane row models: `ConsoleEvent → ConsoleLine`, `TraceStep → ConsoleTraceSpan`, `NodeIO → List<ConsoleVarRow>`.
         - `ChatHomeDebugStatePicker.kt` - Triple-tap state picker (`DropdownMenu`) — visible only in debug builds via `BuildConfig.DEBUG` guard.
-    - `memory/` - Memory screen components.
-      - `MemoryScreen.kt` - Memory UI screen.
-      - `MemoryUiState.kt` - Memory UI state.
-      - `MemoryViewModel.kt` - Memory ViewModel.
+    - `memory/` - Memory screen components (Phase 25 / Task 7 redesign).
+      - `MemoryScreen.kt` - Slim mapper. Subscribes to `MemoryViewModel`, projects `MemoryUiState` to the catalog `MemoryContent` (stats header + provenance breakdown, category chips, sort/date dropdowns, time-grouped sections, semantic-search rows with scores, detail sheet, Compact/Add dialogs). Owns the pure `toViewState` projection (grouping / breakdown / relative-time + detail labels) and the SAF launcher for full export.
+      - `MemoryUiState.kt` - Memory UI state: raw chunk list + size + last-compacted + session-name cache, plus the view selections (category / sort / date / semantic-search) and transient detail/dialog flags.
+      - `MemoryViewModel.kt` - Memory ViewModel. Loads chunks/stats/last-compacted/session-names; owns category/sort/date selection, debounced semantic search (`RetrieveRelevantMemoryUseCase.retrieveScored`), inline edit + tag editing, manual add (`SaveMessageToMemoryUseCase`), pin toggling, manual compaction (`MemoryCompactionUseCase` + `EstimateCompactionUseCase`), and full export.
     - `models/` - Models screen components (Phase 22 / Task 15 — Knotwork redesign with inline Active card + HF auth + Custom URL + Presets list).
       - `ModelsScreen.kt` - Slim mapper. Folds `ModelsUiState` into the catalog `ModelsViewState` (Active card / HF auth section / Custom URL / Presets list with Idle / Downloading / OnDisk variants).
       - `ModelsUiState.kt` - Models UI state. Adds `activeDownloadFileName: String?` so the catalog can render the in-flight progress on the matching preset row.

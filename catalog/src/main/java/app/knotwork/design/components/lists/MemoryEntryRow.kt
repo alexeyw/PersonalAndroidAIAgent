@@ -1,7 +1,7 @@
 package app.knotwork.design.components.lists
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
@@ -11,8 +11,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Star
-import androidx.compose.material.icons.outlined.CheckCircle
-import androidx.compose.material.icons.outlined.RadioButtonUnchecked
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -35,9 +33,6 @@ private const val MEMORY_BODY_MAX_LINES = 3
 /** Size of the leading pin glyph; matches `TitleMd` cap-height. */
 private val MEMORY_PIN_GLYPH_SIZE = 16.dp
 
-/** Size of the leading selection toggle rendered in multi-select mode. */
-private val MEMORY_SELECT_GLYPH_SIZE = 22.dp
-
 /**
  * Knotwork memory-entry row.
  *
@@ -55,17 +50,10 @@ private val MEMORY_SELECT_GLYPH_SIZE = 22.dp
  * @param relevanceScore optional relevance score (e.g. `"0.93"`); rendered
  * in `MonoSm`.
  * @param lastAccessed human-readable last-accessed string ("3 days ago").
- * @param onClick invoked when the user taps the row (opens the detail sheet,
- * or toggles selection while [selectionMode] is active).
+ * @param onClick invoked when the user taps the row.
  * @param modifier optional layout modifier applied to the row root.
  * @param isPinned When `true`, renders a leading star glyph in front of the
  * title to signal that the user pinned this entry.
- * @param selectionMode When `true`, the row renders a leading selection
- * toggle (filled when [selected]) and a tap toggles selection.
- * @param selected When `true` (and [selectionMode] is on), the row is
- * highlighted and its toggle is filled.
- * @param onLongClick invoked on long-press; the screen uses this to enter
- * multi-select mode and select the long-pressed row.
  */
 @Composable
 @Suppress("LongParameterList") // Stable API; collapsing into a `Row` data class hurts call-site clarity.
@@ -78,21 +66,13 @@ fun MemoryEntryRow(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     isPinned: Boolean = false,
-    selectionMode: Boolean = false,
-    selected: Boolean = false,
-    onLongClick: () -> Unit = {},
 ) {
-    val rowBackground = if (selectionMode && selected) {
-        KnotworkTheme.extended.surface2
-    } else {
-        MaterialTheme.colorScheme.surface
-    }
     Column(
         verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp2),
         modifier = modifier
             .fillMaxWidth()
-            .background(rowBackground)
-            .combinedClickable(onClick = onClick, onLongClick = onLongClick, role = Role.Button)
+            .background(MaterialTheme.colorScheme.surface)
+            .clickable(onClick = onClick, role = Role.Button)
             .padding(
                 horizontal = KnotworkTheme.spacing.sp4,
                 vertical = KnotworkTheme.spacing.sp3,
@@ -102,16 +82,6 @@ fun MemoryEntryRow(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp2),
         ) {
-            if (selectionMode) {
-                Icon(
-                    imageVector = if (selected) Icons.Outlined.CheckCircle else Icons.Outlined.RadioButtonUnchecked,
-                    contentDescription = stringResource(
-                        if (selected) R.string.knotwork_memory_selected_cd else R.string.knotwork_memory_unselected_cd,
-                    ),
-                    tint = if (selected) MaterialTheme.colorScheme.primary else KnotworkTheme.extended.onSurfaceMuted,
-                    modifier = Modifier.size(MEMORY_SELECT_GLYPH_SIZE),
-                )
-            }
             if (isPinned) {
                 Icon(
                     imageVector = Icons.Filled.Star,

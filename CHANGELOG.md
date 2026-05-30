@@ -15,20 +15,37 @@ details.
 
 ### Added
 
-- **Memory UI extensions** (Phase 25 / Task 7/10):
+- **Memory screen redesign** (Phase 25 / Task 7/10) — a full rework of the
+  long-term-memory surface:
   - **Save to memory from chat** — the message long-press menu gains a
     *Save to memory* action that embeds the message text with the active
     `EmbeddingProvider` and stores it as a `Manual` chunk (new
     `SaveMessageToMemoryUseCase`), confirming with a *Saved to memory* snackbar.
-  - **Memory filters** — the Memory screen adds a filter row: a date-range
-    chip group (All time / Last 7 days / Last 30 days), multi-select provenance
-    chips (Auto / Manual / Compaction), and a *Pinned only* toggle. Selections
-    persist in the ViewModel.
-  - **Bulk actions** — long-pressing a memory entry enters multi-select mode;
-    the top bar swaps to a bulk-action bar with *Pin selected* / *Unpin
-    selected* / *Export selected* (SAF JSON) / *Delete selected*.
-  `ExportMemoryBaseUseCase` now accepts an optional id subset so the *Export
-  selected* action reuses the existing portable JSON export format.
+  - **Stats header** — total count, on-disk size, "compacted N ago", and a
+    provenance breakdown bar (Auto / Compaction / Manual) with a one-tap
+    **Compact** action gated behind a confirm dialog that previews an estimate
+    (≈ removed / freed / runtime) via the new `EstimateCompactionUseCase`; the
+    manual Compact now runs the real consolidation pass.
+  - **Category chips + dropdowns** — single-select category chips (All / Pinned
+    / Auto / Manual / Compaction) with live counts, plus Sort and date-range
+    dropdowns.
+  - **Semantic search** — the search field now embeds the query and ranks
+    results by relevance, showing a per-row score.
+  - **Time-grouped list** — entries grouped into Pinned / Today / This week /
+    Earlier, each row carrying a provenance accent + badge and its tags.
+  - **Rich detail sheet** — token estimate, source, "Learned from" chat,
+    captured time, "Used in N replies", inline body + tag editing, and
+    pin / delete / save actions.
+  - **Add memory** — a FAB + dialog to store a memory by hand.
+  - **Tags & usage tracking** — chunks now carry tags (auto-extraction persists
+    each fact's type) and a retrieval use-count / last-used time recorded by the
+    pipeline engine. Backed by an additive Room migration (26 → 27).
+
+### Changed
+
+- `MemoryRepository` gains `setMemoryTags` / `recordUsage` and a `tags`
+  parameter on `saveMemory`; `ExportMemoryBaseUseCase` accepts an optional id
+  subset; `SettingsRepository` records the last compaction time.
 
 ### Fixed
 

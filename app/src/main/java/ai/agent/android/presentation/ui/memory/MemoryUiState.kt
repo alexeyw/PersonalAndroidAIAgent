@@ -1,31 +1,48 @@
 package ai.agent.android.presentation.ui.memory
 
-import ai.agent.android.domain.models.ChatMessage
 import ai.agent.android.domain.models.MemoryChunk
+import ai.agent.android.domain.usecases.CompactionEstimate
+import app.knotwork.design.screens.memory.MemoryCategory
 import app.knotwork.design.screens.memory.MemoryDateFilter
-import app.knotwork.design.screens.memory.MemorySourceFilter
+import app.knotwork.design.screens.memory.MemorySortMode
 
 /**
- * Represents the UI state for the Memory management screen.
+ * UI state for the redesigned Memory screen. Holds the raw chunk list plus the
+ * user's view selections (category / sort / date / search) and transient dialog
+ * state; the screen maps this to the catalog `MemoryViewState`.
  *
- * @property chatSessions A map where the key is the session ID and the value is a list of chat messages for that session.
- * @property vectorMemories A list of all stored long-term memory chunks (vector embeddings).
- * @property isLoading True if data is currently being fetched from the database.
- * @property currentTab The index of the currently selected tab (0 for Chat History, 1 for Vector Database).
- * @property dateFilter Active date-range filter applied to [vectorMemories] before display.
- * @property sourceFilters Active provenance filters; an empty set means "every source".
- * @property pinnedOnly When `true`, only pinned chunks are shown.
- * @property selectionMode When `true`, the screen is in multi-select mode.
- * @property selectedIds Ids of the chunks currently selected in multi-select mode.
+ * @property memories All stored chunks (newest-first not guaranteed; the screen sorts).
+ * @property totalBytes On-disk size of the memory table.
+ * @property lastCompactedAt Epoch-millis of the last compaction (`0` = never).
+ * @property sessionNames Session id → display name, for the detail "Learned from" line.
+ * @property isLoading Whether a load is in flight.
+ * @property selectedCategory Active category chip.
+ * @property sortMode Active sort mode.
+ * @property dateFilter Active date-range filter.
+ * @property searchActive Whether the search field is shown.
+ * @property searchQuery Current search query.
+ * @property searchResults Scored semantic-search hits (`null` until a query runs).
+ * @property expandedId Id of the entry whose detail sheet is open, or `null`.
+ * @property editing Whether the open detail sheet is in edit mode.
+ * @property compactDialogVisible Whether the Compact confirm dialog is shown.
+ * @property compactEstimate Loaded compaction estimate (`null` while loading).
+ * @property addDialogVisible Whether the Add-memory dialog is shown.
  */
 data class MemoryUiState(
-    val chatSessions: Map<String, List<ChatMessage>> = emptyMap(),
-    val vectorMemories: List<MemoryChunk> = emptyList(),
+    val memories: List<MemoryChunk> = emptyList(),
+    val totalBytes: Long = 0L,
+    val lastCompactedAt: Long = 0L,
+    val sessionNames: Map<String, String> = emptyMap(),
     val isLoading: Boolean = false,
-    val currentTab: Int = 0,
+    val selectedCategory: MemoryCategory = MemoryCategory.All,
+    val sortMode: MemorySortMode = MemorySortMode.Recent,
     val dateFilter: MemoryDateFilter = MemoryDateFilter.All,
-    val sourceFilters: Set<MemorySourceFilter> = emptySet(),
-    val pinnedOnly: Boolean = false,
-    val selectionMode: Boolean = false,
-    val selectedIds: Set<Long> = emptySet(),
+    val searchActive: Boolean = false,
+    val searchQuery: String = "",
+    val searchResults: List<Pair<MemoryChunk, Float>>? = null,
+    val expandedId: Long? = null,
+    val editing: Boolean = false,
+    val compactDialogVisible: Boolean = false,
+    val compactEstimate: CompactionEstimate? = null,
+    val addDialogVisible: Boolean = false,
 )

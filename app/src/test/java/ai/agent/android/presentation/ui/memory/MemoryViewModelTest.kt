@@ -1,16 +1,24 @@
 package ai.agent.android.presentation.ui.memory
 
-import ai.agent.android.domain.models.ChatMessage
+import ai.agent.android.domain.models.ChatSession
 import ai.agent.android.domain.models.MemoryChunk
-import ai.agent.android.domain.models.Role
+import ai.agent.android.domain.models.MemorySource
+import ai.agent.android.domain.models.MemoryStats
 import ai.agent.android.domain.repositories.ChatRepository
 import ai.agent.android.domain.repositories.MemoryRepository
 import ai.agent.android.domain.repositories.SettingsRepository
 import ai.agent.android.domain.services.EmbeddingProvider
 import ai.agent.android.domain.services.EmbeddingProviderResolver
+import ai.agent.android.domain.usecases.CompactionEstimate
+import ai.agent.android.domain.usecases.EstimateCompactionUseCase
 import ai.agent.android.domain.usecases.ExportMemoryBaseUseCase
+import ai.agent.android.domain.usecases.MemoryCompactionUseCase
+import ai.agent.android.domain.usecases.RetrieveRelevantMemoryUseCase
+import ai.agent.android.domain.usecases.SaveMessageToMemoryUseCase
+import ai.agent.android.domain.usecases.SaveToMemoryOutcome
+import app.knotwork.design.screens.memory.MemoryCategory
 import app.knotwork.design.screens.memory.MemoryDateFilter
-import app.knotwork.design.screens.memory.MemorySourceFilter
+import app.knotwork.design.screens.memory.MemorySortMode
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
@@ -31,9 +39,6 @@ import org.junit.Before
 import org.junit.Test
 import java.io.ByteArrayOutputStream
 
-/**
- * Unit tests for [MemoryViewModel].
- */
 @OptIn(ExperimentalCoroutinesApi::class)
 class MemoryViewModelTest {
 
@@ -43,9 +48,22 @@ class MemoryViewModelTest {
     private lateinit var embeddingProviderResolver: EmbeddingProviderResolver
     private lateinit var embeddingProvider: EmbeddingProvider
     private lateinit var exportMemoryBaseUseCase: ExportMemoryBaseUseCase
+    private lateinit var saveMessageToMemoryUseCase: SaveMessageToMemoryUseCase
+    private lateinit var memoryCompactionUseCase: MemoryCompactionUseCase
+    private lateinit var estimateCompactionUseCase: EstimateCompactionUseCase
+    private lateinit var retrieveRelevantMemoryUseCase: RetrieveRelevantMemoryUseCase
     private lateinit var viewModel: MemoryViewModel
 
     private val testDispatcher = StandardTestDispatcher()
+
+    private fun chunk(id: Long, pinned: Boolean = false, source: MemorySource = MemorySource.Manual) = MemoryChunk(
+        id = id,
+        text = "chunk $id",
+        embedding = floatArrayOf(0f),
+        timestamp = id,
+        isPinned = pinned,
+        source = source,
+    )
 
     @Before
     fun setup() {
@@ -56,8 +74,20 @@ class MemoryViewModelTest {
         embeddingProviderResolver = mockk(relaxed = true)
         embeddingProvider = mockk(relaxed = true)
         exportMemoryBaseUseCase = mockk(relaxed = true)
+        saveMessageToMemoryUseCase = mockk(relaxed = true)
+        memoryCompactionUseCase = mockk(relaxed = true)
+        estimateCompactionUseCase = mockk(relaxed = true)
+        retrieveRelevantMemoryUseCase = mockk(relaxed = true)
+
         coEvery { embeddingProviderResolver.resolve() } returns embeddingProvider
-        coEvery { settingsRepository.maxMemoryChunksForSearch } returns flowOf(1000)
+        coEvery { memoryRepository.getAllMemories() } returns emptyList()
+        coEvery { memoryRepository.observeStats() } returns flowOf(MemoryStats(0, 0L, 0, null))
+        coEvery { settingsRepository.memoryLastCompactedAt } returns flowOf(0L)
+    }
+
+    @After
+    fun tearDown() {
+        Dispatchers.resetMain()
     }
 
     private fun createViewModel(): MemoryViewModel = MemoryViewModel(
@@ -66,294 +96,193 @@ class MemoryViewModelTest {
         settingsRepository,
         embeddingProviderResolver,
         exportMemoryBaseUseCase,
+        saveMessageToMemoryUseCase,
+        memoryCompactionUseCase,
+        estimateCompactionUseCase,
+        retrieveRelevantMemoryUseCase,
     )
 
-    @After
-    fun tearDown() {
-        Dispatchers.resetMain()
-    }
-
     @Test
-    fun `loadAllData populates state with memories and chat sessions`() = runTest {
-        // Arrange
-        val memories = listOf(MemoryChunk(1, "Memory 1", floatArrayOf(0.1f), 1000L))
-        val sessionId = "session-1"
-        val messages = listOf(ChatMessage(1, sessionId, Role.USER, "Hello", 1000L))
+    fun `loadAllData populates memories size and resolves session names`() = runTest {
+        coEvery { memoryRepository.getAllMemories() } returns listOf(
+            chunk(1, source = MemorySource.ChatSession("s1")),
+            chunk(2),
+        )
+        coEvery { memoryRepository.observeStats() } returns flowOf(MemoryStats(2, 4096L, 0, null))
+        coEvery { settingsRepository.memoryLastCompactedAt } returns flowOf(123L)
+        coEvery { chatRepository.getSessionById("s1") } returns
+            ChatSession(id = "s1", name = "Setup chat", updatedAt = 0)
 
-        coEvery { memoryRepository.getAllMemories() } returns memories
-        coEvery { chatRepository.getAllSessions() } returns listOf(sessionId)
-        coEvery { chatRepository.getMessagesForSession(sessionId) } returns flowOf(messages)
-
-        // Act
         viewModel = createViewModel()
         testDispatcher.scheduler.advanceUntilIdle()
 
-        // Assert
         val state = viewModel.uiState.value
         assertFalse(state.isLoading)
-        assertEquals(memories, state.vectorMemories)
-        assertEquals(1, state.chatSessions.size)
-        assertEquals(messages, state.chatSessions[sessionId])
+        assertEquals(2, state.memories.size)
+        assertEquals(4096L, state.totalBytes)
+        assertEquals(123L, state.lastCompactedAt)
+        assertEquals("Setup chat", state.sessionNames["s1"])
     }
 
     @Test
-    fun `deleteChatSession calls repository and reloads data`() = runTest {
+    fun `selectCategory setSortMode setDateFilter persist selections`() = runTest {
         viewModel = createViewModel()
         testDispatcher.scheduler.advanceUntilIdle()
 
-        viewModel.deleteChatSession("session-1")
-        testDispatcher.scheduler.advanceUntilIdle()
-
-        coVerify(exactly = 1) { chatRepository.deleteSession("session-1") }
-        coVerify(atLeast = 2) { memoryRepository.getAllMemories() } // 1 from init, 1 from reload
-    }
-
-    @Test
-    fun `deleteChatMessage calls repository and reloads data`() = runTest {
-        viewModel = createViewModel()
-        testDispatcher.scheduler.advanceUntilIdle()
-
-        viewModel.deleteChatMessage(100L)
-        testDispatcher.scheduler.advanceUntilIdle()
-
-        coVerify(exactly = 1) { chatRepository.deleteMessage(100L) }
-        coVerify(atLeast = 2) { memoryRepository.getAllMemories() }
-    }
-
-    @Test
-    fun `deleteVectorMemory calls repository and reloads data`() = runTest {
-        viewModel = createViewModel()
-        testDispatcher.scheduler.advanceUntilIdle()
-
-        viewModel.deleteVectorMemory(200L)
-        testDispatcher.scheduler.advanceUntilIdle()
-
-        coVerify(exactly = 1) { memoryRepository.deleteMemory(200L) }
-        coVerify(atLeast = 2) { memoryRepository.getAllMemories() }
-    }
-
-    @Test
-    fun `compactMemory calls repository and reloads data`() = runTest {
-        viewModel = createViewModel()
-        testDispatcher.scheduler.advanceUntilIdle()
-
-        viewModel.compactMemory()
-        testDispatcher.scheduler.advanceUntilIdle()
-
-        coVerify(exactly = 1) { memoryRepository.compactMemory(1000) }
-        coVerify(atLeast = 2) { memoryRepository.getAllMemories() }
-    }
-
-    @Test
-    fun `setTab updates currentTab state`() = runTest {
-        viewModel = createViewModel()
-
-        viewModel.setTab(1)
-        assertEquals(1, viewModel.uiState.value.currentTab)
-
-        viewModel.setTab(0)
-        assertEquals(0, viewModel.uiState.value.currentTab)
-    }
-
-    @Test
-    fun `editVectorMemory regenerates embedding and persists update`() = runTest {
-        val newEmbedding = floatArrayOf(0.42f, -0.13f, 0.99f)
-        coEvery { embeddingProvider.embed("edited body") } returns newEmbedding
-
-        viewModel = createViewModel()
-        testDispatcher.scheduler.advanceUntilIdle()
-
-        viewModel.editVectorMemory(id = 11L, newText = "edited body")
-        testDispatcher.scheduler.advanceUntilIdle()
-
-        coVerify(exactly = 1) { embeddingProvider.embed("edited body") }
-        coVerify(exactly = 1) {
-            memoryRepository.updateMemory(id = 11L, text = "edited body", embedding = newEmbedding)
-        }
-        // Reload after persistence: init + reload = at least 2 calls.
-        coVerify(atLeast = 2) { memoryRepository.getAllMemories() }
-    }
-
-    @Test
-    fun `editVectorMemory swallows embed failure and leaves the chunk unchanged`() = runTest {
-        // A cloud-backed embed can fail with a network error; the ViewModel must
-        // not crash and must not persist a half-applied edit.
-        coEvery { embeddingProvider.embed("boom") } throws RuntimeException("network down")
-
-        viewModel = createViewModel()
-        testDispatcher.scheduler.advanceUntilIdle()
-
-        viewModel.editVectorMemory(id = 3L, newText = "boom")
-        testDispatcher.scheduler.advanceUntilIdle()
-
-        coVerify(exactly = 0) { memoryRepository.updateMemory(any(), any(), any()) }
-    }
-
-    @Test
-    fun `togglePinned flips current pinned state and persists`() = runTest {
-        val unpinned = MemoryChunk(id = 5L, text = "x", embedding = floatArrayOf(0f), timestamp = 1L, isPinned = false)
-        coEvery { memoryRepository.getAllMemories() } returns listOf(unpinned)
-
-        viewModel = createViewModel()
-        testDispatcher.scheduler.advanceUntilIdle()
-
-        viewModel.togglePinned(id = 5L)
-        testDispatcher.scheduler.advanceUntilIdle()
-
-        coVerify(exactly = 1) { memoryRepository.setMemoryPinned(id = 5L, pinned = true) }
-    }
-
-    @Test
-    fun `togglePinned unpins an already pinned chunk`() = runTest {
-        val pinned = MemoryChunk(id = 9L, text = "p", embedding = floatArrayOf(0f), timestamp = 2L, isPinned = true)
-        coEvery { memoryRepository.getAllMemories() } returns listOf(pinned)
-
-        viewModel = createViewModel()
-        testDispatcher.scheduler.advanceUntilIdle()
-
-        viewModel.togglePinned(id = 9L)
-        testDispatcher.scheduler.advanceUntilIdle()
-
-        coVerify(exactly = 1) { memoryRepository.setMemoryPinned(id = 9L, pinned = false) }
-    }
-
-    @Test
-    fun `togglePinned ignores unknown ids`() = runTest {
-        viewModel = createViewModel()
-        testDispatcher.scheduler.advanceUntilIdle()
-
-        viewModel.togglePinned(id = 9999L)
-        testDispatcher.scheduler.advanceUntilIdle()
-
-        coVerify(exactly = 0) { memoryRepository.setMemoryPinned(any(), any()) }
-    }
-
-    @Test
-    fun `setDateFilter persists the selection`() = runTest {
-        viewModel = createViewModel()
-        testDispatcher.scheduler.advanceUntilIdle()
-
+        viewModel.selectCategory(MemoryCategory.Manual)
+        viewModel.setSortMode(MemorySortMode.Alphabetical)
         viewModel.setDateFilter(MemoryDateFilter.Last7Days)
 
-        assertEquals(MemoryDateFilter.Last7Days, viewModel.uiState.value.dateFilter)
+        val state = viewModel.uiState.value
+        assertEquals(MemoryCategory.Manual, state.selectedCategory)
+        assertEquals(MemorySortMode.Alphabetical, state.sortMode)
+        assertEquals(MemoryDateFilter.Last7Days, state.dateFilter)
     }
 
     @Test
-    fun `toggleSourceFilter adds then removes the source`() = runTest {
+    fun `openSearch switches to relevance and onSearchQueryChange runs semantic search`() = runTest {
+        coEvery {
+            retrieveRelevantMemoryUseCase.retrieveScored(query = "berlin", limit = any(), threshold = 0f)
+        } returns
+            listOf(chunk(1) to 0.91f)
+
         viewModel = createViewModel()
         testDispatcher.scheduler.advanceUntilIdle()
 
-        viewModel.toggleSourceFilter(MemorySourceFilter.Manual)
-        assertEquals(setOf(MemorySourceFilter.Manual), viewModel.uiState.value.sourceFilters)
+        viewModel.openSearch()
+        assertTrue(viewModel.uiState.value.searchActive)
+        assertEquals(MemorySortMode.Relevance, viewModel.uiState.value.sortMode)
 
-        viewModel.toggleSourceFilter(MemorySourceFilter.Manual)
-        assertEquals(emptySet<MemorySourceFilter>(), viewModel.uiState.value.sourceFilters)
+        viewModel.onSearchQueryChange("berlin")
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals(1, viewModel.uiState.value.searchResults?.size)
+        coVerify { retrieveRelevantMemoryUseCase.retrieveScored(query = "berlin", limit = any(), threshold = 0f) }
     }
 
     @Test
-    fun `togglePinnedOnly flips the flag`() = runTest {
+    fun `closeSearch clears query and results`() = runTest {
         viewModel = createViewModel()
         testDispatcher.scheduler.advanceUntilIdle()
-
-        viewModel.togglePinnedOnly()
-        assertTrue(viewModel.uiState.value.pinnedOnly)
-
-        viewModel.togglePinnedOnly()
-        assertFalse(viewModel.uiState.value.pinnedOnly)
-    }
-
-    @Test
-    fun `enterSelection turns on selection mode with the long-pressed id`() = runTest {
-        viewModel = createViewModel()
+        viewModel.openSearch()
+        viewModel.onSearchQueryChange("x")
         testDispatcher.scheduler.advanceUntilIdle()
 
-        viewModel.enterSelection(id = 7L)
+        viewModel.closeSearch()
 
         val state = viewModel.uiState.value
-        assertTrue(state.selectionMode)
-        assertEquals(setOf(7L), state.selectedIds)
+        assertFalse(state.searchActive)
+        assertEquals("", state.searchQuery)
+        assertEquals(null, state.searchResults)
     }
 
     @Test
-    fun `toggleSelect adds an id and deselecting the last exits selection`() = runTest {
+    fun `openEntry editEntry cancelEdit toggle the detail state`() = runTest {
         viewModel = createViewModel()
         testDispatcher.scheduler.advanceUntilIdle()
 
-        viewModel.enterSelection(id = 1L)
-        viewModel.toggleSelect(id = 2L)
-        assertEquals(setOf(1L, 2L), viewModel.uiState.value.selectedIds)
+        viewModel.openEntry(5L)
+        assertEquals(5L, viewModel.uiState.value.expandedId)
+        assertFalse(viewModel.uiState.value.editing)
 
-        viewModel.toggleSelect(id = 1L)
-        viewModel.toggleSelect(id = 2L)
+        viewModel.editEntry(5L)
+        assertTrue(viewModel.uiState.value.editing)
 
-        val state = viewModel.uiState.value
-        assertFalse(state.selectionMode)
-        assertEquals(emptySet<Long>(), state.selectedIds)
+        viewModel.cancelEdit()
+        assertFalse(viewModel.uiState.value.editing)
+
+        viewModel.closeEntry()
+        assertEquals(null, viewModel.uiState.value.expandedId)
     }
 
     @Test
-    fun `deleteSelected removes every selected chunk and exits selection`() = runTest {
+    fun `commitEdit re-embeds persists text and tags then reloads`() = runTest {
+        val embedding = floatArrayOf(0.3f)
+        coEvery { embeddingProvider.embed("new body") } returns embedding
+
         viewModel = createViewModel()
         testDispatcher.scheduler.advanceUntilIdle()
 
-        viewModel.enterSelection(id = 1L)
-        viewModel.toggleSelect(id = 2L)
-        viewModel.deleteSelected()
+        viewModel.commitEdit(id = 7L, body = "new body", tags = listOf("tag"))
         testDispatcher.scheduler.advanceUntilIdle()
 
-        coVerify(exactly = 1) { memoryRepository.deleteMemory(1L) }
-        coVerify(exactly = 1) { memoryRepository.deleteMemory(2L) }
-        assertFalse(viewModel.uiState.value.selectionMode)
+        coVerify(exactly = 1) { memoryRepository.updateMemory(id = 7L, text = "new body", embedding = embedding) }
+        coVerify(exactly = 1) { memoryRepository.setMemoryTags(id = 7L, tags = listOf("tag")) }
+        coVerify(atLeast = 2) { memoryRepository.getAllMemories() }
     }
 
     @Test
-    fun `setSelectedPinned pins every selected chunk and exits selection`() = runTest {
+    fun `deleteEntry removes the chunk and reloads`() = runTest {
         viewModel = createViewModel()
         testDispatcher.scheduler.advanceUntilIdle()
 
-        viewModel.enterSelection(id = 3L)
-        viewModel.toggleSelect(id = 4L)
-        viewModel.setSelectedPinned(pinned = true)
+        viewModel.deleteEntry(9L)
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        coVerify(exactly = 1) { memoryRepository.deleteMemory(9L) }
+        coVerify(atLeast = 2) { memoryRepository.getAllMemories() }
+    }
+
+    @Test
+    fun `togglePin flips current pinned state`() = runTest {
+        coEvery { memoryRepository.getAllMemories() } returns listOf(chunk(3, pinned = false))
+        viewModel = createViewModel()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        viewModel.togglePin(3L)
         testDispatcher.scheduler.advanceUntilIdle()
 
         coVerify(exactly = 1) { memoryRepository.setMemoryPinned(id = 3L, pinned = true) }
-        coVerify(exactly = 1) { memoryRepository.setMemoryPinned(id = 4L, pinned = true) }
-        assertFalse(viewModel.uiState.value.selectionMode)
     }
 
     @Test
-    fun `requestExportSelected emits only when something is selected`() = runTest {
+    fun `showCompactDialog loads estimate and confirmCompact runs the pass`() = runTest {
+        coEvery { estimateCompactionUseCase(any()) } returns
+            CompactionEstimate(estimatedRemoved = 5, estimatedFreedBytes = 100L, estimatedRuntimeSeconds = 2)
+
         viewModel = createViewModel()
         testDispatcher.scheduler.advanceUntilIdle()
 
-        // Subscribe eagerly (Unconfined) so the collector is attached before the
-        // one-shot `tryEmit`s fire — a StandardTestDispatcher collector would
-        // otherwise miss the replay-less SharedFlow emission.
+        viewModel.showCompactDialog()
+        testDispatcher.scheduler.advanceUntilIdle()
+        assertTrue(viewModel.uiState.value.compactDialogVisible)
+        assertEquals(5, viewModel.uiState.value.compactEstimate?.estimatedRemoved)
+
+        viewModel.confirmCompact()
+        testDispatcher.scheduler.advanceUntilIdle()
+        assertFalse(viewModel.uiState.value.compactDialogVisible)
+        coVerify(exactly = 1) { memoryCompactionUseCase(any()) }
+    }
+
+    @Test
+    fun `confirmAdd saves a manual entry then reloads`() = runTest {
+        coEvery { saveMessageToMemoryUseCase("remember") } returns SaveToMemoryOutcome.Saved(1L)
+        viewModel = createViewModel()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        viewModel.confirmAdd("remember")
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        coVerify(exactly = 1) { saveMessageToMemoryUseCase("remember") }
+        assertFalse(viewModel.uiState.value.addDialogVisible)
+        coVerify(atLeast = 2) { memoryRepository.getAllMemories() }
+    }
+
+    @Test
+    fun `requestExportAll emits and exportAllTo writes the full table`() = runTest {
+        viewModel = createViewModel()
+        testDispatcher.scheduler.advanceUntilIdle()
+
         val events = mutableListOf<Unit>()
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
             viewModel.exportRequests.collect { events.add(it) }
         }
-
-        viewModel.requestExportSelected() // nothing selected → no event
-        assertEquals(0, events.size)
-
-        viewModel.enterSelection(id = 9L)
-        viewModel.requestExportSelected()
+        viewModel.requestExportAll()
         assertEquals(1, events.size)
-    }
 
-    @Test
-    fun `exportSelectedTo forwards the selected ids to the export use case and exits selection`() = runTest {
-        viewModel = createViewModel()
-        testDispatcher.scheduler.advanceUntilIdle()
-
-        viewModel.enterSelection(id = 5L)
-        viewModel.toggleSelect(id = 6L)
         val stream = ByteArrayOutputStream()
-        viewModel.exportSelectedTo(stream)
+        viewModel.exportAllTo(stream)
         testDispatcher.scheduler.advanceUntilIdle()
-
-        coVerify(exactly = 1) { exportMemoryBaseUseCase(target = stream, ids = setOf(5L, 6L)) }
-        assertFalse(viewModel.uiState.value.selectionMode)
+        coVerify(exactly = 1) { exportMemoryBaseUseCase(target = stream, ids = null) }
     }
 }

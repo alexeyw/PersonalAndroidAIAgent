@@ -1,34 +1,47 @@
-@file:Suppress("MatchingDeclarationName") // Hosts MemoryContent and its helpers.
+@file:Suppress("MatchingDeclarationName", "LongMethod", "TooManyFunctions")
+// File hosts MemoryContent and its private section/row/dialog helpers.
 
 package app.knotwork.design.screens.memory
 
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.PushPin
+import androidx.compose.material.icons.outlined.ArrowDropDown
+import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.Close
-import androidx.compose.material.icons.outlined.DeleteOutline
-import androidx.compose.material.icons.outlined.FileDownload
+import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.WarningAmber
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -46,41 +59,45 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import app.knotwork.design.R
 import app.knotwork.design.components.buttons.KnotworkPrimaryButton
 import app.knotwork.design.components.buttons.KnotworkSecondaryButton
 import app.knotwork.design.components.buttons.KnotworkTextButton
-import app.knotwork.design.components.chips.ChipStyle
-import app.knotwork.design.components.chips.KnotworkChip
 import app.knotwork.design.components.chips.KnotworkFilterChip
-import app.knotwork.design.components.lists.MemoryEntryRow
 import app.knotwork.design.components.misc.EmptyState
-import app.knotwork.design.components.misc.StripedPlaceholder
 import app.knotwork.design.theme.KnotworkTheme
 import app.knotwork.design.tokens.KnotworkTextStyles
 
-/** Length of the FLIP rank-shuffle animation per `compose/components/animations.md`. */
-private const val RANK_SHUFFLE_DURATION_MS = 320
+/** Minimum width fraction so a tiny breakdown segment still renders a sliver. */
+private const val MIN_SEGMENT_FRACTION = 0.0001f
+
+/** Height of the provenance breakdown bar. */
+private val BreakdownBarHeight = 8.dp
+
+/** Width of a row's leading provenance accent bar. */
+private val AccentBarWidth = 3.dp
+
+/** Font size of the prominent chunk-count number — the single large element. */
+private val CountFontSize = 30.sp
 
 /**
- * Reduced-motion fallback duration for the FLIP rank-shuffle (per
- * `decisions.md §14`). Matches the 80ms alpha-only crossfade window
- * used by [app.knotwork.design.a11y.respectReducedMotionTransitions].
- */
-private const val REDUCED_MOTION_FALLBACK_MS = 80
-
-/** Height of the trailing skeleton row used while paginating. */
-private val SkeletonRowHeight = 88.dp
-
-/**
- * Stateless Knotwork memory surface. Mirrors
- * `compose/screens/README.md §C6 · Memory`.
+ * Stateless Knotwork memory surface — Phase 25 redesign.
+ *
+ * Renders the stats header (count / size / last-compacted / provenance
+ * breakdown + Compact), the category chip row, the sort + date dropdowns, the
+ * time-grouped entry list (with provenance accent + badge + tags), the
+ * semantic-search field, the detail bottom sheet, the Compact / Add dialogs,
+ * and the "Add memory" FAB. All state is supplied by [state]; every
+ * interaction is forwarded through [callbacks].
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -94,44 +111,64 @@ fun MemoryContent(
             containerColor = MaterialTheme.colorScheme.surface,
             topBar = {
                 app.knotwork.design.components.topbar.KnotworkTopAppBarShell {
-                    if (state.selectionMode) {
-                        MemorySelectionTopBar(selectedCount = state.selectedIds.size, callbacks = callbacks)
-                    } else {
-                        MemoryTopBar(onBack = callbacks.onBack)
-                    }
+                    MemoryTopBar(searching = state.visualState == MemoryVisualState.Searching, callbacks = callbacks)
+                }
+            },
+            floatingActionButton = {
+                if (state.visualState != MemoryVisualState.Error) {
+                    ExtendedFloatingActionButton(
+                        onClick = callbacks.onAddClick,
+                        containerColor = MaterialTheme.colorScheme.primary,
+                        contentColor = MaterialTheme.colorScheme.onPrimary,
+                        icon = { Icon(Icons.Filled.Add, contentDescription = null) },
+                        text = { Text(stringResource(R.string.knotwork_memory_add_memory)) },
+                    )
                 }
             },
             modifier = Modifier.fillMaxSize(),
         ) { padding ->
             MemoryBody(state = state, callbacks = callbacks, padding = padding)
         }
-        if (state.visualState == MemoryVisualState.EntryExpanded ||
-            state.visualState == MemoryVisualState.Editing
-        ) {
+
+        if (state.visualState == MemoryVisualState.EntryExpanded || state.visualState == MemoryVisualState.Editing) {
             state.expandedEntry?.let { detail ->
-                MemoryDetailOverlay(
+                MemoryDetailSheet(
                     detail = detail,
                     editing = state.visualState == MemoryVisualState.Editing,
                     callbacks = callbacks,
                 )
             }
         }
+        if (state.compactDialogVisible) {
+            MemoryCompactDialog(estimate = state.compactEstimate, callbacks = callbacks)
+        }
+        if (state.addDialogVisible) {
+            MemoryAddDialog(callbacks = callbacks)
+        }
     }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun MemoryTopBar(onBack: () -> Unit) {
+private fun MemoryTopBar(searching: Boolean, callbacks: MemoryCallbacks) {
+    var menuOpen by remember { mutableStateOf(false) }
     TopAppBar(
         title = {
-            Text(
-                text = stringResource(R.string.knotwork_memory_title),
-                style = KnotworkTextStyles.TitleLg,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
+            Column {
+                Text(
+                    text = stringResource(R.string.knotwork_memory_title),
+                    style = KnotworkTextStyles.TitleLg,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                Text(
+                    text = stringResource(R.string.knotwork_memory_subtitle),
+                    style = KnotworkTextStyles.LabelSm,
+                    color = KnotworkTheme.extended.onSurfaceMuted,
+                )
+            }
         },
         navigationIcon = {
-            androidx.compose.material3.IconButton(onClick = onBack) {
+            IconButton(onClick = callbacks.onBack) {
                 Icon(
                     imageVector = Icons.AutoMirrored.Outlined.ArrowBack,
                     contentDescription = stringResource(R.string.knotwork_common_back),
@@ -139,65 +176,31 @@ private fun MemoryTopBar(onBack: () -> Unit) {
                 )
             }
         },
-        colors = TopAppBarDefaults.topAppBarColors(
-            containerColor = MaterialTheme.colorScheme.surface,
-            titleContentColor = MaterialTheme.colorScheme.onSurface,
-        ),
-    )
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun MemorySelectionTopBar(selectedCount: Int, callbacks: MemoryCallbacks) {
-    TopAppBar(
-        title = {
-            Text(
-                text = pluralStringResource(
-                    R.plurals.knotwork_memory_selection_count,
-                    selectedCount,
-                    selectedCount,
-                ),
-                style = KnotworkTextStyles.TitleLg,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
-        },
-        navigationIcon = {
-            IconButton(onClick = callbacks.onExitSelection) {
-                Icon(
-                    imageVector = Icons.Outlined.Close,
-                    contentDescription = stringResource(R.string.knotwork_memory_selection_exit_cd),
-                    tint = MaterialTheme.colorScheme.onSurface,
-                )
-            }
-        },
         actions = {
-            IconButton(onClick = callbacks.onPinSelected) {
+            IconButton(onClick = callbacks.onSearchOpen) {
                 Icon(
-                    imageVector = Icons.Filled.PushPin,
-                    contentDescription = stringResource(R.string.knotwork_memory_selection_pin_all),
-                    tint = MaterialTheme.colorScheme.onSurface,
+                    imageVector = Icons.Outlined.Search,
+                    contentDescription = stringResource(R.string.knotwork_memory_search_cd),
+                    tint = if (searching) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
                 )
             }
-            IconButton(onClick = callbacks.onUnpinSelected) {
-                Icon(
-                    imageVector = Icons.Outlined.PushPin,
-                    contentDescription = stringResource(R.string.knotwork_memory_selection_unpin_all),
-                    tint = MaterialTheme.colorScheme.onSurface,
-                )
-            }
-            IconButton(onClick = callbacks.onExportSelected) {
-                Icon(
-                    imageVector = Icons.Outlined.FileDownload,
-                    contentDescription = stringResource(R.string.knotwork_memory_selection_export),
-                    tint = MaterialTheme.colorScheme.onSurface,
-                )
-            }
-            IconButton(onClick = callbacks.onDeleteSelected) {
-                Icon(
-                    imageVector = Icons.Outlined.DeleteOutline,
-                    contentDescription = stringResource(R.string.knotwork_memory_selection_delete),
-                    tint = KnotworkTheme.extended.signalError,
-                )
+            Box {
+                IconButton(onClick = { menuOpen = true }) {
+                    Icon(
+                        imageVector = Icons.Outlined.MoreVert,
+                        contentDescription = stringResource(R.string.knotwork_memory_overflow_cd),
+                        tint = MaterialTheme.colorScheme.onSurface,
+                    )
+                }
+                DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.knotwork_memory_export_all)) },
+                        onClick = {
+                            menuOpen = false
+                            callbacks.onExportAll()
+                        },
+                    )
+                }
             }
         },
         colors = TopAppBarDefaults.topAppBarColors(
@@ -209,163 +212,381 @@ private fun MemorySelectionTopBar(selectedCount: Int, callbacks: MemoryCallbacks
 
 @Composable
 private fun MemoryBody(state: MemoryViewState, callbacks: MemoryCallbacks, padding: PaddingValues) {
-    Column(modifier = Modifier.fillMaxSize().padding(padding)) {
-        // Hide the search / sort / filter chrome while multi-selecting. These
-        // controls narrow `state.entries`; if the user changed them mid-selection
-        // a selected row could vanish from the list while its id lingered in
-        // `selectedIds`, so a bulk action would silently affect a hidden entry.
-        // Freezing the chrome during selection keeps `selectedIds` a subset of
-        // the visible rows (contextual-action-bar pattern).
-        val showHeaderChrome = state.visualState != MemoryVisualState.Error &&
-            state.visualState != MemoryVisualState.Empty &&
-            !state.selectionMode
-        if (showHeaderChrome) {
-            MemorySearchField(query = state.searchQuery, onQueryChange = callbacks.onSearchQueryChange)
-            MemorySortRow(active = state.sortMode, onChange = callbacks.onSortChange)
-            MemoryFilterRow(state = state, callbacks = callbacks)
-        }
-        when (state.visualState) {
-            MemoryVisualState.Empty -> MemoryEmpty(callbacks = callbacks)
-            MemoryVisualState.Error -> MemoryError(state = state, callbacks = callbacks)
-            MemoryVisualState.Searching -> if (state.entries.isEmpty()) {
-                MemoryNoMatches(callbacks = callbacks, query = state.searchQuery)
+    when (state.visualState) {
+        MemoryVisualState.Error -> MemoryError(state = state, callbacks = callbacks, padding = padding)
+        MemoryVisualState.Empty -> MemoryEmpty(callbacks = callbacks, padding = padding)
+        else -> MemoryPopulated(state = state, callbacks = callbacks, padding = padding)
+    }
+}
+
+@Composable
+private fun MemoryPopulated(state: MemoryViewState, callbacks: MemoryCallbacks, padding: PaddingValues) {
+    val searching = state.visualState == MemoryVisualState.Searching
+    LazyColumn(
+        modifier = Modifier.fillMaxSize().padding(padding),
+        contentPadding = PaddingValues(bottom = KnotworkTheme.spacing.sp16),
+    ) {
+        item(key = "header") {
+            if (searching) {
+                MemorySearchField(query = state.searchQuery, callbacks = callbacks)
             } else {
-                MemoryList(state = state, callbacks = callbacks, showSkeleton = false)
+                MemoryStatsCard(header = state.header, callbacks = callbacks)
             }
-            MemoryVisualState.LoadingMore -> MemoryList(state = state, callbacks = callbacks, showSkeleton = true)
-            else -> MemoryList(state = state, callbacks = callbacks, showSkeleton = false)
+            MemoryCategoryRow(
+                chips = state.categoryChips,
+                selected = state.selectedCategory,
+                onSelect = callbacks.onCategorySelect,
+            )
+            if (!searching) {
+                MemorySortRow(state = state, callbacks = callbacks)
+            }
+        }
+        state.sections.forEach { section ->
+            item(key = "section-${section.title}") {
+                MemorySectionHeader(title = section.title, count = section.count)
+            }
+            items(count = section.rows.size, key = { section.rows[it].id }) { index ->
+                MemoryListRow(row = section.rows[index], searching = searching, callbacks = callbacks)
+            }
         }
     }
 }
 
 @Composable
-private fun MemorySearchField(query: String, onQueryChange: (String) -> Unit) {
+private fun MemorySearchField(query: String, callbacks: MemoryCallbacks) {
     val fieldCd = stringResource(R.string.knotwork_memory_search_cd)
+    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = KnotworkTheme.spacing.sp4)) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp2),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = KnotworkTheme.spacing.sp2)
+                .clip(KnotworkTheme.shapes.md)
+                .background(KnotworkTheme.extended.surface2)
+                .padding(horizontal = KnotworkTheme.spacing.sp3, vertical = KnotworkTheme.spacing.sp2),
+        ) {
+            Icon(Icons.Outlined.Search, contentDescription = null, tint = KnotworkTheme.extended.onSurfaceMuted)
+            Box(modifier = Modifier.weight(1f)) {
+                BasicTextField(
+                    value = query,
+                    onValueChange = callbacks.onSearchQueryChange,
+                    singleLine = true,
+                    textStyle = KnotworkTextStyles.BodyBase.copy(color = MaterialTheme.colorScheme.onSurface),
+                    cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                    modifier = Modifier.fillMaxWidth().semantics { contentDescription = fieldCd },
+                )
+                if (query.isEmpty()) {
+                    Text(
+                        text = stringResource(R.string.knotwork_memory_search_placeholder),
+                        style = KnotworkTextStyles.BodyBase,
+                        color = KnotworkTheme.extended.onSurfaceMuted,
+                    )
+                }
+            }
+            if (query.isNotEmpty()) {
+                IconButton(onClick = callbacks.onClearSearch) {
+                    Icon(
+                        Icons.Outlined.Close,
+                        contentDescription = stringResource(R.string.knotwork_memory_search_clear_cd),
+                        tint = KnotworkTheme.extended.onSurfaceMuted,
+                    )
+                }
+            }
+        }
+        Text(
+            text = stringResource(R.string.knotwork_memory_search_semantic),
+            style = KnotworkTextStyles.LabelSm,
+            color = KnotworkTheme.extended.onSurfaceMuted,
+            modifier = Modifier.padding(vertical = KnotworkTheme.spacing.sp1),
+        )
+    }
+}
+
+@Composable
+private fun MemoryStatsCard(header: MemoryStatsHeader, callbacks: MemoryCallbacks) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = KnotworkTheme.spacing.sp4, vertical = KnotworkTheme.spacing.sp2)
+            .clip(KnotworkTheme.shapes.lg)
+            .background(KnotworkTheme.extended.surface2)
+            .padding(KnotworkTheme.spacing.sp4),
+        verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp2),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+            Column(modifier = Modifier.weight(1f)) {
+                Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text(
+                        text = header.totalLabel,
+                        style = KnotworkTextStyles.TitleLg.copy(fontSize = CountFontSize, fontWeight = FontWeight.Bold),
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                    Text(
+                        text = stringResource(R.string.knotwork_memory_count_unit),
+                        style = KnotworkTextStyles.BodyBase,
+                        color = KnotworkTheme.extended.onSurfaceMuted,
+                        modifier = Modifier.padding(bottom = 4.dp),
+                    )
+                }
+                Text(
+                    text = listOfNotNull(header.sizeLabel, header.lastCompactedLabel).joinToString("  ·  "),
+                    style = KnotworkTextStyles.MonoSm,
+                    color = KnotworkTheme.extended.onSurfaceMuted,
+                )
+            }
+            KnotworkSecondaryButton(
+                text = stringResource(R.string.knotwork_memory_compact),
+                onClick = callbacks.onCompactClick,
+                leadingIcon = Icons.Outlined.AutoAwesome,
+            )
+        }
+        if (header.segments.isNotEmpty()) {
+            MemoryBreakdownBar(segments = header.segments)
+            MemoryBreakdownLegend(segments = header.segments)
+        }
+    }
+}
+
+@Composable
+private fun MemoryBreakdownBar(segments: List<MemoryBreakdownSegment>) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(BreakdownBarHeight)
+            .clip(RoundedCornerShape(percent = 50)),
+        horizontalArrangement = Arrangement.spacedBy(2.dp),
+    ) {
+        segments.forEach { segment ->
+            Box(
+                modifier = Modifier
+                    .weight(segment.fraction.coerceAtLeast(MIN_SEGMENT_FRACTION))
+                    .fillMaxSize()
+                    .background(sourceColor(segment.kind)),
+            )
+        }
+    }
+}
+
+@Composable
+private fun MemoryBreakdownLegend(segments: List<MemoryBreakdownSegment>) {
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp3)) {
+        segments.forEach { segment ->
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                Box(
+                    modifier = Modifier.size(
+                        8.dp,
+                    ).clip(RoundedCornerShape(percent = 50)).background(sourceColor(segment.kind)),
+                )
+                Text(
+                    text = segment.label,
+                    style = KnotworkTextStyles.LabelSm,
+                    color = KnotworkTheme.extended.onSurfaceMuted,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun MemoryCategoryRow(
+    chips: List<MemoryCategoryChip>,
+    selected: MemoryCategory,
+    onSelect: (MemoryCategory) -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState())
+            .padding(horizontal = KnotworkTheme.spacing.sp4, vertical = KnotworkTheme.spacing.sp1),
+        horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp2),
+    ) {
+        chips.forEach { chip ->
+            KnotworkFilterChip(
+                label = stringResource(chip.category.labelRes()),
+                selected = chip.category == selected,
+                onClick = { onSelect(chip.category) },
+                leadingIcon = if (chip.category == MemoryCategory.Pinned) Icons.Filled.PushPin else null,
+                trailingCount = chip.count,
+            )
+        }
+    }
+}
+
+@Composable
+private fun MemorySortRow(state: MemoryViewState, callbacks: MemoryCallbacks) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp3),
+        modifier = Modifier.padding(horizontal = KnotworkTheme.spacing.sp4, vertical = KnotworkTheme.spacing.sp1),
+    ) {
+        Text(
+            text = stringResource(R.string.knotwork_memory_sort_label),
+            style = KnotworkTextStyles.LabelSm,
+            color = KnotworkTheme.extended.onSurfaceMuted,
+        )
+        MemoryDropdown(
+            label = stringResource(state.sortMode.labelRes()),
+            options = MemorySortMode.entries,
+            optionLabel = { stringResource(it.labelRes()) },
+            onSelect = callbacks.onSortChange,
+        )
+        MemoryDropdown(
+            label = stringResource(state.dateFilter.labelRes()),
+            options = MemoryDateFilter.entries,
+            optionLabel = { stringResource(it.labelRes()) },
+            onSelect = callbacks.onDateFilterChange,
+        )
+    }
+}
+
+@Composable
+private fun <T> MemoryDropdown(
+    label: String,
+    options: List<T>,
+    optionLabel: @Composable (T) -> String,
+    onSelect: (T) -> Unit,
+) {
+    var open by remember { mutableStateOf(false) }
+    Box {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.clip(KnotworkTheme.shapes.sm).clickable {
+                open = true
+            }.padding(horizontal = 4.dp, vertical = 2.dp),
+        ) {
+            Text(text = label, style = KnotworkTextStyles.LabelMd, color = MaterialTheme.colorScheme.onSurface)
+            Icon(Icons.Outlined.ArrowDropDown, contentDescription = null, tint = KnotworkTheme.extended.onSurfaceMuted)
+        }
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            options.forEach { option ->
+                DropdownMenuItem(
+                    text = { Text(optionLabel(option)) },
+                    onClick = {
+                        open = false
+                        onSelect(option)
+                    },
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun MemorySectionHeader(title: String, count: Int) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp2),
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = KnotworkTheme.spacing.sp4, vertical = KnotworkTheme.spacing.sp2)
-            .clip(KnotworkTheme.shapes.md)
-            .background(color = KnotworkTheme.extended.surface2)
-            .padding(horizontal = KnotworkTheme.spacing.sp3, vertical = KnotworkTheme.spacing.sp2),
+            .padding(horizontal = KnotworkTheme.spacing.sp4, vertical = KnotworkTheme.spacing.sp2),
     ) {
-        Icon(
-            imageVector = Icons.Outlined.Search,
-            contentDescription = null,
-            tint = KnotworkTheme.extended.onSurfaceMuted,
+        Text(
+            text = title.uppercase(),
+            style = KnotworkTextStyles.LabelSm,
+            color = KnotworkTheme.extended.onSurfaceMuted,
         )
-        Box(modifier = Modifier.weight(1f)) {
-            BasicTextField(
-                value = query,
-                onValueChange = onQueryChange,
-                singleLine = true,
-                textStyle = KnotworkTextStyles.BodyBase.copy(color = MaterialTheme.colorScheme.onSurface),
-                cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .semantics { contentDescription = fieldCd },
-            )
-            if (query.isEmpty()) {
+        Text(
+            text = count.toString(),
+            style = KnotworkTextStyles.LabelSm,
+            color = KnotworkTheme.extended.onSurfaceDim,
+        )
+        Box(modifier = Modifier.weight(1f).height(1.dp).background(KnotworkTheme.extended.outlineStrong))
+    }
+}
+
+@Composable
+private fun MemoryListRow(row: MemoryRow, searching: Boolean, callbacks: MemoryCallbacks) {
+    Row(modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min)) {
+        Box(modifier = Modifier.width(AccentBarWidth).fillMaxHeight().background(sourceColor(row.sourceKind)))
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .clickable { callbacks.onEntryClick(row.id) }
+                .padding(horizontal = KnotworkTheme.spacing.sp4, vertical = KnotworkTheme.spacing.sp3),
+            verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp1),
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    text = stringResource(R.string.knotwork_memory_search_placeholder),
-                    style = KnotworkTextStyles.BodyBase,
+                    text = row.title,
+                    style = KnotworkTextStyles.TitleMd,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f),
+                )
+                IconButton(onClick = { callbacks.onEntryPinToggle(row.id) }, modifier = Modifier.size(28.dp)) {
+                    Icon(
+                        imageVector = if (row.isPinned) Icons.Filled.PushPin else Icons.Outlined.PushPin,
+                        contentDescription = stringResource(
+                            if (row.isPinned) R.string.knotwork_memory_unpin else R.string.knotwork_memory_pin,
+                        ),
+                        tint = if (row.isPinned) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            KnotworkTheme.extended.onSurfaceMuted
+                        },
+                        modifier = Modifier.size(18.dp),
+                    )
+                }
+            }
+            Text(
+                text = row.body,
+                style = KnotworkTextStyles.BodyBase,
+                color = KnotworkTheme.extended.onSurface2,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp2),
+            ) {
+                MemorySourceBadge(kind = row.sourceKind)
+                if (row.tags.isNotEmpty()) {
+                    Text(
+                        text = row.tags.joinToString("  ·  "),
+                        style = KnotworkTextStyles.MonoSm,
+                        color = KnotworkTheme.extended.onSurfaceMuted,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false),
+                    )
+                }
+                Spacer(modifier = Modifier.weight(1f))
+                if (searching && row.relevanceScore != null) {
+                    Text(
+                        text = row.relevanceScore,
+                        style = KnotworkTextStyles.MonoSm.copy(fontWeight = FontWeight.Bold),
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                }
+                Text(
+                    text = row.timestampLabel,
+                    style = KnotworkTextStyles.Caption,
                     color = KnotworkTheme.extended.onSurfaceMuted,
                 )
             }
         }
-        if (query.isNotEmpty()) {
-            IconButton(onClick = { onQueryChange("") }) {
-                Icon(
-                    imageVector = Icons.Outlined.Close,
-                    contentDescription = stringResource(R.string.knotwork_memory_search_clear_cd),
-                    tint = KnotworkTheme.extended.onSurfaceMuted,
-                )
-            }
-        }
     }
 }
 
 @Composable
-private fun MemorySortRow(active: MemorySortMode, onChange: (MemorySortMode) -> Unit) {
-    Row(
-        horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp2),
+private fun MemorySourceBadge(kind: MemorySourceKind) {
+    val color = sourceColor(kind)
+    Text(
+        text = stringResource(kind.labelRes()).uppercase(),
+        style = KnotworkTextStyles.LabelSm,
+        color = color,
         modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = KnotworkTheme.spacing.sp4, vertical = KnotworkTheme.spacing.sp1),
-    ) {
-        MemorySortMode.entries.forEach { mode ->
-            val label = stringResource(
-                when (mode) {
-                    MemorySortMode.Recent -> R.string.knotwork_memory_sort_recent
-                    MemorySortMode.Relevance -> R.string.knotwork_memory_sort_relevance
-                    MemorySortMode.Alphabetical -> R.string.knotwork_memory_sort_alphabetical
-                },
-            )
-            KnotworkFilterChip(
-                label = label,
-                selected = mode == active,
-                onClick = { onChange(mode) },
-            )
-        }
-    }
-}
-
-/**
- * Filter chip row beneath the sort chips: a single-select date-range group,
- * a multi-select source group, and a pinned-only toggle. The catalog only
- * reflects the active selection and emits toggle events — the screen owns the
- * actual filtering (and the clock for date ranges).
- */
-@Composable
-private fun MemoryFilterRow(state: MemoryViewState, callbacks: MemoryCallbacks) {
-    FlowRow(
-        horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp2),
-        verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp1),
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = KnotworkTheme.spacing.sp4, vertical = KnotworkTheme.spacing.sp1),
-    ) {
-        MemoryDateFilter.entries.forEach { filter ->
-            val label = stringResource(
-                when (filter) {
-                    MemoryDateFilter.All -> R.string.knotwork_memory_filter_date_all
-                    MemoryDateFilter.Last7Days -> R.string.knotwork_memory_filter_date_7d
-                    MemoryDateFilter.Last30Days -> R.string.knotwork_memory_filter_date_30d
-                },
-            )
-            KnotworkFilterChip(
-                label = label,
-                selected = filter == state.dateFilter,
-                onClick = { callbacks.onDateFilterChange(filter) },
-            )
-        }
-        MemorySourceFilter.entries.forEach { source ->
-            val label = stringResource(
-                when (source) {
-                    MemorySourceFilter.Auto -> R.string.knotwork_memory_filter_source_auto
-                    MemorySourceFilter.Manual -> R.string.knotwork_memory_filter_source_manual
-                    MemorySourceFilter.Compaction -> R.string.knotwork_memory_filter_source_compaction
-                },
-            )
-            KnotworkFilterChip(
-                label = label,
-                selected = source in state.sourceFilters,
-                onClick = { callbacks.onSourceFilterToggle(source) },
-            )
-        }
-        KnotworkFilterChip(
-            label = stringResource(R.string.knotwork_memory_filter_pinned_only),
-            selected = state.pinnedOnly,
-            onClick = callbacks.onPinnedOnlyToggle,
-        )
-    }
+            .clip(KnotworkTheme.shapes.sm)
+            .background(color.copy(alpha = 0.14f))
+            .padding(horizontal = 6.dp, vertical = 2.dp),
+    )
 }
 
 @Composable
-private fun MemoryEmpty(callbacks: MemoryCallbacks) {
-    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+private fun MemoryEmpty(callbacks: MemoryCallbacks, padding: PaddingValues) {
+    Box(modifier = Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
         EmptyState(
             title = stringResource(R.string.knotwork_memory_empty_title),
             subtitle = stringResource(R.string.knotwork_memory_empty_subtitle),
@@ -376,25 +597,11 @@ private fun MemoryEmpty(callbacks: MemoryCallbacks) {
 }
 
 @Composable
-private fun MemoryNoMatches(callbacks: MemoryCallbacks, query: String) {
-    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        EmptyState(
-            title = stringResource(R.string.knotwork_memory_no_match_title),
-            subtitle = stringResource(R.string.knotwork_memory_no_match_subtitle) +
-                (if (query.isNotEmpty()) " (\"$query\")" else ""),
-            illustration = { /* no striped illustration */ },
-            ctaLabel = stringResource(R.string.knotwork_memory_no_match_clear),
-            onCtaClick = callbacks.onClearSearch,
-        )
-    }
-}
-
-@Composable
-private fun MemoryError(state: MemoryViewState, callbacks: MemoryCallbacks) {
+private fun MemoryError(state: MemoryViewState, callbacks: MemoryCallbacks, padding: PaddingValues) {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp2),
-        modifier = Modifier.fillMaxSize().padding(KnotworkTheme.spacing.sp6),
+        modifier = Modifier.fillMaxSize().padding(padding).padding(KnotworkTheme.spacing.sp6),
     ) {
         Icon(
             imageVector = Icons.Outlined.WarningAmber,
@@ -405,169 +612,396 @@ private fun MemoryError(state: MemoryViewState, callbacks: MemoryCallbacks) {
         EmptyState(
             title = stringResource(R.string.knotwork_memory_error_title),
             subtitle = state.errorMessage.orEmpty(),
-            illustration = { /* icon already drawn */ },
+            illustration = { },
             ctaLabel = stringResource(R.string.knotwork_memory_error_retry),
             onCtaClick = callbacks.onErrorRetry,
         )
-        KnotworkTextButton(
-            text = stringResource(R.string.knotwork_memory_error_open_diagnostics),
-            onClick = callbacks.onErrorOpenDiagnostics,
-        )
     }
 }
 
 @Composable
-private fun MemoryList(state: MemoryViewState, callbacks: MemoryCallbacks, showSkeleton: Boolean) {
-    val reducedMotion = KnotworkTheme.a11y.reducedMotion()
-    val placementDuration = if (reducedMotion) REDUCED_MOTION_FALLBACK_MS else RANK_SHUFFLE_DURATION_MS
-    LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(vertical = KnotworkTheme.spacing.sp2),
-        verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp1),
-    ) {
-        items(items = state.entries, key = { it.id }) { row ->
-            val selected = row.id in state.selectedIds
-            MemoryEntryRow(
-                title = row.title,
-                body = row.body,
-                tags = row.tags,
-                relevanceScore = row.relevanceScore,
-                lastAccessed = row.lastAccessed,
-                onClick = {
-                    if (state.selectionMode) callbacks.onToggleSelect(row.id) else callbacks.onEntryClick(row.id)
-                },
-                // FLIP rank-shuffle: `LazyColumn.items(key = …)` already
-                // animates moves via `Modifier.animateItem`; bumping the
-                // duration here matches the spec's `motionLg` budget.
-                // Under reduced-motion (`decisions.md §14`) the placement
-                // animation collapses to an 80ms crossfade-equivalent so
-                // re-ranked rows still settle, just without the long slide.
-                modifier = Modifier.animateItem(
-                    placementSpec = tween(durationMillis = placementDuration),
-                ),
-                isPinned = row.isPinned,
-                selectionMode = state.selectionMode,
-                selected = selected,
-                onLongClick = { callbacks.onEntryLongPress(row.id) },
-            )
-        }
-        if (showSkeleton) {
-            item {
-                StripedPlaceholder(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(SkeletonRowHeight)
-                        .padding(KnotworkTheme.spacing.sp4),
-                )
-            }
-        }
-    }
-}
+private fun MemoryDetailSheet(detail: MemoryEntryDetail, editing: Boolean, callbacks: MemoryCallbacks) {
+    var body by remember(detail.id, editing) { mutableStateOf(detail.body) }
+    var tags by remember(detail.id, editing) { mutableStateOf(detail.tags) }
+    var newTag by remember(detail.id, editing) { mutableStateOf("") }
 
-@Composable
-private fun MemoryDetailOverlay(detail: MemoryEntryDetail, editing: Boolean, callbacks: MemoryCallbacks) {
-    Surface(
-        color = KnotworkTheme.extended.surface1,
-        tonalElevation = KnotworkTheme.elevation.el3,
-        shape = KnotworkTheme.shapes.lg,
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(top = KnotworkTheme.spacing.sp10),
-    ) {
-        Column(
-            verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp3),
-            modifier = Modifier.fillMaxSize().padding(KnotworkTheme.spacing.sp4),
+    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.BottomCenter) {
+        Surface(
+            color = KnotworkTheme.extended.surface1,
+            tonalElevation = KnotworkTheme.elevation.el3,
+            shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp),
+            modifier = Modifier.fillMaxWidth(),
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+            Column(
+                modifier = Modifier
+                    .padding(KnotworkTheme.spacing.sp4)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp3),
+            ) {
+                Box(
+                    modifier = Modifier
+                        .padding(bottom = KnotworkTheme.spacing.sp1)
+                        .width(36.dp)
+                        .height(4.dp)
+                        .clip(RoundedCornerShape(percent = 50))
+                        .background(KnotworkTheme.extended.outlineStrong)
+                        .align(Alignment.CenterHorizontally),
+                )
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                    MemorySourceBadge(kind = detail.sourceKind)
+                    Spacer(modifier = Modifier.width(KnotworkTheme.spacing.sp2))
+                    Text(
+                        text = detail.tokenLabel,
+                        style = KnotworkTextStyles.MonoSm,
+                        color = KnotworkTheme.extended.onSurfaceMuted,
+                    )
+                    Spacer(modifier = Modifier.weight(1f))
+                    IconButton(onClick = { callbacks.onEntryPinToggle(detail.id) }) {
+                        Icon(
+                            imageVector = if (detail.isPinned) Icons.Filled.PushPin else Icons.Outlined.PushPin,
+                            contentDescription = stringResource(
+                                if (detail.isPinned) R.string.knotwork_memory_unpin else R.string.knotwork_memory_pin,
+                            ),
+                            tint = if (detail.isPinned) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                MaterialTheme.colorScheme.onSurface
+                            },
+                        )
+                    }
+                    IconButton(onClick = callbacks.onCloseDetail) {
+                        Icon(
+                            Icons.Outlined.Close,
+                            contentDescription = stringResource(R.string.knotwork_memory_detail_close),
+                            tint = MaterialTheme.colorScheme.onSurface,
+                        )
+                    }
+                }
                 Text(
                     text = detail.title,
                     style = KnotworkTextStyles.TitleLg,
                     color = MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier.weight(1f),
                 )
-                IconButton(onClick = callbacks.onCloseDetail) {
-                    Icon(
-                        imageVector = Icons.Outlined.Close,
-                        contentDescription = stringResource(R.string.knotwork_memory_detail_close),
-                        tint = MaterialTheme.colorScheme.onSurface,
+                if (editing) {
+                    OutlinedTextField(value = body, onValueChange = { body = it }, modifier = Modifier.fillMaxWidth())
+                } else {
+                    Text(
+                        text = detail.body,
+                        style = KnotworkTextStyles.BodyBase,
+                        color = KnotworkTheme.extended.onSurface2,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(KnotworkTheme.shapes.md)
+                            .background(KnotworkTheme.extended.surface2)
+                            .padding(KnotworkTheme.spacing.sp3),
                     )
                 }
-            }
-            if (editing) {
-                var draft by remember(detail.id) { mutableStateOf(detail.body) }
-                OutlinedTextField(
-                    value = draft,
-                    onValueChange = { draft = it },
-                    modifier = Modifier.fillMaxWidth().height(MEMORY_EDIT_FIELD_HEIGHT),
+                MemoryTagEditor(
+                    tags = if (editing) tags else detail.tags,
+                    editing = editing,
+                    newTag = newTag,
+                    onNewTagChange = { newTag = it },
+                    onAddTag = {
+                        val t = newTag.trim()
+                        if (t.isNotEmpty() && t !in tags) tags = tags + t
+                        newTag = ""
+                    },
+                    onRemoveTag = { tags = tags - it },
                 )
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp2),
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    KnotworkSecondaryButton(
-                        text = stringResource(R.string.knotwork_memory_detail_close),
-                        onClick = callbacks.onEntryEditCancel,
-                    )
-                    Spacer(modifier = Modifier.weight(1f))
-                    KnotworkPrimaryButton(
-                        text = stringResource(R.string.knotwork_memory_detail_edit),
-                        onClick = { callbacks.onEntryEditCommit(detail.id, draft) },
-                    )
-                }
-            } else {
-                Text(
-                    text = detail.body,
-                    style = KnotworkTextStyles.BodyBase,
-                    color = KnotworkTheme.extended.onSurface2,
-                )
-                if (detail.tags.isNotEmpty()) {
-                    FlowRow(
-                        horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp1),
-                        verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp1),
-                    ) {
-                        detail.tags.forEach { tag ->
-                            // `screens/README.md §C6` calls for `KnotworkChip(Tonal)` in
-                            // the detail sheet (filled accent), distinct from the
-                            // outline-style chips on `MemoryEntryRow` list items.
-                            KnotworkChip(label = tag, style = ChipStyle.Tonal)
+                MemoryDetailMeta(detail = detail)
+                MemoryDetailActions(
+                    editing = editing,
+                    onDelete = { callbacks.onEntryDelete(detail.id) },
+                    onCancel = if (editing) callbacks.onEntryEditCancel else callbacks.onCloseDetail,
+                    onPrimary = {
+                        if (editing) {
+                            callbacks.onEntryEditCommit(
+                                detail.id,
+                                body,
+                                tags,
+                            )
+                        } else {
+                            callbacks.onEntryEditRequest(detail.id)
                         }
-                    }
-                }
-                Text(
-                    text = detail.lastAccessed,
-                    style = KnotworkTextStyles.Caption,
-                    color = KnotworkTheme.extended.onSurfaceMuted,
+                    },
                 )
-                Spacer(modifier = Modifier.weight(1f))
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp2),
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    KnotworkTextButton(
-                        text = stringResource(R.string.knotwork_memory_detail_edit),
-                        onClick = { callbacks.onEntryEditRequest(detail.id) },
-                    )
-                    KnotworkTextButton(
-                        text = stringResource(
-                            if (detail.isPinned) {
-                                R.string.knotwork_memory_detail_unpin
-                            } else {
-                                R.string.knotwork_memory_detail_pin
-                            },
-                        ),
-                        onClick = { callbacks.onEntryPin(detail.id) },
-                    )
-                    Spacer(modifier = Modifier.weight(1f))
-                    KnotworkTextButton(
-                        text = stringResource(R.string.knotwork_memory_detail_delete),
-                        onClick = { callbacks.onEntryDelete(detail.id) },
-                        destructive = true,
-                    )
-                }
             }
         }
     }
 }
 
-/** Height of the multi-line entry-edit field rendered inside the detail sheet. */
-private val MEMORY_EDIT_FIELD_HEIGHT = 200.dp
+@Composable
+private fun MemoryTagEditor(
+    tags: List<String>,
+    editing: Boolean,
+    newTag: String,
+    onNewTagChange: (String) -> Unit,
+    onAddTag: () -> Unit,
+    onRemoveTag: (String) -> Unit,
+) {
+    FlowRow(
+        horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp1),
+        verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp1),
+    ) {
+        tags.forEach { tag ->
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .clip(KnotworkTheme.shapes.sm)
+                    .background(KnotworkTheme.extended.surface2)
+                    .padding(horizontal = KnotworkTheme.spacing.sp2, vertical = 4.dp),
+            ) {
+                Text(text = tag, style = KnotworkTextStyles.LabelMd, color = MaterialTheme.colorScheme.onSurface)
+                if (editing) {
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Icon(
+                        imageVector = Icons.Outlined.Close,
+                        contentDescription = stringResource(R.string.knotwork_memory_tag_remove_cd),
+                        tint = KnotworkTheme.extended.onSurfaceMuted,
+                        modifier = Modifier.size(14.dp).clickable { onRemoveTag(tag) },
+                    )
+                }
+            }
+        }
+        if (editing) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .clip(KnotworkTheme.shapes.sm)
+                    .background(KnotworkTheme.extended.surface2)
+                    .padding(horizontal = KnotworkTheme.spacing.sp2, vertical = 4.dp),
+            ) {
+                Icon(
+                    Icons.Filled.Add,
+                    contentDescription = null,
+                    tint = KnotworkTheme.extended.onSurfaceMuted,
+                    modifier = Modifier.size(14.dp),
+                )
+                Spacer(modifier = Modifier.width(4.dp))
+                Box {
+                    BasicTextField(
+                        value = newTag,
+                        onValueChange = onNewTagChange,
+                        singleLine = true,
+                        textStyle = KnotworkTextStyles.LabelMd.copy(color = MaterialTheme.colorScheme.onSurface),
+                        cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                        modifier = Modifier.width(64.dp),
+                    )
+                    if (newTag.isEmpty()) {
+                        Text(
+                            text = stringResource(R.string.knotwork_memory_tag_add),
+                            style = KnotworkTextStyles.LabelMd,
+                            color = KnotworkTheme.extended.onSurfaceMuted,
+                        )
+                    }
+                }
+                KnotworkTextButton(text = stringResource(R.string.knotwork_memory_tag_add_action), onClick = onAddTag)
+            }
+        }
+    }
+}
+
+@Composable
+private fun MemoryDetailMeta(detail: MemoryEntryDetail) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(KnotworkTheme.shapes.md)
+            .background(KnotworkTheme.extended.surface2)
+            .padding(KnotworkTheme.spacing.sp3),
+        verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp1),
+    ) {
+        MemoryMetaRow(label = stringResource(R.string.knotwork_memory_meta_source), value = detail.sourceLabel)
+        detail.learnedFromLabel?.let {
+            MemoryMetaRow(label = stringResource(R.string.knotwork_memory_meta_learned_from), value = it)
+        }
+        MemoryMetaRow(label = stringResource(R.string.knotwork_memory_meta_captured), value = detail.capturedLabel)
+        detail.usedInLabel?.let {
+            MemoryMetaRow(label = stringResource(R.string.knotwork_memory_meta_used_in), value = it)
+        }
+    }
+}
+
+@Composable
+private fun MemoryMetaRow(label: String, value: String) {
+    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp3)) {
+        Text(
+            text = label.uppercase(),
+            style = KnotworkTextStyles.LabelSm,
+            color = KnotworkTheme.extended.onSurfaceMuted,
+            modifier = Modifier.width(96.dp),
+        )
+        Text(
+            text = value,
+            style = KnotworkTextStyles.BodySm,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.weight(1f),
+        )
+    }
+}
+
+@Composable
+private fun MemoryDetailActions(editing: Boolean, onDelete: () -> Unit, onCancel: () -> Unit, onPrimary: () -> Unit) {
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+        KnotworkSecondaryButton(
+            text = stringResource(R.string.knotwork_memory_detail_delete),
+            onClick = onDelete,
+            destructive = true,
+        )
+        Spacer(modifier = Modifier.weight(1f))
+        KnotworkTextButton(text = stringResource(R.string.knotwork_memory_detail_cancel), onClick = onCancel)
+        Spacer(modifier = Modifier.width(KnotworkTheme.spacing.sp2))
+        KnotworkPrimaryButton(
+            text = stringResource(
+                if (editing) R.string.knotwork_memory_detail_save else R.string.knotwork_memory_detail_edit,
+            ),
+            onClick = onPrimary,
+        )
+    }
+}
+
+@Composable
+private fun MemoryCompactDialog(estimate: CompactionEstimateView?, callbacks: MemoryCallbacks) {
+    AlertDialog(
+        onDismissRequest = callbacks.onCompactDismiss,
+        title = { Text(stringResource(R.string.knotwork_memory_compact_title), style = KnotworkTextStyles.TitleLg) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp3)) {
+                Text(
+                    text = stringResource(R.string.knotwork_memory_compact_body),
+                    style = KnotworkTextStyles.BodyBase,
+                    color = KnotworkTheme.extended.onSurface2,
+                )
+                if (estimate != null) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(KnotworkTheme.shapes.md)
+                            .background(KnotworkTheme.extended.surface2)
+                            .padding(KnotworkTheme.spacing.sp3),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                    ) {
+                        MemoryEstimateCell(
+                            value = estimate.removedLabel,
+                            label = stringResource(R.string.knotwork_memory_compact_removed),
+                        )
+                        MemoryEstimateCell(
+                            value = estimate.freedLabel,
+                            label = stringResource(R.string.knotwork_memory_compact_freed),
+                        )
+                        MemoryEstimateCell(
+                            value = estimate.runtimeLabel,
+                            label = stringResource(R.string.knotwork_memory_compact_runtime),
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            KnotworkPrimaryButton(
+                text = stringResource(R.string.knotwork_memory_compact_confirm),
+                onClick = callbacks.onCompactConfirm,
+            )
+        },
+        dismissButton = {
+            KnotworkTextButton(
+                text = stringResource(R.string.knotwork_memory_detail_cancel),
+                onClick = callbacks.onCompactDismiss,
+            )
+        },
+    )
+}
+
+@Composable
+private fun MemoryEstimateCell(value: String, label: String) {
+    Column(horizontalAlignment = Alignment.Start) {
+        Text(text = value, style = KnotworkTextStyles.TitleMd, color = MaterialTheme.colorScheme.onSurface)
+        Text(
+            text = label.uppercase(),
+            style = KnotworkTextStyles.LabelSm,
+            color = KnotworkTheme.extended.onSurfaceMuted,
+        )
+    }
+}
+
+@Composable
+private fun MemoryAddDialog(callbacks: MemoryCallbacks) {
+    var text by remember { mutableStateOf("") }
+    AlertDialog(
+        onDismissRequest = callbacks.onAddDismiss,
+        title = { Text(stringResource(R.string.knotwork_memory_add_title), style = KnotworkTextStyles.TitleLg) },
+        text = {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(KnotworkTheme.shapes.md)
+                    .background(KnotworkTheme.extended.surface2)
+                    .padding(KnotworkTheme.spacing.sp3),
+            ) {
+                BasicTextField(
+                    value = text,
+                    onValueChange = { text = it },
+                    textStyle = KnotworkTextStyles.BodyBase.copy(color = MaterialTheme.colorScheme.onSurface),
+                    cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                if (text.isEmpty()) {
+                    Text(
+                        text = stringResource(R.string.knotwork_memory_add_placeholder),
+                        style = KnotworkTextStyles.BodyBase,
+                        color = KnotworkTheme.extended.onSurfaceMuted,
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            KnotworkPrimaryButton(
+                text = stringResource(R.string.knotwork_memory_add_save),
+                onClick = { callbacks.onAddConfirm(text) },
+                enabled = text.isNotBlank(),
+            )
+        },
+        dismissButton = {
+            KnotworkTextButton(
+                text = stringResource(R.string.knotwork_memory_detail_cancel),
+                onClick = callbacks.onAddDismiss,
+            )
+        },
+    )
+}
+
+/** Maps a [MemorySourceKind] to its accent colour. */
+@Composable
+private fun sourceColor(kind: MemorySourceKind): Color = when (kind) {
+    MemorySourceKind.Auto -> KnotworkTheme.extended.memoryAuto
+    MemorySourceKind.Compaction -> KnotworkTheme.extended.memoryCompaction
+    MemorySourceKind.Manual -> MaterialTheme.colorScheme.primary
+    MemorySourceKind.Unknown -> KnotworkTheme.extended.onSurfaceMuted
+}
+
+private fun MemorySourceKind.labelRes(): Int = when (this) {
+    MemorySourceKind.Auto -> R.string.knotwork_memory_badge_auto
+    MemorySourceKind.Manual -> R.string.knotwork_memory_badge_manual
+    MemorySourceKind.Compaction -> R.string.knotwork_memory_badge_compact
+    MemorySourceKind.Unknown -> R.string.knotwork_memory_badge_unknown
+}
+
+private fun MemoryCategory.labelRes(): Int = when (this) {
+    MemoryCategory.All -> R.string.knotwork_memory_category_all
+    MemoryCategory.Pinned -> R.string.knotwork_memory_category_pinned
+    MemoryCategory.Auto -> R.string.knotwork_memory_category_auto
+    MemoryCategory.Manual -> R.string.knotwork_memory_category_manual
+    MemoryCategory.Compaction -> R.string.knotwork_memory_category_compaction
+}
+
+private fun MemorySortMode.labelRes(): Int = when (this) {
+    MemorySortMode.Recent -> R.string.knotwork_memory_sort_recent
+    MemorySortMode.Relevance -> R.string.knotwork_memory_sort_relevance
+    MemorySortMode.Alphabetical -> R.string.knotwork_memory_sort_alphabetical
+}
+
+private fun MemoryDateFilter.labelRes(): Int = when (this) {
+    MemoryDateFilter.All -> R.string.knotwork_memory_filter_date_all
+    MemoryDateFilter.Last7Days -> R.string.knotwork_memory_filter_date_7d
+    MemoryDateFilter.Last30Days -> R.string.knotwork_memory_filter_date_30d
+}

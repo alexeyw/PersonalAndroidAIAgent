@@ -1,190 +1,227 @@
 package app.knotwork.design.screens.memory
 
 /**
- * Visual variant of the memory surface. Drives the 7 documented states
- * (`compose/screens/README.md §C6 · Memory`).
+ * Visual variant of the memory surface.
  */
 enum class MemoryVisualState {
     /** No entries stored. */
     Empty,
 
-    /** Default surface with one or more entries. */
+    /** Default surface with one or more entries, grouped into sections. */
     Populated,
 
-    /** Query non-empty; rows are pre-filtered, FLIP-animated on rank shuffle. */
+    /** Semantic search active; rows carry a relevance score. */
     Searching,
 
-    /** Pagination fetch in progress; trailing skeleton row visible. */
-    LoadingMore,
-
-    /** Detail bottom sheet is open. */
+    /** Detail bottom sheet open (read-only). */
     EntryExpanded,
 
-    /** Detail sheet in edit mode. */
+    /** Detail bottom sheet in edit mode. */
     Editing,
 
-    /** Full-screen error state with Retry / diagnostics. */
+    /** Full-screen error state with Retry. */
     Error,
 }
 
-/** Sort modes exposed in the chip row beneath the search bar. */
+/** Sort modes exposed in the "Sort" dropdown beneath the chips. */
 enum class MemorySortMode {
-    /** Newest first (default when query is empty). */
+    /** Newest first. */
     Recent,
 
-    /** Highest relevance score first (default when searching). */
+    /** Highest relevance score first (search). */
     Relevance,
 
     /** Title alphabetical, ascending. */
     Alphabetical,
 }
 
-/**
- * Date-range filter applied to the entry list. Single-select chip group in
- * the filter row beneath the sort chips. The actual cut-off is resolved by
- * the screen (catalog stays clock-free).
- */
+/** Date-range filter exposed in the second dropdown. */
 enum class MemoryDateFilter {
-    /** No date constraint (default). */
+    /** No date constraint. */
     All,
 
-    /** Only entries created within the last 7 days. */
+    /** Only entries from the last 7 days. */
     Last7Days,
 
-    /** Only entries created within the last 30 days. */
+    /** Only entries from the last 30 days. */
     Last30Days,
 }
 
 /**
- * Provenance filter applied to the entry list. Multi-select chip group: a
- * chip lit means "include this source". An empty selection is treated as
- * "include every source" so the resting surface is unfiltered.
+ * Provenance kind driving a row's left accent bar and source badge, plus the
+ * breakdown-bar segments. `Unknown` covers legacy rows with no recorded source.
  */
-enum class MemorySourceFilter {
-    /** Chunks distilled automatically from finished conversations. */
-    Auto,
-
-    /** Chunks the user saved deliberately via "Save to memory". */
-    Manual,
-
-    /** Chunks produced by the background compaction pass. */
-    Compaction,
-}
+enum class MemorySourceKind { Auto, Manual, Compaction, Unknown }
 
 /**
- * Lightweight projection of one memory chunk as consumed by
- * `MemoryContent`.
+ * Single-select category chip in the chip row. `All` shows everything;
+ * `Pinned` shows only pinned entries; the rest narrow by [MemorySourceKind].
+ */
+enum class MemoryCategory { All, Pinned, Auto, Manual, Compaction }
+
+/**
+ * One segment of the provenance breakdown bar in the stats header.
  *
- * @property id stable identity used as the `LazyColumn` key (drives the
- * FLIP rank-shuffle animation).
- * @property title display title (often the first line of the body).
- * @property body full body text; clamped to 3 lines in the list row.
- * @property tags optional tag list rendered as Outline chips.
- * @property relevanceScore optional relevance score (e.g. `"0.93"`).
- * @property lastAccessed human-readable "last accessed" string.
- * @property isPinned When `true`, the row renders a leading pin glyph and
- * sorts ahead of unpinned entries on the surface.
+ * @property kind Which source this segment represents.
+ * @property label Pre-formatted legend text, e.g. `"AUTO 58 %"`.
+ * @property fraction Share of the whole, `0f..1f`, driving the segment width.
+ */
+data class MemoryBreakdownSegment(val kind: MemorySourceKind, val label: String, val fraction: Float)
+
+/**
+ * Immutable stats header card content.
+ *
+ * @property totalLabel Total chunk count, pre-formatted (e.g. `"1248"`).
+ * @property sizeLabel On-disk size, pre-formatted (e.g. `"14.2 MB"`).
+ * @property lastCompactedLabel "compacted N ago" line, or `null` if never.
+ * @property segments Provenance breakdown segments (may be empty).
+ */
+data class MemoryStatsHeader(
+    val totalLabel: String,
+    val sizeLabel: String,
+    val lastCompactedLabel: String?,
+    val segments: List<MemoryBreakdownSegment>,
+)
+
+/**
+ * One category chip with its live count.
+ *
+ * @property category The category this chip selects.
+ * @property count Number of entries in that category.
+ */
+data class MemoryCategoryChip(val category: MemoryCategory, val count: Int)
+
+/**
+ * Lightweight projection of one memory chunk as a list row.
+ *
+ * @property id Stable identity used as the `LazyColumn` key.
+ * @property title Display title (first line of the body).
+ * @property body Full body text; clamped in the row.
+ * @property sourceKind Provenance — drives the accent bar + badge.
+ * @property tags Tag chips rendered under the body.
+ * @property relevanceScore Pre-formatted score (e.g. `"0.97"`); non-null only
+ *   in search mode.
+ * @property timestampLabel Relative time (e.g. `"2h"`).
+ * @property isPinned Whether the row is pinned (drives the pin glyph).
  */
 data class MemoryRow(
     val id: String,
     val title: String,
     val body: String,
+    val sourceKind: MemorySourceKind,
     val tags: List<String>,
     val relevanceScore: String?,
-    val lastAccessed: String,
-    val isPinned: Boolean = false,
+    val timestampLabel: String,
+    val isPinned: Boolean,
 )
 
 /**
- * Per-entry payload surfaced in the detail bottom sheet.
+ * A titled group of rows ("PINNED", "TODAY", "THIS WEEK", …).
  *
- * @property isPinned drives the Pin / Unpin action label in the sheet
- * footer.
+ * @property title Section header label (rendered upper-case by the surface).
+ * @property count Number of rows in the section.
+ * @property rows The rows in the section.
+ */
+data class MemorySection(val title: String, val count: Int, val rows: List<MemoryRow>)
+
+/**
+ * Per-entry payload for the detail bottom sheet.
+ *
+ * @property id Stable identity.
+ * @property title Display title.
+ * @property body Full body text.
+ * @property sourceKind Provenance — drives the badge tint.
+ * @property sourceLabel Human source label (e.g. `"Auto-extracted"`).
+ * @property tokenLabel Approximate token count (e.g. `"58 tok"`).
+ * @property tags Current tags (editable in edit mode).
+ * @property learnedFromLabel "Learned from" line, or `null` when unknown.
+ * @property capturedLabel Captured timestamp line.
+ * @property usedInLabel "Used in N replies …" line, or `null` when never used.
+ * @property isPinned Whether the entry is pinned.
  */
 data class MemoryEntryDetail(
     val id: String,
     val title: String,
     val body: String,
+    val sourceKind: MemorySourceKind,
+    val sourceLabel: String,
+    val tokenLabel: String,
     val tags: List<String>,
-    val lastAccessed: String,
-    val isPinned: Boolean = false,
+    val learnedFromLabel: String?,
+    val capturedLabel: String,
+    val usedInLabel: String?,
+    val isPinned: Boolean,
 )
 
 /**
- * Top-level immutable input to `MemoryContent`. Mirrors
- * `compose/screens/README.md §C6`.
+ * Pre-formatted compaction estimate shown in the confirm dialog.
  *
- * @property visualState which of the 7 documented states to render.
- * @property entries rows passed through to the list body.
- * @property searchQuery current value of the search field.
- * @property sortMode currently-selected sort mode.
- * @property expandedEntry detail payload rendered in the bottom sheet when
- * [visualState] is [MemoryVisualState.EntryExpanded] / [MemoryVisualState.Editing].
- * @property errorMessage user-visible error rendered in [MemoryVisualState.Error].
- * @property dateFilter active date-range filter (drives the chip selection).
- * @property sourceFilters active provenance filters; empty = every source.
- * @property pinnedOnly when `true`, only pinned entries are shown.
- * @property selectionMode when `true`, the surface is in multi-select mode:
- * the top bar swaps to the bulk-action bar and rows render selection toggles
- * instead of opening the detail sheet on tap.
- * @property selectedIds ids of the entries currently selected in multi-select
- * mode (matches [MemoryRow.id]).
+ * @property removedLabel e.g. `"~140"`.
+ * @property freedLabel e.g. `"~1.8 MB"`.
+ * @property runtimeLabel e.g. `"~4 s"`.
+ */
+data class CompactionEstimateView(val removedLabel: String, val freedLabel: String, val runtimeLabel: String)
+
+/**
+ * Top-level immutable input to `MemoryContent`.
+ *
+ * @property visualState Which variant to render.
+ * @property header Stats header card content.
+ * @property categoryChips Category chip row with counts.
+ * @property selectedCategory Currently-selected category chip.
+ * @property sortMode Active sort mode (the "Sort" dropdown value).
+ * @property dateFilter Active date-range filter (the second dropdown value).
+ * @property searchQuery Current search field value.
+ * @property sections Grouped rows to render.
+ * @property expandedEntry Detail payload when [visualState] is
+ *   [MemoryVisualState.EntryExpanded] / [MemoryVisualState.Editing].
+ * @property errorMessage Error text rendered in [MemoryVisualState.Error].
+ * @property compactDialogVisible Whether the "Compact memory?" dialog is shown.
+ * @property compactEstimate Estimate rendered in that dialog (`null` while loading).
+ * @property addDialogVisible Whether the "Add memory" dialog is shown.
  */
 data class MemoryViewState(
     val visualState: MemoryVisualState,
-    val entries: List<MemoryRow> = emptyList(),
-    val searchQuery: String = "",
+    val header: MemoryStatsHeader,
+    val categoryChips: List<MemoryCategoryChip> = emptyList(),
+    val selectedCategory: MemoryCategory = MemoryCategory.All,
     val sortMode: MemorySortMode = MemorySortMode.Recent,
+    val dateFilter: MemoryDateFilter = MemoryDateFilter.All,
+    val searchQuery: String = "",
+    val sections: List<MemorySection> = emptyList(),
     val expandedEntry: MemoryEntryDetail? = null,
     val errorMessage: String? = null,
-    val dateFilter: MemoryDateFilter = MemoryDateFilter.All,
-    val sourceFilters: Set<MemorySourceFilter> = emptySet(),
-    val pinnedOnly: Boolean = false,
-    val selectionMode: Boolean = false,
-    val selectedIds: Set<String> = emptySet(),
-) {
-    init {
-        require((visualState == MemoryVisualState.Error) == (errorMessage != null)) {
-            "errorMessage must be non-null iff visualState == Error"
-        }
-        require(
-            (
-                visualState == MemoryVisualState.EntryExpanded ||
-                    visualState == MemoryVisualState.Editing
-                ) ==
-                (expandedEntry != null),
-        ) {
-            "expandedEntry must be non-null iff visualState is EntryExpanded or Editing"
-        }
-    }
-}
+    val compactDialogVisible: Boolean = false,
+    val compactEstimate: CompactionEstimateView? = null,
+    val addDialogVisible: Boolean = false,
+)
 
+/** Callbacks emitted by `MemoryContent`. */
 @Suppress("LongParameterList")
 class MemoryCallbacks(
     val onBack: () -> Unit = {},
+    val onSearchOpen: () -> Unit = {},
     val onSearchQueryChange: (String) -> Unit = {},
-    val onSortChange: (MemorySortMode) -> Unit = {},
-    val onEntryClick: (String) -> Unit = {},
-    val onEntryDelete: (String) -> Unit = {},
-    val onEntryEditRequest: (String) -> Unit = {},
-    val onEntryEditCommit: (id: String, newBody: String) -> Unit = { _, _ -> },
-    val onEntryEditCancel: () -> Unit = {},
-    val onEntryPin: (String) -> Unit = {},
-    val onCloseDetail: () -> Unit = {},
-    val onErrorRetry: () -> Unit = {},
-    val onErrorOpenDiagnostics: () -> Unit = {},
-    val onEmptyCta: () -> Unit = {},
     val onClearSearch: () -> Unit = {},
+    val onCategorySelect: (MemoryCategory) -> Unit = {},
+    val onSortChange: (MemorySortMode) -> Unit = {},
     val onDateFilterChange: (MemoryDateFilter) -> Unit = {},
-    val onSourceFilterToggle: (MemorySourceFilter) -> Unit = {},
-    val onPinnedOnlyToggle: () -> Unit = {},
-    val onEntryLongPress: (String) -> Unit = {},
-    val onToggleSelect: (String) -> Unit = {},
-    val onExitSelection: () -> Unit = {},
-    val onDeleteSelected: () -> Unit = {},
-    val onPinSelected: () -> Unit = {},
-    val onUnpinSelected: () -> Unit = {},
-    val onExportSelected: () -> Unit = {},
+    val onEntryClick: (String) -> Unit = {},
+    val onEntryPinToggle: (String) -> Unit = {},
+    val onCloseDetail: () -> Unit = {},
+    val onEntryEditRequest: (String) -> Unit = {},
+    val onEntryEditCommit: (id: String, body: String, tags: List<String>) -> Unit = { _, _, _ -> },
+    val onEntryEditCancel: () -> Unit = {},
+    val onEntryDelete: (String) -> Unit = {},
+    val onCompactClick: () -> Unit = {},
+    val onCompactConfirm: () -> Unit = {},
+    val onCompactDismiss: () -> Unit = {},
+    val onAddClick: () -> Unit = {},
+    val onAddConfirm: (String) -> Unit = {},
+    val onAddDismiss: () -> Unit = {},
+    val onExportAll: () -> Unit = {},
+    val onErrorRetry: () -> Unit = {},
+    val onEmptyCta: () -> Unit = {},
 )
 
 /** Convenience factory returning a callbacks bundle that ignores every event. */

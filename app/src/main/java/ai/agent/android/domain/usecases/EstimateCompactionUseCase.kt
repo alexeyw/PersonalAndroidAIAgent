@@ -93,6 +93,7 @@ data class CompactionEstimate(
     val estimatedFreedBytes: Long,
     val estimatedRuntimeSeconds: Int,
 ) {
+    /** Holds the [EMPTY] sentinel used when nothing is eligible for compaction. */
     companion object {
         /** Zero estimate — nothing eligible to compact. */
         val EMPTY = CompactionEstimate(estimatedRemoved = 0, estimatedFreedBytes = 0L, estimatedRuntimeSeconds = 0)

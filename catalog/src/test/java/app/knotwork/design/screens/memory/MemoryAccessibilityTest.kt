@@ -53,7 +53,10 @@ class MemoryAccessibilityTest {
         // glyph's `contentDescription` (turning the star into a colour-only
         // signal) fails this assertion even when the row stays clickable.
         assertReachableNodes(min = POPULATED_MIN_NODES)
-        assertContentDescriptionPresent(substring = "Pinned")
+        // The pinned row's pin toggle advertises an "Unpin" contentDescription;
+        // a regression stripping it would turn the glyph into a colour-only
+        // signal and fail here even while the row stays clickable.
+        assertContentDescriptionPresent(substring = "pin")
     }
 
     @Test

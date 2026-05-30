@@ -322,47 +322,67 @@
     <!-- ============ Memory screen ============ -->
 
     <string name="knotwork_memory_title">Memory</string>
+    <string name="knotwork_memory_subtitle">LONG-TERM · VECTOR BASE</string>
+    <string name="knotwork_memory_overflow_cd">More options</string>
+    <string name="knotwork_memory_export_all">Export memory</string>
+    <string name="knotwork_memory_add_memory">Add memory</string>
+    <string name="knotwork_memory_count_unit">memories</string>
+    <string name="knotwork_memory_compact">Compact</string>
     <string name="knotwork_memory_search_placeholder">Search memories</string>
     <string name="knotwork_memory_search_cd">Memory search input</string>
     <string name="knotwork_memory_search_clear_cd">Clear memory search</string>
+    <string name="knotwork_memory_search_semantic">SEMANTIC · sorted by relevance</string>
     <string name="knotwork_memory_empty_title">Nothing memorised yet</string>
     <string name="knotwork_memory_empty_subtitle">Ask the agent to remember something — facts, preferences, project notes — and it\'ll show up here.</string>
     <string name="knotwork_memory_empty_cta">Open chat</string>
-    <string name="knotwork_memory_no_match_title">Nothing matches this search</string>
-    <string name="knotwork_memory_no_match_subtitle">Try a different word or clear the search.</string>
-    <string name="knotwork_memory_no_match_clear">Clear search</string>
     <string name="knotwork_memory_error_title">Memory unavailable</string>
     <string name="knotwork_memory_error_retry">Retry</string>
-    <string name="knotwork_memory_error_open_diagnostics">Open diagnostics</string>
+    <string name="knotwork_memory_pinned_cd">Pinned</string>
+    <string name="knotwork_memory_pin">Pin</string>
+    <string name="knotwork_memory_unpin">Unpin</string>
+    <!-- Sort + date-range dropdowns. -->
+    <string name="knotwork_memory_sort_label">Sort</string>
     <string name="knotwork_memory_sort_recent">Recent</string>
     <string name="knotwork_memory_sort_relevance">Relevance</string>
     <string name="knotwork_memory_sort_alphabetical">A → Z</string>
-    <string name="knotwork_memory_detail_edit">Edit</string>
-    <string name="knotwork_memory_detail_delete">Delete</string>
-    <string name="knotwork_memory_detail_pin">Pin to top</string>
-    <string name="knotwork_memory_detail_unpin">Unpin</string>
-    <string name="knotwork_memory_pinned_cd">Pinned</string>
-    <string name="knotwork_memory_detail_close">Close</string>
-    <!-- Memory filter chips (date range / source / pinned-only). -->
     <string name="knotwork_memory_filter_date_all">All time</string>
     <string name="knotwork_memory_filter_date_7d">Last 7 days</string>
     <string name="knotwork_memory_filter_date_30d">Last 30 days</string>
-    <string name="knotwork_memory_filter_source_auto">Auto</string>
-    <string name="knotwork_memory_filter_source_manual">Manual</string>
-    <string name="knotwork_memory_filter_source_compaction">Compaction</string>
-    <string name="knotwork_memory_filter_pinned_only">Pinned only</string>
-    <!-- Memory multi-select bulk-action bar. -->
-    <plurals name="knotwork_memory_selection_count">
-        <item quantity="one">%1$d selected</item>
-        <item quantity="other">%1$d selected</item>
-    </plurals>
-    <string name="knotwork_memory_selection_exit_cd">Exit selection</string>
-    <string name="knotwork_memory_selection_pin_all">Pin selected</string>
-    <string name="knotwork_memory_selection_unpin_all">Unpin selected</string>
-    <string name="knotwork_memory_selection_export">Export selected</string>
-    <string name="knotwork_memory_selection_delete">Delete selected</string>
-    <string name="knotwork_memory_selected_cd">Selected</string>
-    <string name="knotwork_memory_unselected_cd">Not selected</string>
+    <!-- Category chips. -->
+    <string name="knotwork_memory_category_all">All</string>
+    <string name="knotwork_memory_category_pinned">Pinned</string>
+    <string name="knotwork_memory_category_auto">Auto</string>
+    <string name="knotwork_memory_category_manual">Manual</string>
+    <string name="knotwork_memory_category_compaction">Compaction</string>
+    <!-- Provenance badges (rendered upper-case). -->
+    <string name="knotwork_memory_badge_auto">Auto</string>
+    <string name="knotwork_memory_badge_manual">Manual</string>
+    <string name="knotwork_memory_badge_compact">Compact</string>
+    <string name="knotwork_memory_badge_unknown">Unknown</string>
+    <!-- Detail bottom sheet. -->
+    <string name="knotwork_memory_detail_edit">Edit</string>
+    <string name="knotwork_memory_detail_delete">Delete</string>
+    <string name="knotwork_memory_detail_cancel">Cancel</string>
+    <string name="knotwork_memory_detail_save">Save</string>
+    <string name="knotwork_memory_detail_close">Close</string>
+    <string name="knotwork_memory_meta_source">Source</string>
+    <string name="knotwork_memory_meta_learned_from">Learned from</string>
+    <string name="knotwork_memory_meta_captured">Captured</string>
+    <string name="knotwork_memory_meta_used_in">Used in</string>
+    <string name="knotwork_memory_tag_add">Tag</string>
+    <string name="knotwork_memory_tag_add_action">Add</string>
+    <string name="knotwork_memory_tag_remove_cd">Remove tag</string>
+    <!-- Compact confirmation dialog. -->
+    <string name="knotwork_memory_compact_title">Compact memory?</string>
+    <string name="knotwork_memory_compact_body">Merges near-duplicate chunks and re-summarises the oldest 30 days. Pinned memories are never touched.</string>
+    <string name="knotwork_memory_compact_removed">est. removed</string>
+    <string name="knotwork_memory_compact_freed">freed</string>
+    <string name="knotwork_memory_compact_runtime">runtime</string>
+    <string name="knotwork_memory_compact_confirm">Compact now</string>
+    <!-- Add-memory dialog. -->
+    <string name="knotwork_memory_add_title">Add memory</string>
+    <string name="knotwork_memory_add_placeholder">What should the agent remember?</string>
+    <string name="knotwork_memory_add_save">Save</string>
 
     <!-- ============ Onboarding pager ============ -->
 

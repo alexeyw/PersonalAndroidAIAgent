@@ -1037,7 +1037,7 @@ class GraphExecutionEngineTest {
                 retrieveRelevantMemoryUseCase,
                 crashReportingRepository,
                 localModelRepository,
-            memoryRepository,
+                memoryRepository,
             )
 
             // Generate a question with two options; the first one is the default the
