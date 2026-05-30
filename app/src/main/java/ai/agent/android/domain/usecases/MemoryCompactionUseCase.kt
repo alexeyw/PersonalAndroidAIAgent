@@ -116,10 +116,13 @@ class MemoryCompactionUseCase @Inject constructor(
                 }
             }
 
-            // A real pass ran (we got past the candidate-count gate), so stamp
-            // the last-compacted time for the Memory stats card — even when no
-            // cluster met the size floor, the user/worker did exercise compaction.
-            settingsRepository.setMemoryLastCompactedAt(nowMillis)
+            // Stamp the last-compacted time only when a cluster was actually
+            // consolidated — a pass where every candidate fell below the size
+            // floor changed nothing, so labelling it "compacted just now" would
+            // mislead the user (and could throttle a later genuine pass).
+            if (clustersProcessed > 0) {
+                settingsRepository.setMemoryLastCompactedAt(nowMillis)
+            }
 
             MemoryCompactionOutcome(
                 clustersProcessed = clustersProcessed,

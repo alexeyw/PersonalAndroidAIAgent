@@ -1,6 +1,7 @@
 package ai.agent.android.data.repositories
 
 import ai.agent.android.data.local.Converters
+import ai.agent.android.data.local.TagsCsv
 import ai.agent.android.data.local.dao.MemoryDao
 import ai.agent.android.data.local.models.MemoryChunkEntity
 import ai.agent.android.domain.models.MemoryChunk
@@ -51,7 +52,7 @@ class MemoryRepositoryImpl @Inject constructor(private val memoryDao: MemoryDao,
             embedding = embeddingString,
             timestamp = System.currentTimeMillis(),
             source = source,
-            tagsCsv = tags.toTagsCsv(),
+            tagsCsv = TagsCsv.encode(tags),
         )
         memoryDao.insertMemory(entity)
     }
@@ -124,12 +125,24 @@ class MemoryRepositoryImpl @Inject constructor(private val memoryDao: MemoryDao,
         memoryDao.updateMemory(id = id, text = text, embedding = embeddingString)
     }
 
+    override suspend fun updateMemoryWithTags(id: Long, text: String, embedding: FloatArray, tags: List<String>) =
+        withContext(Dispatchers.IO) {
+            val embeddingString = converters.fromFloatArray(embedding)
+                ?: throw IllegalArgumentException("Failed to serialize embedding")
+            memoryDao.updateMemoryWithTags(
+                id = id,
+                text = text,
+                embedding = embeddingString,
+                tagsCsv = TagsCsv.encode(tags),
+            )
+        }
+
     override suspend fun setMemoryPinned(id: Long, pinned: Boolean) = withContext(Dispatchers.IO) {
         memoryDao.setMemoryPinned(id = id, isPinned = pinned)
     }
 
     override suspend fun setMemoryTags(id: Long, tags: List<String>) = withContext(Dispatchers.IO) {
-        memoryDao.setMemoryTags(id = id, tagsCsv = tags.toTagsCsv())
+        memoryDao.setMemoryTags(id = id, tagsCsv = TagsCsv.encode(tags))
     }
 
     override suspend fun recordUsage(ids: List<Long>, atMillis: Long) {
@@ -176,22 +189,11 @@ class MemoryRepositoryImpl @Inject constructor(private val memoryDao: MemoryDao,
             timestamp = timestamp,
             isPinned = isPinned,
             source = source,
-            tags = tagsCsv.toTagList(),
+            tags = TagsCsv.decode(tagsCsv),
             useCount = useCount,
             lastUsedAt = lastUsedAt,
         )
     }
-
-    /**
-     * Encodes a tag list to the comma-separated form stored in `tagsCsv`.
-     * Blanks are dropped and surrounding whitespace trimmed so a round-trip
-     * through [toTagList] is stable.
-     */
-    private fun List<String>.toTagsCsv(): String =
-        mapNotNull { it.trim().ifEmpty { null } }.joinToString(separator = ",")
-
-    /** Decodes the comma-separated `tagsCsv` column back into a tag list. */
-    private fun String.toTagList(): List<String> = split(",").mapNotNull { it.trim().ifEmpty { null } }
 
     /**
      * Calculates the cosine similarity between two vectors.

@@ -16,6 +16,7 @@ import ai.agent.android.domain.usecases.MemoryCompactionUseCase
 import ai.agent.android.domain.usecases.RetrieveRelevantMemoryUseCase
 import ai.agent.android.domain.usecases.SaveMessageToMemoryUseCase
 import ai.agent.android.domain.usecases.SaveToMemoryOutcome
+import ai.agent.android.presentation.state.TransientMessageRelay
 import app.knotwork.design.screens.memory.MemoryCategory
 import app.knotwork.design.screens.memory.MemoryDateFilter
 import app.knotwork.design.screens.memory.MemorySortMode
@@ -52,6 +53,7 @@ class MemoryViewModelTest {
     private lateinit var memoryCompactionUseCase: MemoryCompactionUseCase
     private lateinit var estimateCompactionUseCase: EstimateCompactionUseCase
     private lateinit var retrieveRelevantMemoryUseCase: RetrieveRelevantMemoryUseCase
+    private lateinit var transientMessageRelay: TransientMessageRelay
     private lateinit var viewModel: MemoryViewModel
 
     private val testDispatcher = StandardTestDispatcher()
@@ -78,6 +80,7 @@ class MemoryViewModelTest {
         memoryCompactionUseCase = mockk(relaxed = true)
         estimateCompactionUseCase = mockk(relaxed = true)
         retrieveRelevantMemoryUseCase = mockk(relaxed = true)
+        transientMessageRelay = mockk(relaxed = true)
 
         coEvery { embeddingProviderResolver.resolve() } returns embeddingProvider
         coEvery { memoryRepository.getAllMemories() } returns emptyList()
@@ -100,6 +103,7 @@ class MemoryViewModelTest {
         memoryCompactionUseCase,
         estimateCompactionUseCase,
         retrieveRelevantMemoryUseCase,
+        transientMessageRelay,
     )
 
     @Test
@@ -141,10 +145,11 @@ class MemoryViewModelTest {
 
     @Test
     fun `openSearch switches to relevance and onSearchQueryChange runs semantic search`() = runTest {
+        // Threshold is omitted so the use case honours the user's configured
+        // memorySearchThreshold (its default-null path) rather than 0f.
         coEvery {
-            retrieveRelevantMemoryUseCase.retrieveScored(query = "berlin", limit = any(), threshold = 0f)
-        } returns
-            listOf(chunk(1) to 0.91f)
+            retrieveRelevantMemoryUseCase.retrieveScored(query = "berlin", limit = any(), threshold = null)
+        } returns listOf(chunk(1) to 0.91f)
 
         viewModel = createViewModel()
         testDispatcher.scheduler.advanceUntilIdle()
@@ -157,7 +162,7 @@ class MemoryViewModelTest {
         testDispatcher.scheduler.advanceUntilIdle()
 
         assertEquals(1, viewModel.uiState.value.searchResults?.size)
-        coVerify { retrieveRelevantMemoryUseCase.retrieveScored(query = "berlin", limit = any(), threshold = 0f) }
+        coVerify { retrieveRelevantMemoryUseCase.retrieveScored(query = "berlin", limit = any(), threshold = null) }
     }
 
     @Test
@@ -196,7 +201,7 @@ class MemoryViewModelTest {
     }
 
     @Test
-    fun `commitEdit re-embeds persists text and tags then reloads`() = runTest {
+    fun `commitEdit re-embeds and persists text plus tags atomically then reloads`() = runTest {
         val embedding = floatArrayOf(0.3f)
         coEvery { embeddingProvider.embed("new body") } returns embedding
 
@@ -206,9 +211,29 @@ class MemoryViewModelTest {
         viewModel.commitEdit(id = 7L, body = "new body", tags = listOf("tag"))
         testDispatcher.scheduler.advanceUntilIdle()
 
-        coVerify(exactly = 1) { memoryRepository.updateMemory(id = 7L, text = "new body", embedding = embedding) }
-        coVerify(exactly = 1) { memoryRepository.setMemoryTags(id = 7L, tags = listOf("tag")) }
+        coVerify(exactly = 1) {
+            memoryRepository.updateMemoryWithTags(
+                id = 7L,
+                text = "new body",
+                embedding = embedding,
+                tags = listOf("tag"),
+            )
+        }
         coVerify(atLeast = 2) { memoryRepository.getAllMemories() }
+    }
+
+    @Test
+    fun `commitEdit on embed failure posts a message and reloads without persisting`() = runTest {
+        coEvery { embeddingProvider.embed(any<String>()) } throws RuntimeException("offline")
+
+        viewModel = createViewModel()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        viewModel.commitEdit(id = 7L, body = "boom", tags = emptyList())
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        coVerify(exactly = 0) { memoryRepository.updateMemoryWithTags(any(), any(), any(), any()) }
+        coVerify(exactly = 1) { transientMessageRelay.post(any()) }
     }
 
     @Test
@@ -266,6 +291,20 @@ class MemoryViewModelTest {
         coVerify(exactly = 1) { saveMessageToMemoryUseCase("remember") }
         assertFalse(viewModel.uiState.value.addDialogVisible)
         coVerify(atLeast = 2) { memoryRepository.getAllMemories() }
+    }
+
+    @Test
+    fun `confirmAdd on Failed outcome posts a message and does not reload`() = runTest {
+        coEvery { saveMessageToMemoryUseCase("boom") } returns SaveToMemoryOutcome.Failed(RuntimeException("offline"))
+        viewModel = createViewModel()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        viewModel.confirmAdd("boom")
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        coVerify(exactly = 1) { transientMessageRelay.post(any()) }
+        // Only the init load ran; a failed add does not trigger a reload.
+        coVerify(exactly = 1) { memoryRepository.getAllMemories() }
     }
 
     @Test

@@ -112,6 +112,8 @@ class MemoryCompactionUseCaseTest {
         coVerify(exactly = 1) { memoryRepository.deleteMemory(1L) }
         coVerify(exactly = 1) { memoryRepository.deleteMemory(2L) }
         coVerify(exactly = 1) { memoryRepository.deleteMemory(3L) }
+        // A real consolidation stamps the last-compacted time.
+        coVerify(exactly = 1) { settingsRepository.setMemoryLastCompactedAt(now) }
     }
 
     @Test
@@ -146,6 +148,7 @@ class MemoryCompactionUseCaseTest {
         assertEquals(0, outcome.clustersProcessed)
         coVerify(exactly = 0) { memoryRepository.saveMemory(any(), any(), any(), any()) }
         coVerify(exactly = 0) { memoryRepository.deleteMemory(any()) }
+        coVerify(exactly = 0) { settingsRepository.setMemoryLastCompactedAt(any()) }
     }
 
     @Test
@@ -160,6 +163,7 @@ class MemoryCompactionUseCaseTest {
         assertEquals(0, outcome.clustersProcessed)
         coVerify(exactly = 0) { memoryRepository.saveMemory(any(), any(), any(), any()) }
         coVerify(exactly = 0) { memoryRepository.deleteMemory(any()) }
+        coVerify(exactly = 0) { settingsRepository.setMemoryLastCompactedAt(any()) }
     }
 
     @Test
@@ -174,6 +178,7 @@ class MemoryCompactionUseCaseTest {
         assertEquals(0, outcome.clustersProcessed)
         coVerify(exactly = 0) { memoryRepository.saveMemory(any(), any(), any(), any()) }
         coVerify(exactly = 0) { memoryRepository.deleteMemory(any()) }
+        coVerify(exactly = 0) { settingsRepository.setMemoryLastCompactedAt(any()) }
     }
 
     @Test

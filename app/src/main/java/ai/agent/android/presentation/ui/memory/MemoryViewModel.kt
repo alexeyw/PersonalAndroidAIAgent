@@ -10,6 +10,8 @@ import ai.agent.android.domain.usecases.ExportMemoryBaseUseCase
 import ai.agent.android.domain.usecases.MemoryCompactionUseCase
 import ai.agent.android.domain.usecases.RetrieveRelevantMemoryUseCase
 import ai.agent.android.domain.usecases.SaveMessageToMemoryUseCase
+import ai.agent.android.domain.usecases.SaveToMemoryOutcome
+import ai.agent.android.presentation.state.TransientMessageRelay
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.knotwork.design.screens.memory.MemoryCategory
@@ -51,6 +53,7 @@ class MemoryViewModel @Inject constructor(
     private val memoryCompactionUseCase: MemoryCompactionUseCase,
     private val estimateCompactionUseCase: EstimateCompactionUseCase,
     private val retrieveRelevantMemoryUseCase: RetrieveRelevantMemoryUseCase,
+    private val transientMessageRelay: TransientMessageRelay,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(MemoryUiState(isLoading = true))
@@ -72,20 +75,30 @@ class MemoryViewModel @Inject constructor(
     /** Loads chunks, table size, last-compacted time, and originating session names. */
     fun loadAllData() {
         viewModelScope.launch {
-            _uiState.update { it.copy(isLoading = true) }
-            val memories = memoryRepository.getAllMemories()
-            val totalBytes = memoryRepository.observeStats().first().totalBytes
-            val lastCompactedAt = settingsRepository.memoryLastCompactedAt.first()
-            val sessionNames =
-                resolveSessionNames(memories.mapNotNull { (it.source as? MemorySource.ChatSession)?.sessionId })
-            _uiState.update {
-                it.copy(
-                    memories = memories,
-                    totalBytes = totalBytes,
-                    lastCompactedAt = lastCompactedAt,
-                    sessionNames = sessionNames,
-                    isLoading = false,
-                )
+            _uiState.update { it.copy(isLoading = true, errorMessage = null) }
+            try {
+                val memories = memoryRepository.getAllMemories()
+                val totalBytes = memoryRepository.observeStats().first().totalBytes
+                val lastCompactedAt = settingsRepository.memoryLastCompactedAt.first()
+                val sessionNames =
+                    resolveSessionNames(memories.mapNotNull { (it.source as? MemorySource.ChatSession)?.sessionId })
+                _uiState.update {
+                    it.copy(
+                        memories = memories,
+                        totalBytes = totalBytes,
+                        lastCompactedAt = lastCompactedAt,
+                        sessionNames = sessionNames,
+                        isLoading = false,
+                        errorMessage = null,
+                    )
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                // A read failure (DB/decryption) must surface the Error/Retry
+                // state instead of leaving the screen stuck on a stale list.
+                Timber.w(e, "Failed to load memory")
+                _uiState.update { it.copy(isLoading = false, errorMessage = LOAD_ERROR_MESSAGE) }
             }
         }
     }
@@ -123,8 +136,11 @@ class MemoryViewModel @Inject constructor(
     }
 
     /**
-     * Updates the search query and (debounced) runs a semantic search with a
-     * permissive threshold so the surface shows a broad, relevance-ranked list.
+     * Updates the search query and (debounced) runs a semantic search. The
+     * user's configured relevance threshold is honoured (passing `null` lets
+     * the use case read `memorySearchThreshold`) so results stay relevant
+     * rather than returning the whole pool; a larger [SEARCH_RESULT_LIMIT] just
+     * widens how many of those relevant hits the browse surface shows.
      */
     fun onSearchQueryChange(query: String) {
         _uiState.update { it.copy(searchQuery = query) }
@@ -136,7 +152,7 @@ class MemoryViewModel @Inject constructor(
         searchJob = viewModelScope.launch {
             delay(SEARCH_DEBOUNCE_MS)
             val results = try {
-                retrieveRelevantMemoryUseCase.retrieveScored(query = query, limit = SEARCH_RESULT_LIMIT, threshold = 0f)
+                retrieveRelevantMemoryUseCase.retrieveScored(query = query, limit = SEARCH_RESULT_LIMIT)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -168,23 +184,26 @@ class MemoryViewModel @Inject constructor(
     }
 
     /**
-     * Commits an edit: re-embeds [body] with the active provider, persists the
-     * text + embedding, replaces the tag list, then reloads. A re-embed failure
-     * leaves the chunk untouched.
+     * Commits an edit: re-embeds [body] with the active provider, then persists
+     * the text, embedding, and tags **atomically** (one transaction) so the
+     * write can never half-apply. On a re-embed or persistence failure the
+     * chunk is left untouched, the user is told via a snackbar, and the surface
+     * reloads so it reflects the database rather than a stale draft.
      */
     fun commitEdit(id: Long, body: String, tags: List<String>) {
         viewModelScope.launch {
             try {
                 val embedding = embeddingProviderResolver.resolve().embed(body)
-                memoryRepository.updateMemory(id = id, text = body, embedding = embedding)
-                memoryRepository.setMemoryTags(id = id, tags = tags)
+                memoryRepository.updateMemoryWithTags(id = id, text = body, embedding = embedding, tags = tags)
                 _uiState.update { it.copy(editing = false, expandedId = null) }
                 loadAllData()
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
                 Timber.w(e, "Failed to commit memory edit for $id")
-                _uiState.update { it.copy(editing = false) }
+                transientMessageRelay.post(EDIT_ERROR_MESSAGE)
+                _uiState.update { it.copy(editing = false, expandedId = null) }
+                loadAllData()
             }
         }
     }
@@ -241,12 +260,20 @@ class MemoryViewModel @Inject constructor(
         _uiState.update { it.copy(addDialogVisible = false) }
     }
 
-    /** Saves a manual memory entry from [text], then reloads. */
+    /**
+     * Saves a manual memory entry from [text]. On success the surface reloads;
+     * on a Failed outcome (e.g. an offline cloud embedding provider) the user is
+     * told via a snackbar instead of the add silently vanishing. A blank input
+     * (Skipped) is a no-op.
+     */
     fun confirmAdd(text: String) {
         _uiState.update { it.copy(addDialogVisible = false) }
         viewModelScope.launch {
-            saveMessageToMemoryUseCase(text)
-            loadAllData()
+            when (saveMessageToMemoryUseCase(text)) {
+                is SaveToMemoryOutcome.Saved -> loadAllData()
+                is SaveToMemoryOutcome.Failed -> transientMessageRelay.post(ADD_ERROR_MESSAGE)
+                SaveToMemoryOutcome.Skipped -> Unit
+            }
         }
     }
 
@@ -266,5 +293,10 @@ class MemoryViewModel @Inject constructor(
     private companion object {
         const val SEARCH_DEBOUNCE_MS = 300L
         const val SEARCH_RESULT_LIMIT = 50
+
+        // User-visible snackbar messages routed through TransientMessageRelay.
+        const val LOAD_ERROR_MESSAGE = "Couldn't load memory"
+        const val ADD_ERROR_MESSAGE = "Couldn't save to memory"
+        const val EDIT_ERROR_MESSAGE = "Couldn't save the edit"
     }
 }

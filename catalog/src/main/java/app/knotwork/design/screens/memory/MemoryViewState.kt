@@ -171,6 +171,11 @@ data class CompactionEstimateView(val removedLabel: String, val freedLabel: Stri
  * @property selectedCategory Currently-selected category chip.
  * @property sortMode Active sort mode (the "Sort" dropdown value).
  * @property dateFilter Active date-range filter (the second dropdown value).
+ * @property searchActive Whether the semantic-search field is shown; drives the
+ *   search-field-vs-stats-card swap and per-row relevance scores independently
+ *   of [visualState] (so opening a detail sheet mid-search keeps search chrome).
+ * @property searchEmpty `true` when a search ran and returned no hits; renders
+ *   the "no matches" empty state instead of a blank list.
  * @property searchQuery Current search field value.
  * @property sections Grouped rows to render.
  * @property expandedEntry Detail payload when [visualState] is
@@ -187,6 +192,8 @@ data class MemoryViewState(
     val selectedCategory: MemoryCategory = MemoryCategory.All,
     val sortMode: MemorySortMode = MemorySortMode.Recent,
     val dateFilter: MemoryDateFilter = MemoryDateFilter.All,
+    val searchActive: Boolean = false,
+    val searchEmpty: Boolean = false,
     val searchQuery: String = "",
     val sections: List<MemorySection> = emptyList(),
     val expandedEntry: MemoryEntryDetail? = null,

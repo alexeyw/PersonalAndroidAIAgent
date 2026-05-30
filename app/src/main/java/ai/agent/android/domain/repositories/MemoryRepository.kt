@@ -117,6 +117,18 @@ interface MemoryRepository {
     suspend fun updateMemory(id: Long, text: String, embedding: FloatArray)
 
     /**
+     * Atomically replaces the text, embedding, and tags of a chunk in a single
+     * transaction, so an inline edit can never half-apply (e.g. text committed
+     * but tags not). The chunk's `timestamp` is left untouched.
+     *
+     * @param id Identifier of the chunk to update.
+     * @param text The new raw text content.
+     * @param embedding The new vector embedding produced from [text].
+     * @param tags The new tag list (empty clears all tags).
+     */
+    suspend fun updateMemoryWithTags(id: Long, text: String, embedding: FloatArray, tags: List<String>)
+
+    /**
      * Flips the pinned state of a single memory chunk. Pinned chunks sort
      * ahead of unpinned chunks on the memory surface and are exempt from
      * future compaction passes.

@@ -59,6 +59,16 @@ class MemoryContentSnapshotTest {
     }
 
     @Test
+    fun memory_no_matches_light() = snapshot("no_matches", dark = false) {
+        MemoryContent(state = MemoryPreview.noMatches())
+    }
+
+    @Test
+    fun memory_no_matches_dark() = snapshot("no_matches", dark = true) {
+        MemoryContent(state = MemoryPreview.noMatches())
+    }
+
+    @Test
     fun memory_entry_expanded_light() = snapshot("entry_expanded", dark = false) {
         MemoryContent(state = MemoryPreview.entryExpanded())
     }
@@ -246,9 +256,21 @@ internal object MemoryPreview {
         visualState = MemoryVisualState.Searching,
         header = header(),
         categoryChips = chips(),
+        searchActive = true,
         searchQuery = "berlin",
         sortMode = MemorySortMode.Relevance,
         sections = sections(score = true),
+    )
+
+    fun noMatches() = MemoryViewState(
+        visualState = MemoryVisualState.Searching,
+        header = header(),
+        categoryChips = chips(),
+        searchActive = true,
+        searchEmpty = true,
+        searchQuery = "zzz",
+        sortMode = MemorySortMode.Relevance,
+        sections = emptyList(),
     )
 
     fun entryExpanded() = MemoryViewState(

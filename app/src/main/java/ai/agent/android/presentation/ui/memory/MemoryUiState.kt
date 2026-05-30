@@ -27,6 +27,7 @@ import app.knotwork.design.screens.memory.MemorySortMode
  * @property compactDialogVisible Whether the Compact confirm dialog is shown.
  * @property compactEstimate Loaded compaction estimate (`null` while loading).
  * @property addDialogVisible Whether the Add-memory dialog is shown.
+ * @property errorMessage Non-null when a load failed; drives the Error/Retry state.
  */
 data class MemoryUiState(
     val memories: List<MemoryChunk> = emptyList(),
@@ -45,4 +46,5 @@ data class MemoryUiState(
     val compactDialogVisible: Boolean = false,
     val compactEstimate: CompactionEstimate? = null,
     val addDialogVisible: Boolean = false,
+    val errorMessage: String? = null,
 )

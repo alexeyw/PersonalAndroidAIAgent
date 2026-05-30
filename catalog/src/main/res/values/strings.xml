@@ -335,6 +335,9 @@
     <string name="knotwork_memory_empty_title">Nothing memorised yet</string>
     <string name="knotwork_memory_empty_subtitle">Ask the agent to remember something — facts, preferences, project notes — and it\'ll show up here.</string>
     <string name="knotwork_memory_empty_cta">Open chat</string>
+    <string name="knotwork_memory_no_match_title">Nothing matches this search</string>
+    <string name="knotwork_memory_no_match_subtitle">Try a different word or clear the search.</string>
+    <string name="knotwork_memory_no_match_clear">Clear search</string>
     <string name="knotwork_memory_error_title">Memory unavailable</string>
     <string name="knotwork_memory_error_retry">Retry</string>
     <string name="knotwork_memory_pinned_cd">Pinned</string>

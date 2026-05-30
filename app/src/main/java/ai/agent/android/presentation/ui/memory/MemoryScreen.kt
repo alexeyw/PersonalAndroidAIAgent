@@ -3,6 +3,7 @@ package ai.agent.android.presentation.ui.memory
 import ai.agent.android.domain.models.MemoryChunk
 import ai.agent.android.domain.models.MemorySource
 import ai.agent.android.domain.usecases.CompactionEstimate
+import ai.agent.android.presentation.common.DisplayFormat
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -59,7 +60,33 @@ fun MemoryScreen(viewModel: MemoryViewModel = hiltViewModel(), onOpenChat: () ->
         viewModel.exportRequests.collect { exportLauncher.launch(EXPORT_FILENAME) }
     }
 
-    val viewState = remember(uiState) { uiState.toViewState(nowMillis = System.currentTimeMillis()) }
+    // The expensive list projection (filter / group / sort / breakdown / chip
+    // counts) is memoised only on the fields that affect it, so search
+    // keystrokes and dialog-visibility toggles don't re-run the O(N) work.
+    val listViewState = remember(
+        uiState.memories,
+        uiState.selectedCategory,
+        uiState.sortMode,
+        uiState.dateFilter,
+        uiState.searchResults,
+        uiState.searchActive,
+        uiState.expandedId,
+        uiState.editing,
+        uiState.totalBytes,
+        uiState.lastCompactedAt,
+        uiState.sessionNames,
+        uiState.errorMessage,
+    ) {
+        uiState.toViewState(nowMillis = System.currentTimeMillis())
+    }
+    val viewState = listViewState.copy(
+        searchQuery = uiState.searchQuery,
+        searchEmpty =
+        uiState.searchActive && uiState.searchQuery.isNotBlank() && uiState.searchResults?.isEmpty() == true,
+        compactDialogVisible = uiState.compactDialogVisible,
+        compactEstimate = uiState.compactEstimate?.toView(),
+        addDialogVisible = uiState.addDialogVisible,
+    )
 
     val callbacks = MemoryCallbacks(
         onBack = onBack,
@@ -99,6 +126,7 @@ fun MemoryScreen(viewModel: MemoryViewModel = hiltViewModel(), onOpenChat: () ->
 internal fun MemoryUiState.toViewState(nowMillis: Long): MemoryViewState {
     val expanded = expandedId?.let { id -> memories.firstOrNull { it.id == id } }
     val visualState = when {
+        errorMessage != null -> MemoryVisualState.Error
         expanded != null && editing -> MemoryVisualState.Editing
         expanded != null -> MemoryVisualState.EntryExpanded
         memories.isEmpty() -> MemoryVisualState.Empty
@@ -106,18 +134,31 @@ internal fun MemoryUiState.toViewState(nowMillis: Long): MemoryViewState {
         else -> MemoryVisualState.Populated
     }
 
-    // Base list: search results (with scores) when searching, else category +
-    // date filtered chunks.
-    val scored: List<Pair<MemoryChunk, Float?>> = if (searchActive) {
-        (searchResults ?: emptyList()).map { it.first to it.second }
+    val sections = if (searchActive) {
+        // Search results are a single relevance-ordered list (the order
+        // retrieveScored returns) — no time bucketing, which would scatter the
+        // ranking the search header advertises. Blank title = no section header.
+        val rows = (searchResults ?: emptyList()).map { (chunk, score) -> chunk to score as Float? }
+        if (rows.isEmpty()) {
+            emptyList()
+        } else {
+            listOf(
+                MemorySection(
+                    title = "",
+                    count = rows.size,
+                    rows = rows.map {
+                        it.toRow(nowMillis)
+                    },
+                ),
+            )
+        }
     } else {
-        memories
+        val scored = memories
             .filter { it.matchesCategory(selectedCategory) }
             .filter { it.matchesDate(dateFilter, nowMillis) }
-            .map { it to null }
+            .map { it to null as Float? }
+        buildSections(scored, sortMode, nowMillis)
     }
-
-    val sections = buildSections(scored, sortMode, nowMillis)
 
     return MemoryViewState(
         visualState = visualState,
@@ -126,10 +167,12 @@ internal fun MemoryUiState.toViewState(nowMillis: Long): MemoryViewState {
         selectedCategory = selectedCategory,
         sortMode = sortMode,
         dateFilter = dateFilter,
+        searchActive = searchActive,
+        searchEmpty = searchActive && searchQuery.isNotBlank() && searchResults?.isEmpty() == true,
         searchQuery = searchQuery,
         sections = sections,
         expandedEntry = expanded?.toDetail(nowMillis, sessionNames),
-        errorMessage = null,
+        errorMessage = errorMessage,
         compactDialogVisible = compactDialogVisible,
         compactEstimate = compactEstimate?.toView(),
         addDialogVisible = addDialogVisible,
@@ -148,7 +191,7 @@ private fun MemoryUiState.buildHeader(nowMillis: Long): MemoryStatsHeader {
     }
     return MemoryStatsHeader(
         totalLabel = total.toString(),
-        sizeLabel = formatBytes(totalBytes),
+        sizeLabel = DisplayFormat.formatBytes(totalBytes),
         lastCompactedLabel = if (lastCompactedAt >
             0L
         ) {
@@ -248,7 +291,7 @@ private fun MemoryChunk.toDetail(nowMillis: Long, sessionNames: Map<String, Stri
         body = text,
         sourceKind = source.toKind(),
         sourceLabel = source.toLabel(),
-        tokenLabel = "${(text.length / CHARS_PER_TOKEN).coerceAtLeast(1)} tok",
+        tokenLabel = "${DisplayFormat.approxTokenCount(text).coerceAtLeast(1)} tok",
         tags = tags,
         learnedFromLabel = learnedFrom,
         capturedLabel = formatCaptured(timestamp),
@@ -259,7 +302,7 @@ private fun MemoryChunk.toDetail(nowMillis: Long, sessionNames: Map<String, Stri
 
 private fun CompactionEstimate.toView(): CompactionEstimateView = CompactionEstimateView(
     removedLabel = "~$estimatedRemoved",
-    freedLabel = "~${formatBytes(estimatedFreedBytes)}",
+    freedLabel = "~${DisplayFormat.formatBytes(estimatedFreedBytes)}",
     runtimeLabel = "~$estimatedRuntimeSeconds s",
 )
 
@@ -305,20 +348,10 @@ private fun relativeShort(ageMillis: Long): String {
     }
 }
 
-/** Human-readable byte size, e.g. `"14.2 MB"`. */
-private fun formatBytes(bytes: Long): String {
-    if (bytes < BYTES_PER_KB) return "$bytes B"
-    val kb = bytes.toDouble() / BYTES_PER_KB
-    if (kb < BYTES_PER_KB) return String.format(Locale.US, "%.1f KB", kb)
-    val mb = kb / BYTES_PER_KB
-    return String.format(Locale.US, "%.1f MB", mb)
-}
-
 /** TestTag applied to the screen root. */
 internal const val MEMORY_ROOT_TEST_TAG = "memory_screen_root"
 
 private const val MEMORY_TITLE_MAX_CHARS = 60
-private const val CHARS_PER_TOKEN = 4
 private const val MIME_JSON = "application/json"
 private const val EXPORT_FILENAME = "memory-base.json"
 
@@ -329,7 +362,6 @@ private const val MINUTES_PER_WEEK = 60L * 24 * 7
 private const val DAY_MS = 24L * 60 * 60 * 1000
 private const val WEEK_MS = 7L * DAY_MS
 private const val MONTH_MS = 30L * DAY_MS
-private const val BYTES_PER_KB = 1024.0
 
 /** Formats a capture timestamp as `yyyy-MM-dd · HH:mm` in the current locale. */
 private fun formatCaptured(timestamp: Long): String =

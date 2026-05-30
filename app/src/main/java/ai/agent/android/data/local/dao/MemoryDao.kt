@@ -6,6 +6,7 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.Transaction
 import kotlinx.coroutines.flow.Flow
 
 /**
@@ -74,6 +75,22 @@ interface MemoryDao {
      */
     @Query("UPDATE memory_chunks SET tagsCsv = :tagsCsv WHERE id = :id")
     suspend fun setMemoryTags(id: Long, tagsCsv: String)
+
+    /**
+     * Atomically replaces the text, embedding, and tags of a chunk in one
+     * transaction, so an inline edit never half-applies (e.g. new text saved
+     * but tags not). The `timestamp` is left untouched.
+     *
+     * @param id Identifier of the chunk to update.
+     * @param text New raw text content.
+     * @param embedding Serialized embedding vector for [text].
+     * @param tagsCsv New comma-separated tag list.
+     */
+    @Transaction
+    suspend fun updateMemoryWithTags(id: Long, text: String, embedding: String, tagsCsv: String) {
+        updateMemory(id = id, text = text, embedding = embedding)
+        setMemoryTags(id = id, tagsCsv = tagsCsv)
+    }
 
     /**
      * Records that the given chunks were just retrieved into a pipeline run's

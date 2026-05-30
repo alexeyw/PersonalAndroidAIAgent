@@ -18,6 +18,7 @@ This file maps the contents of the main application package.
     - `ApiKeyManager.kt` - API key manager.
     - `AppDatabase.kt` - Room database definition.
     - `Converters.kt` - Type converters for Room.
+    - `TagsCsv.kt` - Single comma-separated `tagsCsv` codec (encode/decode, trims + drops blanks) shared by every tag-bearing entity (`MemoryChunkEntity`, `PromptPresetEntity`, `PipelinePresetEntity`) so the separator/blank rules live in one place.
     - `EncryptedDbPassphraseProvider.kt` - Provides the SQLCipher passphrase stored in EncryptedSharedPreferences.
     - `McpServerCollisionCheck.kt` - Pure helper that detects when an `updateMcpServer` call would persist a duplicate URL row (editing server A's URL to match an existing server B's URL). Extracted from `SettingsManager.updateMcpServer` so the decision matrix is unit-testable without DataStore plumbing.
     - `SettingsManager.kt` - App settings manager.
@@ -246,6 +247,7 @@ This file maps the contents of the main application package.
     - `GetSystemPromptVariableCatalogUseCase.kt` - Materialises the `$VARIABLE` chip catalog with live preview samples for the Settings → System instructions card.
 - `presentation/` - UI and presentation layer.
   - `common/` - Cross-feature presentation utilities.
+    - `DisplayFormat.kt` - Shared display formatters (`formatBytes` byte-size ladder, `approxTokenCount`, `CHARS_PER_TOKEN`) so byte sizes / token estimates render identically across Memory and Settings instead of drifting between per-screen copies.
     - `UiText.kt` - Sealed `UiText` (`Resource` / `Dynamic` / `Joined` / `Empty`) used by `UiState`s to carry user-visible text without holding a `Context`.
     - `UiTextExt.kt` - `@Composable UiText.asString()` and `Context.resolve(UiText)` resolution helpers.
   - `components/` - Reusable UI components.

@@ -227,7 +227,9 @@ private fun MemoryBody(state: MemoryViewState, callbacks: MemoryCallbacks, paddi
 
 @Composable
 private fun MemoryPopulated(state: MemoryViewState, callbacks: MemoryCallbacks, padding: PaddingValues) {
-    val searching = state.visualState == MemoryVisualState.Searching
+    // Search chrome is driven by the dedicated flag, not visualState, so opening
+    // a detail sheet mid-search keeps the search field + relevance scores.
+    val searching = state.searchActive
     LazyColumn(
         modifier = Modifier.fillMaxSize().padding(padding),
         contentPadding = PaddingValues(bottom = KnotworkTheme.spacing.sp16),
@@ -247,14 +249,37 @@ private fun MemoryPopulated(state: MemoryViewState, callbacks: MemoryCallbacks, 
                 MemorySortRow(state = state, callbacks = callbacks)
             }
         }
+        if (searching && state.searchEmpty) {
+            item(key = "no-matches") {
+                MemoryNoMatches(query = state.searchQuery, onClear = callbacks.onClearSearch)
+            }
+        }
         state.sections.forEach { section ->
-            item(key = "section-${section.title}") {
-                MemorySectionHeader(title = section.title, count = section.count)
+            // Search results are a single relevance-ordered list with no time
+            // grouping, so their section carries a blank title and no header.
+            if (section.title.isNotBlank()) {
+                item(key = "section-${section.title}") {
+                    MemorySectionHeader(title = section.title, count = section.count)
+                }
             }
             items(count = section.rows.size, key = { section.rows[it].id }) { index ->
                 MemoryListRow(row = section.rows[index], searching = searching, callbacks = callbacks)
             }
         }
+    }
+}
+
+@Composable
+private fun MemoryNoMatches(query: String, onClear: () -> Unit) {
+    Box(modifier = Modifier.fillMaxWidth().padding(KnotworkTheme.spacing.sp8), contentAlignment = Alignment.Center) {
+        EmptyState(
+            title = stringResource(R.string.knotwork_memory_no_match_title),
+            subtitle = stringResource(R.string.knotwork_memory_no_match_subtitle) +
+                if (query.isNotBlank()) " (\"$query\")" else "",
+            illustration = { },
+            ctaLabel = stringResource(R.string.knotwork_memory_no_match_clear),
+            onCtaClick = onClear,
+        )
     }
 }
 

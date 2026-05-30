@@ -7,6 +7,7 @@ import ai.agent.android.domain.models.ActiveModelMeta
 import ai.agent.android.domain.models.LocalBackend
 import ai.agent.android.domain.models.ProviderId
 import ai.agent.android.domain.models.ToolApprovalPolicy
+import ai.agent.android.presentation.common.DisplayFormat
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -132,7 +133,7 @@ private fun buildViewState(uiState: SettingsUiState, context: android.content.Co
     val helperText = stringResource(R.string.settings_system_instructions_helper)
     val characterCount = uiState.systemInstructions.length
     val charLimit = SettingsDefaults.SYSTEM_INSTRUCTIONS_CHAR_LIMIT
-    val tokenApprox = (characterCount / CHARS_PER_TOKEN).toInt().coerceAtLeast(0)
+    val tokenApprox = DisplayFormat.approxTokenCount(uiState.systemInstructions)
     val identity = uiState.identity?.let { id ->
         IdentityCardState(
             displayName = id.displayName,
@@ -259,7 +260,7 @@ private fun buildViewState(uiState: SettingsUiState, context: android.content.Co
                 label = stringResource(R.string.settings_memory_stat_chunks),
             ),
             MemoryStatCell(
-                value = formatBytes(uiState.memoryStats.totalBytes),
+                value = DisplayFormat.formatBytes(uiState.memoryStats.totalBytes),
                 label = stringResource(R.string.settings_memory_stat_size),
             ),
             MemoryStatCell(
@@ -411,7 +412,7 @@ private fun formatBuildDate(epochMs: Long): String =
     SimpleDateFormat("yyyy.MM.dd", Locale.US).format(java.util.Date(epochMs))
 
 private fun formatActiveModelMeta(meta: ActiveModelMeta, context: android.content.Context): String {
-    val size = formatBytes(meta.sizeBytes)
+    val size = DisplayFormat.formatBytes(meta.sizeBytes)
     val ctx = "${meta.contextWindowTokens}"
     val quant = meta.quantization ?: "-"
     val downloaded = meta.downloadedAtMs?.let {
@@ -431,19 +432,6 @@ private fun formatTestProbe(uiState: SettingsUiState, context: android.content.C
     }
 }
 
-private fun formatBytes(bytes: Long): String {
-    if (bytes < BYTES_PER_KB) return "$bytes B"
-    val kb = bytes / BYTES_PER_KB_F
-    if (kb < BYTES_PER_KB) return String.format(Locale.getDefault(), "%.1f KB", kb)
-    val mb = kb / BYTES_PER_KB
-    if (mb < BYTES_PER_KB) return String.format(Locale.getDefault(), "%.1f MB", mb)
-    val gb = mb / BYTES_PER_KB
-    return String.format(Locale.getDefault(), "%.1f GB", gb)
-}
-
 private const val MIME_JSON = "application/json"
-private const val CHARS_PER_TOKEN = 3.5f
 private const val MS_PER_SECOND_F = 1_000f
 private const val MAX_PERCENT = 100
-private const val BYTES_PER_KB = 1_024L
-private const val BYTES_PER_KB_F = 1_024f

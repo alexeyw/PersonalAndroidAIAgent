@@ -154,6 +154,43 @@ class MemoryScreenMappingTest {
         )
         val vs = state.toViewState(now)
         assertEquals(MemoryVisualState.Searching, vs.visualState)
+        assertTrue(vs.searchActive)
         assertEquals("0.97", vs.sections.flatMap { it.rows }.first().relevanceScore)
+    }
+
+    @Test
+    fun `search results are one flat relevance-ordered section without time buckets`() {
+        // An old high-relevance hit must stay ahead of a newer low-relevance hit.
+        val state = MemoryUiState(
+            memories = listOf(chunk(1, ageDays = 30), chunk(2, ageDays = 0)),
+            searchActive = true,
+            searchQuery = "x",
+            searchResults = listOf(chunk(1, ageDays = 30) to 0.97f, chunk(2, ageDays = 0) to 0.40f),
+        )
+        val vs = state.toViewState(now)
+        assertEquals(1, vs.sections.size)
+        assertEquals("", vs.sections.single().title)
+        assertEquals(listOf("1", "2"), vs.sections.single().rows.map { it.id })
+    }
+
+    @Test
+    fun `searchEmpty is true when a search returns no hits`() {
+        val state = MemoryUiState(
+            memories = listOf(chunk(1)),
+            searchActive = true,
+            searchQuery = "zzz",
+            searchResults = emptyList(),
+        )
+        val vs = state.toViewState(now)
+        assertTrue(vs.searchEmpty)
+        assertTrue(vs.sections.isEmpty())
+    }
+
+    @Test
+    fun `errorMessage maps to the Error visual state`() {
+        val state = MemoryUiState(memories = listOf(chunk(1)), errorMessage = "boom")
+        val vs = state.toViewState(now)
+        assertEquals(MemoryVisualState.Error, vs.visualState)
+        assertEquals("boom", vs.errorMessage)
     }
 }
