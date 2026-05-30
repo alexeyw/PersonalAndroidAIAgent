@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -64,10 +65,8 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import app.knotwork.design.R
 import app.knotwork.design.components.buttons.KnotworkPrimaryButton
 import app.knotwork.design.components.buttons.KnotworkSecondaryButton
@@ -80,14 +79,15 @@ import app.knotwork.design.tokens.KnotworkTextStyles
 /** Minimum width fraction so a tiny breakdown segment still renders a sliver. */
 private const val MIN_SEGMENT_FRACTION = 0.0001f
 
-/** Height of the provenance breakdown bar. */
-private val BreakdownBarHeight = 8.dp
+/** Height of the provenance breakdown bar (spec §6 — 6 px). */
+private val BreakdownBarHeight = 6.dp
 
 /** Width of a row's leading provenance accent bar. */
 private val AccentBarWidth = 3.dp
 
-/** Font size of the prominent chunk-count number — the single large element. */
-private val CountFontSize = 30.sp
+/** Card vertical rhythm (spec §6): title → description 2 px, description → meta 8 px. */
+private val CARD_TITLE_GAP = 2.dp
+private val CARD_BODY_GAP = 8.dp
 
 /**
  * Stateless Knotwork memory surface — Phase 25 redesign.
@@ -109,6 +109,10 @@ fun MemoryContent(
     Box(modifier = modifier.fillMaxSize()) {
         Scaffold(
             containerColor = MaterialTheme.colorScheme.surface,
+            // System-bar insets are owned by the app shell (matches every other
+            // catalog screen); without this the Scaffold double-pads the bottom
+            // under the navigation buttons.
+            contentWindowInsets = WindowInsets(0, 0, 0, 0),
             topBar = {
                 app.knotwork.design.components.topbar.KnotworkTopAppBarShell {
                     MemoryTopBar(searching = state.visualState == MemoryVisualState.Searching, callbacks = callbacks)
@@ -157,12 +161,12 @@ private fun MemoryTopBar(searching: Boolean, callbacks: MemoryCallbacks) {
             Column {
                 Text(
                     text = stringResource(R.string.knotwork_memory_title),
-                    style = KnotworkTextStyles.TitleLg,
+                    style = MemoryType.appBarTitle,
                     color = MaterialTheme.colorScheme.onSurface,
                 )
                 Text(
                     text = stringResource(R.string.knotwork_memory_subtitle),
-                    style = KnotworkTextStyles.LabelSm,
+                    style = MemoryType.appBarSubtitle,
                     color = KnotworkTheme.extended.onSurfaceMuted,
                 )
             }
@@ -296,7 +300,7 @@ private fun MemorySearchField(query: String, callbacks: MemoryCallbacks) {
         }
         Text(
             text = stringResource(R.string.knotwork_memory_search_semantic),
-            style = KnotworkTextStyles.LabelSm,
+            style = MemoryType.sortLabel,
             color = KnotworkTheme.extended.onSurfaceMuted,
             modifier = Modifier.padding(vertical = KnotworkTheme.spacing.sp1),
         )
@@ -309,7 +313,7 @@ private fun MemoryStatsCard(header: MemoryStatsHeader, callbacks: MemoryCallback
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = KnotworkTheme.spacing.sp4, vertical = KnotworkTheme.spacing.sp2)
-            .clip(KnotworkTheme.shapes.lg)
+            .clip(KnotworkTheme.shapes.md)
             .background(KnotworkTheme.extended.surface2)
             .padding(KnotworkTheme.spacing.sp4),
         verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp2),
@@ -319,19 +323,19 @@ private fun MemoryStatsCard(header: MemoryStatsHeader, callbacks: MemoryCallback
                 Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text(
                         text = header.totalLabel,
-                        style = KnotworkTextStyles.TitleLg.copy(fontSize = CountFontSize, fontWeight = FontWeight.Bold),
+                        style = MemoryType.overviewCount,
                         color = MaterialTheme.colorScheme.onSurface,
                     )
                     Text(
                         text = stringResource(R.string.knotwork_memory_count_unit),
-                        style = KnotworkTextStyles.BodyBase,
+                        style = MemoryType.overviewUnit,
                         color = KnotworkTheme.extended.onSurfaceMuted,
                         modifier = Modifier.padding(bottom = 4.dp),
                     )
                 }
                 Text(
                     text = listOfNotNull(header.sizeLabel, header.lastCompactedLabel).joinToString("  ·  "),
-                    style = KnotworkTextStyles.MonoSm,
+                    style = MemoryType.overviewMeta,
                     color = KnotworkTheme.extended.onSurfaceMuted,
                 )
             }
@@ -380,7 +384,7 @@ private fun MemoryBreakdownLegend(segments: List<MemoryBreakdownSegment>) {
                 )
                 Text(
                     text = segment.label,
-                    style = KnotworkTextStyles.LabelSm,
+                    style = MemoryType.overviewLegend,
                     color = KnotworkTheme.extended.onSurfaceMuted,
                 )
             }
@@ -421,9 +425,9 @@ private fun MemorySortRow(state: MemoryViewState, callbacks: MemoryCallbacks) {
         modifier = Modifier.padding(horizontal = KnotworkTheme.spacing.sp4, vertical = KnotworkTheme.spacing.sp1),
     ) {
         Text(
-            text = stringResource(R.string.knotwork_memory_sort_label),
-            style = KnotworkTextStyles.LabelSm,
-            color = KnotworkTheme.extended.onSurfaceMuted,
+            text = stringResource(R.string.knotwork_memory_sort_label).uppercase(),
+            style = MemoryType.sortLabel,
+            color = KnotworkTheme.extended.onSurfaceDim,
         )
         MemoryDropdown(
             label = stringResource(state.sortMode.labelRes()),
@@ -455,7 +459,7 @@ private fun <T> MemoryDropdown(
                 open = true
             }.padding(horizontal = 4.dp, vertical = 2.dp),
         ) {
-            Text(text = label, style = KnotworkTextStyles.LabelMd, color = MaterialTheme.colorScheme.onSurface)
+            Text(text = label, style = MemoryType.control, color = MaterialTheme.colorScheme.onSurface)
             Icon(Icons.Outlined.ArrowDropDown, contentDescription = null, tint = KnotworkTheme.extended.onSurfaceMuted)
         }
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
@@ -483,12 +487,12 @@ private fun MemorySectionHeader(title: String, count: Int) {
     ) {
         Text(
             text = title.uppercase(),
-            style = KnotworkTextStyles.LabelSm,
+            style = MemoryType.groupHeader,
             color = KnotworkTheme.extended.onSurfaceMuted,
         )
         Text(
             text = count.toString(),
-            style = KnotworkTextStyles.LabelSm,
+            style = MemoryType.groupCount,
             color = KnotworkTheme.extended.onSurfaceDim,
         )
         Box(modifier = Modifier.weight(1f).height(1.dp).background(KnotworkTheme.extended.outlineStrong))
@@ -504,12 +508,11 @@ private fun MemoryListRow(row: MemoryRow, searching: Boolean, callbacks: MemoryC
                 .weight(1f)
                 .clickable { callbacks.onEntryClick(row.id) }
                 .padding(horizontal = KnotworkTheme.spacing.sp4, vertical = KnotworkTheme.spacing.sp3),
-            verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp1),
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     text = row.title,
-                    style = KnotworkTextStyles.TitleMd,
+                    style = MemoryType.cardTitle,
                     color = MaterialTheme.colorScheme.onSurface,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
@@ -530,13 +533,15 @@ private fun MemoryListRow(row: MemoryRow, searching: Boolean, callbacks: MemoryC
                     )
                 }
             }
+            Spacer(modifier = Modifier.height(CARD_TITLE_GAP))
             Text(
                 text = row.body,
-                style = KnotworkTextStyles.BodyBase,
+                style = MemoryType.cardBody,
                 color = KnotworkTheme.extended.onSurface2,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
+            Spacer(modifier = Modifier.height(CARD_BODY_GAP))
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp2),
@@ -545,8 +550,8 @@ private fun MemoryListRow(row: MemoryRow, searching: Boolean, callbacks: MemoryC
                 if (row.tags.isNotEmpty()) {
                     Text(
                         text = row.tags.joinToString("  ·  "),
-                        style = KnotworkTextStyles.MonoSm,
-                        color = KnotworkTheme.extended.onSurfaceMuted,
+                        style = MemoryType.cardTags,
+                        color = KnotworkTheme.extended.onSurfaceDim,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f, fill = false),
@@ -556,13 +561,13 @@ private fun MemoryListRow(row: MemoryRow, searching: Boolean, callbacks: MemoryC
                 if (searching && row.relevanceScore != null) {
                     Text(
                         text = row.relevanceScore,
-                        style = KnotworkTextStyles.MonoSm.copy(fontWeight = FontWeight.Bold),
+                        style = MemoryType.score,
                         color = MaterialTheme.colorScheme.primary,
                     )
                 }
                 Text(
                     text = row.timestampLabel,
-                    style = KnotworkTextStyles.Caption,
+                    style = MemoryType.timestamp,
                     color = KnotworkTheme.extended.onSurfaceMuted,
                 )
             }
@@ -575,10 +580,10 @@ private fun MemorySourceBadge(kind: MemorySourceKind) {
     val color = sourceColor(kind)
     Text(
         text = stringResource(kind.labelRes()).uppercase(),
-        style = KnotworkTextStyles.LabelSm,
+        style = MemoryType.sourceTag,
         color = color,
         modifier = Modifier
-            .clip(KnotworkTheme.shapes.sm)
+            .clip(KnotworkTheme.shapes.xs)
             .background(color.copy(alpha = 0.14f))
             .padding(horizontal = 6.dp, vertical = 2.dp),
     )
@@ -629,7 +634,7 @@ private fun MemoryDetailSheet(detail: MemoryEntryDetail, editing: Boolean, callb
         Surface(
             color = KnotworkTheme.extended.surface1,
             tonalElevation = KnotworkTheme.elevation.el3,
-            shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp),
+            shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
             modifier = Modifier.fillMaxWidth(),
         ) {
             Column(
@@ -652,7 +657,7 @@ private fun MemoryDetailSheet(detail: MemoryEntryDetail, editing: Boolean, callb
                     Spacer(modifier = Modifier.width(KnotworkTheme.spacing.sp2))
                     Text(
                         text = detail.tokenLabel,
-                        style = KnotworkTextStyles.MonoSm,
+                        style = MemoryType.cardTags,
                         color = KnotworkTheme.extended.onSurfaceMuted,
                     )
                     Spacer(modifier = Modifier.weight(1f))
@@ -679,15 +684,20 @@ private fun MemoryDetailSheet(detail: MemoryEntryDetail, editing: Boolean, callb
                 }
                 Text(
                     text = detail.title,
-                    style = KnotworkTextStyles.TitleLg,
+                    style = MemoryType.detailTitle,
                     color = MaterialTheme.colorScheme.onSurface,
                 )
                 if (editing) {
-                    OutlinedTextField(value = body, onValueChange = { body = it }, modifier = Modifier.fillMaxWidth())
+                    OutlinedTextField(
+                        value = body,
+                        onValueChange = { body = it },
+                        textStyle = MemoryType.detailBody,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
                 } else {
                     Text(
                         text = detail.body,
-                        style = KnotworkTextStyles.BodyBase,
+                        style = MemoryType.detailBody,
                         color = KnotworkTheme.extended.onSurface2,
                         modifier = Modifier
                             .fillMaxWidth()
@@ -751,7 +761,7 @@ private fun MemoryTagEditor(
                     .background(KnotworkTheme.extended.surface2)
                     .padding(horizontal = KnotworkTheme.spacing.sp2, vertical = 4.dp),
             ) {
-                Text(text = tag, style = KnotworkTextStyles.LabelMd, color = MaterialTheme.colorScheme.onSurface)
+                Text(text = tag, style = MemoryType.cardTags, color = MaterialTheme.colorScheme.onSurface)
                 if (editing) {
                     Spacer(modifier = Modifier.width(4.dp))
                     Icon(
@@ -783,14 +793,14 @@ private fun MemoryTagEditor(
                         value = newTag,
                         onValueChange = onNewTagChange,
                         singleLine = true,
-                        textStyle = KnotworkTextStyles.LabelMd.copy(color = MaterialTheme.colorScheme.onSurface),
+                        textStyle = MemoryType.cardTags.copy(color = MaterialTheme.colorScheme.onSurface),
                         cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
                         modifier = Modifier.width(64.dp),
                     )
                     if (newTag.isEmpty()) {
                         Text(
                             text = stringResource(R.string.knotwork_memory_tag_add),
-                            style = KnotworkTextStyles.LabelMd,
+                            style = MemoryType.cardTags,
                             color = KnotworkTheme.extended.onSurfaceMuted,
                         )
                     }
@@ -827,13 +837,13 @@ private fun MemoryMetaRow(label: String, value: String) {
     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp3)) {
         Text(
             text = label.uppercase(),
-            style = KnotworkTextStyles.LabelSm,
+            style = MemoryType.provKey,
             color = KnotworkTheme.extended.onSurfaceMuted,
             modifier = Modifier.width(96.dp),
         )
         Text(
             text = value,
-            style = KnotworkTextStyles.BodySm,
+            style = MemoryType.provValue,
             color = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.weight(1f),
         )
@@ -864,12 +874,12 @@ private fun MemoryDetailActions(editing: Boolean, onDelete: () -> Unit, onCancel
 private fun MemoryCompactDialog(estimate: CompactionEstimateView?, callbacks: MemoryCallbacks) {
     AlertDialog(
         onDismissRequest = callbacks.onCompactDismiss,
-        title = { Text(stringResource(R.string.knotwork_memory_compact_title), style = KnotworkTextStyles.TitleLg) },
+        title = { Text(stringResource(R.string.knotwork_memory_compact_title), style = MemoryType.compactTitle) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp3)) {
                 Text(
                     text = stringResource(R.string.knotwork_memory_compact_body),
-                    style = KnotworkTextStyles.BodyBase,
+                    style = MemoryType.compactBody,
                     color = KnotworkTheme.extended.onSurface2,
                 )
                 if (estimate != null) {
@@ -915,10 +925,10 @@ private fun MemoryCompactDialog(estimate: CompactionEstimateView?, callbacks: Me
 @Composable
 private fun MemoryEstimateCell(value: String, label: String) {
     Column(horizontalAlignment = Alignment.Start) {
-        Text(text = value, style = KnotworkTextStyles.TitleMd, color = MaterialTheme.colorScheme.onSurface)
+        Text(text = value, style = MemoryType.statValue, color = MaterialTheme.colorScheme.onSurface)
         Text(
             text = label.uppercase(),
-            style = KnotworkTextStyles.LabelSm,
+            style = MemoryType.statLabel,
             color = KnotworkTheme.extended.onSurfaceMuted,
         )
     }
@@ -929,7 +939,7 @@ private fun MemoryAddDialog(callbacks: MemoryCallbacks) {
     var text by remember { mutableStateOf("") }
     AlertDialog(
         onDismissRequest = callbacks.onAddDismiss,
-        title = { Text(stringResource(R.string.knotwork_memory_add_title), style = KnotworkTextStyles.TitleLg) },
+        title = { Text(stringResource(R.string.knotwork_memory_add_title), style = MemoryType.compactTitle) },
         text = {
             Box(
                 modifier = Modifier
@@ -941,14 +951,14 @@ private fun MemoryAddDialog(callbacks: MemoryCallbacks) {
                 BasicTextField(
                     value = text,
                     onValueChange = { text = it },
-                    textStyle = KnotworkTextStyles.BodyBase.copy(color = MaterialTheme.colorScheme.onSurface),
+                    textStyle = MemoryType.detailBody.copy(color = MaterialTheme.colorScheme.onSurface),
                     cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
                     modifier = Modifier.fillMaxWidth(),
                 )
                 if (text.isEmpty()) {
                     Text(
                         text = stringResource(R.string.knotwork_memory_add_placeholder),
-                        style = KnotworkTextStyles.BodyBase,
+                        style = MemoryType.detailBody,
                         color = KnotworkTheme.extended.onSurfaceMuted,
                     )
                 }
