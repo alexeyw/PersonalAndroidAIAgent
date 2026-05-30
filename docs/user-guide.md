@@ -832,9 +832,38 @@ Four-cell stat grid — **Chunks / Size / Threads / Avg score** — an
 **Auto-extract from conversations** toggle (default on; distils
 durable facts from finished chats into memory — see
 [Auto-extract from conversations](#auto-extract-from-conversations)),
-an **Auto-summarize threshold** slider (`%` of the memory context
-budget), and an **Embedding model** row identifying the on-device
-encoder. The action trio:
+and an **Auto-summarize threshold** slider (`%` of the memory context
+budget).
+
+**Tuning sliders.** Five sliders expose the retrieval and housekeeping
+parameters that otherwise only have code defaults:
+
+- **Search results (top-K)** (1–20, default 5) — how many ranked chunks
+  a single retrieval injects into a node's context block.
+- **Similarity threshold** (0.30–0.90, default 0.55) — the minimum
+  cosine-similarity score a chunk must reach to surface; raise it for
+  stricter matches, lower it if obvious facts are not being found.
+- **Recency half-life** (7–180 days, default 30) — how fast a non-pinned
+  chunk's score decays with age; lower values bias retrieval toward
+  fresh facts.
+- **Compaction age** (7–90 days, default 30) — how old a non-pinned chunk
+  must be before background compaction may cluster and summarise it.
+- **Max stored chunks** (1 000–20 000, default 5 000) — the hard ceiling;
+  crossing it triggers an out-of-schedule compaction pass.
+
+Each slider only offers in-range values; if a value is somehow rejected
+(for example by a future automated edit), an inline message appears and
+the change is discarded rather than saved.
+
+A **Background compaction** toggle (default on) controls whether the
+daily charging-and-idle worker consolidates stale clusters, and an
+**Embedding model** dropdown selects the active provider (on-device
+Universal Sentence Encoder, OpenAI, or Ollama). Switching the provider
+applies on the next embed/retrieval; existing chunks keep their old
+vectors until you run **Re-embed** (or import flags them for a
+background re-embed).
+
+The action trio:
 
 - **Export base** — opens a SAF picker; saves the entire memory
   table as a JSON blob.

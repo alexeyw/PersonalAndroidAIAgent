@@ -66,12 +66,24 @@ object SettingsDefaults {
      */
     const val MEMORY_SEARCH_TOP_K_DEFAULT: Int = 5
 
+    /** Lower bound enforced when the user edits the memory search top-K. */
+    const val MEMORY_SEARCH_TOP_K_MIN: Int = 1
+
+    /** Upper bound enforced when the user edits the memory search top-K. */
+    const val MEMORY_SEARCH_TOP_K_MAX: Int = 20
+
     /**
      * Default minimum cosine-similarity score a memory chunk must reach to be
      * surfaced during retrieval. Chunks below this are filtered out before
      * reaching the prompt.
      */
     const val MEMORY_SEARCH_THRESHOLD_DEFAULT: Float = 0.55f
+
+    /** Lower bound enforced when the user edits the memory search threshold. */
+    const val MEMORY_SEARCH_THRESHOLD_MIN: Float = 0.3f
+
+    /** Upper bound enforced when the user edits the memory search threshold. */
+    const val MEMORY_SEARCH_THRESHOLD_MAX: Float = 0.9f
 
     /**
      * Default recency half-life, in days, used by the memory re-ranker: a

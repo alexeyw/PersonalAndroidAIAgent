@@ -15,6 +15,17 @@ details.
 
 ### Added
 
+- **Memory tuning controls** (Phase 25 / Task 9/10) — *Settings → Memory*
+  now exposes the long-term-memory parameters that previously only had code
+  defaults:
+  - **Sliders** for retrieval *Search results (top-K)* (1–20), *Similarity
+    threshold* (0.30–0.90), *Recency half-life* (7–180 days), *Compaction age*
+    (7–90 days), and *Max stored chunks* (1 000–20 000).
+  - A **Background compaction** toggle and an **Embedding model** dropdown that
+    lists every registered provider (on-device USE, OpenAI, Ollama) and persists
+    the active selection.
+  - Out-of-range or unknown-provider edits are rejected at the ViewModel layer
+    with an inline validation message and are never persisted.
 - **Memory export / import** (Phase 25 / Task 8/10) — move an agent's
   long-term memory between devices:
   - **Export** — *Settings → Memory → Export* writes the table to a

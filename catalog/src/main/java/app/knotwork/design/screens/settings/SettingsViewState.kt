@@ -180,6 +180,49 @@ data class ExternalProvidersCardState(val rows: List<ProviderRowState>)
  */
 data class MemoryStatCell(val label: String, val value: String)
 
+/**
+ * One selectable embedding provider in the Memory-section dropdown.
+ *
+ * @property id Stable provider id used as the selection key (e.g. `"use"`).
+ * @property label Human-readable provider name rendered in the dropdown.
+ */
+data class EmbeddingOptionRow(val id: String, val label: String)
+
+/**
+ * One tunable numeric memory parameter rendered as a `KnotworkParamSlider`
+ * row inside the Memory card.
+ *
+ * @property id Stable id for the row — used as the LazyColumn key, the test
+ *   tag, and the discriminator passed back through
+ *   [SettingsCallbacks.onMemoryParamChange].
+ * @property title Row label.
+ * @property valueLabel Localised display value (e.g. `"5"`, `"0.55"`, `"30 d"`).
+ * @property value Slider position.
+ * @property valueRange Slider domain.
+ * @property steps Discrete steps; `0` for continuous sliders.
+ */
+data class MemoryParamSlider(
+    val id: String,
+    val title: String,
+    val valueLabel: String,
+    val value: Float,
+    val valueRange: ClosedFloatingPointRange<Float>,
+    val steps: Int = 0,
+)
+
+/**
+ * Memory card slice.
+ *
+ * @property params Tunable numeric memory parameters (top-K, threshold,
+ *   recency half-life, compaction age, max chunks) rendered as branded sliders.
+ * @property compactionEnabled Whether the background compaction toggle is on.
+ * @property compactionLabel / [compactionSubtitle] Localised toggle copy.
+ * @property embeddingOptions Available embedding providers for the dropdown.
+ * @property selectedEmbeddingId Wire id of the currently selected provider.
+ * @property selectedEmbeddingLabel Display name of the selected provider.
+ * @property validationError Optional inline error rendered beneath the
+ *   sliders when the last tuning edit was rejected.
+ */
 data class MemoryCardState(
     val stats: List<MemoryStatCell>,
     val autoExtractEnabled: Boolean,
@@ -187,12 +230,19 @@ data class MemoryCardState(
     val autoExtractSubtitle: String,
     val autoSummarizeThreshold: Int,
     val autoSummarizeLabel: String,
+    val params: List<MemoryParamSlider>,
+    val compactionEnabled: Boolean,
+    val compactionLabel: String,
+    val compactionSubtitle: String,
     val embeddingTitle: String,
-    val embeddingSubtitle: String,
+    val embeddingOptions: List<EmbeddingOptionRow>,
+    val selectedEmbeddingId: String,
+    val selectedEmbeddingLabel: String,
     val exportLabel: String,
     val importLabel: String,
     val reembedLabel: String,
     val clearLabel: String,
+    val validationError: String? = null,
     /** Re-embed progress in `0..100`, or `null` when no re-embed is in flight. */
     val reembedProgressPercent: Int?,
 )
@@ -327,6 +377,9 @@ class SettingsCallbacks(
     // Memory.
     val onAutoExtractToggle: (Boolean) -> Unit = {},
     val onAutoSummarizeChange: (Int) -> Unit = {},
+    val onMemoryParamChange: (id: String, value: Float) -> Unit = { _, _ -> },
+    val onMemoryCompactionToggle: (Boolean) -> Unit = {},
+    val onEmbeddingProviderSelected: (String) -> Unit = {},
     val onExportMemoryClick: () -> Unit = {},
     val onImportMemoryClick: () -> Unit = {},
     val onReembedClick: () -> Unit = {},

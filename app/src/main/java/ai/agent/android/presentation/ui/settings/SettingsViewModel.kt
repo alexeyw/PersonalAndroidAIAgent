@@ -15,6 +15,7 @@ import ai.agent.android.domain.repositories.IdentityRepository
 import ai.agent.android.domain.repositories.LocalModelRepository
 import ai.agent.android.domain.repositories.MemoryRepository
 import ai.agent.android.domain.repositories.SettingsRepository
+import ai.agent.android.domain.services.EmbeddingProvider
 import ai.agent.android.domain.usecases.ClearAllMemoryUseCase
 import ai.agent.android.domain.usecases.ExportMemoryBaseUseCase
 import ai.agent.android.domain.usecases.GetSystemPromptVariableCatalogUseCase
@@ -78,6 +79,7 @@ class SettingsViewModel @Inject constructor(
     private val memoryImportUseCase: MemoryImportUseCase,
     private val reembedAllMemoriesUseCase: ReembedAllMemoriesUseCase,
     private val getSystemPromptVariableCatalogUseCase: GetSystemPromptVariableCatalogUseCase,
+    private val embeddingProviders: Map<String, @JvmSuppressWildcards EmbeddingProvider>,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(SettingsUiState())
@@ -105,6 +107,7 @@ class SettingsViewModel @Inject constructor(
     init {
         loadIdentity()
         loadVariableCatalog()
+        loadEmbeddingProviders()
         // Restart-required baselines MUST be locked in before live observers
         // start emitting. Reactive DataStore / EncryptedPrefs flows can deliver
         // a transient seed value (null / default) before the persisted one
@@ -140,6 +143,22 @@ class SettingsViewModel @Inject constructor(
                 .map { VariableCatalogChip(it.placeholder, it.sample) }
             _uiState.update { it.copy(variableCatalog = entries) }
         }
+    }
+
+    /**
+     * Materialises the Hilt-registered embedding-provider map into the
+     * dropdown options consumed by the Memory section. The on-device default
+     * ([EmbeddingProvider.ID_USE]) is hoisted to the top; the rest follow in a
+     * stable display-name order so the list never re-shuffles between reads.
+     */
+    private fun loadEmbeddingProviders() {
+        val options = embeddingProviders.values
+            .map { EmbeddingProviderOption(id = it.id, displayName = it.displayName) }
+            .sortedWith(
+                compareByDescending<EmbeddingProviderOption> { it.id == EmbeddingProvider.ID_USE }
+                    .thenBy { it.displayName },
+            )
+        _uiState.update { it.copy(embeddingProviderOptions = options) }
     }
 
     @Suppress("LongMethod")
@@ -209,6 +228,34 @@ class SettingsViewModel @Inject constructor(
 
         settingsRepository.autoSummarizeThreshold.onEach { value ->
             _uiState.update { it.copy(autoSummarizeThreshold = value) }
+        }.launchIn(viewModelScope)
+
+        settingsRepository.memorySearchTopK.onEach { value ->
+            _uiState.update { it.copy(memorySearchTopK = value) }
+        }.launchIn(viewModelScope)
+
+        settingsRepository.memorySearchThreshold.onEach { value ->
+            _uiState.update { it.copy(memorySearchThreshold = value) }
+        }.launchIn(viewModelScope)
+
+        settingsRepository.memoryRecencyHalfLifeDays.onEach { value ->
+            _uiState.update { it.copy(memoryRecencyHalfLifeDays = value) }
+        }.launchIn(viewModelScope)
+
+        settingsRepository.memoryCompactionEnabled.onEach { value ->
+            _uiState.update { it.copy(memoryCompactionEnabled = value) }
+        }.launchIn(viewModelScope)
+
+        settingsRepository.memoryCompactionAgeDays.onEach { value ->
+            _uiState.update { it.copy(memoryCompactionAgeDays = value) }
+        }.launchIn(viewModelScope)
+
+        settingsRepository.maxMemoryChunks.onEach { value ->
+            _uiState.update { it.copy(maxMemoryChunks = value) }
+        }.launchIn(viewModelScope)
+
+        settingsRepository.activeEmbeddingProviderId.onEach { value ->
+            _uiState.update { it.copy(activeEmbeddingProviderId = value) }
         }.launchIn(viewModelScope)
 
         settingsRepository.longRunningTaskNotificationsEnabled.onEach { value ->
@@ -439,6 +486,131 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch {
             settingsRepository.setAutoSummarizeThreshold(percent.coerceIn(0, MAX_PERCENT).toFloat() / MAX_PERCENT)
         }
+    }
+
+    /**
+     * Persists the memory-retrieval top-K. Out-of-range values are rejected at
+     * this layer (the value stays unpersisted and [MemoryValidationError.SearchTopK]
+     * is surfaced) so a malformed caller can never write a degenerate bound.
+     *
+     * @param value Desired top-K; must lie in
+     *   `[MEMORY_SEARCH_TOP_K_MIN, MEMORY_SEARCH_TOP_K_MAX]`.
+     */
+    fun setMemorySearchTopK(value: Int) {
+        if (value < SettingsDefaults.MEMORY_SEARCH_TOP_K_MIN || value > SettingsDefaults.MEMORY_SEARCH_TOP_K_MAX) {
+            rejectMemoryEdit(MemoryValidationError.SearchTopK)
+            return
+        }
+        clearMemoryValidationError()
+        viewModelScope.launch { settingsRepository.setMemorySearchTopK(value) }
+    }
+
+    /**
+     * Persists the memory-retrieval similarity threshold. Out-of-range values
+     * are rejected with [MemoryValidationError.SearchThreshold].
+     *
+     * @param value Desired threshold; must lie in
+     *   `[MEMORY_SEARCH_THRESHOLD_MIN, MEMORY_SEARCH_THRESHOLD_MAX]`.
+     */
+    fun setMemorySearchThreshold(value: Float) {
+        if (value < SettingsDefaults.MEMORY_SEARCH_THRESHOLD_MIN ||
+            value > SettingsDefaults.MEMORY_SEARCH_THRESHOLD_MAX
+        ) {
+            rejectMemoryEdit(MemoryValidationError.SearchThreshold)
+            return
+        }
+        clearMemoryValidationError()
+        viewModelScope.launch { settingsRepository.setMemorySearchThreshold(value) }
+    }
+
+    /**
+     * Persists the recency half-life used by the memory re-ranker. Out-of-range
+     * values are rejected with [MemoryValidationError.RecencyHalfLife].
+     *
+     * @param days Desired half-life; must lie in
+     *   `[MEMORY_RECENCY_HALF_LIFE_DAYS_MIN, MEMORY_RECENCY_HALF_LIFE_DAYS_MAX]`.
+     */
+    fun setMemoryRecencyHalfLifeDays(days: Int) {
+        if (days < SettingsDefaults.MEMORY_RECENCY_HALF_LIFE_DAYS_MIN ||
+            days > SettingsDefaults.MEMORY_RECENCY_HALF_LIFE_DAYS_MAX
+        ) {
+            rejectMemoryEdit(MemoryValidationError.RecencyHalfLife)
+            return
+        }
+        clearMemoryValidationError()
+        viewModelScope.launch { settingsRepository.setMemoryRecencyHalfLifeDays(days) }
+    }
+
+    /**
+     * Persists the background-compaction toggle. Booleans cannot be
+     * out-of-range, so this never raises a validation error.
+     *
+     * @param enabled `true` to enable the daily compaction pass.
+     */
+    fun setMemoryCompactionEnabled(enabled: Boolean) {
+        clearMemoryValidationError()
+        viewModelScope.launch { settingsRepository.setMemoryCompactionEnabled(enabled) }
+    }
+
+    /**
+     * Persists the compaction age window. Out-of-range values are rejected with
+     * [MemoryValidationError.CompactionAge].
+     *
+     * @param days Desired age window; must lie in
+     *   `[MEMORY_COMPACTION_AGE_DAYS_MIN, MEMORY_COMPACTION_AGE_DAYS_MAX]`.
+     */
+    fun setMemoryCompactionAgeDays(days: Int) {
+        if (days < SettingsDefaults.MEMORY_COMPACTION_AGE_DAYS_MIN ||
+            days > SettingsDefaults.MEMORY_COMPACTION_AGE_DAYS_MAX
+        ) {
+            rejectMemoryEdit(MemoryValidationError.CompactionAge)
+            return
+        }
+        clearMemoryValidationError()
+        viewModelScope.launch { settingsRepository.setMemoryCompactionAgeDays(days) }
+    }
+
+    /**
+     * Persists the hard ceiling on stored chunks. Out-of-range values are
+     * rejected with [MemoryValidationError.MaxChunks].
+     *
+     * @param limit Desired ceiling; must lie in
+     *   `[MAX_MEMORY_CHUNKS_MIN, MAX_MEMORY_CHUNKS_MAX]`.
+     */
+    fun setMaxMemoryChunks(limit: Int) {
+        if (limit < SettingsDefaults.MAX_MEMORY_CHUNKS_MIN || limit > SettingsDefaults.MAX_MEMORY_CHUNKS_MAX) {
+            rejectMemoryEdit(MemoryValidationError.MaxChunks)
+            return
+        }
+        clearMemoryValidationError()
+        viewModelScope.launch { settingsRepository.setMaxMemoryChunks(limit) }
+    }
+
+    /**
+     * Persists the active embedding provider. The id is validated against the
+     * set of registered providers; an unknown id is rejected with
+     * [MemoryValidationError.UnknownEmbeddingProvider] and nothing is written.
+     *
+     * @param id Wire id of a provider present in the Hilt provider map.
+     */
+    fun setActiveEmbeddingProviderId(id: String) {
+        if (!embeddingProviders.containsKey(id)) {
+            rejectMemoryEdit(MemoryValidationError.UnknownEmbeddingProvider)
+            return
+        }
+        clearMemoryValidationError()
+        viewModelScope.launch { settingsRepository.setActiveEmbeddingProviderId(id) }
+    }
+
+    /** Clears the transient memory-tuning validation error (e.g. after the screen showed it). */
+    fun clearMemoryValidationError() {
+        if (_uiState.value.memoryValidationError != null) {
+            _uiState.update { it.copy(memoryValidationError = null) }
+        }
+    }
+
+    private fun rejectMemoryEdit(error: MemoryValidationError) {
+        _uiState.update { it.copy(memoryValidationError = error) }
     }
 
     /**
