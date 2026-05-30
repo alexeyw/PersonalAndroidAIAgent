@@ -68,6 +68,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import app.knotwork.design.R
+import app.knotwork.design.components.buttons.KnotworkButtonSize
 import app.knotwork.design.components.buttons.KnotworkPrimaryButton
 import app.knotwork.design.components.buttons.KnotworkSecondaryButton
 import app.knotwork.design.components.buttons.KnotworkTextButton
@@ -342,6 +343,7 @@ private fun MemoryStatsCard(header: MemoryStatsHeader, callbacks: MemoryCallback
             KnotworkSecondaryButton(
                 text = stringResource(R.string.knotwork_memory_compact),
                 onClick = callbacks.onCompactClick,
+                size = KnotworkButtonSize.Sm,
                 leadingIcon = Icons.Outlined.AutoAwesome,
             )
         }
