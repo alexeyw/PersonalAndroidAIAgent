@@ -73,7 +73,6 @@ import app.knotwork.design.components.buttons.KnotworkSecondaryButton
 import app.knotwork.design.components.buttons.KnotworkTextButton
 import app.knotwork.design.components.chips.ChipStyle
 import app.knotwork.design.components.chips.KnotworkChip
-import app.knotwork.design.components.controls.KnotworkCompactSlider
 import app.knotwork.design.components.controls.KnotworkSegmentedControl
 import app.knotwork.design.components.misc.KnotworkLoader
 import app.knotwork.design.components.misc.KnotworkSectionAction
@@ -574,59 +573,16 @@ private fun LlmParametersCard(state: LlmParametersCardState, callbacks: Settings
         },
     ) {
         state.sliders.forEach { slider ->
-            ParamSliderRow(
-                title = slider.title,
+            KnotworkParamSlider(
+                label = slider.title,
                 valueLabel = slider.valueLabel,
                 value = slider.value,
+                onValueChange = { newValue -> callbacks.onSliderChange(slider.id, newValue) },
                 valueRange = slider.valueRange,
                 steps = slider.steps,
-                onValueChange = { newValue -> callbacks.onSliderChange(slider.id, newValue) },
                 modifier = Modifier.testTag(SLIDER_ROW_TAG_PREFIX + slider.id),
             )
         }
-    }
-}
-
-/**
- * Shared labelled-slider row used by the LLM-parameters and Memory cards so
- * every numeric setting renders with identical density: a `BodySm` SemiBold
- * title on the left, a `MonoSm` muted value on the right, and a
- * `KnotworkCompactSlider` beneath. Stateless — the caller supplies the
- * pre-formatted [valueLabel].
- */
-@Composable
-private fun ParamSliderRow(
-    title: String,
-    valueLabel: String,
-    value: Float,
-    valueRange: ClosedFloatingPointRange<Float>,
-    steps: Int,
-    onValueChange: (Float) -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Column(
-        modifier = modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp1),
-    ) {
-        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                text = title,
-                style = KnotworkTextStyles.BodySm.copy(fontWeight = FontWeight.SemiBold),
-                color = MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier.weight(1f),
-            )
-            Text(
-                text = valueLabel,
-                style = KnotworkTextStyles.MonoSm,
-                color = KnotworkTheme.extended.onSurfaceMuted,
-            )
-        }
-        KnotworkCompactSlider(
-            value = value,
-            onValueChange = onValueChange,
-            valueRange = valueRange,
-            steps = steps,
-        )
     }
 }
 
@@ -957,37 +913,21 @@ private fun MemoryCard(state: MemoryCardState, callbacks: SettingsCallbacks) {
             checked = state.autoExtractEnabled,
             onCheckedChange = callbacks.onAutoExtractToggle,
         )
-        Column(
-            modifier = Modifier.fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp1),
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    text = state.autoSummarizeLabel,
-                    style = KnotworkTextStyles.BodySm.copy(fontWeight = FontWeight.SemiBold),
-                    color = MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier.weight(1f),
-                )
-                Text(
-                    text = "${state.autoSummarizeThreshold} %",
-                    style = KnotworkTextStyles.MonoSm,
-                    color = KnotworkTheme.extended.onSurfaceMuted,
-                )
-            }
-            KnotworkCompactSlider(
-                value = state.autoSummarizeThreshold.toFloat(),
-                onValueChange = { newValue -> callbacks.onAutoSummarizeChange(newValue.toInt()) },
-                valueRange = 0f..100f,
-            )
-        }
+        KnotworkParamSlider(
+            label = state.autoSummarizeLabel,
+            valueLabel = "${state.autoSummarizeThreshold} %",
+            value = state.autoSummarizeThreshold.toFloat(),
+            onValueChange = { newValue -> callbacks.onAutoSummarizeChange(newValue.toInt()) },
+            valueRange = 0f..100f,
+        )
         state.params.forEach { param ->
-            ParamSliderRow(
-                title = param.title,
+            KnotworkParamSlider(
+                label = param.title,
                 valueLabel = param.valueLabel,
                 value = param.value,
+                onValueChange = { newValue -> callbacks.onMemoryParamChange(param.id, newValue) },
                 valueRange = param.valueRange,
                 steps = param.steps,
-                onValueChange = { newValue -> callbacks.onMemoryParamChange(param.id, newValue) },
                 modifier = Modifier.testTag(MEMORY_PARAM_ROW_TAG_PREFIX + param.id),
             )
         }
