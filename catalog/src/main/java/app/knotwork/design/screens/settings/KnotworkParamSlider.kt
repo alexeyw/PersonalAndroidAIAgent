@@ -38,6 +38,8 @@ import app.knotwork.design.tokens.KnotworkTextStyles
  *  the slider continuous.
  * @param enabled `false` puts the slider in a read-only state during a
  *  `PendingChange` transition.
+ * @param errorText optional validation message rendered beneath the slider
+ *  (e.g. for the pipeline node-config fields); `null` (default) shows nothing.
  */
 @Suppress("LongParameterList") // Stable public API; each parameter maps to a row attribute.
 @Composable
@@ -50,6 +52,7 @@ fun KnotworkParamSlider(
     modifier: Modifier = Modifier,
     steps: Int = 0,
     enabled: Boolean = true,
+    errorText: String? = null,
 ) {
     Column(
         modifier = modifier.fillMaxWidth(),
@@ -78,5 +81,12 @@ fun KnotworkParamSlider(
             steps = steps,
             enabled = enabled,
         )
+        if (errorText != null) {
+            Text(
+                text = errorText,
+                style = KnotworkTextStyles.BodySm,
+                color = KnotworkTheme.extended.signalError,
+            )
+        }
     }
 }

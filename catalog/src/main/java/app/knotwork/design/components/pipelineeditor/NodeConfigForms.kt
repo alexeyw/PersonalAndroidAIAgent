@@ -42,7 +42,7 @@ import app.knotwork.design.R
 import app.knotwork.design.components.buttons.KnotworkTextButton
 import app.knotwork.design.components.chips.ChipStyle
 import app.knotwork.design.components.chips.KnotworkChip
-import app.knotwork.design.components.controls.KnotworkCompactSlider
+import app.knotwork.design.screens.settings.KnotworkParamSlider
 import app.knotwork.design.theme.KnotworkTheme
 import app.knotwork.design.tokens.KnotworkTextStyles
 
@@ -382,28 +382,18 @@ private fun FloatSliderField(
     steps: Int = 0,
     onChange: (Float) -> Unit,
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp1)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            FieldLabel(text = label)
-            Text(
-                text = "  %.2f".format(value),
-                style = KnotworkTextStyles.MonoSm,
-                color = KnotworkTheme.extended.onSurfaceMuted,
-            )
-        }
-        KnotworkCompactSlider(
-            value = value,
-            onValueChange = onChange,
-            valueRange = range,
-            steps = steps,
-            modifier = Modifier.fillMaxWidth(),
-        )
-        InlineError(failure = error)
-    }
+    KnotworkParamSlider(
+        label = label,
+        valueLabel = "%.2f".format(value),
+        value = value,
+        onValueChange = onChange,
+        valueRange = range,
+        steps = steps,
+        errorText = error?.let { stringResource(it.stringRes) },
+    )
 }
 
 /** Integer field rendered as a slider over an `IntRange`. */
-@Suppress("LongParameterList") // Same rationale as [FloatSliderField].
 @Composable
 private fun IntSliderField(
     label: String,
@@ -412,31 +402,22 @@ private fun IntSliderField(
     error: ValidationFailure?,
     onChange: (Int) -> Unit,
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp1)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            FieldLabel(text = label)
-            Text(
-                text = "  $value",
-                style = KnotworkTextStyles.MonoSm,
-                color = KnotworkTheme.extended.onSurfaceMuted,
-            )
-        }
-        // Use a continuous slider (`steps = 0`) and round on change. Naïve
-        // `steps = range.last - range.first - 1` would request one tick PER integer:
-        // Cloud's `timeoutMs` range `1_000..600_000` then asks Material3 Slider to
-        // allocate ~600 000 tick composables, freezing the main thread and ANRing the
-        // app when the CLOUD config sheet opens. Continuous + round-on-change gives
-        // identical integer increments at user-perceptible drag resolution without
-        // the tick-mark blow-up.
-        KnotworkCompactSlider(
-            value = value.toFloat(),
-            onValueChange = { next -> onChange(next.toInt()) },
-            valueRange = range.first.toFloat()..range.last.toFloat(),
-            steps = 0,
-            modifier = Modifier.fillMaxWidth(),
-        )
-        InlineError(failure = error)
-    }
+    // Keep the slider continuous (`steps = 0`) and round on change. Naïve
+    // `steps = range.last - range.first - 1` would request one tick PER integer:
+    // Cloud's `timeoutMs` range `1_000..600_000` then asks Material3 Slider to
+    // allocate ~600 000 tick composables, freezing the main thread and ANRing the
+    // app when the CLOUD config sheet opens. Continuous + round-on-change gives
+    // identical integer increments at user-perceptible drag resolution without
+    // the tick-mark blow-up.
+    KnotworkParamSlider(
+        label = label,
+        valueLabel = "$value",
+        value = value.toFloat(),
+        onValueChange = { next -> onChange(next.toInt()) },
+        valueRange = range.first.toFloat()..range.last.toFloat(),
+        steps = 0,
+        errorText = error?.let { stringResource(it.stringRes) },
+    )
 }
 
 /** Segmented chip row that picks one enum value out of a labelled set. */
