@@ -13,4 +13,8 @@
     <string name="memory_delete_message_cd">Delete Message</string>
     <string name="memory_delete_memory_cd">Delete Memory</string>
     <string name="memory_embedding_size">Embedding size: %1$d dims</string>
+    <!-- Transient snackbar messages surfaced by the Memory screen. -->
+    <string name="memory_msg_load_error">Couldn\'t refresh memory</string>
+    <string name="memory_msg_add_error">Couldn\'t save to memory</string>
+    <string name="memory_msg_edit_error">Couldn\'t save the edit</string>
 </resources>

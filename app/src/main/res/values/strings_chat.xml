@@ -53,6 +53,8 @@
 
     <!-- Snackbar feedback -->
     <string name="chat_snackbar_copied">Copied</string>
+    <string name="chat_snackbar_saved_to_memory">Saved to memory</string>
+    <string name="chat_snackbar_save_to_memory_failed">Couldn\'t save to memory</string>
     <string name="chat_snackbar_console_copied">Console log copied</string>
     <string name="chat_snackbar_console_line_copied">Line copied</string>
     <string name="chat_console_clear_dialog_confirm">Clear</string>

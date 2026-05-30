@@ -108,7 +108,10 @@ configured it.
   and power-state management.
 - Long-term memory with semantic retrieval (RAG) over past conversations,
   including automatic extraction of durable facts from finished conversations
-  (toggleable in Settings → Memory).
+  (toggleable in Settings → Memory), manual "Save to memory" from any chat
+  message, and a redesigned memory manager — provenance breakdown, category
+  filters, semantic search with relevance scores, inline edit + tags, manual
+  add, one-tap compaction with an estimate, and JSON export.
 - Standalone browser-based editor (`pipeline-editor.html`) for authoring
   and exporting pipelines without launching the app.
 - Opt-in Firebase Crashlytics for anonymous crash reporting — off by

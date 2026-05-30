@@ -56,6 +56,8 @@ class SettingsManager @Inject constructor(private val dataStore: DataStore<Prefe
         val APP_FUNCTION_RISK_OVERRIDES = stringPreferencesKey("app_function_risk_overrides")
         val CURRENT_CHAT_SESSION_ID = stringPreferencesKey("current_chat_session_id")
         val MAX_MEMORY_CHUNKS_FOR_SEARCH = intPreferencesKey("max_memory_chunks_for_search")
+        val MEMORY_LAST_COMPACTED_AT =
+            androidx.datastore.preferences.core.longPreferencesKey("memory_last_compacted_at")
         val MEMORY_SEARCH_TOP_K = intPreferencesKey("memory_search_top_k")
         val MEMORY_SEARCH_THRESHOLD =
             androidx.datastore.preferences.core.floatPreferencesKey("memory_search_threshold")
@@ -601,6 +603,25 @@ class SettingsManager @Inject constructor(private val dataStore: DataStore<Prefe
     override suspend fun setMaxMemoryChunksForSearch(limit: Int) {
         dataStore.edit { preferences ->
             preferences[PreferencesKeys.MAX_MEMORY_CHUNKS_FOR_SEARCH] = limit
+        }
+    }
+
+    override val memoryLastCompactedAt: Flow<Long> = dataStore.data
+        .catch { exception ->
+            if (exception is IOException) {
+                Timber.e(exception, "Error reading preferences")
+                emit(emptyPreferences())
+            } else {
+                throw exception
+            }
+        }
+        .map { preferences ->
+            preferences[PreferencesKeys.MEMORY_LAST_COMPACTED_AT] ?: 0L
+        }
+
+    override suspend fun setMemoryLastCompactedAt(millis: Long) {
+        dataStore.edit { preferences ->
+            preferences[PreferencesKeys.MEMORY_LAST_COMPACTED_AT] = millis
         }
     }
 

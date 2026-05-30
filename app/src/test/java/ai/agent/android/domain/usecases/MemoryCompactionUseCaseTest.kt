@@ -63,8 +63,9 @@ class MemoryCompactionUseCaseTest {
         coEvery { promptTemplateEngine.render(any(), any()) } answers { firstArg() }
         coEvery { embeddingProviderResolver.resolve() } returns embeddingProvider
         coEvery { embeddingProvider.embed(any<String>()) } returns floatArrayOf(0.5f, 0.5f)
-        coEvery { memoryRepository.saveMemory(any(), any(), any()) } returns 99L
+        coEvery { memoryRepository.saveMemory(any(), any(), any(), any()) } returns 99L
         coEvery { memoryRepository.deleteMemory(any()) } returns Unit
+        coEvery { settingsRepository.setMemoryLastCompactedAt(any()) } returns Unit
         every { llmInferenceEngine.generateResponseStream(any()) } returns flowOf("Merged fact")
 
         useCase = MemoryCompactionUseCase(
@@ -87,7 +88,7 @@ class MemoryCompactionUseCaseTest {
 
         assertEquals(MemoryCompactionUseCase.MemoryCompactionOutcome.EMPTY, outcome)
         coVerify(exactly = 0) { kMeansClusterer.cluster(any()) }
-        coVerify(exactly = 0) { memoryRepository.saveMemory(any(), any(), any()) }
+        coVerify(exactly = 0) { memoryRepository.saveMemory(any(), any(), any(), any()) }
     }
 
     @Test
@@ -111,6 +112,8 @@ class MemoryCompactionUseCaseTest {
         coVerify(exactly = 1) { memoryRepository.deleteMemory(1L) }
         coVerify(exactly = 1) { memoryRepository.deleteMemory(2L) }
         coVerify(exactly = 1) { memoryRepository.deleteMemory(3L) }
+        // A real consolidation stamps the last-compacted time.
+        coVerify(exactly = 1) { settingsRepository.setMemoryLastCompactedAt(now) }
     }
 
     @Test
@@ -143,8 +146,9 @@ class MemoryCompactionUseCaseTest {
         val outcome = useCase(now)
 
         assertEquals(0, outcome.clustersProcessed)
-        coVerify(exactly = 0) { memoryRepository.saveMemory(any(), any(), any()) }
+        coVerify(exactly = 0) { memoryRepository.saveMemory(any(), any(), any(), any()) }
         coVerify(exactly = 0) { memoryRepository.deleteMemory(any()) }
+        coVerify(exactly = 0) { settingsRepository.setMemoryLastCompactedAt(any()) }
     }
 
     @Test
@@ -157,8 +161,9 @@ class MemoryCompactionUseCaseTest {
         val outcome = useCase(now)
 
         assertEquals(0, outcome.clustersProcessed)
-        coVerify(exactly = 0) { memoryRepository.saveMemory(any(), any(), any()) }
+        coVerify(exactly = 0) { memoryRepository.saveMemory(any(), any(), any(), any()) }
         coVerify(exactly = 0) { memoryRepository.deleteMemory(any()) }
+        coVerify(exactly = 0) { settingsRepository.setMemoryLastCompactedAt(any()) }
     }
 
     @Test
@@ -171,8 +176,9 @@ class MemoryCompactionUseCaseTest {
         val outcome = useCase(now)
 
         assertEquals(0, outcome.clustersProcessed)
-        coVerify(exactly = 0) { memoryRepository.saveMemory(any(), any(), any()) }
+        coVerify(exactly = 0) { memoryRepository.saveMemory(any(), any(), any(), any()) }
         coVerify(exactly = 0) { memoryRepository.deleteMemory(any()) }
+        coVerify(exactly = 0) { settingsRepository.setMemoryLastCompactedAt(any()) }
     }
 
     @Test

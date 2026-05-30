@@ -24,11 +24,18 @@ import javax.inject.Inject
  */
 class ExportMemoryBaseUseCase @Inject constructor(private val memoryRepository: MemoryRepository) {
     /**
-     * Serialises every chunk into [target] and returns the number of
-     * entries written. Closes the stream via `buffered().use { … }`.
+     * Serialises chunks into [target] and returns the number of entries
+     * written. Closes the stream via `bufferedWriter().use { … }`.
+     *
+     * @param target Destination stream (owned by the caller's SAF launcher).
+     * @param ids When `null`, every stored chunk is exported (the Settings →
+     *   Memory → Export base action). When non-null, only chunks whose id is in
+     *   the set are written — backs the Memory screen's multi-select "Export
+     *   selected" action. An empty set therefore writes zero chunks.
      */
-    suspend operator fun invoke(target: OutputStream): Int = withContext(Dispatchers.IO) {
+    suspend operator fun invoke(target: OutputStream, ids: Set<Long>? = null): Int = withContext(Dispatchers.IO) {
         val memories = memoryRepository.getAllMemories()
+            .let { all -> if (ids == null) all else all.filter { it.id in ids } }
         val chunksJson = JSONArray()
         for (memory in memories) {
             val chunk = JSONObject().apply {

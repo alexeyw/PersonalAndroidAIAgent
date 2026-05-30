@@ -19,6 +19,8 @@ import ai.agent.android.domain.services.MemoryAutoExtractionCoordinator
 import ai.agent.android.domain.usecases.AgentOrchestratorUseCase
 import ai.agent.android.domain.usecases.GetContextWindowUseCase
 import ai.agent.android.domain.usecases.LoadModelUseCase
+import ai.agent.android.domain.usecases.SaveMessageToMemoryUseCase
+import ai.agent.android.domain.usecases.SaveToMemoryOutcome
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.knotwork.design.components.chat.ChatContent
@@ -107,6 +109,7 @@ class ChatHomeViewModel @Inject constructor(
     private val localModelRepository: LocalModelRepository,
     private val loadModelUseCase: LoadModelUseCase,
     private val memoryAutoExtractionCoordinator: MemoryAutoExtractionCoordinator,
+    private val saveMessageToMemoryUseCase: SaveMessageToMemoryUseCase,
 ) : ViewModel() {
 
     private val _currentSessionId: MutableStateFlow<String> = MutableStateFlow("")
@@ -145,6 +148,7 @@ class ChatHomeViewModel @Inject constructor(
     private val _streamingTokens: MutableStateFlow<Int> = MutableStateFlow(0)
     private val _exportEvents: MutableSharedFlow<ChatExportPayload> = MutableSharedFlow(extraBufferCapacity = 1)
     private val _importErrorEvents: MutableSharedFlow<String> = MutableSharedFlow(extraBufferCapacity = 1)
+    private val _memorySaveEvents: MutableSharedFlow<MemorySaveEvent> = MutableSharedFlow(extraBufferCapacity = 1)
 
     /** Externally-observable current session id. */
     val currentSessionId: StateFlow<String> = _currentSessionId.asStateFlow()
@@ -304,6 +308,13 @@ class ChatHomeViewModel @Inject constructor(
      * description ("Could not read the selected file", JSON parse error, …).
      */
     val importErrorEvents: SharedFlow<String> = _importErrorEvents.asSharedFlow()
+
+    /**
+     * One-shot stream of "Save to memory" outcomes raised by the message
+     * long-press action. The screen maps each event to a snackbar
+     * ("Saved to memory" / failure copy).
+     */
+    val memorySaveEvents: SharedFlow<MemorySaveEvent> = _memorySaveEvents.asSharedFlow()
 
     private var messagesJob: Job? = null
     private var generationJob: Job? = null
@@ -1184,6 +1195,25 @@ class ChatHomeViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Persists the text of the message identified by [rowId] into long-term
+     * memory as a manual entry, then raises a [MemorySaveEvent] so the screen
+     * can confirm via snackbar. Rows without a copyable text payload, and
+     * blank texts, are silently ignored (no event).
+     *
+     * Backs the long-press "Save to memory" context action.
+     */
+    fun saveMessageToMemory(rowId: String) {
+        val text = textForRow(rowId) ?: return
+        viewModelScope.launch {
+            when (saveMessageToMemoryUseCase(text)) {
+                is SaveToMemoryOutcome.Saved -> _memorySaveEvents.tryEmit(MemorySaveEvent.Saved)
+                is SaveToMemoryOutcome.Failed -> _memorySaveEvents.tryEmit(MemorySaveEvent.Failed)
+                SaveToMemoryOutcome.Skipped -> Unit
+            }
+        }
+    }
+
     /** Resting (non-overlay) state given the current message list — `Empty` if no messages, else `Idle`. */
     private fun restingState(): ChatHomeUiState =
         if (_messages.value.isEmpty()) ChatHomeUiState.Empty else ChatHomeUiState.Idle
@@ -1500,4 +1530,17 @@ enum class ConsoleSnackbarEvent {
 
     /** The full filtered log was copied to the system clipboard. */
     AllCopied,
+}
+
+/**
+ * One-shot outcome of the long-press "Save to memory" action, mapped to a
+ * snackbar by the screen. Modelled as an enum so resource ids stay out of
+ * the ViewModel.
+ */
+enum class MemorySaveEvent {
+    /** The message text was embedded and stored as a manual memory entry. */
+    Saved,
+
+    /** Embedding or persistence failed; surface a retry-able failure copy. */
+    Failed,
 }

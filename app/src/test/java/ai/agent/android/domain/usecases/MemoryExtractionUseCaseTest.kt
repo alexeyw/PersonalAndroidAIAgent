@@ -69,7 +69,7 @@ class MemoryExtractionUseCaseTest {
         }
         every { settingsRepository.maxMemoryChunksForSearch } returns flowOf(1000)
         coEvery { memoryRepository.findSimilarMemories(any(), any(), any()) } returns emptyList()
-        coEvery { memoryRepository.saveMemory(any(), any(), any()) } returns 1L
+        coEvery { memoryRepository.saveMemory(any(), any(), any(), any()) } returns 1L
 
         useCase = MemoryExtractionUseCase(
             llmInferenceEngine = llmInferenceEngine,
@@ -102,8 +102,22 @@ class MemoryExtractionUseCaseTest {
         assertEquals(2, outcome.parsed)
         assertEquals(2, outcome.saved)
         assertEquals(0, outcome.skippedDuplicates)
-        coVerify { memoryRepository.saveMemory("Prefers dark mode", any(), MemorySource.ChatSession(sessionId)) }
-        coVerify { memoryRepository.saveMemory("Has a brother named Alex", any(), MemorySource.ChatSession(sessionId)) }
+        coVerify {
+            memoryRepository.saveMemory(
+                "Prefers dark mode",
+                any(),
+                MemorySource.ChatSession(sessionId),
+                listOf("preference"),
+            )
+        }
+        coVerify {
+            memoryRepository.saveMemory(
+                "Has a brother named Alex",
+                any(),
+                MemorySource.ChatSession(sessionId),
+                listOf("relation"),
+            )
+        }
     }
 
     @Test
@@ -114,7 +128,7 @@ class MemoryExtractionUseCaseTest {
 
         assertEquals(0, outcome.parsed)
         assertEquals(0, outcome.saved)
-        coVerify(exactly = 0) { memoryRepository.saveMemory(any(), any(), any()) }
+        coVerify(exactly = 0) { memoryRepository.saveMemory(any(), any(), any(), any()) }
     }
 
     @Test
@@ -125,7 +139,7 @@ class MemoryExtractionUseCaseTest {
 
         assertEquals(0, outcome.parsed)
         assertEquals(0, outcome.saved)
-        coVerify(exactly = 0) { memoryRepository.saveMemory(any(), any(), any()) }
+        coVerify(exactly = 0) { memoryRepository.saveMemory(any(), any(), any(), any()) }
     }
 
     @Test
@@ -142,7 +156,7 @@ class MemoryExtractionUseCaseTest {
 
         assertEquals(1, outcome.parsed)
         assertEquals(1, outcome.saved)
-        coVerify(exactly = 1) { memoryRepository.saveMemory("Likes tea", any(), any()) }
+        coVerify(exactly = 1) { memoryRepository.saveMemory("Likes tea", any(), any(), listOf("preference")) }
     }
 
     @Test
@@ -157,7 +171,7 @@ class MemoryExtractionUseCaseTest {
         assertEquals(1, outcome.parsed)
         assertEquals(0, outcome.saved)
         assertEquals(1, outcome.skippedDuplicates)
-        coVerify(exactly = 0) { memoryRepository.saveMemory(any(), any(), any()) }
+        coVerify(exactly = 0) { memoryRepository.saveMemory(any(), any(), any(), any()) }
     }
 
     @Test
@@ -177,7 +191,7 @@ class MemoryExtractionUseCaseTest {
         assertEquals(2, outcome.parsed)
         assertEquals(1, outcome.saved)
         assertEquals(1, outcome.skippedDuplicates)
-        coVerify(exactly = 1) { memoryRepository.saveMemory(any(), any(), any()) }
+        coVerify(exactly = 1) { memoryRepository.saveMemory(any(), any(), any(), any()) }
     }
 
     @Test
@@ -188,7 +202,7 @@ class MemoryExtractionUseCaseTest {
         val outcome = useCase(sessionId, messages)
 
         assertEquals(MemoryExtractionUseCase.MemoryExtractionOutcome.EMPTY, outcome)
-        coVerify(exactly = 0) { memoryRepository.saveMemory(any(), any(), any()) }
+        coVerify(exactly = 0) { memoryRepository.saveMemory(any(), any(), any(), any()) }
     }
 
     @Test
@@ -214,6 +228,6 @@ class MemoryExtractionUseCaseTest {
 
         assertEquals(2, outcome.parsed)
         assertEquals(0, outcome.saved)
-        coVerify(exactly = 0) { memoryRepository.saveMemory(any(), any(), any()) }
+        coVerify(exactly = 0) { memoryRepository.saveMemory(any(), any(), any(), any()) }
     }
 }

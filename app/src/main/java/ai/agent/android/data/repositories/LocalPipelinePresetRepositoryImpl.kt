@@ -1,5 +1,6 @@
 package ai.agent.android.data.repositories
 
+import ai.agent.android.data.local.TagsCsv
 import ai.agent.android.data.local.dao.PipelinePresetDao
 import ai.agent.android.data.local.models.PipelinePresetEntity
 import ai.agent.android.domain.models.PipelineGraph
@@ -73,7 +74,7 @@ class LocalPipelinePresetRepositoryImpl @Inject constructor(
             description = preset.description,
             categoryKey = preset.category.key,
             graphJson = PipelinePresetJsonSerializer.serialize(preset),
-            tagsCsv = preset.tags.joinToString(separator = TAG_SEPARATOR),
+            tagsCsv = TagsCsv.encode(preset.tags),
             createdAt = System.currentTimeMillis(),
         )
         dao.upsert(entity)
@@ -171,7 +172,7 @@ class LocalPipelinePresetRepositoryImpl @Inject constructor(
             description = description,
             category = PresetCategory.fromKey(categoryKey),
             graph = parsedGraph,
-            tags = if (tagsCsv.isEmpty()) emptyList() else tagsCsv.split(TAG_SEPARATOR),
+            tags = TagsCsv.decode(tagsCsv),
             isBundled = false,
         )
     }
@@ -179,6 +180,5 @@ class LocalPipelinePresetRepositoryImpl @Inject constructor(
     private companion object {
         const val ASSETS_BUNDLED_DIR = "presets/pipelines"
         const val JSON_EXTENSION = ".json"
-        const val TAG_SEPARATOR = ","
     }
 }

@@ -43,6 +43,11 @@ object KnotworkPalette {
     val NodeIntentRouter = Color(0xFF9283DC)
     val NodeIfCondition = Color(0xFF43A96E)
     val NodeClarification = Color(0xFFD49648)
+
+    // Memory provenance accents (Auto = teal, Compaction = violet); Manual reuses
+    // the brand primary at the call site.
+    val MemoryAuto = Color(0xFF1F9AA8)
+    val MemoryCompaction = Color(0xFF7A6AD8)
     val NodeLiteRt = Color(0xFFA76C12)
     val NodeCloud = Color(0xFF5F9DB0)
     val NodeTool = Color(0xFFD5A13C)

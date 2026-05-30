@@ -19,6 +19,14 @@ import androidx.room.PrimaryKey
  *   via [ai.agent.android.data.local.Converters.fromMemorySource]. Legacy rows
  *   created before the version 25 → 26 migration backfill to
  *   [MemorySource.Unknown].
+ * @property tagsCsv Comma-separated tag list (lower-case, kebab-case). Empty
+ *   string when the chunk has no tags. Added by the version 26 → 27 migration
+ *   (default `''`).
+ * @property useCount Number of times this chunk has been injected into a
+ *   pipeline run's Long-Term Memory context block. Added by the 26 → 27
+ *   migration (default `0`).
+ * @property lastUsedAt Epoch-millis of the most recent retrieval, or `null`
+ *   if never used. Added by the 26 → 27 migration (nullable, default `NULL`).
  */
 @Entity(tableName = "memory_chunks")
 data class MemoryChunkEntity(
@@ -30,6 +38,12 @@ data class MemoryChunkEntity(
     val isPinned: Boolean = false,
     @ColumnInfo(name = "source", defaultValue = MemoryChunkEntity.SOURCE_DEFAULT_JSON)
     val source: MemorySource = MemorySource.Unknown,
+    @ColumnInfo(name = "tagsCsv", defaultValue = "")
+    val tagsCsv: String = "",
+    @ColumnInfo(name = "useCount", defaultValue = "0")
+    val useCount: Int = 0,
+    @ColumnInfo(name = "lastUsedAt")
+    val lastUsedAt: Long? = null,
 ) {
     companion object {
         /**

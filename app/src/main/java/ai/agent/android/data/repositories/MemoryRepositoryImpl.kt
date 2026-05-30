@@ -1,6 +1,7 @@
 package ai.agent.android.data.repositories
 
 import ai.agent.android.data.local.Converters
+import ai.agent.android.data.local.TagsCsv
 import ai.agent.android.data.local.dao.MemoryDao
 import ai.agent.android.data.local.models.MemoryChunkEntity
 import ai.agent.android.domain.models.MemoryChunk
@@ -37,19 +38,24 @@ class MemoryRepositoryImpl @Inject constructor(private val memoryDao: MemoryDao,
      */
     private val recentSimilarityScores = MutableStateFlow<List<Float>>(emptyList())
 
-    override suspend fun saveMemory(text: String, embedding: FloatArray, source: MemorySource): Long =
-        withContext(Dispatchers.IO) {
-            val embeddingString = converters.fromFloatArray(embedding)
-                ?: throw IllegalArgumentException("Failed to serialize embedding")
+    override suspend fun saveMemory(
+        text: String,
+        embedding: FloatArray,
+        source: MemorySource,
+        tags: List<String>,
+    ): Long = withContext(Dispatchers.IO) {
+        val embeddingString = converters.fromFloatArray(embedding)
+            ?: throw IllegalArgumentException("Failed to serialize embedding")
 
-            val entity = MemoryChunkEntity(
-                text = text,
-                embedding = embeddingString,
-                timestamp = System.currentTimeMillis(),
-                source = source,
-            )
-            memoryDao.insertMemory(entity)
-        }
+        val entity = MemoryChunkEntity(
+            text = text,
+            embedding = embeddingString,
+            timestamp = System.currentTimeMillis(),
+            source = source,
+            tagsCsv = TagsCsv.encode(tags),
+        )
+        memoryDao.insertMemory(entity)
+    }
 
     override suspend fun getAllMemories(): List<MemoryChunk> = withContext(Dispatchers.IO) {
         memoryDao.getAllMemories().mapNotNull { entity -> entity.toMemoryChunkOrNull() }
@@ -119,8 +125,31 @@ class MemoryRepositoryImpl @Inject constructor(private val memoryDao: MemoryDao,
         memoryDao.updateMemory(id = id, text = text, embedding = embeddingString)
     }
 
+    override suspend fun updateMemoryWithTags(id: Long, text: String, embedding: FloatArray, tags: List<String>) =
+        withContext(Dispatchers.IO) {
+            val embeddingString = converters.fromFloatArray(embedding)
+                ?: throw IllegalArgumentException("Failed to serialize embedding")
+            memoryDao.updateMemoryWithTags(
+                id = id,
+                text = text,
+                embedding = embeddingString,
+                tagsCsv = TagsCsv.encode(tags),
+            )
+        }
+
     override suspend fun setMemoryPinned(id: Long, pinned: Boolean) = withContext(Dispatchers.IO) {
         memoryDao.setMemoryPinned(id = id, isPinned = pinned)
+    }
+
+    override suspend fun setMemoryTags(id: Long, tags: List<String>) = withContext(Dispatchers.IO) {
+        memoryDao.setMemoryTags(id = id, tagsCsv = TagsCsv.encode(tags))
+    }
+
+    override suspend fun recordUsage(ids: List<Long>, atMillis: Long) {
+        if (ids.isEmpty()) return
+        withContext(Dispatchers.IO) {
+            memoryDao.recordUsage(ids = ids, atMillis = atMillis)
+        }
     }
 
     override suspend fun deleteAllMemories() = withContext(Dispatchers.IO) {
@@ -160,6 +189,9 @@ class MemoryRepositoryImpl @Inject constructor(private val memoryDao: MemoryDao,
             timestamp = timestamp,
             isPinned = isPinned,
             source = source,
+            tags = TagsCsv.decode(tagsCsv),
+            useCount = useCount,
+            lastUsedAt = lastUsedAt,
         )
     }
 

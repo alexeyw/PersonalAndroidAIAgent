@@ -1,5 +1,6 @@
 package ai.agent.android.data.repositories
 
+import ai.agent.android.data.local.TagsCsv
 import ai.agent.android.data.local.dao.PromptPresetDao
 import ai.agent.android.data.local.models.PromptPresetEntity
 import ai.agent.android.domain.models.NodeType
@@ -76,7 +77,7 @@ class LocalPromptPresetRepositoryImpl @Inject constructor(
             description = preset.description,
             nodeTypeKey = preset.nodeType.name,
             systemPrompt = preset.systemPrompt,
-            tagsCsv = preset.tags.joinToString(separator = TAG_SEPARATOR),
+            tagsCsv = TagsCsv.encode(preset.tags),
             createdAt = System.currentTimeMillis(),
         )
         dao.upsert(entity)
@@ -161,7 +162,7 @@ class LocalPromptPresetRepositoryImpl @Inject constructor(
             description = description,
             nodeType = resolvedNodeType,
             systemPrompt = systemPrompt,
-            tags = if (tagsCsv.isEmpty()) emptyList() else tagsCsv.split(TAG_SEPARATOR),
+            tags = TagsCsv.decode(tagsCsv),
             isBundled = false,
         )
     }
@@ -169,6 +170,5 @@ class LocalPromptPresetRepositoryImpl @Inject constructor(
     private companion object {
         const val ASSETS_BUNDLED_DIR = "presets/prompts"
         const val JSON_EXTENSION = ".json"
-        const val TAG_SEPARATOR = ","
     }
 }

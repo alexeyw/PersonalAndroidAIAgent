@@ -20,9 +20,16 @@ interface MemoryRepository {
      *   came from). Defaults to [MemorySource.Manual] so existing direct-save
      *   call sites — which represent a deliberate, user-attributable write —
      *   keep a sensible attribution without each having to spell it out.
+     * @param tags Optional labels to attach to the chunk (e.g. the
+     *   auto-extraction fact type). Defaults to empty.
      * @return The ID of the saved memory chunk.
      */
-    suspend fun saveMemory(text: String, embedding: FloatArray, source: MemorySource = MemorySource.Manual): Long
+    suspend fun saveMemory(
+        text: String,
+        embedding: FloatArray,
+        source: MemorySource = MemorySource.Manual,
+        tags: List<String> = emptyList(),
+    ): Long
 
     /**
      * Retrieves all saved memories.
@@ -110,6 +117,18 @@ interface MemoryRepository {
     suspend fun updateMemory(id: Long, text: String, embedding: FloatArray)
 
     /**
+     * Atomically replaces the text, embedding, and tags of a chunk in a single
+     * transaction, so an inline edit can never half-apply (e.g. text committed
+     * but tags not). The chunk's `timestamp` is left untouched.
+     *
+     * @param id Identifier of the chunk to update.
+     * @param text The new raw text content.
+     * @param embedding The new vector embedding produced from [text].
+     * @param tags The new tag list (empty clears all tags).
+     */
+    suspend fun updateMemoryWithTags(id: Long, text: String, embedding: FloatArray, tags: List<String>)
+
+    /**
      * Flips the pinned state of a single memory chunk. Pinned chunks sort
      * ahead of unpinned chunks on the memory surface and are exempt from
      * future compaction passes.
@@ -118,6 +137,25 @@ interface MemoryRepository {
      * @param pinned `true` to pin the chunk, `false` to unpin it.
      */
     suspend fun setMemoryPinned(id: Long, pinned: Boolean)
+
+    /**
+     * Replaces the tag list of a single chunk. Does not touch the text or
+     * embedding (tag edits never require re-embedding).
+     *
+     * @param id Identifier of the chunk to update.
+     * @param tags New tag list (empty clears all tags).
+     */
+    suspend fun setMemoryTags(id: Long, tags: List<String>)
+
+    /**
+     * Records that the given chunks were just retrieved into a pipeline run's
+     * Long-Term Memory context: increments each chunk's use count and stamps
+     * the most-recent-use time. Best-effort; a no-op for an empty [ids].
+     *
+     * @param ids Identifiers of the chunks that were injected.
+     * @param atMillis Epoch-millis to stamp as the most-recent use time.
+     */
+    suspend fun recordUsage(ids: List<Long>, atMillis: Long)
 
     /**
      * Removes every memory chunk — including pinned entries — from the

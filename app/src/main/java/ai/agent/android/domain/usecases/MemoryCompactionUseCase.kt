@@ -116,6 +116,14 @@ class MemoryCompactionUseCase @Inject constructor(
                 }
             }
 
+            // Stamp the last-compacted time only when a cluster was actually
+            // consolidated — a pass where every candidate fell below the size
+            // floor changed nothing, so labelling it "compacted just now" would
+            // mislead the user (and could throttle a later genuine pass).
+            if (clustersProcessed > 0) {
+                settingsRepository.setMemoryLastCompactedAt(nowMillis)
+            }
+
             MemoryCompactionOutcome(
                 clustersProcessed = clustersProcessed,
                 chunksConsolidated = chunksConsolidated,

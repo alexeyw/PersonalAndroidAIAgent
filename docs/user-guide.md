@@ -202,7 +202,12 @@ history is portable to any app that handles JSON or plain text.
 
 ### Copying a message
 
-Long-press any message bubble to copy its text to the clipboard.
+Long-press any message bubble to open its context menu. From there you
+can **Copy** the text to the clipboard, **Re-run** it (drop the text back
+into the composer), **Rate** the reply, or **Save to memory** — which
+stores the message verbatim in long-term memory as a manual entry and
+confirms with a *Saved to memory* snackbar. Saved entries show up under
+**More → Memory** with the **Manual** source.
 
 ---
 
@@ -638,13 +643,15 @@ the rolling context (described below).
 
 ### Browsing long-term memory
 
-Open the **More** tab, tap **Memory**. The screen has two tabs:
-
-- **Chat History** — every past session, grouped by chat. Expand a
-  session to see its messages.
-- **Vector Base** — the actual long-term memory chunks the agent
-  searches over. Each chunk is a small fragment distilled from a
-  past conversation.
+Open the **More** tab, tap **Memory**. A stats header sits at the top:
+the total number of stored memories, the on-disk size, when memory was
+last compacted, and a coloured bar breaking entries down by provenance
+(**Auto** / **Compaction** / **Manual**). Below it, a chip row narrows
+the list — **All**, **Pinned**, or one provenance at a time, each chip
+showing its count — and a **Sort** + date-range pair of dropdowns
+re-orders and time-bounds the list. Entries are grouped into **Pinned**,
+**Today**, **This week**, and **Earlier**, each row carrying a coloured
+provenance accent, a source badge, and its tags.
 
 ### Auto-extract from conversations
 
@@ -658,21 +665,53 @@ assistant's own wording, and anything not explicitly stated are
 ignored, and a fact that closely matches one you already have is
 skipped rather than duplicated.
 
-Each new chunk is tagged with the chat it came from, so you can tell
+Each new chunk is tagged with the fact type it represents (`fact`,
+`preference`, `project`, …) and the chat it came from, so you can tell
 auto-saved memories apart from ones you saved by hand. You can watch
 this happen in the **Console** pane (the **Memory** filter) and review
-or delete the results in **More → Memory → Vector Base**.
+or delete the results on the Memory screen.
 
 Turn the toggle off if you would rather curate memory entirely by
 hand; extraction then stops and existing memories are left untouched.
 
+### Saving a memory by hand
+
+You don't have to wait for auto-extract. Two ways to add a **Manual**
+entry: long-press any chat message and choose **Save to memory** (see
+[Copying a message](#copying-a-message)), or tap the **Add memory** FAB
+on the Memory screen and type the text. Manual entries are embedded with
+whichever embedding provider is active, so they are searchable straight
+away.
+
+### Searching memory
+
+Tap the search icon to open semantic search. Your query is embedded and
+the list is re-ranked by relevance — each result shows a 0–1 score, so a
+search for "berlin" surfaces the timezone note even though it never
+contains that word.
+
+### Viewing and editing an entry
+
+Tap a row to open its detail sheet. It shows the full text, an
+approximate token count, the source ("Auto-extracted" / "Saved
+manually" / "Compacted"), which chat it was learned from, when it was
+captured, and how often it has been used in replies. From here you can
+**pin**, **edit** the text and tags, or **delete** the entry. Pinned
+entries float to the top and are never touched by compaction.
+
 ### Compact Memory
 
-The **Vector Base** tab has a **Compact Memory** button. Tap it to
-let the agent re-summarize and consolidate memory chunks — useful
-after a long string of conversations have produced overlapping
-fragments. Compaction is a single one-shot action; you can leave the
-screen while it runs.
+Tap **Compact** in the stats header to consolidate memory. A dialog
+previews the estimated number of chunks removed, bytes freed, and
+runtime before you confirm. Compaction merges near-duplicate chunks and
+re-summarises the oldest entries; pinned memories are never touched. The
+"compacted N ago" line in the header reflects the last run.
+
+### Exporting memory
+
+The overflow menu (⋮) on the Memory screen offers **Export memory**,
+which writes every chunk — text, embedding, tags, and metadata — to a
+JSON file via the system file picker, for backup or migration.
 
 ### Clearing context
 

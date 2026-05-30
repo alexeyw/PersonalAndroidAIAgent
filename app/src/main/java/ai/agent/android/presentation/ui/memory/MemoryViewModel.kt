@@ -1,27 +1,45 @@
 package ai.agent.android.presentation.ui.memory
 
-import ai.agent.android.domain.models.ChatMessage
+import ai.agent.android.domain.models.MemorySource
 import ai.agent.android.domain.repositories.ChatRepository
 import ai.agent.android.domain.repositories.MemoryRepository
 import ai.agent.android.domain.repositories.SettingsRepository
 import ai.agent.android.domain.services.EmbeddingProviderResolver
+import ai.agent.android.domain.usecases.EstimateCompactionUseCase
+import ai.agent.android.domain.usecases.ExportMemoryBaseUseCase
+import ai.agent.android.domain.usecases.MemoryCompactionUseCase
+import ai.agent.android.domain.usecases.RetrieveRelevantMemoryUseCase
+import ai.agent.android.domain.usecases.SaveMessageToMemoryUseCase
+import ai.agent.android.domain.usecases.SaveToMemoryOutcome
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import app.knotwork.design.screens.memory.MemoryCategory
+import app.knotwork.design.screens.memory.MemoryDateFilter
+import app.knotwork.design.screens.memory.MemorySortMode
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import timber.log.Timber
+import java.io.OutputStream
 import javax.inject.Inject
 
 /**
- * ViewModel for managing the state of the Memory screen.
- * Handles loading, displaying, and deleting short-term (chat history)
- * and long-term (vector database) memories.
+ * ViewModel for the redesigned long-term-memory screen.
+ *
+ * Owns the loaded chunk list, the view selections (category / sort / date /
+ * semantic search), inline edit + tag editing, manual add, manual compaction
+ * (with a pre-run estimate), pin toggling, and full export. The screen maps the
+ * exposed [MemoryUiState] to the catalog surface.
  */
 @HiltViewModel
 class MemoryViewModel @Inject constructor(
@@ -29,149 +47,291 @@ class MemoryViewModel @Inject constructor(
     private val memoryRepository: MemoryRepository,
     private val settingsRepository: SettingsRepository,
     private val embeddingProviderResolver: EmbeddingProviderResolver,
+    private val exportMemoryBaseUseCase: ExportMemoryBaseUseCase,
+    private val saveMessageToMemoryUseCase: SaveMessageToMemoryUseCase,
+    private val memoryCompactionUseCase: MemoryCompactionUseCase,
+    private val estimateCompactionUseCase: EstimateCompactionUseCase,
+    private val retrieveRelevantMemoryUseCase: RetrieveRelevantMemoryUseCase,
 ) : ViewModel() {
 
-    private val _uiState = MutableStateFlow(MemoryUiState(isLoading = true))
+    private val _uiState = MutableStateFlow(MemoryUiState())
+
+    /** The current UI state of the Memory screen. */
+    val uiState: StateFlow<MemoryUiState> = _uiState.asStateFlow()
+
+    private val _exportRequests = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+
+    /** One-shot signal asking the screen to open the SAF document picker for full export. */
+    val exportRequests: SharedFlow<Unit> = _exportRequests.asSharedFlow()
+
+    private val _messageEvents = MutableSharedFlow<MemoryMessage>(extraBufferCapacity = 1)
 
     /**
-     * The current UI state of the Memory screen.
+     * One-shot snackbar events. The screen resolves each [MemoryMessage] to a
+     * localised string and shows it — keeping user-facing copy in the resource
+     * layer rather than the ViewModel.
      */
-    val uiState: StateFlow<MemoryUiState> = _uiState.asStateFlow()
+    val messageEvents: SharedFlow<MemoryMessage> = _messageEvents.asSharedFlow()
+
+    private var searchJob: Job? = null
 
     init {
         loadAllData()
     }
 
     /**
-     * Loads both chat sessions and vector memories from the local database.
+     * Loads the surface from scratch (init / explicit Retry). A read failure
+     * surfaces the full-screen Error/Retry state.
      */
-    fun loadAllData() {
-        viewModelScope.launch {
-            _uiState.update { it.copy(isLoading = true) }
-
-            // Load long-term memories
-            val memories = memoryRepository.getAllMemories()
-
-            // Load chat sessions (short-term memory)
-            val sessionIds = chatRepository.getAllSessions()
-            val sessionsMap = mutableMapOf<String, List<ChatMessage>>()
-
-            for (id in sessionIds) {
-                // Using first() to get the current snapshot of messages for this session
-                val messages = chatRepository.getMessagesForSession(id).first()
-                if (messages.isNotEmpty()) {
-                    sessionsMap[id] = messages
-                }
-            }
-
-            _uiState.update {
-                it.copy(
-                    chatSessions = sessionsMap,
-                    vectorMemories = memories,
-                    isLoading = false,
-                )
-            }
-        }
-    }
+    fun loadAllData() = load(surfaceError = true)
 
     /**
-     * Changes the currently active tab.
-     *
-     * @param index The index of the new tab.
+     * Silent post-mutation refresh: re-reads the table after a delete / pin /
+     * edit / compaction / add. A transient read failure here must NOT flip the
+     * whole screen to Error (that would mask a mutation that already
+     * succeeded) — it just logs and leaves the current list in place.
      */
-    fun setTab(index: Int) {
-        _uiState.update { it.copy(currentTab = index) }
-    }
+    private fun refresh() = load(surfaceError = false)
 
-    /**
-     * Deletes an entire chat session and its associated messages.
-     *
-     * @param sessionId The ID of the session to delete.
-     */
-    fun deleteChatSession(sessionId: String) {
+    private fun load(surfaceError: Boolean) {
         viewModelScope.launch {
-            chatRepository.deleteSession(sessionId)
-            loadAllData() // Reload to reflect changes
-        }
-    }
-
-    /**
-     * Deletes a specific chat message by its ID.
-     *
-     * @param messageId The ID of the message to delete.
-     */
-    fun deleteChatMessage(messageId: Long) {
-        viewModelScope.launch {
-            chatRepository.deleteMessage(messageId)
-            loadAllData()
-        }
-    }
-
-    /**
-     * Deletes a specific vector memory chunk by its ID.
-     *
-     * @param memoryId The ID of the memory chunk to delete.
-     */
-    fun deleteVectorMemory(memoryId: Long) {
-        viewModelScope.launch {
-            memoryRepository.deleteMemory(memoryId)
-            loadAllData()
-        }
-    }
-
-    /**
-     * Replaces the body of a long-term memory chunk. Recomputes the embedding
-     * from the new text via the user's active embedding provider (resolved by
-     * [EmbeddingProviderResolver]) before persisting — re-embedding is required
-     * so semantic-search results stay coherent with the visible text, and using
-     * the active provider keeps the edited chunk in the same embedding space as
-     * the retrieval query.
-     *
-     * @param id Identifier of the chunk to update.
-     * @param newText The new raw text content committed by the user.
-     */
-    fun editVectorMemory(id: Long, newText: String) {
-        viewModelScope.launch {
-            // Embedding may hit the network when a cloud provider is active.
-            // Guard so a transient failure leaves the chunk untouched instead of
-            // crashing the app; rethrow CancellationException to preserve
-            // structured concurrency.
             try {
-                val newEmbedding = embeddingProviderResolver.resolve().embed(newText)
-                memoryRepository.updateMemory(id = id, text = newText, embedding = newEmbedding)
-                loadAllData()
+                val memories = memoryRepository.getAllMemories()
+                val totalBytes = memoryRepository.observeStats().first().totalBytes
+                val lastCompactedAt = settingsRepository.memoryLastCompactedAt.first()
+                val sessionNames =
+                    resolveSessionNames(memories.mapNotNull { (it.source as? MemorySource.ChatSession)?.sessionId })
+                _uiState.update {
+                    it.copy(
+                        memories = memories,
+                        totalBytes = totalBytes,
+                        lastCompactedAt = lastCompactedAt,
+                        sessionNames = sessionNames,
+                        loadFailed = false,
+                    )
+                }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                Timber.w(e, "Failed to re-embed edited memory $id; keeping the previous content")
+                Timber.w(e, "Failed to load memory")
+                if (surfaceError) {
+                    _uiState.update { it.copy(loadFailed = true) }
+                } else {
+                    _messageEvents.tryEmit(MemoryMessage.LoadError)
+                }
             }
         }
     }
 
-    /**
-     * Toggles the pinned state of a long-term memory chunk. The new state is
-     * derived from the currently-loaded snapshot (`isPinned` flip), then
-     * persisted; the surface reloads to reflect the change.
-     *
-     * @param id Identifier of the chunk whose pinned flag should flip.
-     */
-    fun togglePinned(id: Long) {
-        viewModelScope.launch {
-            val current = _uiState.value.vectorMemories.firstOrNull { it.id == id } ?: return@launch
-            memoryRepository.setMemoryPinned(id = id, pinned = !current.isPinned)
-            loadAllData()
+    private suspend fun resolveSessionNames(ids: List<String>): Map<String, String> = ids.distinct().mapNotNull { id ->
+        chatRepository.getSessionById(id)?.let { id to it.name }
+    }.toMap()
+
+    /** Selects a category chip. */
+    fun selectCategory(category: MemoryCategory) {
+        _uiState.update { it.copy(selectedCategory = category) }
+    }
+
+    /** Sets the sort mode. */
+    fun setSortMode(mode: MemorySortMode) {
+        _uiState.update { it.copy(sortMode = mode) }
+    }
+
+    /** Sets the date-range filter. */
+    fun setDateFilter(filter: MemoryDateFilter) {
+        _uiState.update { it.copy(dateFilter = filter) }
+    }
+
+    /** Opens the semantic-search field. */
+    fun openSearch() {
+        _uiState.update { it.copy(searchActive = true, sortMode = MemorySortMode.Relevance) }
+    }
+
+    /** Closes search and clears the query/results. */
+    fun closeSearch() {
+        searchJob?.cancel()
+        _uiState.update {
+            it.copy(searchActive = false, searchQuery = "", searchResults = null, sortMode = MemorySortMode.Recent)
         }
     }
 
     /**
-     * Deletes the oldest memory chunks, keeping only the configured limit.
+     * Updates the search query and (debounced) runs a semantic search. The
+     * user's configured relevance threshold is honoured (passing `null` lets
+     * the use case read `memorySearchThreshold`) so results stay relevant
+     * rather than returning the whole pool; a larger [SEARCH_RESULT_LIMIT] just
+     * widens how many of those relevant hits the browse surface shows.
      */
-    fun compactMemory() {
-        viewModelScope.launch {
-            _uiState.update { it.copy(isLoading = true) }
-            val limit = settingsRepository.maxMemoryChunksForSearch.first()
-            memoryRepository.compactMemory(limit)
-            loadAllData()
+    fun onSearchQueryChange(query: String) {
+        _uiState.update { it.copy(searchQuery = query) }
+        searchJob?.cancel()
+        if (query.isBlank()) {
+            _uiState.update { it.copy(searchResults = null) }
+            return
+        }
+        searchJob = viewModelScope.launch {
+            delay(SEARCH_DEBOUNCE_MS)
+            val results = try {
+                retrieveRelevantMemoryUseCase.retrieveScored(query = query, limit = SEARCH_RESULT_LIMIT)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Timber.w(e, "Semantic memory search failed")
+                emptyList()
+            }
+            _uiState.update { it.copy(searchResults = results) }
         }
     }
+
+    /** Opens the detail sheet for [id] (read mode). */
+    fun openEntry(id: Long) {
+        _uiState.update { it.copy(expandedId = id, editing = false) }
+    }
+
+    /** Closes the detail sheet. */
+    fun closeEntry() {
+        _uiState.update { it.copy(expandedId = null, editing = false) }
+    }
+
+    /** Switches the open detail sheet to edit mode. */
+    fun editEntry(id: Long) {
+        _uiState.update { it.copy(expandedId = id, editing = true) }
+    }
+
+    /** Leaves edit mode, back to read mode. */
+    fun cancelEdit() {
+        _uiState.update { it.copy(editing = false) }
+    }
+
+    /**
+     * Commits an edit: re-embeds [body] with the active provider, then persists
+     * the text, embedding, and tags **atomically** (one transaction) so the
+     * write can never half-apply. On a re-embed or persistence failure the
+     * chunk is left untouched and the **edit sheet stays open with the draft
+     * intact** (a snackbar explains the failure), so a recoverable error — e.g.
+     * an offline cloud provider — is one tap away from retry instead of
+     * discarding the user's typing.
+     */
+    fun commitEdit(id: Long, body: String, tags: List<String>) {
+        viewModelScope.launch {
+            try {
+                val embedding = embeddingProviderResolver.resolve().embed(body)
+                memoryRepository.updateMemoryWithTags(id = id, text = body, embedding = embedding, tags = tags)
+                _uiState.update { it.copy(editing = false, expandedId = null) }
+                refresh()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                // Keep the sheet open in edit mode so the draft survives.
+                Timber.w(e, "Failed to commit memory edit for $id")
+                _messageEvents.tryEmit(MemoryMessage.EditError)
+            }
+        }
+    }
+
+    /** Deletes the entry and closes the sheet. */
+    fun deleteEntry(id: Long) {
+        viewModelScope.launch {
+            memoryRepository.deleteMemory(id)
+            _uiState.update { it.copy(expandedId = null, editing = false) }
+            refresh()
+        }
+    }
+
+    /** Toggles the pinned flag of [id]. */
+    fun togglePin(id: Long) {
+        viewModelScope.launch {
+            val current = _uiState.value.memories.firstOrNull { it.id == id } ?: return@launch
+            memoryRepository.setMemoryPinned(id = id, pinned = !current.isPinned)
+            refresh()
+        }
+    }
+
+    /** Opens the Compact confirm dialog and loads the estimate. */
+    fun showCompactDialog() {
+        _uiState.update { it.copy(compactDialogVisible = true, compactEstimate = null) }
+        viewModelScope.launch {
+            val estimate = runCatching { estimateCompactionUseCase() }.getOrNull()
+            _uiState.update { it.copy(compactEstimate = estimate) }
+        }
+    }
+
+    /** Dismisses the Compact dialog. */
+    fun dismissCompactDialog() {
+        _uiState.update { it.copy(compactDialogVisible = false) }
+    }
+
+    /** Runs the real compaction pass, then refreshes. */
+    fun confirmCompact() {
+        _uiState.update { it.copy(compactDialogVisible = false) }
+        viewModelScope.launch {
+            runCatching { memoryCompactionUseCase() }
+                .onFailure { Timber.w(it, "Manual compaction failed") }
+            refresh()
+        }
+    }
+
+    /** Opens the Add-memory dialog. */
+    fun showAddDialog() {
+        _uiState.update { it.copy(addDialogVisible = true) }
+    }
+
+    /** Dismisses the Add-memory dialog. */
+    fun dismissAddDialog() {
+        _uiState.update { it.copy(addDialogVisible = false) }
+    }
+
+    /**
+     * Saves a manual memory entry from [text]. The Add dialog stays open until
+     * the save resolves: on success it closes and the surface refreshes; on a
+     * Failed outcome (e.g. an offline cloud embedding provider) it **stays open
+     * with the typed text intact** and a snackbar explains the failure, so the
+     * user can retry without re-typing. A blank input (Skipped) just closes.
+     */
+    fun confirmAdd(text: String) {
+        viewModelScope.launch {
+            when (saveMessageToMemoryUseCase(text)) {
+                is SaveToMemoryOutcome.Saved -> {
+                    _uiState.update { it.copy(addDialogVisible = false) }
+                    refresh()
+                }
+                is SaveToMemoryOutcome.Failed -> _messageEvents.tryEmit(MemoryMessage.AddError)
+                SaveToMemoryOutcome.Skipped -> _uiState.update { it.copy(addDialogVisible = false) }
+            }
+        }
+    }
+
+    /** Raises [exportRequests] so the screen opens the SAF picker for a full export. */
+    fun requestExportAll() {
+        _exportRequests.tryEmit(Unit)
+    }
+
+    /** Serialises every chunk into the SAF-provided [target]. */
+    fun exportAllTo(target: OutputStream) {
+        viewModelScope.launch {
+            runCatching { exportMemoryBaseUseCase(target = target, ids = null) }
+                .onFailure { Timber.w(it, "Memory export failed") }
+        }
+    }
+
+    private companion object {
+        const val SEARCH_DEBOUNCE_MS = 300L
+        const val SEARCH_RESULT_LIMIT = 50
+    }
+}
+
+/**
+ * One-shot snackbar messages the Memory screen resolves to localised strings.
+ * Modelled as an enum so user-facing copy lives in the resource layer, not the
+ * ViewModel.
+ */
+enum class MemoryMessage {
+    /** A background refresh after a mutation failed (the mutation itself succeeded). */
+    LoadError,
+
+    /** A manual "Add memory" save failed (e.g. an offline cloud embedding provider). */
+    AddError,
+
+    /** An inline edit failed to persist (the draft is kept in the open sheet). */
+    EditError,
 }

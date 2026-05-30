@@ -6,6 +6,7 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.Transaction
 import kotlinx.coroutines.flow.Flow
 
 /**
@@ -64,6 +65,43 @@ interface MemoryDao {
      */
     @Query("UPDATE memory_chunks SET isPinned = :isPinned WHERE id = :id")
     suspend fun setMemoryPinned(id: Long, isPinned: Boolean)
+
+    /**
+     * Replaces the comma-separated tag list of a single chunk. The text and
+     * embedding are untouched — tag edits do not require re-embedding.
+     *
+     * @param id Identifier of the chunk to update.
+     * @param tagsCsv New comma-separated tag list (empty string clears tags).
+     */
+    @Query("UPDATE memory_chunks SET tagsCsv = :tagsCsv WHERE id = :id")
+    suspend fun setMemoryTags(id: Long, tagsCsv: String)
+
+    /**
+     * Atomically replaces the text, embedding, and tags of a chunk in one
+     * transaction, so an inline edit never half-applies (e.g. new text saved
+     * but tags not). The `timestamp` is left untouched.
+     *
+     * @param id Identifier of the chunk to update.
+     * @param text New raw text content.
+     * @param embedding Serialized embedding vector for [text].
+     * @param tagsCsv New comma-separated tag list.
+     */
+    @Transaction
+    suspend fun updateMemoryWithTags(id: Long, text: String, embedding: String, tagsCsv: String) {
+        updateMemory(id = id, text = text, embedding = embedding)
+        setMemoryTags(id = id, tagsCsv = tagsCsv)
+    }
+
+    /**
+     * Records that the given chunks were just retrieved into a pipeline run's
+     * Long-Term Memory context: increments each chunk's `useCount` and stamps
+     * `lastUsedAt`. Backs the detail sheet's "Used in N replies" line.
+     *
+     * @param ids Identifiers of the chunks that were injected.
+     * @param atMillis Epoch-millis to stamp as the most-recent use time.
+     */
+    @Query("UPDATE memory_chunks SET useCount = useCount + 1, lastUsedAt = :atMillis WHERE id IN (:ids)")
+    suspend fun recordUsage(ids: List<Long>, atMillis: Long)
 
     /**
      * Retrieves a limited number of the most recent memory chunks from the database.

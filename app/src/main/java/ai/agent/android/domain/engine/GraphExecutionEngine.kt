@@ -20,6 +20,7 @@ import ai.agent.android.domain.prompt.PromptVariableProvider
 import ai.agent.android.domain.repositories.ChatRepository
 import ai.agent.android.domain.repositories.CrashReportingRepository
 import ai.agent.android.domain.repositories.LocalModelRepository
+import ai.agent.android.domain.repositories.MemoryRepository
 import ai.agent.android.domain.repositories.MetricsRepository
 import ai.agent.android.domain.repositories.SettingsRepository
 import ai.agent.android.domain.usecases.RetrieveRelevantMemoryUseCase
@@ -48,6 +49,7 @@ class GraphExecutionEngine @Inject constructor(
     private val retrieveRelevantMemoryUseCase: RetrieveRelevantMemoryUseCase,
     private val crashReportingRepository: CrashReportingRepository,
     private val localModelRepository: LocalModelRepository,
+    private val memoryRepository: MemoryRepository,
 ) {
 
     /**
@@ -156,7 +158,18 @@ class GraphExecutionEngine @Inject constructor(
                     ConsoleEventType.MemoryAccess,
                     MemoryAccessLogFormatter.format(query = userPrompt, hits = scored, verbose = verbose),
                 )
-                return scored.map { it.first }.also { memoizedMemories = it }
+                val hits = scored.map { it.first }
+                // Record that these chunks were injected into this run so the
+                // Memory detail sheet can show "Used in N replies". Best-effort:
+                // a failure here must never break the pipeline run.
+                try {
+                    memoryRepository.recordUsage(hits.map { it.id }, System.currentTimeMillis())
+                } catch (e: kotlinx.coroutines.CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    Timber.tag("PipelineDebug").w(e, "Failed to record memory usage; continuing")
+                }
+                return hits.also { memoizedMemories = it }
             }
             // Tool invocations are accumulated as TOOL nodes complete and surfaced
             // via the `--- Tool Results ---` block on later nodes that opt in.
