@@ -503,6 +503,10 @@ Add the key to the `PROMPT_VARIABLES` array in
 [`pipeline-editor.html`](../pipeline-editor.html). The current set is:
 
 ```js
+// Current set (9 variables) — keep in sync with di/PromptTemplateModule.kt:
+const PROMPT_VARIABLES = ['DATE', 'TIME', 'TOOLS', 'MODEL', 'MEMORY_SUMMARY', 'LANG', 'LOCATION', 'USER', 'DEVICE'];
+
+// After registering a new provider (e.g. WEATHER), append its key:
 const PROMPT_VARIABLES = ['DATE', 'TIME', 'TOOLS', 'MODEL', 'MEMORY_SUMMARY', 'LANG', 'LOCATION', 'USER', 'DEVICE', 'WEATHER'];
 //                                                                                                                  ^^^^^^^ your new key
 ```

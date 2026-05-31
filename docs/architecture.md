@@ -397,7 +397,8 @@ engine accepts a graph for execution:
 System prompts on LLM-driven nodes can contain `$KEY` placeholders. The
 `PromptTemplateEngine` substitutes them on every render via Hilt-bound
 `PromptVariableProvider` instances. Built-in keys: `$DATE`, `$TIME`,
-`$TOOLS`, `$MODEL`, `$MEMORY_SUMMARY`. Unknown placeholders are kept
+`$TOOLS`, `$MODEL`, `$MEMORY_SUMMARY`, `$LANG`, `$LOCATION`, `$USER`,
+`$DEVICE`. Unknown placeholders are kept
 verbatim and logged as a warning. See
 [`docs/extending.md`](extending.md) for the recipe to add new
 variables.

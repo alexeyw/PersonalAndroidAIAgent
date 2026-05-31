@@ -13,6 +13,19 @@ details.
 
 ## [Unreleased]
 
+_No unreleased changes yet._
+
+## [0.3.0] - 2026-05-30
+
+Rolls up the post-`0.2.0` work that landed on `main`: the complete long-term
+**memory lifecycle** (Phase 25 — extraction, embedding-provider abstraction,
+retrieval + re-rank, background compaction, export / import, memory-screen
+redesign and tuning controls), **pipeline & prompt presets** end-to-end
+(Phase 24 — bundled catalogues, in-app pickers, browser-editor preset support
+and gradle-driven constant-sync automation), and the **test / coverage
+hardening** that raised the enforced Kover gate to 75 % (Phase 23 —
+executor / DAO / Robolectric / Compose `androidTest` suites).
+
 ### Added
 
 - **Long-term memory documentation + end-to-end test** (Phase 25 / Task 10/10):
@@ -2419,6 +2432,7 @@ that produced the initial 0.1.0 snapshot.
 - **Master key**: `EncryptedSharedPreferences` is rooted in the Android
   Keystore, so the master key is hardware-backed where available.
 
-[Unreleased]: https://github.com/alexeyw/PersonalAndroidAIAgent/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/alexeyw/PersonalAndroidAIAgent/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/alexeyw/PersonalAndroidAIAgent/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/alexeyw/PersonalAndroidAIAgent/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/alexeyw/PersonalAndroidAIAgent/releases/tag/v0.1.0

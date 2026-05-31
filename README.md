@@ -1,7 +1,7 @@
 # On-Device AI Agent for Android
 
 [![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
-![Version](https://img.shields.io/badge/version-0.2.0-orange.svg)
+![Version](https://img.shields.io/badge/version-0.3.0-orange.svg)
 ![Android API](https://img.shields.io/badge/Android-API%2036%2B-3DDC84.svg?logo=android)
 <!-- ![Build](https://img.shields.io/badge/build-pending-lightgrey.svg) — enabled once CI is wired up. -->
 
@@ -21,15 +21,18 @@
 
 ## Pre-release notice
 
-This project is currently at **version 0.2.0** and is published for review and
+This project is currently at **version 0.3.0** and is published for review and
 experimentation. Expect rough edges:
 
 - There are no stability guarantees for the public surface (Kotlin APIs,
   pipeline JSON schema, settings layout) between versions.
 - On-device storage formats (Room schema, encrypted preferences, exported
   pipeline JSON) may change without a migration path.
-- Documentation marked **TBD** below will be filled in by upcoming work in
-  this same phase.
+- **Local data may be lost on upgrade.** Until `1.0.0`, schema migrations are
+  not guaranteed: the encrypted Room database is opened with
+  `fallbackToDestructiveMigration(true)`, so a schema bump can drop existing
+  chat history, long-term memory, and traces rather than migrate them. Export
+  anything you want to keep (chats / memory) before updating.
 
 ## Overview
 
@@ -199,7 +202,7 @@ After installing:
 | Brand fonts      | Inter + JetBrains Mono (bundled TTF, SIL OFL 1.1)       |
 | LLM engine       | LiteRT-LM (Google Edge AI / ex-TensorFlow Lite)         |
 | Tool calling     | AppFunctions Jetpack                                    |
-| Agent framework  | Koog                                                    |
+| MCP & cloud LLM  | Koog (MCP transport + cloud-LLM client only)            |
 | Architecture     | Clean Architecture + MVVM                               |
 | DI               | Hilt                                                    |
 | Async            | Coroutines / Flow                                       |
