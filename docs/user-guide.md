@@ -1034,6 +1034,35 @@ show a stop event with the step count. If you legitimately need
 more iterations, raise the ceiling in **Settings → LLM Parameters →
 Max Steps**. If the run is looping unproductively, lower it instead.
 
+### Memory search isn't finding an obvious entry
+
+If a memory you know exists never shows up in a reply (or in the Memory
+screen's search), work down this list:
+
+- **The node isn't reading memory.** Only nodes with the **Long-term
+  memory** input flag pull from the store. Open the pipeline, check the
+  node's *Input Data* section, and watch the **Console → Memory** filter:
+  if there is no `Memory: query=… → N hits` line for the run, the active
+  node never queried memory.
+- **The similarity threshold is too high.** A high **Settings → Memory →
+  Similarity threshold** drops loosely-related chunks before they reach
+  the prompt. Lower it (or pin the entry — pinned chunks bypass the
+  threshold entirely and always sort to the top).
+- **Recency decay buried it.** Old, non-pinned chunks lose score with
+  age. If a months-old fact stops surfacing, raise **Recency half-life**
+  or pin it.
+- **The entry is queued for re-embedding.** A chunk imported under a
+  different embedding provider can't be matched until the background
+  re-embed finishes (it scores ~0 in the meantime). Give it a moment, or
+  force it with **Settings → Memory → Re-embed**.
+- **The provider changed.** Switching the **Embedding model** leaves
+  existing chunks in the old vector space; run **Re-embed** so the whole
+  store shares the active provider's space again.
+- **It was never extracted.** Auto-extract only keeps durable facts
+  (preferences, events, relationships) and skips small talk and
+  near-duplicates. If a fact didn't make the cut, add it by hand with
+  **Save to memory** or the **Add memory** FAB.
+
 ---
 
 ## See also
