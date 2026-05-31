@@ -1,9 +1,9 @@
 # On-Device AI Agent for Android
 
+[![Check](https://github.com/alexeyw/PersonalAndroidAIAgent/actions/workflows/check.yml/badge.svg)](https://github.com/alexeyw/PersonalAndroidAIAgent/actions/workflows/check.yml)
 [![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 ![Version](https://img.shields.io/badge/version-0.3.0-orange.svg)
 ![Android API](https://img.shields.io/badge/Android-API%2036%2B-3DDC84.svg?logo=android)
-<!-- ![Build](https://img.shields.io/badge/build-pending-lightgrey.svg) — enabled once CI is wired up. -->
 
 > An autonomous AI agent that runs on the device, understands natural language,
 > plans tasks, and takes real actions across Android — without requiring an
