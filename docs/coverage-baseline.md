@@ -211,13 +211,16 @@ so the same constraint that blocked Task 1/10's CI workflow applies here.
 The eventual workflow should:
 
 1. Run `./gradlew :app:koverHtmlReportDebug :app:koverXmlReportDebug` on each
-   PR with `continue-on-error: true` (until Task 9/10 enables `koverVerify`).
+   PR to publish the report (the build-failing threshold itself is already
+   enforced locally and in `./gradlew check` via `koverVerifyDebug` — see
+   *Enforced threshold* below).
 2. Upload `app/build/reports/kover/htmlDebug/` and
    `app/build/reports/kover/reportDebug.xml` via `actions/upload-artifact`.
 3. Optionally print the `koverLog` headline figure as a PR comment.
 
-This will be added in Task 9/10 alongside the `./gradlew check` aggregator
-task, or sooner if the PAT scope is updated.
+This artefact-publishing job is still pending; the coverage **gate**
+(`koverVerifyDebug`) is already wired into `./gradlew check` and is not
+blocked on it.
 
 ## What this baseline does **not** do
 

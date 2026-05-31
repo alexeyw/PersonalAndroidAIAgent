@@ -5,7 +5,7 @@ Android** project: what data the app handles, how it is protected, what is sent
 off-device when the user opts in to crash reporting, and how to report a
 vulnerability you discover.
 
-The project is currently a **pre-release (0.1.0)** and is published primarily
+The project is currently a **pre-release (0.3.0)** and is published primarily
 for review and experimentation. There are no stability guarantees for storage
 formats, APIs, or persisted data across versions.
 
@@ -49,6 +49,21 @@ storage and credentials:
 - The app does not retain any plaintext copy of the passphrase. Legacy
   unencrypted databases from earlier development builds are not migrated; if
   one is detected, Room recreates the database via destructive migration.
+- **Pre-1.0 data-durability caveat.** The Room database is opened with
+  `fallbackToDestructiveMigration(true)`. Until `1.0.0`, schema migrations are
+  **not guaranteed**: any schema-version bump may drop **all** local tables and
+  recreate them empty rather than migrate the data. This affects every
+  user-authored surface, not just conversations — chats and metadata
+  (`chat_messages`, `chat_sessions`), long-term memory (`memory_chunks`),
+  pipeline run traces (`trace_steps`), **custom pipelines**
+  (`pipelines`, `pipeline_nodes`, `pipeline_connections`), and **saved presets
+  and prompt templates** (`pipeline_presets`, `prompt_presets`,
+  `prompt_templates`). This is a data-loss / availability caveat, not a
+  confidentiality one — discarded rows are destroyed, never exposed. Users who
+  need to retain data across an upgrade should export it first: chats and
+  long-term memory through their in-app export actions, and any custom
+  pipelines / saved presets via the pipeline-library and preset JSON-export
+  actions.
 
 ### API keys for cloud providers
 
