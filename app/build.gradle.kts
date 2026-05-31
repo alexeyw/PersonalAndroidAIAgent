@@ -187,6 +187,14 @@ android {
         // (every `minSdk = 36` device is 64-bit). ChromeOS support is not in
         // scope for v0.1 — disable the lint check that demands an x86 binary.
         disable += "ChromeOsAbiSupport"
+        // Phase 26 / Task 2/10: `NewerVersionAvailable` queries the network for
+        // the latest published version of every dependency. With
+        // `warningsAsErrors = true` it turns any upstream release into a build
+        // failure on otherwise-unrelated PRs (e.g. mockk 1.14.9 → 1.14.11),
+        // which makes it unusable as a deterministic CI gate. Dependency
+        // freshness is tracked deliberately, not by failing the build on the
+        // publisher's schedule, so this check is disabled.
+        disable += "NewerVersionAvailable"
     }
 }
 
