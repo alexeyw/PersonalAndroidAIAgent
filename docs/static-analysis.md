@@ -193,12 +193,13 @@ tasks.named("check") { dependsOn("koverVerifyDebug") }
 
 ## CI
 
-The required job is defined in `.github/workflows/check.yml` (kept locally
-until the Git remote's PAT gains the `workflow` scope; the path is currently
-gitignored). The workflow runs `./gradlew check` on every `pull_request →
-main` and every `push` to `main`, uploads each report set as a downloadable
-artifact on failure, and is configured with `concurrency.cancel-in-progress`
-so a new push supersedes any older run on the same branch.
+The required job is defined in `.github/workflows/check.yml`. The workflow runs
+`./gradlew check` on every `pull_request → main` and every `push` to `main`
+(plus a manual `workflow_dispatch` trigger), uploads each report set —
+detekt / ktlint / lint / unit-test / Kover / Roborazzi diffs — as a
+downloadable artifact on failure, and is configured with
+`concurrency.cancel-in-progress` so a new push supersedes any older run on the
+same branch.
 
 ---
 
