@@ -32,6 +32,7 @@ import androidx.compose.material.icons.outlined.Bolt
 import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.ExpandMore
+import androidx.compose.material.icons.outlined.Memory
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Shield
@@ -72,7 +73,6 @@ import app.knotwork.design.components.buttons.KnotworkSecondaryButton
 import app.knotwork.design.components.buttons.KnotworkTextButton
 import app.knotwork.design.components.chips.ChipStyle
 import app.knotwork.design.components.chips.KnotworkChip
-import app.knotwork.design.components.controls.KnotworkCompactSlider
 import app.knotwork.design.components.controls.KnotworkSegmentedControl
 import app.knotwork.design.components.misc.KnotworkLoader
 import app.knotwork.design.components.misc.KnotworkSectionAction
@@ -573,32 +573,15 @@ private fun LlmParametersCard(state: LlmParametersCardState, callbacks: Settings
         },
     ) {
         state.sliders.forEach { slider ->
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .testTag(SLIDER_ROW_TAG_PREFIX + slider.id),
-                verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp1),
-            ) {
-                Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = slider.title,
-                        style = KnotworkTextStyles.BodySm.copy(fontWeight = FontWeight.SemiBold),
-                        color = MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier.weight(1f),
-                    )
-                    Text(
-                        text = slider.valueLabel,
-                        style = KnotworkTextStyles.MonoSm,
-                        color = KnotworkTheme.extended.onSurfaceMuted,
-                    )
-                }
-                KnotworkCompactSlider(
-                    value = slider.value,
-                    onValueChange = { newValue -> callbacks.onSliderChange(slider.id, newValue) },
-                    valueRange = slider.valueRange,
-                    steps = slider.steps,
-                )
-            }
+            KnotworkParamSlider(
+                label = slider.title,
+                valueLabel = slider.valueLabel,
+                value = slider.value,
+                onValueChange = { newValue -> callbacks.onSliderChange(slider.id, newValue) },
+                valueRange = slider.valueRange,
+                steps = slider.steps,
+                modifier = Modifier.testTag(SLIDER_ROW_TAG_PREFIX + slider.id),
+            )
         }
     }
 }
@@ -900,6 +883,7 @@ private fun ProviderNavRow(row: ProviderRowState, onClick: () -> Unit) {
 
 // ─── Memory card ────────────────────────────────────────────────────────────
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun MemoryCard(state: MemoryCardState, callbacks: SettingsCallbacks) {
     SettingsSection(
@@ -922,47 +906,48 @@ private fun MemoryCard(state: MemoryCardState, callbacks: SettingsCallbacks) {
                 }
             }
         }
-        Column(
-            modifier = Modifier.fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp1),
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    text = state.autoSummarizeLabel,
-                    style = KnotworkTextStyles.BodySm.copy(fontWeight = FontWeight.SemiBold),
-                    color = MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier.weight(1f),
-                )
-                Text(
-                    text = "${state.autoSummarizeThreshold} %",
-                    style = KnotworkTextStyles.MonoSm,
-                    color = KnotworkTheme.extended.onSurfaceMuted,
-                )
-            }
-            KnotworkCompactSlider(
-                value = state.autoSummarizeThreshold.toFloat(),
-                onValueChange = { newValue -> callbacks.onAutoSummarizeChange(newValue.toInt()) },
-                valueRange = 0f..100f,
+        IconToggleRow(
+            icon = Icons.Outlined.Bolt,
+            title = state.autoExtractLabel,
+            subtitle = state.autoExtractSubtitle,
+            checked = state.autoExtractEnabled,
+            onCheckedChange = callbacks.onAutoExtractToggle,
+        )
+        KnotworkParamSlider(
+            label = state.autoSummarizeLabel,
+            valueLabel = "${state.autoSummarizeThreshold} %",
+            value = state.autoSummarizeThreshold.toFloat(),
+            onValueChange = { newValue -> callbacks.onAutoSummarizeChange(newValue.toInt()) },
+            valueRange = 0f..100f,
+        )
+        state.params.forEach { param ->
+            KnotworkParamSlider(
+                label = param.title,
+                valueLabel = param.valueLabel,
+                value = param.value,
+                onValueChange = { newValue -> callbacks.onMemoryParamChange(param.id, newValue) },
+                valueRange = param.valueRange,
+                steps = param.steps,
+                modifier = Modifier.testTag(MEMORY_PARAM_ROW_TAG_PREFIX + param.id),
             )
         }
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(
-                KnotworkTheme.spacing.sp3,
-            ),
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = state.embeddingTitle,
-                    style = KnotworkTextStyles.BodySm.copy(fontWeight = FontWeight.SemiBold),
-                    color = MaterialTheme.colorScheme.onSurface,
-                )
-                Text(
-                    text = state.embeddingSubtitle,
-                    style = KnotworkTextStyles.MonoSm,
-                    color = KnotworkTheme.extended.onSurfaceMuted,
-                )
-            }
+        IconToggleRow(
+            icon = Icons.Outlined.Refresh,
+            title = state.compactionLabel,
+            subtitle = state.compactionSubtitle,
+            checked = state.compactionEnabled,
+            onCheckedChange = callbacks.onMemoryCompactionToggle,
+        )
+        EmbeddingProviderDropdown(state = state, callbacks = callbacks)
+        if (state.validationError != null) {
+            Text(
+                text = state.validationError,
+                style = KnotworkTextStyles.MonoSm,
+                color = KnotworkTheme.extended.signalError,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag(MEMORY_VALIDATION_ERROR_TAG),
+            )
         }
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -974,6 +959,17 @@ private fun MemoryCard(state: MemoryCardState, callbacks: SettingsCallbacks) {
                 size = app.knotwork.design.components.buttons.KnotworkButtonSize.Sm,
                 modifier = Modifier.weight(1f),
             )
+            KnotworkSecondaryButton(
+                text = state.importLabel,
+                onClick = callbacks.onImportMemoryClick,
+                size = app.knotwork.design.components.buttons.KnotworkButtonSize.Sm,
+                modifier = Modifier.weight(1f),
+            )
+        }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp2),
+        ) {
             KnotworkSecondaryButton(
                 text = state.reembedLabel,
                 onClick = callbacks.onReembedClick,
@@ -1017,6 +1013,71 @@ private fun MemoryCard(state: MemoryCardState, callbacks: SettingsCallbacks) {
     }
 }
 
+/**
+ * Embedding-provider selector rendered inside the Memory card. Mirrors the
+ * local-model backend dropdown (`ExposedDropdownMenuBox` anchored on a labelled
+ * row) so the two selectors look and behave identically.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun EmbeddingProviderDropdown(state: MemoryCardState, callbacks: SettingsCallbacks) {
+    var expanded by remember { mutableStateOf(false) }
+    ExposedDropdownMenuBox(
+        expanded = expanded,
+        onExpandedChange = { expanded = it },
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp3),
+            modifier = Modifier
+                .fillMaxWidth()
+                .menuAnchor(
+                    androidx.compose.material3.ExposedDropdownMenuAnchorType.PrimaryNotEditable,
+                    enabled = true,
+                )
+                .testTag(MEMORY_EMBEDDING_ROW_TAG),
+        ) {
+            Icon(
+                imageVector = Icons.Outlined.Memory,
+                contentDescription = null,
+                tint = KnotworkTheme.extended.onSurfaceMuted,
+                modifier = Modifier.size(KnotworkTheme.spacing.sp5),
+            )
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = state.embeddingTitle,
+                    style = KnotworkTextStyles.BodySm.copy(fontWeight = FontWeight.SemiBold),
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                Text(
+                    text = state.selectedEmbeddingLabel,
+                    style = KnotworkTextStyles.MonoSm,
+                    color = KnotworkTheme.extended.onSurfaceMuted,
+                )
+            }
+            Icon(
+                imageVector = Icons.Outlined.ExpandMore,
+                contentDescription = null,
+                tint = KnotworkTheme.extended.onSurfaceMuted,
+            )
+        }
+        ExposedDropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+        ) {
+            state.embeddingOptions.forEach { option ->
+                DropdownMenuItem(
+                    text = { Text(option.label) },
+                    onClick = {
+                        callbacks.onEmbeddingProviderSelected(option.id)
+                        expanded = false
+                    },
+                )
+            }
+        }
+    }
+}
+
 // ─── Notifications card ────────────────────────────────────────────────────
 
 @Composable
@@ -1049,6 +1110,13 @@ private fun PrivacyCard(state: PrivacyCardState, callbacks: SettingsCallbacks) {
             subtitle = androidx.compose.ui.res.stringResource(R.string.knotwork_settings_crash_reporting_hint),
             checked = state.crashReportingEnabled,
             onCheckedChange = callbacks.onCrashReportingToggle,
+        )
+        IconToggleRow(
+            icon = Icons.Outlined.Memory,
+            title = androidx.compose.ui.res.stringResource(R.string.knotwork_settings_verbose_memory_logging_label),
+            subtitle = androidx.compose.ui.res.stringResource(R.string.knotwork_settings_verbose_memory_logging_hint),
+            checked = state.verboseMemoryLoggingEnabled,
+            onCheckedChange = callbacks.onVerboseMemoryLoggingToggle,
         )
         KnotworkTextButton(
             text = androidx.compose.ui.res.stringResource(R.string.knotwork_settings_reset_button),
@@ -1173,6 +1241,15 @@ const val DESTRUCTIVE_TYPED_FIELD_TEST_TAG: String = "settings_destructive_typed
 const val DESTRUCTIVE_CONFIRM_BUTTON_TEST_TAG: String = "settings_destructive_confirm"
 const val SLIDER_ROW_TAG_PREFIX: String = "settings_slider_"
 const val PROVIDER_ROW_TAG_PREFIX: String = "settings_provider_row_"
+
+/** Test-tag prefix for the per-parameter Memory tuning slider rows. */
+const val MEMORY_PARAM_ROW_TAG_PREFIX: String = "settings_memory_param_"
+
+/** Test tag for the Memory-section embedding-provider dropdown anchor row. */
+const val MEMORY_EMBEDDING_ROW_TAG: String = "settings_memory_embedding_row"
+
+/** Test tag for the inline Memory tuning validation-error text. */
+const val MEMORY_VALIDATION_ERROR_TAG: String = "settings_memory_validation_error"
 
 private val LOCAL_MODEL_TILE_SIZE = 40.dp
 private val SectionCardBorder = 1.dp

@@ -1,7 +1,9 @@
 package ai.agent.android.presentation.ui
 
 import ai.agent.android.data.services.AgentForegroundService
+import ai.agent.android.data.services.MemoryCompactionScheduler
 import ai.agent.android.domain.repositories.SettingsRepository
+import ai.agent.android.domain.services.MemoryReembedScheduler
 import ai.agent.android.presentation.state.TransientMessageRelay
 import ai.agent.android.presentation.theme.AndroidAIAgentTheme
 import ai.agent.android.presentation.ui.navigation.AppNavGraph
@@ -22,8 +24,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.core.content.ContextCompat
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import androidx.lifecycle.lifecycleScope
 import androidx.navigation.compose.rememberNavController
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 /**
@@ -37,6 +42,10 @@ class MainActivity : ComponentActivity() {
     @Inject lateinit var settingsRepository: SettingsRepository
 
     @Inject lateinit var transientMessageRelay: TransientMessageRelay
+
+    @Inject lateinit var memoryCompactionScheduler: MemoryCompactionScheduler
+
+    @Inject lateinit var memoryReembedScheduler: MemoryReembedScheduler
 
     private val requestPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission(),
@@ -70,6 +79,21 @@ class MainActivity : ComponentActivity() {
         // the splash screen via `AppInitializationUseCase`.
         val serviceIntent = Intent(this, AgentForegroundService::class.java)
         startForegroundService(serviceIntent)
+
+        // Schedule background long-term-memory maintenance off the main thread:
+        // a daily charging + idle compaction pass plus an out-of-schedule watch
+        // that drains the table when it grows past the configured hard limit.
+        // Both calls are idempotent, so re-running them on activity recreation
+        // is harmless.
+        lifecycleScope.launch(Dispatchers.Default) {
+            memoryCompactionScheduler.schedulePeriodic()
+            memoryCompactionScheduler.startHardLimitWatch()
+            // Self-heal: re-arm the import re-embed pass if a prior one-off was
+            // lost or exhausted its retries. The check lives in the scheduler so
+            // recovery isn't tied to this one entry point (the foreground service
+            // re-arms too).
+            memoryReembedScheduler.rearmIfPending()
+        }
 
         // Phase 21 / Task 1/11: pin transparent status- and navigation-bar
         // scrims so the Knotwork design system can paint surfaces all the

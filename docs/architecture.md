@@ -60,7 +60,7 @@ Each layer maps onto concrete packages:
 | Layer          | Packages                                                                                          |
 |----------------|---------------------------------------------------------------------------------------------------|
 | `presentation` | `presentation/ui/{about,chat,memory,models,monitoring,more,onboarding,orchestrator,pipeline/editor,prompts,settings,splash,taskmonitor,tools}`, `presentation/ui/navigation`, `presentation/{components,state,theme,notifications,receivers}` |
-| `domain`       | `domain/{usecases,engine,models,repositories,prompt,constants,services,pipelineio}`               |
+| `domain`       | `domain/{usecases,engine,models,repositories,prompt,constants,services,pipelineio,promptio,memoryio}` |
 | `data`         | `data/{engine,local,repositories,prompt,mcp,services,tools,network,mappers,logging}`              |
 
 Cross-layer wiring is handled by **Hilt**. Modules in `di/` provide
@@ -182,6 +182,115 @@ Step-by-step notes:
 8. The final agent reply (`isFinal = true`) is saved through the
    repository; the resulting `Flow` emission updates the `messages` flow
    exposed by `ChatHomeViewModel` and the UI re-composes.
+9. On the terminal `Completed` state, `ChatHomeViewModel` notifies the
+   app-scoped `MemoryAutoExtractionCoordinator` (domain service). After a
+   30-second per-session debounce — and only when
+   `SettingsRepository.autoExtractEnabled` is set — it runs
+   `MemoryExtractionUseCase`, which makes one local-model pass to distil
+   durable facts from the recent dialogue, embeds them with the active
+   `EmbeddingProvider`, drops near-duplicates, and writes survivors to
+   `memory_chunks` tagged with `MemorySource.ChatSession`. This is
+   fire-and-forget background work and never blocks or fails the chat.
+
+### 2.1. Memory export / import and lazy re-embedding
+
+Long-term memory is portable between devices. The `domain/memoryio`
+gateway (`MemoryJsonSerializer`) serialises `memory_chunks` to a
+`schemaVersion: 1` JSON document — stamped with the active
+`embeddingProviderId` and an `exportedAt` timestamp — driven from
+**Settings → Memory → Export** through a SAF stream
+(`ExportMemoryBaseUseCase`). The provenance field reuses
+`MemorySourceJson`, the same codec the Room `source` column converter
+uses, so the on-disk encoding and the column stay identical.
+
+Import (`MemoryImportUseCase`) parses the file (`Success` /
+`SchemaMismatch` / `Failure`) and reconciles it under a user-chosen
+strategy: **Merge** (insert only ids not already present) or **Replace**
+(an atomic wipe-and-load, a no-op when the document carries no chunks),
+preserving each chunk's id, provenance, pin state and tags. The parser
+rejects chunks with a malformed embedding (empty array / non-finite
+value) so a corrupt vector never reaches the store.
+
+When the document's embedding provider differs from the importing
+device's active **resolved** provider — `EmbeddingProviderResolver.resolve()`,
+which accounts for the on-device fallback when the selected provider is
+unavailable and is the same provider retrieval embeds queries with, not
+the raw persisted setting — the inserted vectors live in an incompatible
+space, so each chunk is flagged `needsReembedding` and the import
+schedules a background pass through the `MemoryReembedScheduler` domain
+seam (`APPEND_OR_REPLACE` so a second import always chains a fresh drain
+rather than being coalesced away while a pass runs). `MemoryReembedWorker`
+(a WorkManager `@HiltWorker`, mirroring `MemoryCompactionWorker`) then runs
+`RecomputePendingEmbeddingsUseCase` off the hot path — re-embedding the
+pending chunks in bounded batches (so a multi-thousand-chunk import neither
+issues one oversized request nor loses progress on a mid-corpus failure)
+and clearing the flag — with WorkManager retry/backoff if the provider is
+temporarily unavailable. Retrieval never blocks on this; it simply
+tolerates the not-yet-repaired chunks (whose cross-space vectors score ~0)
+until the worker finishes. As a safety net for a one-off pass that was lost
+(process killed before the enqueue persisted) or exhausted its retries,
+`MainActivity` re-arms the worker on cold start whenever
+`countMemoriesNeedingReembedding()` is non-zero. The manual *Settings →
+Memory → Re-embed* action shares the same flag-clearing write so the two
+repair paths converge.
+
+### 2.2. Long-term memory lifecycle
+
+Long-term memory is a vector store (`memory_chunks`) of durable facts
+distilled from past conversations. The diagram below traces one fact from
+the message that states it, through storage, to the moment a *later*
+session retrieves it into a node's prompt — plus the background compaction
+loop that keeps the table dense. Only the on-device LLM and the embedding
+backend are model-dependent; everything else is plain domain code.
+
+```mermaid
+flowchart TB
+    subgraph Extraction["Extraction (after a run completes)"]
+        Done[Pipeline Completed] --> Coord[MemoryAutoExtractionCoordinator<br/>debounce 30s · gate on autoExtractEnabled<br/>defer while agent busy]
+        Coord --> Extract[MemoryExtractionUseCase<br/>LLM distils JSON facts]
+        Manual[Save to memory<br/>SaveMessageToMemoryUseCase] --> Embed
+        Extract --> Embed[EmbeddingProvider.embed<br/>resolved per call]
+        Embed --> Dedup{cosine ≥ 0.92<br/>duplicate?}
+        Dedup -- yes --> Drop[skip]
+        Dedup -- no --> Store[(memory_chunks<br/>Room + SQLCipher)]
+    end
+
+    subgraph Retrieval["Retrieval (next session, longTermMemory node)"]
+        Engine[GraphExecutionEngine<br/>resolveMemoriesOnce userPrompt] --> Retrieve[RetrieveRelevantMemoryUseCase]
+        Retrieve --> Search[findSimilarMemories<br/>cosine over pool]
+        Store --> Search
+        Search --> Rerank[MemoryReranker<br/>dedup · recency decay<br/>pinned boost · threshold]
+        Rerank --> Console[ConsoleEvent.MemoryAccess<br/>+ recordUsage]
+        Console --> Block[NodeContextBuilder<br/>--- Long-Term Memory ---]
+        Block --> LLM[Node executor → LLM]
+    end
+
+    subgraph Compaction["Compaction (background)"]
+        Worker[MemoryCompactionWorker<br/>daily · or maxMemoryChunks watch] --> Compact[MemoryCompactionUseCase]
+        Store --> Compact
+        Compact --> Cluster[KMeansClusterer<br/>k = √N / 2]
+        Cluster --> Consolidate[LLM consolidates clusters ≥ 3<br/>→ MemorySource.Compaction<br/>pinned chunks exempt]
+        Consolidate --> Store
+    end
+```
+
+Key invariants:
+
+1. **One retrieval per run.** The engine memoises memory off the immutable
+   `userPrompt`, so multiple memory-enabled nodes in a graph share a single
+   embed + search rather than re-querying per node.
+2. **Same embedding space.** Both extraction and retrieval resolve the
+   *active* provider via `EmbeddingProviderResolver`, so a query is always
+   embedded with whatever produced the stored vectors; a mismatch (e.g. a
+   chunk imported under a different provider) scores ~0 until re-embedded
+   (see §2.1).
+3. **Pinned is sacred.** Pinned chunks bypass the recency decay and
+   threshold filter on retrieval and are never compaction candidates — the
+   one mechanism a user has to guarantee a fact stays findable.
+
+The on-device write path is covered end-to-end by the instrumented
+`MemoryLifecycleIntegrationTest` (extract → retrieve into the context block
+→ survive a compaction pass over a real Room database).
 
 ---
 
@@ -222,7 +331,10 @@ which subset is enabled:
 2. `--- Chat History ---` — numbered conversation history with
    `USER`/`AGENT` roles.
 3. `--- Long-Term Memory ---` — semantic-retrieval hits over past
-   memory chunks.
+   memory chunks. A vector search ranks chunks by cosine similarity;
+   `MemoryReranker` then re-scores the pool (recency decay, a pinned
+   boost, near-duplicate collapse, and a final-score threshold) before
+   the top-K hits are injected.
 4. `--- Tool Results ---` — outputs of every tool invocation made
    during the current run.
 5. `--- Previous Node Output ---` — the text produced by the

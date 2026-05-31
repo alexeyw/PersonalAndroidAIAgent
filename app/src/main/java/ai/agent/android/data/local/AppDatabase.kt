@@ -44,7 +44,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         PipelinePresetEntity::class,
         PromptPresetEntity::class,
     ],
-    version = 25,
+    version = 28,
     exportSchema = true,
 )
 @TypeConverters(Converters::class)
@@ -419,6 +419,64 @@ abstract class AppDatabase : RoomDatabase() {
                     )
                     """.trimIndent(),
                 )
+            }
+        }
+
+        /**
+         * Migration from version 25 to 26 (Phase 25 / Task 2 — Memory write
+         * auto-extraction).
+         *
+         * Adds the `source` column to `memory_chunks` recording each chunk's
+         * provenance ([ai.agent.android.domain.models.MemorySource]) as a
+         * compact JSON string. Existing rows predate source attribution, so
+         * they are backfilled to the `Unknown` encoding — identical to what
+         * `Converters.fromMemorySource(MemorySource.Unknown)` produces and to
+         * the entity's column default, keeping the Room-generated schema and
+         * this migration in agreement.
+         */
+        val MIGRATION_25_26 = object : Migration(25, 26) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "ALTER TABLE `memory_chunks` ADD COLUMN `source` TEXT NOT NULL " +
+                        "DEFAULT '{\"type\":\"unknown\"}'",
+                )
+            }
+        }
+
+        /**
+         * Migration from version 26 to 27.
+         *
+         * Adds three additive columns to `memory_chunks` for the redesigned
+         * Memory surface: `tagsCsv` (comma-separated tag list, default empty),
+         * `useCount` (retrieval counter, default `0`) and `lastUsedAt`
+         * (nullable epoch-millis of the most recent retrieval). All defaults
+         * match the entity column defaults so the Room-generated schema and
+         * this migration agree; existing rows keep their data untouched.
+         */
+        val MIGRATION_26_27 = object : Migration(26, 27) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `memory_chunks` ADD COLUMN `tagsCsv` TEXT NOT NULL DEFAULT ''")
+                db.execSQL("ALTER TABLE `memory_chunks` ADD COLUMN `useCount` INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE `memory_chunks` ADD COLUMN `lastUsedAt` INTEGER")
+            }
+        }
+
+        /**
+         * Migration from version 27 to 28 (Phase 25 / Task 8 — Memory
+         * export/import).
+         *
+         * Adds the `needsReembedding` column to `memory_chunks`. Set to `1` on
+         * chunks imported from a device whose active embedding provider differs
+         * from the local one: their stored vectors live in an incompatible
+         * space and are re-computed lazily on the next retrieval
+         * ([ai.agent.android.domain.usecases.RecomputePendingEmbeddingsUseCase]).
+         * Backfilled to `0` for every existing row — locally-written chunks are
+         * already in the active provider's space. The default matches the entity
+         * column default so the Room-generated schema and this migration agree.
+         */
+        val MIGRATION_27_28 = object : Migration(27, 28) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `memory_chunks` ADD COLUMN `needsReembedding` INTEGER NOT NULL DEFAULT 0")
             }
         }
     }

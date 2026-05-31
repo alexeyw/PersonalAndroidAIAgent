@@ -4,6 +4,7 @@ import ai.agent.android.domain.constants.SettingsDefaults
 import ai.agent.android.domain.models.ActiveModelMeta
 import ai.agent.android.domain.models.Identity
 import ai.agent.android.domain.models.LocalBackend
+import ai.agent.android.domain.models.MemoryExportDocument
 import ai.agent.android.domain.models.MemoryStats
 import ai.agent.android.domain.models.ProviderSummary
 import ai.agent.android.domain.models.TestProbeResult
@@ -35,10 +36,30 @@ import ai.agent.android.domain.models.ToolApprovalPolicy
  * @property memoryStats Live aggregate counters.
  * @property autoSummarizeThreshold Fraction (0..1) for the threshold
  *   slider.
+ * @property memorySearchTopK How many ranked chunks a single retrieval
+ *   returns into a node's context block.
+ * @property memorySearchThreshold Minimum cosine-similarity score a chunk
+ *   must reach to be surfaced during retrieval.
+ * @property memoryRecencyHalfLifeDays Recency half-life (days) used by the
+ *   memory re-ranker.
+ * @property memoryCompactionEnabled Whether the daily background compaction
+ *   pass is enabled.
+ * @property memoryCompactionAgeDays Age (days) after which a non-pinned chunk
+ *   becomes a compaction candidate.
+ * @property maxMemoryChunks Hard ceiling on the number of stored chunks.
+ * @property activeEmbeddingProviderId Wire id of the selected embedding
+ *   provider.
+ * @property embeddingProviderOptions Available embedding providers (id +
+ *   display name) for the Memory-section dropdown.
+ * @property memoryValidationError Transient validation error surfaced when a
+ *   memory-tuning mutator rejects an out-of-range / unknown value; `null` when
+ *   the last edit was accepted.
  * @property reembedProgress `null` when no re-embed job is in flight;
  *   otherwise `0f..1f`.
  * @property longRunningTaskNotificationsEnabled Mirror of the toggle.
  * @property crashReportingEnabled Mirror of the toggle.
+ * @property verboseMemoryLoggingEnabled Mirror of the verbose memory logging
+ *   toggle (Settings → Privacy).
  * @property restartRequired `true` after the user changed an
  *   inference-backend / Ollama base URL that requires a process restart.
  * @property pendingDestructive Currently staged destructive action,
@@ -66,15 +87,68 @@ data class SettingsUiState(
     val testProbeInFlight: Boolean = false,
     val providers: List<ProviderSummary> = emptyList(),
     val memoryStats: MemoryStats = MemoryStats.EMPTY,
+    val autoExtractEnabled: Boolean = SettingsDefaults.AUTO_EXTRACT_ENABLED_DEFAULT,
     val autoSummarizeThreshold: Float = SettingsDefaults.AUTO_SUMMARIZE_THRESHOLD_DEFAULT,
+    val memorySearchTopK: Int = SettingsDefaults.MEMORY_SEARCH_TOP_K_DEFAULT,
+    val memorySearchThreshold: Float = SettingsDefaults.MEMORY_SEARCH_THRESHOLD_DEFAULT,
+    val memoryRecencyHalfLifeDays: Int = SettingsDefaults.MEMORY_RECENCY_HALF_LIFE_DAYS_DEFAULT,
+    val memoryCompactionEnabled: Boolean = SettingsDefaults.MEMORY_COMPACTION_ENABLED_DEFAULT,
+    val memoryCompactionAgeDays: Int = SettingsDefaults.MEMORY_COMPACTION_AGE_DAYS_DEFAULT,
+    val maxMemoryChunks: Int = SettingsDefaults.MAX_MEMORY_CHUNKS_DEFAULT,
+    val activeEmbeddingProviderId: String = SettingsDefaults.ACTIVE_EMBEDDING_PROVIDER_ID_DEFAULT,
+    val embeddingProviderOptions: List<EmbeddingProviderOption> = emptyList(),
+    val memoryValidationError: MemoryValidationError? = null,
     val reembedProgress: Float? = null,
     val longRunningTaskNotificationsEnabled: Boolean = true,
     val crashReportingEnabled: Boolean = false,
+    val verboseMemoryLoggingEnabled: Boolean = SettingsDefaults.VERBOSE_MEMORY_LOGGING_ENABLED_DEFAULT,
     val restartRequired: Boolean = false,
     val pendingDestructive: PendingDestructiveAction? = null,
     val destructiveTypedInput: String = "",
+    val pendingImport: PendingMemoryImport? = null,
     val snackbarMessage: String? = null,
 )
+
+/**
+ * A successfully-parsed memory import file awaiting the user's strategy choice
+ * in the import dialog.
+ *
+ * @property document The parsed export document to import once confirmed.
+ * @property providerMismatch `true` when the file was exported under a
+ *   different embedding provider than the one active on this device — the
+ *   dialog then warns that embeddings will be re-computed on first retrieval.
+ * @property schemaMismatch `true` when the file's `schemaVersion` differs from
+ *   what this build expects (best-effort parse); the dialog warns accordingly.
+ */
+data class PendingMemoryImport(
+    val document: MemoryExportDocument,
+    val providerMismatch: Boolean,
+    val schemaMismatch: Boolean,
+)
+
+/**
+ * One selectable embedding provider in the Memory-section dropdown.
+ *
+ * @property id Stable wire id persisted via
+ *   [ai.agent.android.domain.repositories.SettingsRepository.activeEmbeddingProviderId]
+ *   (e.g. `"use"`).
+ * @property displayName Human-readable provider label rendered in the dropdown.
+ */
+data class EmbeddingProviderOption(val id: String, val displayName: String)
+
+/**
+ * Which memory-tuning mutator rejected its last input. Surfaced through
+ * [SettingsUiState.memoryValidationError] so the screen can show an inline
+ * error and the value stays unpersisted.
+ */
+enum class MemoryValidationError {
+    SearchTopK,
+    SearchThreshold,
+    RecencyHalfLife,
+    CompactionAge,
+    MaxChunks,
+    UnknownEmbeddingProvider,
+}
 
 /**
  * One `$VARIABLE` chip in the System instructions card.

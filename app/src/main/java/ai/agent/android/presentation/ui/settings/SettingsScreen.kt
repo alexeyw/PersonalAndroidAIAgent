@@ -5,15 +5,24 @@ import ai.agent.android.R
 import ai.agent.android.domain.constants.SettingsDefaults
 import ai.agent.android.domain.models.ActiveModelMeta
 import ai.agent.android.domain.models.LocalBackend
+import ai.agent.android.domain.models.MemoryImportStrategy
 import ai.agent.android.domain.models.ProviderId
 import ai.agent.android.domain.models.ToolApprovalPolicy
+import ai.agent.android.presentation.common.DisplayFormat
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -23,16 +32,19 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import app.knotwork.design.screens.settings.ApproveToolCallsOption
 import app.knotwork.design.screens.settings.DestructiveActionKind
 import app.knotwork.design.screens.settings.DestructiveActionState
+import app.knotwork.design.screens.settings.EmbeddingOptionRow
 import app.knotwork.design.screens.settings.ExternalProvidersCardState
 import app.knotwork.design.screens.settings.IdentityCardState
 import app.knotwork.design.screens.settings.LlmParameterSlider
 import app.knotwork.design.screens.settings.LlmParametersCardState
 import app.knotwork.design.screens.settings.LocalModelCardState
 import app.knotwork.design.screens.settings.MemoryCardState
+import app.knotwork.design.screens.settings.MemoryParamSlider
 import app.knotwork.design.screens.settings.MemoryStatCell
 import app.knotwork.design.screens.settings.NotificationsCardState
 import app.knotwork.design.screens.settings.PrivacyCardState
@@ -87,6 +99,14 @@ fun SettingsScreen(
         if (stream != null) viewModel.exportMemoryBase(stream)
     }
 
+    val importLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument(),
+    ) { uri: Uri? ->
+        uri ?: return@rememberLauncherForActivityResult
+        val stream = runCatching { context.contentResolver.openInputStream(uri) }.getOrNull()
+        if (stream != null) viewModel.importMemory(stream)
+    }
+
     LaunchedEffect(uiState.snackbarMessage) {
         val message = uiState.snackbarMessage ?: return@LaunchedEffect
         snackbarHostState.showSnackbar(message)
@@ -105,6 +125,7 @@ fun SettingsScreen(
             ProviderId.entries.firstOrNull { it.cloudProvider.id == id }?.let(onOpenProvider)
         },
         onExportClick = { exportLauncher.launch(exportFilename) },
+        onImportClick = { importLauncher.launch(arrayOf(MIME_JSON)) },
         onRestart = {
             viewModel.acknowledgeRestart()
             // No-arg overload — ProcessPhoenix resolves the app's launcher
@@ -120,8 +141,91 @@ fun SettingsScreen(
 
     Box(modifier = modifier.fillMaxSize()) {
         SettingsContent(state = viewState, callbacks = callbacks)
+        uiState.pendingImport?.let { pending ->
+            MemoryImportDialog(
+                pending = pending,
+                onMerge = { viewModel.confirmImport(MemoryImportStrategy.Merge) },
+                onReplace = { viewModel.confirmImport(MemoryImportStrategy.Replace) },
+                onCancel = viewModel::cancelImport,
+            )
+        }
         SnackbarHost(hostState = snackbarHostState)
     }
+}
+
+/**
+ * Strategy-choice dialog raised after a memory import file parses. Lets the
+ * user pick Merge (keep existing, skip duplicate ids) or Replace (wipe then
+ * load), and surfaces provider / schema mismatch warnings.
+ *
+ * @param pending Parsed document plus the mismatch flags driving the warnings.
+ * @param onMerge Invoked when the user confirms the non-destructive merge.
+ * @param onReplace Invoked when the user confirms the destructive replace.
+ * @param onCancel Invoked on dismiss / Cancel.
+ */
+@Composable
+private fun MemoryImportDialog(
+    pending: PendingMemoryImport,
+    onMerge: () -> Unit,
+    onReplace: () -> Unit,
+    onCancel: () -> Unit,
+) {
+    val warnings = buildList {
+        if (pending.schemaMismatch) add(stringResource(R.string.settings_memory_import_schema_warning))
+        if (pending.providerMismatch) {
+            add(
+                stringResource(
+                    R.string.settings_memory_import_provider_warning,
+                    pending.document.embeddingProviderId,
+                ),
+            )
+        }
+    }
+    // The two strategy actions share the confirm slot (Merge as the safe
+    // default, Replace error-tinted as the destructive choice); Cancel takes the
+    // dismiss slot. Keeping all three in AlertDialog's button slots gives them
+    // the standard button-row spacing/insets instead of a button floating in the
+    // body text.
+    AlertDialog(
+        onDismissRequest = onCancel,
+        title = { Text(stringResource(R.string.settings_memory_import_dialog_title)) },
+        text = {
+            Text(
+                buildString {
+                    append(
+                        stringResource(
+                            R.string.settings_memory_import_dialog_body,
+                            pending.document.chunks.size,
+                        ),
+                    )
+                    warnings.forEach { warning ->
+                        append("\n\n")
+                        append(warning)
+                    }
+                },
+            )
+        },
+        confirmButton = {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                TextButton(onClick = onMerge) {
+                    Text(stringResource(R.string.settings_memory_import_merge))
+                }
+                TextButton(
+                    onClick = onReplace,
+                    colors = ButtonDefaults.textButtonColors(
+                        contentColor = MaterialTheme.colorScheme.error,
+                    ),
+                ) {
+                    Text(stringResource(R.string.settings_memory_import_replace))
+                }
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onCancel) {
+                Text(stringResource(R.string.settings_memory_import_cancel))
+            }
+        },
+    )
 }
 
 @Composable
@@ -132,7 +236,7 @@ private fun buildViewState(uiState: SettingsUiState, context: android.content.Co
     val helperText = stringResource(R.string.settings_system_instructions_helper)
     val characterCount = uiState.systemInstructions.length
     val charLimit = SettingsDefaults.SYSTEM_INSTRUCTIONS_CHAR_LIMIT
-    val tokenApprox = (characterCount / CHARS_PER_TOKEN).toInt().coerceAtLeast(0)
+    val tokenApprox = DisplayFormat.approxTokenCount(uiState.systemInstructions)
     val identity = uiState.identity?.let { id ->
         IdentityCardState(
             displayName = id.displayName,
@@ -259,7 +363,7 @@ private fun buildViewState(uiState: SettingsUiState, context: android.content.Co
                 label = stringResource(R.string.settings_memory_stat_chunks),
             ),
             MemoryStatCell(
-                value = formatBytes(uiState.memoryStats.totalBytes),
+                value = DisplayFormat.formatBytes(uiState.memoryStats.totalBytes),
                 label = stringResource(R.string.settings_memory_stat_size),
             ),
             MemoryStatCell(
@@ -277,17 +381,34 @@ private fun buildViewState(uiState: SettingsUiState, context: android.content.Co
                 label = stringResource(R.string.settings_memory_stat_avg_score),
             ),
         ),
+        autoExtractEnabled = uiState.autoExtractEnabled,
+        autoExtractLabel = stringResource(R.string.settings_memory_auto_extract_title),
+        autoExtractSubtitle = stringResource(R.string.settings_memory_auto_extract_subtitle),
         autoSummarizeThreshold = (uiState.autoSummarizeThreshold * MAX_PERCENT).roundToInt(),
         autoSummarizeLabel = stringResource(R.string.settings_memory_auto_summarize_title),
+        params = memoryParamSliders(uiState, locale),
+        compactionEnabled = uiState.memoryCompactionEnabled,
+        compactionLabel = stringResource(R.string.settings_memory_compaction_title),
+        compactionSubtitle = stringResource(R.string.settings_memory_compaction_subtitle),
         embeddingTitle = stringResource(R.string.settings_memory_embedding_title),
-        embeddingSubtitle = stringResource(R.string.settings_memory_embedding_subtitle),
+        embeddingOptions = uiState.embeddingProviderOptions.map { EmbeddingOptionRow(it.id, it.displayName) },
+        selectedEmbeddingId = uiState.activeEmbeddingProviderId,
+        selectedEmbeddingLabel = uiState.embeddingProviderOptions
+            .firstOrNull { it.id == uiState.activeEmbeddingProviderId }
+            ?.displayName
+            ?: uiState.activeEmbeddingProviderId,
         exportLabel = stringResource(R.string.settings_memory_export),
+        importLabel = stringResource(R.string.settings_memory_import),
         reembedLabel = stringResource(R.string.settings_memory_reembed),
         clearLabel = stringResource(R.string.settings_memory_clear),
+        validationError = uiState.memoryValidationError?.let { memoryValidationMessage(it, context) },
         reembedProgressPercent = uiState.reembedProgress?.let { (it * MAX_PERCENT).roundToInt() },
     )
     val notifications = NotificationsCardState(longRunningEnabled = uiState.longRunningTaskNotificationsEnabled)
-    val privacy = PrivacyCardState(crashReportingEnabled = uiState.crashReportingEnabled)
+    val privacy = PrivacyCardState(
+        crashReportingEnabled = uiState.crashReportingEnabled,
+        verboseMemoryLoggingEnabled = uiState.verboseMemoryLoggingEnabled,
+    )
     val destructive = uiState.pendingDestructive?.let { kind ->
         DestructiveActionState(
             title = stringResource(
@@ -340,6 +461,119 @@ private fun buildViewState(uiState: SettingsUiState, context: android.content.Co
     )
 }
 
+/**
+ * Builds the five Memory-tuning slider rows from the persisted state. Each
+ * row's [MemoryParamSlider.id] is matched in `buildCallbacks` to route the
+ * drag back to the corresponding validated ViewModel setter. Ranges mirror the
+ * `MIN`/`MAX` bounds in [SettingsDefaults]; integer rows use one discrete step
+ * per unit, the threshold row stays continuous.
+ */
+@Composable
+private fun memoryParamSliders(uiState: SettingsUiState, locale: Locale): List<MemoryParamSlider> = listOf(
+    intMemoryParam(
+        id = MEMORY_PARAM_TOP_K,
+        title = stringResource(R.string.settings_memory_param_top_k_title),
+        valueLabel = uiState.memorySearchTopK.toString(),
+        value = uiState.memorySearchTopK,
+        min = SettingsDefaults.MEMORY_SEARCH_TOP_K_MIN,
+        max = SettingsDefaults.MEMORY_SEARCH_TOP_K_MAX,
+    ),
+    MemoryParamSlider(
+        id = MEMORY_PARAM_THRESHOLD,
+        title = stringResource(R.string.settings_memory_param_threshold_title),
+        valueLabel = String.format(locale, "%.2f", uiState.memorySearchThreshold),
+        value = uiState.memorySearchThreshold,
+        valueRange = SettingsDefaults.MEMORY_SEARCH_THRESHOLD_MIN..SettingsDefaults.MEMORY_SEARCH_THRESHOLD_MAX,
+    ),
+    intMemoryParam(
+        id = MEMORY_PARAM_HALF_LIFE,
+        title = stringResource(R.string.settings_memory_param_half_life_title),
+        valueLabel = stringResource(R.string.settings_memory_param_days_value, uiState.memoryRecencyHalfLifeDays),
+        value = uiState.memoryRecencyHalfLifeDays,
+        min = SettingsDefaults.MEMORY_RECENCY_HALF_LIFE_DAYS_MIN,
+        max = SettingsDefaults.MEMORY_RECENCY_HALF_LIFE_DAYS_MAX,
+    ),
+    intMemoryParam(
+        id = MEMORY_PARAM_COMPACTION_AGE,
+        title = stringResource(R.string.settings_memory_param_compaction_age_title),
+        valueLabel = stringResource(R.string.settings_memory_param_days_value, uiState.memoryCompactionAgeDays),
+        value = uiState.memoryCompactionAgeDays,
+        min = SettingsDefaults.MEMORY_COMPACTION_AGE_DAYS_MIN,
+        max = SettingsDefaults.MEMORY_COMPACTION_AGE_DAYS_MAX,
+    ),
+    intMemoryParam(
+        id = MEMORY_PARAM_MAX_CHUNKS,
+        title = stringResource(R.string.settings_memory_param_max_chunks_title),
+        valueLabel = String.format(locale, "%,d", uiState.maxMemoryChunks),
+        value = uiState.maxMemoryChunks,
+        min = SettingsDefaults.MAX_MEMORY_CHUNKS_MIN,
+        max = SettingsDefaults.MAX_MEMORY_CHUNKS_MAX,
+    ),
+)
+
+/**
+ * Builds an integer-valued memory tuning slider. The range is `[min, max]`
+ * mapped onto floats and the slider is kept **continuous** (`steps = 0`):
+ * `onMemoryParamChange` rounds the dragged float back to an `Int` before it
+ * reaches the setter, which gives whole-number increments at the user's drag
+ * resolution without asking Material3 to allocate one tick composable per
+ * integer (a `steps = max - min - 1` slider over a wide range — e.g. the
+ * 1 000..20 000 max-chunks span — would freeze the main thread; see the same
+ * note on `NodeConfigForms`' integer slider).
+ */
+private fun intMemoryParam(
+    id: String,
+    title: String,
+    valueLabel: String,
+    value: Int,
+    min: Int,
+    max: Int,
+): MemoryParamSlider = MemoryParamSlider(
+    id = id,
+    title = title,
+    valueLabel = valueLabel,
+    value = value.toFloat(),
+    valueRange = min.toFloat()..max.toFloat(),
+    steps = 0,
+)
+
+/**
+ * Maps a rejected memory edit to its localized inline error message. The
+ * threshold message interpolates the float bounds; the rest interpolate
+ * integer bounds.
+ */
+private fun memoryValidationMessage(error: MemoryValidationError, context: android.content.Context): String =
+    when (error) {
+        MemoryValidationError.SearchTopK -> context.getString(
+            R.string.settings_memory_validation_top_k,
+            SettingsDefaults.MEMORY_SEARCH_TOP_K_MIN,
+            SettingsDefaults.MEMORY_SEARCH_TOP_K_MAX,
+        )
+        MemoryValidationError.SearchThreshold -> context.getString(
+            R.string.settings_memory_validation_threshold,
+            String.format(Locale.US, "%.2f", SettingsDefaults.MEMORY_SEARCH_THRESHOLD_MIN),
+            String.format(Locale.US, "%.2f", SettingsDefaults.MEMORY_SEARCH_THRESHOLD_MAX),
+        )
+        MemoryValidationError.RecencyHalfLife -> context.getString(
+            R.string.settings_memory_validation_half_life,
+            SettingsDefaults.MEMORY_RECENCY_HALF_LIFE_DAYS_MIN,
+            SettingsDefaults.MEMORY_RECENCY_HALF_LIFE_DAYS_MAX,
+        )
+        MemoryValidationError.CompactionAge -> context.getString(
+            R.string.settings_memory_validation_compaction_age,
+            SettingsDefaults.MEMORY_COMPACTION_AGE_DAYS_MIN,
+            SettingsDefaults.MEMORY_COMPACTION_AGE_DAYS_MAX,
+        )
+        MemoryValidationError.MaxChunks -> context.getString(
+            R.string.settings_memory_validation_max_chunks,
+            SettingsDefaults.MAX_MEMORY_CHUNKS_MIN,
+            SettingsDefaults.MAX_MEMORY_CHUNKS_MAX,
+        )
+        MemoryValidationError.UnknownEmbeddingProvider -> context.getString(
+            R.string.settings_memory_validation_unknown_provider,
+        )
+    }
+
 @Composable
 @Suppress("LongParameterList")
 private fun buildCallbacks(
@@ -350,6 +584,7 @@ private fun buildCallbacks(
     onOpenSearch: () -> Unit,
     onProviderClick: (String) -> Unit,
     onExportClick: () -> Unit,
+    onImportClick: () -> Unit,
     onRestart: () -> Unit,
 ): SettingsCallbacks = SettingsCallbacks(
     onBack = onBack,
@@ -386,12 +621,26 @@ private fun buildCallbacks(
     onTestBackendClick = viewModel::runBackendProbe,
     onProviderRowClick = onProviderClick,
     onAddProviderClick = onOpenAddProvider,
+    onAutoExtractToggle = viewModel::setAutoExtractEnabled,
     onAutoSummarizeChange = viewModel::setAutoSummarizeThreshold,
+    onMemoryParamChange = { id, value ->
+        when (id) {
+            MEMORY_PARAM_TOP_K -> viewModel.setMemorySearchTopK(value.roundToInt())
+            MEMORY_PARAM_THRESHOLD -> viewModel.setMemorySearchThreshold(value)
+            MEMORY_PARAM_HALF_LIFE -> viewModel.setMemoryRecencyHalfLifeDays(value.roundToInt())
+            MEMORY_PARAM_COMPACTION_AGE -> viewModel.setMemoryCompactionAgeDays(value.roundToInt())
+            MEMORY_PARAM_MAX_CHUNKS -> viewModel.setMaxMemoryChunks(value.roundToInt())
+        }
+    },
+    onMemoryCompactionToggle = viewModel::setMemoryCompactionEnabled,
+    onEmbeddingProviderSelected = viewModel::setActiveEmbeddingProviderId,
     onExportMemoryClick = onExportClick,
+    onImportMemoryClick = onImportClick,
     onReembedClick = viewModel::runReembed,
     onClearMemoryClick = viewModel::stageClearMemory,
     onLongRunningToggle = viewModel::setLongRunningTaskNotificationsEnabled,
     onCrashReportingToggle = viewModel::setCrashReportingEnabled,
+    onVerboseMemoryLoggingToggle = viewModel::setVerboseMemoryLoggingEnabled,
     onResetSettingsClick = viewModel::stageResetSettings,
     onRestartClick = onRestart,
     onDestructiveTypedConfirmChange = viewModel::updateDestructiveTypedInput,
@@ -403,7 +652,7 @@ private fun formatBuildDate(epochMs: Long): String =
     SimpleDateFormat("yyyy.MM.dd", Locale.US).format(java.util.Date(epochMs))
 
 private fun formatActiveModelMeta(meta: ActiveModelMeta, context: android.content.Context): String {
-    val size = formatBytes(meta.sizeBytes)
+    val size = DisplayFormat.formatBytes(meta.sizeBytes)
     val ctx = "${meta.contextWindowTokens}"
     val quant = meta.quantization ?: "-"
     val downloaded = meta.downloadedAtMs?.let {
@@ -423,19 +672,13 @@ private fun formatTestProbe(uiState: SettingsUiState, context: android.content.C
     }
 }
 
-private fun formatBytes(bytes: Long): String {
-    if (bytes < BYTES_PER_KB) return "$bytes B"
-    val kb = bytes / BYTES_PER_KB_F
-    if (kb < BYTES_PER_KB) return String.format(Locale.getDefault(), "%.1f KB", kb)
-    val mb = kb / BYTES_PER_KB
-    if (mb < BYTES_PER_KB) return String.format(Locale.getDefault(), "%.1f MB", mb)
-    val gb = mb / BYTES_PER_KB
-    return String.format(Locale.getDefault(), "%.1f GB", gb)
-}
-
 private const val MIME_JSON = "application/json"
-private const val CHARS_PER_TOKEN = 3.5f
 private const val MS_PER_SECOND_F = 1_000f
 private const val MAX_PERCENT = 100
-private const val BYTES_PER_KB = 1_024L
-private const val BYTES_PER_KB_F = 1_024f
+
+// Stable ids matching each Memory-tuning slider row to its ViewModel setter.
+private const val MEMORY_PARAM_TOP_K = "memory_top_k"
+private const val MEMORY_PARAM_THRESHOLD = "memory_threshold"
+private const val MEMORY_PARAM_HALF_LIFE = "memory_half_life"
+private const val MEMORY_PARAM_COMPACTION_AGE = "memory_compaction_age"
+private const val MEMORY_PARAM_MAX_CHUNKS = "memory_max_chunks"

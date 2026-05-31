@@ -30,9 +30,9 @@ class PromptLibraryScreenListTest {
     fun selectedCategory_rendersOnlyPromptsInThatCategory() {
         val (vm, _) = mockPromptLibraryViewModel(
             initialUiState = PromptLibraryUiState(
-                promptTemplates = listOf(
-                    samplePromptTemplate(id = 1L, name = "Decompose first", category = "DECOMPOSITION"),
-                    samplePromptTemplate(id = 2L, name = "Route the intent", category = "INTENT_ROUTER"),
+                userPresets = listOf(
+                    samplePromptPreset(id = "1", name = "Decompose first", category = "DECOMPOSITION"),
+                    samplePromptPreset(id = "2", name = "Route the intent", category = "INTENT_ROUTER"),
                 ),
                 selectedCategory = "DECOMPOSITION",
             ),
@@ -52,9 +52,9 @@ class PromptLibraryScreenListTest {
     fun categoryTab_tap_invokesSelectCategory() {
         val (vm, _) = mockPromptLibraryViewModel(
             initialUiState = PromptLibraryUiState(
-                promptTemplates = listOf(
-                    samplePromptTemplate(id = 1L, name = "Decompose first", category = "DECOMPOSITION"),
-                    samplePromptTemplate(id = 2L, name = "Route the intent", category = "INTENT_ROUTER"),
+                userPresets = listOf(
+                    samplePromptPreset(id = "1", name = "Decompose first", category = "DECOMPOSITION"),
+                    samplePromptPreset(id = "2", name = "Route the intent", category = "INTENT_ROUTER"),
                 ),
                 selectedCategory = "DECOMPOSITION",
             ),
@@ -64,20 +64,23 @@ class PromptLibraryScreenListTest {
             MaterialTheme { PromptLibraryScreen(viewModel = vm) }
         }
 
-        // INTENT_ROUTER is the label of the other tab; tapping it fires
-        // the VM hook even though the screen doesn't yet re-render
+        // The category tab row lists every LLM-driven node type sorted, so
+        // `CLARIFICATION` is the leftmost tab — always on-screen in the
+        // `ScrollableTabRow` (unlike `INTENT_ROUTER`, which sits mid-row and
+        // can be scrolled off a phone-width viewport). Tapping a non-selected
+        // tab fires the VM hook even though the screen doesn't re-render
         // (state mutation is the ViewModel's job).
-        composeTestRule.onNodeWithText(text = "INTENT_ROUTER").performClick()
+        composeTestRule.onNodeWithText(text = "CLARIFICATION").performClick()
 
-        verify(exactly = 1) { vm.selectCategory(category = "INTENT_ROUTER") }
+        verify(exactly = 1) { vm.selectCategory(category = "CLARIFICATION") }
     }
 
     @Test
     fun fabTap_opensNewPromptEditor() {
         val (vm, _) = mockPromptLibraryViewModel(
             initialUiState = PromptLibraryUiState(
-                promptTemplates = listOf(
-                    samplePromptTemplate(id = 1L, name = "Prompt A", category = "DECOMPOSITION"),
+                userPresets = listOf(
+                    samplePromptPreset(id = "1", name = "Prompt A", category = "DECOMPOSITION"),
                 ),
                 selectedCategory = "DECOMPOSITION",
             ),
@@ -99,8 +102,8 @@ class PromptLibraryScreenListTest {
     fun deleteIcon_invokesDeletePrompt() {
         val (vm, _) = mockPromptLibraryViewModel(
             initialUiState = PromptLibraryUiState(
-                promptTemplates = listOf(
-                    samplePromptTemplate(id = 7L, name = "Doomed prompt", category = "DECOMPOSITION"),
+                userPresets = listOf(
+                    samplePromptPreset(id = "7", name = "Doomed prompt", category = "DECOMPOSITION"),
                 ),
                 selectedCategory = "DECOMPOSITION",
             ),
@@ -117,15 +120,15 @@ class PromptLibraryScreenListTest {
         // delete content description is the one we want.
         composeTestRule.onAllNodesWithContentDescription(label = deleteCd).onFirst().performClick()
 
-        verify(exactly = 1) { vm.deletePrompt(id = 7L) }
+        verify(exactly = 1) { vm.deletePrompt(id = "7") }
     }
 
     @Test
     fun editIcon_invokesOpenEditor_withPromptId() {
         val (vm, _) = mockPromptLibraryViewModel(
             initialUiState = PromptLibraryUiState(
-                promptTemplates = listOf(
-                    samplePromptTemplate(id = 11L, name = "Edit me", category = "DECOMPOSITION"),
+                userPresets = listOf(
+                    samplePromptPreset(id = "11", name = "Edit me", category = "DECOMPOSITION"),
                 ),
                 selectedCategory = "DECOMPOSITION",
             ),
@@ -140,15 +143,15 @@ class PromptLibraryScreenListTest {
 
         composeTestRule.onAllNodesWithContentDescription(label = editCd).onFirst().performClick()
 
-        verify(exactly = 1) { vm.openEditor(promptId = 11L) }
+        verify(exactly = 1) { vm.openEditor(promptId = "11") }
     }
 
     @Test
     fun duplicateButton_invokesDuplicatePrompt() {
         val (vm, _) = mockPromptLibraryViewModel(
             initialUiState = PromptLibraryUiState(
-                promptTemplates = listOf(
-                    samplePromptTemplate(id = 13L, name = "Cloneable", category = "DECOMPOSITION"),
+                userPresets = listOf(
+                    samplePromptPreset(id = "13", name = "Cloneable", category = "DECOMPOSITION"),
                 ),
                 selectedCategory = "DECOMPOSITION",
             ),
@@ -163,6 +166,6 @@ class PromptLibraryScreenListTest {
 
         composeTestRule.onNodeWithText(text = duplicateLabel).performClick()
 
-        verify(exactly = 1) { vm.duplicatePrompt(id = 13L) }
+        verify(exactly = 1) { vm.duplicatePrompt(id = "13") }
     }
 }

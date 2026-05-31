@@ -73,7 +73,7 @@ configured it.
   execution.
 - Redesigned **Settings** screen with identity card, structured
   HITL restrictions, sampling/repetition controls, memory dashboard
-  (Chunks · Size · Threads · Avg score + Export / Re-embed / Clear),
+  (Chunks · Size · Threads · Avg score + Export / Import / Re-embed / Clear),
   test-backend probe metrics, and a long-running-task notification
   channel.
 - **Local model manager** with an inline Active card, HuggingFace
@@ -106,7 +106,14 @@ configured it.
   directly into chat home.
 - Background execution as an Android Foreground Service with explicit idle
   and power-state management.
-- Long-term memory with semantic retrieval (RAG) over past conversations.
+- Long-term memory with semantic retrieval (RAG) over past conversations,
+  including automatic extraction of durable facts from finished conversations
+  (toggleable in Settings → Memory), manual "Save to memory" from any chat
+  message, and a redesigned memory manager — provenance breakdown, category
+  filters, semantic search with relevance scores, inline edit + tags, manual
+  add, one-tap compaction with an estimate, and JSON export / import
+  (Merge or Replace, with background re-embedding when the source device used a
+  different embedding provider).
 - Standalone browser-based editor (`pipeline-editor.html`) for authoring
   and exporting pipelines without launching the app.
 - Opt-in Firebase Crashlytics for anonymous crash reporting — off by

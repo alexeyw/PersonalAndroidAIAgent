@@ -56,6 +56,12 @@ class SettingsManager @Inject constructor(private val dataStore: DataStore<Prefe
         val APP_FUNCTION_RISK_OVERRIDES = stringPreferencesKey("app_function_risk_overrides")
         val CURRENT_CHAT_SESSION_ID = stringPreferencesKey("current_chat_session_id")
         val MAX_MEMORY_CHUNKS_FOR_SEARCH = intPreferencesKey("max_memory_chunks_for_search")
+        val MEMORY_LAST_COMPACTED_AT =
+            androidx.datastore.preferences.core.longPreferencesKey("memory_last_compacted_at")
+        val MEMORY_SEARCH_TOP_K = intPreferencesKey("memory_search_top_k")
+        val MEMORY_SEARCH_THRESHOLD =
+            androidx.datastore.preferences.core.floatPreferencesKey("memory_search_threshold")
+        val MEMORY_RECENCY_HALF_LIFE_DAYS = intPreferencesKey("memory_recency_half_life_days")
         val LOCAL_MODEL_BACKEND = stringPreferencesKey("local_model_backend")
 
         /**
@@ -84,6 +90,20 @@ class SettingsManager @Inject constructor(private val dataStore: DataStore<Prefe
         )
         val LONG_RUNNING_TASKS_NOTIFICATIONS = booleanPreferencesKey("long_running_tasks_notifications")
         val LAST_TEST_PROBE_RESULT = stringPreferencesKey("last_test_probe_result")
+
+        // Phase 25 / Task 1 — Embedding provider abstraction.
+        val ACTIVE_EMBEDDING_PROVIDER_ID = stringPreferencesKey("active_embedding_provider_id")
+
+        // Phase 25 / Task 2 — Memory write auto-extraction.
+        val AUTO_EXTRACT_ENABLED = booleanPreferencesKey("auto_extract_enabled")
+
+        // Phase 25 / Task 5 — Background memory compaction.
+        val MEMORY_COMPACTION_ENABLED = booleanPreferencesKey("memory_compaction_enabled")
+        val MEMORY_COMPACTION_AGE_DAYS = intPreferencesKey("memory_compaction_age_days")
+        val MAX_MEMORY_CHUNKS = intPreferencesKey("max_memory_chunks")
+
+        // Phase 25 / Task 6 — Memory observability.
+        val VERBOSE_MEMORY_LOGGING_ENABLED = booleanPreferencesKey("verbose_memory_logging_enabled")
     }
 
     override val isFirstLaunch: Flow<Boolean> = dataStore.data
@@ -586,6 +606,85 @@ class SettingsManager @Inject constructor(private val dataStore: DataStore<Prefe
         }
     }
 
+    override val memoryLastCompactedAt: Flow<Long> = dataStore.data
+        .catch { exception ->
+            if (exception is IOException) {
+                Timber.e(exception, "Error reading preferences")
+                emit(emptyPreferences())
+            } else {
+                throw exception
+            }
+        }
+        .map { preferences ->
+            preferences[PreferencesKeys.MEMORY_LAST_COMPACTED_AT] ?: 0L
+        }
+
+    override suspend fun setMemoryLastCompactedAt(millis: Long) {
+        dataStore.edit { preferences ->
+            preferences[PreferencesKeys.MEMORY_LAST_COMPACTED_AT] = millis
+        }
+    }
+
+    override val memorySearchTopK: Flow<Int> = dataStore.data
+        .catch { exception ->
+            if (exception is IOException) {
+                Timber.e(exception, "Error reading preferences")
+                emit(emptyPreferences())
+            } else {
+                throw exception
+            }
+        }
+        .map { preferences ->
+            preferences[PreferencesKeys.MEMORY_SEARCH_TOP_K]
+                ?: SettingsDefaults.MEMORY_SEARCH_TOP_K_DEFAULT
+        }
+
+    override suspend fun setMemorySearchTopK(topK: Int) {
+        dataStore.edit { preferences ->
+            preferences[PreferencesKeys.MEMORY_SEARCH_TOP_K] = topK
+        }
+    }
+
+    override val memorySearchThreshold: Flow<Float> = dataStore.data
+        .catch { exception ->
+            if (exception is IOException) {
+                Timber.e(exception, "Error reading preferences")
+                emit(emptyPreferences())
+            } else {
+                throw exception
+            }
+        }
+        .map { preferences ->
+            preferences[PreferencesKeys.MEMORY_SEARCH_THRESHOLD]
+                ?: SettingsDefaults.MEMORY_SEARCH_THRESHOLD_DEFAULT
+        }
+
+    override suspend fun setMemorySearchThreshold(threshold: Float) {
+        dataStore.edit { preferences ->
+            preferences[PreferencesKeys.MEMORY_SEARCH_THRESHOLD] = threshold
+        }
+    }
+
+    override val memoryRecencyHalfLifeDays: Flow<Int> = dataStore.data
+        .catch { exception ->
+            if (exception is IOException) {
+                Timber.e(exception, "Error reading preferences")
+                emit(emptyPreferences())
+            } else {
+                throw exception
+            }
+        }
+        .map { preferences ->
+            preferences[PreferencesKeys.MEMORY_RECENCY_HALF_LIFE_DAYS]
+                ?: SettingsDefaults.MEMORY_RECENCY_HALF_LIFE_DAYS_DEFAULT
+        }
+
+    override suspend fun setMemoryRecencyHalfLifeDays(days: Int) {
+        dataStore.edit { preferences ->
+            preferences[PreferencesKeys.MEMORY_RECENCY_HALF_LIFE_DAYS] = days
+        }
+    }
+
     override val defaultPipelineId: Flow<String?> = dataStore.data
         .catch { exception ->
             if (exception is IOException) {
@@ -625,6 +724,125 @@ class SettingsManager @Inject constructor(private val dataStore: DataStore<Prefe
     override suspend fun setLocalModelBackend(backend: String) {
         dataStore.edit { preferences ->
             preferences[PreferencesKeys.LOCAL_MODEL_BACKEND] = backend
+        }
+    }
+
+    override val activeEmbeddingProviderId: Flow<String> = dataStore.data
+        .catch { exception ->
+            if (exception is IOException) {
+                Timber.e(exception, "Error reading preferences")
+                emit(emptyPreferences())
+            } else {
+                throw exception
+            }
+        }
+        .map { preferences ->
+            preferences[PreferencesKeys.ACTIVE_EMBEDDING_PROVIDER_ID]
+                ?: SettingsDefaults.ACTIVE_EMBEDDING_PROVIDER_ID_DEFAULT
+        }
+
+    override suspend fun setActiveEmbeddingProviderId(id: String) {
+        dataStore.edit { preferences ->
+            preferences[PreferencesKeys.ACTIVE_EMBEDDING_PROVIDER_ID] = id
+        }
+    }
+
+    override val autoExtractEnabled: Flow<Boolean> = dataStore.data
+        .catch { exception ->
+            if (exception is IOException) {
+                Timber.e(exception, "Error reading preferences")
+                emit(emptyPreferences())
+            } else {
+                throw exception
+            }
+        }
+        .map { preferences ->
+            preferences[PreferencesKeys.AUTO_EXTRACT_ENABLED] ?: SettingsDefaults.AUTO_EXTRACT_ENABLED_DEFAULT
+        }
+
+    override val memoryCompactionEnabled: Flow<Boolean> = dataStore.data
+        .catch { exception ->
+            if (exception is IOException) {
+                Timber.e(exception, "Error reading preferences")
+                emit(emptyPreferences())
+            } else {
+                throw exception
+            }
+        }
+        .map { preferences ->
+            preferences[PreferencesKeys.MEMORY_COMPACTION_ENABLED]
+                ?: SettingsDefaults.MEMORY_COMPACTION_ENABLED_DEFAULT
+        }
+
+    override suspend fun setMemoryCompactionEnabled(enabled: Boolean) {
+        dataStore.edit { preferences ->
+            preferences[PreferencesKeys.MEMORY_COMPACTION_ENABLED] = enabled
+        }
+    }
+
+    override val verboseMemoryLoggingEnabled: Flow<Boolean> = dataStore.data
+        .catch { exception ->
+            if (exception is IOException) {
+                Timber.e(exception, "Error reading preferences")
+                emit(emptyPreferences())
+            } else {
+                throw exception
+            }
+        }
+        .map { preferences ->
+            preferences[PreferencesKeys.VERBOSE_MEMORY_LOGGING_ENABLED]
+                ?: SettingsDefaults.VERBOSE_MEMORY_LOGGING_ENABLED_DEFAULT
+        }
+
+    override suspend fun setVerboseMemoryLoggingEnabled(enabled: Boolean) {
+        dataStore.edit { preferences ->
+            preferences[PreferencesKeys.VERBOSE_MEMORY_LOGGING_ENABLED] = enabled
+        }
+    }
+
+    override val memoryCompactionAgeDays: Flow<Int> = dataStore.data
+        .catch { exception ->
+            if (exception is IOException) {
+                Timber.e(exception, "Error reading preferences")
+                emit(emptyPreferences())
+            } else {
+                throw exception
+            }
+        }
+        .map { preferences ->
+            preferences[PreferencesKeys.MEMORY_COMPACTION_AGE_DAYS]
+                ?: SettingsDefaults.MEMORY_COMPACTION_AGE_DAYS_DEFAULT
+        }
+
+    override suspend fun setMemoryCompactionAgeDays(days: Int) {
+        dataStore.edit { preferences ->
+            preferences[PreferencesKeys.MEMORY_COMPACTION_AGE_DAYS] = days
+        }
+    }
+
+    override val maxMemoryChunks: Flow<Int> = dataStore.data
+        .catch { exception ->
+            if (exception is IOException) {
+                Timber.e(exception, "Error reading preferences")
+                emit(emptyPreferences())
+            } else {
+                throw exception
+            }
+        }
+        .map { preferences ->
+            preferences[PreferencesKeys.MAX_MEMORY_CHUNKS]
+                ?: SettingsDefaults.MAX_MEMORY_CHUNKS_DEFAULT
+        }
+
+    override suspend fun setMaxMemoryChunks(limit: Int) {
+        dataStore.edit { preferences ->
+            preferences[PreferencesKeys.MAX_MEMORY_CHUNKS] = limit
+        }
+    }
+
+    override suspend fun setAutoExtractEnabled(enabled: Boolean) {
+        dataStore.edit { preferences ->
+            preferences[PreferencesKeys.AUTO_EXTRACT_ENABLED] = enabled
         }
     }
 

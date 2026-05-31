@@ -18,6 +18,8 @@ import ai.agent.android.domain.repositories.SettingsRepository
 import ai.agent.android.domain.usecases.AgentOrchestratorUseCase
 import ai.agent.android.domain.usecases.GetContextWindowUseCase
 import ai.agent.android.domain.usecases.LoadModelUseCase
+import ai.agent.android.domain.usecases.SaveMessageToMemoryUseCase
+import ai.agent.android.domain.usecases.SaveToMemoryOutcome
 import app.knotwork.design.components.chat.ChatContent
 import app.knotwork.design.components.chat.ChatRole
 import app.knotwork.design.components.chips.Risk
@@ -35,7 +37,9 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runCurrent
@@ -82,6 +86,7 @@ class ChatHomeViewModelTest {
     private lateinit var clarificationRepository: ClarificationRepository
     private lateinit var localModelRepository: LocalModelRepository
     private lateinit var loadModelUseCase: LoadModelUseCase
+    private lateinit var saveMessageToMemoryUseCase: SaveMessageToMemoryUseCase
 
     private lateinit var sessionsFlow: MutableStateFlow<List<ChatSession>>
     private lateinit var localModelsFlow: MutableStateFlow<List<LocalModel>>
@@ -106,6 +111,7 @@ class ChatHomeViewModelTest {
         clarificationRepository = mockk(relaxed = true)
         localModelRepository = mockk(relaxed = true)
         loadModelUseCase = mockk()
+        saveMessageToMemoryUseCase = mockk()
 
         sessionsFlow = MutableStateFlow(emptyList())
         localModelsFlow = MutableStateFlow(emptyList())
@@ -162,6 +168,8 @@ class ChatHomeViewModelTest {
         clarificationRepository,
         localModelRepository,
         loadModelUseCase,
+        mockk(relaxed = true),
+        saveMessageToMemoryUseCase,
     )
 
     @Test
@@ -218,6 +226,53 @@ class ChatHomeViewModelTest {
         // content so the host-supplied markdown renderer formats them.
         assertEquals("hello", (rows[1].content as ChatContent.Markdown).source)
         assertEquals(ChatHomeUiState.Idle, viewModel.state.value)
+    }
+
+    @Test
+    fun `saveMessageToMemory persists the row text and emits a Saved event`() = runTest(testDispatcher) {
+        viewModel = createViewModel()
+        advanceUntilIdle()
+        val sessionId = viewModel.currentSessionId.value
+        messagesFlow.value = listOf(
+            ChatMessage(id = 1, sessionId = sessionId, role = Role.USER, content = "remember me", timestamp = 0),
+        )
+        advanceUntilIdle()
+        val rowId = viewModel.messages.value.first().id
+        coEvery { saveMessageToMemoryUseCase("remember me") } returns SaveToMemoryOutcome.Saved(id = 1L)
+
+        val events = mutableListOf<MemorySaveEvent>()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            viewModel.memorySaveEvents.collect { events.add(it) }
+        }
+
+        viewModel.saveMessageToMemory(rowId)
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { saveMessageToMemoryUseCase("remember me") }
+        assertEquals(listOf(MemorySaveEvent.Saved), events)
+    }
+
+    @Test
+    fun `saveMessageToMemory emits a Failed event when the use case fails`() = runTest(testDispatcher) {
+        viewModel = createViewModel()
+        advanceUntilIdle()
+        val sessionId = viewModel.currentSessionId.value
+        messagesFlow.value = listOf(
+            ChatMessage(id = 1, sessionId = sessionId, role = Role.USER, content = "remember me", timestamp = 0),
+        )
+        advanceUntilIdle()
+        val rowId = viewModel.messages.value.first().id
+        coEvery { saveMessageToMemoryUseCase(any()) } returns SaveToMemoryOutcome.Failed(RuntimeException("boom"))
+
+        val events = mutableListOf<MemorySaveEvent>()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            viewModel.memorySaveEvents.collect { events.add(it) }
+        }
+
+        viewModel.saveMessageToMemory(rowId)
+        advanceUntilIdle()
+
+        assertEquals(listOf(MemorySaveEvent.Failed), events)
     }
 
     @Test

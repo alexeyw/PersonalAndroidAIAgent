@@ -1,9 +1,11 @@
 package ai.agent.android.data.repositories
 
 import ai.agent.android.data.local.Converters
+import ai.agent.android.data.local.TagsCsv
 import ai.agent.android.data.local.dao.MemoryDao
 import ai.agent.android.data.local.models.MemoryChunkEntity
 import ai.agent.android.domain.models.MemoryChunk
+import ai.agent.android.domain.models.MemorySource
 import ai.agent.android.domain.models.MemoryStats
 import ai.agent.android.domain.models.MemorySummary
 import ai.agent.android.domain.repositories.MemoryRepository
@@ -36,7 +38,12 @@ class MemoryRepositoryImpl @Inject constructor(private val memoryDao: MemoryDao,
      */
     private val recentSimilarityScores = MutableStateFlow<List<Float>>(emptyList())
 
-    override suspend fun saveMemory(text: String, embedding: FloatArray): Long = withContext(Dispatchers.IO) {
+    override suspend fun saveMemory(
+        text: String,
+        embedding: FloatArray,
+        source: MemorySource,
+        tags: List<String>,
+    ): Long = withContext(Dispatchers.IO) {
         val embeddingString = converters.fromFloatArray(embedding)
             ?: throw IllegalArgumentException("Failed to serialize embedding")
 
@@ -44,25 +51,14 @@ class MemoryRepositoryImpl @Inject constructor(private val memoryDao: MemoryDao,
             text = text,
             embedding = embeddingString,
             timestamp = System.currentTimeMillis(),
+            source = source,
+            tagsCsv = TagsCsv.encode(tags),
         )
         memoryDao.insertMemory(entity)
     }
 
     override suspend fun getAllMemories(): List<MemoryChunk> = withContext(Dispatchers.IO) {
-        memoryDao.getAllMemories().mapNotNull { entity ->
-            val embeddingArray = converters.toFloatArray(entity.embedding)
-            if (embeddingArray != null) {
-                MemoryChunk(
-                    id = entity.id,
-                    text = entity.text,
-                    embedding = embeddingArray,
-                    timestamp = entity.timestamp,
-                    isPinned = entity.isPinned,
-                )
-            } else {
-                null
-            }
-        }
+        memoryDao.getAllMemories().mapNotNull { entity -> entity.toMemoryChunkOrNull() }
     }
 
     override suspend fun getRecentMemorySummaries(limit: Int): List<MemorySummary> = if (limit <= 0) {
@@ -79,18 +75,7 @@ class MemoryRepositoryImpl @Inject constructor(private val memoryDao: MemoryDao,
         limit: Int,
     ): List<Pair<MemoryChunk, Float>> = withContext(Dispatchers.Default) {
         val recentMemories = memoryDao.getRecentMemories(searchPoolLimit).mapNotNull { entity ->
-            val embeddingArray = converters.toFloatArray(entity.embedding)
-            if (embeddingArray != null) {
-                MemoryChunk(
-                    id = entity.id,
-                    text = entity.text,
-                    embedding = embeddingArray,
-                    timestamp = entity.timestamp,
-                    isPinned = entity.isPinned,
-                )
-            } else {
-                null
-            }
+            entity.toMemoryChunkOrNull()
         }
 
         val ranked = recentMemories.map { memory ->
@@ -100,10 +85,12 @@ class MemoryRepositoryImpl @Inject constructor(private val memoryDao: MemoryDao,
             .sortedByDescending { it.second }
             .take(limit)
 
-        // Record the top-k scores so the Settings stats card surfaces a
-        // representative recency-weighted average. Bounded so the average
-        // tracks recent behaviour rather than the lifetime mean.
-        val newScores = ranked.map { it.second }
+        // Record the strongest few scores so the Settings stats card surfaces a
+        // representative average. Only the head of the ranked list is sampled
+        // (not the whole returned set): retrieval now asks for the full scored
+        // pool to feed re-ranking, and folding hundreds of low-similarity tail
+        // scores into the window would drag the AVG SCORE cell toward zero.
+        val newScores = ranked.take(STATS_SAMPLE_SIZE).map { it.second }
         if (newScores.isNotEmpty()) {
             recentSimilarityScores.update { previous ->
                 (previous + newScores).takeLast(RECENT_SIMILARITY_WINDOW)
@@ -117,6 +104,17 @@ class MemoryRepositoryImpl @Inject constructor(private val memoryDao: MemoryDao,
         memoryDao.deleteOldestMemories(keepLimit)
     }
 
+    override suspend fun getCompactionCandidates(olderThanMillis: Long): List<MemoryChunk> =
+        withContext(Dispatchers.IO) {
+            memoryDao.getCompactionCandidates(olderThanMillis).mapNotNull { entity ->
+                entity.toMemoryChunkOrNull()
+            }
+        }
+
+    override suspend fun countMemories(): Int = withContext(Dispatchers.IO) {
+        memoryDao.countMemories()
+    }
+
     override suspend fun deleteMemory(id: Long) = withContext(Dispatchers.IO) {
         memoryDao.deleteMemoryById(id)
     }
@@ -127,13 +125,109 @@ class MemoryRepositoryImpl @Inject constructor(private val memoryDao: MemoryDao,
         memoryDao.updateMemory(id = id, text = text, embedding = embeddingString)
     }
 
+    override suspend fun updateMemoryWithTags(id: Long, text: String, embedding: FloatArray, tags: List<String>) =
+        withContext(Dispatchers.IO) {
+            val embeddingString = converters.fromFloatArray(embedding)
+                ?: throw IllegalArgumentException("Failed to serialize embedding")
+            memoryDao.updateMemoryWithTags(
+                id = id,
+                text = text,
+                embedding = embeddingString,
+                tagsCsv = TagsCsv.encode(tags),
+            )
+        }
+
     override suspend fun setMemoryPinned(id: Long, pinned: Boolean) = withContext(Dispatchers.IO) {
         memoryDao.setMemoryPinned(id = id, isPinned = pinned)
+    }
+
+    override suspend fun setMemoryTags(id: Long, tags: List<String>) = withContext(Dispatchers.IO) {
+        memoryDao.setMemoryTags(id = id, tagsCsv = TagsCsv.encode(tags))
+    }
+
+    override suspend fun recordUsage(ids: List<Long>, atMillis: Long) {
+        if (ids.isEmpty()) return
+        withContext(Dispatchers.IO) {
+            memoryDao.recordUsage(ids = ids, atMillis = atMillis)
+        }
     }
 
     override suspend fun deleteAllMemories() = withContext(Dispatchers.IO) {
         memoryDao.deleteAllMemories()
         recentSimilarityScores.value = emptyList()
+    }
+
+    override suspend fun getExistingMemoryIds(): Set<Long> = withContext(Dispatchers.IO) {
+        memoryDao.getAllIds().toSet()
+    }
+
+    override suspend fun insertImportedMemories(chunks: List<MemoryChunk>, needsReembedding: Boolean) {
+        if (chunks.isEmpty()) return
+        withContext(Dispatchers.IO) {
+            memoryDao.insertMemories(chunks.toImportEntities(needsReembedding))
+        }
+    }
+
+    override suspend fun replaceImportedMemories(chunks: List<MemoryChunk>, needsReembedding: Boolean) =
+        withContext(Dispatchers.IO) {
+            memoryDao.replaceAll(chunks.toImportEntities(needsReembedding))
+        }
+
+    override suspend fun countMemoriesNeedingReembedding(): Int = withContext(Dispatchers.IO) {
+        memoryDao.countNeedingReembedding()
+    }
+
+    override suspend fun getMemoriesNeedingReembedding(): List<MemoryChunk> = withContext(Dispatchers.IO) {
+        // Deliberately lenient (no `mapNotNull` drop): the re-embed pass recomputes
+        // the vector from `text` and ignores the stored embedding, so a row whose
+        // embedding string is unparseable must still be returned — otherwise it
+        // would be dropped here yet keep counting in `countNeedingReembedding`,
+        // re-arming the worker on every startup as a permanent no-op. A bad
+        // embedding falls back to an empty array (the caller never reads it).
+        memoryDao.getMemoriesNeedingReembedding().map { entity ->
+            MemoryChunk(
+                id = entity.id,
+                text = entity.text,
+                // runCatching: toFloatArray throws on a non-numeric string and
+                // returns null on a blank one; either way a corrupt embedding
+                // falls back to empty so the row is still returned and repaired.
+                embedding = runCatching { converters.toFloatArray(entity.embedding) }.getOrNull() ?: FloatArray(0),
+                timestamp = entity.timestamp,
+                isPinned = entity.isPinned,
+                source = entity.source,
+                tags = TagsCsv.decode(entity.tagsCsv),
+                useCount = entity.useCount,
+                lastUsedAt = entity.lastUsedAt,
+            )
+        }
+    }
+
+    /**
+     * Maps imported domain chunks to entities, preserving id / timestamp /
+     * provenance / pin state / tags and resetting per-device usage telemetry.
+     * Chunks whose embedding cannot be serialised are dropped (their embedding
+     * is already validated non-empty by the import parser, so this is a defensive
+     * guard rather than an expected path).
+     */
+    private fun List<MemoryChunk>.toImportEntities(needsReembedding: Boolean): List<MemoryChunkEntity> =
+        mapNotNull { chunk ->
+            val embeddingString = converters.fromFloatArray(chunk.embedding) ?: return@mapNotNull null
+            MemoryChunkEntity(
+                id = chunk.id,
+                text = chunk.text,
+                embedding = embeddingString,
+                timestamp = chunk.timestamp,
+                isPinned = chunk.isPinned,
+                source = chunk.source,
+                tagsCsv = TagsCsv.encode(chunk.tags),
+                needsReembedding = needsReembedding,
+            )
+        }
+
+    override suspend fun markMemoryReembedded(id: Long, embedding: FloatArray) = withContext(Dispatchers.IO) {
+        val embeddingString = converters.fromFloatArray(embedding)
+            ?: throw IllegalArgumentException("Failed to serialize embedding")
+        memoryDao.markReembedded(id = id, embedding = embeddingString)
     }
 
     override fun observeStats(): Flow<MemoryStats> = combine(
@@ -148,6 +242,29 @@ class MemoryRepositoryImpl @Inject constructor(private val memoryDao: MemoryDao,
             // and the UI then renders a dash for the THREADS stat cell.
             threadCount = 0,
             averageSimilarityScore = scores.takeIf { it.isNotEmpty() }?.average()?.toFloat(),
+        )
+    }
+
+    /**
+     * Maps a persisted [MemoryChunkEntity] to its domain [MemoryChunk],
+     * deserialising the comma-encoded embedding. Returns `null` when the
+     * embedding column cannot be parsed so a single corrupt row is skipped
+     * rather than aborting the whole load.
+     *
+     * @return The domain chunk, or `null` if the embedding failed to deserialise.
+     */
+    private fun MemoryChunkEntity.toMemoryChunkOrNull(): MemoryChunk? {
+        val embeddingArray = converters.toFloatArray(embedding) ?: return null
+        return MemoryChunk(
+            id = id,
+            text = text,
+            embedding = embeddingArray,
+            timestamp = timestamp,
+            isPinned = isPinned,
+            source = source,
+            tags = TagsCsv.decode(tagsCsv),
+            useCount = useCount,
+            lastUsedAt = lastUsedAt,
         )
     }
 
@@ -182,5 +299,12 @@ class MemoryRepositoryImpl @Inject constructor(private val memoryDao: MemoryDao,
     private companion object {
         /** Number of recent cosine-similarity scores tracked for the AVG SCORE stat cell. */
         const val RECENT_SIMILARITY_WINDOW: Int = 32
+
+        /**
+         * Per-call cap on how many of the ranked scores feed the AVG SCORE
+         * window. Keeps the stat anchored to the strongest hits even when a
+         * caller requests a large pool for re-ranking.
+         */
+        const val STATS_SAMPLE_SIZE: Int = 5
     }
 }

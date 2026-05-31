@@ -144,6 +144,8 @@ fun ChatHomeScreen(
     val importUnreadableMessage = stringResource(R.string.chat_import_unreadable)
     val messageCopiedMessage = stringResource(R.string.chat_snackbar_copied)
     val rateComingSoonMessage = stringResource(R.string.chat_message_rate_coming_soon)
+    val savedToMemoryMessage = stringResource(R.string.chat_snackbar_saved_to_memory)
+    val saveToMemoryFailedMessage = stringResource(R.string.chat_snackbar_save_to_memory_failed)
 
     LaunchedEffect(viewModel) {
         viewModel.pipelineFallbackEvents.collect {
@@ -172,6 +174,15 @@ fun ChatHomeScreen(
     LaunchedEffect(viewModel) {
         viewModel.importErrorEvents.collect { reason ->
             snackbarHostState.showSnackbar(message = importFailedTemplate.format(reason))
+        }
+    }
+    LaunchedEffect(viewModel) {
+        viewModel.memorySaveEvents.collect { event ->
+            val message = when (event) {
+                MemorySaveEvent.Saved -> savedToMemoryMessage
+                MemorySaveEvent.Failed -> saveToMemoryFailedMessage
+            }
+            snackbarHostState.showSnackbar(message = message)
         }
     }
 
@@ -287,6 +298,9 @@ fun ChatHomeScreen(
                 }
                 ChatContextAction.Rerun -> {
                     viewModel.textForRow(rowId)?.let(viewModel::onComposerValueChange)
+                }
+                ChatContextAction.SaveToMemory -> {
+                    viewModel.saveMessageToMemory(rowId)
                 }
                 ChatContextAction.Rate -> {
                     coroutineScope.launch {

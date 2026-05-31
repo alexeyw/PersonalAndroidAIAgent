@@ -1,5 +1,7 @@
 package ai.agent.android.data.local
 
+import ai.agent.android.domain.memoryio.MemorySourceJson
+import ai.agent.android.domain.models.MemorySource
 import ai.agent.android.domain.models.NodeContextConfig
 import androidx.room.TypeConverter
 import org.json.JSONException
@@ -11,7 +13,8 @@ import timber.log.Timber
  *
  * Currently handles:
  * - [FloatArray] ↔ comma-separated [String] for vector embeddings;
- * - [NodeContextConfig] ↔ JSON [String] for per-node pipeline context flags.
+ * - [NodeContextConfig] ↔ JSON [String] for per-node pipeline context flags;
+ * - [MemorySource] ↔ JSON [String] for memory-chunk provenance.
  */
 class Converters {
 
@@ -83,6 +86,44 @@ class Converters {
         } catch (e: JSONException) {
             Timber.w(e, "Failed to parse NodeContextConfig from value=%s, using ALL_ENABLED", value)
             NodeContextConfig.ALL_ENABLED
+        }
+    }
+
+    /**
+     * Serialises a [MemorySource] to a compact JSON string for the single
+     * `memory_chunks.source` TEXT column. Delegates the wire shape to
+     * [MemorySourceJson] so the column encoding stays byte-identical to the
+     * memory export file. The column is `NOT NULL`, so both directions are
+     * non-null.
+     *
+     * @param source The provenance to serialise.
+     * @return A JSON object string carrying the [MemorySource.type] key and any
+     * variant payload.
+     */
+    @TypeConverter
+    fun fromMemorySource(source: MemorySource): String = MemorySourceJson.encode(source).toString()
+
+    /**
+     * Deserialises a JSON string produced by [fromMemorySource] back into a
+     * [MemorySource].
+     *
+     * Defends against blank or malformed payloads (e.g. a hand-edited DB or a
+     * future wire key this build does not recognise): in every unrecoverable
+     * case it returns [MemorySource.Unknown], matching the JSON the migration
+     * writes for legacy rows. This keeps reads total — a single corrupt row
+     * never aborts a whole memory load.
+     *
+     * @param value The stored JSON string.
+     * @return The parsed provenance, or [MemorySource.Unknown] on any error.
+     */
+    @TypeConverter
+    fun toMemorySource(value: String): MemorySource {
+        if (value.isBlank()) return MemorySource.Unknown
+        return try {
+            MemorySourceJson.decode(JSONObject(value))
+        } catch (e: JSONException) {
+            Timber.w(e, "Failed to parse MemorySource from value=%s, using Unknown", value)
+            MemorySource.Unknown
         }
     }
 

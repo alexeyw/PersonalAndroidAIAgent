@@ -202,7 +202,12 @@ history is portable to any app that handles JSON or plain text.
 
 ### Copying a message
 
-Long-press any message bubble to copy its text to the clipboard.
+Long-press any message bubble to open its context menu. From there you
+can **Copy** the text to the clipboard, **Re-run** it (drop the text back
+into the composer), **Rate** the reply, or **Save to memory** — which
+stores the message verbatim in long-term memory as a manual entry and
+confirms with a *Saved to memory* snackbar. Saved entries show up under
+**More → Memory** with the **Manual** source.
 
 ---
 
@@ -240,8 +245,14 @@ The pane has three tabs:
 
 - **Console log** — every `[TAG] message` event from the current
   session in chronological order with millisecond timestamps. A row
-  of filter chips at the top lets you narrow to **All / Nodes / Tools
-  / Memory / Errors**.
+  of source filter chips at the top lets you narrow by origin —
+  **NODE / TOOL / MEMORY / RUNTIME / USER** — each toggling
+  independently. The **MEMORY** chip isolates long-term-memory
+  retrievals: each one is logged as
+  `Memory: query='…' → N hits (score, …)`, echoing the query, how many
+  chunks were surfaced, and their similarity scores. Turn on
+  **Settings → Privacy → Verbose memory logging** to expand each line
+  with a per-hit text snippet and score.
 - **Pipeline trace** — a structured view of the pipeline run as a tree
   of node spans (name, duration, status). Useful for understanding
   *why* a particular branch fired or a node was skipped.
@@ -632,21 +643,102 @@ the rolling context (described below).
 
 ### Browsing long-term memory
 
-Open the **More** tab, tap **Memory**. The screen has two tabs:
+Open the **More** tab, tap **Memory**. A stats header sits at the top:
+the total number of stored memories, the on-disk size, when memory was
+last compacted, and a coloured bar breaking entries down by provenance
+(**Auto** / **Compaction** / **Manual**). Below it, a chip row narrows
+the list — **All**, **Pinned**, or one provenance at a time, each chip
+showing its count — and a **Sort** + date-range pair of dropdowns
+re-orders and time-bounds the list. Entries are grouped into **Pinned**,
+**Today**, **This week**, and **Earlier**, each row carrying a coloured
+provenance accent, a source badge, and its tags.
 
-- **Chat History** — every past session, grouped by chat. Expand a
-  session to see its messages.
-- **Vector Base** — the actual long-term memory chunks the agent
-  searches over. Each chunk is a small fragment distilled from a
-  past conversation.
+### Auto-extract from conversations
+
+When **Settings → Memory → Auto-extract from conversations** is on
+(the default), the agent automatically tops up long-term memory for
+you. Shortly after a reply finishes (a ~30-second quiet period, so a
+fast back-and-forth is processed only once), it re-reads the recent
+conversation and distils the durable facts you stated — preferences,
+events, and relationships — into new memory chunks. Small talk, the
+assistant's own wording, and anything not explicitly stated are
+ignored, and a fact that closely matches one you already have is
+skipped rather than duplicated.
+
+Each new chunk is tagged with the fact type it represents (`fact`,
+`preference`, `project`, …) and the chat it came from, so you can tell
+auto-saved memories apart from ones you saved by hand. You can watch
+this happen in the **Console** pane (the **Memory** filter) and review
+or delete the results on the Memory screen.
+
+Turn the toggle off if you would rather curate memory entirely by
+hand; extraction then stops and existing memories are left untouched.
+
+### Saving a memory by hand
+
+You don't have to wait for auto-extract. Two ways to add a **Manual**
+entry: long-press any chat message and choose **Save to memory** (see
+[Copying a message](#copying-a-message)), or tap the **Add memory** FAB
+on the Memory screen and type the text. Manual entries are embedded with
+whichever embedding provider is active, so they are searchable straight
+away.
+
+### Searching memory
+
+Tap the search icon to open semantic search. Your query is embedded and
+the list is re-ranked by relevance — each result shows a 0–1 score, so a
+search for "berlin" surfaces the timezone note even though it never
+contains that word.
+
+### Viewing and editing an entry
+
+Tap a row to open its detail sheet. It shows the full text, an
+approximate token count, the source ("Auto-extracted" / "Saved
+manually" / "Compacted"), which chat it was learned from, when it was
+captured, and how often it has been used in replies. From here you can
+**pin**, **edit** the text and tags, or **delete** the entry. Pinned
+entries float to the top and are never touched by compaction.
 
 ### Compact Memory
 
-The **Vector Base** tab has a **Compact Memory** button. Tap it to
-let the agent re-summarize and consolidate memory chunks — useful
-after a long string of conversations have produced overlapping
-fragments. Compaction is a single one-shot action; you can leave the
-screen while it runs.
+Tap **Compact** in the stats header to consolidate memory. A dialog
+previews the estimated number of chunks removed, bytes freed, and
+runtime before you confirm. Compaction merges near-duplicate chunks and
+re-summarises the oldest entries; pinned memories are never touched. The
+"compacted N ago" line in the header reflects the last run.
+
+### Exporting memory
+
+The overflow menu (⋮) on the Memory screen offers **Export memory**,
+which writes every chunk — text, embedding, tags, and metadata — to a
+JSON file via the system file picker, for backup or migration. The same
+**Export** action lives under **Settings → Memory**, and the Memory
+screen's multi-select mode can export only the chosen entries.
+
+### Moving memory to another device (export / import)
+
+To carry an agent's memory to a new phone, export it on the old device
+and import the file on the new one:
+
+1. On the source device, open **Settings → Memory → Export** and pick a
+   location. The file is a self-describing JSON document (it records
+   which embedding provider produced the vectors and when it was
+   written).
+2. Copy the file to the new device (any transfer works — cloud drive,
+   cable, messaging app).
+3. On the new device, open **Settings → Memory → Import**, select the
+   file, then choose a strategy:
+   - **Merge** — add the imported chunks to whatever is already there,
+     skipping any with an id that already exists. Nothing is deleted.
+   - **Replace all** — wipe the current memory (pinned entries included)
+     and load the file's chunks exactly. Use this for a clean transfer.
+
+If the file was exported with a **different embedding provider** than the
+one the new device is using, the app shows a notice and re-computes the
+affected embeddings automatically in the background after import — so the
+transferred entries become findable without any manual step (give it a
+moment to finish before searching). You can also force an immediate pass
+with **Settings → Memory → Re-embed**.
 
 ### Clearing context
 
@@ -736,10 +828,42 @@ Leaving every cloud row blank keeps the agent fully offline.
 
 ### Memory
 
-Four-cell stat grid — **Chunks / Size / Threads / Avg score** —
-plus an **Auto-summarize threshold** slider (`%` of the memory
-context budget) and an **Embedding model** row identifying the
-on-device encoder. The action trio:
+Four-cell stat grid — **Chunks / Size / Threads / Avg score** — an
+**Auto-extract from conversations** toggle (default on; distils
+durable facts from finished chats into memory — see
+[Auto-extract from conversations](#auto-extract-from-conversations)),
+and an **Auto-summarize threshold** slider (`%` of the memory context
+budget).
+
+**Tuning sliders.** Five sliders expose the retrieval and housekeeping
+parameters that otherwise only have code defaults:
+
+- **Search results (top-K)** (1–20, default 5) — how many ranked chunks
+  a single retrieval injects into a node's context block.
+- **Similarity threshold** (0.30–0.90, default 0.55) — the minimum
+  cosine-similarity score a chunk must reach to surface; raise it for
+  stricter matches, lower it if obvious facts are not being found.
+- **Recency half-life** (7–180 days, default 30) — how fast a non-pinned
+  chunk's score decays with age; lower values bias retrieval toward
+  fresh facts.
+- **Compaction age** (7–90 days, default 30) — how old a non-pinned chunk
+  must be before background compaction may cluster and summarise it.
+- **Max stored chunks** (1 000–20 000, default 5 000) — the hard ceiling;
+  crossing it triggers an out-of-schedule compaction pass.
+
+Each slider only offers in-range values; if a value is somehow rejected
+(for example by a future automated edit), an inline message appears and
+the change is discarded rather than saved.
+
+A **Background compaction** toggle (default on) controls whether the
+daily charging-and-idle worker consolidates stale clusters, and an
+**Embedding model** dropdown selects the active provider (on-device
+Universal Sentence Encoder, OpenAI, or Ollama). Switching the provider
+applies on the next embed/retrieval; existing chunks keep their old
+vectors until you run **Re-embed** (or import flags them for a
+background re-embed).
+
+The action trio:
 
 - **Export base** — opens a SAF picker; saves the entire memory
   table as a JSON blob.
@@ -760,6 +884,11 @@ on-device encoder. The action trio:
   device meta + active pipeline / model identifiers to Firebase
   Crashlytics. Off by default; debug builds never report. Full
   policy in [SECURITY.md](../SECURITY.md).
+- **Verbose memory logging** — off by default. When on, the agent
+  console expands every memory-retrieval line with a per-hit text
+  snippet and similarity score (see [Console](#console)), and the
+  background compaction pass logs which chunks it merged. A local
+  diagnostic only — nothing leaves the device.
 - **Reset all settings** — typed-confirm dialog that restores
   every preference to defaults (API keys, downloaded models, and
   memory are untouched).
@@ -904,6 +1033,35 @@ Long pipelines can hit the **Max Steps** ceiling. The console will
 show a stop event with the step count. If you legitimately need
 more iterations, raise the ceiling in **Settings → LLM Parameters →
 Max Steps**. If the run is looping unproductively, lower it instead.
+
+### Memory search isn't finding an obvious entry
+
+If a memory you know exists never shows up in a reply (or in the Memory
+screen's search), work down this list:
+
+- **The node isn't reading memory.** Only nodes with the **Long-term
+  memory** input flag pull from the store. Open the pipeline, check the
+  node's *Input Data* section, and watch the **Console → Memory** filter:
+  if there is no `Memory: query=… → N hits` line for the run, the active
+  node never queried memory.
+- **The similarity threshold is too high.** A high **Settings → Memory →
+  Similarity threshold** drops loosely-related chunks before they reach
+  the prompt. Lower it (or pin the entry — pinned chunks bypass the
+  threshold entirely and always sort to the top).
+- **Recency decay buried it.** Old, non-pinned chunks lose score with
+  age. If a months-old fact stops surfacing, raise **Recency half-life**
+  or pin it.
+- **The entry is queued for re-embedding.** A chunk imported under a
+  different embedding provider can't be matched until the background
+  re-embed finishes (it scores ~0 in the meantime). Give it a moment, or
+  force it with **Settings → Memory → Re-embed**.
+- **The provider changed.** Switching the **Embedding model** leaves
+  existing chunks in the old vector space; run **Re-embed** so the whole
+  store shares the active provider's space again.
+- **It was never extracted.** Auto-extract only keeps durable facts
+  (preferences, events, relationships) and skips small talk and
+  near-duplicates. If a fact didn't make the cut, add it by hand with
+  **Save to memory** or the **Add memory** FAB.
 
 ---
 

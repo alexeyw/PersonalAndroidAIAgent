@@ -61,6 +61,15 @@ class SettingsManagerTest {
     private val crashReportingEnabledKey = booleanPreferencesKey("crash_reporting_enabled")
     private val appFunctionRiskOverridesKey = stringPreferencesKey("app_function_risk_overrides")
     private val hasCompletedOnboardingKey = booleanPreferencesKey("has_completed_onboarding")
+    private val activeEmbeddingProviderIdKey = stringPreferencesKey("active_embedding_provider_id")
+    private val memorySearchTopKKey = androidx.datastore.preferences.core.intPreferencesKey("memory_search_top_k")
+    private val memorySearchThresholdKey =
+        androidx.datastore.preferences.core.floatPreferencesKey("memory_search_threshold")
+    private val memoryCompactionEnabledKey = booleanPreferencesKey("memory_compaction_enabled")
+    private val verboseMemoryLoggingEnabledKey = booleanPreferencesKey("verbose_memory_logging_enabled")
+    private val memoryCompactionAgeDaysKey =
+        androidx.datastore.preferences.core.intPreferencesKey("memory_compaction_age_days")
+    private val maxMemoryChunksKey = androidx.datastore.preferences.core.intPreferencesKey("max_memory_chunks")
 
     @Test
     fun `isFirstLaunch returns true by default`() = runTest {
@@ -142,6 +151,138 @@ class SettingsManagerTest {
         val settingsManager = SettingsManager(dataStore)
         val result = settingsManager.maxMemoryChunksForSearch.first()
         assertEquals(1000, result)
+    }
+
+    @Test
+    fun `memorySearchTopK returns default value`() = runTest {
+        val prefs = mockk<Preferences>()
+        every { prefs[memorySearchTopKKey] } returns null
+        every { dataStore.data } returns flowOf(prefs)
+
+        val settingsManager = SettingsManager(dataStore)
+        val result = settingsManager.memorySearchTopK.first()
+        assertEquals(SettingsDefaults.MEMORY_SEARCH_TOP_K_DEFAULT, result)
+    }
+
+    @Test
+    fun `memorySearchThreshold returns default value`() = runTest {
+        val prefs = mockk<Preferences>()
+        every { prefs[memorySearchThresholdKey] } returns null
+        every { dataStore.data } returns flowOf(prefs)
+
+        val settingsManager = SettingsManager(dataStore)
+        val result = settingsManager.memorySearchThreshold.first()
+        assertEquals(SettingsDefaults.MEMORY_SEARCH_THRESHOLD_DEFAULT, result)
+    }
+
+    @Test
+    fun `setMemorySearchTopK persists and is read back`() = runTest {
+        val (manager, scope) = freshManagerWithRealDataStore()
+        try {
+            manager.setMemorySearchTopK(12)
+            assertEquals(12, manager.memorySearchTopK.first())
+        } finally {
+            scope.cancel()
+        }
+    }
+
+    @Test
+    fun `setMemorySearchThreshold persists and is read back`() = runTest {
+        val (manager, scope) = freshManagerWithRealDataStore()
+        try {
+            manager.setMemorySearchThreshold(0.72f)
+            assertEquals(0.72f, manager.memorySearchThreshold.first())
+        } finally {
+            scope.cancel()
+        }
+    }
+
+    @Test
+    fun `memoryCompactionEnabled returns default value`() = runTest {
+        val prefs = mockk<Preferences>()
+        every { prefs[memoryCompactionEnabledKey] } returns null
+        every { dataStore.data } returns flowOf(prefs)
+
+        val settingsManager = SettingsManager(dataStore)
+        val result = settingsManager.memoryCompactionEnabled.first()
+        assertEquals(SettingsDefaults.MEMORY_COMPACTION_ENABLED_DEFAULT, result)
+    }
+
+    @Test
+    fun `setMemoryCompactionEnabled persists and is read back`() = runTest {
+        val (manager, scope) = freshManagerWithRealDataStore()
+        try {
+            manager.setMemoryCompactionEnabled(false)
+            assertEquals(false, manager.memoryCompactionEnabled.first())
+        } finally {
+            scope.cancel()
+        }
+    }
+
+    @Test
+    fun `verboseMemoryLoggingEnabled returns default value`() = runTest {
+        val prefs = mockk<Preferences>()
+        every { prefs[verboseMemoryLoggingEnabledKey] } returns null
+        every { dataStore.data } returns flowOf(prefs)
+
+        val settingsManager = SettingsManager(dataStore)
+        val result = settingsManager.verboseMemoryLoggingEnabled.first()
+        assertEquals(SettingsDefaults.VERBOSE_MEMORY_LOGGING_ENABLED_DEFAULT, result)
+    }
+
+    @Test
+    fun `setVerboseMemoryLoggingEnabled persists and is read back`() = runTest {
+        val (manager, scope) = freshManagerWithRealDataStore()
+        try {
+            manager.setVerboseMemoryLoggingEnabled(true)
+            assertEquals(true, manager.verboseMemoryLoggingEnabled.first())
+        } finally {
+            scope.cancel()
+        }
+    }
+
+    @Test
+    fun `memoryCompactionAgeDays returns default value`() = runTest {
+        val prefs = mockk<Preferences>()
+        every { prefs[memoryCompactionAgeDaysKey] } returns null
+        every { dataStore.data } returns flowOf(prefs)
+
+        val settingsManager = SettingsManager(dataStore)
+        val result = settingsManager.memoryCompactionAgeDays.first()
+        assertEquals(SettingsDefaults.MEMORY_COMPACTION_AGE_DAYS_DEFAULT, result)
+    }
+
+    @Test
+    fun `setMemoryCompactionAgeDays persists and is read back`() = runTest {
+        val (manager, scope) = freshManagerWithRealDataStore()
+        try {
+            manager.setMemoryCompactionAgeDays(45)
+            assertEquals(45, manager.memoryCompactionAgeDays.first())
+        } finally {
+            scope.cancel()
+        }
+    }
+
+    @Test
+    fun `maxMemoryChunks returns default value`() = runTest {
+        val prefs = mockk<Preferences>()
+        every { prefs[maxMemoryChunksKey] } returns null
+        every { dataStore.data } returns flowOf(prefs)
+
+        val settingsManager = SettingsManager(dataStore)
+        val result = settingsManager.maxMemoryChunks.first()
+        assertEquals(SettingsDefaults.MAX_MEMORY_CHUNKS_DEFAULT, result)
+    }
+
+    @Test
+    fun `setMaxMemoryChunks persists and is read back`() = runTest {
+        val (manager, scope) = freshManagerWithRealDataStore()
+        try {
+            manager.setMaxMemoryChunks(8000)
+            assertEquals(8000, manager.maxMemoryChunks.first())
+        } finally {
+            scope.cancel()
+        }
     }
 
     @Test
@@ -480,6 +621,56 @@ class SettingsManagerTest {
             assertEquals(1, onDisk.size)
             assertEquals("http://c", onDisk[0].url)
             assertEquals("Server C", onDisk[0].name)
+        } finally {
+            scope.cancel()
+        }
+    }
+
+    @Test
+    fun `activeEmbeddingProviderId returns on-device default when nothing stored`() = runTest {
+        val prefs = mockk<Preferences>()
+        every { prefs[activeEmbeddingProviderIdKey] } returns null
+        every { dataStore.data } returns flowOf(prefs)
+
+        val settingsManager = SettingsManager(dataStore)
+        val result = settingsManager.activeEmbeddingProviderId.first()
+
+        assertEquals(SettingsDefaults.ACTIVE_EMBEDDING_PROVIDER_ID_DEFAULT, result)
+        assertEquals("use", result)
+    }
+
+    @Test
+    fun `activeEmbeddingProviderId returns stored value`() = runTest {
+        val prefs = mockk<Preferences>()
+        every { prefs[activeEmbeddingProviderIdKey] } returns "openai_3_small"
+        every { dataStore.data } returns flowOf(prefs)
+
+        val settingsManager = SettingsManager(dataStore)
+        val result = settingsManager.activeEmbeddingProviderId.first()
+
+        assertEquals("openai_3_small", result)
+    }
+
+    @Test
+    fun `activeEmbeddingProviderId handles IOException and returns default`() = runTest {
+        every { dataStore.data } returns flow { throw IOException("Test") }
+
+        val settingsManager = SettingsManager(dataStore)
+        val result = settingsManager.activeEmbeddingProviderId.first()
+
+        assertEquals(SettingsDefaults.ACTIVE_EMBEDDING_PROVIDER_ID_DEFAULT, result)
+    }
+
+    @Test
+    fun `setActiveEmbeddingProviderId persists and round-trips through DataStore`() = runTest {
+        val (manager, scope) = freshManagerWithRealDataStore()
+        try {
+            // Default before any write.
+            assertEquals("use", manager.activeEmbeddingProviderId.first())
+
+            manager.setActiveEmbeddingProviderId("ollama")
+
+            assertEquals("ollama", manager.activeEmbeddingProviderId.first())
         } finally {
             scope.cancel()
         }

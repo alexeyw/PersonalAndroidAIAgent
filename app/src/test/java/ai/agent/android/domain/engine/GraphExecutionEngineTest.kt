@@ -36,6 +36,7 @@ import ai.agent.android.domain.repositories.ChatRepository
 import ai.agent.android.domain.repositories.ClarificationRepository
 import ai.agent.android.domain.repositories.CrashReportingRepository
 import ai.agent.android.domain.repositories.LocalModelRepository
+import ai.agent.android.domain.repositories.MemoryRepository
 import ai.agent.android.domain.repositories.MetricsRepository
 import ai.agent.android.domain.repositories.NetworkActivityTracker
 import ai.agent.android.domain.repositories.SettingsRepository
@@ -83,6 +84,7 @@ class GraphExecutionEngineTest {
     private lateinit var clarificationRepository: ClarificationRepository
     private lateinit var crashReportingRepository: CrashReportingRepository
     private lateinit var localModelRepository: LocalModelRepository
+    private lateinit var memoryRepository: MemoryRepository
 
     private lateinit var engine: GraphExecutionEngine
     private lateinit var promptTemplateEngine: PromptTemplateEngine
@@ -108,6 +110,7 @@ class GraphExecutionEngineTest {
         loadModelUseCase = mockk()
         crashReportingRepository = mockk(relaxed = true)
         localModelRepository = mockk(relaxed = true)
+        memoryRepository = mockk(relaxed = true)
         clarificationRepository = mockk()
         // The resolver is exercised whenever a CLOUD node fires; default to a sensible
         // Koog model so each individual test does not have to wire it up.
@@ -195,10 +198,13 @@ class GraphExecutionEngineTest {
             retrieveRelevantMemoryUseCase,
             crashReportingRepository,
             localModelRepository,
+            memoryRepository,
         )
 
         coEvery { getContextWindowUseCase(sessionId) } returns ""
         coEvery { retrieveRelevantMemoryUseCase(any()) } returns emptyList()
+        coEvery { retrieveRelevantMemoryUseCase.retrieveScored(any()) } returns emptyList()
+        every { settingsRepository.verboseMemoryLoggingEnabled } returns flowOf(false)
         every { chatRepository.getMessagesForSession(any()) } returns flowOf(emptyList())
         every { settingsRepository.systemPromptPrefix } returns flowOf("")
         every { settingsRepository.toolUsageInstruction } returns flowOf("")
@@ -421,6 +427,7 @@ class GraphExecutionEngineTest {
             PromptTemplateEngine(),
             emptySet(),
             NodeContextBuilder(),
+            mockk(relaxed = true),
             mockk(relaxed = true),
             mockk(relaxed = true),
             mockk(relaxed = true),
@@ -856,6 +863,7 @@ class GraphExecutionEngineTest {
             retrieveRelevantMemoryUseCase,
             crashReportingRepository,
             localModelRepository,
+            memoryRepository,
         )
 
         val inputNode = NodeModel("input", NodeType.INPUT, 0f, 0f)
@@ -1029,6 +1037,7 @@ class GraphExecutionEngineTest {
                 retrieveRelevantMemoryUseCase,
                 crashReportingRepository,
                 localModelRepository,
+                memoryRepository,
             )
 
             // Generate a question with two options; the first one is the default the
@@ -1161,6 +1170,70 @@ class GraphExecutionEngineTest {
                 )
             }
         }
+
+    @Test
+    fun `given LITE_RT with longTermMemory flag when executed then retrieved chunk reaches the prompt`() = runTest {
+        every { settingsRepository.pipelineMaxSteps } returns flowOf(15)
+
+        // The retrieval use case is resolved once per run, keyed off the user
+        // prompt; stub it to surface exactly one relevant chunk (with a score —
+        // the engine consumes the score-preserving variant for the console).
+        coEvery { retrieveRelevantMemoryUseCase.retrieveScored(any()) } returns listOf(
+            MemoryChunk(
+                id = 7L,
+                text = "user prefers dark mode",
+                embedding = FloatArray(0),
+                timestamp = 0L,
+            ) to 0.83f,
+        )
+
+        val inputNode = NodeModel("input", NodeType.INPUT, 0f, 0f)
+        val llmNode = NodeModel(
+            id = "llm",
+            type = NodeType.LITE_RT,
+            x = 0f,
+            y = 0f,
+            // Only Long-Term Memory is enabled, so the assembled prompt must
+            // carry that block and nothing else.
+            contextConfig = NodeContextConfig(
+                chatHistory = false,
+                originalTask = false,
+                nodeInput = false,
+                longTermMemory = true,
+                toolResults = false,
+            ),
+        )
+        val outputNode = NodeModel("output", NodeType.OUTPUT, 0f, 0f, systemPrompt = null)
+
+        val graph = PipelineGraph(
+            id = "g1",
+            name = "Long-Term Memory Flag Test",
+            nodes = listOf(inputNode, llmNode, outputNode),
+            connections = listOf(
+                ConnectionModel("c1", "input", "llm"),
+                ConnectionModel("c2", "llm", "output"),
+            ),
+        )
+
+        every { llmEngine.generateResponseStream(any()) } returns flowOf("ok")
+
+        engine(sessionId, "what's my UI preference?", graph).toList()
+
+        // The LITE_RT prompt must carry the Long-Term Memory block with the
+        // retrieved chunk text, and no other context block headers.
+        io.mockk.verify {
+            llmEngine.generateResponseStream(
+                match {
+                    it.contains("--- Long-Term Memory ---") &&
+                        it.contains("user prefers dark mode") &&
+                        !it.contains("--- Original Task ---") &&
+                        !it.contains("--- Chat History ---") &&
+                        !it.contains("--- Tool Results ---") &&
+                        !it.contains("--- Previous Node Output ---")
+                },
+            )
+        }
+    }
 
     @Test
     fun `given TOOL node configured as auto when executed then resolved tool name reaches downstream`() = runTest {
@@ -1298,13 +1371,13 @@ class GraphExecutionEngineTest {
                 ),
             ),
         )
-        coEvery { retrieveRelevantMemoryUseCase(any()) } returns listOf(
+        coEvery { retrieveRelevantMemoryUseCase.retrieveScored(any()) } returns listOf(
             MemoryChunk(
                 id = 99L,
                 text = "user lives in Berlin",
                 embedding = FloatArray(0),
                 timestamp = 0L,
-            ),
+            ) to 0.77f,
         )
 
         // ToolRepository: one available tool plus a deterministic execution
@@ -1489,9 +1562,11 @@ class GraphExecutionEngineTest {
             .last()
             .events
 
-        // Memory access is reported even when the corpus is empty.
+        // Memory access is reported even when the corpus is empty, carrying the
+        // truncated query and a zero-hit count.
         val memEvent = finalLog.single { it.type == ConsoleEventType.MemoryAccess }
-        assertTrue(memEvent.message.contains("0"))
+        assertTrue("Missing query echo: ${memEvent.message}", memEvent.message.contains("query='User prompt'"))
+        assertTrue("Missing zero-hit count: ${memEvent.message}", memEvent.message.contains("0 hits"))
 
         // Every non-OUTPUT node yields a paired ▶ / ✓ NodeExecution event;
         // OUTPUT only gets a ▶ because its own Completed state already serves
@@ -1505,6 +1580,81 @@ class GraphExecutionEngineTest {
         assertTrue("Missing LITE_RT done", nodeMessages.any { it.startsWith("✓") && it.contains("LITE_RT") })
         assertTrue("Missing OUTPUT start", nodeMessages.any { it.startsWith("▶") && it.contains("OUTPUT") })
         assertTrue("OUTPUT must not push ✓", nodeMessages.none { it.startsWith("✓") && it.contains("OUTPUT") })
+    }
+
+    @Test
+    fun `given retrieved hits when run completes then MemoryAccess event carries query and scores`() = runTest {
+        every { settingsRepository.pipelineMaxSteps } returns flowOf(15)
+        coEvery { retrieveRelevantMemoryUseCase.retrieveScored(any()) } returns listOf(
+            MemoryChunk(id = 1L, text = "user prefers dark mode", embedding = FloatArray(0), timestamp = 0L) to 0.9f,
+            MemoryChunk(id = 2L, text = "user lives in Berlin", embedding = FloatArray(0), timestamp = 0L) to 0.4f,
+        )
+
+        val graph = PipelineGraph(
+            id = "g1",
+            name = "Memory Console",
+            nodes = listOf(
+                NodeModel("input_1", NodeType.INPUT, 0f, 0f),
+                NodeModel("llm_1", NodeType.LITE_RT, 0f, 0f),
+                NodeModel("output_1", NodeType.OUTPUT, 0f, 0f),
+            ),
+            connections = listOf(
+                ConnectionModel("c1", "input_1", "llm_1"),
+                ConnectionModel("c2", "llm_1", "output_1"),
+            ),
+        )
+        every { llmEngine.generateResponseStream(any()) } returns flowOf("answer")
+
+        val memEvent = engine(sessionId, "what is my UI preference", graph).toList()
+            .filterIsInstance<AgentOrchestratorState.ConsoleLog>()
+            .last()
+            .events
+            .single { it.type == ConsoleEventType.MemoryAccess }
+
+        // Terse format (verbose off): single line with query echo, hit count and scores.
+        assertEquals(
+            "Memory: query='what is my UI preference' → 2 hits (0.90, 0.40)",
+            memEvent.message,
+        )
+    }
+
+    @Test
+    fun `given verbose memory logging when run completes then MemoryAccess event expands per-hit snippets`() = runTest {
+        every { settingsRepository.pipelineMaxSteps } returns flowOf(15)
+        every { settingsRepository.verboseMemoryLoggingEnabled } returns flowOf(true)
+        coEvery { retrieveRelevantMemoryUseCase.retrieveScored(any()) } returns listOf(
+            MemoryChunk(id = 1L, text = "user prefers dark mode", embedding = FloatArray(0), timestamp = 0L) to 0.9f,
+        )
+
+        val graph = PipelineGraph(
+            id = "g1",
+            name = "Memory Console Verbose",
+            nodes = listOf(
+                NodeModel("input_1", NodeType.INPUT, 0f, 0f),
+                NodeModel("llm_1", NodeType.LITE_RT, 0f, 0f),
+                NodeModel("output_1", NodeType.OUTPUT, 0f, 0f),
+            ),
+            connections = listOf(
+                ConnectionModel("c1", "input_1", "llm_1"),
+                ConnectionModel("c2", "llm_1", "output_1"),
+            ),
+        )
+        every { llmEngine.generateResponseStream(any()) } returns flowOf("answer")
+
+        val memEvent = engine(sessionId, "prefs", graph).toList()
+            .filterIsInstance<AgentOrchestratorState.ConsoleLog>()
+            .last()
+            .events
+            .single { it.type == ConsoleEventType.MemoryAccess }
+
+        assertTrue(
+            "Missing header line: ${memEvent.message}",
+            memEvent.message.startsWith("Memory: query='prefs' → 1 hits (0.90)"),
+        )
+        assertTrue(
+            "Missing per-hit snippet: ${memEvent.message}",
+            memEvent.message.contains("1. [0.90] user prefers dark mode"),
+        )
     }
 
     @Test

@@ -1,5 +1,7 @@
 package ai.agent.android.domain.constants
 
+import ai.agent.android.domain.services.EmbeddingProvider
+
 /**
  * Canonical default values for every user-tunable setting that lives behind
  * [ai.agent.android.domain.repositories.SettingsRepository].
@@ -58,6 +60,45 @@ object SettingsDefaults {
     const val MEMORY_CHUNK_SEARCH_LIMIT_DEFAULT: Int = 1_000
 
     /**
+     * Default top-K for long-term memory retrieval: how many ranked chunks a
+     * single search returns into a node's context block. Distinct from
+     * [MEMORY_CHUNK_SEARCH_LIMIT_DEFAULT], which caps the *scanned* pool.
+     */
+    const val MEMORY_SEARCH_TOP_K_DEFAULT: Int = 5
+
+    /** Lower bound enforced when the user edits the memory search top-K. */
+    const val MEMORY_SEARCH_TOP_K_MIN: Int = 1
+
+    /** Upper bound enforced when the user edits the memory search top-K. */
+    const val MEMORY_SEARCH_TOP_K_MAX: Int = 20
+
+    /**
+     * Default minimum cosine-similarity score a memory chunk must reach to be
+     * surfaced during retrieval. Chunks below this are filtered out before
+     * reaching the prompt.
+     */
+    const val MEMORY_SEARCH_THRESHOLD_DEFAULT: Float = 0.55f
+
+    /** Lower bound enforced when the user edits the memory search threshold. */
+    const val MEMORY_SEARCH_THRESHOLD_MIN: Float = 0.3f
+
+    /** Upper bound enforced when the user edits the memory search threshold. */
+    const val MEMORY_SEARCH_THRESHOLD_MAX: Float = 0.9f
+
+    /**
+     * Default recency half-life, in days, used by the memory re-ranker: a
+     * non-pinned chunk this old keeps half of its raw cosine similarity. Lower
+     * values bias retrieval harder towards fresh facts.
+     */
+    const val MEMORY_RECENCY_HALF_LIFE_DAYS_DEFAULT: Int = 30
+
+    /** Lower bound enforced when the user edits the recency half-life. */
+    const val MEMORY_RECENCY_HALF_LIFE_DAYS_MIN: Int = 7
+
+    /** Upper bound enforced when the user edits the recency half-life. */
+    const val MEMORY_RECENCY_HALF_LIFE_DAYS_MAX: Int = 180
+
+    /**
      * Default Ollama-side context-window size (in tokens) assumed by
      * [ai.agent.android.data.local.ApiKeyManager] for any model whose
      * per-model override has not been configured.
@@ -99,4 +140,67 @@ object SettingsDefaults {
      * the prompt past what an on-device model can fit in context.
      */
     const val SYSTEM_INSTRUCTIONS_CHAR_LIMIT: Int = 4_000
+
+    /**
+     * Default active embedding-provider id for the long-term memory subsystem.
+     *
+     * Mirrors [EmbeddingProvider.ID_USE] (the on-device Universal Sentence
+     * Encoder) — referenced rather than re-typed so the default and the
+     * provider's own id can never drift apart.
+     */
+    const val ACTIVE_EMBEDDING_PROVIDER_ID_DEFAULT: String = EmbeddingProvider.ID_USE
+
+    /**
+     * Default for the "Auto-extract from conversations" memory toggle. `true`
+     * so the long-term memory fills itself out of the box: after a pipeline run
+     * completes, [ai.agent.android.domain.usecases.MemoryExtractionUseCase]
+     * distils durable facts from the dialogue. Users who prefer to curate
+     * memory by hand can turn it off in Settings → Memory.
+     */
+    const val AUTO_EXTRACT_ENABLED_DEFAULT: Boolean = true
+
+    /**
+     * Default for the background memory-compaction toggle. `true` so the
+     * long-term memory keeps itself tidy out of the box: a daily worker
+     * (`MemoryCompactionWorker`, charging + idle only) clusters old non-pinned
+     * chunks and consolidates each dense cluster into a single summary chunk.
+     * Users who prefer their raw facts untouched can turn it off in
+     * Settings → Memory (UI lands in Phase 25 / Task 9).
+     */
+    const val MEMORY_COMPACTION_ENABLED_DEFAULT: Boolean = true
+
+    /**
+     * Default for the "Verbose memory logging" privacy toggle. `false` so the
+     * agent console and logcat stay terse out of the box. When the user opts in
+     * (Settings → Privacy), memory retrieval console events expand with per-hit
+     * snippets and similarity scores, and the compaction pass logs the cluster
+     * membership of every consolidation.
+     */
+    const val VERBOSE_MEMORY_LOGGING_ENABLED_DEFAULT: Boolean = false
+
+    /**
+     * Default age, in days, after which a non-pinned chunk becomes a candidate
+     * for compaction. Fresh chunks are left alone so recently-learned facts
+     * keep their exact wording; only stale ones are eligible for clustering.
+     */
+    const val MEMORY_COMPACTION_AGE_DAYS_DEFAULT: Int = 30
+
+    /** Lower bound enforced when the user edits the compaction age window. */
+    const val MEMORY_COMPACTION_AGE_DAYS_MIN: Int = 7
+
+    /** Upper bound enforced when the user edits the compaction age window. */
+    const val MEMORY_COMPACTION_AGE_DAYS_MAX: Int = 90
+
+    /**
+     * Hard ceiling on the total number of stored memory chunks. When the table
+     * grows past this, compaction is triggered out-of-schedule (without waiting
+     * for the daily charging-and-idle window) to keep the database bounded.
+     */
+    const val MAX_MEMORY_CHUNKS_DEFAULT: Int = 5_000
+
+    /** Lower bound enforced when the user edits the max-chunks hard limit. */
+    const val MAX_MEMORY_CHUNKS_MIN: Int = 1_000
+
+    /** Upper bound enforced when the user edits the max-chunks hard limit. */
+    const val MAX_MEMORY_CHUNKS_MAX: Int = 20_000
 }

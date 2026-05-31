@@ -143,6 +143,8 @@ class ChatHomeConsoleStreamingTest {
         clarificationRepository,
         localModelRepository,
         loadModelUseCase,
+        mockk(relaxed = true),
+        mockk(relaxed = true),
     )
 
     @Test

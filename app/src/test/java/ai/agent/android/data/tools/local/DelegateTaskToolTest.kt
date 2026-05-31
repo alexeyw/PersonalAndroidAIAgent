@@ -1,9 +1,10 @@
 package ai.agent.android.data.tools.local
 
 import ai.agent.android.data.engine.KoogClientFactory
-import ai.agent.android.domain.engine.TextEmbeddingEngine
 import ai.agent.android.domain.repositories.ApiKeyRepository
 import ai.agent.android.domain.repositories.MemoryRepository
+import ai.agent.android.domain.services.EmbeddingProvider
+import ai.agent.android.domain.services.EmbeddingProviderResolver
 import ai.koog.prompt.Prompt
 import ai.koog.prompt.executor.clients.LLMClient
 import ai.koog.prompt.llm.LLModel
@@ -25,7 +26,8 @@ class DelegateTaskToolTest {
 
     private lateinit var koogClientFactory: KoogClientFactory
     private lateinit var memoryRepository: MemoryRepository
-    private lateinit var textEmbeddingEngine: TextEmbeddingEngine
+    private lateinit var embeddingProviderResolver: EmbeddingProviderResolver
+    private lateinit var embeddingProvider: EmbeddingProvider
     private lateinit var apiKeyRepository: ApiKeyRepository
     private lateinit var delegateTaskTool: DelegateTaskTool
     private lateinit var mockClient: LLMClient
@@ -34,9 +36,12 @@ class DelegateTaskToolTest {
     fun setup() {
         koogClientFactory = mockk()
         memoryRepository = mockk(relaxed = true)
-        textEmbeddingEngine = mockk()
+        embeddingProviderResolver = mockk()
+        embeddingProvider = mockk()
         apiKeyRepository = mockk(relaxed = true)
         mockClient = mockk(relaxed = true)
+
+        coEvery { embeddingProviderResolver.resolve() } returns embeddingProvider
 
         every { apiKeyRepository.getAnthropicModel() } returns flowOf("claude-3-5-sonnet-20240620")
         every { apiKeyRepository.getOpenAIModel() } returns flowOf("gpt-4o")
@@ -47,7 +52,7 @@ class DelegateTaskToolTest {
         delegateTaskTool = DelegateTaskTool(
             koogClientFactory = koogClientFactory,
             memoryRepository = memoryRepository,
-            textEmbeddingEngine = textEmbeddingEngine,
+            embeddingProviderResolver = embeddingProviderResolver,
             apiKeyRepository = apiKeyRepository,
         )
     }
@@ -70,7 +75,7 @@ class DelegateTaskToolTest {
             coEvery { mockClient.executeStreaming(any<Prompt>(), any<LLModel>()) } returns
                 kotlinx.coroutines.flow.flowOf(StreamFrame.TextDelta(mockResponseText))
 
-            coEvery { textEmbeddingEngine.generateEmbedding(mockResponseText) } returns mockEmbedding
+            coEvery { embeddingProvider.embed(mockResponseText) } returns mockEmbedding
 
             val result = delegateTaskTool.executeDelegation(taskDescription, targetModel)
 
@@ -80,10 +85,35 @@ class DelegateTaskToolTest {
     }
 
     @Test
+    fun `executeDelegation still returns the delegated result when memory embedding fails`() {
+        runTest {
+            val targetModel = "anthropic"
+            val taskDescription = "Write a hello world app"
+            val mockResponseText = "Here is your hello world app"
+
+            coEvery { koogClientFactory.createAnthropicExecutor() } returns mockClient
+            coEvery { mockClient.models() } returns emptyList()
+            every { mockClient.llmProvider() } returns mockk(relaxed = true)
+            coEvery { mockClient.executeStreaming(any<Prompt>(), any<LLModel>()) } returns
+                kotlinx.coroutines.flow.flowOf(StreamFrame.TextDelta(mockResponseText))
+
+            // The (cloud) embedding call fails — the secondary memory write must
+            // not discard the primary delegated result.
+            coEvery { embeddingProvider.embed(mockResponseText) } throws RuntimeException("embedding backend down")
+
+            val result = delegateTaskTool.executeDelegation(taskDescription, targetModel)
+
+            assertTrue(result.startsWith("Success: Task completed"))
+            assertTrue(result.contains("memory save failed"))
+            coVerify(exactly = 0) { memoryRepository.saveMemory(any(), any(), any(), any()) }
+        }
+    }
+
+    @Test
     fun `executeDelegation returns error when target model is unsupported`() = runTest {
         val result = delegateTaskTool.executeDelegation("Task", "unknown_model")
         assertTrue(result.startsWith("Error: Unsupported target model"))
-        coVerify(exactly = 0) { memoryRepository.saveMemory(any(), any()) }
+        coVerify(exactly = 0) { memoryRepository.saveMemory(any(), any(), any(), any()) }
     }
 
     @Test
@@ -91,7 +121,7 @@ class DelegateTaskToolTest {
         coEvery { koogClientFactory.createAnthropicExecutor() } returns null
         val result = delegateTaskTool.executeDelegation("Task", "anthropic")
         assertTrue(result.startsWith("Error: Client for"))
-        coVerify(exactly = 0) { memoryRepository.saveMemory(any(), any()) }
+        coVerify(exactly = 0) { memoryRepository.saveMemory(any(), any(), any(), any()) }
     }
 
     @Test
@@ -106,7 +136,7 @@ class DelegateTaskToolTest {
             val result = delegateTaskTool.executeDelegation("Task", "anthropic")
 
             assertTrue(result.startsWith("Error: Task delegation failed"))
-            coVerify(exactly = 0) { memoryRepository.saveMemory(any(), any()) }
+            coVerify(exactly = 0) { memoryRepository.saveMemory(any(), any(), any(), any()) }
         }
     }
 }

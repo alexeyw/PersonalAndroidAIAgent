@@ -18,6 +18,7 @@ This file maps the contents of the main application package.
     - `ApiKeyManager.kt` - API key manager.
     - `AppDatabase.kt` - Room database definition.
     - `Converters.kt` - Type converters for Room.
+    - `TagsCsv.kt` - Single comma-separated `tagsCsv` codec (encode/decode, trims + drops blanks) shared by every tag-bearing entity (`MemoryChunkEntity`, `PromptPresetEntity`, `PipelinePresetEntity`) so the separator/blank rules live in one place.
     - `EncryptedDbPassphraseProvider.kt` - Provides the SQLCipher passphrase stored in EncryptedSharedPreferences.
     - `McpServerCollisionCheck.kt` - Pure helper that detects when an `updateMcpServer` call would persist a duplicate URL row (editing server A's URL to match an existing server B's URL). Extracted from `SettingsManager.updateMcpServer` so the decision matrix is unit-testable without DataStore plumbing.
     - `SettingsManager.kt` - App settings manager.
@@ -84,7 +85,16 @@ This file maps the contents of the main application package.
     - `AgentIdleManager.kt` - Manager for device idle state.
     - `AgentPowerManager.kt` - Manager for power states.
     - `AgentWorker.kt` - WorkManager worker for agent tasks.
+    - `MemoryCompactionScheduler.kt` - Owns the WorkManager scheduling of `MemoryCompactionWorker`: a daily periodic job (charging + device-idle) plus an out-of-schedule `startHardLimitWatch` that fires an immediate relaxed-constraint pass when the chunk count crosses `maxMemoryChunks`. Wired from `MainActivity.onCreate`.
+    - `MemoryCompactionWorker.kt` - `@HiltWorker` that runs one long-term memory compaction pass. Gates on `SettingsRepository.memoryCompactionEnabled` and delegates clustering/consolidation to `MemoryCompactionUseCase`.
+    - `MemoryReembedWorker.kt` - `@HiltWorker` that re-embeds memory chunks flagged `needsReembedding` (imported under a different provider) off the hot path, delegating to `RecomputePendingEmbeddingsUseCase`; `Result.retry()` on failure so WorkManager backs off and retries (Phase 25 / Task 8).
+    - `WorkManagerMemoryReembedScheduler.kt` - Data-layer `MemoryReembedScheduler`: enqueues a unique one-off `MemoryReembedWorker` (relaxed constraints + exponential backoff, `KEEP` coalescing) when an import flags chunks for re-embedding (Phase 25 / Task 8).
     - `LongRunningTaskNotifierImpl.kt` - Notifier for the `LongRunningTasksChannel`; gated on the Settings → Notifications toggle.
+    - `embedding/` - `EmbeddingProvider` implementations and the Koog client seam.
+      - `KoogEmbedderFactory.kt` - Factory (+ default impl) building Koog OpenAI/Ollama embedding clients; `List<Double> → FloatArray` helper.
+      - `UseEmbeddingProvider.kt` - On-device USE provider (512-d) wrapping `TextEmbeddingEngine`, mutex-guarded.
+      - `CloudEmbeddingProvider.kt` - OpenAI `text-embedding-3-small` provider (1536-d) via Koog; on-device fallback when no key.
+      - `OllamaEmbeddingProvider.kt` - Ollama `nomic-embed-text` provider (768-d) via Koog; on-device fallback when no base URL.
   - `testing/` - Production-graph entry points used solely by instrumented tests.
     - `AppFunctionsE2ETestEntryPoint.kt` - Hilt `EntryPoint` exposing `ToolRepository`, `SettingsRepository`, and `ChatRepository` to `AppFunctionsEndToEndTest` so the test can reach the production singletons without a Hilt test component.
   - `tools/` - Tool and action implementations.
@@ -102,6 +112,7 @@ This file maps the contents of the main application package.
 - `di/` - Dependency Injection configurations (Hilt).
   - `AppModule.kt` - General app-level DI module.
   - `DataModule.kt` - Data layer DI module.
+  - `EmbeddingModule.kt` - Hilt multibinding for the `EmbeddingProvider` map (`use` / `openai_3_small` / `ollama`) and the `KoogEmbedderFactory` binding.
   - `LocalToolsModule.kt` - Hilt multibinding for `LocalToolExecutor` map and bindings for `CloudLlmClientFactory` / `CloudLlmModelResolver`.
   - `PromptTemplateModule.kt` - Hilt multibinding module for prompt variable providers.
 - `domain/` - Domain layer containing core business logic and Use Cases.
@@ -119,11 +130,15 @@ This file maps the contents of the main application package.
     - `DefaultPipelineFactory.kt` - Factory for default pipelines.
     - `GraphExecutionEngine.kt` - Engine responsible for executing PipelineGraphs.
     - `LlmInferenceEngine.kt` - LLM engine interface.
+    - `MemoryAccessLogFormatter.kt` - Pure formatter for the `MemoryAccess` console event. Renders the terse one-line summary (`query` + hit count + scores) and, when verbose memory logging is on, the per-hit snippet/score expansion. Used by `GraphExecutionEngine`.
     - `NodeContextBuilder.kt` - Assembles a node's executor input by concatenating only the context blocks enabled by its `NodeContextConfig` (Original Task, Chat History, Long-Term Memory, Tool Results, Previous Node Output).
     - `PipelineExecutionContext.kt` - Immutable per-iteration snapshot of pipeline-scoped data (original user message, chat history, previous node output, tool invocation results, memory entries) consumed by `NodeContextBuilder`.
     - `TaskQueueManager.kt` - Task queue manager interface.
     - `TextEmbeddingEngine.kt` - Text embedding engine interface.
     - `executors/ClarificationNodeExecutor.kt` - Executor for `NodeType.CLARIFICATION` that asks the local LLM to generate a question/options JSON, suspends on `ClarificationRepository.requestAnswer`, and forwards the user's reply downstream.
+  - `memoryio/` - JSON serialisation gateway for long-term memory export/import (Phase 25 / Task 8).
+    - `MemorySourceJson.kt` - Single source of truth for the `MemorySource` ↔ JSON wire shape; shared by the Room `source` column converter (`data/local/Converters`) and `MemoryJsonSerializer` so the column encoding and the export file stay byte-identical.
+    - `MemoryJsonSerializer.kt` - Two-way mapper between the memory table and the portable `schemaVersion: 1` export document (`embeddingProviderId` + `exportedAt` + per-chunk `id`/`text`/`embedding`/`source`/`timestamp`/`isPinned`/`tags`). Never-throwing `parse` returns `Success / SchemaMismatch / Failure`.
   - `pipelineio/` - JSON serialisation gateway for pipeline import/export.
     - `PipelineJsonSerializer.kt` - Two-way mapper between `PipelineGraph` and the `schemaVersion: 1` JSON document shared with the browser-side editor (`pipeline-editor.html`).
     - `PipelinePresetJsonSerializer.kt` - Two-way mapper between `PipelinePreset` and the pipeline-preset JSON format used by `assets/presets/pipelines/*.json` and the browser editor's `*.preset.json` export. Strict superset of the pipeline JSON; delegates the graph half to `PipelineJsonSerializer` (Phase 24 / Task 1).
@@ -155,6 +170,10 @@ This file maps the contents of the main application package.
     - `McpTool.kt` - Domain model for one tool advertised by an MCP server (`id = "mcp:<sha8(serverUrl)>:<toolName>"`, `serverUrl`, `name`, `description`, `inputSchemaJson`, optional `risk`).
     - `McpTransport.kt` - Transport selector backing `McpServerConfig.transport`. Only SSE is end-to-end wired today through Koog 0.8; STREAMABLE_HTTP falls back to SSE until upstream support lands.
     - `MemoryChunk.kt` - Memory chunk model.
+    - `MemoryExportDocument.kt` - Parsed representation of a memory export file (`embeddingProviderId`, `exportedAt`, `chunks`) produced by `MemoryJsonSerializer.parse` and consumed by `MemoryImportUseCase` (Phase 25 / Task 8).
+    - `MemoryImportOutcome.kt` - Sealed result of parsing a memory export document (`Success` / `SchemaMismatch` / `Failure`), mirroring the pipeline / prompt-preset import outcomes (Phase 25 / Task 8).
+    - `MemoryImportStrategy.kt` - How an import reconciles with the existing store: `Merge` (skip duplicate ids) / `Replace` (wipe then load) (Phase 25 / Task 8).
+    - `MemorySource.kt` - Provenance of a memory chunk (`ChatSession` / `Manual` / `Compaction` / `Unknown`) with stable wire keys; persisted via the `memory_chunks.source` column.
     - `MemorySummary.kt` - Lightweight memory projection (id/text/timestamp) used by `$MEMORY_SUMMARY`.
     - `NetworkState.kt` - Network state model.
     - `NodeContextConfig.kt` - Per-node selection of pipeline context blocks (chat history, original task, previous node output, long-term memory, tool results) injected on every execution.
@@ -199,6 +218,12 @@ This file maps the contents of the main application package.
     - `ToolRepository.kt` - Tool repository interface.
   - `services/` - Domain-level services.
     - `ApprovalNotifier.kt` - Notifier for approval requests.
+    - `EmbeddingProvider.kt` - Text-embedding backend abstraction (`embed` / `dimension` / `id` / `displayName`) + provider-id constants and `EmbeddingException`.
+    - `EmbeddingProviderResolver.kt` - Resolves the active `EmbeddingProvider` from the Hilt map and `SettingsRepository.activeEmbeddingProviderId`, falling back to on-device USE.
+    - `KMeansClusterer.kt` - Deterministic k-means clusterer over embedding vectors (farthest-first seeding, cosine distance, no randomness). Groups stale memory chunks for `MemoryCompactionUseCase`; `k = max(1, floor(sqrt(N) / 2))`.
+    - `MemoryReembedScheduler.kt` - Domain seam for scheduling the background re-embed pass over chunks flagged `needsReembedding`. Keeps `MemoryImportUseCase` free of WorkManager; data-layer impl: `WorkManagerMemoryReembedScheduler` (Phase 25 / Task 8).
+    - `MemoryAutoExtractionCoordinator.kt` - App-scoped, debounced (30s/session) trigger that runs `MemoryExtractionUseCase` after a pipeline completes; short-circuits when `SettingsRepository.autoExtractEnabled` is off, and defers (re-waits a debounce window) while `TaskQueueManager.globalState` shows an active pipeline so it never races a foreground generation on the single-conversation engine. Notified by `ChatHomeViewModel` on the terminal `Completed` state.
+    - `MemoryReranker.kt` - Pure, clock-free re-ranker for long-term-memory search hits. Re-scores `(MemoryChunk, similarity)` pairs with recency decay (half-life-based), a flat pinned boost (+0.2, hard-sorted to the top and threshold-exempt), 80-char-prefix deduplication (newest survivor), and a final-score threshold filter. Used by `RetrieveRelevantMemoryUseCase`; the caller supplies `nowMillis`.
   - `usecases/` - Business logic Use Cases.
     - `AgentOrchestratorUseCase.kt` - Use case for agent orchestration.
     - `AppInitializationUseCase.kt` - Cold-start orchestrator: streams `InitProgress` snapshots while running first-launch defaults, loading the LiteRT model, and prefetching pipelines / chat sessions / memory summaries. Drives the splash screen.
@@ -213,7 +238,9 @@ This file maps the contents of the main application package.
     - `LoadPipelineFromPresetUseCase.kt` - Materialises a `PipelinePreset` into a concrete `PipelineGraph` with fresh ids (pipeline + nodes + connections), drops orphan connections, validates, persists via `PipelineRepository.savePipeline`, returns the new pipeline id (Phase 24 / Task 1).
     - `LoadPipelineUseCase.kt` - Use case to load a pipeline.
     - `RenamePipelineUseCase.kt` - Validates and applies a new display name to an existing pipeline; canonical name-validation gate (trim + length).
+    - `MemoryCompactionUseCase.kt` - Runs one background memory-compaction pass: loads non-pinned chunks older than `memoryCompactionAgeDays`, clusters them via `KMeansClusterer`, and for each cluster of ≥ 3 runs a local-model consolidation prompt, embeds the summary with the active provider, saves it tagged `MemorySource.Compaction`, and deletes the originals. Best-effort: a blank reply or embedding failure skips only that cluster.
     - `RetrieveRelevantMemoryUseCase.kt` - Use case to retrieve memories.
+    - `MemoryExtractionUseCase.kt` - Distils durable facts (`{type, text}` JSON) from a finished conversation via one local-model pass, batch-embeds them with the active `EmbeddingProvider` (single `embed(List)` call), dedups (cosine ≥ 0.92) against stored + same-pass facts, and saves survivors tagged `MemorySource.ChatSession`. The manual "Save to memory" path uses the lighter `SaveMessageToMemoryUseCase` instead (no LLM distillation pass).
     - `SavePipelineAsPresetUseCase.kt` - Packages the currently-edited `PipelineGraph` into a user-saved `PipelinePreset` (validates name, runs `PipelineGraph.validate()`, enforces `isBundled=false`). Phase 24 / Task 1.
     - `SavePromptAsPresetUseCase.kt` - Packages a freshly-edited system prompt into a user-saved `PromptPreset`. Validates name (1..60), `systemPrompt` (non-blank, ≤ `MAX_SYSTEM_PROMPT_LENGTH`), and that the target `NodeType` is LLM-driven. Phase 24 / Task 4.
     - `SavePipelineUseCase.kt` - Use case to save a pipeline.
@@ -221,12 +248,17 @@ This file maps the contents of the main application package.
     - `TaskRouterUseCase.kt` - Use case to route tasks.
     - `ResetSamplingDefaultsUseCase.kt` - Resets temperature / top-K / top-P / repetition penalty / max context / max steps to the documented defaults.
     - `ClearAllMemoryUseCase.kt` - Wipes every memory chunk (pinned and unpinned). Gated behind the typed-confirm dialog.
-    - `ExportMemoryBaseUseCase.kt` - Serialises the memory table to a portable JSON blob. SAF-driven from `SettingsScreen`.
+    - `ExportMemoryBaseUseCase.kt` - Serialises the memory table to a portable `schemaVersion: 1` JSON blob via `MemoryJsonSerializer` (stamping the active `embeddingProviderId` + `exportedAt`). SAF-driven from `SettingsScreen` (full table) and from the Memory screen's multi-select "Export selected" action (optional `ids` subset, Phase 25 / Task 7). The import counterpart is `MemoryImportUseCase` (Phase 25 / Task 8).
+    - `MemoryImportUseCase.kt` - Imports a memory export file: `parse` surfaces the `MemoryImportOutcome`; `import(document, strategy, activeProviderId)` reconciles under `Merge` (insert non-duplicate ids) / `Replace` (transactional wipe+load; no-op on an empty document), preserving each chunk's id / provenance / pin state / tags. On a provider mismatch it flags chunks for re-embedding and schedules the background pass via `MemoryReembedScheduler` (Phase 25 / Task 8).
+    - `RecomputePendingEmbeddingsUseCase.kt` - Re-embeds chunks flagged `needsReembedding` (imported under a different provider) with the active provider and clears the flag. Run off the hot path by `MemoryReembedWorker`; a batch-embed failure propagates so the worker can retry with backoff (Phase 25 / Task 8).
+    - `SaveMessageToMemoryUseCase.kt` - Direct-wrapper manual save path behind the chat "Save to memory" action and the Memory screen's Add-memory dialog (Phase 25 / Task 7): embeds the chosen text with the active `EmbeddingProvider` (via `EmbeddingProviderResolver`) and stores it tagged `MemorySource.Manual`. Returns `SaveToMemoryOutcome` (Saved / Skipped / Failed); blank input is skipped, embedding failures are swallowed for the caller's snackbar.
+    - `EstimateCompactionUseCase.kt` - LLM-free preview of a prospective compaction pass (Phase 25 / Task 7): loads the same candidate set as `MemoryCompactionUseCase`, derives the clusterer's `k`, and returns a `CompactionEstimate` (≈ removed chunks / freed bytes / runtime) for the Memory screen's "Compact memory?" confirm dialog.
     - `ReembedAllMemoriesUseCase.kt` - Re-runs the active embedding engine over every chunk; streams `0f..1f` progress.
     - `TestBackendUseCase.kt` - Runs a fixed prompt-probe against the active local model and persists `TestProbeResult` so the Settings row keeps showing the latest throughput.
     - `GetSystemPromptVariableCatalogUseCase.kt` - Materialises the `$VARIABLE` chip catalog with live preview samples for the Settings → System instructions card.
 - `presentation/` - UI and presentation layer.
   - `common/` - Cross-feature presentation utilities.
+    - `DisplayFormat.kt` - Shared display formatters (`formatBytes` byte-size ladder, `approxTokenCount`, `CHARS_PER_TOKEN`) so byte sizes / token estimates render identically across Memory and Settings instead of drifting between per-screen copies.
     - `UiText.kt` - Sealed `UiText` (`Resource` / `Dynamic` / `Joined` / `Empty`) used by `UiState`s to carry user-visible text without holding a `Context`.
     - `UiTextExt.kt` - `@Composable UiText.asString()` and `Context.resolve(UiText)` resolution helpers.
   - `components/` - Reusable UI components.
@@ -268,10 +300,10 @@ This file maps the contents of the main application package.
         - `ChatHomeStateMapping.kt` - Pure-Kotlin mapper from `ChatHomeUiState` to the catalog `ChatHomeViewState`, plus debug-picker fixtures and the `DebugStateIds` constants.
         - `ChatHomeConsoleMapping.kt` - Pure-Kotlin mappers from the domain orchestrator output to the catalog console-pane row models: `ConsoleEvent → ConsoleLine`, `TraceStep → ConsoleTraceSpan`, `NodeIO → List<ConsoleVarRow>`.
         - `ChatHomeDebugStatePicker.kt` - Triple-tap state picker (`DropdownMenu`) — visible only in debug builds via `BuildConfig.DEBUG` guard.
-    - `memory/` - Memory screen components.
-      - `MemoryScreen.kt` - Memory UI screen.
-      - `MemoryUiState.kt` - Memory UI state.
-      - `MemoryViewModel.kt` - Memory ViewModel.
+    - `memory/` - Memory screen components (Phase 25 / Task 7 redesign).
+      - `MemoryScreen.kt` - Slim mapper. Subscribes to `MemoryViewModel`, projects `MemoryUiState` to the catalog `MemoryContent` (stats header + provenance breakdown, category chips, sort/date dropdowns, time-grouped sections, semantic-search rows with scores, detail sheet, Compact/Add dialogs). Owns the pure `toViewState` projection (grouping / breakdown / relative-time + detail labels) and the SAF launcher for full export.
+      - `MemoryUiState.kt` - Memory UI state: raw chunk list + size + last-compacted + session-name cache, plus the view selections (category / sort / date / semantic-search) and transient detail/dialog flags.
+      - `MemoryViewModel.kt` - Memory ViewModel. Loads chunks/stats/last-compacted/session-names; owns category/sort/date selection, debounced semantic search (`RetrieveRelevantMemoryUseCase.retrieveScored`), inline edit + tag editing, manual add (`SaveMessageToMemoryUseCase`), pin toggling, manual compaction (`MemoryCompactionUseCase` + `EstimateCompactionUseCase`), and full export.
     - `models/` - Models screen components (Phase 22 / Task 15 — Knotwork redesign with inline Active card + HF auth + Custom URL + Presets list).
       - `ModelsScreen.kt` - Slim mapper. Folds `ModelsUiState` into the catalog `ModelsViewState` (Active card / HF auth section / Custom URL / Presets list with Idle / Downloading / OnDisk variants).
       - `ModelsUiState.kt` - Models UI state. Adds `activeDownloadFileName: String?` so the catalog can render the in-flight progress on the matching preset row.

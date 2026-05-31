@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.BookmarkAdd
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.ErrorOutline
@@ -472,6 +473,14 @@ private fun ChatBubbleChrome(
                     onClick = {
                         menuExpanded = false
                         onContextAction(ChatContextAction.Rate)
+                    },
+                )
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.knotwork_chat_message_action_save_to_memory)) },
+                    leadingIcon = { Icon(Icons.Outlined.BookmarkAdd, contentDescription = null) },
+                    onClick = {
+                        menuExpanded = false
+                        onContextAction(ChatContextAction.SaveToMemory)
                     },
                 )
             }

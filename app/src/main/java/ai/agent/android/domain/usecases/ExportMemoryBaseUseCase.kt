@@ -1,58 +1,64 @@
 package ai.agent.android.domain.usecases
 
+import ai.agent.android.domain.memoryio.MemoryJsonSerializer
 import ai.agent.android.domain.repositories.MemoryRepository
+import ai.agent.android.domain.repositories.SettingsRepository
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
-import org.json.JSONArray
-import org.json.JSONObject
 import java.io.OutputStream
 import javax.inject.Inject
 
 /**
- * Serialises the full memory table into a portable JSON blob and writes
- * it to an arbitrary [OutputStream]. Backs the Settings → Memory →
- * Export base action; the screen owns the SAF launcher that produces the
- * stream so the use case stays free of Android imports.
+ * Serialises the memory table into a portable JSON blob and writes it to an
+ * arbitrary [OutputStream]. Backs the Settings → Memory → Export action and the
+ * Memory screen's multi-select "Export selected" action; the screen owns the
+ * SAF launcher that produces the stream so the use case stays free of Android
+ * imports.
  *
- * Format: a top-level JSON object with `schemaVersion: 1` and `chunks`
- * — an array of objects carrying `id`, `text`, `embedding` (as a JSON
- * array of floats), `timestamp`, and `isPinned`. Re-import lives in a
- * follow-up task; until then the export is informational / migratable
- * via external tools.
+ * The on-disk shape is owned by [MemoryJsonSerializer] (`schemaVersion: 1`):
+ * a top-level object carrying `embeddingProviderId` (the provider that produced
+ * the stored vectors — lets an importing device detect a vector-space
+ * mismatch), `exportedAt`, and a `chunks` array. The matching reader is
+ * [MemoryImportUseCase].
  *
+ * @property memoryRepository Source of the chunks to export.
+ * @property settingsRepository Source of the active embedding provider id
+ *   stamped onto the document.
  * @return Number of chunks written.
  */
-class ExportMemoryBaseUseCase @Inject constructor(private val memoryRepository: MemoryRepository) {
+class ExportMemoryBaseUseCase @Inject constructor(
+    private val memoryRepository: MemoryRepository,
+    private val settingsRepository: SettingsRepository,
+) {
     /**
-     * Serialises every chunk into [target] and returns the number of
-     * entries written. Closes the stream via `buffered().use { … }`.
+     * Serialises chunks into [target] and returns the number of entries
+     * written. Closes the stream via `bufferedWriter().use { … }`.
+     *
+     * @param target Destination stream (owned by the caller's SAF launcher).
+     * @param ids When `null`, every stored chunk is exported (the Settings →
+     *   Memory → Export action). When non-null, only chunks whose id is in the
+     *   set are written — backs the Memory screen's multi-select "Export
+     *   selected" action. An empty set therefore writes zero chunks.
+     * @param nowMillis Epoch-millis recorded as the export time; defaults to the
+     *   current wall-clock and is overridable for deterministic tests.
      */
-    suspend operator fun invoke(target: OutputStream): Int = withContext(Dispatchers.IO) {
+    suspend operator fun invoke(
+        target: OutputStream,
+        ids: Set<Long>? = null,
+        nowMillis: Long = System.currentTimeMillis(),
+    ): Int = withContext(Dispatchers.IO) {
         val memories = memoryRepository.getAllMemories()
-        val chunksJson = JSONArray()
-        for (memory in memories) {
-            val chunk = JSONObject().apply {
-                put("id", memory.id)
-                put("text", memory.text)
-                put("timestamp", memory.timestamp)
-                put("isPinned", memory.isPinned)
-                val embeddingJson = JSONArray()
-                for (value in memory.embedding) embeddingJson.put(value.toDouble())
-                put("embedding", embeddingJson)
-            }
-            chunksJson.put(chunk)
-        }
-        val payload = JSONObject().apply {
-            put("schemaVersion", SCHEMA_VERSION)
-            put("chunks", chunksJson)
-        }
+            .let { all -> if (ids == null) all else all.filter { it.id in ids } }
+        val providerId = settingsRepository.activeEmbeddingProviderId.first()
+        val payload = MemoryJsonSerializer.serialize(
+            chunks = memories,
+            embeddingProviderId = providerId,
+            exportedAt = nowMillis,
+        )
         target.bufferedWriter().use { writer ->
-            writer.write(payload.toString())
+            writer.write(payload)
         }
         memories.size
-    }
-
-    private companion object {
-        const val SCHEMA_VERSION = 1
     }
 }

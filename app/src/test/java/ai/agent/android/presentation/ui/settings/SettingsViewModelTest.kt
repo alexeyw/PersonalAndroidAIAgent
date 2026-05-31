@@ -11,9 +11,11 @@ import ai.agent.android.domain.repositories.IdentityRepository
 import ai.agent.android.domain.repositories.LocalModelRepository
 import ai.agent.android.domain.repositories.MemoryRepository
 import ai.agent.android.domain.repositories.SettingsRepository
+import ai.agent.android.domain.services.EmbeddingProvider
 import ai.agent.android.domain.usecases.ClearAllMemoryUseCase
 import ai.agent.android.domain.usecases.ExportMemoryBaseUseCase
 import ai.agent.android.domain.usecases.GetSystemPromptVariableCatalogUseCase
+import ai.agent.android.domain.usecases.MemoryImportUseCase
 import ai.agent.android.domain.usecases.PromptVariableCatalogEntry
 import ai.agent.android.domain.usecases.ReembedAllMemoriesUseCase
 import ai.agent.android.domain.usecases.ResetSamplingDefaultsUseCase
@@ -65,11 +67,24 @@ class SettingsViewModelTest {
     private val resetSampling = mockk<ResetSamplingDefaultsUseCase>(relaxed = true)
     private val clearMemory = mockk<ClearAllMemoryUseCase>(relaxed = true)
     private val exportMemory = mockk<ExportMemoryBaseUseCase>(relaxed = true)
+    private val memoryImport = mockk<MemoryImportUseCase>(relaxed = true)
     private val reembed = mockk<ReembedAllMemoriesUseCase>(relaxed = true)
     private val variableCatalog = mockk<GetSystemPromptVariableCatalogUseCase>(relaxed = true)
 
+    private val useProvider = fakeProvider(EmbeddingProvider.ID_USE, "On-device (USE)")
+    private val openAiProvider = fakeProvider(EmbeddingProvider.ID_OPENAI_3_SMALL, "OpenAI (3-small)")
+    private val embeddingProviders: Map<String, EmbeddingProvider> = mapOf(
+        EmbeddingProvider.ID_OPENAI_3_SMALL to openAiProvider,
+        EmbeddingProvider.ID_USE to useProvider,
+    )
+
     private lateinit var viewModel: SettingsViewModel
     private val dispatcher = StandardTestDispatcher()
+
+    private fun fakeProvider(providerId: String, name: String): EmbeddingProvider = mockk(relaxed = true) {
+        every { id } returns providerId
+        every { displayName } returns name
+    }
 
     @Before
     fun setUp() {
@@ -91,8 +106,20 @@ class SettingsViewModelTest {
         every { settings.localModelBackend } returns MutableStateFlow("CPU")
         every { settings.lastTestProbeResult } returns MutableStateFlow<TestProbeResult?>(null)
         every { settings.autoSummarizeThreshold } returns MutableStateFlow(0.8f)
+        every { settings.autoExtractEnabled } returns MutableStateFlow(true)
+        every { settings.memorySearchTopK } returns MutableStateFlow(SettingsDefaults.MEMORY_SEARCH_TOP_K_DEFAULT)
+        every { settings.memorySearchThreshold } returns
+            MutableStateFlow(SettingsDefaults.MEMORY_SEARCH_THRESHOLD_DEFAULT)
+        every { settings.memoryRecencyHalfLifeDays } returns
+            MutableStateFlow(SettingsDefaults.MEMORY_RECENCY_HALF_LIFE_DAYS_DEFAULT)
+        every { settings.memoryCompactionEnabled } returns MutableStateFlow(true)
+        every { settings.memoryCompactionAgeDays } returns
+            MutableStateFlow(SettingsDefaults.MEMORY_COMPACTION_AGE_DAYS_DEFAULT)
+        every { settings.maxMemoryChunks } returns MutableStateFlow(SettingsDefaults.MAX_MEMORY_CHUNKS_DEFAULT)
+        every { settings.activeEmbeddingProviderId } returns MutableStateFlow(EmbeddingProvider.ID_USE)
         every { settings.longRunningTaskNotificationsEnabled } returns MutableStateFlow(true)
         every { settings.crashReportingEnabled } returns MutableStateFlow(false)
+        every { settings.verboseMemoryLoggingEnabled } returns MutableStateFlow(false)
 
         every { localModels.observeActiveModelMeta() } returns MutableStateFlow(null)
         every { memory.observeStats() } returns MutableStateFlow(MemoryStats.EMPTY)
@@ -174,6 +201,170 @@ class SettingsViewModelTest {
         viewModel.setAutoSummarizeThreshold(75)
         advanceUntilIdle()
         coVerify { settings.setAutoSummarizeThreshold(0.75f) }
+    }
+
+    // ─── Memory tuning: observation ────────────────────────────────────────
+
+    @Test
+    fun `init observes memory tuning preferences and builds embedding options`() = runTest {
+        advanceUntilIdle()
+        val state = viewModel.uiState.value
+        assertEquals(SettingsDefaults.MEMORY_SEARCH_TOP_K_DEFAULT, state.memorySearchTopK)
+        assertEquals(SettingsDefaults.MEMORY_SEARCH_THRESHOLD_DEFAULT, state.memorySearchThreshold)
+        assertEquals(SettingsDefaults.MEMORY_RECENCY_HALF_LIFE_DAYS_DEFAULT, state.memoryRecencyHalfLifeDays)
+        assertTrue(state.memoryCompactionEnabled)
+        assertEquals(SettingsDefaults.MEMORY_COMPACTION_AGE_DAYS_DEFAULT, state.memoryCompactionAgeDays)
+        assertEquals(SettingsDefaults.MAX_MEMORY_CHUNKS_DEFAULT, state.maxMemoryChunks)
+        assertEquals(EmbeddingProvider.ID_USE, state.activeEmbeddingProviderId)
+        // On-device USE is hoisted to the top regardless of map iteration order.
+        assertEquals(EmbeddingProvider.ID_USE, state.embeddingProviderOptions.first().id)
+        assertEquals(embeddingProviders.size, state.embeddingProviderOptions.size)
+    }
+
+    // ─── Memory tuning: valid edits persist ────────────────────────────────
+
+    @Test
+    fun `setMemorySearchTopK within range persists and clears error`() = runTest {
+        advanceUntilIdle()
+        viewModel.setMemorySearchTopK(10)
+        advanceUntilIdle()
+        coVerify { settings.setMemorySearchTopK(10) }
+        assertNull(viewModel.uiState.value.memoryValidationError)
+    }
+
+    @Test
+    fun `setMemorySearchThreshold within range persists`() = runTest {
+        advanceUntilIdle()
+        viewModel.setMemorySearchThreshold(0.5f)
+        advanceUntilIdle()
+        coVerify { settings.setMemorySearchThreshold(0.5f) }
+        assertNull(viewModel.uiState.value.memoryValidationError)
+    }
+
+    @Test
+    fun `setMemoryRecencyHalfLifeDays within range persists`() = runTest {
+        advanceUntilIdle()
+        viewModel.setMemoryRecencyHalfLifeDays(60)
+        advanceUntilIdle()
+        coVerify { settings.setMemoryRecencyHalfLifeDays(60) }
+    }
+
+    @Test
+    fun `setMemoryCompactionEnabled persists`() = runTest {
+        advanceUntilIdle()
+        viewModel.setMemoryCompactionEnabled(false)
+        advanceUntilIdle()
+        coVerify { settings.setMemoryCompactionEnabled(false) }
+        assertNull(viewModel.uiState.value.memoryValidationError)
+    }
+
+    @Test
+    fun `setMemoryCompactionAgeDays within range persists`() = runTest {
+        advanceUntilIdle()
+        viewModel.setMemoryCompactionAgeDays(45)
+        advanceUntilIdle()
+        coVerify { settings.setMemoryCompactionAgeDays(45) }
+    }
+
+    @Test
+    fun `setMaxMemoryChunks within range persists`() = runTest {
+        advanceUntilIdle()
+        viewModel.setMaxMemoryChunks(8_000)
+        advanceUntilIdle()
+        coVerify { settings.setMaxMemoryChunks(8_000) }
+    }
+
+    @Test
+    fun `setActiveEmbeddingProviderId for known provider persists`() = runTest {
+        advanceUntilIdle()
+        viewModel.setActiveEmbeddingProviderId(EmbeddingProvider.ID_OPENAI_3_SMALL)
+        advanceUntilIdle()
+        coVerify { settings.setActiveEmbeddingProviderId(EmbeddingProvider.ID_OPENAI_3_SMALL) }
+        assertNull(viewModel.uiState.value.memoryValidationError)
+    }
+
+    // ─── Memory tuning: out-of-range edits are rejected ────────────────────
+
+    @Test
+    fun `setMemorySearchTopK above max is rejected with validation error and not persisted`() = runTest {
+        advanceUntilIdle()
+        viewModel.setMemorySearchTopK(SettingsDefaults.MEMORY_SEARCH_TOP_K_MAX + 1)
+        advanceUntilIdle()
+        assertEquals(MemoryValidationError.SearchTopK, viewModel.uiState.value.memoryValidationError)
+        coVerify(exactly = 0) { settings.setMemorySearchTopK(any()) }
+    }
+
+    @Test
+    fun `setMemorySearchTopK below min is rejected`() = runTest {
+        advanceUntilIdle()
+        viewModel.setMemorySearchTopK(SettingsDefaults.MEMORY_SEARCH_TOP_K_MIN - 1)
+        advanceUntilIdle()
+        assertEquals(MemoryValidationError.SearchTopK, viewModel.uiState.value.memoryValidationError)
+        coVerify(exactly = 0) { settings.setMemorySearchTopK(any()) }
+    }
+
+    @Test
+    fun `setMemorySearchThreshold out of range is rejected`() = runTest {
+        advanceUntilIdle()
+        viewModel.setMemorySearchThreshold(SettingsDefaults.MEMORY_SEARCH_THRESHOLD_MAX + 0.1f)
+        advanceUntilIdle()
+        assertEquals(MemoryValidationError.SearchThreshold, viewModel.uiState.value.memoryValidationError)
+        coVerify(exactly = 0) { settings.setMemorySearchThreshold(any()) }
+    }
+
+    @Test
+    fun `setMemoryRecencyHalfLifeDays out of range is rejected`() = runTest {
+        advanceUntilIdle()
+        viewModel.setMemoryRecencyHalfLifeDays(SettingsDefaults.MEMORY_RECENCY_HALF_LIFE_DAYS_MAX + 1)
+        advanceUntilIdle()
+        assertEquals(MemoryValidationError.RecencyHalfLife, viewModel.uiState.value.memoryValidationError)
+        coVerify(exactly = 0) { settings.setMemoryRecencyHalfLifeDays(any()) }
+    }
+
+    @Test
+    fun `setMemoryCompactionAgeDays out of range is rejected`() = runTest {
+        advanceUntilIdle()
+        viewModel.setMemoryCompactionAgeDays(SettingsDefaults.MEMORY_COMPACTION_AGE_DAYS_MIN - 1)
+        advanceUntilIdle()
+        assertEquals(MemoryValidationError.CompactionAge, viewModel.uiState.value.memoryValidationError)
+        coVerify(exactly = 0) { settings.setMemoryCompactionAgeDays(any()) }
+    }
+
+    @Test
+    fun `setMaxMemoryChunks out of range is rejected`() = runTest {
+        advanceUntilIdle()
+        viewModel.setMaxMemoryChunks(SettingsDefaults.MAX_MEMORY_CHUNKS_MAX + 1)
+        advanceUntilIdle()
+        assertEquals(MemoryValidationError.MaxChunks, viewModel.uiState.value.memoryValidationError)
+        coVerify(exactly = 0) { settings.setMaxMemoryChunks(any()) }
+    }
+
+    @Test
+    fun `setActiveEmbeddingProviderId for unknown id is rejected`() = runTest {
+        advanceUntilIdle()
+        viewModel.setActiveEmbeddingProviderId("nonexistent_provider")
+        advanceUntilIdle()
+        assertEquals(
+            MemoryValidationError.UnknownEmbeddingProvider,
+            viewModel.uiState.value.memoryValidationError,
+        )
+        coVerify(exactly = 0) { settings.setActiveEmbeddingProviderId(any()) }
+    }
+
+    @Test
+    fun `clearMemoryValidationError resets the error and a valid edit clears it`() = runTest {
+        advanceUntilIdle()
+        viewModel.setMemorySearchTopK(SettingsDefaults.MEMORY_SEARCH_TOP_K_MAX + 5)
+        advanceUntilIdle()
+        assertEquals(MemoryValidationError.SearchTopK, viewModel.uiState.value.memoryValidationError)
+
+        viewModel.clearMemoryValidationError()
+        assertNull(viewModel.uiState.value.memoryValidationError)
+
+        // A subsequent in-range edit also keeps the error cleared.
+        viewModel.setMemorySearchTopK(3)
+        advanceUntilIdle()
+        assertNull(viewModel.uiState.value.memoryValidationError)
     }
 
     @Test
@@ -280,6 +471,24 @@ class SettingsViewModelTest {
     }
 
     @Test
+    fun `confirmDestructive ResetSettings also reverts memory tuning to defaults`() = runTest {
+        every { context.getString(ai.agent.android.R.string.settings_destructive_typed_keyword) } returns "yes"
+        advanceUntilIdle()
+        viewModel.stageResetSettings()
+        viewModel.updateDestructiveTypedInput("yes")
+        viewModel.confirmDestructive()
+        advanceUntilIdle()
+        coVerify { settings.setAutoExtractEnabled(SettingsDefaults.AUTO_EXTRACT_ENABLED_DEFAULT) }
+        coVerify { settings.setMemorySearchTopK(SettingsDefaults.MEMORY_SEARCH_TOP_K_DEFAULT) }
+        coVerify { settings.setMemorySearchThreshold(SettingsDefaults.MEMORY_SEARCH_THRESHOLD_DEFAULT) }
+        coVerify { settings.setMemoryRecencyHalfLifeDays(SettingsDefaults.MEMORY_RECENCY_HALF_LIFE_DAYS_DEFAULT) }
+        coVerify { settings.setMemoryCompactionEnabled(SettingsDefaults.MEMORY_COMPACTION_ENABLED_DEFAULT) }
+        coVerify { settings.setMemoryCompactionAgeDays(SettingsDefaults.MEMORY_COMPACTION_AGE_DAYS_DEFAULT) }
+        coVerify { settings.setMaxMemoryChunks(SettingsDefaults.MAX_MEMORY_CHUNKS_DEFAULT) }
+        coVerify { settings.setActiveEmbeddingProviderId(SettingsDefaults.ACTIVE_EMBEDDING_PROVIDER_ID_DEFAULT) }
+    }
+
+    @Test
     fun `cancelDestructive clears pending state`() = runTest {
         advanceUntilIdle()
         viewModel.stageClearMemory()
@@ -303,6 +512,22 @@ class SettingsViewModelTest {
         advanceUntilIdle()
         coVerify { settings.setCrashReportingEnabled(true) }
         coVerify { crashReporting.setEnabled(true) }
+    }
+
+    @Test
+    fun `setVerboseMemoryLoggingEnabled routes through repository`() = runTest {
+        advanceUntilIdle()
+        viewModel.setVerboseMemoryLoggingEnabled(true)
+        advanceUntilIdle()
+        coVerify { settings.setVerboseMemoryLoggingEnabled(true) }
+    }
+
+    @Test
+    fun `verboseMemoryLoggingEnabled flow is mirrored into uiState`() = runTest {
+        every { settings.verboseMemoryLoggingEnabled } returns MutableStateFlow(true)
+        val vm = newViewModel()
+        advanceUntilIdle()
+        assertTrue(vm.uiState.value.verboseMemoryLoggingEnabled)
     }
 
     @Test
@@ -342,7 +567,9 @@ class SettingsViewModelTest {
         resetSamplingDefaultsUseCase = resetSampling,
         clearAllMemoryUseCase = clearMemory,
         exportMemoryBaseUseCase = exportMemory,
+        memoryImportUseCase = memoryImport,
         reembedAllMemoriesUseCase = reembed,
         getSystemPromptVariableCatalogUseCase = variableCatalog,
+        embeddingProviders = embeddingProviders,
     )
 }

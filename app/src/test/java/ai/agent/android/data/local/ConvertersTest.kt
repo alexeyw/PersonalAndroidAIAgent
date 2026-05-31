@@ -1,5 +1,6 @@
 package ai.agent.android.data.local
 
+import ai.agent.android.domain.models.MemorySource
 import ai.agent.android.domain.models.NodeContextConfig
 import org.junit.Assert.assertEquals
 import org.junit.Before
@@ -61,5 +62,41 @@ class ConvertersTest {
 
             assertEquals("Mask=$mask", original, restored)
         }
+    }
+
+    // ─── MemorySource ─────────────────────────────────────────────────────
+
+    @Test
+    fun `memory source round-trips every variant`() {
+        val sources = listOf(
+            MemorySource.ChatSession("session-42"),
+            MemorySource.Manual,
+            MemorySource.Compaction(listOf(1L, 2L, 3L)),
+            MemorySource.Unknown,
+        )
+        for (source in sources) {
+            val restored = converters.toMemorySource(converters.fromMemorySource(source))
+            assertEquals(source, restored)
+        }
+    }
+
+    @Test
+    fun `toMemorySource returns Unknown for blank input`() {
+        assertEquals(MemorySource.Unknown, converters.toMemorySource("   "))
+    }
+
+    @Test
+    fun `toMemorySource returns Unknown for malformed json`() {
+        assertEquals(MemorySource.Unknown, converters.toMemorySource("{not json"))
+    }
+
+    @Test
+    fun `toMemorySource returns Unknown for unrecognised type key`() {
+        assertEquals(MemorySource.Unknown, converters.toMemorySource("{\"type\":\"future_kind\"}"))
+    }
+
+    @Test
+    fun `fromMemorySource encodes unknown as the migration default`() {
+        assertEquals("{\"type\":\"unknown\"}", converters.fromMemorySource(MemorySource.Unknown))
     }
 }

@@ -15,6 +15,213 @@ details.
 
 ### Added
 
+- **Long-term memory documentation + end-to-end test** (Phase 25 / Task 10/10):
+  - `DESCRIPTION.md` §6 now documents the full memory subsystem (extraction,
+    embedding providers, storage, retrieval/re-rank, context injection,
+    compaction, import/export, and the message-to-retrieval lifecycle).
+  - `docs/architecture.md` gains a §2.2 Mermaid *memory lifecycle* diagram;
+    `docs/extending.md` gains an *Add a new `EmbeddingProvider`* recipe;
+    `docs/user-guide.md` gains a *memory search isn't finding an entry*
+    troubleshooting section.
+  - New instrumented `MemoryLifecycleIntegrationTest` wires the real domain
+    components (Room, `MemoryRepositoryImpl`, `MemoryReranker`,
+    `NodeContextBuilder`, `KMeansClusterer`, extraction/retrieval/compaction
+    use cases) over an in-memory database: a fact extracted in one session is
+    retrieved into the next session's `--- Long-Term Memory ---` block and a
+    pinned chunk survives a compaction pass.
+- **Memory tuning controls** (Phase 25 / Task 9/10) — *Settings → Memory*
+  now exposes the long-term-memory parameters that previously only had code
+  defaults:
+  - **Sliders** for retrieval *Search results (top-K)* (1–20), *Similarity
+    threshold* (0.30–0.90), *Recency half-life* (7–180 days), *Compaction age*
+    (7–90 days), and *Max stored chunks* (1 000–20 000).
+  - A **Background compaction** toggle and an **Embedding model** dropdown that
+    lists every registered provider (on-device USE, OpenAI, Ollama) and persists
+    the active selection.
+  - Out-of-range or unknown-provider edits are rejected at the ViewModel layer
+    with an inline validation message and are never persisted.
+- **Memory export / import** (Phase 25 / Task 8/10) — move an agent's
+  long-term memory between devices:
+  - **Export** — *Settings → Memory → Export* writes the table to a
+    `schemaVersion: 1` JSON file via the Storage Access Framework, stamped with
+    the active embedding provider id and an export timestamp (new
+    `domain/memoryio/MemoryJsonSerializer`; the existing `ExportMemoryBaseUseCase`
+    now emits the richer document, including per-chunk provenance and tags).
+  - **Import** — *Settings → Memory → Import* parses a file and offers a
+    **Merge** (keep existing, skip duplicate ids) or **Replace all** (wipe then
+    load) strategy (new `MemoryImportUseCase`), preserving each chunk's id,
+    provenance, pin state, and tags.
+  - **Provider-mismatch handling** — when the file was exported under a
+    different embedding provider, imported chunks are flagged `needsReembedding`
+    and re-computed with the active provider by a background WorkManager job
+    (new `MemoryReembedWorker` + `RecomputePendingEmbeddingsUseCase`, scheduled
+    at import time), so transferred memories become findable off the hot path
+    without stalling retrieval or needing a manual re-embed. The manual
+    *Settings → Memory → Re-embed* action now also clears the flag.
+- **Memory screen redesign** (Phase 25 / Task 7/10) — a full rework of the
+  long-term-memory surface:
+  - **Save to memory from chat** — the message long-press menu gains a
+    *Save to memory* action that embeds the message text with the active
+    `EmbeddingProvider` and stores it as a `Manual` chunk (new
+    `SaveMessageToMemoryUseCase`), confirming with a *Saved to memory* snackbar.
+  - **Stats header** — total count, on-disk size, "compacted N ago", and a
+    provenance breakdown bar (Auto / Compaction / Manual) with a one-tap
+    **Compact** action gated behind a confirm dialog that previews an estimate
+    (≈ removed / freed / runtime) via the new `EstimateCompactionUseCase`; the
+    manual Compact now runs the real consolidation pass.
+  - **Category chips + dropdowns** — single-select category chips (All / Pinned
+    / Auto / Manual / Compaction) with live counts, plus Sort and date-range
+    dropdowns.
+  - **Semantic search** — the search field now embeds the query and ranks
+    results by relevance, showing a per-row score.
+  - **Time-grouped list** — entries grouped into Pinned / Today / This week /
+    Earlier, each row carrying a provenance accent + badge and its tags.
+  - **Rich detail sheet** — token estimate, source, "Learned from" chat,
+    captured time, "Used in N replies", inline body + tag editing, and
+    pin / delete / save actions.
+  - **Add memory** — a FAB + dialog to store a memory by hand.
+  - **Tags & usage tracking** — chunks now carry tags (auto-extraction persists
+    each fact's type) and a retrieval use-count / last-used time recorded by the
+    pipeline engine. Backed by an additive Room migration (26 → 27).
+
+### Changed
+
+- `MemoryRepository` gains `setMemoryTags` / `recordUsage` and a `tags`
+  parameter on `saveMemory`; `ExportMemoryBaseUseCase` accepts an optional id
+  subset; `SettingsRepository` records the last compaction time.
+
+### Fixed
+
+- **Long-term memory now embeds every read and write with the active provider**
+  (Phase 25 / Task 3/10). Retrieval embedded the search query with the fixed
+  on-device Universal Sentence Encoder (512-d) while auto-extraction (Task 2)
+  stored chunks via the user-selected `EmbeddingProvider` — so with a non-`use`
+  provider active (OpenAI 1536-d, Ollama 768-d) query and stored vectors lived
+  in different dimensions, cosine similarity collapsed to `0`, and the
+  `longTermMemory` node flag surfaced nothing. All memory paths now resolve the
+  same active provider via `EmbeddingProviderResolver`:
+  - `RetrieveRelevantMemoryUseCase` (read) — so enabling the flag actually
+    injects relevant memories regardless of the chosen backend.
+  - `DelegateTaskTool` (delegated-result write), `MemoryViewModel.editVectorMemory`
+    (inline edit re-embed) and `ReembedAllMemoriesUseCase` (Settings → Memory →
+    Re-embed) — previously these persisted 512-d USE vectors that a non-`use`
+    query could never match. Re-embed remains the canonical way to migrate the
+    whole corpus into a newly selected provider's space.
+- **Memory retrieval is skipped when no executed node requests it**
+  (Phase 25 / Task 3/10). `GraphExecutionEngine` previously embedded the user
+  prompt at run start unconditionally. It now resolves long-term memory lazily —
+  at most once, the first time an executed node actually opts into the
+  `longTermMemory` context block — so graphs with memory disabled never embed
+  the prompt, sparing avoidable cloud-embedding latency/cost and not shipping
+  the prompt to an embedding backend the user did not enable memory for.
+
+### Added
+
+- **Memory observability in the agent console** (Phase 25 / Task 6/10). Every
+  long-term-memory retrieval now surfaces in the chat console as a dedicated
+  `MEMORY` source line (previously collapsed into the generic `RUNTIME`
+  source), so the new `MEMORY` filter chip isolates memory activity from node
+  and tool output. Each retrieval line echoes the truncated query, the hit
+  count, and the per-hit similarity scores
+  (`Memory: query='…' → 2 hits (0.83, 0.40)`) instead of the old bare count.
+  A new opt-in **Settings → Privacy → Verbose memory logging** toggle (default
+  off, `SettingsRepository.verboseMemoryLoggingEnabled`) expands each retrieval
+  line with a per-hit snippet + score, and makes `MemoryCompactionUseCase` log
+  the cluster membership (merged chunk ids) of every consolidation to logcat.
+- **Background memory compaction** (Phase 25 / Task 5/10). A daily
+  `MemoryCompactionWorker` (WorkManager, constrained to charging + device-idle)
+  consolidates stale, redundant long-term memory so the `memory_chunks` table
+  does not balloon with near-duplicate facts over weeks of use. The pass loads
+  non-pinned chunks older than `memoryCompactionAgeDays` (default 30), clusters
+  them by embedding similarity with a new deterministic `KMeansClusterer`
+  (`k = max(1, floor(sqrt(N) / 2))`), and for every cluster of ≥ 3 chunks runs a
+  single local-model consolidation prompt
+  (`DefaultPrompts.MemoryCompaction`), embeds the summary with the active
+  provider, saves it tagged `MemorySource.Compaction` (carrying the merged ids),
+  and deletes the originals. Pinned chunks are never touched; a blank model
+  reply or an embedding error skips only that cluster (its originals are kept).
+  An out-of-schedule watch (`MemoryCompactionScheduler.startHardLimitWatch`)
+  triggers an immediate, relaxed-constraint pass when the table grows past
+  `maxMemoryChunks` (default 5000). New settings `memoryCompactionEnabled`
+  (default on), `memoryCompactionAgeDays` and `maxMemoryChunks` back the feature
+  (the Settings → Memory UI for them lands in Task 9).
+- **Memory retrieval re-ranking** (Phase 25 / Task 4/10). Raw cosine
+  similarity is no longer the final word on what reaches the prompt. A new
+  pure-domain `MemoryReranker` re-scores the full scored search pool before
+  the top-K cut, applying four deterministic rules:
+  - **Recency weighting** — a non-pinned chunk's score decays with age
+    (`final = similarity * (1 - 0.5 * daysSince / halfLife)`, floored at 0),
+    so a stale chunk no longer crowds out a fresher one. The half-life is
+    configurable via the new `SettingsRepository.memoryRecencyHalfLifeDays`
+    (default 30 days; Settings UI lands with the later Settings/tuning task).
+  - **Pinned boost** — pinned chunks skip decay, gain a flat `+0.2`, sort
+    ahead of every non-pinned chunk, and are exempt from the threshold filter,
+    so a deliberately curated fact is always surfaced.
+  - **Deduplication** — chunks sharing their first 80 characters collapse to
+    the newest survivor, sparing the limited context budget.
+  - **Threshold filter** — applied to the *final* (post-rerank) score.
+  Re-ranking lives in `RetrieveRelevantMemoryUseCase` (the retrieval-only
+  path), leaving `MemoryRepository.findSimilarMemories` raw for
+  `MemoryExtractionUseCase`'s near-duplicate detection. The use case now pulls
+  the full scored pool so a pinned or fresh chunk just outside the raw-cosine
+  top-K can still be promoted.
+- **Configurable memory retrieval tuning** (Phase 25 / Task 3/10). The
+  retrieval top-K and relevance threshold are no longer hard-coded:
+  `SettingsRepository.memorySearchTopK` (default 5) and
+  `memorySearchThreshold` (default 0.55) back them via DataStore.
+  `RetrieveRelevantMemoryUseCase` reads these by default (callers may still
+  override per-call). The Settings UI for these controls lands with the later
+  Settings/tuning task of this phase.
+- **Automatic memory extraction** (Phase 25 / Task 2/10). After a pipeline run
+  completes, the agent now mines the conversation for durable facts and writes
+  the novel ones into long-term memory — making the "remembers past chats"
+  capability actually populate memory instead of relying on manual saves.
+  - A new `MemoryExtractionUseCase` (domain) runs the local model once with a
+    conservative, no-hallucination prompt
+    (`DefaultPrompts.MemoryExtraction.SYSTEM_FALLBACK`, `$DATE`-grounded) that
+    returns a JSON array of `{type, text}` facts; all facts are embedded in a
+    single batch `EmbeddingProvider.embed(List)` call (one cloud round-trip
+    instead of N) and each is saved only if it is not a near-duplicate
+    (cosine ≥ 0.92) of an existing chunk or another fact from the same pass.
+  - A `MemoryAutoExtractionCoordinator` (domain, app-scoped) triggers the pass
+    on pipeline completion with a 30 s per-session debounce, short-circuiting
+    when the toggle is off and deferring while another pipeline is still
+    generating.
+  - The on-device inference engine (`LiteRTLlmEngine`) now serialises every
+    generation behind a `Mutex`, since LiteRT-LM allows only one active
+    conversation — this prevents the background extraction pass and a
+    foreground response from concurrently tearing down each other's session
+    (which could crash the native layer).
+  - Memory chunks now carry a typed `MemorySource`
+    (`ChatSession` / `Manual` / `Compaction` / `Unknown`), persisted via a new
+    `memory_chunks.source` column (Room migration 25 → 26, legacy rows backfilled
+    to `Unknown`).
+  - New `Settings → Memory → Auto-extract from conversations` toggle
+    (`SettingsRepository.autoExtractEnabled`, default on) describing exactly what
+    is collected.
+- **Embedding provider abstraction** (Phase 25 / Task 1/10). Long-term memory
+  no longer hard-codes the on-device Universal Sentence Encoder. A new
+  `EmbeddingProvider` domain abstraction (`embed` / batch `embed` /
+  `dimension` / `id` / `displayName`) is implemented by three backends, Hilt-
+  multibound into a `Map<String, EmbeddingProvider>` and selected at call time
+  by `EmbeddingProviderResolver`:
+  - `use` — on-device MediaPipe Universal Sentence Encoder (512-d), the
+    default; needs no network or API key.
+  - `openai_3_small` — OpenAI `text-embedding-3-small` (1536-d) via the
+    existing Koog OpenAI client.
+  - `ollama` — local-network Ollama `nomic-embed-text` (768-d) via the Koog
+    Ollama client.
+
+  The active backend is persisted in the new
+  `SettingsRepository.activeEmbeddingProviderId` setting (default `"use"`).
+  Each provider reports `isAvailable()` (cloud providers require a configured
+  key / base URL); when the selected provider is unavailable the resolver
+  substitutes the on-device default — keeping each provider's declared
+  `dimension` honest rather than silently returning mis-dimensioned vectors.
+  Backend failures surface as a typed `EmbeddingException`, and coroutine
+  cancellation is propagated unwrapped. Existing embedding consumers are
+  unchanged in this task; migrating them onto the resolver lands with the
+  later memory tasks of this phase.
 - **Browser-editor constant sync automation** (Phase 24 / Task 8/9). The
   `:app:generateBrowserEditorConstants` Gradle task regenerates the
   `NODE_TYPES`, `PROMPT_VARIABLES`, `AVAILABLE_TOOLS` and
@@ -161,6 +368,12 @@ details.
 
 ### Changed
 
+- **`MemoryAccess` console events carry query + scores** (Phase 25 / Task 6/10).
+  The format moved from `Memory: N chunk(s) retrieved` to a richer line built
+  by the new pure `MemoryAccessLogFormatter`. `RetrieveRelevantMemoryUseCase`
+  gains a score-preserving `retrieveScored(...)` entry point (the score-free
+  `invoke(...)` now delegates to it) so the engine can render scores without a
+  second retrieval.
 - **Browser pipeline editor — full sync sweep** (Phase 24 / Task 6/9).
   Re-synced `pipeline-editor.html` with the Android source of truth after
   the Phase 20–24 drift:

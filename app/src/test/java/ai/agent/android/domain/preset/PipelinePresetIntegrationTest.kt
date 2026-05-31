@@ -180,6 +180,7 @@ class PipelinePresetIntegrationTest {
             retrieveRelevantMemoryUseCase,
             crashReportingRepository,
             localModelRepository,
+            mockk(relaxed = true),
         )
 
         every { llmEngine.generateResponseStream(any()) } returns flowOf(cannedAnswer)

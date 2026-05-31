@@ -3,6 +3,9 @@ package ai.agent.android.presentation.ui.settings
 import ai.agent.android.R
 import ai.agent.android.domain.constants.SettingsDefaults
 import ai.agent.android.domain.models.CloudProvider
+import ai.agent.android.domain.models.MemoryExportDocument
+import ai.agent.android.domain.models.MemoryImportOutcome
+import ai.agent.android.domain.models.MemoryImportStrategy
 import ai.agent.android.domain.models.ProviderId
 import ai.agent.android.domain.models.ProviderSummary
 import ai.agent.android.domain.models.ToolApprovalPolicy
@@ -12,9 +15,12 @@ import ai.agent.android.domain.repositories.IdentityRepository
 import ai.agent.android.domain.repositories.LocalModelRepository
 import ai.agent.android.domain.repositories.MemoryRepository
 import ai.agent.android.domain.repositories.SettingsRepository
+import ai.agent.android.domain.services.EmbeddingProvider
 import ai.agent.android.domain.usecases.ClearAllMemoryUseCase
 import ai.agent.android.domain.usecases.ExportMemoryBaseUseCase
 import ai.agent.android.domain.usecases.GetSystemPromptVariableCatalogUseCase
+import ai.agent.android.domain.usecases.MemoryImportResult
+import ai.agent.android.domain.usecases.MemoryImportUseCase
 import ai.agent.android.domain.usecases.ReembedAllMemoriesUseCase
 import ai.agent.android.domain.usecases.ResetSamplingDefaultsUseCase
 import ai.agent.android.domain.usecases.TestBackendUseCase
@@ -23,6 +29,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -32,7 +39,9 @@ import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import timber.log.Timber
+import java.io.InputStream
 import java.io.OutputStream
 import javax.inject.Inject
 
@@ -67,8 +76,10 @@ class SettingsViewModel @Inject constructor(
     private val resetSamplingDefaultsUseCase: ResetSamplingDefaultsUseCase,
     private val clearAllMemoryUseCase: ClearAllMemoryUseCase,
     private val exportMemoryBaseUseCase: ExportMemoryBaseUseCase,
+    private val memoryImportUseCase: MemoryImportUseCase,
     private val reembedAllMemoriesUseCase: ReembedAllMemoriesUseCase,
     private val getSystemPromptVariableCatalogUseCase: GetSystemPromptVariableCatalogUseCase,
+    private val embeddingProviders: Map<String, @JvmSuppressWildcards EmbeddingProvider>,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(SettingsUiState())
@@ -96,6 +107,7 @@ class SettingsViewModel @Inject constructor(
     init {
         loadIdentity()
         loadVariableCatalog()
+        loadEmbeddingProviders()
         // Restart-required baselines MUST be locked in before live observers
         // start emitting. Reactive DataStore / EncryptedPrefs flows can deliver
         // a transient seed value (null / default) before the persisted one
@@ -131,6 +143,22 @@ class SettingsViewModel @Inject constructor(
                 .map { VariableCatalogChip(it.placeholder, it.sample) }
             _uiState.update { it.copy(variableCatalog = entries) }
         }
+    }
+
+    /**
+     * Materialises the Hilt-registered embedding-provider map into the
+     * dropdown options consumed by the Memory section. The on-device default
+     * ([EmbeddingProvider.ID_USE]) is hoisted to the top; the rest follow in a
+     * stable display-name order so the list never re-shuffles between reads.
+     */
+    private fun loadEmbeddingProviders() {
+        val options = embeddingProviders.values
+            .map { EmbeddingProviderOption(id = it.id, displayName = it.displayName) }
+            .sortedWith(
+                compareByDescending<EmbeddingProviderOption> { it.id == EmbeddingProvider.ID_USE }
+                    .thenBy { it.displayName },
+            )
+        _uiState.update { it.copy(embeddingProviderOptions = options) }
     }
 
     @Suppress("LongMethod")
@@ -194,8 +222,40 @@ class SettingsViewModel @Inject constructor(
             _uiState.update { it.copy(memoryStats = stats) }
         }.launchIn(viewModelScope)
 
+        settingsRepository.autoExtractEnabled.onEach { value ->
+            _uiState.update { it.copy(autoExtractEnabled = value) }
+        }.launchIn(viewModelScope)
+
         settingsRepository.autoSummarizeThreshold.onEach { value ->
             _uiState.update { it.copy(autoSummarizeThreshold = value) }
+        }.launchIn(viewModelScope)
+
+        settingsRepository.memorySearchTopK.onEach { value ->
+            _uiState.update { it.copy(memorySearchTopK = value) }
+        }.launchIn(viewModelScope)
+
+        settingsRepository.memorySearchThreshold.onEach { value ->
+            _uiState.update { it.copy(memorySearchThreshold = value) }
+        }.launchIn(viewModelScope)
+
+        settingsRepository.memoryRecencyHalfLifeDays.onEach { value ->
+            _uiState.update { it.copy(memoryRecencyHalfLifeDays = value) }
+        }.launchIn(viewModelScope)
+
+        settingsRepository.memoryCompactionEnabled.onEach { value ->
+            _uiState.update { it.copy(memoryCompactionEnabled = value) }
+        }.launchIn(viewModelScope)
+
+        settingsRepository.memoryCompactionAgeDays.onEach { value ->
+            _uiState.update { it.copy(memoryCompactionAgeDays = value) }
+        }.launchIn(viewModelScope)
+
+        settingsRepository.maxMemoryChunks.onEach { value ->
+            _uiState.update { it.copy(maxMemoryChunks = value) }
+        }.launchIn(viewModelScope)
+
+        settingsRepository.activeEmbeddingProviderId.onEach { value ->
+            _uiState.update { it.copy(activeEmbeddingProviderId = value) }
         }.launchIn(viewModelScope)
 
         settingsRepository.longRunningTaskNotificationsEnabled.onEach { value ->
@@ -204,6 +264,10 @@ class SettingsViewModel @Inject constructor(
 
         settingsRepository.crashReportingEnabled.onEach { value ->
             _uiState.update { it.copy(crashReportingEnabled = value) }
+        }.launchIn(viewModelScope)
+
+        settingsRepository.verboseMemoryLoggingEnabled.onEach { value ->
+            _uiState.update { it.copy(verboseMemoryLoggingEnabled = value) }
         }.launchIn(viewModelScope)
     }
 
@@ -406,10 +470,147 @@ class SettingsViewModel @Inject constructor(
 
     // ─── Memory ───────────────────────────────────────────────────────────
 
+    /**
+     * Persists the "Auto-extract from conversations" toggle. When enabled the
+     * agent distils durable facts into long-term memory after each pipeline run.
+     *
+     * @param enabled `true` to enable automatic extraction.
+     */
+    fun setAutoExtractEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsRepository.setAutoExtractEnabled(enabled)
+        }
+    }
+
     fun setAutoSummarizeThreshold(percent: Int) {
         viewModelScope.launch {
             settingsRepository.setAutoSummarizeThreshold(percent.coerceIn(0, MAX_PERCENT).toFloat() / MAX_PERCENT)
         }
+    }
+
+    /**
+     * Persists the memory-retrieval top-K. Out-of-range values are rejected at
+     * this layer (the value stays unpersisted and [MemoryValidationError.SearchTopK]
+     * is surfaced) so a malformed caller can never write a degenerate bound.
+     *
+     * @param value Desired top-K; must lie in
+     *   `[MEMORY_SEARCH_TOP_K_MIN, MEMORY_SEARCH_TOP_K_MAX]`.
+     */
+    fun setMemorySearchTopK(value: Int) {
+        if (value < SettingsDefaults.MEMORY_SEARCH_TOP_K_MIN || value > SettingsDefaults.MEMORY_SEARCH_TOP_K_MAX) {
+            rejectMemoryEdit(MemoryValidationError.SearchTopK)
+            return
+        }
+        clearMemoryValidationError()
+        viewModelScope.launch { settingsRepository.setMemorySearchTopK(value) }
+    }
+
+    /**
+     * Persists the memory-retrieval similarity threshold. Out-of-range values
+     * are rejected with [MemoryValidationError.SearchThreshold].
+     *
+     * @param value Desired threshold; must lie in
+     *   `[MEMORY_SEARCH_THRESHOLD_MIN, MEMORY_SEARCH_THRESHOLD_MAX]`.
+     */
+    fun setMemorySearchThreshold(value: Float) {
+        if (value < SettingsDefaults.MEMORY_SEARCH_THRESHOLD_MIN ||
+            value > SettingsDefaults.MEMORY_SEARCH_THRESHOLD_MAX
+        ) {
+            rejectMemoryEdit(MemoryValidationError.SearchThreshold)
+            return
+        }
+        clearMemoryValidationError()
+        viewModelScope.launch { settingsRepository.setMemorySearchThreshold(value) }
+    }
+
+    /**
+     * Persists the recency half-life used by the memory re-ranker. Out-of-range
+     * values are rejected with [MemoryValidationError.RecencyHalfLife].
+     *
+     * @param days Desired half-life; must lie in
+     *   `[MEMORY_RECENCY_HALF_LIFE_DAYS_MIN, MEMORY_RECENCY_HALF_LIFE_DAYS_MAX]`.
+     */
+    fun setMemoryRecencyHalfLifeDays(days: Int) {
+        if (days < SettingsDefaults.MEMORY_RECENCY_HALF_LIFE_DAYS_MIN ||
+            days > SettingsDefaults.MEMORY_RECENCY_HALF_LIFE_DAYS_MAX
+        ) {
+            rejectMemoryEdit(MemoryValidationError.RecencyHalfLife)
+            return
+        }
+        clearMemoryValidationError()
+        viewModelScope.launch { settingsRepository.setMemoryRecencyHalfLifeDays(days) }
+    }
+
+    /**
+     * Persists the background-compaction toggle. Booleans cannot be
+     * out-of-range, so this never raises a validation error.
+     *
+     * @param enabled `true` to enable the daily compaction pass.
+     */
+    fun setMemoryCompactionEnabled(enabled: Boolean) {
+        clearMemoryValidationError()
+        viewModelScope.launch { settingsRepository.setMemoryCompactionEnabled(enabled) }
+    }
+
+    /**
+     * Persists the compaction age window. Out-of-range values are rejected with
+     * [MemoryValidationError.CompactionAge].
+     *
+     * @param days Desired age window; must lie in
+     *   `[MEMORY_COMPACTION_AGE_DAYS_MIN, MEMORY_COMPACTION_AGE_DAYS_MAX]`.
+     */
+    fun setMemoryCompactionAgeDays(days: Int) {
+        if (days < SettingsDefaults.MEMORY_COMPACTION_AGE_DAYS_MIN ||
+            days > SettingsDefaults.MEMORY_COMPACTION_AGE_DAYS_MAX
+        ) {
+            rejectMemoryEdit(MemoryValidationError.CompactionAge)
+            return
+        }
+        clearMemoryValidationError()
+        viewModelScope.launch { settingsRepository.setMemoryCompactionAgeDays(days) }
+    }
+
+    /**
+     * Persists the hard ceiling on stored chunks. Out-of-range values are
+     * rejected with [MemoryValidationError.MaxChunks].
+     *
+     * @param limit Desired ceiling; must lie in
+     *   `[MAX_MEMORY_CHUNKS_MIN, MAX_MEMORY_CHUNKS_MAX]`.
+     */
+    fun setMaxMemoryChunks(limit: Int) {
+        if (limit < SettingsDefaults.MAX_MEMORY_CHUNKS_MIN || limit > SettingsDefaults.MAX_MEMORY_CHUNKS_MAX) {
+            rejectMemoryEdit(MemoryValidationError.MaxChunks)
+            return
+        }
+        clearMemoryValidationError()
+        viewModelScope.launch { settingsRepository.setMaxMemoryChunks(limit) }
+    }
+
+    /**
+     * Persists the active embedding provider. The id is validated against the
+     * set of registered providers; an unknown id is rejected with
+     * [MemoryValidationError.UnknownEmbeddingProvider] and nothing is written.
+     *
+     * @param id Wire id of a provider present in the Hilt provider map.
+     */
+    fun setActiveEmbeddingProviderId(id: String) {
+        if (!embeddingProviders.containsKey(id)) {
+            rejectMemoryEdit(MemoryValidationError.UnknownEmbeddingProvider)
+            return
+        }
+        clearMemoryValidationError()
+        viewModelScope.launch { settingsRepository.setActiveEmbeddingProviderId(id) }
+    }
+
+    /** Clears the transient memory-tuning validation error (e.g. after the screen showed it). */
+    fun clearMemoryValidationError() {
+        if (_uiState.value.memoryValidationError != null) {
+            _uiState.update { it.copy(memoryValidationError = null) }
+        }
+    }
+
+    private fun rejectMemoryEdit(error: MemoryValidationError) {
+        _uiState.update { it.copy(memoryValidationError = error) }
     }
 
     /**
@@ -426,6 +627,100 @@ class SettingsViewModel @Inject constructor(
                 Timber.w(error, "Memory export failed")
                 emitSnackbar(appContext.getString(R.string.settings_memory_export_failed, error.message.orEmpty()))
             }
+        }
+    }
+
+    /**
+     * Parses a memory export file from the supplied [InputStream] and, on a
+     * usable parse, stages the import dialog (strategy choice + any
+     * provider/schema warnings). A failed parse surfaces an error snackbar and
+     * stages nothing.
+     *
+     * Called by the screen after the SAF open-document launcher returns a
+     * readable URI. The stream is fully read and closed here; persistence is
+     * deferred to [confirmImport] once the user picks a strategy.
+     *
+     * @param source Readable stream over the user-selected JSON file.
+     */
+    fun importMemory(source: InputStream) {
+        viewModelScope.launch {
+            val jsonText = runCatching {
+                withContext(Dispatchers.IO) { source.bufferedReader().use { it.readText() } }
+            }.getOrElse { error ->
+                Timber.w(error, "Memory import: failed to read file")
+                emitSnackbar(appContext.getString(R.string.settings_memory_import_failed, error.message.orEmpty()))
+                return@launch
+            }
+
+            when (val outcome = memoryImportUseCase.parse(jsonText)) {
+                is MemoryImportOutcome.Failure -> {
+                    emitSnackbar(appContext.getString(R.string.settings_memory_import_failed, outcome.message))
+                }
+                is MemoryImportOutcome.Success -> stagePendingImport(outcome.document, schemaMismatch = false)
+                is MemoryImportOutcome.SchemaMismatch ->
+                    stagePendingImport(outcome.document, schemaMismatch = true)
+            }
+        }
+    }
+
+    /**
+     * Stages [document] for the import dialog, computing whether the file's
+     * embedding provider differs from the one active on this device.
+     */
+    private suspend fun stagePendingImport(document: MemoryExportDocument, schemaMismatch: Boolean) {
+        _uiState.update {
+            it.copy(
+                pendingImport = PendingMemoryImport(
+                    document = document,
+                    // Compare against the provider retrieval actually resolves to
+                    // (on-device fallback included), not the raw persisted setting.
+                    providerMismatch = memoryImportUseCase.isProviderMismatched(document),
+                    schemaMismatch = schemaMismatch,
+                ),
+            )
+        }
+    }
+
+    /**
+     * Imports the staged document under [strategy], clears the dialog, and
+     * surfaces a result snackbar. No-op when nothing is staged.
+     *
+     * @param strategy Merge (skip duplicate ids) or Replace (wipe then load).
+     */
+    fun confirmImport(strategy: MemoryImportStrategy) {
+        val pending = _uiState.value.pendingImport ?: return
+        _uiState.update { it.copy(pendingImport = null) }
+        viewModelScope.launch {
+            runCatching {
+                memoryImportUseCase.import(pending.document, strategy)
+            }.onSuccess { result ->
+                emitSnackbar(importResultMessage(result))
+            }.onFailure { error ->
+                Timber.w(error, "Memory import failed")
+                emitSnackbar(appContext.getString(R.string.settings_memory_import_failed, error.message.orEmpty()))
+            }
+        }
+    }
+
+    /** Dismisses the import dialog without importing anything. */
+    fun cancelImport() {
+        _uiState.update { it.copy(pendingImport = null) }
+    }
+
+    /**
+     * Composes the post-import snackbar, appending the re-embedding note when
+     * the imported chunks were flagged for lazy re-computation.
+     */
+    private fun importResultMessage(result: MemoryImportResult): String {
+        val base = appContext.getString(
+            R.string.settings_memory_import_success,
+            result.imported,
+            result.skipped,
+        )
+        return if (result.needsReembedding) {
+            base + " " + appContext.getString(R.string.settings_memory_import_reembed_note)
+        } else {
+            base
         }
     }
 
@@ -491,8 +786,26 @@ class SettingsViewModel @Inject constructor(
             settingsRepository.setAutoSummarizeThreshold(SettingsDefaults.AUTO_SUMMARIZE_THRESHOLD_DEFAULT)
             settingsRepository.setLongRunningTaskNotificationsEnabled(true)
             settingsRepository.setSystemPromptPrefix("")
+            resetMemoryTuningDefaults()
             emitSnackbar(appContext.getString(R.string.settings_reset_button))
         }
+    }
+
+    /**
+     * Restores every Settings → Memory tuning control to its documented default
+     * so "Reset settings" reverts the whole Memory card (not just the sampling
+     * sliders). Mirrors the bounds-free defaults in [SettingsDefaults]; the
+     * embedding provider returns to the on-device USE default.
+     */
+    private suspend fun resetMemoryTuningDefaults() {
+        settingsRepository.setAutoExtractEnabled(SettingsDefaults.AUTO_EXTRACT_ENABLED_DEFAULT)
+        settingsRepository.setMemorySearchTopK(SettingsDefaults.MEMORY_SEARCH_TOP_K_DEFAULT)
+        settingsRepository.setMemorySearchThreshold(SettingsDefaults.MEMORY_SEARCH_THRESHOLD_DEFAULT)
+        settingsRepository.setMemoryRecencyHalfLifeDays(SettingsDefaults.MEMORY_RECENCY_HALF_LIFE_DAYS_DEFAULT)
+        settingsRepository.setMemoryCompactionEnabled(SettingsDefaults.MEMORY_COMPACTION_ENABLED_DEFAULT)
+        settingsRepository.setMemoryCompactionAgeDays(SettingsDefaults.MEMORY_COMPACTION_AGE_DAYS_DEFAULT)
+        settingsRepository.setMaxMemoryChunks(SettingsDefaults.MAX_MEMORY_CHUNKS_DEFAULT)
+        settingsRepository.setActiveEmbeddingProviderId(SettingsDefaults.ACTIVE_EMBEDDING_PROVIDER_ID_DEFAULT)
     }
 
     // ─── Notifications + privacy ─────────────────────────────────────────
@@ -506,6 +819,10 @@ class SettingsViewModel @Inject constructor(
             settingsRepository.setCrashReportingEnabled(enabled)
             crashReportingRepository.setEnabled(enabled)
         }
+    }
+
+    fun setVerboseMemoryLoggingEnabled(enabled: Boolean) {
+        viewModelScope.launch { settingsRepository.setVerboseMemoryLoggingEnabled(enabled) }
     }
 
     // ─── Surface ───────────────────────────────────────────────────────────

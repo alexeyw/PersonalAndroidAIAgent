@@ -141,6 +141,7 @@ internal fun mockChatHomeViewModel(
     every { vm.consoleSnackbarEvents } returns MutableSharedFlow()
     every { vm.exportEvents } returns MutableSharedFlow()
     every { vm.importErrorEvents } returns MutableSharedFlow()
+    every { vm.memorySaveEvents } returns MutableSharedFlow()
     every { vm.currentSessionId } returns MutableStateFlow("active-id")
     every { vm.currentPipelineId() } returns null
 

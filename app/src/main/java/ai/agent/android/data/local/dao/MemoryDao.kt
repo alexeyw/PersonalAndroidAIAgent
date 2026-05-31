@@ -6,6 +6,7 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.Transaction
 import kotlinx.coroutines.flow.Flow
 
 /**
@@ -22,6 +23,39 @@ interface MemoryDao {
      */
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertMemory(memoryChunk: MemoryChunkEntity): Long
+
+    /**
+     * Inserts a batch of memory chunks in a single transaction. Used by the
+     * memory import path; rows carrying an explicit non-zero `id` keep that id
+     * (so a round-trip preserves identity), while `id = 0` rows are
+     * auto-assigned. Conflicting ids are replaced.
+     *
+     * @param chunks The chunks to insert.
+     */
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertMemories(chunks: List<MemoryChunkEntity>)
+
+    /**
+     * Atomically replaces the whole table with [chunks]: deletes every row then
+     * inserts the batch in one transaction, so a Replace import can never leave
+     * the store empty if the insert fails partway.
+     *
+     * @param chunks The replacement rows.
+     */
+    @Transaction
+    suspend fun replaceAll(chunks: List<MemoryChunkEntity>) {
+        deleteAllMemories()
+        insertMemories(chunks)
+    }
+
+    /**
+     * Projects the ids of every stored chunk. Backs the import Merge strategy's
+     * duplicate check without deserialising any embeddings.
+     *
+     * @return All stored chunk ids.
+     */
+    @Query("SELECT id FROM memory_chunks")
+    suspend fun getAllIds(): List<Long>
 
     /**
      * Retrieves all memory chunks from the database.
@@ -64,6 +98,43 @@ interface MemoryDao {
      */
     @Query("UPDATE memory_chunks SET isPinned = :isPinned WHERE id = :id")
     suspend fun setMemoryPinned(id: Long, isPinned: Boolean)
+
+    /**
+     * Replaces the comma-separated tag list of a single chunk. The text and
+     * embedding are untouched — tag edits do not require re-embedding.
+     *
+     * @param id Identifier of the chunk to update.
+     * @param tagsCsv New comma-separated tag list (empty string clears tags).
+     */
+    @Query("UPDATE memory_chunks SET tagsCsv = :tagsCsv WHERE id = :id")
+    suspend fun setMemoryTags(id: Long, tagsCsv: String)
+
+    /**
+     * Atomically replaces the text, embedding, and tags of a chunk in one
+     * transaction, so an inline edit never half-applies (e.g. new text saved
+     * but tags not). The `timestamp` is left untouched.
+     *
+     * @param id Identifier of the chunk to update.
+     * @param text New raw text content.
+     * @param embedding Serialized embedding vector for [text].
+     * @param tagsCsv New comma-separated tag list.
+     */
+    @Transaction
+    suspend fun updateMemoryWithTags(id: Long, text: String, embedding: String, tagsCsv: String) {
+        updateMemory(id = id, text = text, embedding = embedding)
+        setMemoryTags(id = id, tagsCsv = tagsCsv)
+    }
+
+    /**
+     * Records that the given chunks were just retrieved into a pipeline run's
+     * Long-Term Memory context: increments each chunk's `useCount` and stamps
+     * `lastUsedAt`. Backs the detail sheet's "Used in N replies" line.
+     *
+     * @param ids Identifiers of the chunks that were injected.
+     * @param atMillis Epoch-millis to stamp as the most-recent use time.
+     */
+    @Query("UPDATE memory_chunks SET useCount = useCount + 1, lastUsedAt = :atMillis WHERE id IN (:ids)")
+    suspend fun recordUsage(ids: List<Long>, atMillis: Long)
 
     /**
      * Retrieves a limited number of the most recent memory chunks from the database.
@@ -109,6 +180,32 @@ interface MemoryDao {
     suspend fun deleteOldestMemories(keepLimit: Int)
 
     /**
+     * Retrieves the non-pinned memory chunks older than a given timestamp —
+     * the candidate set for background compaction.
+     *
+     * Pinned chunks (`isPinned = 1`) are excluded so they are never touched by
+     * consolidation, and fresh chunks (`timestamp >= :olderThan`) are excluded
+     * so recently-learned facts keep their exact wording. The full embedding
+     * payload is returned because the compaction worker clusters on it.
+     *
+     * @param olderThan Exclusive upper bound on `timestamp`; only rows strictly
+     *   older than this are returned.
+     * @return Candidate chunks ordered newest-first.
+     */
+    @Query("SELECT * FROM memory_chunks WHERE isPinned = 0 AND timestamp < :olderThan ORDER BY timestamp DESC")
+    suspend fun getCompactionCandidates(olderThan: Long): List<MemoryChunkEntity>
+
+    /**
+     * One-shot count of every stored memory chunk (pinned and unpinned). Used
+     * by the compaction scheduler's hard-limit check; distinct from the
+     * reactive [observeChunkCount] used by the Settings stats card.
+     *
+     * @return The total number of rows in `memory_chunks`.
+     */
+    @Query("SELECT COUNT(*) FROM memory_chunks")
+    suspend fun countMemories(): Int
+
+    /**
      * Removes every memory chunk from the table — including pinned entries.
      * Backs the Settings → Memory → Clear destructive action. Pinned-or-not
      * is intentionally ignored because the user has explicitly confirmed
@@ -116,6 +213,38 @@ interface MemoryDao {
      */
     @Query("DELETE FROM memory_chunks")
     suspend fun deleteAllMemories()
+
+    /**
+     * One-shot count of chunks awaiting re-embedding. Backs the cheap startup
+     * re-arm check (`MainActivity`) that re-schedules the re-embed worker when a
+     * previous one-off was lost (process killed before WorkManager persisted it)
+     * or exhausted its retries — without loading every pending row + embedding.
+     *
+     * @return The number of rows with `needsReembedding = 1`.
+     */
+    @Query("SELECT COUNT(*) FROM memory_chunks WHERE needsReembedding = 1")
+    suspend fun countNeedingReembedding(): Int
+
+    /**
+     * Retrieves every chunk awaiting re-embedding. The full embedding payload
+     * is returned for symmetry with [getAllMemories]; the recompute use case
+     * only needs the text but the mapper is shared.
+     *
+     * @return Chunks with `needsReembedding = 1`.
+     */
+    @Query("SELECT * FROM memory_chunks WHERE needsReembedding = 1")
+    suspend fun getMemoriesNeedingReembedding(): List<MemoryChunkEntity>
+
+    /**
+     * Writes a freshly-computed embedding back to a chunk and clears its
+     * `needsReembedding` flag, so a once-imported chunk is repaired exactly
+     * once. The `text` and `timestamp` are untouched.
+     *
+     * @param id Identifier of the chunk to repair.
+     * @param embedding Serialized embedding vector produced by the active provider.
+     */
+    @Query("UPDATE memory_chunks SET embedding = :embedding, needsReembedding = 0 WHERE id = :id")
+    suspend fun markReembedded(id: Long, embedding: String)
 
     /**
      * Live count of stored memory chunks. Powers the Settings → Memory

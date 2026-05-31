@@ -332,6 +332,106 @@ object DefaultPrompts {
                 "Reply strictly with 'true' or 'false'."
     }
 
+    /**
+     * Prompts for the long-term memory **auto-extraction** pass
+     * ([ai.agent.android.domain.usecases.MemoryExtractionUseCase]).
+     *
+     * This is not tied to a pipeline [NodeType]: the use case runs the local
+     * model once after a conversation completes to distil durable facts from
+     * the recent dialogue.
+     */
+    object MemoryExtraction {
+        /**
+         * System prompt that instructs the local model to extract durable
+         * facts from a conversation as a strict JSON array.
+         *
+         * Authored conservatively on purpose: the model is told to extract
+         * **only** explicitly-stated, durable facts and to return an empty
+         * array `[]` when nothing qualifies, so a chatty exchange with no real
+         * facts does not pollute long-term memory with hallucinations. The
+         * `$DATE` placeholder is resolved at runtime by
+         * [ai.agent.android.domain.prompt.PromptTemplateEngine] to give the
+         * model temporal grounding when it normalises relative dates.
+         *
+         * Expected response: a JSON array (and nothing else) whose elements are
+         * objects of the shape `{"type": "preference"|"event"|"relation",
+         * "text": "<fact>"}`.
+         */
+        val SYSTEM_FALLBACK = """
+            You are a long-term memory extractor for a personal AI assistant.
+            Today's date is ${'$'}DATE.
+
+            Read the conversation below and extract durable facts worth
+            remembering about the user across future sessions. Only extract
+            facts that are EXPLICITLY stated by the user. Do NOT guess, infer,
+            or invent anything. Ignore small talk, transient context, and the
+            assistant's own statements.
+
+            Classify each fact with one of these types:
+            - "preference": a stable like, dislike, or setting (e.g. "prefers dark mode").
+            - "event": something that happened or will happen at a specific time.
+            - "relation": a relationship to a person, place, or thing.
+
+            Normalise relative dates (e.g. "tomorrow") to absolute dates using
+            today's date above.
+
+            Respond with STRICTLY valid JSON and NOTHING else: a JSON array of
+            objects with exactly the keys "type" and "text". If there are no
+            durable facts to remember, respond with an empty array: [].
+
+            Example:
+            [
+              {"type": "preference", "text": "Prefers dark mode in the UI"},
+              {"type": "relation", "text": "Has a brother named Alex"}
+            ]
+        """.trimIndent()
+    }
+
+    /**
+     * Prompt for the background memory-compaction worker
+     * ([ai.agent.android.domain.usecases.MemoryCompactionUseCase]). The worker
+     * clusters stale, non-pinned memory chunks by embedding similarity and runs
+     * this prompt once per dense cluster to fold its facts into one chunk.
+     *
+     * Like [MemoryExtraction], this sub-object is a code-level inference prompt,
+     * not a node `systemPrompt` — it is **not** mirrored into the browser editor
+     * (`pipeline-editor.html`) because no `NodeType` hosts it.
+     */
+    object MemoryCompaction {
+        /**
+         * System prompt that instructs the local model to consolidate a small
+         * set of related long-term facts into a single, denser fact.
+         *
+         * Authored conservatively: the model is told to preserve every distinct
+         * piece of information (dates, names, numbers) and to never invent
+         * detail, so consolidation compresses redundancy without losing meaning.
+         * The cluster's facts are appended after this prompt by the use case.
+         * The `$DATE` placeholder is resolved at runtime by
+         * [ai.agent.android.domain.prompt.PromptTemplateEngine] to keep any
+         * relative-date normalisation grounded.
+         *
+         * Expected response: the consolidated fact as a single line of plain
+         * text and nothing else (no JSON, no preamble, no bullet list).
+         */
+        val SYSTEM_FALLBACK = """
+            You are a long-term memory compaction assistant for a personal AI assistant.
+            Today's date is ${'$'}DATE.
+
+            Below is a small group of related facts that were remembered about
+            the user at different times. They overlap or are closely related.
+
+            Merge them into ONE concise fact that preserves every distinct piece
+            of information — keep all specific names, dates, numbers, and
+            preferences. Do NOT invent, guess, or add anything that is not
+            present in the facts below. Do NOT drop a detail just to make the
+            sentence shorter. If the facts genuinely contradict each other,
+            prefer the most recent wording.
+
+            Respond with the single consolidated fact as plain text and NOTHING
+            else: no JSON, no quotes, no bullet points, no explanation.
+        """.trimIndent()
+    }
+
     /** Prompts for the [NodeType.QUEUE_PROCESSOR] iteration loop. */
     object QueueProcessor {
         /**
