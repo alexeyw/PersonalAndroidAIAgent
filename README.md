@@ -30,9 +30,11 @@ experimentation. Expect rough edges:
   pipeline JSON) may change without a migration path.
 - **Local data may be lost on upgrade.** Until `1.0.0`, schema migrations are
   not guaranteed: the encrypted Room database is opened with
-  `fallbackToDestructiveMigration(true)`, so a schema bump can drop existing
-  chat history, long-term memory, and traces rather than migrate them. Export
-  anything you want to keep (chats / memory) before updating.
+  `fallbackToDestructiveMigration(true)`, so a schema bump can drop **all**
+  local data — chat history, long-term memory, run traces, **custom pipelines,
+  and saved presets / prompt templates** — rather than migrate it. Export
+  anything you want to keep (chats, memory, and any custom pipelines or saved
+  presets) before updating.
 
 ## Overview
 
