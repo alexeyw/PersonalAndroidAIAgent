@@ -231,6 +231,64 @@ until the worker finishes. As a safety net for a one-off pass that was lost
 Memory → Re-embed* action shares the same flag-clearing write so the two
 repair paths converge.
 
+### 2.2. Long-term memory lifecycle
+
+Long-term memory is a vector store (`memory_chunks`) of durable facts
+distilled from past conversations. The diagram below traces one fact from
+the message that states it, through storage, to the moment a *later*
+session retrieves it into a node's prompt — plus the background compaction
+loop that keeps the table dense. Only the on-device LLM and the embedding
+backend are model-dependent; everything else is plain domain code.
+
+```mermaid
+flowchart TB
+    subgraph Extraction["Extraction (after a run completes)"]
+        Done[Pipeline Completed] --> Coord[MemoryAutoExtractionCoordinator<br/>debounce 30s · gate on autoExtractEnabled<br/>defer while agent busy]
+        Coord --> Extract[MemoryExtractionUseCase<br/>LLM distils JSON facts]
+        Manual[Save to memory<br/>SaveMessageToMemoryUseCase] --> Embed
+        Extract --> Embed[EmbeddingProvider.embed<br/>resolved per call]
+        Embed --> Dedup{cosine ≥ 0.92<br/>duplicate?}
+        Dedup -- yes --> Drop[skip]
+        Dedup -- no --> Store[(memory_chunks<br/>Room + SQLCipher)]
+    end
+
+    subgraph Retrieval["Retrieval (next session, longTermMemory node)"]
+        Engine[GraphExecutionEngine<br/>resolveMemoriesOnce userPrompt] --> Retrieve[RetrieveRelevantMemoryUseCase]
+        Retrieve --> Search[findSimilarMemories<br/>cosine over pool]
+        Store --> Search
+        Search --> Rerank[MemoryReranker<br/>dedup · recency decay<br/>pinned boost · threshold]
+        Rerank --> Console[ConsoleEvent.MemoryAccess<br/>+ recordUsage]
+        Console --> Block[NodeContextBuilder<br/>--- Long-Term Memory ---]
+        Block --> LLM[Node executor → LLM]
+    end
+
+    subgraph Compaction["Compaction (background)"]
+        Worker[MemoryCompactionWorker<br/>daily · or maxMemoryChunks watch] --> Compact[MemoryCompactionUseCase]
+        Store --> Compact
+        Compact --> Cluster[KMeansClusterer<br/>k = √N / 2]
+        Cluster --> Consolidate[LLM consolidates clusters ≥ 3<br/>→ MemorySource.Compaction<br/>pinned chunks exempt]
+        Consolidate --> Store
+    end
+```
+
+Key invariants:
+
+1. **One retrieval per run.** The engine memoises memory off the immutable
+   `userPrompt`, so multiple memory-enabled nodes in a graph share a single
+   embed + search rather than re-querying per node.
+2. **Same embedding space.** Both extraction and retrieval resolve the
+   *active* provider via `EmbeddingProviderResolver`, so a query is always
+   embedded with whatever produced the stored vectors; a mismatch (e.g. a
+   chunk imported under a different provider) scores ~0 until re-embedded
+   (see §2.1).
+3. **Pinned is sacred.** Pinned chunks bypass the recency decay and
+   threshold filter on retrieval and are never compaction candidates — the
+   one mechanism a user has to guarantee a fact stays findable.
+
+The on-device write path is covered end-to-end by the instrumented
+`MemoryLifecycleIntegrationTest` (extract → retrieve into the context block
+→ survive a compaction pass over a real Room database).
+
 ---
 
 ## 3. Pipeline engine

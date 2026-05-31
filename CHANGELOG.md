@@ -15,6 +15,20 @@ details.
 
 ### Added
 
+- **Long-term memory documentation + end-to-end test** (Phase 25 / Task 10/10):
+  - `DESCRIPTION.md` §6 now documents the full memory subsystem (extraction,
+    embedding providers, storage, retrieval/re-rank, context injection,
+    compaction, import/export, and the message-to-retrieval lifecycle).
+  - `docs/architecture.md` gains a §2.2 Mermaid *memory lifecycle* diagram;
+    `docs/extending.md` gains an *Add a new `EmbeddingProvider`* recipe;
+    `docs/user-guide.md` gains a *memory search isn't finding an entry*
+    troubleshooting section.
+  - New instrumented `MemoryLifecycleIntegrationTest` wires the real domain
+    components (Room, `MemoryRepositoryImpl`, `MemoryReranker`,
+    `NodeContextBuilder`, `KMeansClusterer`, extraction/retrieval/compaction
+    use cases) over an in-memory database: a fact extracted in one session is
+    retrieved into the next session's `--- Long-Term Memory ---` block and a
+    pinned chunk survives a compaction pass.
 - **Memory tuning controls** (Phase 25 / Task 9/10) — *Settings → Memory*
   now exposes the long-term-memory parameters that previously only had code
   defaults:
