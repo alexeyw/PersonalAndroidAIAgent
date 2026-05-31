@@ -212,7 +212,10 @@ rejects chunks with a malformed embedding (empty array / non-finite
 value) so a corrupt vector never reaches the store.
 
 When the document's embedding provider differs from the importing
-device's active provider the inserted vectors live in an incompatible
+device's active **resolved** provider — `EmbeddingProviderResolver.resolve()`,
+which accounts for the on-device fallback when the selected provider is
+unavailable and is the same provider retrieval embeds queries with, not
+the raw persisted setting — the inserted vectors live in an incompatible
 space, so each chunk is flagged `needsReembedding` and the import
 schedules a background pass through the `MemoryReembedScheduler` domain
 seam (`APPEND_OR_REPLACE` so a second import always chains a fresh drain

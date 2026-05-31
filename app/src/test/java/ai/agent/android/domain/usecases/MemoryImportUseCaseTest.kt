@@ -6,10 +6,13 @@ import ai.agent.android.domain.models.MemoryExportDocument
 import ai.agent.android.domain.models.MemoryImportOutcome
 import ai.agent.android.domain.models.MemoryImportStrategy
 import ai.agent.android.domain.repositories.MemoryRepository
+import ai.agent.android.domain.services.EmbeddingProvider
+import ai.agent.android.domain.services.EmbeddingProviderResolver
 import ai.agent.android.domain.services.MemoryReembedScheduler
 import io.mockk.Runs
 import io.mockk.coEvery
 import io.mockk.coVerify
+import io.mockk.every
 import io.mockk.just
 import io.mockk.mockk
 import io.mockk.slot
@@ -28,16 +31,29 @@ import org.junit.Test
 class MemoryImportUseCaseTest {
 
     private lateinit var repository: MemoryRepository
+    private lateinit var resolver: EmbeddingProviderResolver
     private lateinit var scheduler: MemoryReembedScheduler
     private lateinit var useCase: MemoryImportUseCase
 
     @Before
     fun setup() {
         repository = mockk()
+        resolver = mockk()
         scheduler = mockk(relaxed = true)
-        useCase = MemoryImportUseCase(repository, scheduler)
+        useCase = MemoryImportUseCase(repository, resolver, scheduler)
         coEvery { repository.insertImportedMemories(any(), any()) } just Runs
         coEvery { repository.replaceImportedMemories(any(), any()) } just Runs
+        // Default: retrieval resolves to the on-device USE provider.
+        resolveActiveProviderTo(EmbeddingProvider.ID_USE)
+    }
+
+    /**
+     * Stubs the resolver to report [id] as the provider retrieval will actually
+     * use — the seam the import decision keys off, not the raw persisted setting.
+     */
+    private fun resolveActiveProviderTo(id: String) {
+        val provider = mockk<EmbeddingProvider> { every { this@mockk.id } returns id }
+        coEvery { resolver.resolve() } returns provider
     }
 
     private fun chunk(id: Long) = MemoryChunk(id = id, text = "t$id", embedding = floatArrayOf(0.1f), timestamp = id)
@@ -59,7 +75,7 @@ class MemoryImportUseCaseTest {
         coEvery { repository.insertImportedMemories(capture(captured), any()) } just Runs
 
         val doc = document("use", listOf(chunk(1), chunk(3)))
-        val result = useCase.import(doc, MemoryImportStrategy.Merge, activeProviderId = "use")
+        val result = useCase.import(doc, MemoryImportStrategy.Merge)
 
         assertEquals(1, result.imported)
         assertEquals(1, result.skipped)
@@ -76,7 +92,7 @@ class MemoryImportUseCaseTest {
         // Two id-less (id == 0) chunks must both be inserted (Room auto-assigns
         // fresh keys); dedupById keeps every id-0 chunk rather than collapsing.
         val doc = document("use", listOf(chunk(0), chunk(0)))
-        val result = useCase.import(doc, MemoryImportStrategy.Merge, activeProviderId = "use")
+        val result = useCase.import(doc, MemoryImportStrategy.Merge)
 
         assertEquals(2, result.imported)
         assertEquals(2, captured.captured.size)
@@ -90,7 +106,7 @@ class MemoryImportUseCaseTest {
         // Two chunks share id=5; @Insert REPLACE would collapse them to one row,
         // so imported must report 1, not 2.
         val doc = document("use", listOf(chunk(5), chunk(5), chunk(6)))
-        val result = useCase.import(doc, MemoryImportStrategy.Replace, activeProviderId = "use")
+        val result = useCase.import(doc, MemoryImportStrategy.Replace)
 
         assertEquals(2, result.imported)
         assertEquals(1, result.skipped)
@@ -103,7 +119,7 @@ class MemoryImportUseCaseTest {
         coEvery { repository.replaceImportedMemories(capture(captured), any()) } just Runs
 
         val doc = document("use", listOf(chunk(1), chunk(2)))
-        val result = useCase.import(doc, MemoryImportStrategy.Replace, activeProviderId = "use")
+        val result = useCase.import(doc, MemoryImportStrategy.Replace)
 
         assertEquals(2, result.imported)
         assertEquals(0, result.skipped)
@@ -115,7 +131,7 @@ class MemoryImportUseCaseTest {
     fun `Replace with an empty document leaves the store untouched`() = runTest {
         val doc = document("use", emptyList())
 
-        val result = useCase.import(doc, MemoryImportStrategy.Replace, activeProviderId = "use")
+        val result = useCase.import(doc, MemoryImportStrategy.Replace)
 
         assertEquals(0, result.imported)
         coVerify(exactly = 0) { repository.replaceImportedMemories(any(), any()) }
@@ -131,7 +147,6 @@ class MemoryImportUseCaseTest {
         val result = useCase.import(
             document("openai_3_small", listOf(chunk(1))),
             MemoryImportStrategy.Replace,
-            activeProviderId = "use",
         )
 
         assertTrue(result.needsReembedding)
@@ -146,7 +161,6 @@ class MemoryImportUseCaseTest {
         val result = useCase.import(
             document("use", listOf(chunk(1))),
             MemoryImportStrategy.Replace,
-            activeProviderId = "use",
         )
 
         assertFalse(result.needsReembedding)
@@ -162,11 +176,52 @@ class MemoryImportUseCaseTest {
         val result = useCase.import(
             document("openai_3_small", listOf(chunk(1))),
             MemoryImportStrategy.Merge,
-            activeProviderId = "use",
         )
 
         assertEquals(0, result.imported)
         assertFalse(result.needsReembedding)
         verify(exactly = 0) { scheduler.schedule() }
+    }
+
+    @Test
+    fun `flags re-embedding against the resolved provider when the selection falls back`() = runTest {
+        // The user selected openai_3_small but it is unavailable (no API key), so
+        // the resolver falls back to USE — exactly what queries embed with. An
+        // openai_3_small-stamped file therefore IS a mismatch and must be flagged,
+        // even though the raw persisted setting would have "matched" the file.
+        resolveActiveProviderTo(EmbeddingProvider.ID_USE)
+        coEvery { repository.replaceImportedMemories(any(), capture(slot())) } just Runs
+
+        val result = useCase.import(
+            document(EmbeddingProvider.ID_OPENAI_3_SMALL, listOf(chunk(1))),
+            MemoryImportStrategy.Replace,
+        )
+
+        assertTrue(result.needsReembedding)
+        verify(exactly = 1) { scheduler.schedule() }
+    }
+
+    @Test
+    fun `does not flag re-embedding when the resolved provider matches the file`() = runTest {
+        // Selection resolves to openai_3_small (key configured) and the file was
+        // exported under the same provider, so the vectors are already compatible.
+        resolveActiveProviderTo(EmbeddingProvider.ID_OPENAI_3_SMALL)
+        coEvery { repository.replaceImportedMemories(any(), capture(slot())) } just Runs
+
+        val result = useCase.import(
+            document(EmbeddingProvider.ID_OPENAI_3_SMALL, listOf(chunk(1))),
+            MemoryImportStrategy.Replace,
+        )
+
+        assertFalse(result.needsReembedding)
+        verify(exactly = 0) { scheduler.schedule() }
+    }
+
+    @Test
+    fun `isProviderMismatched follows the resolved provider not the file stamp`() = runTest {
+        resolveActiveProviderTo(EmbeddingProvider.ID_USE)
+
+        assertTrue(useCase.isProviderMismatched(document(EmbeddingProvider.ID_OPENAI_3_SMALL, emptyList())))
+        assertFalse(useCase.isProviderMismatched(document(EmbeddingProvider.ID_USE, emptyList())))
     }
 }
