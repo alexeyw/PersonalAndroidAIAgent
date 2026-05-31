@@ -25,3 +25,32 @@ CLAUDE.md
 # directory. The CI configuration (`check.yml`) is maintained locally and
 # committed by the repo owner separately.
 /.github/workflows/
+
+# --- Secret / credential hardening (Phase 26) ---
+# Defensive guards against ever committing signing material or credentials to a
+# public repository. None of these are tracked today; the patterns exist so an
+# accidental `git add` of a real keystore or key file is caught by Git itself.
+*.jks
+*.keystore
+*.p12
+*.pfx
+keystore.properties
+signing.properties
+secrets.properties
+*.pem
+*.key
+
+# Heap dumps and profiling captures may embed in-memory secrets / user data.
+*.hprof
+
+# Roborazzi / Kover leftover artifacts from local screenshot diffing.
+*-actual.png
+*_actual.png
+
+# NOTE — intentionally tracked, do NOT add to this file:
+#   * app/google-services.json                          — placeholder Firebase
+#     config (project_id "android-ai-agent-placeholder", zeroed project_number,
+#     placeholder API key) required for local & CI builds; carries no real
+#     Firebase identifiers or secrets.
+#   * app/src/main/assets/universal_sentence_encoder.tflite — bundled on-device
+#     USE embedding model, the default embedding provider; required at runtime.
