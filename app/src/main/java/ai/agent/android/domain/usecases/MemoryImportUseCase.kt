@@ -6,6 +6,7 @@ import ai.agent.android.domain.models.MemoryExportDocument
 import ai.agent.android.domain.models.MemoryImportOutcome
 import ai.agent.android.domain.models.MemoryImportStrategy
 import ai.agent.android.domain.repositories.MemoryRepository
+import ai.agent.android.domain.services.EmbeddingProviderResolver
 import ai.agent.android.domain.services.MemoryReembedScheduler
 import javax.inject.Inject
 
@@ -24,14 +25,29 @@ import javax.inject.Inject
  * Splitting parse from import keeps the use case testable without an `Activity`
  * and lets the UI raise a strategy / compatibility dialog before any mutation.
  *
+ * **Provider mismatch is decided against the *resolved* provider.** Both the
+ * re-embed decision ([import]) and the UI warning ([isProviderMismatched])
+ * compare the file's stamp against [EmbeddingProviderResolver.resolve], not the
+ * raw persisted `activeEmbeddingProviderId`. The resolver falls back to the
+ * on-device default when the selected provider is unavailable (e.g.
+ * `openai_3_small` is selected but no API key is configured), and that fallback
+ * is exactly what retrieval and auto-extraction embed with. Comparing against
+ * the raw setting would, in that state, see an OpenAI-stamped file "match" the
+ * OpenAI selection and skip re-embedding — leaving imported 1536-d vectors that
+ * every USE-embedded query scores as a mismatch and never repairs.
+ *
  * @property memoryRepository Backing store for the existing-id lookup, the
  *   transactional replace used by [MemoryImportStrategy.Replace], and the bulk
  *   insert.
+ * @property embeddingProviderResolver Resolves the provider retrieval will
+ *   actually use (with on-device fallback), so the re-embed decision matches
+ *   the space queries are embedded in.
  * @property reembedScheduler Enqueues the background re-embed pass when the
  *   imported chunks were flagged for re-embedding (provider mismatch).
  */
 class MemoryImportUseCase @Inject constructor(
     private val memoryRepository: MemoryRepository,
+    private val embeddingProviderResolver: EmbeddingProviderResolver,
     private val reembedScheduler: MemoryReembedScheduler,
 ) {
 
@@ -45,6 +61,22 @@ class MemoryImportUseCase @Inject constructor(
     fun parse(jsonText: String): MemoryImportOutcome = MemoryJsonSerializer.parse(jsonText)
 
     /**
+     * Reports whether [document] was exported under a different embedding
+     * provider than the one this device will actually use for retrieval — i.e.
+     * the [EmbeddingProviderResolver.resolve] result, which accounts for the
+     * on-device fallback when the selected provider is unavailable. Drives the
+     * import dialog's "embeddings will be re-computed" warning, and mirrors the
+     * exact decision [import] makes, so the warning never disagrees with the
+     * behaviour.
+     *
+     * @param document The parsed document about to be imported.
+     * @return `true` when the file's vectors live in a different space than the
+     *   active resolved provider and would need re-embedding.
+     */
+    suspend fun isProviderMismatched(document: MemoryExportDocument): Boolean =
+        document.embeddingProviderId != embeddingProviderResolver.resolve().id
+
+    /**
      * Reconciles [document] with the local store under [strategy].
      *
      * - [MemoryImportStrategy.Replace] atomically wipes every existing chunk and
@@ -54,24 +86,19 @@ class MemoryImportUseCase @Inject constructor(
      * - [MemoryImportStrategy.Merge] keeps existing chunks and inserts only
      *   those whose id is not already present (duplicates are skipped).
      *
-     * When [document]'s `embeddingProviderId` differs from [activeProviderId]
-     * the imported vectors live in an incompatible space, so every inserted
-     * chunk is flagged for re-embedding and a background re-embed pass is
-     * scheduled (the worker repairs them off the hot path).
+     * When [document]'s `embeddingProviderId` differs from the **resolved**
+     * active provider ([isProviderMismatched]) the imported vectors live in an
+     * incompatible space, so every inserted chunk is flagged for re-embedding
+     * and a background re-embed pass is scheduled (the worker repairs them off
+     * the hot path).
      *
      * @param document The parsed document to import.
      * @param strategy How to reconcile with the existing store.
-     * @param activeProviderId Id of the importing device's active embedding
-     *   provider.
      * @return A [MemoryImportResult] describing how many chunks were imported
      *   and skipped, and whether a re-embed was scheduled.
      */
-    suspend fun import(
-        document: MemoryExportDocument,
-        strategy: MemoryImportStrategy,
-        activeProviderId: String,
-    ): MemoryImportResult {
-        val needsReembedding = document.embeddingProviderId != activeProviderId
+    suspend fun import(document: MemoryExportDocument, strategy: MemoryImportStrategy): MemoryImportResult {
+        val needsReembedding = isProviderMismatched(document)
         val toInsert = when (strategy) {
             MemoryImportStrategy.Replace -> {
                 // Guard: never wipe the store when there is nothing to load.

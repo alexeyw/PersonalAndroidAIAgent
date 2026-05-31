@@ -10,7 +10,9 @@ import ai.agent.android.domain.models.MemorySummary
 import ai.agent.android.domain.repositories.MemoryRepository
 import ai.agent.android.domain.repositories.SettingsRepository
 import ai.agent.android.domain.services.EmbeddingProvider
+import ai.agent.android.domain.services.EmbeddingProviderResolver
 import ai.agent.android.domain.services.MemoryReembedScheduler
+import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.flow.Flow
@@ -31,6 +33,12 @@ import java.io.ByteArrayOutputStream
 class MemoryExportImportRoundTripTest {
 
     private val scheduler = mockk<MemoryReembedScheduler>(relaxed = true)
+
+    // Retrieval resolves to the on-device USE provider; the round-trip files are
+    // stamped with the same provider, so no re-embedding is expected.
+    private val resolver = mockk<EmbeddingProviderResolver> {
+        coEvery { resolve() } returns mockk { every { id } returns EmbeddingProvider.ID_USE }
+    }
 
     @Test
     fun `export then wipe then import Replace reproduces the original store`() = runTest {
@@ -58,7 +66,7 @@ class MemoryExportImportRoundTripTest {
         val settings = mockk<SettingsRepository>()
         every { settings.activeEmbeddingProviderId } returns flowOf(EmbeddingProvider.ID_USE)
         val export = ExportMemoryBaseUseCase(store, settings)
-        val importUseCase = MemoryImportUseCase(store, scheduler)
+        val importUseCase = MemoryImportUseCase(store, resolver, scheduler)
 
         val out = ByteArrayOutputStream()
         export(out)
@@ -71,7 +79,6 @@ class MemoryExportImportRoundTripTest {
         val result = importUseCase.import(
             (outcome as MemoryImportOutcome.Success).document,
             MemoryImportStrategy.Replace,
-            activeProviderId = EmbeddingProvider.ID_USE,
         )
 
         assertEquals(2, result.imported)
@@ -91,10 +98,10 @@ class MemoryExportImportRoundTripTest {
             MemoryChunk(id = 2, text = "fresh", embedding = floatArrayOf(0.2f), timestamp = 2L),
         )
 
-        val importUseCase = MemoryImportUseCase(store, scheduler)
+        val importUseCase = MemoryImportUseCase(store, resolver, scheduler)
         val document = MemoryExportDocument(EmbeddingProvider.ID_USE, 0L, incoming)
 
-        val result = importUseCase.import(document, MemoryImportStrategy.Merge, EmbeddingProvider.ID_USE)
+        val result = importUseCase.import(document, MemoryImportStrategy.Merge)
 
         assertEquals(1, result.imported)
         assertEquals(1, result.skipped)

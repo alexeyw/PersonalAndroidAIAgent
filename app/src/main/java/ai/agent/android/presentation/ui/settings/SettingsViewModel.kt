@@ -668,12 +668,13 @@ class SettingsViewModel @Inject constructor(
      * embedding provider differs from the one active on this device.
      */
     private suspend fun stagePendingImport(document: MemoryExportDocument, schemaMismatch: Boolean) {
-        val activeProviderId = settingsRepository.activeEmbeddingProviderId.first()
         _uiState.update {
             it.copy(
                 pendingImport = PendingMemoryImport(
                     document = document,
-                    providerMismatch = document.embeddingProviderId != activeProviderId,
+                    // Compare against the provider retrieval actually resolves to
+                    // (on-device fallback included), not the raw persisted setting.
+                    providerMismatch = memoryImportUseCase.isProviderMismatched(document),
                     schemaMismatch = schemaMismatch,
                 ),
             )
@@ -691,8 +692,7 @@ class SettingsViewModel @Inject constructor(
         _uiState.update { it.copy(pendingImport = null) }
         viewModelScope.launch {
             runCatching {
-                val activeProviderId = settingsRepository.activeEmbeddingProviderId.first()
-                memoryImportUseCase.import(pending.document, strategy, activeProviderId)
+                memoryImportUseCase.import(pending.document, strategy)
             }.onSuccess { result ->
                 emitSnackbar(importResultMessage(result))
             }.onFailure { error ->
