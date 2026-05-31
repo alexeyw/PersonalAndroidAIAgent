@@ -38,13 +38,12 @@ jobs:
           java-version: '21'
 
       - name: Set up Android SDK
+        # Installs a current cmdline-tools and accepts the SDK licenses. The
+        # API 37 platform (`compileSdk = release(37)`) and the matching
+        # build-tools are then fetched automatically by AGP during the build
+        # (`android.builder.sdkDownload` is on by default), so the exact
+        # package coordinates do not have to be hand-maintained here.
         uses: android-actions/setup-android@v4
-
-      - name: Install Android platform 37
-        # `compileSdk = release(37)` requires the API 37 platform; install it
-        # explicitly so the build does not depend on what the runner image
-        # happens to preinstall.
-        run: sdkmanager "platforms;android-37"
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v6
