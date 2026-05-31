@@ -13,7 +13,18 @@ details.
 
 ## [Unreleased]
 
-_No unreleased changes yet._
+### Added
+
+- **CI on GitHub Actions** (Phase 26 / Task 2/10): the `.github/workflows/check.yml`
+  gate is now tracked in the repository (previously kept locally and gitignored
+  because the remote PAT lacked the `workflow` scope). The job runs
+  `./gradlew check` — detekt, ktlintCheck, lintDebug, testDebugUnitTest,
+  koverVerifyDebug, verifyBrowserEditorConstants and `checkNoInternalFqn` — on
+  every `pull_request → main`, every `push` to `main`, and on manual
+  `workflow_dispatch`. It sets up JDK 21 (temurin) and the Android API 37
+  platform, caches Gradle, and uploads detekt / ktlint / lint / unit-test /
+  Kover / Roborazzi reports as artifacts on failure. A live build badge was
+  added to `README.md`.
 
 ## [0.3.0] - 2026-05-30
 
