@@ -21,9 +21,7 @@ import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Check
-import androidx.compose.material.icons.outlined.RadioButtonUnchecked
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -59,6 +57,7 @@ import app.knotwork.design.components.controls.KnotworkTextField
 import app.knotwork.design.components.knotworkMarkdownColor
 import app.knotwork.design.components.knotworkMarkdownTypography
 import app.knotwork.design.components.misc.KnotworkSnackbar
+import app.knotwork.design.icons.AppIcons
 import app.knotwork.design.screens.chat.ChatHomeCallbacks
 import app.knotwork.design.screens.chat.ChatHomeContent
 import app.knotwork.design.theme.KnotworkTheme
@@ -691,7 +690,7 @@ private fun ModelPickerSheetContent(
                         trailingContent = if (model.id == activeId) {
                             {
                                 Icon(
-                                    imageVector = Icons.Outlined.Check,
+                                    imageVector = AppIcons.Check,
                                     contentDescription =
                                     stringResource(R.string.chat_model_picker_active_cd),
                                 )
@@ -699,7 +698,7 @@ private fun ModelPickerSheetContent(
                         } else {
                             {
                                 Icon(
-                                    imageVector = Icons.Outlined.RadioButtonUnchecked,
+                                    imageVector = AppIcons.Circle,
                                     contentDescription = null,
                                 )
                             }

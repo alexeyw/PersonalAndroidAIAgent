@@ -17,9 +17,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Check
-import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -42,6 +40,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import app.knotwork.design.icons.AppIcons
 import app.knotwork.design.theme.KnotworkTheme
 import app.knotwork.design.tokens.KnotworkTextStyles
 
@@ -119,7 +118,7 @@ fun PresetPickerSheet(
                     modifier = Modifier.weight(1f),
                 )
                 IconButton(onClick = onDismiss) {
-                    Icon(Icons.Outlined.Close, contentDescription = null)
+                    Icon(AppIcons.X, contentDescription = null)
                 }
             }
 
@@ -209,7 +208,7 @@ fun PresetPickerSheet(
                     modifier = Modifier.testTag(tag = PRESET_PICKER_USE_TEST_TAG),
                 ) {
                     Icon(
-                        Icons.Outlined.Check,
+                        AppIcons.Check,
                         contentDescription = null,
                         modifier = Modifier.padding(end = KnotworkTheme.spacing.sp1),
                     )

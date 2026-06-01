@@ -26,6 +26,43 @@ details.
   caches Gradle, and uploads detekt / ktlint / lint / unit-test / Kover /
   Roborazzi reports as artifacts on failure. A live build badge was added to
   `README.md`.
+- **JetBrains Mono SemiBold (600) + Bold (700)** (Phase 26 / Task 3/10): the
+  brand monospace family now ships its load-bearing heavier cuts as real
+  Latin-subset font files (SIL OFL 1.1) instead of relying on synthetic bold —
+  source / status tags, node-kind labels, badges and stat numbers render in
+  Mono 700 at 9.5–11 px without smearing.
+- **Custom `I.*` icon family** (Phase 26 / Task 3/10): the spec §0.7
+  single-stroke icon set (73 glyphs — `menu`, `back`, `search`, `add`, `edit`,
+  `trash`, `send`, `play`, `refresh`, `eye`, `terminal`, `undo`/`redo`, …, plus
+  `pin`/`pin-on`) ships as custom `AppIcons.*` vectors built from the designer's
+  SVG sources (stroke 1.6 default; solid for `more` / `play` / `pause` / `dot` /
+  `pin-on` / `stop`; mixed for `theme`). **All Material Design icon call sites
+  (240) migrated to the brand family** — the app UI now renders entirely on one
+  stroke family (system Material components such as `RadioButton` keep their
+  built-in glyph). The selected bottom-nav tab renders at the active 2.0 stroke.
+  Stroke-weight and render-size icon tokens (`IconStroke`, `KnotworkIconSizes`)
+  back the family.
+
+### Changed
+
+- **Design-token reconciliation against the Controls & Components spec**
+  (Phase 26 / Task 3/10): aligned the Knotwork tokens and shared controls to the
+  canonical `tokens.css` source of truth.
+  - **Colour.** `primary` moved from accent-500 to **accent-600** (light) /
+    **accent-300** (dark) so white `on-primary` clears the 3:1 UI-contrast floor
+    on filled buttons. Added chat-bubble pairs (`chat-user/agent/tool` × bg/fg,
+    with a distinct quieter tool bubble), the `console-tag` accent, and the
+    memory source-tag provenance palette (`mem-auto/manual/compact` × bg/fg/rail
+    — AUTO blue 220, MANUAL brand amber, COMPACT violet 285). All values derived
+    deterministically from the `oklch` token source.
+  - **Iconography.** Default stroke 1.5 → **1.6**; added named stroke
+    (default / active / contextual) and render-size (22 / 20 / 18 / 26 / 14)
+    tokens per spec §0.7.
+  - **Controls.** Button labels now Inter 600 / 14 sp / +0.1; `RiskPill`
+    JetBrains Mono 500 / +0.2; node-kind and `CURRENT` pills moved to
+    JetBrains Mono 700 (with a real 5 px dot on `CURRENT`); icon-button glyph
+    22 dp and badge 14 dp / Inter 700 / primary fill; bottom-nav on `surface-2`
+    with a hairline top divider and Inter 11 sp labels.
 
 ## [0.3.0] - 2026-05-30
 

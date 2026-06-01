@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -100,7 +99,7 @@ internal fun EmptyPipelineState(
                     text = stringResource(R.string.pipeline_editor_empty_cta_start),
                     onClick = onStartWithInput,
                     size = KnotworkButtonSize.Sm,
-                    leadingIcon = Icons.Outlined.Add,
+                    leadingIcon = AppIcons.Add,
                 )
                 KnotworkSecondaryButton(
                     text = stringResource(R.string.pipeline_editor_empty_cta_template),

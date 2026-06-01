@@ -11,9 +11,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Pause
-import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.outlined.History
 import androidx.compose.material3.Surface
@@ -29,6 +27,7 @@ import androidx.compose.ui.unit.dp
 import app.knotwork.design.R
 import app.knotwork.design.components.buttons.KnotworkButtonSize
 import app.knotwork.design.components.buttons.KnotworkSecondaryButton
+import app.knotwork.design.icons.AppIcons
 import app.knotwork.design.theme.KnotworkTheme
 import app.knotwork.design.tokens.KnotworkTextStyles
 
@@ -259,13 +258,13 @@ private fun ActionsRow(
                     text = stringResource(R.string.knotwork_run_banner_action_pause),
                     onClick = onPause,
                     size = KnotworkButtonSize.Sm,
-                    leadingIcon = Icons.Filled.Pause,
+                    leadingIcon = AppIcons.Pause,
                 )
                 KnotworkSecondaryButton(
                     text = stringResource(R.string.knotwork_run_banner_action_stop),
                     onClick = onStop,
                     size = KnotworkButtonSize.Sm,
-                    leadingIcon = Icons.Filled.Stop,
+                    leadingIcon = AppIcons.Stop,
                     destructive = true,
                 )
             }
@@ -274,13 +273,13 @@ private fun ActionsRow(
                     text = stringResource(R.string.knotwork_run_banner_action_resume),
                     onClick = onResume,
                     size = KnotworkButtonSize.Sm,
-                    leadingIcon = Icons.Filled.PlayArrow,
+                    leadingIcon = AppIcons.Play,
                 )
                 KnotworkSecondaryButton(
                     text = stringResource(R.string.knotwork_run_banner_action_stop),
                     onClick = onStop,
                     size = KnotworkButtonSize.Sm,
-                    leadingIcon = Icons.Filled.Stop,
+                    leadingIcon = AppIcons.Stop,
                     destructive = true,
                 )
             }
@@ -289,7 +288,7 @@ private fun ActionsRow(
                     text = stringResource(R.string.knotwork_run_banner_action_trace),
                     onClick = onTrace,
                     size = KnotworkButtonSize.Sm,
-                    leadingIcon = Icons.Outlined.History,
+                    leadingIcon = AppIcons.History,
                 )
             }
         }

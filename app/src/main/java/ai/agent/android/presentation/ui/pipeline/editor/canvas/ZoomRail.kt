@@ -7,10 +7,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.size
-import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Add
-import androidx.compose.material.icons.outlined.OpenInFull
-import androidx.compose.material.icons.outlined.Remove
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
@@ -22,6 +19,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import app.knotwork.design.icons.AppIcons
 import app.knotwork.design.theme.KnotworkTheme
 
 /**
@@ -69,19 +67,19 @@ fun ZoomRail(
         verticalArrangement = Arrangement.spacedBy(TileGap),
     ) {
         ZoomTile(
-            icon = Icons.Outlined.Add,
+            icon = AppIcons.Add,
             contentDescription = stringResource(R.string.pipeline_editor_zoom_rail_zoom_in),
             enabled = canZoomIn,
             onClick = onZoomIn,
         )
         ZoomTile(
-            icon = Icons.Outlined.Remove,
+            icon = AppIcons.Minus,
             contentDescription = stringResource(R.string.pipeline_editor_zoom_rail_zoom_out),
             enabled = canZoomOut,
             onClick = onZoomOut,
         )
         ZoomTile(
-            icon = Icons.Outlined.OpenInFull,
+            icon = AppIcons.Expand,
             contentDescription = stringResource(R.string.pipeline_editor_zoom_rail_fit),
             enabled = canFit,
             onClick = onFit,

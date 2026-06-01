@@ -5,14 +5,13 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Terminal
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
+import app.knotwork.design.icons.AppIcons
 import app.knotwork.design.theme.KnotworkTheme
 
 /**
@@ -41,7 +40,7 @@ fun KnotworkButtonsCatalogContent() {
             KnotworkPrimaryButton(
                 text = "Send",
                 onClick = {},
-                leadingIcon = Icons.Filled.ArrowUpward,
+                leadingIcon = AppIcons.ArrowUpLine,
             )
 
             // Secondary button — default / destructive / loading / disabled.
@@ -60,24 +59,24 @@ fun KnotworkButtonsCatalogContent() {
                 KnotworkIconButton(
                     onClick = {},
                     contentDescription = "Open console",
-                    icon = Icons.Outlined.Terminal,
+                    icon = AppIcons.Terminal,
                 )
                 KnotworkIconButton(
                     onClick = {},
                     contentDescription = "Search messages",
-                    icon = Icons.Outlined.Search,
+                    icon = AppIcons.Search,
                     badge = 3,
                 )
                 KnotworkIconButton(
                     onClick = {},
                     contentDescription = "Search messages",
-                    icon = Icons.Outlined.Search,
+                    icon = AppIcons.Search,
                     badge = 42,
                 )
                 KnotworkIconButton(
                     onClick = {},
                     contentDescription = "Open console",
-                    icon = Icons.Outlined.Terminal,
+                    icon = AppIcons.Terminal,
                     enabled = false,
                 )
             }

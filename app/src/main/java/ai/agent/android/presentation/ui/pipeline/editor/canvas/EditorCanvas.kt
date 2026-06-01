@@ -14,7 +14,6 @@ import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
@@ -37,6 +36,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import app.knotwork.design.components.pipelineeditor.NodeError
+import app.knotwork.design.icons.AppIcons
 import app.knotwork.design.theme.KnotworkTheme
 
 /**
@@ -415,7 +415,7 @@ internal fun EditorCanvas(
                 shape = KnotworkTheme.shapes.full,
             ) {
                 Icon(
-                    imageVector = Icons.Outlined.Add,
+                    imageVector = AppIcons.Add,
                     contentDescription = stringResource(R.string.pipeline_editor_fab_add_node),
                 )
             }

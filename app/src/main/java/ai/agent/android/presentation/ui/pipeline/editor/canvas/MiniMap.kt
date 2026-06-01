@@ -17,8 +17,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Surface
@@ -35,6 +33,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import app.knotwork.design.components.pipelineeditor.headerTint
+import app.knotwork.design.icons.AppIcons
 import app.knotwork.design.theme.KnotworkTheme
 import app.knotwork.design.tokens.KnotworkTextStyles
 import kotlin.math.roundToInt
@@ -124,7 +123,7 @@ private fun Header(transform: CanvasTransform, onClose: () -> Unit) {
         )
         IconButton(onClick = onClose, modifier = Modifier.size(28.dp)) {
             Icon(
-                imageVector = Icons.Outlined.Close,
+                imageVector = AppIcons.X,
                 contentDescription = stringResource(R.string.pipeline_editor_mini_map_close),
                 tint = KnotworkTheme.extended.onSurfaceMuted,
             )

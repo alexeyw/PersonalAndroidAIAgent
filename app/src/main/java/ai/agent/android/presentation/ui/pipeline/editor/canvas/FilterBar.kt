@@ -8,8 +8,6 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -24,6 +22,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import app.knotwork.design.components.controls.KnotworkFieldSize
 import app.knotwork.design.components.controls.KnotworkTextField
+import app.knotwork.design.icons.AppIcons
 import app.knotwork.design.theme.KnotworkTheme
 import app.knotwork.design.tokens.KnotworkTextStyles
 
@@ -35,7 +34,7 @@ import app.knotwork.design.tokens.KnotworkTextStyles
  *
  * Migrated to the Knotwork [KnotworkTextField] search variant
  * (`inputs-and-chips.md` §2) — pill shape, `surface2` container, leading
- * [Icons.Outlined.Search] glyph baked into the field rather than rendered
+ * [AppIcons.Search] glyph baked into the field rather than rendered
  * as a sibling. Trailing `×` stays as a standalone [IconButton] because it
  * closes the overlay entirely rather than clearing the query.
  *
@@ -77,7 +76,7 @@ internal fun FilterBar(
                 size = KnotworkFieldSize.Md,
                 search = true,
                 placeholder = stringResource(R.string.pipeline_editor_search_placeholder),
-                leadingIcon = Icons.Outlined.Search,
+                leadingIcon = AppIcons.Search,
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
                 keyboardActions = KeyboardActions(onSearch = { onSubmit() }),
                 contentDescription = stringResource(R.string.pipeline_editor_search_placeholder),
@@ -95,7 +94,7 @@ internal fun FilterBar(
             }
             IconButton(onClick = onClose) {
                 Icon(
-                    imageVector = Icons.Outlined.Close,
+                    imageVector = AppIcons.X,
                     contentDescription = stringResource(R.string.pipeline_editor_search_close),
                 )
             }

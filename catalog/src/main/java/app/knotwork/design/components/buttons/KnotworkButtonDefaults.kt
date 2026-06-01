@@ -9,13 +9,14 @@ import app.knotwork.design.tokens.KnotworkTextStyles
 /**
  * Per-spec sizing tier for every Knotwork brand button.
  *
- * Mirrors the `Sm / Md / Lg` columns of `project_docs/buttons.md`:
+ * Label typography is `ButtonLabel` (Inter 600 / 14 sp / +0.1) across all
+ * tiers per spec §2.1 — only height and padding vary by size:
  *
- * |       | height | h-padding | text style |
- * |-------|--------|-----------|------------|
- * | [Sm]  | 32 dp  | 12 dp     | `LabelMd` (13 sp / Medium) |
- * | [Md]  | 40 dp  | 20 dp     | `LabelLg` (15 sp / Medium) |
- * | [Lg]  | 48 dp  | 24 dp     | `LabelLg` (15 sp / Medium) |
+ * |       | height | h-padding | text style    |
+ * |-------|--------|-----------|---------------|
+ * | [Sm]  | 32 dp  | 12 dp     | `ButtonLabel` |
+ * | [Md]  | 40 dp  | 20 dp     | `ButtonLabel` |
+ * | [Lg]  | 48 dp  | 24 dp     | `ButtonLabel` |
  *
  * The interactive touch-target floors at 48 × 48 dp regardless of
  * size — every concrete button composable applies
@@ -90,9 +91,9 @@ object KnotworkButtonDefaults {
         KnotworkButtonSize.Md, KnotworkButtonSize.Lg -> IconSizeMd
     }
 
-    /** Returns the label text style for the supplied [size]. */
+    /** Returns the label text style — `ButtonLabel` for every tier (spec §2.1). */
     fun textStyleFor(size: KnotworkButtonSize): TextStyle = when (size) {
-        KnotworkButtonSize.Sm -> KnotworkTextStyles.LabelMd
-        KnotworkButtonSize.Md, KnotworkButtonSize.Lg -> KnotworkTextStyles.LabelLg
+        KnotworkButtonSize.Sm, KnotworkButtonSize.Md, KnotworkButtonSize.Lg ->
+            KnotworkTextStyles.ButtonLabel
     }
 }

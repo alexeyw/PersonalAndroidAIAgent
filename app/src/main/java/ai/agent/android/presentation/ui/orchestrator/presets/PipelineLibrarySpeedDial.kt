@@ -4,9 +4,7 @@ import ai.agent.android.R
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Add
-import androidx.compose.material.icons.outlined.Bookmarks
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -18,6 +16,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
+import app.knotwork.design.icons.AppIcons
 import app.knotwork.design.theme.KnotworkTheme
 
 /**
@@ -47,7 +46,7 @@ fun PipelineLibrarySpeedDial(onNewPipeline: () -> Unit, onFromPreset: () -> Unit
                     expanded = false
                     onFromPreset()
                 },
-                icon = { Icon(Icons.Outlined.Bookmarks, contentDescription = null) },
+                icon = { Icon(AppIcons.Bookmark, contentDescription = null) },
                 text = { Text(stringResource(R.string.orchestrator_library_speed_dial_from_preset)) },
                 modifier = Modifier.testTag(tag = SPEED_DIAL_FROM_PRESET_TEST_TAG),
             )
@@ -61,7 +60,7 @@ fun PipelineLibrarySpeedDial(onNewPipeline: () -> Unit, onFromPreset: () -> Unit
                     expanded = true
                 }
             },
-            icon = { Icon(Icons.Outlined.Add, contentDescription = null) },
+            icon = { Icon(AppIcons.Add, contentDescription = null) },
             text = {
                 Text(
                     if (expanded) {

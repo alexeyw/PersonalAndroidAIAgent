@@ -14,10 +14,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.ArrowForward
-import androidx.compose.material.icons.outlined.Cancel
-import androidx.compose.material.icons.outlined.WarningAmber
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -30,6 +26,7 @@ import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import app.knotwork.design.components.buttons.KnotworkTextButton
+import app.knotwork.design.icons.AppIcons
 import app.knotwork.design.theme.KnotworkTheme
 import app.knotwork.design.tokens.KnotworkTextStyles
 
@@ -126,7 +123,7 @@ private fun HeaderBanner(issueCount: Int, autoFixApplicable: Boolean, onAutoFix:
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(
-            imageVector = Icons.Outlined.WarningAmber,
+            imageVector = AppIcons.Warn,
             contentDescription = null,
             tint = MaterialTheme.colorScheme.error,
             modifier = Modifier.size(18.dp),
@@ -181,7 +178,7 @@ private fun ValidationRow(label: String, severity: Severity, nodeLabel: String?,
         TextButton(onClick = onGo, enabled = canFocus) {
             Text(text = stringResource(R.string.pipeline_editor_validation_go))
             Icon(
-                imageVector = Icons.AutoMirrored.Outlined.ArrowForward,
+                imageVector = AppIcons.ArrowR,
                 contentDescription = null,
                 modifier = Modifier
                     .padding(start = KnotworkTheme.spacing.sp1)
@@ -193,8 +190,8 @@ private fun ValidationRow(label: String, severity: Severity, nodeLabel: String?,
 
 /** Per-row severity classification — drives the icon and tint. */
 private enum class Severity(val icon: ImageVector) {
-    Blocker(Icons.Outlined.Cancel),
-    Warning(Icons.Outlined.WarningAmber),
+    Blocker(AppIcons.X),
+    Warning(AppIcons.Warn),
     ;
 
     @Composable

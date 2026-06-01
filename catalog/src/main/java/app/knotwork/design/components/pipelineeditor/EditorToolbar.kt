@@ -12,9 +12,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.ArrowBack
-import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -30,6 +27,7 @@ import app.knotwork.design.R
 import app.knotwork.design.components.buttons.KnotworkButtonSize
 import app.knotwork.design.components.buttons.KnotworkIconButton
 import app.knotwork.design.components.buttons.KnotworkPrimaryButton
+import app.knotwork.design.icons.AppIcons
 import app.knotwork.design.theme.KnotworkTheme
 import app.knotwork.design.tokens.KnotworkTextStyles
 
@@ -108,7 +106,7 @@ fun EditorToolbar(
             KnotworkIconButton(
                 onClick = onNavigateUp,
                 contentDescription = stringResource(R.string.knotwork_editor_action_navigate_up),
-                icon = Icons.AutoMirrored.Outlined.ArrowBack,
+                icon = AppIcons.Back,
             )
             TitleStack(
                 name = name,
@@ -139,7 +137,7 @@ fun EditorToolbar(
             KnotworkIconButton(
                 onClick = onOverflow,
                 contentDescription = stringResource(R.string.knotwork_editor_action_overflow),
-                icon = Icons.Outlined.MoreVert,
+                icon = AppIcons.More,
             )
         }
     }

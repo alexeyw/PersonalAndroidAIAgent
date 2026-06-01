@@ -19,8 +19,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.WarningAmber
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -38,6 +36,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
+import app.knotwork.design.icons.AppIcons
 import app.knotwork.design.theme.KnotworkTheme
 import app.knotwork.design.tokens.KnotworkTextStyles
 
@@ -234,7 +233,7 @@ private fun HeaderStrip(type: NodeType, strip: Color, onStrip: Color, error: Nod
         )
         if (error is NodeError.Validation) {
             Icon(
-                imageVector = Icons.Outlined.WarningAmber,
+                imageVector = AppIcons.Warn,
                 contentDescription = null,
                 tint = onStrip,
                 modifier = Modifier.size(HeaderGlyphSize),

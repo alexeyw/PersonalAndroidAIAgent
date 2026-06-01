@@ -9,9 +9,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -26,6 +23,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import app.knotwork.design.icons.AppIcons
 import app.knotwork.design.theme.KnotworkTheme
 import app.knotwork.design.tokens.KnotworkTextStyles
 
@@ -55,7 +53,7 @@ fun ProviderPickerScreen(onPick: (ProviderId) -> Unit, onBack: () -> Unit) {
                     navigationIcon = {
                         IconButton(onClick = onBack) {
                             Icon(
-                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                imageVector = AppIcons.Back,
                                 contentDescription = stringResource(R.string.common_back),
                             )
                         }
@@ -106,7 +104,7 @@ private fun ProviderPickerRow(title: String, onClick: () -> Unit) {
                 modifier = Modifier.weight(1f),
             )
             Icon(
-                imageVector = Icons.Outlined.ChevronRight,
+                imageVector = AppIcons.ArrowR,
                 contentDescription = null,
                 tint = KnotworkTheme.extended.onSurfaceMuted,
             )

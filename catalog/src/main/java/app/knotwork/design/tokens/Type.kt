@@ -148,7 +148,16 @@ object KnotworkTextStyles {
         lineHeight = 18.sp,
     )
 
-    /** 15 sp / 20 sp Medium — primary buttons, prominent labels. */
+    /** 14 sp / 20 sp SemiBold, +0.1 tracking — button labels (spec §2.1). */
+    val ButtonLabel get() = TextStyle(
+        fontFamily = inter,
+        fontWeight = FontWeight.SemiBold,
+        fontSize = 14.sp,
+        lineHeight = 20.sp,
+        letterSpacing = 0.1.sp,
+    )
+
+    /** 15 sp / 20 sp Medium — prominent labels, list titleSmall slot. */
     val LabelLg get() = TextStyle(
         fontFamily = inter,
         fontWeight = FontWeight.Medium,
