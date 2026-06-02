@@ -41,11 +41,11 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalClipboardManager
@@ -67,6 +67,7 @@ import app.knotwork.design.screens.chat.ChatHomeContent
 import app.knotwork.design.theme.KnotworkTheme
 import com.mikepenz.markdown.m3.Markdown
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -129,26 +130,28 @@ fun ChatHomeScreen(
     val currentSessionId by viewModel.currentSessionId.collectAsStateWithLifecycle()
     val chatListState = rememberLazyListState()
 
-    // Auto-scroll policy for the message list:
-    //  - Opening a thread (session id changes) jumps to the very end so the
-    //    latest exchange is on screen.
-    //  - A newly appended message (user or agent) is revealed per the spec:
-    //    a message taller than the viewport is top-aligned (its first line at
-    //    the top); a shorter one is bottom-aligned (its last line at the
-    //    bottom). When the whole conversation already fits, nothing scrolls
-    //    (the scroll calls clamp to the existing position).
-    var lastScrolledSessionId by remember { mutableStateOf<String?>(null) }
-    var lastMessageCount by remember { mutableIntStateOf(0) }
-    LaunchedEffect(currentSessionId, messages.size) {
-        val count = messages.size
-        if (count == 0) return@LaunchedEffect // wait for the thread's history to load
-        val lastMessageIndex = count - 1
-        when {
-            currentSessionId != lastScrolledSessionId -> chatListState.scrollChatToEnd(lastMessageIndex)
-            count > lastMessageCount -> chatListState.revealAppendedMessage(lastMessageIndex)
+    // Auto-scroll for the message list, re-armed on every thread switch.
+    //  1. Opening a thread jumps to the very end — but only once the list has
+    //     actually laid out its items. The `snapshotFlow { … totalItemsCount }`
+    //     wait is essential: the list is composed only after the messages
+    //     arrive (Empty → Idle), so scrolling in the same frame would hit an
+    //     unmeasured list and silently no-op (the bug in the first attempt).
+    //  2. After that baseline, each newly appended message (user or agent) is
+    //     revealed per the spec — top-aligned when taller than the viewport,
+    //     otherwise bottom-aligned. Nothing moves when the conversation already
+    //     fits (the scroll calls clamp to the current position).
+    LaunchedEffect(currentSessionId) {
+        if (currentSessionId.isBlank()) return@LaunchedEffect
+        snapshotFlow { chatListState.layoutInfo.totalItemsCount }.first { it > 0 }
+        chatListState.scrollChatToEnd(messages.size - 1)
+        var known = messages.size
+        snapshotFlow { messages.size }.collect { count ->
+            if (count > known && count > 0) {
+                snapshotFlow { chatListState.layoutInfo.totalItemsCount }.first { it >= count }
+                chatListState.revealAppendedMessage(count - 1)
+            }
+            known = count
         }
-        lastScrolledSessionId = currentSessionId
-        lastMessageCount = count
     }
 
     var debugPickerExpanded by remember { mutableStateOf(false) }
