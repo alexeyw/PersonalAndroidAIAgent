@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -409,10 +410,15 @@ internal fun EditorCanvas(
                     val cy = viewportSize.second / 2f
                     editor.quickAddAnchor = cx to cy
                 },
+                // Spec §2.3: regular FAB fill primary / on-primary, radius 16 (`shapes.lg`).
+                // Matches the memory / library FAB family rather than the M3 default
+                // primary-container pill.
+                containerColor = MaterialTheme.colorScheme.primary,
+                contentColor = MaterialTheme.colorScheme.onPrimary,
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
                     .padding(KnotworkTheme.spacing.sp4),
-                shape = KnotworkTheme.shapes.full,
+                shape = KnotworkTheme.shapes.lg,
             ) {
                 Icon(
                     imageVector = AppIcons.Add,
