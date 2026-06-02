@@ -153,6 +153,32 @@ class LoadPipelineFromPresetUseCaseTest {
     }
 
     @Test
+    fun `given valid preset when materialize then returns regenerated graph without persisting`() = runTest {
+        coEvery { presetRepository.getPresetById("local_only_qa") } returns preset()
+
+        val result = useCase.materialize("local_only_qa")
+
+        assertTrue(result.isSuccess)
+        val graph = result.getOrNull()!!
+        // Ids are regenerated…
+        assertNotEquals("template-id", graph.id)
+        assertTrue(graph.nodes.none { it.id == "tpl-input" || it.id == "tpl-output" })
+        // …and nothing is written to the repository (the caller decides where it lands).
+        coVerify(exactly = 0) { pipelineRepository.savePipeline(any()) }
+    }
+
+    @Test
+    fun `given missing preset when materialize then returns failure`() = runTest {
+        coEvery { presetRepository.getPresetById("nope") } returns null
+
+        val result = useCase.materialize("nope")
+
+        assertTrue(result.isFailure)
+        assertTrue(result.exceptionOrNull() is IllegalStateException)
+        coVerify(exactly = 0) { pipelineRepository.savePipeline(any()) }
+    }
+
+    @Test
     fun `given save fails when invoke then propagates failure`() = runTest {
         coEvery { presetRepository.getPresetById("p") } returns preset()
         coEvery { pipelineRepository.savePipeline(any()) } throws RuntimeException("io")

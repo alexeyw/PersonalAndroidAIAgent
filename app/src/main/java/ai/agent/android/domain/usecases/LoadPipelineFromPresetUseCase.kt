@@ -46,6 +46,28 @@ class LoadPipelineFromPresetUseCase @Inject constructor(
      *   throws.
      */
     suspend operator fun invoke(presetId: String): Result<String> = try {
+        val pipeline = materialize(presetId).getOrElse { return Result.failure(it) }
+        pipelineRepository.savePipeline(pipeline)
+        Result.success(pipeline.id)
+    } catch (e: Exception) {
+        Result.failure(e)
+    }
+
+    /**
+     * Instantiates the preset identified by [presetId] into a fresh,
+     * validated [PipelineGraph] **without persisting it**.
+     *
+     * Used by surfaces that fill an *existing* pipeline from a template (the
+     * editor's empty-state "From template" CTA) rather than spawning a new
+     * library row — the caller decides where the regenerated graph's nodes /
+     * connections land. [invoke] builds on this and adds the persistence step.
+     *
+     * @param presetId The stable id of the preset to instantiate.
+     * @return [Result.success] with the regenerated graph (new pipeline / node
+     *   / connection ids, validated), or [Result.failure] when the preset is
+     *   missing or the template fails [PipelineGraph.validate].
+     */
+    suspend fun materialize(presetId: String): Result<PipelineGraph> = try {
         val preset = pipelinePresetRepository.getPresetById(presetId)
             ?: return Result.failure(IllegalStateException("Preset not found: $presetId"))
 
@@ -81,11 +103,10 @@ class LoadPipelineFromPresetUseCase @Inject constructor(
 
         val errors = pipeline.validate()
         if (errors.isNotEmpty()) {
-            return Result.failure(PipelineValidationException(errors))
+            Result.failure(PipelineValidationException(errors))
+        } else {
+            Result.success(pipeline)
         }
-
-        pipelineRepository.savePipeline(pipeline)
-        Result.success(pipeline.id)
     } catch (e: Exception) {
         Result.failure(e)
     }

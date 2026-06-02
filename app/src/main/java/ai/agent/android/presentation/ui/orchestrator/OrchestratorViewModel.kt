@@ -27,6 +27,7 @@ import ai.agent.android.domain.usecases.DeletePipelineUseCase
 import ai.agent.android.domain.usecases.DuplicatePipelineUseCase
 import ai.agent.android.domain.usecases.GetPromptTemplatesUseCase
 import ai.agent.android.domain.usecases.ImportPipelineUseCase
+import ai.agent.android.domain.usecases.LoadPipelineFromPresetUseCase
 import ai.agent.android.domain.usecases.LoadPipelineUseCase
 import ai.agent.android.domain.usecases.RenamePipelineUseCase
 import ai.agent.android.domain.usecases.SavePipelineAsPresetUseCase
@@ -71,6 +72,7 @@ class OrchestratorViewModel @Inject constructor(
     private val savePipelineUseCase: SavePipelineUseCase,
     private val loadPipelineUseCase: LoadPipelineUseCase,
     private val importPipelineUseCase: ImportPipelineUseCase,
+    private val loadPipelineFromPresetUseCase: LoadPipelineFromPresetUseCase,
     private val renamePipelineUseCase: RenamePipelineUseCase,
     private val duplicatePipelineUseCase: DuplicatePipelineUseCase,
     private val deletePipelineUseCase: DeletePipelineUseCase,
@@ -565,6 +567,43 @@ class OrchestratorViewModel @Inject constructor(
                     updatedAt = System.currentTimeMillis(),
                 ),
             )
+        }
+    }
+
+    /**
+     * Fills the pipeline currently being edited with the graph of the preset
+     * identified by [presetId], regenerating node / connection ids so the
+     * template is never mutated. Unlike the library's `+ From preset` flow
+     * (which spawns a brand-new pipeline), this *replaces the current
+     * pipeline's* nodes and connections in place — driving the editor's
+     * empty-state "From template" CTA — while preserving the current
+     * pipeline's `id` and `name`. Failures surface through `errorMessage`.
+     *
+     * @param presetId The stable id of the preset to materialise into the
+     *   current pipeline.
+     */
+    fun applyPresetToCurrentPipeline(presetId: String) {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isLoading = true) }
+            val result = loadPipelineFromPresetUseCase.materialize(presetId)
+            _uiState.update { state ->
+                result.fold(
+                    onSuccess = { graph ->
+                        state.copy(
+                            isLoading = false,
+                            currentPipeline = state.currentPipeline.copy(
+                                nodes = graph.nodes,
+                                connections = graph.connections,
+                                updatedAt = System.currentTimeMillis(),
+                            ),
+                            feedbackMessage = UiText(R.string.orchestrator_preset_picker_loaded),
+                        )
+                    },
+                    onFailure = { e ->
+                        state.copy(isLoading = false, errorMessage = throwableAsUiText(e))
+                    },
+                )
+            }
         }
     }
 

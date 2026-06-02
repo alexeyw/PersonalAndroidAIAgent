@@ -8,6 +8,8 @@ import ai.agent.android.presentation.ui.orchestrator.presets.PipelineLibrarySpee
 import ai.agent.android.presentation.ui.orchestrator.presets.PipelinePresetsViewModel
 import ai.agent.android.presentation.ui.orchestrator.presets.PresetPickerSheet
 import ai.agent.android.presentation.ui.orchestrator.presets.SaveAsPresetDialog
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -28,6 +30,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
@@ -45,7 +48,9 @@ import app.knotwork.design.screens.pipelines.PipelineLibraryVisualState
 import app.knotwork.design.screens.pipelines.PipelineSecondaryLineKind
 import app.knotwork.design.screens.pipelines.isFabHidden
 import app.knotwork.design.theme.KnotworkTheme
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
  * Library screen listing every saved pipeline. Acts as the entry point for
@@ -77,6 +82,30 @@ fun PipelineLibraryScreen(
     val presetsState by presetsViewModel.uiState.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
+    val importUnreadableMessage = stringResource(R.string.orchestrator_library_import_unreadable)
+
+    // SAF launcher for the footer "Import JSON" affordance. Reads the picked
+    // document off the main thread and hands the text to the VM, which parses,
+    // validates, persists, and (on a schemaVersion mismatch) stashes the graph
+    // in `pendingImport` for the confirmation dialog below.
+    val importLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument(),
+    ) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        scope.launch {
+            val json = withContext(Dispatchers.IO) {
+                runCatching {
+                    context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
+                }.getOrNull()
+            }
+            if (json.isNullOrBlank()) {
+                snackbarHostState.showSnackbar(message = importUnreadableMessage)
+            } else {
+                viewModel.importPipelineFromJson(json)
+            }
+        }
+    }
 
     var activeFilter by remember { mutableStateOf(PipelineLibraryFilter.All) }
     var openOverflowRowId by remember { mutableStateOf<String?>(null) }
@@ -173,9 +202,7 @@ fun PipelineLibraryScreen(
             // surface a snackbar so the affordance is visible.
             scope.launch { snackbarHostState.showSnackbar(message = EXPORT_COMING_SOON_MESSAGE) }
         },
-        onImportJson = {
-            scope.launch { snackbarHostState.showSnackbar(message = IMPORT_HINT_MESSAGE) }
-        },
+        onImportJson = { importLauncher.launch(arrayOf("application/json", "text/*")) },
         // Archive: phase-21 has no archival table yet — treat as delete so
         // the affordance is exercised.
         onArchive = { id ->
@@ -308,6 +335,31 @@ fun PipelineLibraryScreen(
             },
         )
     }
+    uiState.pendingImport?.let { mismatch ->
+        AlertDialog(
+            onDismissRequest = viewModel::cancelPendingImport,
+            title = { Text(stringResource(R.string.orchestrator_library_import_schema_title)) },
+            text = {
+                Text(
+                    stringResource(
+                        R.string.orchestrator_library_import_schema_body,
+                        mismatch.foundVersion,
+                        mismatch.expectedVersion,
+                    ),
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = viewModel::confirmPendingImport) {
+                    Text(stringResource(R.string.orchestrator_library_import_anyway))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = viewModel::cancelPendingImport) {
+                    Text(stringResource(R.string.common_cancel))
+                }
+            },
+        )
+    }
 }
 
 /**
@@ -401,6 +453,3 @@ internal const val LIBRARY_ROOT_TEST_TAG = "pipeline_library_root"
 
 /** Snackbar message shown when the user taps "Export JSON" — per-id export lands post-v0.1. */
 private const val EXPORT_COMING_SOON_MESSAGE = "Per-pipeline export ships in a follow-up."
-
-/** Snackbar message shown when the user taps the footer "Import JSON" link. */
-private const val IMPORT_HINT_MESSAGE = "Use the import dialog in the editor for now."

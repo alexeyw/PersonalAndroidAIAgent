@@ -891,14 +891,15 @@ fun PipelineEditorScreen(viewModel: OrchestratorViewModel, onBack: () -> Unit) {
             )
         }
 
-        // "From template" picker — mirrors the library's `+ From preset` flow.
-        // Picking a preset materialises it into a brand-new pipeline through
-        // `LoadPipelineFromPresetUseCase`; the editor then swaps onto that
-        // pipeline (no navigation hop — we're already here).
+        // "From template" picker — fills the CURRENT (empty) pipeline from a
+        // preset rather than spawning a new library row: the regenerated graph
+        // replaces the current pipeline's nodes / connections in place (see
+        // OrchestratorViewModel.applyPresetToCurrentPipeline). The presets
+        // ViewModel here only supplies the catalogue (tabs / categories / list).
         //
-        // The presets ViewModel is resolved lazily inside this branch (not as a
-        // screen parameter) so the editor only touches Hilt when the picker is
-        // actually opened — composable tests that drive the editor with a manual
+        // It is resolved lazily inside this branch (not as a screen parameter)
+        // so the editor only touches Hilt when the picker is actually opened —
+        // composable tests that drive the editor with a manual
         // OrchestratorViewModel and never open the picker stay Hilt-free.
         if (showPresetPicker) {
             val presetsViewModel: PipelinePresetsViewModel = hiltViewModel()
@@ -907,34 +908,18 @@ fun PipelineEditorScreen(viewModel: OrchestratorViewModel, onBack: () -> Unit) {
                 state = presetsState,
                 onTabSelected = presetsViewModel::selectTab,
                 onCategorySelected = presetsViewModel::selectCategory,
-                // The sheet stays open until the load resolves; the effect below
-                // closes it once the new pipeline id is in hand (or surfaces an
-                // error and leaves the sheet up to retry).
-                onUsePreset = presetsViewModel::loadFromPreset,
-                onDismiss = { showPresetPicker = false },
-            )
-            // On success, swap the editor onto the freshly materialised pipeline.
-            // Unlike the library (which navigates into the editor), we are already
-            // here — so we re-point the shared OrchestratorViewModel and close.
-            LaunchedEffect(presetsState.pendingPipelineIdFromPreset) {
-                presetsState.pendingPipelineIdFromPreset?.let { newPipelineId ->
-                    presetsViewModel.consumePendingPipelineNavigation()
-                    // The screen-local EditorState belongs to the graph we are
-                    // leaving. Drop its undo/redo history and transient selection
-                    // before switching pipelines — otherwise a stale Undo snapshot
-                    // from the previous graph would clobber the loaded preset the
-                    // moment the user hits Undo.
+                onUsePreset = { presetId ->
+                    // The screen-local EditorState belongs to the (empty) graph
+                    // we are replacing. Drop its undo/redo history and transient
+                    // selection so a stale Undo snapshot can't clobber the
+                    // freshly loaded preset.
                     editor.undoRedo.reset()
                     editor.clearTransient()
-                    viewModel.loadPipeline(newPipelineId)
+                    viewModel.applyPresetToCurrentPipeline(presetId)
                     showPresetPicker = false
-                }
-            }
-            LaunchedEffect(presetsState.errorMessage) {
-                val msg = presetsState.errorMessage ?: return@LaunchedEffect
-                snackbarHostState.showSnackbar(message = context.resolve(msg))
-                presetsViewModel.clearError()
-            }
+                },
+                onDismiss = { showPresetPicker = false },
+            )
         }
 
         val edgeToDelete = pendingEdgeDelete
