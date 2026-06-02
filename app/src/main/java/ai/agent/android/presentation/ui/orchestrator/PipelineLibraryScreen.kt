@@ -3,6 +3,7 @@ package ai.agent.android.presentation.ui.orchestrator
 import ai.agent.android.R
 import ai.agent.android.domain.models.PipelineGraph
 import ai.agent.android.presentation.ui.common.asString
+import ai.agent.android.presentation.ui.orchestrator.presets.GraphFlowPreview
 import ai.agent.android.presentation.ui.orchestrator.presets.PipelineLibrarySpeedDial
 import ai.agent.android.presentation.ui.orchestrator.presets.PipelinePresetsViewModel
 import ai.agent.android.presentation.ui.orchestrator.presets.PresetPickerSheet
@@ -354,12 +355,11 @@ private fun PipelineNameDialog(
  * "unbound").
  */
 private fun PipelineGraph.toLibraryRow(isActive: Boolean, isDefault: Boolean): PipelineLibraryRow {
-    val flavour = nodes
-        .asSequence()
-        .map { it.type.name }
-        .take(n = NODE_FLOW_PREVIEW_COUNT)
-        .joinToString(separator = "→")
-        .ifBlank { "empty pipeline" }
+    // Walk the graph from INPUT following connections (GraphFlowPreview) rather
+    // than iterating `nodes` in insertion order — otherwise the subtitle reads
+    // e.g. "INPUT→OUTPUT→LITE_RT" (storage order) while the editor renders the
+    // true execution order "INPUT→LITE_RT→OUTPUT".
+    val flavour = GraphFlowPreview.render(this)
     val subtitle = "$nodeCountText · $flavour"
     val secondaryLine = when {
         isActive && isDefault -> "Active default"
@@ -392,9 +392,6 @@ private val PipelineGraph.nodeCountText: String
 
 /** Number of rows considered "recent" by the Recent filter chip. */
 private const val RECENT_TAKE_COUNT = 3
-
-/** Number of node types listed in the "8 nodes · INPUT→PLANNER→TOOLS→OUTPUT" subtitle. */
-private const val NODE_FLOW_PREVIEW_COUNT = 4
 
 /** Packed ARGB of the leading-mark tint used by every library row (brand orange). */
 private const val LEADING_TINT_PACKED: Long = 0xFFC48225

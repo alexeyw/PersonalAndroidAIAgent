@@ -611,6 +611,68 @@ class GraphExecutionEngineTest {
         }
     }
 
+    // ─── EVALUATION tests ─────────────────────────────────────────────────────
+
+    /**
+     * Builds an INPUT → EVALUATION → {Pass, Fail} → OUTPUT graph where each
+     * branch carries a distinct LITE_RT marker prompt, so a routing assertion
+     * can tell which output port the verdict selected.
+     */
+    private fun evaluationBranchGraph(): PipelineGraph = PipelineGraph(
+        id = "ge",
+        name = "Evaluation routing",
+        nodes = listOf(
+            NodeModel("input", NodeType.INPUT, 0f, 0f),
+            NodeModel("eval", NodeType.EVALUATION, 0f, 0f),
+            NodeModel("pass", NodeType.LITE_RT, 0f, 0f, systemPrompt = "PASS_BRANCH_MARKER"),
+            NodeModel("fail", NodeType.LITE_RT, 0f, 0f, systemPrompt = "FAIL_BRANCH_MARKER"),
+            NodeModel("output", NodeType.OUTPUT, 0f, 0f),
+        ),
+        connections = listOf(
+            ConnectionModel("c1", "input", "eval"),
+            ConnectionModel("c2", "eval", "pass", label = "Pass"),
+            ConnectionModel("c3", "eval", "fail", label = "Fail"),
+            ConnectionModel("c4", "pass", "output"),
+            ConnectionModel("c5", "fail", "output"),
+        ),
+    )
+
+    @Test
+    fun `given EVALUATION verdict PASS then routes through the Pass output port`() = runTest {
+        every { settingsRepository.pipelineMaxSteps } returns flowOf(15)
+        every { llmEngine.generateResponseStream(any()) } returnsMany listOf(
+            flowOf("PASS — the subtask result satisfies the goal."), // EVALUATION verdict
+            flowOf("pass-branch answer"), // LITE_RT on the Pass branch
+            flowOf("Final"), // OUTPUT
+        )
+
+        val states = engine(sessionId, "evaluate this", evaluationBranchGraph()).toList()
+
+        assertTrue("Expected Completed but got: ${states.last()}", states.last() is AgentOrchestratorState.Completed)
+        io.mockk.verify { llmEngine.generateResponseStream(match { it.contains("PASS_BRANCH_MARKER") }) }
+        io.mockk.verify(exactly = 0) {
+            llmEngine.generateResponseStream(match { it.contains("FAIL_BRANCH_MARKER") })
+        }
+    }
+
+    @Test
+    fun `given EVALUATION verdict FAIL then routes through the Fail output port`() = runTest {
+        every { settingsRepository.pipelineMaxSteps } returns flowOf(15)
+        every { llmEngine.generateResponseStream(any()) } returnsMany listOf(
+            flowOf("FAIL: the result is incorrect and cannot be repaired."), // EVALUATION verdict
+            flowOf("fail-branch answer"), // LITE_RT on the Fail branch
+            flowOf("Final"), // OUTPUT
+        )
+
+        val states = engine(sessionId, "evaluate this", evaluationBranchGraph()).toList()
+
+        assertTrue("Expected Completed but got: ${states.last()}", states.last() is AgentOrchestratorState.Completed)
+        io.mockk.verify { llmEngine.generateResponseStream(match { it.contains("FAIL_BRANCH_MARKER") }) }
+        io.mockk.verify(exactly = 0) {
+            llmEngine.generateResponseStream(match { it.contains("PASS_BRANCH_MARKER") })
+        }
+    }
+
     // ─── QUEUE_PROCESSOR tests ────────────────────────────────────────────────
 
     @Test
