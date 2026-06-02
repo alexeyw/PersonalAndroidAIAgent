@@ -5,7 +5,6 @@ import android.content.Intent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -20,7 +19,6 @@ import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.windowInsetsPadding
-import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -70,7 +68,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import timber.log.Timber
 
 /**
  * Redesigned Knotwork chat home — the user-facing surface introduced in
@@ -147,36 +144,27 @@ fun ChatHomeScreen(
         // Drive scrolling off `messages.size` — it grows by exactly one for each
         // appended row (user OR agent), unlike the rendered item count which can
         // stay flat when a generating-loader item is swapped for the agent's
-        // final message. The open-jump targets the list's REAL last rendered
-        // item (`totalItemsCount - 1`) so it lands at the true end even if the
-        // rendered list carries trailing items.
+        // final message.
+        //
+        // A single `scrollToItem(lastMessageIndex)` does the right thing and is
+        // reliable: the last item clamps to the bottom when it is shorter than
+        // the viewport (bottom-aligned) and aligns its top to the viewport when
+        // it is taller (top-aligned). An earlier attempt that read `layoutInfo`
+        // right after `scrollToItem` to "fine-tune" the offset drifted the list
+        // into the middle, because `layoutInfo` had not yet been recomputed for
+        // the scroll just issued (stale offsets).
         snapshotFlow { messages.size }.collect { count ->
-            val totalBefore = chatListState.layoutInfo.totalItemsCount
-            Timber.tag(SCROLL_DEBUG_TAG).d(
-                "session=%s msgCount=%d total=%d known=%d firstVisible=%d",
-                currentSessionId,
-                count,
-                totalBefore,
-                known,
-                chatListState.firstVisibleItemIndex,
-            )
             if (count <= 0) {
                 known = -1
                 return@collect
             }
-            // Wait until the list has actually laid out at least `count` items.
+            // Wait until the list has actually laid out the messages — on a
+            // fresh thread the rows arrive before the LazyColumn measures them.
             snapshotFlow { chatListState.layoutInfo.totalItemsCount }.first { it >= count }
-            when {
-                known < 0 -> chatListState.scrollToListEnd(chatListState.layoutInfo.totalItemsCount - 1)
-                count > known -> chatListState.revealMessageAt(count - 1)
+            if (known < 0 || count > known) {
+                chatListState.scrollToItem(count - 1)
             }
             known = count
-            Timber.tag(SCROLL_DEBUG_TAG).d(
-                "after-scroll total=%d firstVisible=%d lastVisible=%d",
-                chatListState.layoutInfo.totalItemsCount,
-                chatListState.firstVisibleItemIndex,
-                chatListState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1,
-            )
         }
     }
 
@@ -805,60 +793,3 @@ private const val PIPELINE_NAME_PLACEHOLDER: String = "default"
 
 /** MIME type used by both the export share-sheet and the import file picker. */
 private const val MIME_JSON: String = "application/json"
-
-/** Temporary Timber tag for diagnosing chat auto-scroll; remove once verified. */
-private const val SCROLL_DEBUG_TAG: String = "ChatScroll"
-
-/**
- * Jumps the chat list to the very end (opening a thread). Aligns the last
- * message's bottom edge with the viewport bottom even when that message is
- * taller than the viewport, so the freshest content is always on screen.
- *
- * @param lastMessageIndex Index of the last message row in the list.
- */
-private suspend fun LazyListState.scrollToListEnd(lastIndex: Int) {
-    if (lastIndex < 0) return
-    scrollToItem(lastIndex)
-    // Bottom-align the last item even when it is taller than the viewport, so
-    // the end of the conversation is always flush with the bottom edge.
-    bottomAlign(lastIndex)
-}
-
-/**
- * Reveals a freshly appended message per the chat scroll spec:
- *  - taller than the viewport → top-aligned (its first line at the top);
- *  - shorter than the viewport → bottom-aligned (its last line at the bottom,
- *    earlier messages filling the space above).
- *
- * Nothing moves when the conversation already fits (the scroll calls clamp).
- *
- * @param messageIndex Index of the appended message row in the list.
- */
-private suspend fun LazyListState.revealMessageAt(messageIndex: Int) {
-    if (messageIndex < 0) return
-    scrollToItem(messageIndex)
-    val viewportHeight = layoutInfo.viewportEndOffset - layoutInfo.viewportStartOffset
-    val item = layoutInfo.visibleItemsInfo.firstOrNull { it.index == messageIndex } ?: return
-    // Tall message → keep the top-alignment that scrollToItem already applied.
-    if (item.size >= viewportHeight) return
-    // Short message → bottom-align it.
-    bottomAlign(messageIndex)
-}
-
-/**
- * Scrolls so the item at [index] sits flush with the viewport bottom. Computes
- * the delta from the item's **current** offset (read after a preceding
- * `scrollToItem`), so when `scrollToItem` already clamped the list to the
- * bottom — e.g. a short last item — the delta is zero and nothing moves. This
- * is the fix for the earlier "jerk far from the new message": assuming the
- * offset was 0 double-applied the shift on top of the clamp.
- *
- * @param index Index of the item to bottom-align.
- */
-private suspend fun LazyListState.bottomAlign(index: Int) {
-    val viewportHeight = layoutInfo.viewportEndOffset - layoutInfo.viewportStartOffset
-    val item = layoutInfo.visibleItemsInfo.firstOrNull { it.index == index } ?: return
-    val desiredTop = viewportHeight - item.size
-    val delta = item.offset - desiredTop
-    if (delta != 0) scrollBy(delta.toFloat())
-}
