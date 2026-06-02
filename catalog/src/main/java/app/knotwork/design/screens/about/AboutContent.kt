@@ -24,7 +24,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import app.knotwork.design.components.brand.KnotworkLogo
+import app.knotwork.design.components.brand.KnotworkAppIconTile
 import app.knotwork.design.components.brand.KnotworkLogoSize
 import app.knotwork.design.components.buttons.KnotworkSecondaryButton
 import app.knotwork.design.icons.AppIcons
@@ -116,7 +116,7 @@ private fun Hero(state: AboutViewState) {
         verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp2),
         modifier = Modifier.fillMaxWidth().padding(vertical = KnotworkTheme.spacing.sp3),
     ) {
-        KnotworkLogo(size = KnotworkLogoSize.Md)
+        KnotworkAppIconTile(size = KnotworkLogoSize.Md)
         Text(
             text = state.appName,
             style = KnotworkTextStyles.TitleXl,
