@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -46,6 +47,8 @@ fun PipelineLibrarySpeedDial(onNewPipeline: () -> Unit, onFromPreset: () -> Unit
                     expanded = false
                     onFromPreset()
                 },
+                containerColor = MaterialTheme.colorScheme.primary,
+                contentColor = MaterialTheme.colorScheme.onPrimary,
                 icon = { Icon(AppIcons.Bookmark, contentDescription = null) },
                 text = { Text(stringResource(R.string.orchestrator_library_speed_dial_from_preset)) },
                 modifier = Modifier.testTag(tag = SPEED_DIAL_FROM_PRESET_TEST_TAG),
@@ -60,6 +63,8 @@ fun PipelineLibrarySpeedDial(onNewPipeline: () -> Unit, onFromPreset: () -> Unit
                     expanded = true
                 }
             },
+            containerColor = MaterialTheme.colorScheme.primary,
+            contentColor = MaterialTheme.colorScheme.onPrimary,
             icon = { Icon(AppIcons.Add, contentDescription = null) },
             text = {
                 Text(
