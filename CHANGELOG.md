@@ -66,22 +66,32 @@ details.
 
 ### Fixed
 
-- **UI functional verification — orphaned callbacks wired** (Phase 26 / Task 4/10):
-  - The pipeline editor's empty-state **"From template"** CTA now opens the
-    preset picker and materialises the chosen bundled / user preset into the
-    editor (was a "coming soon" Snackbar). It reuses the same
-    `LoadPipelineFromPresetUseCase` flow as the library's `+ From preset`.
-  - The Monitoring screen's **Retry** action now reloads the recent system-log
-    stream (`MonitoringViewModel.loadLogs()`) instead of doing nothing.
-  - Remaining secondary affordances that back unreachable error states
-    (Models / Task-monitor retry), retired features (Prompt-library search), or
-    preview-only run controls (editor Pause / Resume / Trace) are now explicit
-    documented no-ops rather than silent empty lambdas. See
-    `project_docs/ui-functional-audit-phase26.md` for the full register.
-  - Closed the `MoreViewModel` and `ProviderDetailViewModel` unit-test gaps
-    flagged in `docs/coverage-baseline.md`; added a regression asserting the
-    first-launch seeded pipeline passes `PipelineGraph.validate()` with zero
-    errors.
+- **UI functional verification — every control does something** (Phase 26 / Task 4/10):
+  a screen-by-screen sweep wiring orphaned callbacks, fixing node-config
+  forms, and removing dead / misleading affordances.
+  - Pipeline editor: the empty-state **"From template"** CTA now fills the
+    current pipeline from a chosen preset (was a "coming soon" Snackbar); the
+    **EVALUATION** node now routes through its Pass / Retry / Fail output ports
+    based on the model's verdict (was: always took the first edge).
+  - Pipeline library: **Import JSON** now opens a real document picker and
+    imports the pipeline (with a schema-mismatch confirm); the row subtitle
+    lists node types in execution order (walked from INPUT) rather than
+    storage order. Monitoring **Retry** reloads the system-log stream.
+  - Node config: TOOL "Auto" no longer blocks Save; the QUEUE input-list
+    expression is optional with a helper; CLARIFY gains a quick-replies helper
+    and a 0–360 s timeout slider (0 = none).
+  - Tools: discovered AppFunctions are hidden from the list (kept callable by
+    the agent); the ToolDetail and Add-MCP-server top bars now match the app
+    chrome.
+  - Removed affordances that did nothing or misled: top-bar overflow menus
+    (Library / Tools / Models), the More and Settings search icons (the latter
+    opened an empty sheet), the Models active-model chevron, and the duplicate
+    Settings "Change" link. Memory's search field can now be dismissed without
+    first typing a query. Provider picker / detail screens aligned to the
+    standard chrome.
+  - Closed the `MoreViewModel` and `ProviderDetailViewModel` unit-test gaps;
+    added a regression asserting the first-launch seeded pipeline passes
+    `PipelineGraph.validate()` with zero errors.
 
 ## [0.3.0] - 2026-05-30
 
