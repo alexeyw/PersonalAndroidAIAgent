@@ -348,7 +348,6 @@ enum class DestructiveActionKind {
 @Suppress("LongParameterList")
 class SettingsCallbacks(
     val onBack: () -> Unit = {},
-    val onSearchClick: () -> Unit = {},
 
     // System instructions.
     val onSystemInstructionsChange: (String) -> Unit = {},
@@ -367,7 +366,6 @@ class SettingsCallbacks(
 
     // Local model.
     val onManageModelsClick: () -> Unit = {},
-    val onChangeModelClick: () -> Unit = {},
     val onBackendSelected: (String) -> Unit = {},
     val onTestBackendClick: () -> Unit = {},
 

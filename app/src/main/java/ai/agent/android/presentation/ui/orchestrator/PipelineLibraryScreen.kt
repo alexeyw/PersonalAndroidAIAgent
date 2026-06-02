@@ -212,7 +212,6 @@ fun PipelineLibraryScreen(
             uiState.savedPipelines.firstOrNull { it.id == id }?.let { deleteTarget = it }
         },
         onOpenDrawer = { /* drawer ships post-v0.1. */ },
-        onTopOverflow = { /* top overflow ships post-v0.1. */ },
         onNewPipeline = { showCreateDialog = true },
         onBrowseTemplates = { showPresetPicker = true },
         onSaveAsPreset = { id ->

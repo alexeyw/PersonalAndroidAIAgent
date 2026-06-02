@@ -125,9 +125,6 @@ object NavRoutes {
     /** Picker sheet shown when the user taps "+ Add provider". */
     const val ADD_PROVIDER: String = "settings/provider/add"
 
-    /** Search-in-settings modal sheet. */
-    const val SETTINGS_SEARCH: String = "settings/search"
-
     // ─── Modal bottom-sheet placeholder routes ─────────────────────────────
     // Phase 21 / Task 4 introduces the [KnotworkModalRoute] wrapper used by
     // every modal surface. The three sheets below are registered as empty

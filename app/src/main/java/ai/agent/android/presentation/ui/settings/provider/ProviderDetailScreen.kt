@@ -7,6 +7,7 @@ import ai.agent.android.domain.models.ProviderId
 import ai.agent.android.domain.repositories.ApiKeyRepository
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -70,13 +71,17 @@ fun ProviderDetailScreen(
     val locale = LocalConfiguration.current.locales[0]
 
     Scaffold(
+        containerColor = MaterialTheme.colorScheme.surface,
+        // The outer AppShellScaffold already absorbs the system bars; defaulting
+        // to safeDrawing here would double-count the insets.
+        contentWindowInsets = WindowInsets(left = 0, top = 0, right = 0, bottom = 0),
         topBar = {
             app.knotwork.design.components.topbar.KnotworkTopAppBarShell {
                 TopAppBar(
                     title = {
                         Text(
                             text = stringResource(R.string.settings_provider_detail_title, providerLabel(providerId)),
-                            style = KnotworkTextStyles.TitleLg,
+                            style = KnotworkTextStyles.TitleMd,
                             color = MaterialTheme.colorScheme.onSurface,
                         )
                     },
@@ -91,6 +96,7 @@ fun ProviderDetailScreen(
                     },
                     colors = TopAppBarDefaults.topAppBarColors(
                         containerColor = MaterialTheme.colorScheme.surface,
+                        titleContentColor = MaterialTheme.colorScheme.onSurface,
                     ),
                 )
             }

@@ -161,7 +161,6 @@
         <item quantity="other">%1$d saved · %2$d default</item>
     </plurals>
     <!-- ContentDescription for the trailing overflow icon. -->
-    <string name="knotwork_library_top_overflow_cd">Library actions</string>
     <!-- LIBRARY section header inside the list. -->
     <string name="knotwork_library_section_library">LIBRARY</string>
     <!-- "DEFAULT" pill on the row that's marked as the user's default pipeline. -->
@@ -199,7 +198,6 @@
         <item quantity="other">%1$d built-in · %2$d MCP</item>
     </plurals>
     <!-- ContentDescription for the trailing overflow icon. -->
-    <string name="knotwork_tools_top_overflow_cd">Tools actions</string>
     <!-- BUILT-IN section header. -->
     <string name="knotwork_tools_section_built_in">BUILT-IN (APPFUNCTIONS)</string>
     <!-- MCP SERVERS section header. -->
@@ -272,7 +270,6 @@
 
     <string name="knotwork_settings_title">Settings</string>
     <string name="knotwork_settings_back">Back</string>
-    <string name="knotwork_settings_search_cd">Search settings</string>
 
     <string name="knotwork_settings_section_system_instructions">System instructions</string>
     <string name="knotwork_settings_section_restrictions">Restrictions · Human-in-the-loop</string>
@@ -293,7 +290,6 @@
     <string name="knotwork_settings_llm_reset">Reset to defaults</string>
 
     <string name="knotwork_settings_local_model_manage">Manage</string>
-    <string name="knotwork_settings_local_model_change">Change</string>
     <string name="knotwork_settings_local_model_active_pill">Active</string>
     <string name="knotwork_settings_local_model_empty">No model installed</string>
     <string name="knotwork_settings_local_model_backend_title">Inference backend</string>
@@ -534,13 +530,17 @@
     <string name="knotwork_node_field_label_false">False label</string>
     <string name="knotwork_node_field_question">Question template</string>
     <string name="knotwork_node_field_quick_replies">Quick replies</string>
-    <string name="knotwork_node_field_timeout_optional">Wait timeout (ms, optional)</string>
+    <string name="knotwork_node_field_quick_replies_help">Optional. Comma-separated answers shown as tappable chips under the question (up to 4).</string>
+    <string name="knotwork_node_field_timeout_seconds">Wait timeout</string>
+    <string name="knotwork_node_field_timeout_none">none</string>
+    <string name="knotwork_node_field_timeout_seconds_value">%1$d s</string>
     <string name="knotwork_node_field_tool">Tool</string>
     <string name="knotwork_node_field_arg_mapping">Argument mapping</string>
     <string name="knotwork_node_field_confirm_override">Confirm policy override</string>
     <string name="knotwork_node_field_planning_prompt">Planning prompt</string>
     <string name="knotwork_node_field_max_subtasks">Max subtasks</string>
     <string name="knotwork_node_field_input_list">Input list expression</string>
+    <string name="knotwork_node_field_input_list_help">Optional. Leave blank to iterate the list from the previous node (e.g. DECOMPOSITION).</string>
     <string name="knotwork_node_field_item_variable">Item variable name</string>
     <string name="knotwork_node_field_parallelism">Parallelism</string>
     <string name="knotwork_node_field_stop_on_error">Stop on error</string>

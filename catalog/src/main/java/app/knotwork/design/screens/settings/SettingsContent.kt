@@ -29,7 +29,6 @@ import androidx.compose.material.icons.outlined.Block
 import androidx.compose.material.icons.outlined.Bolt
 import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.Refresh
-import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Shield
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenuItem
@@ -106,7 +105,7 @@ fun SettingsContent(
             containerColor = MaterialTheme.colorScheme.surface,
             topBar = {
                 app.knotwork.design.components.topbar.KnotworkTopAppBarShell {
-                    SettingsTopBar(state = state, onBack = callbacks.onBack, onSearch = callbacks.onSearchClick)
+                    SettingsTopBar(state = state, onBack = callbacks.onBack)
                 }
             },
             // The outer `AppShellScaffold` already applies the system /
@@ -142,7 +141,7 @@ fun SettingsContent(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun SettingsTopBar(state: SettingsViewState, onBack: () -> Unit, onSearch: () -> Unit) {
+private fun SettingsTopBar(state: SettingsViewState, onBack: () -> Unit) {
     TopAppBar(
         title = {
             Column {
@@ -176,15 +175,8 @@ private fun SettingsTopBar(state: SettingsViewState, onBack: () -> Unit, onSearc
                 )
             }
         },
-        actions = {
-            IconButton(onClick = onSearch) {
-                Icon(
-                    imageVector = AppIcons.Search,
-                    contentDescription = androidx.compose.ui.res.stringResource(R.string.knotwork_settings_search_cd),
-                    tint = MaterialTheme.colorScheme.onSurface,
-                )
-            }
-        },
+        // No search action: Settings is a short, sectioned list with no search
+        // surface, so the icon (which opened an empty sheet) is omitted.
         colors = TopAppBarDefaults.topAppBarColors(
             containerColor = MaterialTheme.colorScheme.surface,
             titleContentColor = MaterialTheme.colorScheme.onSurface,
@@ -652,10 +644,9 @@ private fun LocalModelCard(state: LocalModelCardState, callbacks: SettingsCallba
                         )
                     }
                 }
-                KnotworkTextButton(
-                    text = androidx.compose.ui.res.stringResource(R.string.knotwork_settings_local_model_change),
-                    onClick = callbacks.onChangeModelClick,
-                )
+                // "Change" removed: it duplicated the section-level "Manage"
+                // action (both routed to the Models screen). "Manage" is kept
+                // as the single entry point.
             }
         }
 

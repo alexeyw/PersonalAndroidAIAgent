@@ -138,7 +138,7 @@ fun ToolsContent(
         containerColor = MaterialTheme.colorScheme.surface,
         topBar = {
             app.knotwork.design.components.topbar.KnotworkTopAppBarShell {
-                ToolsTopBar(state = state, callbacks = callbacks)
+                ToolsTopBar(state = state)
             }
         },
         // The outer `AppShellScaffold` already absorbs both the system
@@ -159,7 +159,7 @@ fun ToolsContent(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun ToolsTopBar(state: ToolsViewState, callbacks: ToolsCallbacks) {
+private fun ToolsTopBar(state: ToolsViewState) {
     TopAppBar(
         title = {
             Column {
@@ -180,15 +180,9 @@ private fun ToolsTopBar(state: ToolsViewState, callbacks: ToolsCallbacks) {
                 )
             }
         },
-        actions = {
-            IconButton(onClick = callbacks.onTopOverflow) {
-                Icon(
-                    imageVector = AppIcons.More,
-                    contentDescription = stringResource(R.string.knotwork_tools_top_overflow_cd),
-                    tint = MaterialTheme.colorScheme.onSurface,
-                )
-            }
-        },
+        // No top-bar overflow: connect-server lives on the FAB / empty-state
+        // CTA and per-server actions live inline on each server card, so the
+        // menu had nothing to host.
         colors = TopAppBarDefaults.topAppBarColors(
             containerColor = MaterialTheme.colorScheme.surface,
             titleContentColor = MaterialTheme.colorScheme.onSurface,
@@ -848,30 +842,32 @@ fun ToolDetailContent(
         // visible gap under the schema box.
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
-            TopAppBar(
-                title = {
-                    Text(
-                        text = state.toolName,
-                        style = KnotworkTextStyles.TitleLg,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                },
-                navigationIcon = {
-                    IconButton(onClick = callbacks.onBack) {
-                        Icon(
-                            imageVector = AppIcons.Back,
-                            contentDescription = stringResource(R.string.knotwork_tools_detail_back),
-                            tint = MaterialTheme.colorScheme.onSurface,
+            app.knotwork.design.components.topbar.KnotworkTopAppBarShell {
+                TopAppBar(
+                    title = {
+                        Text(
+                            text = state.toolName,
+                            style = KnotworkTextStyles.TitleMd,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
                         )
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface,
-                    titleContentColor = MaterialTheme.colorScheme.onSurface,
-                ),
-            )
+                    },
+                    navigationIcon = {
+                        IconButton(onClick = callbacks.onBack) {
+                            Icon(
+                                imageVector = AppIcons.Back,
+                                contentDescription = stringResource(R.string.knotwork_tools_detail_back),
+                                tint = MaterialTheme.colorScheme.onSurface,
+                            )
+                        }
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = MaterialTheme.colorScheme.surface,
+                        titleContentColor = MaterialTheme.colorScheme.onSurface,
+                    ),
+                )
+            }
         },
     ) { padding ->
         Column(
@@ -982,32 +978,34 @@ fun McpServerConfigContent(
         containerColor = MaterialTheme.colorScheme.surface,
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
-            TopAppBar(
-                title = {
-                    Text(
-                        text = if (form.isEdit) {
-                            stringResource(R.string.knotwork_tools_form_title_edit)
-                        } else {
-                            stringResource(R.string.knotwork_tools_form_title_add)
-                        },
-                        style = KnotworkTextStyles.TitleLg,
-                        color = MaterialTheme.colorScheme.onSurface,
-                    )
-                },
-                navigationIcon = {
-                    IconButton(onClick = callbacks.onCancel) {
-                        Icon(
-                            imageVector = AppIcons.Back,
-                            contentDescription = stringResource(R.string.knotwork_tools_add_form_cancel),
-                            tint = MaterialTheme.colorScheme.onSurface,
+            app.knotwork.design.components.topbar.KnotworkTopAppBarShell {
+                TopAppBar(
+                    title = {
+                        Text(
+                            text = if (form.isEdit) {
+                                stringResource(R.string.knotwork_tools_form_title_edit)
+                            } else {
+                                stringResource(R.string.knotwork_tools_form_title_add)
+                            },
+                            style = KnotworkTextStyles.TitleMd,
+                            color = MaterialTheme.colorScheme.onSurface,
                         )
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface,
-                    titleContentColor = MaterialTheme.colorScheme.onSurface,
-                ),
-            )
+                    },
+                    navigationIcon = {
+                        IconButton(onClick = callbacks.onCancel) {
+                            Icon(
+                                imageVector = AppIcons.Back,
+                                contentDescription = stringResource(R.string.knotwork_tools_add_form_cancel),
+                                tint = MaterialTheme.colorScheme.onSurface,
+                            )
+                        }
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = MaterialTheme.colorScheme.surface,
+                        titleContentColor = MaterialTheme.colorScheme.onSurface,
+                    ),
+                )
+            }
         },
     ) { padding ->
         Column(

@@ -314,7 +314,6 @@ fun AppNavGraph(navController: NavHostController, showOnboarding: Boolean, modif
                     )
                 },
                 onOpenAddProvider = { navController.navigate(NavRoutes.ADD_PROVIDER) },
-                onOpenSearch = { navController.navigate(NavRoutes.SETTINGS_SEARCH) },
             )
         }
         composable(
@@ -353,10 +352,6 @@ fun AppNavGraph(navController: NavHostController, showOnboarding: Boolean, modif
                 },
                 onBack = { navController.popBackStack() },
             )
-        }
-        composable(NavRoutes.SETTINGS_SEARCH) {
-            // Placeholder until the search-in-settings sheet lands.
-            KnotworkModalRoute(onDismiss = { navController.popBackStack() }) { _ -> }
         }
         composable(NavRoutes.PROMPTS) {
             PromptLibraryScreen(

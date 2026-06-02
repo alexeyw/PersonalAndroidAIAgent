@@ -325,14 +325,15 @@ private fun MemorySearchField(query: String, callbacks: MemoryCallbacks) {
                     )
                 }
             }
-            if (query.isNotEmpty()) {
-                IconButton(onClick = callbacks.onClearSearch) {
-                    Icon(
-                        AppIcons.X,
-                        contentDescription = stringResource(R.string.knotwork_memory_search_clear_cd),
-                        tint = KnotworkTheme.extended.onSurfaceMuted,
-                    )
-                }
+            // Always show the close affordance while the field is open — the
+            // user must be able to dismiss search without first typing a query
+            // (onClearSearch clears the text and collapses the field).
+            IconButton(onClick = callbacks.onClearSearch) {
+                Icon(
+                    AppIcons.X,
+                    contentDescription = stringResource(R.string.knotwork_memory_search_clear_cd),
+                    tint = KnotworkTheme.extended.onSurfaceMuted,
+                )
             }
         }
         Text(

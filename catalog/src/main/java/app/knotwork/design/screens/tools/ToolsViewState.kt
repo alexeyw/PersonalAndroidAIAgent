@@ -207,7 +207,6 @@ class ToolsCallbacks(
     val onAddServerOpen: () -> Unit = {},
     val onErrorRetry: () -> Unit = {},
     val onOpenDrawer: () -> Unit = {},
-    val onTopOverflow: () -> Unit = {},
 )
 
 /** Convenience factory returning a callbacks bundle that ignores every event. */
