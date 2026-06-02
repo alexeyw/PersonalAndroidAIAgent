@@ -30,16 +30,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.windowInsetsPadding
-import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.Redo
 import androidx.compose.material.icons.automirrored.outlined.Undo
-import androidx.compose.material.icons.outlined.Bookmarks
-import androidx.compose.material.icons.outlined.ContentPaste
-import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.GridOff
-import androidx.compose.material.icons.outlined.GridOn
-import androidx.compose.material.icons.outlined.Map
 import androidx.compose.material.icons.outlined.Save
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.AlertDialog
@@ -520,7 +514,7 @@ fun PipelineEditorScreen(viewModel: OrchestratorViewModel, onBack: () -> Unit) {
                         scope.launch { snackbarHostState.showSnackbar(saveDoneMessage) }
                     },
                     leadingIcon = {
-                        Icon(Icons.Outlined.Save, contentDescription = null)
+                        Icon(AppIcons.Save, contentDescription = null)
                     },
                 )
                 DropdownMenuItem(
@@ -531,7 +525,7 @@ fun PipelineEditorScreen(viewModel: OrchestratorViewModel, onBack: () -> Unit) {
                     },
                     enabled = editor.undoRedo.canUndo,
                     leadingIcon = {
-                        Icon(Icons.AutoMirrored.Outlined.Undo, contentDescription = null)
+                        Icon(AppIcons.Undo, contentDescription = null)
                     },
                 )
                 DropdownMenuItem(
@@ -542,7 +536,7 @@ fun PipelineEditorScreen(viewModel: OrchestratorViewModel, onBack: () -> Unit) {
                     },
                     enabled = editor.undoRedo.canRedo,
                     leadingIcon = {
-                        Icon(Icons.AutoMirrored.Outlined.Redo, contentDescription = null)
+                        Icon(AppIcons.Redo, contentDescription = null)
                     },
                 )
                 DropdownMenuItem(
@@ -553,7 +547,7 @@ fun PipelineEditorScreen(viewModel: OrchestratorViewModel, onBack: () -> Unit) {
                     },
                     enabled = editor.selection.size == 1,
                     leadingIcon = {
-                        Icon(Icons.Outlined.Edit, contentDescription = null)
+                        Icon(AppIcons.Edit, contentDescription = null)
                     },
                 )
                 DropdownMenuItem(
@@ -564,7 +558,7 @@ fun PipelineEditorScreen(viewModel: OrchestratorViewModel, onBack: () -> Unit) {
                     },
                     enabled = editor.selection.isNotEmpty() || editor.selectedEdgeId != null,
                     leadingIcon = {
-                        Icon(Icons.Outlined.Delete, contentDescription = null)
+                        Icon(AppIcons.Trash, contentDescription = null)
                     },
                 )
                 DropdownMenuItem(
@@ -574,7 +568,7 @@ fun PipelineEditorScreen(viewModel: OrchestratorViewModel, onBack: () -> Unit) {
                         saveAsPresetOpen = true
                     },
                     leadingIcon = {
-                        Icon(Icons.Outlined.Bookmarks, contentDescription = null)
+                        Icon(AppIcons.Bookmark, contentDescription = null)
                     },
                 )
                 DropdownMenuItem(
@@ -594,7 +588,7 @@ fun PipelineEditorScreen(viewModel: OrchestratorViewModel, onBack: () -> Unit) {
                         editor.miniMapOpen = !editor.miniMapOpen
                     },
                     leadingIcon = {
-                        Icon(Icons.Outlined.Map, contentDescription = null)
+                        Icon(AppIcons.Globe, contentDescription = null)
                     },
                 )
                 DropdownMenuItem(
@@ -615,7 +609,7 @@ fun PipelineEditorScreen(viewModel: OrchestratorViewModel, onBack: () -> Unit) {
                     },
                     leadingIcon = {
                         Icon(
-                            imageVector = if (editor.gridVisible) Icons.Outlined.GridOff else Icons.Outlined.GridOn,
+                            imageVector = if (editor.gridVisible) AppIcons.GridOff else AppIcons.Grid,
                             contentDescription = null,
                         )
                     },
@@ -627,7 +621,7 @@ fun PipelineEditorScreen(viewModel: OrchestratorViewModel, onBack: () -> Unit) {
                         editor.searchOpen = true
                     },
                     leadingIcon = {
-                        Icon(Icons.Outlined.Search, contentDescription = null)
+                        Icon(AppIcons.Search, contentDescription = null)
                     },
                 )
                 DropdownMenuItem(
@@ -665,7 +659,7 @@ fun PipelineEditorScreen(viewModel: OrchestratorViewModel, onBack: () -> Unit) {
                     },
                     enabled = editor.clipboard.isNotEmpty(),
                     leadingIcon = {
-                        Icon(Icons.Outlined.ContentPaste, contentDescription = null)
+                        Icon(AppIcons.Paste, contentDescription = null)
                     },
                 )
             }

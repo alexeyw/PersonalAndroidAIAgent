@@ -12,11 +12,14 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
@@ -32,12 +35,16 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.sp
 import androidx.navigation.NavHostController
 import androidx.navigation.NavOptionsBuilder
 import androidx.navigation.compose.currentBackStackEntryAsState
 import app.knotwork.design.components.misc.KnotworkSnackbar
 import app.knotwork.design.components.misc.SnackbarVariant
 import app.knotwork.design.theme.KnotworkTheme
+import app.knotwork.design.tokens.KnotworkIconSizes
+import app.knotwork.design.tokens.KnotworkTextStyles
 
 /**
  * Root scaffold for the post-splash, post-onboarding app surface.
@@ -175,28 +182,42 @@ private fun AppBottomNavigationBar(currentRoute: String?, onTabSelected: (TabDes
     // as the indicator tint, onPrimaryContainer for the selected glyph. The
     // unselected icon and label stay on `onSurfaceMuted` so they read as
     // secondary affordances rather than competing with the active tab.
-    NavigationBar(containerColor = KnotworkTheme.extended.surface1) {
-        val itemColors = NavigationBarItemDefaults.colors(
-            selectedIconColor = MaterialTheme.colorScheme.onPrimaryContainer,
-            selectedTextColor = MaterialTheme.colorScheme.onSurface,
-            indicatorColor = MaterialTheme.colorScheme.primaryContainer,
-            unselectedIconColor = KnotworkTheme.extended.onSurfaceMuted,
-            unselectedTextColor = KnotworkTheme.extended.onSurfaceMuted,
-        )
-        TAB_DESTINATIONS.forEach { tab ->
-            val selected = currentRoute?.belongsToTab(tab) == true
-            NavigationBarItem(
-                selected = selected,
-                onClick = { onTabSelected(tab) },
-                icon = {
-                    Icon(
-                        imageVector = if (selected) tab.iconSelected else tab.iconUnselected,
-                        contentDescription = null,
-                    )
-                },
-                label = { Text(stringResource(tab.labelRes)) },
-                colors = itemColors,
+    // Spec §3.2: bg surface-2, 1 px top divider, nav glyph 22 dp, label Inter 11 sp
+    // (active 600 +0.2, idle 500).
+    Column {
+        HorizontalDivider(color = KnotworkTheme.extended.divider)
+        NavigationBar(containerColor = KnotworkTheme.extended.surface2) {
+            val itemColors = NavigationBarItemDefaults.colors(
+                selectedIconColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                selectedTextColor = MaterialTheme.colorScheme.onSurface,
+                indicatorColor = MaterialTheme.colorScheme.primaryContainer,
+                unselectedIconColor = KnotworkTheme.extended.onSurfaceMuted,
+                unselectedTextColor = KnotworkTheme.extended.onSurfaceMuted,
             )
+            TAB_DESTINATIONS.forEach { tab ->
+                val selected = currentRoute?.belongsToTab(tab) == true
+                NavigationBarItem(
+                    selected = selected,
+                    onClick = { onTabSelected(tab) },
+                    icon = {
+                        Icon(
+                            imageVector = if (selected) tab.iconSelected else tab.iconUnselected,
+                            contentDescription = null,
+                            modifier = Modifier.size(KnotworkIconSizes.AppBar),
+                        )
+                    },
+                    label = {
+                        Text(
+                            text = stringResource(tab.labelRes),
+                            style = KnotworkTextStyles.LabelSm.copy(
+                                fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
+                                letterSpacing = 0.2.sp,
+                            ),
+                        )
+                    },
+                    colors = itemColors,
+                )
+            }
         }
     }
 }

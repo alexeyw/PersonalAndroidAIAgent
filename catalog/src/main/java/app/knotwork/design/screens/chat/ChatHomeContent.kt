@@ -39,16 +39,11 @@ import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.outlined.Add
-import androidx.compose.material.icons.outlined.BrightnessMedium
 import androidx.compose.material.icons.outlined.Edit
-import androidx.compose.material.icons.outlined.FileDownload
 import androidx.compose.material.icons.outlined.Hub
 import androidx.compose.material.icons.outlined.Menu
-import androidx.compose.material.icons.outlined.MoreVert
-import androidx.compose.material.icons.outlined.StarBorder
 import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -93,6 +88,7 @@ import app.knotwork.design.components.chips.Risk
 import app.knotwork.design.components.console.ConsolePane
 import app.knotwork.design.components.console.ConsoleSnap
 import app.knotwork.design.components.misc.KnotworkLoader
+import app.knotwork.design.icons.AppIcons
 import app.knotwork.design.theme.KnotworkTheme
 import app.knotwork.design.tokens.KnotworkTextStyles
 import kotlinx.coroutines.launch
@@ -253,7 +249,7 @@ private fun ChatHomeTopBar(state: ChatHomeViewState, callbacks: ChatHomeCallback
         navigationIcon = {
             IconButton(onClick = callbacks.onOpenDrawer) {
                 Icon(
-                    imageVector = Icons.Outlined.Menu,
+                    imageVector = AppIcons.Menu,
                     contentDescription = stringResource(R.string.knotwork_chat_home_action_threads),
                     tint = MaterialTheme.colorScheme.onSurface,
                 )
@@ -262,7 +258,7 @@ private fun ChatHomeTopBar(state: ChatHomeViewState, callbacks: ChatHomeCallback
         actions = {
             IconButton(onClick = callbacks.onToggleFavorite) {
                 Icon(
-                    imageVector = if (state.favorite) Icons.Filled.Star else Icons.Outlined.StarBorder,
+                    imageVector = if (state.favorite) AppIcons.Star else AppIcons.Star,
                     contentDescription = stringResource(R.string.knotwork_chat_home_action_favorite),
                     tint = if (state.favorite) {
                         MaterialTheme.colorScheme.primary
@@ -273,7 +269,7 @@ private fun ChatHomeTopBar(state: ChatHomeViewState, callbacks: ChatHomeCallback
             }
             IconButton(onClick = callbacks.onOverflow) {
                 Icon(
-                    imageVector = Icons.Outlined.MoreVert,
+                    imageVector = AppIcons.More,
                     contentDescription = stringResource(R.string.knotwork_chat_home_action_overflow),
                     tint = MaterialTheme.colorScheme.onSurface,
                 )
@@ -526,7 +522,7 @@ private fun BrandGlyphTile() {
             .background(color = app.knotwork.design.tokens.KnotworkPalette.Accent100),
     ) {
         Icon(
-            imageVector = Icons.Outlined.Hub,
+            imageVector = AppIcons.Hub,
             contentDescription = null,
             tint = MaterialTheme.colorScheme.primary,
             modifier = Modifier.size(BrandGlyphInnerSize),
@@ -641,7 +637,7 @@ private fun GeneratingLoaderBubble() {
             modifier = Modifier
                 .wrapContentWidth()
                 .clip(KnotworkTheme.shapes.md)
-                .background(color = KnotworkTheme.extended.chatBotBg)
+                .background(color = KnotworkTheme.extended.chatAgentBg)
                 .padding(horizontal = KnotworkTheme.spacing.sp3, vertical = KnotworkTheme.spacing.sp3),
         ) {
             Row(
@@ -762,7 +758,7 @@ private fun ChatHomeDrawerOverlay(state: ChatHomeViewState, callbacks: ChatHomeC
                 // -------- Footer entries --------
                 HorizontalDivider(color = KnotworkTheme.extended.divider)
                 DrawerFooterRow(
-                    icon = Icons.Outlined.FileDownload,
+                    icon = AppIcons.Download,
                     title = stringResource(R.string.knotwork_chat_home_drawer_import_title),
                     subtitle = stringResource(R.string.knotwork_chat_home_drawer_import_subtitle),
                     onClick = {
@@ -771,7 +767,7 @@ private fun ChatHomeDrawerOverlay(state: ChatHomeViewState, callbacks: ChatHomeC
                     },
                 )
                 DrawerFooterRow(
-                    icon = Icons.Outlined.BrightnessMedium,
+                    icon = AppIcons.Theme,
                     title = stringResource(R.string.knotwork_chat_home_drawer_settings_title),
                     subtitle = stringResource(R.string.knotwork_chat_home_drawer_settings_subtitle),
                     onClick = {
@@ -798,7 +794,7 @@ private fun DrawerNewChatPill(onClick: () -> Unit) {
             .padding(horizontal = KnotworkTheme.spacing.sp4, vertical = KnotworkTheme.spacing.sp3),
     ) {
         Icon(
-            imageVector = Icons.Outlined.Add,
+            imageVector = AppIcons.Add,
             contentDescription = null,
             tint = MaterialTheme.colorScheme.primary,
         )
@@ -861,7 +857,7 @@ private fun ChatHomeDrawerThreadRow(row: ChatHomeThreadRow, onClick: () -> Unit,
             ) {
                 if (row.starred) {
                     Icon(
-                        imageVector = Icons.Filled.Star,
+                        imageVector = AppIcons.Star,
                         contentDescription =
                         stringResource(R.string.knotwork_chat_home_drawer_starred_cd),
                         tint = MaterialTheme.colorScheme.primary,
@@ -888,7 +884,7 @@ private fun ChatHomeDrawerThreadRow(row: ChatHomeThreadRow, onClick: () -> Unit,
         }
         IconButton(onClick = onEdit) {
             Icon(
-                imageVector = Icons.Outlined.Edit,
+                imageVector = AppIcons.Edit,
                 contentDescription = stringResource(R.string.knotwork_chat_home_drawer_edit_cd),
                 tint = KnotworkTheme.extended.onSurfaceMuted,
             )

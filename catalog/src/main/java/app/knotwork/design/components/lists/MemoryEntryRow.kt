@@ -9,7 +9,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -24,6 +23,7 @@ import androidx.compose.ui.unit.dp
 import app.knotwork.design.R
 import app.knotwork.design.components.chips.ChipStyle
 import app.knotwork.design.components.chips.KnotworkChip
+import app.knotwork.design.icons.AppIcons
 import app.knotwork.design.theme.KnotworkTheme
 import app.knotwork.design.tokens.KnotworkTextStyles
 
@@ -84,7 +84,7 @@ fun MemoryEntryRow(
         ) {
             if (isPinned) {
                 Icon(
-                    imageVector = Icons.Filled.Star,
+                    imageVector = AppIcons.Star,
                     contentDescription = stringResource(R.string.knotwork_memory_pinned_cd),
                     tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(MEMORY_PIN_GLYPH_SIZE),

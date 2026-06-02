@@ -23,6 +23,18 @@ internal const val ICON_VIEWPORT = 24f
 internal val ICON_SIZE = 24.dp
 
 /**
+ * Stroke-width tokens (spec §0.7). The vector path geometry bakes in the
+ * default weight; [IconStroke.ACTIVE] / [IconStroke.CONTEXTUAL] are applied by
+ * restroked icon variants (selected bottom-nav tab + active segmented control →
+ * Active; select-mode app-bar actions → Contextual).
+ */
+internal object IconStroke {
+    const val DEFAULT = 1.6f
+    const val ACTIVE = 2.0f
+    const val CONTEXTUAL = 1.7f
+}
+
+/**
  * Starts a 24×24 [ImageVector.Builder] with the canonical Knotwork defaults
  * (matches the SVGs in `project_docs/design/icons-src/`).
  */
@@ -36,16 +48,16 @@ internal fun iconBuilder(name: String): ImageVector.Builder = ImageVector.Builde
 
 /**
  * Adds a stroked path matching the project's standard stroke style
- * (1.5 px optical width, round caps/joins, currentColor).
+ * ([IconStroke.DEFAULT] = 1.6 px optical width, round caps/joins, currentColor).
  *
  * @param d SVG-compatible path data string. Parsed via [addPathNodes].
- * @param strokeWidth Optional override; defaults to 1.5.
+ * @param strokeWidth Optional override; defaults to [IconStroke.DEFAULT].
  * @param strokeAlpha Optional alpha multiplier for the stroke (decorative
  *   helper lines use `0.3` in `auto-layout.svg`).
  */
 internal fun ImageVector.Builder.strokePath(
     d: String,
-    strokeWidth: Float = 1.5f,
+    strokeWidth: Float = IconStroke.DEFAULT,
     strokeAlpha: Float = 1f,
 ): ImageVector.Builder = addPath(
     pathData = addPathNodes(d),

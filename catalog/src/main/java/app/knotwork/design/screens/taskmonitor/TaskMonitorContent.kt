@@ -17,10 +17,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.ArrowBack
-import androidx.compose.material.icons.outlined.Cancel
-import androidx.compose.material.icons.outlined.PlayArrow
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -45,6 +41,7 @@ import app.knotwork.design.components.chips.KnotworkFilterChip
 import app.knotwork.design.components.chips.Status
 import app.knotwork.design.components.chips.StatusPill
 import app.knotwork.design.components.misc.EmptyState
+import app.knotwork.design.icons.AppIcons
 import app.knotwork.design.theme.KnotworkTheme
 import app.knotwork.design.tokens.KnotworkTextStyles
 
@@ -105,12 +102,12 @@ fun TaskMonitorContent(
 private fun TopBar(strings: TaskMonitorStrings, callbacks: TaskMonitorCallbacks) {
     TopAppBar(
         title = {
-            Text(text = strings.title, style = KnotworkTextStyles.TitleLg, color = MaterialTheme.colorScheme.onSurface)
+            Text(text = strings.title, style = KnotworkTextStyles.TitleMd, color = MaterialTheme.colorScheme.onSurface)
         },
         navigationIcon = {
             IconButton(onClick = callbacks.onBack) {
                 Icon(
-                    imageVector = Icons.AutoMirrored.Outlined.ArrowBack,
+                    imageVector = AppIcons.Back,
                     contentDescription = strings.backCd,
                     tint = MaterialTheme.colorScheme.onSurface,
                 )
@@ -203,7 +200,7 @@ private fun TaskRow(row: TaskMonitorRow, strings: TaskMonitorStrings, callbacks:
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(
-                    imageVector = Icons.Outlined.PlayArrow,
+                    imageVector = AppIcons.Play,
                     contentDescription = null,
                     tint = KnotworkTheme.extended.onSurface2,
                 )
@@ -235,7 +232,7 @@ private fun TaskRow(row: TaskMonitorRow, strings: TaskMonitorStrings, callbacks:
             if (row.isCancellable) {
                 IconButton(onClick = { callbacks.onRowCancel(row.id) }) {
                     Icon(
-                        imageVector = Icons.Outlined.Cancel,
+                        imageVector = AppIcons.X,
                         contentDescription = strings.cancelCd,
                         tint = KnotworkTheme.extended.signalError,
                     )

@@ -22,12 +22,10 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -48,6 +46,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import app.knotwork.design.R
+import app.knotwork.design.icons.AppIcons
 import app.knotwork.design.theme.KnotworkTheme
 import app.knotwork.design.tokens.KnotworkTextStyles
 
@@ -246,28 +245,28 @@ private fun ActionButton(
         val content: Color
         when (current) {
             ActionTarget.Mic -> {
-                icon = Icons.Filled.Mic
+                icon = AppIcons.Mic
                 descriptionRes = R.string.knotwork_composer_mic
                 onClick = onMic ?: {}
                 container = KnotworkTheme.extended.surface3
                 content = MaterialTheme.colorScheme.onSurface
             }
             ActionTarget.Send -> {
-                icon = Icons.AutoMirrored.Filled.Send
+                icon = AppIcons.Send
                 descriptionRes = R.string.knotwork_composer_send
                 onClick = onSend
                 container = MaterialTheme.colorScheme.primary
                 content = MaterialTheme.colorScheme.onPrimary
             }
             ActionTarget.Stop -> {
-                icon = Icons.Filled.Pause
+                icon = AppIcons.Pause
                 descriptionRes = R.string.knotwork_composer_stop
                 onClick = onStop
                 container = MaterialTheme.colorScheme.primary
                 content = MaterialTheme.colorScheme.onPrimary
             }
             ActionTarget.Retry -> {
-                icon = Icons.Filled.Refresh
+                icon = AppIcons.Refresh
                 descriptionRes = R.string.knotwork_composer_send
                 onClick = onSend
                 container = KnotworkTheme.extended.riskDestructive
@@ -363,7 +362,7 @@ private fun ErrorBanner(message: String) {
             ),
     ) {
         Icon(
-            imageVector = Icons.Outlined.ErrorOutline,
+            imageVector = AppIcons.AlertCircle,
             contentDescription = null,
             tint = KnotworkTheme.extended.signalError,
         )

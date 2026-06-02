@@ -6,25 +6,22 @@
     android:viewportHeight="108">
 
     <!--
-      Adaptive launcher foreground — Knotwork mark in the warm-neutral surface
-      colour so it reads against the accent background.
-      Source: project_docs/design/compose/brand/ic_launcher_foreground.svg.
-      Translate +21,+21 from the SVG is baked into the path coordinates so the
-      glyph sits inside the 67×67 dp safe zone.
+      Adaptive launcher foreground — the canonical Knotwork mark (two nodes
+      joined by one edge) in the warm-neutral on-primary tone so it reads
+      against the accent background. Source: brand/ic_launcher_foreground.svg
+      (logo guide §1, §4). Centred on (54,54); the two r=9 nodes span
+      (27..81, 30..78) — inside the 66 dp safe zone (21..87).
     -->
     <path
-        android:pathData="M37,37 L37,71 M37,71 L71,71 M37,37 L71,71"
+        android:pathData="M42,45 L66,63"
         android:strokeColor="#FEFCFA"
-        android:strokeWidth="7"
+        android:strokeWidth="5"
         android:strokeLineCap="round"
         android:strokeLineJoin="round" />
     <path
-        android:pathData="M37,37 m-6,0 a6,6 0 1 0 12,0 a6,6 0 1 0 -12,0 Z"
+        android:pathData="M36,39 m-9,0 a9,9 0 1 0 18,0 a9,9 0 1 0 -18,0 Z"
         android:fillColor="#FEFCFA" />
     <path
-        android:pathData="M37,71 m-6,0 a6,6 0 1 0 12,0 a6,6 0 1 0 -12,0 Z"
-        android:fillColor="#FEFCFA" />
-    <path
-        android:pathData="M71,71 m-6,0 a6,6 0 1 0 12,0 a6,6 0 1 0 -12,0 Z"
+        android:pathData="M72,69 m-9,0 a9,9 0 1 0 18,0 a9,9 0 1 0 -18,0 Z"
         android:fillColor="#FEFCFA" />
 </vector>

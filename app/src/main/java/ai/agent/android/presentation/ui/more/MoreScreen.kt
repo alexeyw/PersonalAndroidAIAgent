@@ -1,15 +1,9 @@
 package ai.agent.android.presentation.ui.more
 
 import ai.agent.android.R
-import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Bolt
-import androidx.compose.material.icons.outlined.Bookmarks
 import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.Info
-import androidx.compose.material.icons.outlined.Memory
-import androidx.compose.material.icons.outlined.Psychology
-import androidx.compose.material.icons.outlined.Settings
-import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -17,6 +11,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import app.knotwork.design.icons.AppIcons
 import app.knotwork.design.screens.more.MoreContent
 import app.knotwork.design.screens.more.MoreRow
 import app.knotwork.design.screens.more.MoreStrings
@@ -94,35 +89,35 @@ internal fun MoreUiState.toViewState(
             id = "memory",
             title = titleMemory,
             subtitle = memorySubtitle,
-            icon = Icons.Outlined.Psychology,
+            icon = AppIcons.Brain,
             onClick = onMemory,
         ),
         MoreRow(
             id = "models",
             title = titleModels,
             subtitle = modelsSubtitle,
-            icon = Icons.Outlined.Memory,
+            icon = AppIcons.Ram,
             onClick = onModels,
         ),
         MoreRow(
             id = "prompts",
             title = titlePrompts,
             subtitle = promptsSubtitle,
-            icon = Icons.Outlined.Tune,
+            icon = AppIcons.Sliders,
             onClick = onPrompts,
         ),
         MoreRow(
             id = "library",
             title = titleLibrary,
             subtitle = librarySubtitle,
-            icon = Icons.Outlined.Bookmarks,
+            icon = AppIcons.Bookmark,
             onClick = onLibrary,
         ),
         MoreRow(
             id = "tasks",
             title = titleTasks,
             subtitle = tasksSubtitle,
-            icon = Icons.Outlined.History,
+            icon = AppIcons.History,
             badge = tasksBadge,
             onClick = onTasks,
         ),
@@ -130,21 +125,21 @@ internal fun MoreUiState.toViewState(
             id = "metrics",
             title = titleMetrics,
             subtitle = metricsSubtitle,
-            icon = Icons.Outlined.Bolt,
+            icon = AppIcons.Bolt,
             onClick = onMetrics,
         ),
         MoreRow(
             id = "settings",
             title = titleSettings,
             subtitle = settingsSubtitle,
-            icon = Icons.Outlined.Settings,
+            icon = AppIcons.Cog,
             onClick = onSettings,
         ),
         MoreRow(
             id = "about",
             title = titleAbout,
             subtitle = aboutSubtitle,
-            icon = Icons.Outlined.Info,
+            icon = AppIcons.Info,
             onClick = onAbout,
         ),
     ),

@@ -2,10 +2,6 @@ package ai.agent.android.presentation.ui.navigation
 
 import ai.agent.android.R
 import androidx.annotation.StringRes
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Build
-import androidx.compose.material.icons.outlined.ChatBubbleOutline
-import androidx.compose.material.icons.outlined.MoreHoriz
 import androidx.compose.ui.graphics.vector.ImageVector
 import app.knotwork.design.icons.AppIcons
 
@@ -23,10 +19,9 @@ import app.knotwork.design.icons.AppIcons
  * `restoreState = true`), which automatically preserves the inner back-stack
  * and scroll position of every tab across switches and configuration changes.
  *
- * Phase 21 / Task 4: filled-variant icons (per `animations.md §App shell`,
- * "icon fill morph 200ms") will arrive with Task 11's icon set; we currently
- * pass the same outlined glyph for both [iconUnselected] and [iconSelected]
- * so the API is wired and a future swap is a single-line change.
+ * The selected tab renders the custom `AppIcons.*Active` glyph at the spec's
+ * active 2.0 stroke (§0.7), while the unselected tab uses the 1.6 default —
+ * the stroke weight is the selection emphasis on top of the M3 indicator pill.
  *
  * @property route Start-destination route string for the tab.
  * @property labelRes String resource for the visible label below the icon.
@@ -49,25 +44,25 @@ val TAB_DESTINATIONS: List<TabDestination> = listOf(
     TabDestination(
         route = NavRoutes.CHAT_TAB,
         labelRes = R.string.nav_tab_chat,
-        iconUnselected = Icons.Outlined.ChatBubbleOutline,
-        iconSelected = Icons.Outlined.ChatBubbleOutline,
+        iconUnselected = AppIcons.Chat,
+        iconSelected = AppIcons.ChatActive,
     ),
     TabDestination(
         route = NavRoutes.PIPELINES_GRAPH,
         labelRes = R.string.nav_tab_pipelines,
         iconUnselected = AppIcons.Flow,
-        iconSelected = AppIcons.Flow,
+        iconSelected = AppIcons.FlowActive,
     ),
     TabDestination(
         route = NavRoutes.TOOLS,
         labelRes = R.string.nav_tab_tools,
-        iconUnselected = Icons.Outlined.Build,
-        iconSelected = Icons.Outlined.Build,
+        iconUnselected = AppIcons.Tool,
+        iconSelected = AppIcons.ToolActive,
     ),
     TabDestination(
         route = NavRoutes.MORE,
         labelRes = R.string.nav_tab_more,
-        iconUnselected = Icons.Outlined.MoreHoriz,
-        iconSelected = Icons.Outlined.MoreHoriz,
+        iconUnselected = AppIcons.More2,
+        iconSelected = AppIcons.More2Active,
     ),
 )

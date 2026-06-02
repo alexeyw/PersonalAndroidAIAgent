@@ -14,7 +14,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
@@ -30,6 +29,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
 import app.knotwork.design.components.lists.KnotworkNavListRow
+import app.knotwork.design.icons.AppIcons
 import app.knotwork.design.theme.KnotworkTheme
 import app.knotwork.design.tokens.KnotworkTextStyles
 
@@ -96,7 +96,7 @@ private fun TopBar(strings: MoreStrings, onSearch: () -> Unit) {
             Column {
                 Text(
                     text = strings.title,
-                    style = KnotworkTextStyles.TitleLg,
+                    style = KnotworkTextStyles.TitleMd,
                     color = MaterialTheme.colorScheme.onSurface,
                 )
                 Text(
@@ -109,7 +109,7 @@ private fun TopBar(strings: MoreStrings, onSearch: () -> Unit) {
         actions = {
             IconButton(onClick = onSearch) {
                 Icon(
-                    imageVector = Icons.Outlined.Search,
+                    imageVector = AppIcons.Search,
                     contentDescription = strings.searchCd,
                     tint = MaterialTheme.colorScheme.onSurface,
                 )

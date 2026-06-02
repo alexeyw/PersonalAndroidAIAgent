@@ -17,20 +17,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.OpenInNew
-import androidx.compose.material.icons.outlined.AccountTree
 import androidx.compose.material.icons.outlined.Add
-import androidx.compose.material.icons.outlined.Bookmarks
 import androidx.compose.material.icons.outlined.Check
-import androidx.compose.material.icons.outlined.Close
-import androidx.compose.material.icons.outlined.ContentCopy
-import androidx.compose.material.icons.outlined.DeleteOutline
-import androidx.compose.material.icons.outlined.DriveFileRenameOutline
-import androidx.compose.material.icons.outlined.FileDownload
-import androidx.compose.material.icons.outlined.FileUpload
-import androidx.compose.material.icons.outlined.MoreVert
-import androidx.compose.material.icons.outlined.WarningAmber
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -57,6 +45,7 @@ import app.knotwork.design.components.buttons.KnotworkTextButton
 import app.knotwork.design.components.chips.KnotworkChip
 import app.knotwork.design.components.misc.EmptyState
 import app.knotwork.design.components.misc.StripedPlaceholder
+import app.knotwork.design.icons.AppIcons
 import app.knotwork.design.theme.KnotworkTheme
 import app.knotwork.design.tokens.KnotworkTextStyles
 
@@ -137,7 +126,7 @@ fun PipelineLibraryFab(onClick: () -> Unit, modifier: Modifier = Modifier) {
         contentColor = MaterialTheme.colorScheme.onPrimary,
         icon = {
             Icon(
-                imageVector = Icons.Outlined.Add,
+                imageVector = AppIcons.Add,
                 contentDescription = stringResource(R.string.knotwork_library_new_pipeline_cd),
             )
         },
@@ -168,7 +157,7 @@ private fun LibraryTopBar(state: PipelineLibraryViewState, callbacks: PipelineLi
             Column {
                 Text(
                     text = stringResource(R.string.knotwork_library_title),
-                    style = KnotworkTextStyles.TitleLg,
+                    style = KnotworkTextStyles.TitleMd,
                     color = MaterialTheme.colorScheme.onSurface,
                 )
                 Text(
@@ -186,7 +175,7 @@ private fun LibraryTopBar(state: PipelineLibraryViewState, callbacks: PipelineLi
         actions = {
             IconButton(onClick = callbacks.onTopOverflow) {
                 Icon(
-                    imageVector = Icons.Outlined.MoreVert,
+                    imageVector = AppIcons.More,
                     contentDescription = stringResource(R.string.knotwork_library_top_overflow_cd),
                     tint = MaterialTheme.colorScheme.onSurface,
                 )
@@ -217,7 +206,7 @@ private fun MultiSelectToolbar(state: PipelineLibraryViewState, callbacks: Pipel
         navigationIcon = {
             IconButton(onClick = callbacks.onMultiSelectCancel) {
                 Icon(
-                    imageVector = Icons.Outlined.Close,
+                    imageVector = AppIcons.X,
                     contentDescription = stringResource(R.string.knotwork_library_multi_select_cancel),
                     tint = MaterialTheme.colorScheme.onSurface,
                 )
@@ -338,7 +327,7 @@ private fun LibraryErrorState(state: PipelineLibraryViewState, callbacks: Pipeli
             .padding(KnotworkTheme.spacing.sp6),
     ) {
         Icon(
-            imageVector = Icons.Outlined.WarningAmber,
+            imageVector = AppIcons.Warn,
             contentDescription = null,
             tint = KnotworkTheme.extended.signalError,
             modifier = Modifier.size(KnotworkTheme.spacing.sp16),
@@ -423,7 +412,7 @@ private fun PipelineLibraryListRow(
                 .background(color = KnotworkTheme.extended.surface2),
         ) {
             Icon(
-                imageVector = Icons.Outlined.AccountTree,
+                imageVector = AppIcons.Branch,
                 contentDescription = null,
                 tint = row.leadingTint,
                 modifier = Modifier.size(RowLeadingIconSize),
@@ -471,7 +460,7 @@ private fun PipelineLibraryListRow(
         Box {
             IconButton(onClick = { callbacks.onPipelineOverflow(row.id) }) {
                 Icon(
-                    imageVector = Icons.Outlined.MoreVert,
+                    imageVector = AppIcons.More,
                     contentDescription = stringResource(R.string.knotwork_library_row_overflow_cd, row.title),
                     tint = KnotworkTheme.extended.onSurfaceMuted,
                 )
@@ -516,7 +505,7 @@ private fun RowOverflowMenu(row: PipelineLibraryRow, expanded: Boolean, callback
         DropdownMenuItem(
             leadingIcon = {
                 Icon(
-                    imageVector = Icons.AutoMirrored.Outlined.OpenInNew,
+                    imageVector = AppIcons.External,
                     contentDescription = null,
                 )
             },
@@ -529,7 +518,7 @@ private fun RowOverflowMenu(row: PipelineLibraryRow, expanded: Boolean, callback
         DropdownMenuItem(
             leadingIcon = {
                 Icon(
-                    imageVector = Icons.Outlined.Check,
+                    imageVector = AppIcons.Check,
                     contentDescription = null,
                     tint = if (row.isDefault) {
                         MaterialTheme.colorScheme.primary
@@ -558,7 +547,7 @@ private fun RowOverflowMenu(row: PipelineLibraryRow, expanded: Boolean, callback
         DropdownMenuItem(
             leadingIcon = {
                 Icon(
-                    imageVector = Icons.Outlined.DriveFileRenameOutline,
+                    imageVector = AppIcons.Edit,
                     contentDescription = null,
                 )
             },
@@ -571,7 +560,7 @@ private fun RowOverflowMenu(row: PipelineLibraryRow, expanded: Boolean, callback
         DropdownMenuItem(
             leadingIcon = {
                 Icon(
-                    imageVector = Icons.Outlined.ContentCopy,
+                    imageVector = AppIcons.Copy,
                     contentDescription = null,
                 )
             },
@@ -584,7 +573,7 @@ private fun RowOverflowMenu(row: PipelineLibraryRow, expanded: Boolean, callback
         DropdownMenuItem(
             leadingIcon = {
                 Icon(
-                    imageVector = Icons.Outlined.FileDownload,
+                    imageVector = AppIcons.Download,
                     contentDescription = null,
                 )
             },
@@ -597,7 +586,7 @@ private fun RowOverflowMenu(row: PipelineLibraryRow, expanded: Boolean, callback
         DropdownMenuItem(
             leadingIcon = {
                 Icon(
-                    imageVector = Icons.Outlined.Bookmarks,
+                    imageVector = AppIcons.Bookmark,
                     contentDescription = null,
                 )
             },
@@ -611,7 +600,7 @@ private fun RowOverflowMenu(row: PipelineLibraryRow, expanded: Boolean, callback
         DropdownMenuItem(
             leadingIcon = {
                 Icon(
-                    imageVector = Icons.Outlined.DeleteOutline,
+                    imageVector = AppIcons.Trash,
                     contentDescription = null,
                     tint = KnotworkTheme.extended.signalError,
                 )
@@ -654,7 +643,7 @@ private fun BrowserEditorFooter(callbacks: PipelineLibraryCallbacks) {
                 modifier = Modifier.clickable { callbacks.onImportJson() },
             ) {
                 Icon(
-                    imageVector = Icons.Outlined.FileUpload,
+                    imageVector = AppIcons.Download2,
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.primary,
                 )

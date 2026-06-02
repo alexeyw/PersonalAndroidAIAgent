@@ -19,12 +19,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.ArrowBack
-import androidx.compose.material.icons.outlined.DeleteOutline
-import androidx.compose.material.icons.outlined.DriveFileRenameOutline
-import androidx.compose.material.icons.outlined.FileDownload
-import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -62,6 +56,7 @@ import app.knotwork.design.components.chips.KnotworkFilterChip
 import app.knotwork.design.components.controls.KnotworkField
 import app.knotwork.design.components.controls.KnotworkTextField
 import app.knotwork.design.components.topbar.KnotworkTopAppBarShell
+import app.knotwork.design.icons.AppIcons
 import app.knotwork.design.theme.KnotworkTheme
 import app.knotwork.design.tokens.KnotworkTextStyles
 import kotlinx.coroutines.launch
@@ -165,7 +160,7 @@ fun PipelinePresetsManagerScreen(viewModel: PipelinePresetsViewModel = hiltViewM
                     },
                     navigationIcon = {
                         IconButton(onClick = onBack) {
-                            Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = null)
+                            Icon(AppIcons.Back, contentDescription = null)
                         }
                     },
                     colors = TopAppBarDefaults.topAppBarColors(
@@ -421,12 +416,12 @@ private fun PresetManagerRow(
                 onClick = { menuOpen = true },
                 modifier = Modifier.testTag(tag = managerOverflowTestTag(preset.id)),
             ) {
-                Icon(Icons.Outlined.MoreVert, contentDescription = null)
+                Icon(AppIcons.More, contentDescription = null)
             }
             DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
                 if (onRename != null) {
                     DropdownMenuItem(
-                        leadingIcon = { Icon(Icons.Outlined.DriveFileRenameOutline, contentDescription = null) },
+                        leadingIcon = { Icon(AppIcons.Edit, contentDescription = null) },
                         text = { Text(stringResource(R.string.orchestrator_preset_manager_action_rename)) },
                         onClick = {
                             menuOpen = false
@@ -435,7 +430,7 @@ private fun PresetManagerRow(
                     )
                 }
                 DropdownMenuItem(
-                    leadingIcon = { Icon(Icons.Outlined.FileDownload, contentDescription = null) },
+                    leadingIcon = { Icon(AppIcons.Download, contentDescription = null) },
                     text = { Text(stringResource(R.string.orchestrator_preset_manager_action_export)) },
                     onClick = {
                         menuOpen = false
@@ -446,7 +441,7 @@ private fun PresetManagerRow(
                     DropdownMenuItem(
                         leadingIcon = {
                             Icon(
-                                imageVector = Icons.Outlined.DeleteOutline,
+                                imageVector = AppIcons.Trash,
                                 contentDescription = null,
                                 tint = KnotworkTheme.extended.signalError,
                             )

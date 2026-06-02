@@ -24,19 +24,13 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.Block
 import androidx.compose.material.icons.outlined.Bolt
-import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.Download
-import androidx.compose.material.icons.outlined.ExpandMore
-import androidx.compose.material.icons.outlined.Memory
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Shield
-import androidx.compose.material.icons.outlined.WarningAmber
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -78,6 +72,7 @@ import app.knotwork.design.components.misc.KnotworkLoader
 import app.knotwork.design.components.misc.KnotworkSectionAction
 import app.knotwork.design.components.misc.KnotworkStatCell
 import app.knotwork.design.components.misc.StripedPlaceholder
+import app.knotwork.design.icons.AppIcons
 import app.knotwork.design.theme.KnotworkTheme
 import app.knotwork.design.tokens.KnotworkTextStyles
 
@@ -153,7 +148,7 @@ private fun SettingsTopBar(state: SettingsViewState, onBack: () -> Unit, onSearc
             Column {
                 Text(
                     text = androidx.compose.ui.res.stringResource(R.string.knotwork_settings_title),
-                    style = KnotworkTextStyles.TitleLg,
+                    style = KnotworkTextStyles.TitleMd,
                     color = MaterialTheme.colorScheme.onSurface,
                 )
                 val subtitle = listOf(
@@ -175,7 +170,7 @@ private fun SettingsTopBar(state: SettingsViewState, onBack: () -> Unit, onSearc
         navigationIcon = {
             IconButton(onClick = onBack) {
                 Icon(
-                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                    imageVector = AppIcons.Back,
                     contentDescription = androidx.compose.ui.res.stringResource(R.string.knotwork_settings_back),
                     tint = MaterialTheme.colorScheme.onSurface,
                 )
@@ -184,7 +179,7 @@ private fun SettingsTopBar(state: SettingsViewState, onBack: () -> Unit, onSearc
         actions = {
             IconButton(onClick = onSearch) {
                 Icon(
-                    imageVector = Icons.Outlined.Search,
+                    imageVector = AppIcons.Search,
                     contentDescription = androidx.compose.ui.res.stringResource(R.string.knotwork_settings_search_cd),
                     tint = MaterialTheme.colorScheme.onSurface,
                 )
@@ -451,21 +446,21 @@ private fun RestrictionsCard(state: RestrictionsCardState, callbacks: SettingsCa
             )
         }
         IconToggleRow(
-            icon = Icons.Outlined.Shield,
+            icon = AppIcons.Shield,
             title = androidx.compose.ui.res.stringResource(R.string.knotwork_settings_restrictions_block_destructive),
             subtitle = state.blockDestructiveSubtitle,
             checked = state.blockDestructive,
             onCheckedChange = callbacks.onBlockDestructiveChange,
         )
         IconToggleRow(
-            icon = Icons.Outlined.Block,
+            icon = AppIcons.Block,
             title = androidx.compose.ui.res.stringResource(R.string.knotwork_settings_restrictions_block_network),
             subtitle = state.blockNetworkSubtitle,
             checked = state.blockNetwork,
             onCheckedChange = callbacks.onBlockNetworkChange,
         )
         IconValueRow(
-            icon = Icons.Outlined.WarningAmber,
+            icon = AppIcons.Warn,
             title = androidx.compose.ui.res.stringResource(R.string.knotwork_settings_restrictions_cap_steps),
             subtitle = state.capStepsSubtitle,
             valueLabel = state.capSteps.toString(),
@@ -596,7 +591,7 @@ private fun LocalModelCard(state: LocalModelCardState, callbacks: SettingsCallba
         trailing = {
             KnotworkSectionAction(
                 label = androidx.compose.ui.res.stringResource(R.string.knotwork_settings_local_model_manage),
-                icon = Icons.Outlined.Download,
+                icon = AppIcons.Download,
                 onClick = callbacks.onManageModelsClick,
             )
         },
@@ -620,7 +615,7 @@ private fun LocalModelCard(state: LocalModelCardState, callbacks: SettingsCallba
                         .background(color = KnotworkTheme.extended.surface2),
                 ) {
                     Icon(
-                        imageVector = Icons.Outlined.Bolt,
+                        imageVector = AppIcons.Bolt,
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.onSurface,
                     )
@@ -680,7 +675,7 @@ private fun LocalModelCard(state: LocalModelCardState, callbacks: SettingsCallba
                     ),
             ) {
                 Icon(
-                    imageVector = Icons.Outlined.Bolt,
+                    imageVector = AppIcons.Bolt,
                     contentDescription = null,
                     tint = KnotworkTheme.extended.onSurfaceMuted,
                     modifier = Modifier.size(KnotworkTheme.spacing.sp5),
@@ -706,7 +701,7 @@ private fun LocalModelCard(state: LocalModelCardState, callbacks: SettingsCallba
                     color = KnotworkTheme.extended.onSurfaceMuted,
                 )
                 Icon(
-                    imageVector = Icons.Outlined.ExpandMore,
+                    imageVector = AppIcons.ArrowDown,
                     contentDescription = null,
                     tint = KnotworkTheme.extended.onSurfaceMuted,
                 )
@@ -733,7 +728,7 @@ private fun LocalModelCard(state: LocalModelCardState, callbacks: SettingsCallba
             modifier = Modifier.fillMaxWidth(),
         ) {
             Icon(
-                imageVector = Icons.Outlined.Bolt,
+                imageVector = AppIcons.Bolt,
                 contentDescription = null,
                 tint = KnotworkTheme.extended.onSurfaceMuted,
                 modifier = Modifier.size(KnotworkTheme.spacing.sp5),
@@ -798,7 +793,7 @@ private fun ExternalProvidersCard(state: ExternalProvidersCardState, callbacks: 
         trailing = {
             KnotworkSectionAction(
                 label = androidx.compose.ui.res.stringResource(R.string.knotwork_settings_providers_add),
-                icon = Icons.Outlined.Add,
+                icon = AppIcons.Add,
                 onClick = callbacks.onAddProviderClick,
             )
         },
@@ -827,7 +822,7 @@ private fun ProviderNavRow(row: ProviderRowState, onClick: () -> Unit) {
                 .background(color = KnotworkTheme.extended.surface2),
         ) {
             Icon(
-                imageVector = Icons.Outlined.Bolt,
+                imageVector = AppIcons.Bolt,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.onSurface,
             )
@@ -874,7 +869,7 @@ private fun ProviderNavRow(row: ProviderRowState, onClick: () -> Unit) {
             )
         }
         Icon(
-            imageVector = Icons.Outlined.ChevronRight,
+            imageVector = AppIcons.ArrowR,
             contentDescription = null,
             tint = KnotworkTheme.extended.onSurfaceMuted,
         )
@@ -907,7 +902,7 @@ private fun MemoryCard(state: MemoryCardState, callbacks: SettingsCallbacks) {
             }
         }
         IconToggleRow(
-            icon = Icons.Outlined.Bolt,
+            icon = AppIcons.Bolt,
             title = state.autoExtractLabel,
             subtitle = state.autoExtractSubtitle,
             checked = state.autoExtractEnabled,
@@ -932,7 +927,7 @@ private fun MemoryCard(state: MemoryCardState, callbacks: SettingsCallbacks) {
             )
         }
         IconToggleRow(
-            icon = Icons.Outlined.Refresh,
+            icon = AppIcons.Refresh,
             title = state.compactionLabel,
             subtitle = state.compactionSubtitle,
             checked = state.compactionEnabled,
@@ -1038,7 +1033,7 @@ private fun EmbeddingProviderDropdown(state: MemoryCardState, callbacks: Setting
                 .testTag(MEMORY_EMBEDDING_ROW_TAG),
         ) {
             Icon(
-                imageVector = Icons.Outlined.Memory,
+                imageVector = AppIcons.Ram,
                 contentDescription = null,
                 tint = KnotworkTheme.extended.onSurfaceMuted,
                 modifier = Modifier.size(KnotworkTheme.spacing.sp5),
@@ -1056,7 +1051,7 @@ private fun EmbeddingProviderDropdown(state: MemoryCardState, callbacks: Setting
                 )
             }
             Icon(
-                imageVector = Icons.Outlined.ExpandMore,
+                imageVector = AppIcons.ArrowDown,
                 contentDescription = null,
                 tint = KnotworkTheme.extended.onSurfaceMuted,
             )
@@ -1086,7 +1081,7 @@ private fun NotificationsCard(state: NotificationsCardState, callbacks: Settings
         title = androidx.compose.ui.res.stringResource(R.string.knotwork_settings_section_notifications),
     ) {
         IconToggleRow(
-            icon = Icons.Outlined.Refresh,
+            icon = AppIcons.Refresh,
             title = androidx.compose.ui.res.stringResource(R.string.knotwork_settings_notifications_long_running),
             subtitle = androidx.compose.ui.res.stringResource(
                 R.string.knotwork_settings_notifications_long_running_subtitle,
@@ -1105,14 +1100,14 @@ private fun PrivacyCard(state: PrivacyCardState, callbacks: SettingsCallbacks) {
         title = androidx.compose.ui.res.stringResource(R.string.knotwork_settings_section_privacy),
     ) {
         IconToggleRow(
-            icon = Icons.Outlined.Shield,
+            icon = AppIcons.Shield,
             title = androidx.compose.ui.res.stringResource(R.string.knotwork_settings_crash_reporting_label),
             subtitle = androidx.compose.ui.res.stringResource(R.string.knotwork_settings_crash_reporting_hint),
             checked = state.crashReportingEnabled,
             onCheckedChange = callbacks.onCrashReportingToggle,
         )
         IconToggleRow(
-            icon = Icons.Outlined.Memory,
+            icon = AppIcons.Ram,
             title = androidx.compose.ui.res.stringResource(R.string.knotwork_settings_verbose_memory_logging_label),
             subtitle = androidx.compose.ui.res.stringResource(R.string.knotwork_settings_verbose_memory_logging_hint),
             checked = state.verboseMemoryLoggingEnabled,

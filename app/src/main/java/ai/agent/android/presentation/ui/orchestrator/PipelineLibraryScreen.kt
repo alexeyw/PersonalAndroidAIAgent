@@ -10,8 +10,6 @@ import ai.agent.android.presentation.ui.orchestrator.presets.SaveAsPresetDialog
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.AccountTree
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.SnackbarHost
@@ -36,6 +34,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.knotwork.design.components.chips.Status
 import app.knotwork.design.components.controls.KnotworkField
 import app.knotwork.design.components.controls.KnotworkTextField
+import app.knotwork.design.icons.AppIcons
 import app.knotwork.design.screens.pipelines.PipelineLibraryCallbacks
 import app.knotwork.design.screens.pipelines.PipelineLibraryContent
 import app.knotwork.design.screens.pipelines.PipelineLibraryFilter
@@ -381,7 +380,7 @@ private fun PipelineGraph.toLibraryRow(isActive: Boolean, isDefault: Boolean): P
         secondaryLineKind = secondaryKind,
         status = if (isActive) Status.Running else Status.Idle,
         leadingTint = Color(color = LEADING_TINT_PACKED),
-        leadingIcon = Icons.Outlined.AccountTree,
+        leadingIcon = AppIcons.Branch,
         isActive = isActive,
         isDefault = isDefault,
     )

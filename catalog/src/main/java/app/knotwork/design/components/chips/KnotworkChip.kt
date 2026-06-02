@@ -58,7 +58,7 @@ enum class ChipStyle {
  * @param modifier optional layout modifier applied to the chip root.
  * @param leadingIcon optional vector rendered before the label (16 dp).
  * @param trailingIcon optional vector rendered after the label (16 dp); pair
- * with `Icons.Filled.Close` for filter chips that toggle off.
+ * with `AppIcons.X` for filter chips that toggle off.
  * @param selected when `true`, renders the selected palette regardless of
  * [style].
  * @param style controls the resting (unselected) palette.

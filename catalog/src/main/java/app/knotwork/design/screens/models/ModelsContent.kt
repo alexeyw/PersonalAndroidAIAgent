@@ -18,14 +18,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.ArrowBack
-import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
-import androidx.compose.material.icons.outlined.Close
-import androidx.compose.material.icons.outlined.DeveloperBoard
 import androidx.compose.material.icons.outlined.Download
-import androidx.compose.material.icons.outlined.MoreVert
-import androidx.compose.material.icons.outlined.VpnKey
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -51,6 +44,7 @@ import androidx.compose.ui.unit.dp
 import app.knotwork.design.components.buttons.KnotworkButtonSize
 import app.knotwork.design.components.buttons.KnotworkPrimaryButton
 import app.knotwork.design.components.misc.EmptyState
+import app.knotwork.design.icons.AppIcons
 import app.knotwork.design.theme.KnotworkTheme
 import app.knotwork.design.tokens.KnotworkTextStyles
 
@@ -121,7 +115,7 @@ private fun ModelsTopBar(state: ModelsViewState, strings: ModelsStrings, callbac
             Column {
                 Text(
                     text = strings.title,
-                    style = KnotworkTextStyles.TitleLg,
+                    style = KnotworkTextStyles.TitleMd,
                     color = MaterialTheme.colorScheme.onSurface,
                 )
                 if (state.subtitle.isNotEmpty()) {
@@ -136,7 +130,7 @@ private fun ModelsTopBar(state: ModelsViewState, strings: ModelsStrings, callbac
         navigationIcon = {
             IconButton(onClick = callbacks.onBack) {
                 Icon(
-                    imageVector = Icons.AutoMirrored.Outlined.ArrowBack,
+                    imageVector = AppIcons.Back,
                     contentDescription = strings.backCd,
                     tint = MaterialTheme.colorScheme.onSurface,
                 )
@@ -145,7 +139,7 @@ private fun ModelsTopBar(state: ModelsViewState, strings: ModelsStrings, callbac
         actions = {
             IconButton(onClick = callbacks.onOverflowMenu) {
                 Icon(
-                    imageVector = Icons.Outlined.MoreVert,
+                    imageVector = AppIcons.More,
                     contentDescription = strings.overflowCd,
                     tint = MaterialTheme.colorScheme.onSurface,
                 )
@@ -300,7 +294,7 @@ private fun CustomDownloadRow(
             )
             IconButton(onClick = { callbacks.onCustomDownloadCancel() }) {
                 Icon(
-                    imageVector = Icons.Outlined.Close,
+                    imageVector = AppIcons.X,
                     contentDescription = strings.presetCancelCd,
                     tint = KnotworkTheme.extended.onSurfaceMuted,
                 )
@@ -387,7 +381,7 @@ private fun ActiveModelCard(active: ActiveModelRow, strings: ModelsStrings, onCl
             )
         }
         Icon(
-            imageVector = Icons.AutoMirrored.Outlined.KeyboardArrowRight,
+            imageVector = AppIcons.ArrowR,
             contentDescription = null,
             tint = MaterialTheme.colorScheme.onSurface,
         )
@@ -403,7 +397,7 @@ private fun LeadingChipTile(background: Color) {
         contentAlignment = Alignment.Center,
     ) {
         Icon(
-            imageVector = Icons.Outlined.DeveloperBoard,
+            imageVector = AppIcons.Chip,
             contentDescription = null,
             tint = KnotworkTheme.extended.onSurface2,
             modifier = Modifier.size(LeadingGlyphSize),
@@ -416,7 +410,7 @@ private fun AuthTokenField(state: ModelsViewState, strings: ModelsStrings, callb
     InlineFieldRow(
         leadingIcon = {
             Icon(
-                imageVector = Icons.Outlined.VpnKey,
+                imageVector = AppIcons.Key,
                 contentDescription = null,
                 tint = KnotworkTheme.extended.onSurfaceMuted,
             )
@@ -458,7 +452,7 @@ private fun CustomUrlRow(state: ModelsViewState, strings: ModelsStrings, callbac
             text = strings.customUrlGet,
             onClick = callbacks.onCustomUrlSubmit,
             enabled = state.customUrlEnabled && state.customUrl.isNotBlank(),
-            leadingIcon = Icons.Outlined.Download,
+            leadingIcon = AppIcons.Download,
             size = KnotworkButtonSize.Sm,
         )
     }
@@ -593,12 +587,12 @@ private fun PresetTrailing(preset: PresetRow, strings: ModelsStrings, callbacks:
         is PresetStatus.Idle -> KnotworkPrimaryButton(
             text = strings.presetGet,
             onClick = { callbacks.onPresetDownload(preset.id) },
-            leadingIcon = Icons.Outlined.Download,
+            leadingIcon = AppIcons.Download,
             size = KnotworkButtonSize.Sm,
         )
         is PresetStatus.Downloading -> IconButton(onClick = { callbacks.onPresetCancelDownload(preset.id) }) {
             Icon(
-                imageVector = Icons.Outlined.Close,
+                imageVector = AppIcons.X,
                 contentDescription = strings.presetCancelCd,
                 tint = KnotworkTheme.extended.onSurfaceMuted,
             )
@@ -655,7 +649,7 @@ private fun PresetOverflowMenu(
     Box {
         IconButton(onClick = { expanded.value = true }) {
             Icon(
-                imageVector = Icons.Outlined.MoreVert,
+                imageVector = AppIcons.More,
                 contentDescription = strings.rowMenuCd,
                 tint = KnotworkTheme.extended.onSurfaceMuted,
             )

@@ -30,15 +30,17 @@ class KnotworkThemeTest {
     val composeTestRule = createComposeRule()
 
     @Test
-    fun `given KnotworkTheme light when read MaterialTheme primary then equals Accent500`() {
+    fun `given KnotworkTheme light when read MaterialTheme primary then equals Accent600`() {
+        // Spec §1: light primary = accent-600 (L 0.58) so white on-primary clears
+        // the 3:1 UI-contrast floor on filled buttons; accent-500 fell short.
         val captured = captureInTheme(darkTheme = false) { MaterialTheme.colorScheme.primary }
-        assertEquals(KnotworkPalette.Accent500, captured)
+        assertEquals(KnotworkPalette.Accent600, captured)
     }
 
     @Test
-    fun `given KnotworkTheme dark when read MaterialTheme primary then equals Accent400`() {
+    fun `given KnotworkTheme dark when read MaterialTheme primary then equals Accent300`() {
         val captured = captureInTheme(darkTheme = true) { MaterialTheme.colorScheme.primary }
-        assertEquals(KnotworkPalette.Accent400, captured)
+        assertEquals(KnotworkPalette.Accent300, captured)
     }
 
     @Test
@@ -60,9 +62,9 @@ class KnotworkThemeTest {
     }
 
     @Test
-    fun `given KnotworkTheme dark when read extended chatBotBg then matches dark surface2`() {
-        val captured = captureInTheme(darkTheme = true) { KnotworkTheme.extended.chatBotBg }
-        // KnotworkExtendedColors.chatBotBg in dark theme aliases surface2 (#221E1A).
+    fun `given KnotworkTheme dark when read extended chatAgentBg then matches dark surface2`() {
+        val captured = captureInTheme(darkTheme = true) { KnotworkTheme.extended.chatAgentBg }
+        // KnotworkExtendedColors.chatAgentBg in dark theme aliases surface2 (#221E1A).
         assertEquals(Color(0xFF221E1A), captured)
     }
 

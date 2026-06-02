@@ -17,10 +17,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.ArrowForward
 import androidx.compose.material.icons.outlined.Hub
-import androidx.compose.material.icons.outlined.VpnKey
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -39,6 +36,7 @@ import androidx.compose.ui.unit.dp
 import app.knotwork.design.R
 import app.knotwork.design.components.buttons.KnotworkPrimaryButton
 import app.knotwork.design.components.buttons.KnotworkTextButton
+import app.knotwork.design.icons.AppIcons
 import app.knotwork.design.theme.KnotworkTheme
 import app.knotwork.design.tokens.KnotworkPalette
 import app.knotwork.design.tokens.KnotworkTextStyles
@@ -150,7 +148,7 @@ private fun OnboardingTopBar(state: OnboardingViewState, callbacks: OnboardingCa
             ),
     ) {
         Icon(
-            imageVector = Icons.Outlined.Hub,
+            imageVector = AppIcons.Hub,
             contentDescription = null,
             tint = MaterialTheme.colorScheme.primary,
             modifier = Modifier.size(LogoIconSize),
@@ -197,7 +195,7 @@ private fun OnboardingFooter(state: OnboardingViewState, callbacks: OnboardingCa
             )
         }
         val leadingIcon = if (state.step == OnboardingStep.Ready) {
-            Icons.AutoMirrored.Outlined.ArrowForward
+            AppIcons.ArrowR
         } else {
             null
         }
@@ -652,7 +650,7 @@ private fun CloudProviderRow(provider: OnboardingCloudProvider, configured: Bool
             ),
     ) {
         Icon(
-            imageVector = Icons.Outlined.VpnKey,
+            imageVector = AppIcons.Key,
             contentDescription = null,
             tint = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.size(CloudIconSize),
@@ -747,7 +745,7 @@ private fun PipelinePreviewCard(preview: OnboardingDefaultPipelinePreview) {
                 PipelineNodeChip(name = name, accent = name == preview.accentNodeName)
                 if (index < preview.nodes.lastIndex) {
                     Icon(
-                        imageVector = Icons.AutoMirrored.Outlined.ArrowForward,
+                        imageVector = AppIcons.ArrowR,
                         contentDescription = null,
                         tint = KnotworkTheme.extended.onSurfaceMuted,
                         modifier = Modifier

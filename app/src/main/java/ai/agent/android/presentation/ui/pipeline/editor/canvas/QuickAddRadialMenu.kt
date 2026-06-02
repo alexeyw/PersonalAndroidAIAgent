@@ -14,8 +14,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -42,6 +40,7 @@ import androidx.compose.ui.unit.dp
 import app.knotwork.design.components.pipelineeditor.glyph
 import app.knotwork.design.components.pipelineeditor.headerOnColor
 import app.knotwork.design.components.pipelineeditor.headerTint
+import app.knotwork.design.icons.AppIcons
 import app.knotwork.design.theme.KnotworkTheme
 import app.knotwork.design.tokens.KnotworkTextStyles
 import kotlin.math.PI
@@ -151,7 +150,7 @@ internal fun QuickAddRadialMenu(
                 .padding(KnotworkTheme.spacing.sp4),
         ) {
             Icon(
-                imageVector = Icons.Outlined.Close,
+                imageVector = AppIcons.X,
                 contentDescription = stringResource(R.string.pipeline_editor_quick_add_close),
                 tint = MaterialTheme.colorScheme.surface,
             )

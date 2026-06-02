@@ -13,12 +13,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.AddCircleOutline
-import androidx.compose.material.icons.outlined.AutoStories
 import androidx.compose.material.icons.outlined.BookmarkAdd
 import androidx.compose.material.icons.outlined.Check
-import androidx.compose.material.icons.outlined.RemoveCircleOutline
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
@@ -42,6 +38,7 @@ import app.knotwork.design.R
 import app.knotwork.design.components.buttons.KnotworkTextButton
 import app.knotwork.design.components.chips.ChipStyle
 import app.knotwork.design.components.chips.KnotworkChip
+import app.knotwork.design.icons.AppIcons
 import app.knotwork.design.screens.settings.KnotworkParamSlider
 import app.knotwork.design.theme.KnotworkTheme
 import app.knotwork.design.tokens.KnotworkTextStyles
@@ -330,7 +327,7 @@ private fun TextField(
                         modifier = Modifier.size(LIBRARY_BUTTON_TARGET_DP.dp),
                     ) {
                         Icon(
-                            imageVector = Icons.Outlined.AutoStories,
+                            imageVector = AppIcons.Book,
                             contentDescription = stringResource(R.string.knotwork_node_action_load_from_library),
                         )
                     }
@@ -341,7 +338,7 @@ private fun TextField(
                         modifier = Modifier.size(LIBRARY_BUTTON_TARGET_DP.dp),
                     ) {
                         Icon(
-                            imageVector = Icons.Outlined.BookmarkAdd,
+                            imageVector = AppIcons.BookmarkAdd,
                             contentDescription = stringResource(R.string.knotwork_node_action_save_as_preset),
                         )
                     }
@@ -442,7 +439,7 @@ private fun <T> SegmentedChipRow(label: String, values: List<Pair<T, String>>, s
                     // which made the Summary format (and other segmented-chip groups) look
                     // unmarked. A leading check unambiguously surfaces the active state
                     // regardless of theme contrast.
-                    leadingIcon = if (isSelected) Icons.Outlined.Check else null,
+                    leadingIcon = if (isSelected) AppIcons.Check else null,
                 )
             }
         }
@@ -673,7 +670,7 @@ private fun IntentRouterFormBody(
                     enabled = canRemove,
                 ) {
                     Icon(
-                        imageVector = Icons.Outlined.RemoveCircleOutline,
+                        imageVector = AppIcons.MinusCircle,
                         contentDescription = stringResource(R.string.knotwork_node_action_remove_class),
                     )
                 }
@@ -701,7 +698,7 @@ private fun IntentRouterFormBody(
                 onChange(config.copy(classes = updated))
             },
             enabled = canAdd,
-            leadingIcon = Icons.Outlined.AddCircleOutline,
+            leadingIcon = AppIcons.Add,
         )
         InlineError(failure = errors[FieldId.CLASSES])
     }

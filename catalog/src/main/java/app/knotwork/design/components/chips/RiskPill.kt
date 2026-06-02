@@ -19,7 +19,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import app.knotwork.design.theme.KnotworkTheme
 import app.knotwork.design.tokens.KnotworkTextStyles
 
@@ -82,7 +84,11 @@ fun RiskPill(risk: Risk, modifier: Modifier = Modifier) {
             )
             Text(
                 text = risk.label,
-                style = KnotworkTextStyles.MonoSm,
+                // Spec §2.5: JetBrains Mono 500, 11 px, +0.2 tracking.
+                style = KnotworkTextStyles.MonoSm.copy(
+                    fontWeight = FontWeight.Medium,
+                    letterSpacing = 0.2.sp,
+                ),
                 color = color,
             )
         }

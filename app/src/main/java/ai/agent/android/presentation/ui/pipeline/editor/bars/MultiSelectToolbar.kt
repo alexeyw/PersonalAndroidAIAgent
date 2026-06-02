@@ -7,10 +7,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Close
-import androidx.compose.material.icons.outlined.ContentCopy
-import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -21,6 +17,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import app.knotwork.design.icons.AppIcons
 import app.knotwork.design.theme.KnotworkTheme
 import app.knotwork.design.tokens.KnotworkTextStyles
 
@@ -60,7 +57,7 @@ internal fun MultiSelectToolbar(
         Row(verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onCancel) {
                 Icon(
-                    imageVector = Icons.Outlined.Close,
+                    imageVector = AppIcons.X,
                     contentDescription = stringResource(R.string.pipeline_editor_multi_select_cancel),
                 )
             }
@@ -78,13 +75,13 @@ internal fun MultiSelectToolbar(
         Row(verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onCopy) {
                 Icon(
-                    imageVector = Icons.Outlined.ContentCopy,
+                    imageVector = AppIcons.Copy,
                     contentDescription = stringResource(R.string.pipeline_editor_multi_select_copy),
                 )
             }
             IconButton(onClick = onDelete) {
                 Icon(
-                    imageVector = Icons.Outlined.Delete,
+                    imageVector = AppIcons.Trash,
                     contentDescription = stringResource(R.string.pipeline_editor_multi_select_delete),
                     tint = MaterialTheme.colorScheme.error,
                 )

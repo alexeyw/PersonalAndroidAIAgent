@@ -83,8 +83,8 @@
     <!-- Phase 24 / Task 3 — Pipeline presets UI -->
     <!-- Library speed-dial -->
     <string name="orchestrator_library_speed_dial_new">New</string>
-    <string name="orchestrator_library_speed_dial_new_pipeline">+ New pipeline</string>
-    <string name="orchestrator_library_speed_dial_from_preset">+ From preset</string>
+    <string name="orchestrator_library_speed_dial_new_pipeline">New pipeline</string>
+    <string name="orchestrator_library_speed_dial_from_preset">From preset</string>
 
     <!-- Preset picker sheet -->
     <string name="orchestrator_preset_picker_title">Choose a preset</string>
