@@ -919,6 +919,13 @@ fun PipelineEditorScreen(viewModel: OrchestratorViewModel, onBack: () -> Unit) {
             LaunchedEffect(presetsState.pendingPipelineIdFromPreset) {
                 presetsState.pendingPipelineIdFromPreset?.let { newPipelineId ->
                     presetsViewModel.consumePendingPipelineNavigation()
+                    // The screen-local EditorState belongs to the graph we are
+                    // leaving. Drop its undo/redo history and transient selection
+                    // before switching pipelines — otherwise a stale Undo snapshot
+                    // from the previous graph would clobber the loaded preset the
+                    // moment the user hits Undo.
+                    editor.undoRedo.reset()
+                    editor.clearTransient()
                     viewModel.loadPipeline(newPipelineId)
                     showPresetPicker = false
                 }
