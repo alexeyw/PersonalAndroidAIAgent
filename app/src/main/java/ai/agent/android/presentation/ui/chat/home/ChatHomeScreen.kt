@@ -65,7 +65,6 @@ import app.knotwork.design.screens.chat.ChatHomeContent
 import app.knotwork.design.theme.KnotworkTheme
 import com.mikepenz.markdown.m3.Markdown
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -140,32 +139,34 @@ fun ChatHomeScreen(
     //     fits (the scroll calls clamp to the current position).
     LaunchedEffect(currentSessionId) {
         if (currentSessionId.isBlank()) return@LaunchedEffect
-        var known = -1
-        // Drive scrolling off `messages.size` — it grows by exactly one for each
-        // appended row (user OR agent), unlike the rendered item count which can
-        // stay flat when a generating-loader item is swapped for the agent's
-        // final message.
-        //
-        // A single `scrollToItem(lastMessageIndex)` does the right thing and is
-        // reliable: the last item clamps to the bottom when it is shorter than
-        // the viewport (bottom-aligned) and aligns its top to the viewport when
-        // it is taller (top-aligned). An earlier attempt that read `layoutInfo`
-        // right after `scrollToItem` to "fine-tune" the offset drifted the list
-        // into the middle, because `layoutInfo` had not yet been recomputed for
-        // the scroll just issued (stale offsets).
-        snapshotFlow { messages.size }.collect { count ->
-            if (count <= 0) {
-                known = -1
-                return@collect
+        var knownMessages = -1
+        var knownItems = -1
+        // Observe BOTH the message count and the rendered item count:
+        //  - `messages.size` grows by one for each appended user/agent row (and
+        //    stays correct even when a generating-loader item is swapped for the
+        //    agent's final message, which leaves the rendered count flat);
+        //  - `layoutInfo.totalItemsCount` also captures the trailing service rows
+        //    (the generating loader and the error tile) that are NOT part of
+        //    `messages`, so those scroll into view too.
+        // On either growth (or a freshly opened thread) we scroll to the list's
+        // real last item. `scrollToItem` is reliable on its own: a short last
+        // item clamps to the bottom (bottom-aligned), a tall one aligns its top
+        // to the viewport (top-aligned), and a list that already fits is a no-op.
+        snapshotFlow { messages.size to chatListState.layoutInfo.totalItemsCount }
+            .collect { (messageCount, itemCount) ->
+                if (messageCount <= 0 || itemCount <= 0) {
+                    knownMessages = messageCount
+                    knownItems = itemCount
+                    return@collect
+                }
+                val opened = knownMessages < 0
+                val grew = messageCount > knownMessages || itemCount > knownItems
+                if (opened || grew) {
+                    chatListState.scrollToItem(itemCount - 1)
+                }
+                knownMessages = messageCount
+                knownItems = itemCount
             }
-            // Wait until the list has actually laid out the messages — on a
-            // fresh thread the rows arrive before the LazyColumn measures them.
-            snapshotFlow { chatListState.layoutInfo.totalItemsCount }.first { it >= count }
-            if (known < 0 || count > known) {
-                chatListState.scrollToItem(count - 1)
-            }
-            known = count
-        }
     }
 
     var debugPickerExpanded by remember { mutableStateOf(false) }

@@ -101,6 +101,14 @@ private val ChatHorizontalPadding = 16.dp
 /** Vertical gap between consecutive chat-message rows. */
 private val ChatRowGap = 12.dp
 
+/**
+ * Bottom clearance reserved under the message list so a short last message
+ * (clamped to the bottom of the scroll range) clears the single-line
+ * agent-status console pill sitting above the composer. Sized to a one-line
+ * pill (~mono line + its vertical padding).
+ */
+private val ChatConsoleClearance = 40.dp
+
 /** Width of the drawer overlay panel (Material spec for navigation drawers). */
 private val DrawerWidth = 320.dp
 
@@ -596,7 +604,11 @@ private fun ChatHomeMessageList(
         start = padding.calculateStartPadding(LocalLayoutDirection.current) + ChatHorizontalPadding,
         end = padding.calculateEndPadding(LocalLayoutDirection.current) + ChatHorizontalPadding,
         top = padding.calculateTopPadding() + KnotworkTheme.spacing.sp2,
-        bottom = padding.calculateBottomPadding() + KnotworkTheme.spacing.sp2,
+        // Extra bottom clearance so a short last message that clamps to the
+        // bottom of the scroll range rests clear of the single-line agent-status
+        // console pill that sits just above the composer, instead of tucking
+        // under it.
+        bottom = padding.calculateBottomPadding() + KnotworkTheme.spacing.sp2 + ChatConsoleClearance,
     )
     LazyColumn(
         state = listState,
