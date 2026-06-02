@@ -32,7 +32,7 @@ fun MonitoringScreen(viewModel: MonitoringViewModel, modifier: Modifier = Modifi
         state = viewState,
         modifier = modifier,
         strings = strings,
-        callbacks = MonitoringCallbacks(onBack = onBack, onRetry = {}),
+        callbacks = MonitoringCallbacks(onBack = onBack, onRetry = viewModel::loadLogs),
     )
 }
 

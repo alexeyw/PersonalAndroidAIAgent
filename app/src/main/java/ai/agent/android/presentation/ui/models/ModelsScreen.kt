@@ -94,9 +94,20 @@ fun ModelsScreen(modifier: Modifier = Modifier, viewModel: ModelsViewModel = hil
                     ?.let { viewModel.deleteModel(it.id) }
             },
             onCustomDownloadCancel = { viewModel.cancelDownload() },
-            onActiveOpen = {},
-            onOverflowMenu = {},
-            onRetry = {},
+            // Active-model detail and the TopAppBar overflow are post-v0.1
+            // chrome: the catalog renders the affordances, but the surfaces
+            // they would open (per-model detail page, model-management
+            // overflow menu) are not part of the v0.x scope. Kept as
+            // documented no-ops rather than hidden so the design chrome stays
+            // intact and the wiring is a one-liner when those surfaces land.
+            onActiveOpen = { /* model-detail surface ships post-v0.1. */ },
+            onOverflowMenu = { /* model-management overflow ships post-v0.1. */ },
+            // `onRetry` only fires in `ModelsVisualState.Error`, which this
+            // mapper never produces — download failures surface as a transient
+            // Snackbar (see the `LaunchedEffect(downloadError)` above) and the
+            // model list is otherwise read reactively, so there is no error
+            // surface to recover from here.
+            onRetry = { /* unreachable: this screen never enters the Error state. */ },
         ),
     )
 }

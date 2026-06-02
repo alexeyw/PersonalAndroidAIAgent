@@ -64,6 +64,25 @@ details.
     22 dp and badge 14 dp / Inter 700 / primary fill; bottom-nav on `surface-2`
     with a hairline top divider and Inter 11 sp labels.
 
+### Fixed
+
+- **UI functional verification — orphaned callbacks wired** (Phase 26 / Task 4/10):
+  - The pipeline editor's empty-state **"From template"** CTA now opens the
+    preset picker and materialises the chosen bundled / user preset into the
+    editor (was a "coming soon" Snackbar). It reuses the same
+    `LoadPipelineFromPresetUseCase` flow as the library's `+ From preset`.
+  - The Monitoring screen's **Retry** action now reloads the recent system-log
+    stream (`MonitoringViewModel.loadLogs()`) instead of doing nothing.
+  - Remaining secondary affordances that back unreachable error states
+    (Models / Task-monitor retry), retired features (Prompt-library search), or
+    preview-only run controls (editor Pause / Resume / Trace) are now explicit
+    documented no-ops rather than silent empty lambdas. See
+    `project_docs/ui-functional-audit-phase26.md` for the full register.
+  - Closed the `MoreViewModel` and `ProviderDetailViewModel` unit-test gaps
+    flagged in `docs/coverage-baseline.md`; added a regression asserting the
+    first-launch seeded pipeline passes `PipelineGraph.validate()` with zero
+    errors.
+
 ## [0.3.0] - 2026-05-30
 
 Rolls up the post-`0.2.0` work that landed on `main`: the complete long-term

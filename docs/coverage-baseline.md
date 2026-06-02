@@ -18,6 +18,15 @@ coverage materially.
 `./gradlew :app:koverLog` headline figure: **`application line coverage: 77.62 %`**
 (5 968 / 7 689 lines after exclusions).
 
+> **Phase 26 / Task 4/10 refresh (2026-06-02):** aggregate LINE is now
+> **79.05 %** (7 816 / 9 888 lines after exclusions) — the line total grew with
+> the Phase 24/25 feature work, and Task 4 closed the `presentation.ui.more`
+> (→ 100 %) and `presentation.ui.settings.provider` (→ 100 %) gaps and raised
+> `presentation.ui.prompts` to 67.9 %. The three rows below carry an
+> `↑ Phase 26 / Task 4` note; the remaining per-package figures are still the
+> Phase-23 measurement and will be re-measured wholesale at the next coverage
+> task.
+
 ### Historical snapshots
 
 | Phase / Task            | Date       | Aggregate LINE | Gate  |
@@ -25,6 +34,7 @@ coverage materially.
 | Phase 18 / Task 2/10    | 2026-05-10 | 45.3 % (raw, no exclusions yet) | — (measurement only) |
 | Phase 18 / Task 9-10    | 2026-05-?? | ~80 % (with exclusions, claimed) | 70 % |
 | Phase 23 / Task 9/9     | 2026-05-26 | 77.6 % (after extending exclusions for nav/about/more/provider screens + AppFunctions glue) | **75 %** |
+| Phase 26 / Task 4/10    | 2026-06-02 | 79.05 % (closed `MoreViewModel` / `ProviderDetailViewModel` gaps) | **75 %** |
 
 ## Per-package LINE coverage (post-exclusions)
 
@@ -83,14 +93,14 @@ and remains lifted.
 | `presentation.ui.memory`                      | 92.86 %  | 52 / 56         | ≥ 85 %  |
 | `presentation.ui.models`                      | 82.14 %  | 92 / 112        | ≥ 75 %  |
 | `presentation.ui.monitoring`                  | 100.00 % | 30 / 30         | ≥ 95 %  |
-| `presentation.ui.more`                        | 23.19 %  | 16 / 69         | known gap — `MoreViewModel` lacks tests (Phase 24 follow-up) |
+| `presentation.ui.more`                        | 100.00 % | 80 / 80         | ↑ Phase 26 / Task 4 — `MoreViewModelTest` closes the gap |
 | `presentation.ui.onboarding`                  | 86.61 %  | 110 / 127       | ≥ 80 %  |
 | `presentation.ui.orchestrator`                | 85.03 %  | 335 / 394       | ≥ 80 %  |
 | `presentation.ui.pipeline.editor.config`      | 52.40 %  | 175 / 334       | known gap — `NodeConfigCodec` round-trip tests (Phase 24 follow-up) |
 | `presentation.ui.pipeline.editor.core`        | 85.16 %  | 310 / 364       | ≥ 80 %  |
-| `presentation.ui.prompts`                     | 41.67 %  | 45 / 108        | known gap — `PromptVariablesViewModel` thin tests |
+| `presentation.ui.prompts`                     | 67.91 %  | 91 / 134        | ↑ Phase 26 / Task 4 — the baseline's `PromptVariablesViewModel` no longer exists; the surface is `PromptLibraryViewModel` (covered). Residual gap is the `toViewState` mapper. |
 | `presentation.ui.settings`                    | 88.89 %  | 256 / 288       | ≥ 80 %  |
-| `presentation.ui.settings.provider`           | 0.00 %   | 0 / 83          | known gap — `ProviderDetailViewModel` / `ProviderDetailUiState` lack tests (Phase 24 follow-up) |
+| `presentation.ui.settings.provider`           | 100.00 % | 83 / 83         | ↑ Phase 26 / Task 4 — `ProviderDetailViewModelTest` closes the gap |
 | `presentation.ui.splash`                      | 97.30 %  | 36 / 37         | ≥ 90 %  |
 | `presentation.ui.taskmonitor`                 | 90.91 %  | 100 / 110       | ≥ 85 %  |
 | `presentation.ui.tools`                       | 92.34 %  | 205 / 222       | ≥ 85 %  |
