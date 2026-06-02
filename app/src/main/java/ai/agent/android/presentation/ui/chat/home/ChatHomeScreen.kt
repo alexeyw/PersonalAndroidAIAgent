@@ -70,6 +70,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import timber.log.Timber
 
 /**
  * Redesigned Knotwork chat home — the user-facing surface introduced in
@@ -142,21 +143,40 @@ fun ChatHomeScreen(
     //     fits (the scroll calls clamp to the current position).
     LaunchedEffect(currentSessionId) {
         if (currentSessionId.isBlank()) return@LaunchedEffect
-        // The VM clears the message list on `selectThread`, so waiting for a
-        // non-empty size guarantees we react to THIS thread's history rather
-        // than the outgoing thread's still-rendered rows (the cause of "opening
-        // doesn't scroll" — we were scrolling the stale list).
-        snapshotFlow { messages.size }.first { it > 0 }
-        snapshotFlow { chatListState.layoutInfo.totalItemsCount }.first { it >= messages.size }
-        chatListState.scrollToListEnd(messages.size - 1)
-        var known = messages.size
+        var known = -1
+        // Drive scrolling off `messages.size` — it grows by exactly one for each
+        // appended row (user OR agent), unlike the rendered item count which can
+        // stay flat when a generating-loader item is swapped for the agent's
+        // final message. The open-jump targets the list's REAL last rendered
+        // item (`totalItemsCount - 1`) so it lands at the true end even if the
+        // rendered list carries trailing items.
         snapshotFlow { messages.size }.collect { count ->
-            if (count > known && count > 0) {
-                // Wait for the appended row to be laid out before positioning it.
-                snapshotFlow { chatListState.layoutInfo.totalItemsCount }.first { it >= count }
-                chatListState.revealMessageAt(count - 1)
+            val totalBefore = chatListState.layoutInfo.totalItemsCount
+            Timber.tag(SCROLL_DEBUG_TAG).d(
+                "session=%s msgCount=%d total=%d known=%d firstVisible=%d",
+                currentSessionId,
+                count,
+                totalBefore,
+                known,
+                chatListState.firstVisibleItemIndex,
+            )
+            if (count <= 0) {
+                known = -1
+                return@collect
+            }
+            // Wait until the list has actually laid out at least `count` items.
+            snapshotFlow { chatListState.layoutInfo.totalItemsCount }.first { it >= count }
+            when {
+                known < 0 -> chatListState.scrollToListEnd(chatListState.layoutInfo.totalItemsCount - 1)
+                count > known -> chatListState.revealMessageAt(count - 1)
             }
             known = count
+            Timber.tag(SCROLL_DEBUG_TAG).d(
+                "after-scroll total=%d firstVisible=%d lastVisible=%d",
+                chatListState.layoutInfo.totalItemsCount,
+                chatListState.firstVisibleItemIndex,
+                chatListState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1,
+            )
         }
     }
 
@@ -785,6 +805,9 @@ private const val PIPELINE_NAME_PLACEHOLDER: String = "default"
 
 /** MIME type used by both the export share-sheet and the import file picker. */
 private const val MIME_JSON: String = "application/json"
+
+/** Temporary Timber tag for diagnosing chat auto-scroll; remove once verified. */
+private const val SCROLL_DEBUG_TAG: String = "ChatScroll"
 
 /**
  * Jumps the chat list to the very end (opening a thread). Aligns the last
