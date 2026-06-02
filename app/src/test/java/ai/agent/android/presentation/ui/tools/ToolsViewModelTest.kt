@@ -4,6 +4,7 @@ import ai.agent.android.domain.models.AgentTool
 import ai.agent.android.domain.models.McpConnectionStatus
 import ai.agent.android.domain.models.McpServerConfig
 import ai.agent.android.domain.models.McpTool
+import ai.agent.android.domain.models.ToolSource
 import ai.agent.android.domain.repositories.McpServerRepository
 import ai.agent.android.domain.repositories.SettingsRepository
 import ai.agent.android.domain.repositories.ToolRepository
@@ -77,6 +78,23 @@ class ToolsViewModelTest {
         assertEquals(listOf("http://test.com"), state.mcpServers.map { it.url })
         assertEquals(setOf("get_system_time"), state.disabledAppFunctions)
         assertEquals("get_system_time", state.localTools.first().name)
+    }
+
+    @Test
+    fun `local tools list hides discovered AppFunctions but keeps built-ins`() = runTest {
+        coEvery { toolRepository.getAllLocalTools() } returns listOf(
+            AgentTool(name = "get_system_time", description = "", parameters = "{}", source = ToolSource.BUILT_IN),
+            AgentTool(name = "com.x/echo", description = "", parameters = "{}", source = ToolSource.APP_FUNCTION),
+        )
+        viewModel = ToolsViewModel(
+            settingsRepository = settingsRepository,
+            toolRepository = toolRepository,
+            mcpServerRepository = mcpServerRepository,
+        )
+        advanceUntilIdle()
+
+        val names = viewModel.uiState.value.localTools.map { it.name }
+        assertEquals(listOf("get_system_time"), names)
     }
 
     @Test

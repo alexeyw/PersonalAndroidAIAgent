@@ -8,6 +8,7 @@ import ai.agent.android.domain.models.AgentTool
 import ai.agent.android.domain.models.CloudProvider
 import ai.agent.android.domain.models.McpServerConfig
 import ai.agent.android.domain.models.ToolRisk
+import ai.agent.android.domain.models.ToolSource
 import ai.agent.android.domain.repositories.ApiKeyRepository
 import ai.agent.android.domain.repositories.LocalToolExecutor
 import ai.agent.android.domain.repositories.SettingsRepository
@@ -213,14 +214,18 @@ class ToolRepositoryImpl @Inject constructor(
     override suspend fun getAllLocalTools(): List<AgentTool> {
         val builtins = getBuiltinTools()
         val builtinNames = builtins.mapTo(mutableSetOf()) { it.name }
-        val appFunctions = localAppFunctionManager.getAvailableFunctions().filter { tool ->
-            if (tool.name in builtinNames) {
-                Timber.w("AppFunction %s collides with built-in tool; built-in wins", tool.name)
-                false
-            } else {
-                true
+        val appFunctions = localAppFunctionManager.getAvailableFunctions()
+            .filter { tool ->
+                if (tool.name in builtinNames) {
+                    Timber.w("AppFunction %s collides with built-in tool; built-in wins", tool.name)
+                    false
+                } else {
+                    true
+                }
             }
-        }
+            // Tag provenance so UI surfaces can distinguish discovered AppFunctions
+            // from hand-written built-ins (the Tools screen hides the former).
+            .map { it.copy(source = ToolSource.APP_FUNCTION) }
         return builtins + appFunctions
     }
 
