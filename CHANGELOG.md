@@ -92,6 +92,10 @@ details.
   - Closed the `MoreViewModel` and `ProviderDetailViewModel` unit-test gaps;
     added a regression asserting the first-launch seeded pipeline passes
     `PipelineGraph.validate()` with zero errors.
+  - Chat auto-scroll: opening a thread jumps to the latest message; a newly
+    appended message (user or agent) is revealed automatically — top-aligned
+    when it is taller than the screen, otherwise bottom-aligned — and nothing
+    scrolls when the whole conversation already fits.
 
 ## [0.3.0] - 2026-05-30
 

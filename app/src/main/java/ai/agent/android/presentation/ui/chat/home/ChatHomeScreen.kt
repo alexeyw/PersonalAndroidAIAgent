@@ -5,6 +5,7 @@ import android.content.Intent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -19,6 +20,8 @@ import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.outlined.Check
@@ -38,6 +41,7 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -122,6 +126,30 @@ fun ChatHomeScreen(
     val installedModels by viewModel.installedModels.collectAsStateWithLifecycle()
     val activeModelId by viewModel.activeModelId.collectAsStateWithLifecycle()
     val availablePipelines by viewModel.availablePipelinesFlow.collectAsStateWithLifecycle()
+    val currentSessionId by viewModel.currentSessionId.collectAsStateWithLifecycle()
+    val chatListState = rememberLazyListState()
+
+    // Auto-scroll policy for the message list:
+    //  - Opening a thread (session id changes) jumps to the very end so the
+    //    latest exchange is on screen.
+    //  - A newly appended message (user or agent) is revealed per the spec:
+    //    a message taller than the viewport is top-aligned (its first line at
+    //    the top); a shorter one is bottom-aligned (its last line at the
+    //    bottom). When the whole conversation already fits, nothing scrolls
+    //    (the scroll calls clamp to the existing position).
+    var lastScrolledSessionId by remember { mutableStateOf<String?>(null) }
+    var lastMessageCount by remember { mutableIntStateOf(0) }
+    LaunchedEffect(currentSessionId, messages.size) {
+        val count = messages.size
+        if (count == 0) return@LaunchedEffect // wait for the thread's history to load
+        val lastMessageIndex = count - 1
+        when {
+            currentSessionId != lastScrolledSessionId -> chatListState.scrollChatToEnd(lastMessageIndex)
+            count > lastMessageCount -> chatListState.revealAppendedMessage(lastMessageIndex)
+        }
+        lastScrolledSessionId = currentSessionId
+        lastMessageCount = count
+    }
 
     var debugPickerExpanded by remember { mutableStateOf(false) }
     var overflowExpanded by remember { mutableStateOf(false) }
@@ -347,6 +375,7 @@ fun ChatHomeScreen(
                     colors = markdownColors,
                 )
             },
+            messageListState = chatListState,
         )
         SnackbarHost(
             hostState = snackbarHostState,
@@ -747,3 +776,51 @@ private const val PIPELINE_NAME_PLACEHOLDER: String = "default"
 
 /** MIME type used by both the export share-sheet and the import file picker. */
 private const val MIME_JSON: String = "application/json"
+
+/**
+ * Jumps the chat list to the very end (opening a thread). Aligns the last
+ * message's bottom edge with the viewport bottom even when that message is
+ * taller than the viewport, so the freshest content is always on screen.
+ *
+ * @param lastMessageIndex Index of the last message row in the list.
+ */
+private suspend fun LazyListState.scrollChatToEnd(lastMessageIndex: Int) {
+    if (lastMessageIndex < 0) return
+    // First put the message's top at the viewport top (clamps to the bottom of
+    // the scroll range for a short last message)…
+    scrollToItem(lastMessageIndex)
+    val info = layoutInfo
+    val item = info.visibleItemsInfo.lastOrNull { it.index == lastMessageIndex } ?: return
+    val viewportHeight = info.viewportEndOffset - info.viewportStartOffset
+    // …then, if the message is taller than the viewport, nudge down so its
+    // bottom edge reaches the viewport bottom (true "scroll to the end").
+    val overshoot = item.size - viewportHeight
+    if (overshoot > 0) scrollBy(overshoot.toFloat())
+}
+
+/**
+ * Reveals a freshly appended message per the chat scroll spec:
+ *  - taller than the viewport → top-aligned (its first line at the top);
+ *  - shorter than the viewport → bottom-aligned (its last line at the bottom,
+ *    earlier messages filling the space above).
+ *
+ * When the conversation already fits on screen the underlying scroll calls
+ * clamp to the current position, so nothing moves.
+ *
+ * @param messageIndex Index of the appended message row in the list.
+ */
+private suspend fun LazyListState.revealAppendedMessage(messageIndex: Int) {
+    if (messageIndex < 0) return
+    // Align the message's top edge to the viewport top. For a tall message this
+    // is the final position; for a short one we bottom-align it next.
+    scrollToItem(messageIndex)
+    val info = layoutInfo
+    val item = info.visibleItemsInfo.firstOrNull { it.index == messageIndex } ?: return
+    val viewportHeight = info.viewportEndOffset - info.viewportStartOffset
+    if (item.size < viewportHeight) {
+        // Scroll back toward the start so the short message sits at the bottom
+        // with the preceding messages visible above it. Clamps when there is
+        // not enough earlier content to fill the gap.
+        scrollBy(-(viewportHeight - item.size).toFloat())
+    }
+}

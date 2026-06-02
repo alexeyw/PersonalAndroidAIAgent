@@ -37,7 +37,9 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.outlined.Add
@@ -150,6 +152,7 @@ fun ChatHomeContent(
     modifier: Modifier = Modifier,
     callbacks: ChatHomeCallbacks = noopChatHomeCallbacks(),
     markdownRenderer: (@Composable (String) -> Unit)? = null,
+    messageListState: LazyListState = rememberLazyListState(),
 ) {
     Box(modifier = modifier.fillMaxSize()) {
         Scaffold(
@@ -175,6 +178,7 @@ fun ChatHomeContent(
                 callbacks = callbacks,
                 padding = padding,
                 markdownRenderer = markdownRenderer,
+                messageListState = messageListState,
             )
         }
         // Drawer slide-in honours `animations.md §Chat` — 280 ms emphasised
@@ -406,6 +410,7 @@ private fun ChatHomeBody(
     callbacks: ChatHomeCallbacks,
     padding: PaddingValues,
     markdownRenderer: (@Composable (String) -> Unit)?,
+    messageListState: LazyListState,
 ) {
     when (state.visualState) {
         ChatHomeVisualState.Loading -> ChatHomeLoadingBody(padding = padding)
@@ -415,6 +420,7 @@ private fun ChatHomeBody(
             callbacks = callbacks,
             padding = padding,
             markdownRenderer = markdownRenderer,
+            listState = messageListState,
         )
     }
 }
@@ -578,6 +584,7 @@ private fun ChatHomeMessageList(
     callbacks: ChatHomeCallbacks,
     padding: PaddingValues,
     markdownRenderer: (@Composable (String) -> Unit)?,
+    listState: LazyListState,
 ) {
     // Compose the Scaffold-provided insets with the surface's own 16dp
     // horizontal padding into a single `contentPadding` value. Applying
@@ -592,6 +599,7 @@ private fun ChatHomeMessageList(
         bottom = padding.calculateBottomPadding() + KnotworkTheme.spacing.sp2,
     )
     LazyColumn(
+        state = listState,
         modifier = Modifier.fillMaxSize(),
         contentPadding = mergedContentPadding,
         verticalArrangement = Arrangement.spacedBy(ChatRowGap),
