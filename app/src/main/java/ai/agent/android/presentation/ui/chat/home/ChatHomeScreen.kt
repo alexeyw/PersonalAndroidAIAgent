@@ -142,13 +142,19 @@ fun ChatHomeScreen(
     //     fits (the scroll calls clamp to the current position).
     LaunchedEffect(currentSessionId) {
         if (currentSessionId.isBlank()) return@LaunchedEffect
-        snapshotFlow { chatListState.layoutInfo.totalItemsCount }.first { it > 0 }
-        chatListState.scrollChatToEnd(messages.size - 1)
+        // The VM clears the message list on `selectThread`, so waiting for a
+        // non-empty size guarantees we react to THIS thread's history rather
+        // than the outgoing thread's still-rendered rows (the cause of "opening
+        // doesn't scroll" — we were scrolling the stale list).
+        snapshotFlow { messages.size }.first { it > 0 }
+        snapshotFlow { chatListState.layoutInfo.totalItemsCount }.first { it >= messages.size }
+        chatListState.scrollToListEnd(messages.size - 1)
         var known = messages.size
         snapshotFlow { messages.size }.collect { count ->
             if (count > known && count > 0) {
+                // Wait for the appended row to be laid out before positioning it.
                 snapshotFlow { chatListState.layoutInfo.totalItemsCount }.first { it >= count }
-                chatListState.revealAppendedMessage(count - 1)
+                chatListState.revealMessageAt(count - 1)
             }
             known = count
         }
@@ -787,18 +793,12 @@ private const val MIME_JSON: String = "application/json"
  *
  * @param lastMessageIndex Index of the last message row in the list.
  */
-private suspend fun LazyListState.scrollChatToEnd(lastMessageIndex: Int) {
-    if (lastMessageIndex < 0) return
-    // First put the message's top at the viewport top (clamps to the bottom of
-    // the scroll range for a short last message)…
-    scrollToItem(lastMessageIndex)
-    val info = layoutInfo
-    val item = info.visibleItemsInfo.lastOrNull { it.index == lastMessageIndex } ?: return
-    val viewportHeight = info.viewportEndOffset - info.viewportStartOffset
-    // …then, if the message is taller than the viewport, nudge down so its
-    // bottom edge reaches the viewport bottom (true "scroll to the end").
-    val overshoot = item.size - viewportHeight
-    if (overshoot > 0) scrollBy(overshoot.toFloat())
+private suspend fun LazyListState.scrollToListEnd(lastIndex: Int) {
+    if (lastIndex < 0) return
+    scrollToItem(lastIndex)
+    // Bottom-align the last item even when it is taller than the viewport, so
+    // the end of the conversation is always flush with the bottom edge.
+    bottomAlign(lastIndex)
 }
 
 /**
@@ -807,23 +807,35 @@ private suspend fun LazyListState.scrollChatToEnd(lastMessageIndex: Int) {
  *  - shorter than the viewport → bottom-aligned (its last line at the bottom,
  *    earlier messages filling the space above).
  *
- * When the conversation already fits on screen the underlying scroll calls
- * clamp to the current position, so nothing moves.
+ * Nothing moves when the conversation already fits (the scroll calls clamp).
  *
  * @param messageIndex Index of the appended message row in the list.
  */
-private suspend fun LazyListState.revealAppendedMessage(messageIndex: Int) {
+private suspend fun LazyListState.revealMessageAt(messageIndex: Int) {
     if (messageIndex < 0) return
-    // Align the message's top edge to the viewport top. For a tall message this
-    // is the final position; for a short one we bottom-align it next.
     scrollToItem(messageIndex)
-    val info = layoutInfo
-    val item = info.visibleItemsInfo.firstOrNull { it.index == messageIndex } ?: return
-    val viewportHeight = info.viewportEndOffset - info.viewportStartOffset
-    if (item.size < viewportHeight) {
-        // Scroll back toward the start so the short message sits at the bottom
-        // with the preceding messages visible above it. Clamps when there is
-        // not enough earlier content to fill the gap.
-        scrollBy(-(viewportHeight - item.size).toFloat())
-    }
+    val viewportHeight = layoutInfo.viewportEndOffset - layoutInfo.viewportStartOffset
+    val item = layoutInfo.visibleItemsInfo.firstOrNull { it.index == messageIndex } ?: return
+    // Tall message → keep the top-alignment that scrollToItem already applied.
+    if (item.size >= viewportHeight) return
+    // Short message → bottom-align it.
+    bottomAlign(messageIndex)
+}
+
+/**
+ * Scrolls so the item at [index] sits flush with the viewport bottom. Computes
+ * the delta from the item's **current** offset (read after a preceding
+ * `scrollToItem`), so when `scrollToItem` already clamped the list to the
+ * bottom — e.g. a short last item — the delta is zero and nothing moves. This
+ * is the fix for the earlier "jerk far from the new message": assuming the
+ * offset was 0 double-applied the shift on top of the clamp.
+ *
+ * @param index Index of the item to bottom-align.
+ */
+private suspend fun LazyListState.bottomAlign(index: Int) {
+    val viewportHeight = layoutInfo.viewportEndOffset - layoutInfo.viewportStartOffset
+    val item = layoutInfo.visibleItemsInfo.firstOrNull { it.index == index } ?: return
+    val desiredTop = viewportHeight - item.size
+    val delta = item.offset - desiredTop
+    if (delta != 0) scrollBy(delta.toFloat())
 }
