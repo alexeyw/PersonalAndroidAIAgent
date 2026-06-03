@@ -82,9 +82,10 @@ project — `:app` consumes it as an `implementation` dependency.
       colour family (`Queued`, `Idle`, `Running`, `Success`, `Warning`,
       `Error`, `Cancelled`); pulses the dot for `Running` (respects
       `KnotworkTheme.a11y.reducedMotion()`).
-    - `KnotworkChip.kt` — `@Deprecated` legacy chip kept for one
-      release to ease the migration; new call sites use the split
-      family above.
+    - `KnotworkChip.kt` — general-purpose pill chip with `Default /
+      Tonal / Outline` styles, optional leading/trailing icons and a
+      decorative (no-`onClick`) variant for tag rows; complements the
+      intent-specific split family above.
     - `KnotworkChipsPreview.kt` — `@Preview` wrappers.
   - `controls/` — text-input + slider atoms per `inputs-and-chips.md`
     §1–§5.
