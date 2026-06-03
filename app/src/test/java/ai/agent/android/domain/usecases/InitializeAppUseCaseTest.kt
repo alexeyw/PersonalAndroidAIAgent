@@ -45,6 +45,22 @@ class InitializeAppUseCaseTest {
     }
 
     @Test
+    fun `invoke seeds a pipeline that passes PipelineGraph validate with zero errors`() = runTest {
+        // Given — first launch fires the seed-default-pipeline branch.
+        every { settingsRepository.isFirstLaunch } returns flowOf(true)
+        val savedPipeline = slot<PipelineGraph>()
+
+        // When
+        useCase()
+
+        // Then — the seeded pipeline is structurally valid (exactly one INPUT /
+        // OUTPUT, no isolated nodes, no cycles), so the first-launch user lands
+        // on a graph that opens in the editor and is runnable end-to-end.
+        coVerify { pipelineRepository.savePipeline(capture(savedPipeline)) }
+        assertEquals(emptyList<Any>(), savedPipeline.captured.validate())
+    }
+
+    @Test
     fun `invoke saves pipeline whose nodes use recommended contextConfig per type`() = runTest {
         // Given — first launch fires the seed-default-pipeline branch.
         every { settingsRepository.isFirstLaunch } returns flowOf(true)

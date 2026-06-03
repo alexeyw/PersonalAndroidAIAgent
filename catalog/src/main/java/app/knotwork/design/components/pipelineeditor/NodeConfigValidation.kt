@@ -289,7 +289,8 @@ object NodeConfigValidation {
 
     private fun validateTool(config: ToolConfig): Map<FieldId, ValidationFailure> {
         val errors = mutableMapOf<FieldId, ValidationFailure>()
-        if (config.toolId.isBlank()) errors[FieldId.TOOL_ID] = ValidationFailure.REQUIRED
+        // A blank toolId is the "Auto" selection — the agent picks the tool at
+        // run time — so it is valid and must NOT block Save.
         val names = config.argumentMapping.map { it.name }
         when {
             config.argumentMapping.any { it.name.isBlank() || it.expression.isBlank() } -> {
@@ -316,7 +317,9 @@ object NodeConfigValidation {
 
     private fun validateQueueProcessor(config: QueueProcessorConfig): Map<FieldId, ValidationFailure> {
         val errors = mutableMapOf<FieldId, ValidationFailure>()
-        if (config.inputList.isBlank()) errors[FieldId.INPUT_LIST] = ValidationFailure.REQUIRED
+        // The input-list expression is optional: left blank, the processor
+        // consumes the list produced by the previous node (typically
+        // DECOMPOSITION). It must not be a required field.
         if (config.itemVariable.isBlank()) errors[FieldId.ITEM_VARIABLE] = ValidationFailure.REQUIRED
         if (config.parallelism !in PARALLELISM_RANGE) {
             errors[FieldId.PARALLELISM] = ValidationFailure.PARALLELISM_RANGE

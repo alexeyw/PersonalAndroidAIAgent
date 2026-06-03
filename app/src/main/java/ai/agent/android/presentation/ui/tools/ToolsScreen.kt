@@ -90,9 +90,8 @@ fun ToolsScreen(
         onMcpToolToggle = { id, enabled -> viewModel.toggleMcpTool(toolId = id, isEnabled = enabled) },
         onMcpToolClick = onOpenToolDetail,
         onAddServerOpen = onAddMcpServer,
-        onErrorRetry = { /* no-op until ToolRepository surfaces a discovery error. */ },
+        onErrorRetry = { /* unreachable: discovery errors surface per-server, not as a top-level state. */ },
         onOpenDrawer = { /* drawer ships post-v0.1. */ },
-        onTopOverflow = { /* top overflow ships post-v0.1. */ },
     )
 
     ToolsContent(

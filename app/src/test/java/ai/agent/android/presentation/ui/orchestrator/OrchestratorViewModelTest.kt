@@ -24,6 +24,7 @@ import ai.agent.android.domain.usecases.DeletePipelineUseCase
 import ai.agent.android.domain.usecases.DuplicatePipelineUseCase
 import ai.agent.android.domain.usecases.GetPromptTemplatesUseCase
 import ai.agent.android.domain.usecases.ImportPipelineUseCase
+import ai.agent.android.domain.usecases.LoadPipelineFromPresetUseCase
 import ai.agent.android.domain.usecases.LoadPipelineUseCase
 import ai.agent.android.domain.usecases.RenamePipelineUseCase
 import ai.agent.android.domain.usecases.SavePipelineAsPresetUseCase
@@ -55,6 +56,7 @@ class OrchestratorViewModelTest {
     private lateinit var savePipelineUseCase: SavePipelineUseCase
     private lateinit var loadPipelineUseCase: LoadPipelineUseCase
     private lateinit var importPipelineUseCase: ImportPipelineUseCase
+    private lateinit var loadPipelineFromPresetUseCase: LoadPipelineFromPresetUseCase
     private lateinit var renamePipelineUseCase: RenamePipelineUseCase
     private lateinit var duplicatePipelineUseCase: DuplicatePipelineUseCase
     private lateinit var deletePipelineUseCase: DeletePipelineUseCase
@@ -86,6 +88,7 @@ class OrchestratorViewModelTest {
         // Use the real ImportPipelineUseCase against the mocked save: the
         // import path here is exercised end-to-end (parse + persist).
         importPipelineUseCase = ImportPipelineUseCase(savePipelineUseCase)
+        loadPipelineFromPresetUseCase = mockk()
         renamePipelineUseCase = mockk()
         duplicatePipelineUseCase = mockk()
         deletePipelineUseCase = mockk()
@@ -129,6 +132,7 @@ class OrchestratorViewModelTest {
             savePipelineUseCase,
             loadPipelineUseCase,
             importPipelineUseCase,
+            loadPipelineFromPresetUseCase,
             renamePipelineUseCase,
             duplicatePipelineUseCase,
             deletePipelineUseCase,
@@ -1220,6 +1224,44 @@ class OrchestratorViewModelTest {
             description = "",
             nodeType = NodeType.LITE_RT,
         )
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertNotNull(viewModel.uiState.value.errorMessage)
+    }
+
+    @Test
+    fun `applyPresetToCurrentPipeline fills current pipeline preserving its id and name`() = runTest {
+        val originalId = viewModel.uiState.value.currentPipeline.id
+        val originalName = viewModel.uiState.value.currentPipeline.name
+        val materialized = PipelineGraph(
+            id = "preset-instance",
+            name = "Preset Name",
+            nodes = listOf(
+                NodeModel("n1", NodeType.INPUT, 0f, 0f),
+                NodeModel("n2", NodeType.OUTPUT, 0f, 0f),
+            ),
+            connections = emptyList(),
+        )
+        coEvery { loadPipelineFromPresetUseCase.materialize("preset1") } returns Result.success(materialized)
+
+        viewModel.applyPresetToCurrentPipeline("preset1")
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        val current = viewModel.uiState.value.currentPipeline
+        // id + name preserved (we fill the existing pipeline, not spawn a new one)…
+        assertEquals(originalId, current.id)
+        assertEquals(originalName, current.name)
+        // …but nodes come from the materialised preset.
+        assertEquals(listOf("n1", "n2"), current.nodes.map { it.id })
+        assertNotNull(viewModel.uiState.value.feedbackMessage)
+    }
+
+    @Test
+    fun `applyPresetToCurrentPipeline surfaces error when materialize fails`() = runTest {
+        coEvery { loadPipelineFromPresetUseCase.materialize("bad") } returns
+            Result.failure(IllegalStateException("Preset not found: bad"))
+
+        viewModel.applyPresetToCurrentPipeline("bad")
         testDispatcher.scheduler.advanceUntilIdle()
 
         assertNotNull(viewModel.uiState.value.errorMessage)

@@ -103,7 +103,7 @@ fun PipelineLibraryContent(
                 if (state.visualState == PipelineLibraryVisualState.MultiSelect) {
                     MultiSelectToolbar(state = state, callbacks = callbacks)
                 } else {
-                    LibraryTopBar(state = state, callbacks = callbacks)
+                    LibraryTopBar(state = state)
                 }
             }
         },
@@ -151,7 +151,7 @@ val PipelineLibraryViewState.isFabHidden: Boolean
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun LibraryTopBar(state: PipelineLibraryViewState, callbacks: PipelineLibraryCallbacks) {
+private fun LibraryTopBar(state: PipelineLibraryViewState) {
     TopAppBar(
         title = {
             Column {
@@ -172,15 +172,10 @@ private fun LibraryTopBar(state: PipelineLibraryViewState, callbacks: PipelineLi
                 )
             }
         },
-        actions = {
-            IconButton(onClick = callbacks.onTopOverflow) {
-                Icon(
-                    imageVector = AppIcons.More,
-                    contentDescription = stringResource(R.string.knotwork_library_top_overflow_cd),
-                    tint = MaterialTheme.colorScheme.onSurface,
-                )
-            }
-        },
+        // No top-bar overflow: per-row actions (rename / duplicate / delete /
+        // save-as-preset) live in each row's own overflow menu, and the create
+        // / import actions live on the FAB speed-dial — so the top-level menu
+        // had nothing to host.
         colors = TopAppBarDefaults.topAppBarColors(
             containerColor = MaterialTheme.colorScheme.surface,
             titleContentColor = MaterialTheme.colorScheme.onSurface,

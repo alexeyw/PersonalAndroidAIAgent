@@ -37,7 +37,9 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.outlined.Add
@@ -99,6 +101,14 @@ private val ChatHorizontalPadding = 16.dp
 /** Vertical gap between consecutive chat-message rows. */
 private val ChatRowGap = 12.dp
 
+/**
+ * Bottom clearance reserved under the message list so a short last message
+ * (clamped to the bottom of the scroll range) clears the single-line
+ * agent-status console pill sitting above the composer. Sized to a one-line
+ * pill (~mono line + its vertical padding).
+ */
+private val ChatConsoleClearance = 40.dp
+
 /** Width of the drawer overlay panel (Material spec for navigation drawers). */
 private val DrawerWidth = 320.dp
 
@@ -150,6 +160,7 @@ fun ChatHomeContent(
     modifier: Modifier = Modifier,
     callbacks: ChatHomeCallbacks = noopChatHomeCallbacks(),
     markdownRenderer: (@Composable (String) -> Unit)? = null,
+    messageListState: LazyListState = rememberLazyListState(),
 ) {
     Box(modifier = modifier.fillMaxSize()) {
         Scaffold(
@@ -175,6 +186,7 @@ fun ChatHomeContent(
                 callbacks = callbacks,
                 padding = padding,
                 markdownRenderer = markdownRenderer,
+                messageListState = messageListState,
             )
         }
         // Drawer slide-in honours `animations.md §Chat` — 280 ms emphasised
@@ -406,6 +418,7 @@ private fun ChatHomeBody(
     callbacks: ChatHomeCallbacks,
     padding: PaddingValues,
     markdownRenderer: (@Composable (String) -> Unit)?,
+    messageListState: LazyListState,
 ) {
     when (state.visualState) {
         ChatHomeVisualState.Loading -> ChatHomeLoadingBody(padding = padding)
@@ -415,6 +428,7 @@ private fun ChatHomeBody(
             callbacks = callbacks,
             padding = padding,
             markdownRenderer = markdownRenderer,
+            listState = messageListState,
         )
     }
 }
@@ -578,6 +592,7 @@ private fun ChatHomeMessageList(
     callbacks: ChatHomeCallbacks,
     padding: PaddingValues,
     markdownRenderer: (@Composable (String) -> Unit)?,
+    listState: LazyListState,
 ) {
     // Compose the Scaffold-provided insets with the surface's own 16dp
     // horizontal padding into a single `contentPadding` value. Applying
@@ -589,9 +604,14 @@ private fun ChatHomeMessageList(
         start = padding.calculateStartPadding(LocalLayoutDirection.current) + ChatHorizontalPadding,
         end = padding.calculateEndPadding(LocalLayoutDirection.current) + ChatHorizontalPadding,
         top = padding.calculateTopPadding() + KnotworkTheme.spacing.sp2,
-        bottom = padding.calculateBottomPadding() + KnotworkTheme.spacing.sp2,
+        // Extra bottom clearance so a short last message that clamps to the
+        // bottom of the scroll range rests clear of the single-line agent-status
+        // console pill that sits just above the composer, instead of tucking
+        // under it.
+        bottom = padding.calculateBottomPadding() + KnotworkTheme.spacing.sp2 + ChatConsoleClearance,
     )
     LazyColumn(
+        state = listState,
         modifier = Modifier.fillMaxSize(),
         contentPadding = mergedContentPadding,
         verticalArrangement = Arrangement.spacedBy(ChatRowGap),

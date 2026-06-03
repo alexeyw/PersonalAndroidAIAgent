@@ -6,6 +6,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -40,13 +41,15 @@ import app.knotwork.design.tokens.KnotworkTextStyles
 @Composable
 fun ProviderPickerScreen(onPick: (ProviderId) -> Unit, onBack: () -> Unit) {
     Scaffold(
+        containerColor = MaterialTheme.colorScheme.surface,
+        contentWindowInsets = WindowInsets(left = 0, top = 0, right = 0, bottom = 0),
         topBar = {
             app.knotwork.design.components.topbar.KnotworkTopAppBarShell {
                 TopAppBar(
                     title = {
                         Text(
                             text = stringResource(R.string.settings_provider_picker_title),
-                            style = KnotworkTextStyles.TitleLg,
+                            style = KnotworkTextStyles.TitleMd,
                             color = MaterialTheme.colorScheme.onSurface,
                         )
                     },
@@ -60,6 +63,7 @@ fun ProviderPickerScreen(onPick: (ProviderId) -> Unit, onBack: () -> Unit) {
                     },
                     colors = TopAppBarDefaults.topAppBarColors(
                         containerColor = MaterialTheme.colorScheme.surface,
+                        titleContentColor = MaterialTheme.colorScheme.onSurface,
                     ),
                 )
             }

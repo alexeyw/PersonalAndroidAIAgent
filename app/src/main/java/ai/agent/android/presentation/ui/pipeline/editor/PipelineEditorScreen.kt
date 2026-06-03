@@ -11,6 +11,8 @@ import ai.agent.android.presentation.ui.orchestrator.PromptPreviewState
 import ai.agent.android.presentation.ui.orchestrator.components.NodeContextConfigSection
 import ai.agent.android.presentation.ui.orchestrator.components.PromptPresetPickerDialog
 import ai.agent.android.presentation.ui.orchestrator.components.SavePromptAsPresetDialog
+import ai.agent.android.presentation.ui.orchestrator.presets.PipelinePresetsViewModel
+import ai.agent.android.presentation.ui.orchestrator.presets.PresetPickerSheet
 import ai.agent.android.presentation.ui.orchestrator.presets.SaveAsPresetDialog
 import ai.agent.android.presentation.ui.pipeline.editor.canvas.formatScalePercent
 import ai.agent.android.presentation.ui.pipeline.editor.config.NodeConfigCodec
@@ -61,6 +63,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import app.knotwork.design.components.controls.KnotworkField
 import app.knotwork.design.components.controls.KnotworkTextField
 import app.knotwork.design.components.pipelineeditor.EditorPrimaryAction
@@ -130,6 +133,11 @@ fun PipelineEditorScreen(viewModel: OrchestratorViewModel, onBack: () -> Unit) {
     // Save-as-preset dialog state — true while the dialog is visible, dismissed
     // on cancel or after submission.
     var saveAsPresetOpen by remember { mutableStateOf(false) }
+    // Preset-picker sheet visibility — opened from the empty-pipeline state's
+    // "From template" CTA. On pick, the preset is materialised into a fresh
+    // pipeline and the editor swaps onto it (see the `pendingPipelineIdFromPreset`
+    // effect below).
+    var showPresetPicker by remember { mutableStateOf(false) }
     // Screen-local clock driving the [RunStatusBanner] elapsed-seconds metric.
     // Reset to 0 every time a new run starts; ticks ~10 Hz while running so the
     // banner reads ~"4.2 s" rather than jumping by whole seconds. Stops when
@@ -446,13 +454,7 @@ fun PipelineEditorScreen(viewModel: OrchestratorViewModel, onBack: () -> Unit) {
                 )
                 editor.workingContextConfig = NodeContextConfig.ALL_ENABLED
             },
-            onFromTemplate = {
-                // Template gallery is tracked separately; surface a hint so the
-                // CTA isn't a silent no-op while we land the picker.
-                scope.launch {
-                    snackbarHostState.showSnackbar("Template gallery arrives in a follow-up task.")
-                }
-            },
+            onFromTemplate = { showPresetPicker = true },
             onFocusNode = viewModel::requestFocusNode,
             onAutoFix = {
                 val outcome = ValidationAutoFix.apply(pipeline, validationErrors)
@@ -886,6 +888,37 @@ fun PipelineEditorScreen(viewModel: OrchestratorViewModel, onBack: () -> Unit) {
                     )
                     saveAsPresetOpen = false
                 },
+            )
+        }
+
+        // "From template" picker — fills the CURRENT (empty) pipeline from a
+        // preset rather than spawning a new library row: the regenerated graph
+        // replaces the current pipeline's nodes / connections in place (see
+        // OrchestratorViewModel.applyPresetToCurrentPipeline). The presets
+        // ViewModel here only supplies the catalogue (tabs / categories / list).
+        //
+        // It is resolved lazily inside this branch (not as a screen parameter)
+        // so the editor only touches Hilt when the picker is actually opened —
+        // composable tests that drive the editor with a manual
+        // OrchestratorViewModel and never open the picker stay Hilt-free.
+        if (showPresetPicker) {
+            val presetsViewModel: PipelinePresetsViewModel = hiltViewModel()
+            val presetsState by presetsViewModel.uiState.collectAsState()
+            PresetPickerSheet(
+                state = presetsState,
+                onTabSelected = presetsViewModel::selectTab,
+                onCategorySelected = presetsViewModel::selectCategory,
+                onUsePreset = { presetId ->
+                    // The screen-local EditorState belongs to the (empty) graph
+                    // we are replacing. Drop its undo/redo history and transient
+                    // selection so a stale Undo snapshot can't clobber the
+                    // freshly loaded preset.
+                    editor.undoRedo.reset()
+                    editor.clearTransient()
+                    viewModel.applyPresetToCurrentPipeline(presetId)
+                    showPresetPicker = false
+                },
+                onDismiss = { showPresetPicker = false },
             )
         }
 

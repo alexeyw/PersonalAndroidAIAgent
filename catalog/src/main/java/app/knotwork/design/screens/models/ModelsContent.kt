@@ -136,15 +136,9 @@ private fun ModelsTopBar(state: ModelsViewState, strings: ModelsStrings, callbac
                 )
             }
         },
-        actions = {
-            IconButton(onClick = callbacks.onOverflowMenu) {
-                Icon(
-                    imageVector = AppIcons.More,
-                    contentDescription = strings.overflowCd,
-                    tint = MaterialTheme.colorScheme.onSurface,
-                )
-            }
-        },
+        // No top-bar overflow: the model-management actions it would host are
+        // not part of v0.x, so the affordance is omitted rather than shown as a
+        // dead button.
         colors = TopAppBarDefaults.topAppBarColors(
             containerColor = MaterialTheme.colorScheme.surface,
             titleContentColor = MaterialTheme.colorScheme.onSurface,
@@ -216,7 +210,7 @@ private fun ModelsBody(
     ) {
         state.active?.let { active ->
             item(key = "active") {
-                ActiveModelCard(active = active, strings = strings, onClick = callbacks.onActiveOpen)
+                ActiveModelCard(active = active, strings = strings)
             }
         }
         item(key = "hf-section") {
@@ -338,7 +332,10 @@ private fun SectionHeader(label: String, modifier: Modifier = Modifier, trailing
 }
 
 @Composable
-private fun ActiveModelCard(active: ActiveModelRow, strings: ModelsStrings, onClick: () -> Unit) {
+private fun ActiveModelCard(active: ActiveModelRow, strings: ModelsStrings) {
+    // Non-interactive status card: there is no active-model detail surface in
+    // v0.x, so the card neither clicks nor shows a trailing chevron (a chevron
+    // would falsely imply navigation).
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp3),
@@ -346,7 +343,6 @@ private fun ActiveModelCard(active: ActiveModelRow, strings: ModelsStrings, onCl
             .fillMaxWidth()
             .clip(KnotworkTheme.shapes.md)
             .background(color = KnotworkTheme.extended.surface3)
-            .clickable(onClick = onClick, role = Role.Button)
             .padding(horizontal = KnotworkTheme.spacing.sp3, vertical = KnotworkTheme.spacing.sp3),
     ) {
         LeadingChipTile(background = MaterialTheme.colorScheme.surface)
@@ -380,11 +376,6 @@ private fun ActiveModelCard(active: ActiveModelRow, strings: ModelsStrings, onCl
                 color = KnotworkTheme.extended.onSurfaceMuted,
             )
         }
-        Icon(
-            imageVector = AppIcons.ArrowR,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurface,
-        )
     }
 }
 

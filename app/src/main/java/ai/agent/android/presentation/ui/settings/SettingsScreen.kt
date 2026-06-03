@@ -75,7 +75,6 @@ import kotlin.math.roundToInt
  * @param onOpenProvider invoked when the user taps a collapsed provider
  *   nav-row; routes to the standalone provider detail screen.
  * @param onOpenAddProvider invoked from the "+ Add provider" action.
- * @param onOpenSearch invoked from the magnifying-glass action.
  */
 @Composable
 fun SettingsScreen(
@@ -85,7 +84,6 @@ fun SettingsScreen(
     onOpenModels: () -> Unit = {},
     onOpenProvider: (ProviderId) -> Unit = {},
     onOpenAddProvider: () -> Unit = {},
-    onOpenSearch: () -> Unit = {},
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val context = LocalContext.current
@@ -120,7 +118,6 @@ fun SettingsScreen(
         onBack = onBack,
         onOpenModels = onOpenModels,
         onOpenAddProvider = onOpenAddProvider,
-        onOpenSearch = onOpenSearch,
         onProviderClick = { id ->
             ProviderId.entries.firstOrNull { it.cloudProvider.id == id }?.let(onOpenProvider)
         },
@@ -581,14 +578,12 @@ private fun buildCallbacks(
     onBack: () -> Unit,
     onOpenModels: () -> Unit,
     onOpenAddProvider: () -> Unit,
-    onOpenSearch: () -> Unit,
     onProviderClick: (String) -> Unit,
     onExportClick: () -> Unit,
     onImportClick: () -> Unit,
     onRestart: () -> Unit,
 ): SettingsCallbacks = SettingsCallbacks(
     onBack = onBack,
-    onSearchClick = onOpenSearch,
     onSystemInstructionsChange = viewModel::updateSystemInstructions,
     onInsertVariableClick = { /* sheet wiring lands in a follow-up; chip row already inserts. */ },
     onChipInsert = viewModel::insertVariable,
@@ -616,7 +611,6 @@ private fun buildCallbacks(
     },
     onResetLlmDefaults = viewModel::resetSamplingDefaults,
     onManageModelsClick = onOpenModels,
-    onChangeModelClick = onOpenModels,
     onBackendSelected = viewModel::setLocalModelBackend,
     onTestBackendClick = viewModel::runBackendProbe,
     onProviderRowClick = onProviderClick,

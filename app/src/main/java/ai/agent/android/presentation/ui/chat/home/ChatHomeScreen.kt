@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.outlined.Check
@@ -42,6 +43,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalClipboardManager
@@ -122,6 +124,50 @@ fun ChatHomeScreen(
     val installedModels by viewModel.installedModels.collectAsStateWithLifecycle()
     val activeModelId by viewModel.activeModelId.collectAsStateWithLifecycle()
     val availablePipelines by viewModel.availablePipelinesFlow.collectAsStateWithLifecycle()
+    val currentSessionId by viewModel.currentSessionId.collectAsStateWithLifecycle()
+    val chatListState = rememberLazyListState()
+
+    // Auto-scroll for the message list, re-armed on every thread switch.
+    //  1. Opening a thread jumps to the very end — but only once the list has
+    //     actually laid out its items. The `snapshotFlow { … totalItemsCount }`
+    //     wait is essential: the list is composed only after the messages
+    //     arrive (Empty → Idle), so scrolling in the same frame would hit an
+    //     unmeasured list and silently no-op (the bug in the first attempt).
+    //  2. After that baseline, each newly appended message (user or agent) is
+    //     revealed per the spec — top-aligned when taller than the viewport,
+    //     otherwise bottom-aligned. Nothing moves when the conversation already
+    //     fits (the scroll calls clamp to the current position).
+    LaunchedEffect(currentSessionId) {
+        if (currentSessionId.isBlank()) return@LaunchedEffect
+        var knownMessages = -1
+        var knownItems = -1
+        // Observe BOTH the message count and the rendered item count:
+        //  - `messages.size` grows by one for each appended user/agent row (and
+        //    stays correct even when a generating-loader item is swapped for the
+        //    agent's final message, which leaves the rendered count flat);
+        //  - `layoutInfo.totalItemsCount` also captures the trailing service rows
+        //    (the generating loader and the error tile) that are NOT part of
+        //    `messages`, so those scroll into view too.
+        // On either growth (or a freshly opened thread) we scroll to the list's
+        // real last item. `scrollToItem` is reliable on its own: a short last
+        // item clamps to the bottom (bottom-aligned), a tall one aligns its top
+        // to the viewport (top-aligned), and a list that already fits is a no-op.
+        snapshotFlow { messages.size to chatListState.layoutInfo.totalItemsCount }
+            .collect { (messageCount, itemCount) ->
+                if (messageCount <= 0 || itemCount <= 0) {
+                    knownMessages = messageCount
+                    knownItems = itemCount
+                    return@collect
+                }
+                val opened = knownMessages < 0
+                val grew = messageCount > knownMessages || itemCount > knownItems
+                if (opened || grew) {
+                    chatListState.scrollToItem(itemCount - 1)
+                }
+                knownMessages = messageCount
+                knownItems = itemCount
+            }
+    }
 
     var debugPickerExpanded by remember { mutableStateOf(false) }
     var overflowExpanded by remember { mutableStateOf(false) }
@@ -347,6 +393,7 @@ fun ChatHomeScreen(
                     colors = markdownColors,
                 )
             },
+            messageListState = chatListState,
         )
         SnackbarHost(
             hostState = snackbarHostState,

@@ -94,9 +94,13 @@ fun ModelsScreen(modifier: Modifier = Modifier, viewModel: ModelsViewModel = hil
                     ?.let { viewModel.deleteModel(it.id) }
             },
             onCustomDownloadCancel = { viewModel.cancelDownload() },
-            onActiveOpen = {},
-            onOverflowMenu = {},
-            onRetry = {},
+            // `onActiveOpen` / `onOverflowMenu` are intentionally left at their
+            // default no-ops: the catalog no longer renders those affordances
+            // (the active-model card is a passive status row and the TopAppBar
+            // has no overflow), so there is nothing to wire. `onRetry` only
+            // fires in `ModelsVisualState.Error`, which this mapper never
+            // produces — download failures surface as a transient Snackbar.
+            onRetry = { /* unreachable: this screen never enters the Error state. */ },
         ),
     )
 }

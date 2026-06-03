@@ -193,6 +193,16 @@ private fun FieldLabel(text: String) {
     )
 }
 
+/** Muted helper caption rendered under a field to explain its purpose. */
+@Composable
+private fun FieldCaption(text: String) {
+    Text(
+        text = text,
+        style = KnotworkTextStyles.BodySm,
+        color = KnotworkTheme.extended.onSurfaceMuted,
+    )
+}
+
 /** Inline error rendered under a field when validation fails. */
 @Composable
 private fun InlineError(failure: ValidationFailure?) {
@@ -804,14 +814,34 @@ private fun ClarificationFormBody(
         error = errors[FieldId.QUICK_REPLIES],
         onChange = { next -> onChange(config.copy(quickReplies = next)) },
     )
-    TextField(
-        label = stringResource(R.string.knotwork_node_field_timeout_optional),
-        value = config.timeoutMs?.toString().orEmpty(),
-        error = errors[FieldId.TIMEOUT_OPTIONAL],
-        singleLine = true,
-        onChange = { next -> onChange(config.copy(timeoutMs = next.toIntOrNull())) },
+    // Timeout is edited in whole seconds (0–360). 0 means "no timeout" and
+    // maps back to a null `timeoutMs`; any other value is stored as
+    // milliseconds. A slider replaces the old free-text ms field so the unit
+    // and bounds are unambiguous.
+    val timeoutSeconds = ((config.timeoutMs ?: 0) / MILLIS_PER_SECOND).coerceIn(0, CLARIFY_TIMEOUT_MAX_SECONDS)
+    KnotworkParamSlider(
+        label = stringResource(R.string.knotwork_node_field_timeout_seconds),
+        valueLabel = if (timeoutSeconds == 0) {
+            stringResource(R.string.knotwork_node_field_timeout_none)
+        } else {
+            stringResource(R.string.knotwork_node_field_timeout_seconds_value, timeoutSeconds)
+        },
+        value = timeoutSeconds.toFloat(),
+        onValueChange = { next ->
+            val secs = next.toInt()
+            onChange(config.copy(timeoutMs = if (secs == 0) null else secs * MILLIS_PER_SECOND))
+        },
+        valueRange = 0f..CLARIFY_TIMEOUT_MAX_SECONDS.toFloat(),
+        steps = 0,
+        errorText = errors[FieldId.TIMEOUT_OPTIONAL]?.let { stringResource(it.stringRes) },
     )
 }
+
+/** Milliseconds per second — Clarify timeout slider works in whole seconds. */
+private const val MILLIS_PER_SECOND: Int = 1_000
+
+/** Upper bound (seconds) of the Clarify wait-timeout slider. */
+private const val CLARIFY_TIMEOUT_MAX_SECONDS: Int = 360
 
 /**
  * Comma-separated quick-reply editor.
@@ -847,6 +877,7 @@ private fun QuickRepliesField(replies: List<String>, error: ValidationFailure?, 
     }
     Column(verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp1)) {
         FieldLabel(text = stringResource(R.string.knotwork_node_field_quick_replies))
+        FieldCaption(text = stringResource(R.string.knotwork_node_field_quick_replies_help))
         OutlinedTextField(
             value = rawText,
             onValueChange = { next ->
@@ -1218,6 +1249,7 @@ private fun QueueProcessorFormBody(
         singleLine = true,
         onChange = { next -> onChange(config.copy(inputList = next)) },
     )
+    FieldCaption(text = stringResource(R.string.knotwork_node_field_input_list_help))
     TextField(
         label = stringResource(R.string.knotwork_node_field_item_variable),
         value = config.itemVariable,

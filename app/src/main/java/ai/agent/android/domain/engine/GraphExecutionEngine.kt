@@ -504,6 +504,12 @@ class GraphExecutionEngine @Inject constructor(
             val matchedEdge = edges.find { it.label?.equals(routingKey, ignoreCase = true) == true }
                 ?: edges.find { !it.label.isNullOrBlank() && routingKey.contains(it.label, ignoreCase = true) }
             matchedEdge?.targetNodeId ?: edges.firstOrNull()?.targetNodeId
+        } else if (currentNode.type == NodeType.EVALUATION && routingKey != null) {
+            // EVALUATION emits a Pass / Retry / Fail verdict as the routing key;
+            // route to the edge whose label matches the verdict, falling back to
+            // the first outgoing edge when the verdict has no dedicated port.
+            edges.find { it.label?.equals(routingKey, ignoreCase = true) == true }?.targetNodeId
+                ?: edges.firstOrNull()?.targetNodeId
         } else {
             edges.firstOrNull()?.targetNodeId
         }

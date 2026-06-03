@@ -64,6 +64,39 @@ details.
     22 dp and badge 14 dp / Inter 700 / primary fill; bottom-nav on `surface-2`
     with a hairline top divider and Inter 11 sp labels.
 
+### Fixed
+
+- **UI functional verification — every control does something** (Phase 26 / Task 4/10):
+  a screen-by-screen sweep wiring orphaned callbacks, fixing node-config
+  forms, and removing dead / misleading affordances.
+  - Pipeline editor: the empty-state **"From template"** CTA now fills the
+    current pipeline from a chosen preset (was a "coming soon" Snackbar); the
+    **EVALUATION** node now routes through its Pass / Retry / Fail output ports
+    based on the model's verdict (was: always took the first edge).
+  - Pipeline library: **Import JSON** now opens a real document picker and
+    imports the pipeline (with a schema-mismatch confirm); the row subtitle
+    lists node types in execution order (walked from INPUT) rather than
+    storage order. Monitoring **Retry** reloads the system-log stream.
+  - Node config: TOOL "Auto" no longer blocks Save; the QUEUE input-list
+    expression is optional with a helper; CLARIFY gains a quick-replies helper
+    and a 0–360 s timeout slider (0 = none).
+  - Tools: discovered AppFunctions are hidden from the list (kept callable by
+    the agent); the ToolDetail and Add-MCP-server top bars now match the app
+    chrome.
+  - Removed affordances that did nothing or misled: top-bar overflow menus
+    (Library / Tools / Models), the More and Settings search icons (the latter
+    opened an empty sheet), the Models active-model chevron, and the duplicate
+    Settings "Change" link. Memory's search field can now be dismissed without
+    first typing a query. Provider picker / detail screens aligned to the
+    standard chrome.
+  - Closed the `MoreViewModel` and `ProviderDetailViewModel` unit-test gaps;
+    added a regression asserting the first-launch seeded pipeline passes
+    `PipelineGraph.validate()` with zero errors.
+  - Chat auto-scroll: opening a thread jumps to the latest message; a newly
+    appended message (user or agent) is revealed automatically — top-aligned
+    when it is taller than the screen, otherwise bottom-aligned — and nothing
+    scrolls when the whole conversation already fits.
+
 ## [0.3.0] - 2026-05-30
 
 Rolls up the post-`0.2.0` work that landed on `main`: the complete long-term

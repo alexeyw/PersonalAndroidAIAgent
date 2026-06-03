@@ -139,13 +139,15 @@ class NodeConfigValidationTest {
     }
 
     @Test
-    fun `given ToolConfig with empty toolId when validate then REQUIRED`() {
+    fun `given ToolConfig with empty toolId (Auto) when validate then no TOOL_ID error`() {
+        // A blank toolId is the "Auto" selection — the agent picks the tool at
+        // run time — so it is valid and must not block Save.
         val errors = NodeConfigValidation.validate(
             config = ToolConfig(title = "tool", toolId = ""),
             peerTitles = noPeers,
         )
 
-        assertEquals(ValidationFailure.REQUIRED, errors[FieldId.TOOL_ID])
+        assertNull(errors[FieldId.TOOL_ID])
     }
 
     @Test

@@ -3,6 +3,7 @@ package ai.agent.android.presentation.ui.tools
 import ai.agent.android.domain.models.McpConnectionStatus
 import ai.agent.android.domain.models.McpServerConfig
 import ai.agent.android.domain.models.McpTool
+import ai.agent.android.domain.models.ToolSource
 import ai.agent.android.domain.repositories.McpServerRepository
 import ai.agent.android.domain.repositories.SettingsRepository
 import ai.agent.android.domain.repositories.ToolRepository
@@ -48,7 +49,12 @@ class ToolsViewModel @Inject constructor(
 
     init {
         viewModelScope.launch {
+            // Discovered on-device AppFunctions are hidden from the Tools screen —
+            // they are uninformative placeholders today (no human-readable metadata)
+            // and clutter the built-in list. They remain callable by the agent via
+            // ToolRepository.getAvailableTools; only this display path filters them.
             val tools = toolRepository.getAllLocalTools()
+                .filter { it.source != ToolSource.APP_FUNCTION }
             _uiState.update { it.copy(localTools = tools) }
         }
 

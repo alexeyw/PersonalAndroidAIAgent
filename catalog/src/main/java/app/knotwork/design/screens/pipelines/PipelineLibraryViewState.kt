@@ -171,7 +171,6 @@ class PipelineLibraryCallbacks(
     val onSaveAsPreset: (String) -> Unit = {},
     val onImportJson: () -> Unit = {},
     val onOpenDrawer: () -> Unit = {},
-    val onTopOverflow: () -> Unit = {},
     val onNewPipeline: () -> Unit = {},
     val onBrowseTemplates: () -> Unit = {},
     val onErrorRetry: () -> Unit = {},

@@ -114,7 +114,10 @@ object DefaultPrompts {
      * expected to inspect a subtask's result and report success / what went wrong.
      */
     const val EVALUATION_PROMPT = "You are a Task Evaluator. Analyze the result of the executed subtask and " +
-        "determine if it was successful. If not, explain what went wrong and how to fix it."
+        "determine if it was successful. Begin your reply with a single verdict token on its own first line — " +
+        "exactly one of PASS, RETRY, or FAIL — then explain your reasoning. Use PASS when the result satisfies " +
+        "the task, RETRY when another attempt could plausibly fix it, and FAIL when the task cannot be completed. " +
+        "The verdict routes the pipeline through the node's matching output port."
 
     /**
      * Default `systemPrompt` for an [NodeType.SUMMARY] node. The model is

@@ -126,4 +126,10 @@
     <string name="orchestrator_preset_manager_deleted">Preset deleted</string>
     <string name="orchestrator_preset_manager_delete_title">Delete preset?</string>
     <string name="orchestrator_preset_manager_delete_confirm">Delete the preset \"%1$s\"? This cannot be undone.</string>
+
+    <!-- Pipeline JSON import (library) -->
+    <string name="orchestrator_library_import_unreadable">Selected file could not be read.</string>
+    <string name="orchestrator_library_import_schema_title">Schema mismatch</string>
+    <string name="orchestrator_library_import_schema_body" tools:ignore="PluralsCandidate">This pipeline was written for schema v%1$d but this build expects v%2$d. Some configuration may not import cleanly.</string>
+    <string name="orchestrator_library_import_anyway">Import anyway</string>
 </resources>

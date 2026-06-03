@@ -344,8 +344,10 @@ exist:
   pipeline's `⋮` menu). These live in the app's local database.
 
 Spawn a pipeline from a preset with the FAB's **+ From preset** option
-(see above); loading a preset always creates a *fresh* pipeline with new
-ids, so the template is never modified. Presets are interchangeable with
+(see above), or — when you open the editor on an empty pipeline — tap the
+canvas's **From template** button to pick a preset without leaving the
+editor. Either way, loading a preset always creates a *fresh* pipeline
+with new ids, so the template is never modified. Presets are interchangeable with
 the [browser pipeline editor](#browser-pipeline-editor): a bundled preset
 can be exported as a `*.preset.json` file (see below) and imported into
 the editor, and the editor can export its own `*.preset.json` for import

@@ -56,7 +56,12 @@ fun TaskMonitorScreen(
                 }
             }
         },
-        onRetry = {},
+        // `onRetry` only fires in the catalog's Error state, which this mapper
+        // never produces: the view state is folded purely from reactive flows
+        // (`getSessionsFlow` + `getWorkInfosFlow` + `activeSessionsState`) that
+        // self-heal on the next emission, so there is no failed-load surface to
+        // recover from here.
+        onRetry = { /* unreachable: this screen never enters the Error state. */ },
     )
 
     TaskMonitorContent(state = viewState, modifier = modifier, strings = strings, callbacks = callbacks)
