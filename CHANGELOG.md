@@ -64,6 +64,17 @@ details.
     22 dp and badge 14 dp / Inter 700 / primary fill; bottom-nav on `surface-2`
     with a hairline top divider and Inter 11 sp labels.
 
+### Removed
+
+- **Dead string resources** (Phase 26 / Task 5/10): removed 54 unused string
+  resources that lingered as legacy duplicates after screen bodies moved into
+  the `:catalog` module — 52 from the app's `strings_*.xml` files (the fully
+  orphaned `strings_tools.xml` was deleted outright) and 2 `knotwork_*` strings
+  from the catalog. Their `UnusedResources` entries, plus 6 now-stale
+  `PluralsCandidate` / `TypographyEllipsis` entries that pointed at the deleted
+  strings, were pruned from `app/lint-baseline.xml`. detekt's
+  `UnusedPrivate*` rules were already clean; no code symbols were removed.
+
 ### Fixed
 
 - **UI functional verification — every control does something** (Phase 26 / Task 4/10):

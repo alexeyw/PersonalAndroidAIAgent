@@ -188,7 +188,6 @@
     <string name="knotwork_tools_empty_title">No tool servers connected</string>
     <string name="knotwork_tools_empty_subtitle">Connect an MCP server to give the agent capabilities like web search, file access, or shell.</string>
     <string name="knotwork_tools_empty_cta">+ Connect server</string>
-    <string name="knotwork_tools_empty_learn">Learn about MCP</string>
     <!--
         Top-bar subtitle: "N built-in · M MCP". Quantity tracks the built-in count;
         the MCP count interpolates as-is regardless of quantity class.
@@ -308,8 +307,6 @@
     <string name="knotwork_settings_verbose_memory_logging_label">Verbose memory logging</string>
     <string name="knotwork_settings_verbose_memory_logging_hint">Show memory retrieval hits and scores in the console, and log compaction details.</string>
     <string name="knotwork_settings_reset_button">Reset all settings</string>
-
-    <string name="knotwork_settings_restart_required">Backend change requires restart.</string>
     <string name="knotwork_settings_restart_action">Restart</string>
 
     <string name="knotwork_settings_destructive_confirm">Confirm</string>

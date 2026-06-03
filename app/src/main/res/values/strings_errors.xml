@@ -9,10 +9,7 @@
 -->
 <resources>
     <!-- Generic fallbacks -->
-    <string name="errors_generic_unknown">Unknown error</string>
     <string name="errors_generic_unexpected">An unexpected error occurred</string>
-    <string name="errors_generic_unknown_lower">unknown error</string>
-    <string name="errors_generic_invalid_json">invalid JSON</string>
 
     <!-- Chat feature -->
     <string name="errors_chat_pipeline_removed">The pipeline was deleted. Default pipeline is used now.</string>
