@@ -25,9 +25,6 @@
     <!-- Message bubble -->
 
     <!-- Input bar -->
-    <string name="chat_input_placeholder">Ask the agent...</string>
-    <string name="chat_input_stop_cd">Stop generation</string>
-    <string name="chat_input_send_cd">Send</string>
 
     <!-- Console (collapsed + full) -->
     <string name="chat_console_clear_dialog_title">Clear console log?</string>
@@ -59,13 +56,6 @@
     <string name="chat_snackbar_console_line_copied">Line copied</string>
     <string name="chat_console_clear_dialog_confirm">Clear</string>
     <string name="chat_console_clear_dialog_cancel">Cancel</string>
-
-    <!-- Session naming -->
-    <string name="chat_session_imported_default_name">Imported Chat</string>
-    <string name="chat_session_export_fallback_name">Chat</string>
-
-    <!-- Stop-generation suffix appended to the partial agent message persisted on cancel -->
-    <string name="chat_message_stopped_suffix">[stopped]</string>
 
     <!-- ============ ChatHomeScreen debug state picker (debug builds only) ============ -->
     <string name="chat_home_debug_state_empty">Empty</string>
