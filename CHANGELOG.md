@@ -45,6 +45,13 @@ details.
 
 ### Changed
 
+- **`KnotworkChip` un-deprecated** (Phase 26 / Task 5/10): the general-purpose
+  pill chip (`Default / Tonal / Outline` styles + decorative no-`onClick`
+  variant) is reinstated as a supported design-system component rather than a
+  removal target — it fills the decorative-tag / badge role the intent-specific
+  `KnotworkFilterChip` / `KnotworkSuggestionChip` / `KnotworkInputChip` family
+  does not cover. The `@Deprecated` annotation and the preview's stale
+  `@file:Suppress("DEPRECATION")` were removed.
 - **Design-token reconciliation against the Controls & Components spec**
   (Phase 26 / Task 3/10): aligned the Knotwork tokens and shared controls to the
   canonical `tokens.css` source of truth.

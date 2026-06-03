@@ -1,7 +1,3 @@
-@file:Suppress("DEPRECATION") // Preview intentionally renders the legacy `KnotworkChip` one last time
-// before its scheduled removal — the new family is documented through
-// `KnotworkFilterChip` / `KnotworkSuggestionChip` / `KnotworkInputChip` previews.
-
 package app.knotwork.design.components.chips
 
 import androidx.compose.foundation.layout.Arrangement

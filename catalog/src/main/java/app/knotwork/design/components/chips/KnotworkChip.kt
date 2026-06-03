@@ -65,15 +65,6 @@ enum class ChipStyle {
  * @param enabled when `false`, the chip is non-interactive and renders the
  * disabled tone.
  */
-@Deprecated(
-    message = "Use KnotworkFilterChip / KnotworkSuggestionChip / KnotworkInputChip — the spec " +
-        "(`inputs-and-chips.md` §6) splits the chip family by intent. KnotworkChip is kept for one " +
-        "release so existing call sites do not break in the middle of the inputs-and-chips migration.",
-    replaceWith = ReplaceWith(
-        expression = "KnotworkFilterChip(label = label, selected = selected, onClick = onClick ?: {})",
-        imports = ["app.knotwork.design.components.chips.KnotworkFilterChip"],
-    ),
-)
 @Composable
 @Suppress("LongParameterList") // Chip API has a stable shape — collapsing the params hides intent.
 fun KnotworkChip(
