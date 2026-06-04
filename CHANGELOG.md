@@ -130,6 +130,13 @@ details.
 
 ### Fixed
 
+- **Chat token-usage indicator counted a token budget as characters**
+  (Phase 26 / Task 6/10): `GetContextWindowUseCase` compared message
+  **character** lengths against `maxContextLength` (a **token** budget), so the
+  history was truncated to ~¼ of the window and the TopAppBar "tokens used"
+  bar capped at ~25%. It now converts the token budget to characters
+  (`× CHARS_PER_TOKEN`) before truncating. Display-only — the actual prompt and
+  the engine's `maxNumTokens` windowing were already correct.
 - **Deleting a local model now removes its file** (Phase 26 / Task 6/10):
   `LocalModelRepository.deleteModelById` only dropped the Room record, leaving
   the (often multi-GB) weights file orphaned on disk. It now deletes the

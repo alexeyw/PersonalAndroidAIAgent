@@ -58,9 +58,9 @@ class GetContextWindowUseCaseTest {
         )
 
         coEvery { chatRepository.getMessagesForSession(sessionId) } returns flowOf(messages)
-        // Set limit to allow only the last two messages
-        // Length of last two: 21 + 1 (newline) + 19 = 41. Let's set limit to 45.
-        coEvery { settingsRepository.maxContextLength } returns flowOf(45)
+        // Last two messages = 21 + 1 (newline) + 19 = 41 chars; all three = 61 chars.
+        // Budget 12 tokens × CHARS_PER_TOKEN(4) = 48 chars → keep the last two, drop the first.
+        coEvery { settingsRepository.maxContextLength } returns flowOf(12)
 
         val result = getContextWindowUseCase(sessionId)
 
@@ -86,10 +86,12 @@ class GetContextWindowUseCaseTest {
             ChatMessage(1, sessionId, Role.USER, "Short", 1000),
             ChatMessage(2, sessionId, Role.AGENT, "This is a very long message indeed", 2000),
         )
-        // AGENT: This is a very long message indeed -> 41 chars
+        // AGENT: This is a very long message indeed -> 41 chars;
+        // including the older "Short" -> 41 + 1 + 12 = 54 chars.
 
         coEvery { chatRepository.getMessagesForSession(sessionId) } returns flowOf(messages)
-        coEvery { settingsRepository.maxContextLength } returns flowOf(41)
+        // Budget 11 tokens × 4 = 44 chars → only the latest message fits (54 > 44).
+        coEvery { settingsRepository.maxContextLength } returns flowOf(11)
 
         val result = getContextWindowUseCase(sessionId)
 
@@ -107,10 +109,30 @@ class GetContextWindowUseCaseTest {
         // AGENT: This is a very long message indeed -> 41 chars
 
         coEvery { chatRepository.getMessagesForSession(sessionId) } returns flowOf(messages)
-        coEvery { settingsRepository.maxContextLength } returns flowOf(20)
+        // Budget 10 tokens × 4 = 40 chars < 41 → nothing fits.
+        coEvery { settingsRepository.maxContextLength } returns flowOf(10)
 
         val result = getContextWindowUseCase(sessionId)
 
         assertEquals("", result)
+    }
+
+    @Test
+    fun `invoke treats maxContextLength as a token budget not a character budget`() = runTest {
+        // Regression: a 41-character formatted message kept under an
+        // 11-"length" budget proves the budget is interpreted as tokens
+        // (11 × CHARS_PER_TOKEN = 44 chars) rather than characters — the old
+        // behaviour compared the 41-char message against the bare value 11 and
+        // dropped it, truncating history to ~1/4 of the intended window.
+        val sessionId = "session1"
+        val messages = listOf(
+            ChatMessage(1, sessionId, Role.AGENT, "This is a very long message indeed", 1000),
+        )
+        coEvery { chatRepository.getMessagesForSession(sessionId) } returns flowOf(messages)
+        coEvery { settingsRepository.maxContextLength } returns flowOf(11)
+
+        val result = getContextWindowUseCase(sessionId)
+
+        assertEquals("AGENT: This is a very long message indeed", result)
     }
 }
