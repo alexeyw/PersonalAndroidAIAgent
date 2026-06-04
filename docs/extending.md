@@ -555,7 +555,7 @@ three preset-only fields (`category`, `tags`, `description`). The canonical
 contract is `domain/pipelineio/PipelinePresetJsonSerializer.kt` (schema
 version 1); the seven shipped files under `assets/presets/pipelines/` are the
 reference examples. The broadest of them, `showcase_full_agent.json`, is a
-21-node on-device agent: an `INTENT_ROUTER` triages every message into
+22-node on-device agent: an `INTENT_ROUTER` triages every message into
 **chat / factual / task**, and each intent runs a tailored branch —
 
 - *chat* → a direct `LITE_RT` reply;

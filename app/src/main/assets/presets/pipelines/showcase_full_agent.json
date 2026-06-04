@@ -15,7 +15,7 @@
   "updatedAt": 1748304000000,
   "nodes": [
     {
-      "id": "node-5",
+      "id": "node-1",
       "type": "INPUT",
       "position": {
         "x": 58,
@@ -47,7 +47,7 @@
       }
     },
     {
-      "id": "node-7",
+      "id": "node-2",
       "type": "OUTPUT",
       "position": {
         "x": 2007,
@@ -65,11 +65,11 @@
         "conditionComplexity": null
       },
       "contextConfig": {
-        "chatHistory": true,
-        "originalTask": true,
+        "chatHistory": false,
+        "originalTask": false,
         "nodeInput": true,
-        "longTermMemory": true,
-        "toolResults": true
+        "longTermMemory": false,
+        "toolResults": false
       },
       "nodeConfig": {
         "v": 1,
@@ -80,7 +80,7 @@
       }
     },
     {
-      "id": "node-8",
+      "id": "node-3",
       "type": "INTENT_ROUTER",
       "position": {
         "x": 324.3333333333333,
@@ -130,7 +130,7 @@
       }
     },
     {
-      "id": "node-9",
+      "id": "node-4",
       "type": "LITE_RT",
       "position": {
         "x": 1222,
@@ -167,7 +167,7 @@
       }
     },
     {
-      "id": "node-10",
+      "id": "node-5",
       "type": "IF_CONDITION",
       "position": {
         "x": 618,
@@ -201,7 +201,7 @@
       }
     },
     {
-      "id": "node-11",
+      "id": "node-6",
       "type": "TOOL",
       "position": {
         "x": 1424,
@@ -234,7 +234,7 @@
       }
     },
     {
-      "id": "node-12",
+      "id": "node-7",
       "type": "LITE_RT",
       "position": {
         "x": 1180.6666666666667,
@@ -271,7 +271,7 @@
       }
     },
     {
-      "id": "node-13",
+      "id": "node-8",
       "type": "LITE_RT",
       "position": {
         "x": 1683,
@@ -308,7 +308,7 @@
       }
     },
     {
-      "id": "node-14",
+      "id": "node-9",
       "type": "DECOMPOSITION",
       "position": {
         "x": 921,
@@ -341,7 +341,7 @@
       }
     },
     {
-      "id": "node-15",
+      "id": "node-10",
       "type": "QUEUE_PROCESSOR",
       "position": {
         "x": 1186,
@@ -376,7 +376,7 @@
       }
     },
     {
-      "id": "node-16",
+      "id": "node-11",
       "type": "TOOL",
       "position": {
         "x": 1195,
@@ -409,15 +409,15 @@
       }
     },
     {
-      "id": "node-17",
+      "id": "node-12",
       "type": "SUMMARY",
       "position": {
-        "x": 1589.3333333333333,
-        "y": 309
+        "x": 1670,
+        "y": 308
       },
       "label": "Research Synthesis",
       "config": {
-        "systemPrompt": "You are writing the final answer to the user's original factual question, using information that was gathered from several Wikipedia lookups run separately for different sub-topics.\n\nToday is $DATE. Reply in $LANG.\n\nHow to answer:\n- Weave the gathered information into ONE coherent answer to the question. Do not list the sub-topics or describe what each lookup returned — the user only wants the answer.\n- Ground every factual claim strictly in the gathered information. Do not add facts from your own assumptions.\n- Coverage is often partial — some sub-topics may have returned nothing useful (e.g. \"No results found\"). Answer the parts that are supported, and state plainly which parts could not be confirmed instead of filling gaps with guesses.\n- If the question was a comparison or had several parts, make sure the answer addresses each part that has supporting information.\n- Lead with the bottom-line answer, then add the supporting detail that matters. Plain conversational prose — no headings or bullet lists unless the content genuinely needs them.\n- Do not mention \"Wikipedia\", \"lookups\", \"sub-topics\", \"tools\" or the pipeline. Just answer as the assistant.\n\nOutput only the final answer for the user.",
+        "systemPrompt": "You are writing the final answer to the user's original factual question, using information gathered from several Wikipedia lookups run separately for different sub-topics.\n\nToday is $DATE. Reply in $LANG.\n\nHow to answer:\n- Weave the gathered information into ONE coherent answer to the question. Do not list the sub-topics or describe what each lookup returned — the user only wants the answer.\n- Ground every factual claim strictly in the gathered information. Do not add facts from your own assumptions. Copy numbers, names and figures EXACTLY as they appear in the sources — never alter, merge or round digits.\n- Coverage is often partial — some sub-topics may have returned nothing useful (e.g. \"No results found\"). Answer the parts that are supported, and state plainly which parts could not be confirmed instead of guessing.\n- For a comparison, compare the items point by point IN PROSE: for each aspect, give each item's value in a sentence (e.g. \"By size, X is …, whereas Y is …\").\n\nFormatting — strict:\n- Write plain flowing prose in short paragraphs. Nothing else.\n- Do NOT use Markdown tables, headings (#), bold, bullet or numbered lists, or pipe \"|\" characters. The chat cannot render tables reliably, so any table will come out broken.\n\nDo not mention \"Wikipedia\", \"lookups\", \"sub-topics\", \"tools\" or the pipeline. Just answer as the assistant.\n\nOutput only the final answer for the user.",
         "cloudProvider": null,
         "modelPath": null,
         "toolName": null,
@@ -431,19 +431,19 @@
         "originalTask": true,
         "nodeInput": true,
         "longTermMemory": false,
-        "toolResults": true
+        "toolResults": false
       },
       "nodeConfig": {
         "v": 1,
         "type": "SUMMARY",
         "title": "Research Synthesis",
         "format": "CUSTOM",
-        "customPrompt": "You are writing the final answer to the user's original factual question, using information that was gathered from several Wikipedia lookups run separately for different sub-topics.\n\nToday is $DATE. Reply in $LANG.\n\nHow to answer:\n- Weave the gathered information into ONE coherent answer to the question. Do not list the sub-topics or describe what each lookup returned — the user only wants the answer.\n- Ground every factual claim strictly in the gathered information. Do not add facts from your own assumptions.\n- Coverage is often partial — some sub-topics may have returned nothing useful (e.g. \"No results found\"). Answer the parts that are supported, and state plainly which parts could not be confirmed instead of filling gaps with guesses.\n- If the question was a comparison or had several parts, make sure the answer addresses each part that has supporting information.\n- Lead with the bottom-line answer, then add the supporting detail that matters. Plain conversational prose — no headings or bullet lists unless the content genuinely needs them.\n- Do not mention \"Wikipedia\", \"lookups\", \"sub-topics\", \"tools\" or the pipeline. Just answer as the assistant.\n\nOutput only the final answer for the user.",
+        "customPrompt": "You are writing the final answer to the user's original factual question, using information gathered from several Wikipedia lookups run separately for different sub-topics.\n\nToday is $DATE. Reply in $LANG.\n\nHow to answer:\n- Weave the gathered information into ONE coherent answer to the question. Do not list the sub-topics or describe what each lookup returned — the user only wants the answer.\n- Ground every factual claim strictly in the gathered information. Do not add facts from your own assumptions. Copy numbers, names and figures EXACTLY as they appear in the sources — never alter, merge or round digits.\n- Coverage is often partial — some sub-topics may have returned nothing useful (e.g. \"No results found\"). Answer the parts that are supported, and state plainly which parts could not be confirmed instead of guessing.\n- For a comparison, compare the items point by point IN PROSE: for each aspect, give each item's value in a sentence (e.g. \"By size, X is …, whereas Y is …\").\n\nFormatting — strict:\n- Write plain flowing prose in short paragraphs. Nothing else.\n- Do NOT use Markdown tables, headings (#), bold, bullet or numbered lists, or pipe \"|\" characters. The chat cannot render tables reliably, so any table will come out broken.\n\nDo not mention \"Wikipedia\", \"lookups\", \"sub-topics\", \"tools\" or the pipeline. Just answer as the assistant.\n\nOutput only the final answer for the user.",
         "targetLengthChars": 2000
       }
     },
     {
-      "id": "node-18",
+      "id": "node-13",
       "type": "DECOMPOSITION",
       "position": {
         "x": 547,
@@ -476,7 +476,7 @@
       }
     },
     {
-      "id": "node-19",
+      "id": "node-14",
       "type": "QUEUE_PROCESSOR",
       "position": {
         "x": 1092.3333333333333,
@@ -511,7 +511,7 @@
       }
     },
     {
-      "id": "node-20",
+      "id": "node-15",
       "type": "INTENT_ROUTER",
       "position": {
         "x": 190,
@@ -565,7 +565,7 @@
       }
     },
     {
-      "id": "node-21",
+      "id": "node-16",
       "type": "SUMMARY",
       "position": {
         "x": 1411,
@@ -595,11 +595,11 @@
         "title": "Task Synthesis",
         "format": "CUSTOM",
         "customPrompt": "You are writing the final response to the user after an actionable task has been carried out. The task was broken into subtasks, each completed separately — some produced content, some gathered information, some performed actions through tools, some collected the user's own input. Their results are provided to you.\n\nToday is $DATE. Reply in $LANG.\n\nHow to respond:\n- Pull the subtask results together into ONE coherent response that delivers the outcome of the original task. Do not list the subtasks or narrate the process — give the user the result.\n- If the task produced content (a draft, a plan, an answer, a computed value), present that content as the substance of your reply.\n- If actions were performed through tools, state clearly and accurately what was done — but claim an action succeeded ONLY if its result actually confirms it. Never report an action as completed if the result shows it was denied, blocked, failed, or is missing.\n- Be honest about gaps: if part of the task could not be completed, say so plainly and, where useful, tell the user what is needed to finish it. Do not paper over failures or invent outcomes.\n- Ground every statement in the provided results — do not add facts or assume results.\n- Lead with the outcome, then the supporting detail that matters. Plain conversational prose; add structure only if the content genuinely needs it.\n- Do not mention \"subtasks\", \"tools\", \"the plan\" or the pipeline. Speak as the assistant reporting back.\n\nOutput only the final response for the user.",
-        "targetLengthChars": 2000
+        "targetLengthChars": 3000
       }
     },
     {
-      "id": "node-23",
+      "id": "node-17",
       "type": "CLARIFICATION",
       "position": {
         "x": 462,
@@ -633,7 +633,7 @@
       }
     },
     {
-      "id": "node-24",
+      "id": "node-18",
       "type": "LITE_RT",
       "position": {
         "x": 564,
@@ -670,7 +670,7 @@
       }
     },
     {
-      "id": "node-25",
+      "id": "node-19",
       "type": "TOOL",
       "position": {
         "x": 871,
@@ -703,7 +703,7 @@
       }
     },
     {
-      "id": "node-26",
+      "id": "node-20",
       "type": "TOOL",
       "position": {
         "x": 498,
@@ -736,7 +736,7 @@
       }
     },
     {
-      "id": "node-27",
+      "id": "node-21",
       "type": "LITE_RT",
       "position": {
         "x": 559,
@@ -771,97 +771,188 @@
         "maxNewTokens": 2048,
         "stopTokens": []
       }
+    },
+    {
+      "id": "node-22",
+      "type": "LITE_RT",
+      "position": {
+        "x": 1463,
+        "y": 317
+      },
+      "label": "Research Distiller",
+      "config": {
+        "systemPrompt": "You are preparing raw reference material before a final answer is written. Your input contains the user's original question and one or more raw article extracts (some may be long, duplicated, or say \"No results found\").\n\nToday is $DATE. Work in the user's language ($LANG).\n\nProduce a compact fact digest for the next step:\n- Keep only facts relevant to the question, one fact per line as \"Subject — aspect: value\".\n- Copy each figure EXACTLY as written. When a figure is given in two units (e.g. °C and K, or with a bracketed conversion), KEEP ONLY ONE unit and drop the other. Never place two numbers next to each other.\n- One value per aspect. If sources conflict, keep the first one and ignore the rest.\n- If a needed fact is missing or a lookup failed, write \"Subject — aspect: not found\". Do not guess.\n- No intro, no conclusion, no prose — only the fact lines.\n\nOutput the fact lines only.",
+        "cloudProvider": null,
+        "modelPath": null,
+        "toolName": null,
+        "clarificationTimeoutMs": null,
+        "conditionPrompt": null,
+        "conditionKeywords": null,
+        "conditionComplexity": null
+      },
+      "contextConfig": {
+        "chatHistory": false,
+        "originalTask": true,
+        "nodeInput": true,
+        "longTermMemory": false,
+        "toolResults": false
+      },
+      "nodeConfig": {
+        "v": 1,
+        "type": "LITE_RT",
+        "title": "Research Distiller",
+        "modelId": "",
+        "systemPrompt": "You are preparing raw reference material before a final answer is written. Your input contains the user's original question and one or more raw article extracts (some may be long, duplicated, or say \"No results found\").\n\nToday is $DATE. Work in the user's language ($LANG).\n\nProduce a compact fact digest for the next step:\n- Keep only facts relevant to the question, one fact per line as \"Subject — aspect: value\".\n- Copy each figure EXACTLY as written. When a figure is given in two units (e.g. °C and K, or with a bracketed conversion), KEEP ONLY ONE unit and drop the other. Never place two numbers next to each other.\n- One value per aspect. If sources conflict, keep the first one and ignore the rest.\n- If a needed fact is missing or a lookup failed, write \"Subject — aspect: not found\". Do not guess.\n- No intro, no conclusion, no prose — only the fact lines.\n\nOutput the fact lines only.",
+        "temperature": 0.7,
+        "topP": 0.9,
+        "maxNewTokens": 4096,
+        "stopTokens": []
+      }
     }
   ],
   "connections": [
     {
-      "id": "conn-5-output_1-8-input_1",
+      "id": "conn-1-output_1-3-input_1",
+      "fromNodeId": "node-1",
+      "toNodeId": "node-3",
+      "label": null
+    },
+    {
+      "id": "conn-3-output_1-4-input_1",
+      "fromNodeId": "node-3",
+      "toNodeId": "node-4",
+      "label": "Chat"
+    },
+    {
+      "id": "conn-3-output_1-5-input_1",
+      "fromNodeId": "node-3",
+      "toNodeId": "node-5",
+      "label": "Factual"
+    },
+    {
+      "id": "conn-3-output_1-13-input_1",
+      "fromNodeId": "node-3",
+      "toNodeId": "node-13",
+      "label": "Task"
+    },
+    {
+      "id": "conn-4-output_1-2-input_1",
+      "fromNodeId": "node-4",
+      "toNodeId": "node-2",
+      "label": null
+    },
+    {
+      "id": "conn-5-output_1-9-input_1",
       "fromNodeId": "node-5",
+      "toNodeId": "node-9",
+      "label": "True"
+    },
+    {
+      "id": "conn-5-output_2-7-input_1",
+      "fromNodeId": "node-5",
+      "toNodeId": "node-7",
+      "label": "False"
+    },
+    {
+      "id": "conn-6-output_1-8-input_1",
+      "fromNodeId": "node-6",
       "toNodeId": "node-8",
       "label": null
     },
     {
-      "id": "conn-8-output_1-9-input_1",
-      "fromNodeId": "node-8",
-      "toNodeId": "node-9",
-      "label": "Chat"
+      "id": "conn-7-output_1-6-input_1",
+      "fromNodeId": "node-7",
+      "toNodeId": "node-6",
+      "label": null
     },
     {
-      "id": "conn-8-output_1-10-input_1",
+      "id": "conn-8-output_1-2-input_1",
       "fromNodeId": "node-8",
-      "toNodeId": "node-10",
-      "label": "Factual"
+      "toNodeId": "node-2",
+      "label": null
     },
     {
-      "id": "conn-8-output_1-18-input_1",
-      "fromNodeId": "node-8",
-      "toNodeId": "node-18",
-      "label": "Task"
-    },
-    {
-      "id": "conn-9-output_1-7-input_1",
+      "id": "conn-9-output_1-10-input_1",
       "fromNodeId": "node-9",
-      "toNodeId": "node-7",
+      "toNodeId": "node-10",
       "label": null
     },
     {
-      "id": "conn-10-output_1-14-input_1",
+      "id": "conn-10-output_1-11-input_1",
       "fromNodeId": "node-10",
-      "toNodeId": "node-14",
-      "label": "True"
-    },
-    {
-      "id": "conn-10-output_2-12-input_1",
-      "fromNodeId": "node-10",
-      "toNodeId": "node-12",
-      "label": "False"
-    },
-    {
-      "id": "conn-11-output_1-13-input_1",
-      "fromNodeId": "node-11",
-      "toNodeId": "node-13",
-      "label": null
-    },
-    {
-      "id": "conn-12-output_1-11-input_1",
-      "fromNodeId": "node-12",
       "toNodeId": "node-11",
+      "label": "Item"
+    },
+    {
+      "id": "conn-10-output_2-22-input_1",
+      "fromNodeId": "node-10",
+      "toNodeId": "node-22",
+      "label": "Done"
+    },
+    {
+      "id": "conn-11-output_1-10-input_1",
+      "fromNodeId": "node-11",
+      "toNodeId": "node-10",
       "label": null
     },
     {
-      "id": "conn-13-output_1-7-input_1",
+      "id": "conn-12-output_1-2-input_1",
+      "fromNodeId": "node-12",
+      "toNodeId": "node-2",
+      "label": null
+    },
+    {
+      "id": "conn-13-output_1-14-input_1",
       "fromNodeId": "node-13",
-      "toNodeId": "node-7",
+      "toNodeId": "node-14",
       "label": null
     },
     {
       "id": "conn-14-output_1-15-input_1",
       "fromNodeId": "node-14",
       "toNodeId": "node-15",
-      "label": null
-    },
-    {
-      "id": "conn-15-output_1-16-input_1",
-      "fromNodeId": "node-15",
-      "toNodeId": "node-16",
       "label": "Item"
     },
     {
-      "id": "conn-15-output_2-17-input_1",
-      "fromNodeId": "node-15",
-      "toNodeId": "node-17",
+      "id": "conn-14-output_2-16-input_1",
+      "fromNodeId": "node-14",
+      "toNodeId": "node-16",
       "label": "Done"
     },
     {
-      "id": "conn-16-output_1-15-input_1",
+      "id": "conn-15-output_1-17-input_1",
+      "fromNodeId": "node-15",
+      "toNodeId": "node-17",
+      "label": "Clarify"
+    },
+    {
+      "id": "conn-15-output_1-18-input_1",
+      "fromNodeId": "node-15",
+      "toNodeId": "node-18",
+      "label": "Lookup"
+    },
+    {
+      "id": "conn-15-output_1-20-input_1",
+      "fromNodeId": "node-15",
+      "toNodeId": "node-20",
+      "label": "Act"
+    },
+    {
+      "id": "conn-15-output_1-21-input_1",
+      "fromNodeId": "node-15",
+      "toNodeId": "node-21",
+      "label": "Process"
+    },
+    {
+      "id": "conn-16-output_1-2-input_1",
       "fromNodeId": "node-16",
-      "toNodeId": "node-15",
+      "toNodeId": "node-2",
       "label": null
     },
     {
-      "id": "conn-17-output_1-7-input_1",
+      "id": "conn-17-output_1-14-input_1",
       "fromNodeId": "node-17",
-      "toNodeId": "node-7",
+      "toNodeId": "node-14",
       "label": null
     },
     {
@@ -871,75 +962,27 @@
       "label": null
     },
     {
-      "id": "conn-19-output_1-20-input_1",
+      "id": "conn-19-output_1-14-input_1",
       "fromNodeId": "node-19",
-      "toNodeId": "node-20",
-      "label": "Item"
+      "toNodeId": "node-14",
+      "label": null
     },
     {
-      "id": "conn-19-output_2-21-input_1",
-      "fromNodeId": "node-19",
-      "toNodeId": "node-21",
-      "label": "Done"
-    },
-    {
-      "id": "conn-20-output_1-23-input_1",
+      "id": "conn-20-output_1-14-input_1",
       "fromNodeId": "node-20",
-      "toNodeId": "node-23",
-      "label": "Clarify"
+      "toNodeId": "node-14",
+      "label": null
     },
     {
-      "id": "conn-20-output_1-24-input_1",
-      "fromNodeId": "node-20",
-      "toNodeId": "node-24",
-      "label": "Lookup"
-    },
-    {
-      "id": "conn-20-output_1-26-input_1",
-      "fromNodeId": "node-20",
-      "toNodeId": "node-26",
-      "label": "Act"
-    },
-    {
-      "id": "conn-20-output_1-27-input_1",
-      "fromNodeId": "node-20",
-      "toNodeId": "node-27",
-      "label": "Process"
-    },
-    {
-      "id": "conn-21-output_1-7-input_1",
+      "id": "conn-21-output_1-14-input_1",
       "fromNodeId": "node-21",
-      "toNodeId": "node-7",
+      "toNodeId": "node-14",
       "label": null
     },
     {
-      "id": "conn-23-output_1-19-input_1",
-      "fromNodeId": "node-23",
-      "toNodeId": "node-19",
-      "label": null
-    },
-    {
-      "id": "conn-24-output_1-25-input_1",
-      "fromNodeId": "node-24",
-      "toNodeId": "node-25",
-      "label": null
-    },
-    {
-      "id": "conn-25-output_1-19-input_1",
-      "fromNodeId": "node-25",
-      "toNodeId": "node-19",
-      "label": null
-    },
-    {
-      "id": "conn-26-output_1-19-input_1",
-      "fromNodeId": "node-26",
-      "toNodeId": "node-19",
-      "label": null
-    },
-    {
-      "id": "conn-27-output_1-19-input_1",
-      "fromNodeId": "node-27",
-      "toNodeId": "node-19",
+      "id": "conn-22-output_1-12-input_1",
+      "fromNodeId": "node-22",
+      "toNodeId": "node-12",
       "label": null
     }
   ]

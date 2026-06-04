@@ -66,7 +66,7 @@ details.
   Stroke-weight and render-size icon tokens (`IconStroke`, `KnotworkIconSizes`)
   back the family.
 - **`showcase_full_agent` bundled pipeline preset** (Phase 26 / Task 6/10): a
-  seventh bundled preset under `assets/presets/pipelines/` — a 21-node
+  seventh bundled preset under `assets/presets/pipelines/` — a 22-node
   on-device agent that triages each message (chat / factual / task) and runs a
   tailored branch: a direct `LITE_RT` reply for chat; an `IF_CONDITION`
   complexity-gated Wikipedia-lookup path for factual questions (single lookup
