@@ -31,9 +31,13 @@ details.
   flat fields for older documents) on import. **EVALUATION nodes now expose
   three labelled output ports — Pass / Retry / Fail** (was a single generic
   output), matching `GraphExecutionEngine`'s verdict routing; the editor
-  auto-labels the edges and round-trips them. CLOUD keeps an editor-only "auto"
-  provider option. Verified with a full export→import→export round-trip across
-  all 12 node types in a headless browser.
+  auto-labels the edges and round-trips them. The CLOUD provider gains a
+  first-class **Auto** option (a new `CloudProvider.AUTO` catalog value that
+  maps to the domain `"auto"` wire sentinel via `CloudProviderMapper.toWireId`
+  / `fromWireId`) so an auto-routing node survives the editor→app round-trip
+  and an in-app sheet save instead of silently decoding to OpenAI. Verified
+  with a full export→import→export round-trip across all 12 node types in a
+  headless browser.
 - **CI on GitHub Actions** (Phase 26 / Task 2/10): the `.github/workflows/check.yml`
   gate is now tracked in the repository (previously kept locally and gitignored
   because the remote PAT lacked the `workflow` scope). The job runs

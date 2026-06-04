@@ -583,6 +583,7 @@ private fun CloudFormBody(
     SegmentedChipRow(
         label = stringResource(R.string.knotwork_node_field_provider),
         values = listOf(
+            CloudProvider.AUTO to "Auto",
             CloudProvider.OPEN_AI to "OpenAI",
             CloudProvider.ANTHROPIC to "Anthropic",
             CloudProvider.GOOGLE to "Google",

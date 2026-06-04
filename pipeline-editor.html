@@ -3496,8 +3496,11 @@
     // COMPATIBLE; the editor additionally offers "auto" (the domain
     // AUTO_KEY sentinel) which the rich CloudConfig cannot express — it is an
     // editor-only convenience persisted via the flat `cloudProvider` field.
+    // Ids match the catalog `CloudProvider` enum names so the `nodeConfig`
+    // envelope round-trips into the app's NodeConfigSheet. `AUTO` is a real
+    // catalog value (persisted as the flat `cloudProvider = "auto"` sentinel).
     const CLOUD_PROVIDER_OPTIONS = [
-        { id: 'auto',      label: 'Auto (pick at runtime)' },
+        { id: 'AUTO',      label: 'Auto (pick at runtime)' },
         { id: 'OPEN_AI',   label: 'OpenAI' },
         { id: 'ANTHROPIC', label: 'Anthropic' },
         { id: 'GOOGLE',    label: 'Google' },
@@ -3514,7 +3517,7 @@
             case 'ANTHROPIC': return 'anthropic';
             case 'GOOGLE':    return 'google';
             case 'COMPATIBLE': return 'deepseek';
-            case 'auto':      return 'auto';
+            case 'AUTO':      return 'auto';
             default:          return 'auto';
         }
     }
@@ -3527,8 +3530,8 @@
             case 'google':    return 'GOOGLE';
             case 'deepseek':
             case 'ollama':    return 'COMPATIBLE';
-            case 'auto':      return 'auto';
-            default:          return 'auto';
+            case 'auto':      return 'AUTO';
+            default:          return 'AUTO';
         }
     }
 
@@ -3542,7 +3545,7 @@
             case 'OUTPUT':      return { ...base, format: 'PLAIN_TEXT', systemPrompt: '' };
             case 'LITE_RT':     return { ...base, modelId: '', systemPrompt: D.LITE_RT || '',
                 temperature: 0.7, topP: 0.9, maxNewTokens: 512, stopTokens: [] };
-            case 'CLOUD':       return { ...base, provider: 'auto', model: '', systemPrompt: D.CLOUD || '',
+            case 'CLOUD':       return { ...base, provider: 'AUTO', model: '', systemPrompt: D.CLOUD || '',
                 temperature: 0.7, maxTokens: 1024, timeoutMs: 30000 };
             case 'INTENT_ROUTER': return { ...base,
                 classes: [{ name: 'simple', description: '', examples: [] },
@@ -3624,7 +3627,11 @@
                 env.stopTokens = (cfg.stopTokens || []).slice();
                 break;
             case 'CLOUD':
-                if (cfg.provider && cfg.provider !== 'auto') env.provider = cfg.provider;
+                // Always emit the provider (including AUTO) — the app's
+                // NodeConfigCodec maps AUTO back to the flat "auto" sentinel, so
+                // omitting it would make an auto node decode as OpenAI and lose
+                // auto-routing on the next sheet save.
+                env.provider = cfg.provider || 'AUTO';
                 env.model = cfg.model ?? '';
                 env.systemPrompt = cfg.systemPrompt ?? '';
                 env.temperature = Number(cfg.temperature ?? 0.7);
@@ -3706,7 +3713,7 @@
                 cfg.stopTokens = strArr(env.stopTokens);
                 break;
             case 'CLOUD':
-                cfg.provider = env.provider ? String(env.provider) : 'auto';
+                cfg.provider = env.provider ? String(env.provider) : 'AUTO';
                 if (env.model != null) cfg.model = String(env.model);
                 if (env.systemPrompt != null) cfg.systemPrompt = String(env.systemPrompt);
                 cfg.temperature = num(env.temperature, 0.7);

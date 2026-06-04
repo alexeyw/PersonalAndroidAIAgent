@@ -39,8 +39,14 @@ enum class OutputFormat { PLAIN_TEXT, MARKDOWN, JSON }
  */
 data class LocalModelOption(val id: String, val displayName: String, val isActive: Boolean)
 
-/** Cloud LLM provider for [CloudConfig]. */
-enum class CloudProvider { OPEN_AI, ANTHROPIC, GOOGLE, COMPATIBLE }
+/**
+ * Cloud LLM provider for [CloudConfig].
+ *
+ * [AUTO] defers the choice to runtime — the executor picks a provider from the
+ * configured API keys. It maps to the domain `CloudProvider.AUTO_KEY` wire
+ * sentinel (`"auto"`) rather than a concrete provider.
+ */
+enum class CloudProvider { OPEN_AI, ANTHROPIC, GOOGLE, COMPATIBLE, AUTO }
 
 /** Summary rendering style for [SummaryConfig]. */
 enum class SummaryFormat { BULLETS, PARAGRAPH, CUSTOM }

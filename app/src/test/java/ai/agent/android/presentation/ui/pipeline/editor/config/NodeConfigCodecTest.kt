@@ -4,6 +4,7 @@ import ai.agent.android.domain.models.NodeModel
 import ai.agent.android.domain.models.NodeType
 import app.knotwork.design.components.pipelineeditor.ClarificationConfig
 import app.knotwork.design.components.pipelineeditor.CloudConfig
+import app.knotwork.design.components.pipelineeditor.CloudProvider
 import app.knotwork.design.components.pipelineeditor.IfConditionConfig
 import app.knotwork.design.components.pipelineeditor.LiteRtConfig
 import org.junit.Assert.assertEquals
@@ -65,6 +66,32 @@ class NodeConfigCodecTest {
         assertEquals("claude-opus-4-7", decoded.model)
         assertEquals(2048, decoded.maxTokens)
         assertEquals(45_000, decoded.timeoutMs)
+    }
+
+    @Test
+    fun `given Cloud AUTO provider when apply then flat field is the auto sentinel and decodes back to AUTO`() {
+        val source = node(NodeType.CLOUD, "Cloud")
+        val config = CloudConfig(title = "Cloud", provider = CloudProvider.AUTO)
+
+        val applied = NodeConfigCodec.apply(source, config)
+
+        // Saving the sheet must persist "auto" (not a concrete provider), so the
+        // runtime keeps auto-routing.
+        assertEquals("auto", applied.cloudProvider)
+        // …and re-decoding the saved node round-trips back to AUTO.
+        assertEquals(CloudProvider.AUTO, (NodeConfigCodec.decode(applied) as CloudConfig).provider)
+    }
+
+    @Test
+    fun `given legacy auto CLOUD node with no configJson when decode then provider is AUTO`() {
+        // Regression for the round-trip bug: a browser-edited / default CLOUD
+        // node persists cloudProvider="auto" with no rich payload. It must decode
+        // as AUTO, not silently fall back to OpenAI.
+        val legacy = node(NodeType.CLOUD, "Cloud").copy(cloudProvider = "auto", configJson = null)
+
+        val decoded = NodeConfigCodec.decode(legacy) as CloudConfig
+
+        assertEquals(CloudProvider.AUTO, decoded.provider)
     }
 
     @Test
