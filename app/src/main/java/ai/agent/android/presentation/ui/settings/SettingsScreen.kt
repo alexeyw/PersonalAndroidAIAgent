@@ -315,8 +315,8 @@ private fun buildViewState(uiState: SettingsUiState, context: android.content.Co
                 title = stringResource(R.string.settings_row_max_context_title),
                 valueLabel = "${uiState.maxContextLength} tok",
                 value = uiState.maxContextLength.toFloat(),
-                valueRange = 512f..8192f,
-                steps = 14,
+                valueRange = 512f..32_000f,
+                steps = 61,
             ),
             LlmParameterSlider(
                 id = "max_steps",

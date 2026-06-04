@@ -15,7 +15,7 @@ class SettingsDefaultsTest {
 
     @Test
     fun `given LLM defaults when read then match documented values`() {
-        assertEquals(4_000, SettingsDefaults.MAX_CONTEXT_LENGTH_DEFAULT)
+        assertEquals(8_000, SettingsDefaults.MAX_CONTEXT_LENGTH_DEFAULT)
         assertEquals(0.7f, SettingsDefaults.TEMPERATURE_DEFAULT)
         assertEquals(40, SettingsDefaults.TOP_K_DEFAULT)
         assertEquals(0.9f, SettingsDefaults.TOP_P_DEFAULT)

@@ -23,7 +23,7 @@ import ai.agent.android.domain.services.EmbeddingProvider
  */
 object SettingsDefaults {
     /** Maximum number of tokens to keep in the LLM context window by default. */
-    const val MAX_CONTEXT_LENGTH_DEFAULT: Int = 4_000
+    const val MAX_CONTEXT_LENGTH_DEFAULT: Int = 8_000
 
     /** Default sampling temperature for local LLM generation. */
     const val TEMPERATURE_DEFAULT: Float = 0.7f
