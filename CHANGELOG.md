@@ -15,6 +15,25 @@ details.
 
 ### Added
 
+- **Browser editor ↔ app full node-config parity** (Phase 26 / Task 6/10):
+  the standalone `pipeline-editor.html` now mirrors every in-app
+  `NodeConfigSheet` form field-for-field. The pipeline JSON interchange gained
+  an optional, additive `nodeConfig` object per node — the exact
+  `NodeConfigCodec` envelope (`{ "v":1, "type", "title", ...type fields... }`) —
+  carried opaquely by `PipelineJsonSerializer` (the `domain` layer never
+  interprets it; the flat `config` block stays authoritative for the runtime).
+  The editor rewrote its 12 per-type forms onto the rich `NodeConfig` schema
+  (temperature / topP / maxNewTokens / stop sequences, cloud model + maxTokens
+  + timeout, intent-router classes with descriptions/examples, tool
+  argument-mapping + confirm policy, summary format, decomposition/queue knobs,
+  etc.) with the catalog `NodeConfigValidation` ranges, derives the flat runtime
+  fields on export, and reads `nodeConfig` (falling back to deriving from the
+  flat fields for older documents) on import. **EVALUATION nodes now expose
+  three labelled output ports — Pass / Retry / Fail** (was a single generic
+  output), matching `GraphExecutionEngine`'s verdict routing; the editor
+  auto-labels the edges and round-trips them. CLOUD keeps an editor-only "auto"
+  provider option. Verified with a full export→import→export round-trip across
+  all 12 node types in a headless browser.
 - **CI on GitHub Actions** (Phase 26 / Task 2/10): the `.github/workflows/check.yml`
   gate is now tracked in the repository (previously kept locally and gitignored
   because the remote PAT lacked the `workflow` scope). The job runs
@@ -42,9 +61,27 @@ details.
   built-in glyph). The selected bottom-nav tab renders at the active 2.0 stroke.
   Stroke-weight and render-size icon tokens (`IconStroke`, `KnotworkIconSizes`)
   back the family.
+- **`showcase_full_agent` bundled pipeline preset** (Phase 26 / Task 6/10): a
+  seventh bundled preset under `assets/presets/pipelines/` — a 21-node
+  on-device agent that triages each message (chat / factual / task) and runs a
+  tailored branch: a direct `LITE_RT` reply for chat; an `IF_CONDITION`
+  complexity-gated Wikipedia-lookup path for factual questions (single lookup
+  or `DECOMPOSITION` → `QUEUE_PROCESSOR` research loop → `SUMMARY`); and a
+  plan-and-loop flow for tasks (`DECOMPOSITION` → `QUEUE_PROCESSOR` → a second
+  `INTENT_ROUTER` over clarify / lookup / act / process, with a human-in-the-loop
+  `CLARIFICATION` node → `SUMMARY`). Carries rich per-node `nodeConfig`, passes
+  `PipelineGraph.validate()` with zero errors, is mirrored into the browser
+  editor's `BUILTIN_PIPELINE_PRESETS`, and is materialised as the first-launch
+  seed.
 
 ### Changed
 
+- **First-launch seed materialised from a preset** (Phase 26 / Task 6/10):
+  `InitializeAppUseCase` now seeds the default pipeline by materialising the
+  bundled `showcase_full_agent` preset through `LoadPipelineFromPresetUseCase`
+  (fresh ids, validated, persisted) instead of hardcoding
+  `DefaultPipelineFactory`. The factory remains a fallback if the preset asset
+  cannot be loaded, so first launch never leaves the library empty.
 - **`KnotworkChip` un-deprecated** (Phase 26 / Task 5/10): the general-purpose
   pill chip (`Default / Tonal / Outline` styles + decorative no-`onClick`
   variant) is reinstated as a supported design-system component rather than a
@@ -84,6 +121,14 @@ details.
 
 ### Fixed
 
+- **Documentation ↔ code reconciliation** (Phase 26 / Task 6/10): a sweep
+  aligning the public docs with current behaviour. `FILE_MAP.md` no longer
+  claims MCP "Only SSE … through Koog 0.8; STREAMABLE_HTTP falls back to SSE" —
+  both transports are end-to-end wired on Koog 1.0.0 (`KoogMcpClient` uses
+  `mcpStreamableHttpTransport`). `docs/user-guide.md` now lists all nine prompt
+  variables (was missing `$LANG` / `$LOCATION` / `$USER` / `$DEVICE`) and
+  documents the first-launch showcase pipeline; `docs/extending.md` and
+  `DESCRIPTION.md` reflect the seven bundled presets and the preset-backed seed.
 - **UI functional verification — every control does something** (Phase 26 / Task 4/10):
   a screen-by-screen sweep wiring orphaned callbacks, fixing node-config
   forms, and removing dead / misleading affordances.

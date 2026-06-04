@@ -195,6 +195,14 @@ android {
         // freshness is tracked deliberately, not by failing the build on the
         // publisher's schedule, so this check is disabled.
         disable += "NewerVersionAvailable"
+        // Phase 26 / Task 6/10: `GradleDependency` is the sibling "a newer
+        // version of X is available" check with the identical defect — its
+        // finding message embeds the latest published version, so an upstream
+        // release (e.g. androidx.core:core-ktx 1.18.0 → 1.19.0) fails the build
+        // on unrelated PRs and any baseline entry goes stale on the next
+        // release. Disabled for the same determinism reason as
+        // `NewerVersionAvailable`; dependency freshness is tracked deliberately.
+        disable += "GradleDependency"
     }
 }
 

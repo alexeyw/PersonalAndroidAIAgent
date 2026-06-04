@@ -75,7 +75,7 @@ object BrowserEditorConstantsGenerator {
         NodeTypeMeta("INTENT_ROUTER", "Intent Router", "#E91E63", "🧭", 1, 1),
         NodeTypeMeta("DECOMPOSITION", "Decomposition", "#3F51B5", "🧩", 1, 1),
         NodeTypeMeta("QUEUE_PROCESSOR", "Queue Processor", "#795548", "🔁", 1, 2),
-        NodeTypeMeta("EVALUATION", "Evaluation", "#009688", "✅", 1, 1),
+        NodeTypeMeta("EVALUATION", "Evaluation", "#009688", "✅", 1, 3),
         NodeTypeMeta("SUMMARY", "Summary", "#8BC34A", "📝", 1, 1),
         NodeTypeMeta("CLARIFICATION", "Clarification", "#9C27B0", "💬", 1, 1),
     )

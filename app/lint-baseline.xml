@@ -45,16 +45,6 @@
             column="17"/>
     </issue>
 
-    <issue
-        id="GradleDependency"
-        message="A newer version of com.google.mediapipe:tasks-text than 0.10.35 is available: 0.20230731"
-        errorLine1="mediapipe = &quot;0.10.35&quot;"
-        errorLine2="            ~~~~~~~~~">
-        <location
-            file="../gradle/libs.versions.toml"
-            line="20"
-            column="13"/>
-    </issue>
 
     <issue
         id="ObsoleteSdkInt"
