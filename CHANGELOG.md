@@ -80,10 +80,11 @@ details.
 
 ### Changed
 
-- **Larger context-window setting** (Phase 26 / Task 6/10): the
-  **Settings → LLM parameters → Max context** default is now **8192 tokens**
-  (was 4000) and the slider spans **1024–32768 tokens in 1024-token steps**
-  (was 512–8192).
+- **Context-window default** (Phase 26 / Task 6/10): the
+  **Settings → LLM parameters → Max context** default is now **4096 tokens**
+  (was 4000), landing exactly on a slider notch (range 512–8192, 512-token
+  steps). A higher ceiling was trialled and reverted — large windows OOM-crash
+  the on-device model on real hardware.
 - **First-launch seed materialised from a preset** (Phase 26 / Task 6/10):
   `InitializeAppUseCase` now seeds the default pipeline by materialising the
   bundled `showcase_full_agent` preset through `LoadPipelineFromPresetUseCase`
