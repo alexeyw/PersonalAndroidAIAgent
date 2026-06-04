@@ -15,6 +15,29 @@ details.
 
 ### Added
 
+- **Browser editor ↔ app full node-config parity** (Phase 26 / Task 6/10):
+  the standalone `pipeline-editor.html` now mirrors every in-app
+  `NodeConfigSheet` form field-for-field. The pipeline JSON interchange gained
+  an optional, additive `nodeConfig` object per node — the exact
+  `NodeConfigCodec` envelope (`{ "v":1, "type", "title", ...type fields... }`) —
+  carried opaquely by `PipelineJsonSerializer` (the `domain` layer never
+  interprets it; the flat `config` block stays authoritative for the runtime).
+  The editor rewrote its 12 per-type forms onto the rich `NodeConfig` schema
+  (temperature / topP / maxNewTokens / stop sequences, cloud model + maxTokens
+  + timeout, intent-router classes with descriptions/examples, tool
+  argument-mapping + confirm policy, summary format, decomposition/queue knobs,
+  etc.) with the catalog `NodeConfigValidation` ranges, derives the flat runtime
+  fields on export, and reads `nodeConfig` (falling back to deriving from the
+  flat fields for older documents) on import. **EVALUATION nodes now expose
+  three labelled output ports — Pass / Retry / Fail** (was a single generic
+  output), matching `GraphExecutionEngine`'s verdict routing; the editor
+  auto-labels the edges and round-trips them. The CLOUD provider gains a
+  first-class **Auto** option (a new `CloudProvider.AUTO` catalog value that
+  maps to the domain `"auto"` wire sentinel via `CloudProviderMapper.toWireId`
+  / `fromWireId`) so an auto-routing node survives the editor→app round-trip
+  and an in-app sheet save instead of silently decoding to OpenAI. Verified
+  with a full export→import→export round-trip across all 12 node types in a
+  headless browser.
 - **CI on GitHub Actions** (Phase 26 / Task 2/10): the `.github/workflows/check.yml`
   gate is now tracked in the repository (previously kept locally and gitignored
   because the remote PAT lacked the `workflow` scope). The job runs
@@ -42,9 +65,32 @@ details.
   built-in glyph). The selected bottom-nav tab renders at the active 2.0 stroke.
   Stroke-weight and render-size icon tokens (`IconStroke`, `KnotworkIconSizes`)
   back the family.
+- **`showcase_full_agent` bundled pipeline preset** (Phase 26 / Task 6/10): a
+  seventh bundled preset under `assets/presets/pipelines/` — a 22-node
+  on-device agent that triages each message (chat / factual / task) and runs a
+  tailored branch: a direct `LITE_RT` reply for chat; an `IF_CONDITION`
+  complexity-gated Wikipedia-lookup path for factual questions (single lookup
+  or `DECOMPOSITION` → `QUEUE_PROCESSOR` research loop → `SUMMARY`); and a
+  plan-and-loop flow for tasks (`DECOMPOSITION` → `QUEUE_PROCESSOR` → a second
+  `INTENT_ROUTER` over clarify / lookup / act / process, with a human-in-the-loop
+  `CLARIFICATION` node → `SUMMARY`). Carries rich per-node `nodeConfig`, passes
+  `PipelineGraph.validate()` with zero errors, is mirrored into the browser
+  editor's `BUILTIN_PIPELINE_PRESETS`, and is materialised as the first-launch
+  seed.
 
 ### Changed
 
+- **Context-window default** (Phase 26 / Task 6/10): the
+  **Settings → LLM parameters → Max context** default is now **4096 tokens**
+  (was 4000), landing exactly on a slider notch (range 512–8192, 512-token
+  steps). A higher ceiling was trialled and reverted — large windows OOM-crash
+  the on-device model on real hardware.
+- **First-launch seed materialised from a preset** (Phase 26 / Task 6/10):
+  `InitializeAppUseCase` now seeds the default pipeline by materialising the
+  bundled `showcase_full_agent` preset through `LoadPipelineFromPresetUseCase`
+  (fresh ids, validated, persisted) instead of hardcoding
+  `DefaultPipelineFactory`. The factory remains a fallback if the preset asset
+  cannot be loaded, so first launch never leaves the library empty.
 - **`KnotworkChip` un-deprecated** (Phase 26 / Task 5/10): the general-purpose
   pill chip (`Default / Tonal / Outline` styles + decorative no-`onClick`
   variant) is reinstated as a supported design-system component rather than a
@@ -84,6 +130,41 @@ details.
 
 ### Fixed
 
+- **TOOL node with "Auto" tool failed at runtime** (Phase 26 / Task 6/10): a
+  TOOL node left on the Auto option (persisted as a blank `toolName`) errored
+  with "Tool node is missing toolName configuration" instead of letting the
+  model pick a tool. `ToolNodeExecutor` now treats a blank/null `toolName` the
+  same as the explicit `"auto"` sentinel (LLM-driven auto-select); only a
+  configured-but-unknown tool name is an error.
+- **Chat token-usage indicator counted a token budget as characters**
+  (Phase 26 / Task 6/10): `GetContextWindowUseCase` compared message
+  **character** lengths against `maxContextLength` (a **token** budget), so the
+  history was truncated to ~¼ of the window and the TopAppBar "tokens used"
+  bar capped at ~25%. It now converts the token budget to characters
+  (`× CHARS_PER_TOKEN`) before truncating. Display-only — the actual prompt and
+  the engine's `maxNumTokens` windowing were already correct.
+- **Deleting a local model now removes its file** (Phase 26 / Task 6/10):
+  `LocalModelRepository.deleteModelById` only dropped the Room record, leaving
+  the (often multi-GB) weights file orphaned on disk. It now deletes the
+  on-disk file at the model's path first (best-effort — a missing/unreadable
+  file never blocks the record removal).
+- **Dependency freshness** (Phase 26 / Task 6/10): bumped `androidx.core:core-ktx`
+  1.18.0 → 1.19.0 and `com.google.ai.edge.litertlm:litertlm-android` 0.12.0 →
+  0.13.0 (both Apache-2.0, no new transitive licences). The `GradleDependency`
+  and `NewerVersionAvailable` lint checks are kept enabled so outdated
+  dependencies are surfaced and updated rather than silenced; the deliberate
+  Kotlin/Compose-plugin pin (2.3.21, a separate toolchain upgrade) and the
+  mediapipe false positive (its version scheme sorts `0.20230731` as newer than
+  the actual-latest `0.10.35`) are grandfathered individually in
+  `lint-baseline.xml`.
+- **Documentation ↔ code reconciliation** (Phase 26 / Task 6/10): a sweep
+  aligning the public docs with current behaviour. `FILE_MAP.md` no longer
+  claims MCP "Only SSE … through Koog 0.8; STREAMABLE_HTTP falls back to SSE" —
+  both transports are end-to-end wired on Koog 1.0.0 (`KoogMcpClient` uses
+  `mcpStreamableHttpTransport`). `docs/user-guide.md` now lists all nine prompt
+  variables (was missing `$LANG` / `$LOCATION` / `$USER` / `$DEVICE`) and
+  documents the first-launch showcase pipeline; `docs/extending.md` and
+  `DESCRIPTION.md` reflect the seven bundled presets and the preset-backed seed.
 - **UI functional verification — every control does something** (Phase 26 / Task 4/10):
   a screen-by-screen sweep wiring orphaned callbacks, fixing node-config
   forms, and removing dead / misleading affordances.

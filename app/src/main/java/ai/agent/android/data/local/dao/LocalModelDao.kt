@@ -55,6 +55,18 @@ interface LocalModelDao {
     suspend fun updateModel(model: LocalModelEntity)
 
     /**
+     * Returns the row with the given [id], or `null` when none exists.
+     * Used by `LocalModelRepository.deleteModelById` to resolve the on-disk
+     * [LocalModelEntity.path] so the model file can be removed alongside the
+     * record.
+     *
+     * @param id The ID of the model to look up.
+     * @return the matching entity, or `null`.
+     */
+    @Query("SELECT * FROM local_models WHERE id = :id LIMIT 1")
+    suspend fun findById(id: Long): LocalModelEntity?
+
+    /**
      * Deletes a model record by its ID.
      *
      * @param id The ID of the model to delete.

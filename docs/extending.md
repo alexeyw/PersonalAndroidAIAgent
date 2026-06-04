@@ -553,8 +553,26 @@ test, and — for pipeline presets — a mirror entry in the browser editor.
 A pipeline preset wraps the same pipeline-graph JSON the app exports, plus
 three preset-only fields (`category`, `tags`, `description`). The canonical
 contract is `domain/pipelineio/PipelinePresetJsonSerializer.kt` (schema
-version 1); the six shipped files under `assets/presets/pipelines/` are the
-reference examples.
+version 1); the seven shipped files under `assets/presets/pipelines/` are the
+reference examples. The broadest of them, `showcase_full_agent.json`, is a
+22-node on-device agent: an `INTENT_ROUTER` triages every message into
+**chat / factual / task**, and each intent runs a tailored branch —
+
+- *chat* → a direct `LITE_RT` reply;
+- *factual* → an `IF_CONDITION` complexity gate that either does a single
+  Wikipedia lookup (`LITE_RT` query-builder → `TOOL` → `LITE_RT` grounded
+  answer) or decomposes the question (`DECOMPOSITION` → `QUEUE_PROCESSOR`
+  per-topic `TOOL` loop → `SUMMARY`);
+- *task* → a plan-and-loop flow (`DECOMPOSITION` → `QUEUE_PROCESSOR` → a
+  second `INTENT_ROUTER` routing each subtask over clarify / lookup / act /
+  process, with a human-in-the-loop `CLARIFICATION` node → `SUMMARY`).
+
+It exercises intent routing, IF-condition branching, decomposition,
+queue-processor loops (via QUEUE_PROCESSOR back-edges), tool calls, HITL
+clarification and summary synthesis, with a broad mix of context flags and
+`$VARIABLE` placeholders. It is also the pipeline `InitializeAppUseCase`
+materialises as the first-launch seed, so treat it as the canonical
+"kitchen-sink" template.
 
 **Step 1 — drop a JSON file under `assets/presets/pipelines/`.** The
 filename stem becomes the preset `id`, so it must be unique across the
@@ -602,6 +620,17 @@ Rules:
   `$LANG`, `$LOCATION`, `$USER`, `$DEVICE`) — same whitelist as §5.2.
 - `name` must not exceed 60 characters (the cross-feature
   `MAX_NAME_LENGTH`).
+
+Each node may also carry an optional `nodeConfig` object alongside `config`
+and `contextConfig` — the rich `NodeConfig` payload (the
+`NodeConfigCodec` envelope: `{ "v": 1, "type", "title", ...type-specific
+fields... }`) that the in-app `NodeConfigSheet` and the browser editor edit
+field-for-field. It is additive: `PipelineJsonSerializer` round-trips it as
+an opaque blob into `NodeModel.configJson`, the runtime engine ignores it
+(it reads only the flat `config` fields), and documents without it import
+fine — the app derives a default rich config from the flat fields on first
+edit. Hand-written presets can omit `nodeConfig`; the browser editor emits
+it automatically on export.
 
 **Step 2 — register the filename in `PipelinePresetCatalogValidationTest`.**
 `expectedFileNames` in

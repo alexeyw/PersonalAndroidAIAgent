@@ -61,26 +61,39 @@ internal object NodeTypeMapper {
  * Bridges between the catalog-side [CatalogCloudProvider] enum (used by `CloudConfig` forms)
  * and the production-domain [DomainCloudProvider] (persisted as `cloudProvider` wire-id).
  *
- * The catalog set is intentionally narrower (`OPEN_AI / ANTHROPIC / GOOGLE / COMPATIBLE`)
- * because the design language only enumerates user-presentable provider tiles. The domain
- * adds `DEEPSEEK` and `OLLAMA`, which both map onto catalog's `COMPATIBLE` slot — they
- * use the OpenAI-compatible wire protocol.
+ * The catalog set (`AUTO / OPEN_AI / ANTHROPIC / GOOGLE / COMPATIBLE`) enumerates the
+ * user-presentable provider tiles. The domain adds `DEEPSEEK` and `OLLAMA`, which both
+ * map onto catalog's `COMPATIBLE` slot (OpenAI-compatible wire protocol), while catalog's
+ * `AUTO` has no concrete domain provider — it round-trips through the
+ * [DomainCloudProvider.AUTO_KEY] (`"auto"`) wire sentinel via [toWireId] / [fromWireId].
  */
 internal object CloudProviderMapper {
 
     /**
-     * Translates the catalog form's selection into the domain wire-id.
+     * Translates the catalog form's selection into the domain provider.
      *
      * @return the matching [DomainCloudProvider]; `COMPATIBLE` maps to [DomainCloudProvider.DEEPSEEK]
      * as the canonical "OpenAI-compatible" instance because it is the only such provider with a
-     * dedicated wire-id today.
+     * dedicated wire-id today. [CatalogCloudProvider.AUTO] returns `null` — it has no concrete
+     * domain provider and is persisted as the [DomainCloudProvider.AUTO_KEY] sentinel instead
+     * (see [toWireId]).
      */
-    fun toDomain(provider: CatalogCloudProvider): DomainCloudProvider = when (provider) {
+    fun toDomain(provider: CatalogCloudProvider): DomainCloudProvider? = when (provider) {
+        CatalogCloudProvider.AUTO -> null
         CatalogCloudProvider.OPEN_AI -> DomainCloudProvider.OPENAI
         CatalogCloudProvider.ANTHROPIC -> DomainCloudProvider.ANTHROPIC
         CatalogCloudProvider.GOOGLE -> DomainCloudProvider.GOOGLE
         CatalogCloudProvider.COMPATIBLE -> DomainCloudProvider.DEEPSEEK
     }
+
+    /**
+     * Resolves the catalog selection to the `cloudProvider` wire-id stored on
+     * the domain [ai.agent.android.domain.models.NodeModel]. [CatalogCloudProvider.AUTO]
+     * yields [DomainCloudProvider.AUTO_KEY] (`"auto"`) so runtime auto-routing is
+     * preserved across a config-sheet save; every other tile yields its concrete
+     * `DomainCloudProvider.id`.
+     */
+    fun toWireId(provider: CatalogCloudProvider): String = toDomain(provider)?.id ?: DomainCloudProvider.AUTO_KEY
 
     /**
      * Translates a domain wire-id into the matching catalog selection. Both [DomainCloudProvider.DEEPSEEK]
@@ -98,4 +111,22 @@ internal object CloudProviderMapper {
         -> CatalogCloudProvider.COMPATIBLE
         null -> CatalogCloudProvider.OPEN_AI
     }
+
+    /**
+     * Resolves a persisted `cloudProvider` wire-id back to the catalog selection,
+     * preserving the [DomainCloudProvider.AUTO_KEY] sentinel as
+     * [CatalogCloudProvider.AUTO]. Unlike [DomainCloudProvider.fromId] (which folds
+     * `"auto"`, blank and unknown ids all to `null`), this keeps `"auto"` distinct
+     * from "no provider" so a browser-edited / auto CLOUD node round-trips as Auto
+     * instead of silently becoming OpenAI.
+     *
+     * @return [CatalogCloudProvider.AUTO] for the auto sentinel, otherwise the tile
+     *   for the concrete provider (defaulting to `OPEN_AI` for `null` / unknown).
+     */
+    fun fromWireId(wireId: String?): CatalogCloudProvider =
+        if (wireId != null && wireId.equals(DomainCloudProvider.AUTO_KEY, ignoreCase = true)) {
+            CatalogCloudProvider.AUTO
+        } else {
+            toCatalog(DomainCloudProvider.fromId(wireId))
+        }
 }

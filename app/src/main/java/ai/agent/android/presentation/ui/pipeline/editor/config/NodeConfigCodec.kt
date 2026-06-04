@@ -26,7 +26,6 @@ import org.json.JSONArray
 import org.json.JSONException
 import org.json.JSONObject
 import timber.log.Timber
-import ai.agent.android.domain.models.CloudProvider as DomainCloudProvider
 import ai.agent.android.domain.models.NodeType as DomainNodeType
 import app.knotwork.design.components.pipelineeditor.NodeType as CatalogNodeType
 
@@ -133,7 +132,10 @@ internal object NodeConfigCodec {
             )
             is CloudConfig -> withJson.copy(
                 systemPrompt = config.systemPrompt,
-                cloudProvider = CloudProviderMapper.toDomain(config.provider).id,
+                // `toWireId` keeps `CloudProvider.AUTO` as the "auto" sentinel
+                // (rather than collapsing to a concrete provider), so saving the
+                // sheet does not rewrite an auto-routing node to OpenAI.
+                cloudProvider = CloudProviderMapper.toWireId(config.provider),
             )
             is ToolConfig -> withJson.copy(toolName = config.toolId.takeIf { it.isNotBlank() })
             is IfConditionConfig -> withJson.copy(conditionPrompt = config.expression)
@@ -264,7 +266,7 @@ internal object NodeConfigCodec {
             CatalogNodeType.CLOUD -> CloudConfig(
                 title = title,
                 systemPrompt = systemPromptOrDefault,
-                provider = CloudProviderMapper.toCatalog(DomainCloudProvider.fromId(node.cloudProvider)),
+                provider = CloudProviderMapper.fromWireId(node.cloudProvider),
             )
             CatalogNodeType.INTENT_ROUTER -> IntentRouterConfig(
                 title = title,
@@ -431,7 +433,7 @@ internal object NodeConfigCodec {
             description = description,
             provider = enumOrDefault(
                 p.optStringOrNull("provider"),
-                CloudProviderMapper.toCatalog(DomainCloudProvider.fromId(fb.cloudProvider)),
+                CloudProviderMapper.fromWireId(fb.cloudProvider),
             ),
             model = p.optString("model"),
             systemPrompt = p.optString("systemPrompt").ifBlank { fb.systemPrompt.orEmpty() },

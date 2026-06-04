@@ -21,9 +21,10 @@ import java.io.File
  * Why a catalogue-level test exists separately from
  * [PipelinePresetJsonSerializerTest]: the serializer test pins the
  * round-trip contract using synthetic fixtures, while this test pins the
- * *shipped* artefacts — six curated presets that the user sees the first
- * time they open the library. A broken preset would otherwise only surface
- * at runtime on a real device.
+ * *shipped* artefacts — seven curated presets that the user sees the first
+ * time they open the library (including the comprehensive
+ * `showcase_full_agent`, which doubles as the first-launch seed). A broken
+ * preset would otherwise only surface at runtime on a real device.
  *
  * The four assertions per file are intentionally narrow:
  * - the filename set is the one Task 2/9 promised (catches typos /
@@ -56,6 +57,7 @@ class PipelinePresetCatalogValidationTest {
         "multi_step_research.json",
         "clarify_then_act.json",
         "routed_local_cloud.json",
+        "showcase_full_agent.json",
     )
 
     /**

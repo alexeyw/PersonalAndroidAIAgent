@@ -6,7 +6,9 @@ import ai.agent.android.domain.models.NodeModel
 import ai.agent.android.domain.models.NodeType
 import ai.agent.android.domain.models.PipelineGraph
 import ai.agent.android.domain.models.PipelineImportOutcome
+import org.json.JSONObject
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -264,4 +266,100 @@ class PipelineJsonSerializerTest {
         assertTrue(json.contains("\"systemPrompt\":null"))
         assertTrue(json.contains("\"toolName\":null"))
     }
+
+    @Test
+    fun `serialize then parse round-trips the rich nodeConfig payload`() {
+        val payload = """
+            {"v":1,"type":"CLOUD","title":"Brain","provider":"ANTHROPIC",
+             "model":"claude","systemPrompt":"You are an agent.",
+             "temperature":0.7,"maxTokens":1024,"timeoutMs":30000}
+        """.trimIndent()
+        val graph = graphWithCloudConfigJson(payload)
+
+        val outcome = PipelineJsonSerializer.parse(PipelineJsonSerializer.serialize(graph))
+
+        assertTrue(outcome is PipelineImportOutcome.Success)
+        val cloud = (outcome as PipelineImportOutcome.Success).graph.nodes.first { it.type == NodeType.CLOUD }
+        // The opaque blob round-trips: the rich fields survive verbatim even
+        // though the domain serializer never interprets them.
+        assertNotNull(cloud.configJson)
+        val parsed = JSONObject(cloud.configJson!!)
+        assertEquals(1, parsed.getInt("v"))
+        assertEquals("ANTHROPIC", parsed.getString("provider"))
+        assertEquals(0.7, parsed.getDouble("temperature"), 0.0001)
+        assertEquals(1024, parsed.getInt("maxTokens"))
+        // The flat config remains authoritative for the runtime.
+        assertEquals("anthropic", cloud.cloudProvider)
+    }
+
+    @Test
+    fun `serialize omits nodeConfig when configJson is absent`() {
+        val json = PipelineJsonSerializer.serialize(graphWithCloudConfigJson(null))
+
+        assertFalse(json.contains("\"nodeConfig\""))
+    }
+
+    @Test
+    fun `serialize drops malformed configJson instead of emitting nodeConfig`() {
+        val json = PipelineJsonSerializer.serialize(graphWithCloudConfigJson("{ not json"))
+
+        assertFalse("Malformed configJson must not leak into the document", json.contains("\"nodeConfig\""))
+        val outcome = PipelineJsonSerializer.parse(json)
+        assertTrue(outcome is PipelineImportOutcome.Success)
+        val cloud = (outcome as PipelineImportOutcome.Success).graph.nodes.first { it.type == NodeType.CLOUD }
+        assertNull(cloud.configJson)
+    }
+
+    @Test
+    fun `parse tolerates a non-object nodeConfig as null`() {
+        val json = """
+            {
+              "schemaVersion": 1,
+              "id": "p",
+              "name": "x",
+              "nodes": [
+                { "id": "n1", "type": "INPUT", "position": { "x": 0, "y": 0 }, "label": "In",
+                  "nodeConfig": "oops-not-an-object" }
+              ],
+              "connections": []
+            }
+        """.trimIndent()
+
+        val outcome = PipelineJsonSerializer.parse(json)
+
+        assertTrue(outcome is PipelineImportOutcome.Success)
+        assertNull((outcome as PipelineImportOutcome.Success).graph.nodes.single().configJson)
+    }
+
+    /**
+     * Builds a minimal INPUT → CLOUD graph whose CLOUD node carries the given
+     * [configJson] blob, used to exercise the opaque `nodeConfig` passthrough.
+     */
+    private fun graphWithCloudConfigJson(configJson: String?): PipelineGraph = PipelineGraph(
+        id = "p",
+        name = "x",
+        nodes = listOf(
+            NodeModel(
+                id = "n1",
+                type = NodeType.INPUT,
+                x = 0f,
+                y = 0f,
+                systemPrompt = null,
+                contextConfig = NodeContextConfig.defaultForType(NodeType.INPUT),
+            ),
+            NodeModel(
+                id = "n2",
+                type = NodeType.CLOUD,
+                x = 1f,
+                y = 0f,
+                systemPrompt = "You are an agent.",
+                cloudProvider = "anthropic",
+                contextConfig = NodeContextConfig.defaultForType(NodeType.CLOUD),
+                configJson = configJson,
+            ),
+        ),
+        connections = listOf(
+            ConnectionModel(id = "c1", sourceNodeId = "n1", targetNodeId = "n2", label = null),
+        ),
+    )
 }

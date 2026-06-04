@@ -140,7 +140,7 @@ This file maps the contents of the main application package.
     - `MemorySourceJson.kt` - Single source of truth for the `MemorySource` ↔ JSON wire shape; shared by the Room `source` column converter (`data/local/Converters`) and `MemoryJsonSerializer` so the column encoding and the export file stay byte-identical.
     - `MemoryJsonSerializer.kt` - Two-way mapper between the memory table and the portable `schemaVersion: 1` export document (`embeddingProviderId` + `exportedAt` + per-chunk `id`/`text`/`embedding`/`source`/`timestamp`/`isPinned`/`tags`). Never-throwing `parse` returns `Success / SchemaMismatch / Failure`.
   - `pipelineio/` - JSON serialisation gateway for pipeline import/export.
-    - `PipelineJsonSerializer.kt` - Two-way mapper between `PipelineGraph` and the `schemaVersion: 1` JSON document shared with the browser-side editor (`pipeline-editor.html`).
+    - `PipelineJsonSerializer.kt` - Two-way mapper between `PipelineGraph` and the `schemaVersion: 1` JSON document shared with the browser-side editor (`pipeline-editor.html`). Carries the flat runtime `config` fields plus an optional opaque `nodeConfig` object (the rich `NodeConfigCodec` payload) round-tripped verbatim into `NodeModel.configJson` without interpreting it.
     - `PipelinePresetJsonSerializer.kt` - Two-way mapper between `PipelinePreset` and the pipeline-preset JSON format used by `assets/presets/pipelines/*.json` and the browser editor's `*.preset.json` export. Strict superset of the pipeline JSON; delegates the graph half to `PipelineJsonSerializer` (Phase 24 / Task 1).
   - `promptio/` - JSON serialisation gateway for prompt-preset import/export (Phase 24 / Task 4).
     - `PromptPresetJsonSerializer.kt` - Two-way mapper between `PromptPreset` and its `schemaVersion: 1` JSON document. Rejects unknown / non-LLM `NodeType` values at parse time; never throws (returns `Success / SchemaMismatch / Failure`).
@@ -168,7 +168,7 @@ This file maps the contents of the main application package.
     - `McpConnectionStatus.kt` - Sealed lifecycle (`Connecting` / `Connected` / `Error(reason)`) exposed by `McpServerRepository.observeConnectionStatus` and rendered as the per-server status pill.
     - `McpServerConfig.kt` - Per-server configuration persisted by `SettingsRepository.mcpServers`: URL + optional display name + transport (SSE / Streamable HTTP) + typed `McpAuth` + arbitrary headers (advanced overrides).
     - `McpTool.kt` - Domain model for one tool advertised by an MCP server (`id = "mcp:<sha8(serverUrl)>:<toolName>"`, `serverUrl`, `name`, `description`, `inputSchemaJson`, optional `risk`).
-    - `McpTransport.kt` - Transport selector backing `McpServerConfig.transport`. Only SSE is end-to-end wired today through Koog 0.8; STREAMABLE_HTTP falls back to SSE until upstream support lands.
+    - `McpTransport.kt` - Transport selector backing `McpServerConfig.transport`. Both variants are end-to-end wired on Koog 1.0.0: `SSE` via Koog's `defaultSseTransport`, `STREAMABLE_HTTP` via the MCP Kotlin SDK's `HttpClient.mcpStreamableHttpTransport` (see `KoogMcpClient`).
     - `MemoryChunk.kt` - Memory chunk model.
     - `MemoryExportDocument.kt` - Parsed representation of a memory export file (`embeddingProviderId`, `exportedAt`, `chunks`) produced by `MemoryJsonSerializer.parse` and consumed by `MemoryImportUseCase` (Phase 25 / Task 8).
     - `MemoryImportOutcome.kt` - Sealed result of parsing a memory export document (`Success` / `SchemaMismatch` / `Failure`), mirroring the pipeline / prompt-preset import outcomes (Phase 25 / Task 8).
@@ -233,7 +233,7 @@ This file maps the contents of the main application package.
     - `DeletePipelineUseCase.kt` - Deletes a pipeline by id; refuses to delete the pipeline currently loaded in the editor (caller passes the active id).
     - `DuplicatePipelineUseCase.kt` - Deep-copies an existing pipeline with fresh ids for the graph and every node/connection; suffixes the name with `(copy)`.
     - `ImportPipelineUseCase.kt` - Parses a pipeline JSON document via `PipelineJsonSerializer` and persists clean imports through `SavePipelineUseCase`; defers schema-mismatch persistence to a separate `persistConfirmed` step.
-    - `InitializeAppUseCase.kt` - Use case for app initialization.
+    - `InitializeAppUseCase.kt` - First-launch initialiser: persists the default system prompts and materialises the bundled `showcase_full_agent` preset (via `LoadPipelineFromPresetUseCase`) as the seed/default pipeline, falling back to `DefaultPipelineFactory` if the preset asset is unavailable. Idempotent on `isFirstLaunch`.
     - `LoadModelUseCase.kt` - Use case to load a model.
     - `LoadPipelineFromPresetUseCase.kt` - Materialises a `PipelinePreset` into a concrete `PipelineGraph` with fresh ids (pipeline + nodes + connections), drops orphan connections, validates, persists via `PipelineRepository.savePipeline`, returns the new pipeline id (Phase 24 / Task 1).
     - `LoadPipelineUseCase.kt` - Use case to load a pipeline.

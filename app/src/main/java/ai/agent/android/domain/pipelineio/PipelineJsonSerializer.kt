@@ -39,7 +39,8 @@ import org.json.JSONObject
  *         "conditionKeywords": "",
  *         "conditionComplexity": null
  *       },
- *       "contextConfig": { "chatHistory": true, ... }
+ *       "contextConfig": { "chatHistory": true, ... },
+ *       "nodeConfig": { "v": 1, "type": "CLOUD", "title": "Cloud", ... }
  *     }
  *   ],
  *   "connections": [
@@ -47,6 +48,19 @@ import org.json.JSONObject
  *   ]
  * }
  * ```
+ *
+ * ### Rich per-node config (`nodeConfig`)
+ *
+ * The optional `nodeConfig` object carries the full Phase-21
+ * `NodeConfig` payload (the `NodeConfigCodec` envelope: `{ "v": 1,
+ * "type", "title", ...type-specific... }`) so the browser editor and the
+ * in-app editor can round-trip every form field, not just the flat
+ * `config` subset the runtime reads. It is treated as an **opaque blob**
+ * here — stored into / read from [NodeModel.configJson] verbatim, never
+ * interpreted by this domain-layer serializer (only the presentation-layer
+ * `NodeConfigCodec` parses it). The field is additive and optional:
+ * documents without it (older exports, hand-written presets) parse fine and
+ * the app re-derives the rich config from the flat fields on first edit.
  *
  * ### Forward-compatibility
  *
@@ -119,13 +133,28 @@ object PipelineJsonSerializer {
             .put("longTermMemory", node.contextConfig.longTermMemory)
             .put("toolResults", node.contextConfig.toolResults)
 
-        return JSONObject()
+        val nodeJson = JSONObject()
             .put("id", node.id)
             .put("type", node.type.name)
             .put("position", position)
             .put("label", node.label)
             .put("config", config)
             .put("contextConfig", contextConfig)
+
+        // Embed the rich per-node config (the `NodeConfigCodec` payload stored
+        // in [NodeModel.configJson]) as an opaque nested `nodeConfig` object so
+        // the browser editor and other app instances can round-trip the full
+        // Phase-21 `NodeConfig`. The domain layer intentionally does NOT
+        // interpret this blob — it is passed through verbatim, keeping the
+        // serializer free of any presentation-layer dependency. The flat
+        // `config` block above stays authoritative for the runtime engine.
+        // Absent / blank / malformed `configJson` simply omits the key.
+        node.configJson
+            ?.takeIf { it.isNotBlank() }
+            ?.let { raw -> runCatching { JSONObject(raw) }.getOrNull() }
+            ?.let { nodeJson.put("nodeConfig", it) }
+
+        return nodeJson
     }
 
     private fun serializeConnection(c: ConnectionModel): JSONObject = JSONObject()
@@ -236,6 +265,12 @@ object PipelineJsonSerializer {
             NodeContextConfig.defaultForType(type)
         }
 
+        // Round-trip the opaque rich-config blob when present. Stored verbatim
+        // into [NodeModel.configJson]; `NodeConfigCodec` (presentation layer)
+        // is the only code that interprets it. Absent ⇒ null, so legacy
+        // flat-only documents continue to derive their config on first edit.
+        val nodeConfigJson = json.optJSONObject("nodeConfig")?.toString()
+
         return NodeModel(
             id = id,
             type = type,
@@ -251,6 +286,7 @@ object PipelineJsonSerializer {
             cloudProvider = config.optStringOrNull("cloudProvider"),
             clarificationTimeoutMs = config.optLongOrNull("clarificationTimeoutMs"),
             contextConfig = contextConfig,
+            configJson = nodeConfigJson,
         )
     }
 
