@@ -30,7 +30,7 @@ fun AboutScreen(modifier: Modifier = Modifier, onBack: () -> Unit) {
         buildLine = stringResource(R.string.about_build_format, BuildConfig.VERSION_CODE, BuildConfig.BUILD_TYPE),
         commitSha = BuildConfig.GIT_SHA,
         licenseName = stringResource(R.string.license_name),
-        acknowledgments = AboutAcknowledgments.entries,
+        acknowledgments = AboutAcknowledgments.ENTRIES,
         privacyBody = stringResource(R.string.about_privacy_policy_body),
     )
     val strings = AboutStrings(
@@ -72,23 +72,40 @@ private const val LICENSE_URL = "https://www.apache.org/licenses/LICENSE-2.0"
  */
 private const val PRIVACY_URL = "https://github.com/alexeyw/PersonalAndroidAIAgent#privacy"
 
-/** Hand-maintained acknowledgments list (15 key dependencies). */
-private object AboutAcknowledgments {
-    val entries: List<AcknowledgmentEntry> = listOf(
-        AcknowledgmentEntry(name = "Jetpack Compose", license = "Apache 2.0"),
-        AcknowledgmentEntry(name = "Kotlin Coroutines", license = "Apache 2.0"),
-        AcknowledgmentEntry(name = "Hilt", license = "Apache 2.0"),
-        AcknowledgmentEntry(name = "Room", license = "Apache 2.0"),
-        AcknowledgmentEntry(name = "Koog", license = "Apache 2.0"),
-        AcknowledgmentEntry(name = "LiteRT-LM", license = "Apache 2.0"),
-        AcknowledgmentEntry(name = "Retrofit", license = "Apache 2.0"),
-        AcknowledgmentEntry(name = "Coil", license = "Apache 2.0"),
-        AcknowledgmentEntry(name = "Roborazzi", license = "Apache 2.0"),
-        AcknowledgmentEntry(name = "MockK", license = "Apache 2.0"),
+/**
+ * Hand-maintained acknowledgments for the third-party components bundled in the
+ * released APK/AAB, plus the bundled brand fonts.
+ *
+ * This list is the user-facing companion of the repository `NOTICE` file and is
+ * reconciled against the actual `gradle/libs.versions.toml` runtime dependency
+ * set (`PHASE 26 — Task 7`). It intentionally excludes test-only artifacts
+ * (MockK, Roborazzi, Robolectric, JUnit, org.json) since they are not
+ * distributed with the application. `internal` so the
+ * `AboutAcknowledgmentsTest` drift guard can read it.
+ */
+internal object AboutAcknowledgments {
+    /** SPDX-style label for components under the Apache License 2.0. */
+    private const val APACHE_2_0 = "Apache 2.0"
+
+    val ENTRIES: List<AcknowledgmentEntry> = listOf(
+        AcknowledgmentEntry(name = "Jetpack Compose", license = APACHE_2_0),
+        AcknowledgmentEntry(name = "AndroidX Jetpack", license = APACHE_2_0),
+        AcknowledgmentEntry(name = "Kotlin Coroutines", license = APACHE_2_0),
+        AcknowledgmentEntry(name = "Hilt", license = APACHE_2_0),
+        AcknowledgmentEntry(name = "Room", license = APACHE_2_0),
+        AcknowledgmentEntry(name = "AppFunctions", license = APACHE_2_0),
+        AcknowledgmentEntry(name = "LiteRT-LM", license = APACHE_2_0),
+        AcknowledgmentEntry(name = "MediaPipe", license = APACHE_2_0),
+        AcknowledgmentEntry(name = "Koog", license = APACHE_2_0),
+        AcknowledgmentEntry(name = "Ktor", license = APACHE_2_0),
+        AcknowledgmentEntry(name = "OkHttp", license = APACHE_2_0),
+        AcknowledgmentEntry(name = "Gson", license = APACHE_2_0),
+        AcknowledgmentEntry(name = "Multiplatform Markdown Renderer", license = APACHE_2_0),
+        AcknowledgmentEntry(name = "Timber", license = APACHE_2_0),
+        AcknowledgmentEntry(name = "ProcessPhoenix", license = APACHE_2_0),
+        AcknowledgmentEntry(name = "Firebase Crashlytics", license = APACHE_2_0),
         AcknowledgmentEntry(name = "SQLCipher", license = "BSD-3-Clause"),
-        AcknowledgmentEntry(name = "Firebase Crashlytics", license = "Apache 2.0"),
-        AcknowledgmentEntry(name = "MediaPipe", license = "Apache 2.0"),
-        AcknowledgmentEntry(name = "Timber", license = "Apache 2.0"),
-        AcknowledgmentEntry(name = "ProcessPhoenix", license = "Apache 2.0"),
+        AcknowledgmentEntry(name = "Inter", license = "SIL OFL 1.1"),
+        AcknowledgmentEntry(name = "JetBrains Mono", license = "SIL OFL 1.1"),
     )
 }
