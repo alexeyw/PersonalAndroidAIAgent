@@ -1,0 +1,114 @@
+On-Device AI Agent for Android
+Copyright 2026 Aleksei Volodin
+
+This product is licensed under the Apache License, Version 2.0 (the "License").
+You may obtain a copy of the License in the accompanying LICENSE file or at
+http://www.apache.org/licenses/LICENSE-2.0
+
+================================================================================
+Third-party components distributed with the application
+================================================================================
+
+The following third-party components are bundled in the released APK/AAB. Each
+is redistributed under its own license, reproduced or referenced below. All of
+the licenses listed here are compatible with the Apache License 2.0.
+
+--------------------------------------------------------------------------------
+Apache License 2.0 components
+--------------------------------------------------------------------------------
+
+The components below are licensed under the Apache License, Version 2.0
+(http://www.apache.org/licenses/LICENSE-2.0). No additional notice text is
+required for their redistribution beyond this acknowledgment:
+
+  * AndroidX Jetpack libraries (Core, Lifecycle, Activity, Navigation, DataStore,
+    WorkManager, Security-Crypto, Splashscreen) — The Android Open Source Project
+  * Jetpack Compose & Material 3 — The Android Open Source Project
+  * Room — The Android Open Source Project
+  * AppFunctions — The Android Open Source Project
+  * Kotlin Coroutines — JetBrains s.r.o. and Kotlin Programming Language contributors
+  * Hilt / Dagger — Google LLC
+  * LiteRT-LM — Google LLC
+  * MediaPipe — Google LLC
+  * Koog — JetBrains s.r.o.
+  * Ktor — JetBrains s.r.o.
+  * OkHttp — Square, Inc.
+  * Gson — Google LLC
+  * Multiplatform Markdown Renderer — Mike Penz
+  * Timber — Jake Wharton
+  * ProcessPhoenix — Jake Wharton
+  * Firebase Android SDK (Crashlytics, Analytics) — Google LLC
+
+--------------------------------------------------------------------------------
+SQLCipher for Android — BSD 3-Clause License
+--------------------------------------------------------------------------------
+
+net.zetetic:sqlcipher-android
+
+Copyright (c) 2008-2023, ZETETIC LLC
+All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+    * Redistributions of source code must retain the above copyright
+      notice, this list of conditions and the following disclaimer.
+    * Redistributions in binary form must reproduce the above copyright
+      notice, this list of conditions and the following disclaimer in the
+      documentation and/or other materials provided with the distribution.
+    * Neither the name of the ZETETIC LLC nor the
+      names of its contributors may be used to endorse or promote products
+      derived from this software without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY ZETETIC LLC ''AS IS'' AND ANY
+EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+DISCLAIMED. IN NO EVENT SHALL ZETETIC LLC BE LIABLE FOR ANY
+DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+(INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
+ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+--------------------------------------------------------------------------------
+Bundled fonts — SIL Open Font License, Version 1.1
+--------------------------------------------------------------------------------
+
+The brand typefaces are bundled as TrueType assets under res/font/. Each is
+licensed under the SIL Open Font License, Version 1.1. The full license texts
+are bundled alongside the application in:
+  * app/src/main/assets/license_inter_ofl.txt
+  * app/src/main/assets/license_jetbrainsmono_ofl.txt
+
+Inter
+  Copyright (c) 2016 The Inter Project Authors
+  (https://github.com/rsms/inter)
+
+JetBrains Mono
+  Copyright 2020 The JetBrains Mono Project Authors
+  (https://github.com/JetBrains/JetBrainsMono)
+
+This Font Software is licensed under the SIL Open Font License, Version 1.1.
+This license is available with a FAQ at http://scripts.sil.org/OFL
+
+--------------------------------------------------------------------------------
+Bundled machine-learning model — Apache License 2.0
+--------------------------------------------------------------------------------
+
+The on-device long-term-memory embedding model is bundled as a TensorFlow Lite
+asset (app/src/main/assets/universal_sentence_encoder.tflite) and ships in the
+released APK/AAB:
+
+  * Universal Sentence Encoder — Copyright Google LLC — Apache License 2.0
+    (https://www.kaggle.com/models/google/universal-sentence-encoder)
+
+================================================================================
+Development-time tooling (not distributed in the application)
+================================================================================
+
+The standalone browser pipeline editor (pipeline-editor.html) loads the
+following library from a public CDN at runtime in the browser. It is a
+development/authoring tool and is NOT bundled in the released APK/AAB:
+
+  * Drawflow (drawflow@0.0.60) — MIT License — Copyright (c) Jero Soler
+    https://github.com/jerosoler/Drawflow

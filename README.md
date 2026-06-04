@@ -208,7 +208,7 @@ After installing:
 | Architecture     | Clean Architecture + MVVM                               |
 | DI               | Hilt                                                    |
 | Async            | Coroutines / Flow                                       |
-| Network          | Retrofit, Coil                                          |
+| Network          | OkHttp + Ktor (via Koog)                                |
 | Local storage    | Room + DataStore                                        |
 | Testing          | JUnit + MockK                                           |
 
