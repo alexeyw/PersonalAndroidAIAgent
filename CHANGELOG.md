@@ -121,6 +121,15 @@ details.
 
 ### Fixed
 
+- **Dependency freshness** (Phase 26 / Task 6/10): bumped `androidx.core:core-ktx`
+  1.18.0 → 1.19.0 and `com.google.ai.edge.litertlm:litertlm-android` 0.12.0 →
+  0.13.0 (both Apache-2.0, no new transitive licences). The `GradleDependency`
+  and `NewerVersionAvailable` lint checks are kept enabled so outdated
+  dependencies are surfaced and updated rather than silenced; the deliberate
+  Kotlin/Compose-plugin pin (2.3.21, a separate toolchain upgrade) and the
+  mediapipe false positive (its version scheme sorts `0.20230731` as newer than
+  the actual-latest `0.10.35`) are grandfathered individually in
+  `lint-baseline.xml`.
 - **Documentation ↔ code reconciliation** (Phase 26 / Task 6/10): a sweep
   aligning the public docs with current behaviour. `FILE_MAP.md` no longer
   claims MCP "Only SSE … through Koog 0.8; STREAMABLE_HTTP falls back to SSE" —

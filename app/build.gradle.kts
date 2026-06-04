@@ -187,22 +187,12 @@ android {
         // (every `minSdk = 36` device is 64-bit). ChromeOS support is not in
         // scope for v0.1 — disable the lint check that demands an x86 binary.
         disable += "ChromeOsAbiSupport"
-        // Phase 26 / Task 2/10: `NewerVersionAvailable` queries the network for
-        // the latest published version of every dependency. With
-        // `warningsAsErrors = true` it turns any upstream release into a build
-        // failure on otherwise-unrelated PRs (e.g. mockk 1.14.9 → 1.14.11),
-        // which makes it unusable as a deterministic CI gate. Dependency
-        // freshness is tracked deliberately, not by failing the build on the
-        // publisher's schedule, so this check is disabled.
-        disable += "NewerVersionAvailable"
-        // Phase 26 / Task 6/10: `GradleDependency` is the sibling "a newer
-        // version of X is available" check with the identical defect — its
-        // finding message embeds the latest published version, so an upstream
-        // release (e.g. androidx.core:core-ktx 1.18.0 → 1.19.0) fails the build
-        // on unrelated PRs and any baseline entry goes stale on the next
-        // release. Disabled for the same determinism reason as
-        // `NewerVersionAvailable`; dependency freshness is tracked deliberately.
-        disable += "GradleDependency"
+        // `NewerVersionAvailable` / `GradleDependency` (the "a newer version of
+        // X is available" checks) are kept ENABLED on purpose: surfacing an
+        // outdated dependency is the whole point of the analysis, so we update
+        // the dependency rather than silence the check. Genuine false positives
+        // (e.g. date-versioned artefacts whose "newer" version is actually
+        // older) are grandfathered individually in `lint-baseline.xml`.
     }
 }
 
