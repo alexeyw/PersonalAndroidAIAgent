@@ -54,6 +54,16 @@ class LocalModelRepositoryImpl @Inject constructor(private val localModelDao: Lo
     }
 
     override suspend fun deleteModelById(id: Long): Unit = withContext(Dispatchers.IO) {
+        // Remove the on-disk model file before dropping the record, otherwise
+        // deleting a model leaks its (often multi-GB) weights file on disk.
+        // Best-effort: a missing file or an unreadable path must not block the
+        // record deletion, so the file removal is wrapped in runCatching.
+        localModelDao.findById(id)?.let { entity ->
+            runCatching {
+                val file = File(entity.path)
+                if (file.exists()) file.delete()
+            }
+        }
         localModelDao.deleteModelById(id)
     }
 

@@ -125,6 +125,11 @@ details.
 
 ### Fixed
 
+- **Deleting a local model now removes its file** (Phase 26 / Task 6/10):
+  `LocalModelRepository.deleteModelById` only dropped the Room record, leaving
+  the (often multi-GB) weights file orphaned on disk. It now deletes the
+  on-disk file at the model's path first (best-effort — a missing/unreadable
+  file never blocks the record removal).
 - **Dependency freshness** (Phase 26 / Task 6/10): bumped `androidx.core:core-ktx`
   1.18.0 → 1.19.0 and `com.google.ai.edge.litertlm:litertlm-android` 0.12.0 →
   0.13.0 (both Apache-2.0, no new transitive licences). The `GradleDependency`
