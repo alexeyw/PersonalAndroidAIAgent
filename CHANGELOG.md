@@ -80,6 +80,20 @@ details.
 
 ### Changed
 
+- **`FILE_MAP.md` navigation reconciliation** (Phase 26 / Task 8/10): the
+  `app/src/main/java/ai/agent/android/FILE_MAP.md` agent/contributor navigation
+  map was re-synced with the actual source tree — added the 11 missing pipeline
+  `NodeExecutor` strategies (only `ClarificationNodeExecutor` had been listed),
+  `PromptRepositoryImpl`, seven domain models (`ActiveModelMeta`, `Identity`,
+  `MemoryStats`, `PromptTemplate`, `ProviderSummary`, `TestProbeResult`,
+  `ToolApprovalPolicy`), the `IdentityRepository` / `PromptRepository`
+  interfaces, `LongRunningTaskNotifier`, the three prompt-template use cases,
+  and `ChatHomeFixtures`; corrected the misfiled `presentation/ui/common` +
+  `presentation/ui/components` nesting; and removed the stale `data/remote/`
+  entry. The `catalog/FILE_MAP.md` design-system map gained its entire
+  previously-undocumented `screens/` tree (13 screen surfaces) plus the
+  `components/{brand,pipelineeditor,topbar}` groups, missing tokens/components,
+  and the new screen-level tests. No code changed.
 - **Third-party license attribution audit** (Phase 26 / Task 7/10): added a
   repository `NOTICE` file inventorying every bundled runtime component, the
   required BSD-3-Clause notice for SQLCipher (`net.zetetic:sqlcipher-android`),
