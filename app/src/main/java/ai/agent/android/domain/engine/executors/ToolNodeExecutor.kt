@@ -118,10 +118,12 @@ class ToolNodeExecutor @Inject constructor(
         originalPrompt: String,
     ): Flow<NodeOutput> = flow {
         val toolNameConfig = node.toolName
-        if (toolNameConfig.isNullOrBlank()) {
-            emit(NodeOutput.Result(NodeExecutionResult(error = "Tool node is missing toolName configuration.")))
-            return@flow
-        }
+        // A blank / null tool name is the "Auto" selection — the editor's empty
+        // tool option is persisted as `null` (see `NodeConfigCodec.apply`), and
+        // it means the same thing as the explicit "auto" sentinel: let the LLM
+        // pick a tool from the registry at runtime. Only a *configured but
+        // unknown* tool name is a real error, handled in the else branch below.
+        val isAutoSelect = toolNameConfig.isNullOrBlank() || toolNameConfig.equals("auto", ignoreCase = true)
 
         emit(NodeOutput.State(AgentOrchestratorState.Thinking("Analyzing task for tool execution...")))
 
@@ -136,7 +138,7 @@ class ToolNodeExecutor @Inject constructor(
         val resolvedToolName: String
         val resolvedToolArgs: String
 
-        if (toolNameConfig.equals("auto", ignoreCase = true)) {
+        if (isAutoSelect) {
             val availableTools = toolRepository.getAvailableTools()
             if (availableTools.isEmpty()) {
                 val errorMsg = "No tools available for auto selection"

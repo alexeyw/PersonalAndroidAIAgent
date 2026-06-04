@@ -130,6 +130,12 @@ details.
 
 ### Fixed
 
+- **TOOL node with "Auto" tool failed at runtime** (Phase 26 / Task 6/10): a
+  TOOL node left on the Auto option (persisted as a blank `toolName`) errored
+  with "Tool node is missing toolName configuration" instead of letting the
+  model pick a tool. `ToolNodeExecutor` now treats a blank/null `toolName` the
+  same as the explicit `"auto"` sentinel (LLM-driven auto-select); only a
+  configured-but-unknown tool name is an error.
 - **Chat token-usage indicator counted a token budget as characters**
   (Phase 26 / Task 6/10): `GetContextWindowUseCase` compared message
   **character** lengths against `maxContextLength` (a **token** budget), so the

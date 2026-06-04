@@ -31,6 +31,7 @@ import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -391,5 +392,32 @@ class ToolNodeExecutorTest {
 
         val lastState = states.last() as NodeExecutionResult
         assertEquals("Tool B Success", lastState.outputText)
+    }
+
+    @Test
+    fun `execute treats a blank tool name as auto-select`() = runTest {
+        // The editor's "Auto" tool option persists as a null / blank toolName
+        // (NodeConfigCodec maps an empty toolId to null). It must behave like
+        // the explicit "auto" sentinel — the LLM picks a tool — rather than
+        // failing with "missing toolName configuration".
+        listOf(null, "", "   ").forEach { blank ->
+            val node = NodeModel("1", NodeType.TOOL, 0f, 0f, toolName = blank)
+            coEvery { toolRepository.getAvailableTools() } returns listOf(
+                AgentTool("ToolA", "DescA", "SchemaA"),
+            )
+            every { llmEngine.generateResponseStream(any()) } returns
+                flowOf("""{"tool": "ToolA", "arguments": "arg_a"}""")
+            coEvery { toolRepository.executeTool("ToolA", "arg_a") } returns "Tool A Success"
+
+            val states = executor.execute(node, "Do A", "session-1", "").toList().unwrap()
+
+            val last = states.last() as NodeExecutionResult
+            assertEquals(
+                "blank toolName <$blank> should auto-select and run the tool",
+                "Tool A Success",
+                last.outputText,
+            )
+            assertNull("auto-select must not error for blank toolName <$blank>", last.error)
+        }
     }
 }
