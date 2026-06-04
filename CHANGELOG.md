@@ -83,14 +83,17 @@ details.
 - **Third-party license attribution audit** (Phase 26 / Task 7/10): added a
   repository `NOTICE` file inventorying every bundled runtime component, the
   required BSD-3-Clause notice for SQLCipher (`net.zetetic:sqlcipher-android`),
-  and the SIL OFL 1.1 copyright lines for the bundled Inter / JetBrains Mono
-  fonts (with pointers to the full license texts under `app/src/main/assets/`).
+  the SIL OFL 1.1 copyright lines for the bundled Inter / JetBrains Mono fonts
+  (with pointers to the full license texts under `app/src/main/assets/`), and
+  the bundled Universal Sentence Encoder embedding model
+  (`assets/universal_sentence_encoder.tflite`, Apache-2.0).
   The About screen's acknowledgments list was reconciled against the actual
   `libs.versions.toml` dependency set: dropped the phantom **Retrofit** /
   **Coil** entries (the network stack is OkHttp + Ktor) and the test-only
   MockK / Roborazzi credits, and added the previously-missing **AndroidX
   Jetpack**, **AppFunctions**, **Ktor**, **OkHttp**, **Gson**, **Multiplatform
-  Markdown Renderer**, and the **Inter** / **JetBrains Mono** fonts. A new
+  Markdown Renderer**, the bundled **Universal Sentence Encoder** model, and the
+  **Inter** / **JetBrains Mono** fonts. A new
   `AboutAcknowledgmentsTest` guards the list against drift (no blanks, no
   duplicates, notice-required components present, stale non-dependencies
   absent). The README tech-stack "Network" row was corrected from

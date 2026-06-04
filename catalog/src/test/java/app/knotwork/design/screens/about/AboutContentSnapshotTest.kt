@@ -62,6 +62,7 @@ internal object AboutPreview {
             AcknowledgmentEntry(name = "AppFunctions", license = "Apache 2.0"),
             AcknowledgmentEntry(name = "LiteRT-LM", license = "Apache 2.0"),
             AcknowledgmentEntry(name = "MediaPipe", license = "Apache 2.0"),
+            AcknowledgmentEntry(name = "Universal Sentence Encoder", license = "Apache 2.0"),
             AcknowledgmentEntry(name = "Koog", license = "Apache 2.0"),
             AcknowledgmentEntry(name = "Ktor", license = "Apache 2.0"),
             AcknowledgmentEntry(name = "OkHttp", license = "Apache 2.0"),

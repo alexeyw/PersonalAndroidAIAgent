@@ -48,6 +48,16 @@ class AboutAcknowledgmentsTest {
     }
 
     @Test
+    fun `given acknowledgments when read then the bundled embedding model is credited`() {
+        // The Universal Sentence Encoder TFLite model ships in the released
+        // APK/AAB (assets/universal_sentence_encoder.tflite) and must remain in
+        // the attribution audit even though it is an asset rather than a Gradle
+        // dependency.
+        val names = AboutAcknowledgments.ENTRIES.map { it.name }.toSet()
+        assertTrue("Bundled embedding model must be credited", "Universal Sentence Encoder" in names)
+    }
+
+    @Test
     fun `given acknowledgments when read then the bundled fonts are credited under OFL`() {
         val fonts = AboutAcknowledgments.ENTRIES.filter { it.name == "Inter" || it.name == "JetBrains Mono" }
         assertEquals("Both brand fonts must be listed", 2, fonts.size)

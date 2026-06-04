@@ -96,6 +96,7 @@ internal object AboutAcknowledgments {
         AcknowledgmentEntry(name = "AppFunctions", license = APACHE_2_0),
         AcknowledgmentEntry(name = "LiteRT-LM", license = APACHE_2_0),
         AcknowledgmentEntry(name = "MediaPipe", license = APACHE_2_0),
+        AcknowledgmentEntry(name = "Universal Sentence Encoder", license = APACHE_2_0),
         AcknowledgmentEntry(name = "Koog", license = APACHE_2_0),
         AcknowledgmentEntry(name = "Ktor", license = APACHE_2_0),
         AcknowledgmentEntry(name = "OkHttp", license = APACHE_2_0),

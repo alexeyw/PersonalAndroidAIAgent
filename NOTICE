@@ -91,6 +91,17 @@ JetBrains Mono
 This Font Software is licensed under the SIL Open Font License, Version 1.1.
 This license is available with a FAQ at http://scripts.sil.org/OFL
 
+--------------------------------------------------------------------------------
+Bundled machine-learning model — Apache License 2.0
+--------------------------------------------------------------------------------
+
+The on-device long-term-memory embedding model is bundled as a TensorFlow Lite
+asset (app/src/main/assets/universal_sentence_encoder.tflite) and ships in the
+released APK/AAB:
+
+  * Universal Sentence Encoder — Copyright Google LLC — Apache License 2.0
+    (https://www.kaggle.com/models/google/universal-sentence-encoder)
+
 ================================================================================
 Development-time tooling (not distributed in the application)
 ================================================================================
