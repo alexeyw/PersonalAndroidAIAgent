@@ -80,6 +80,10 @@ details.
 
 ### Changed
 
+- **Bump LiteRT-LM `0.13.0` → `0.13.1`**: a bug-fix-only patch release of
+  `com.google.ai.edge.litertlm:litertlm-android` (no API or behavior changes).
+  Clears the `GradleDependency` lint error that flagged the newer version as
+  available and was blocking `./gradlew check`.
 - **`FILE_MAP.md` navigation reconciliation** (Phase 26 / Task 8/10): the
   `app/src/main/java/ai/agent/android/FILE_MAP.md` agent/contributor navigation
   map was re-synced with the actual source tree — added the 11 missing pipeline
