@@ -3,8 +3,7 @@ package app.knotwork.design.icons.imagevector
 import androidx.compose.ui.graphics.vector.ImageVector
 
 /**
- * `I.warn` glyph (warning) — spec §0.7 single-stroke icon family.
- * Source: `project_docs/design/icons-src/warn.svg`.
+ * `I.warn` glyph (warning) — single-stroke icon family.
  */
 internal val knotworkWarnIcon: ImageVector by lazy { build() }
 

@@ -145,11 +145,8 @@ class ToolRepositoryImpl @Inject constructor(
      * the first occurrence. Defensive measure against a known issue in
      * [ai.agent.android.data.local.SettingsManager.updateMcpServer], which
      * replaces by index without checking for collisions: editing server A's
-     * URL to match an existing server B can persist `[B, B]`. Before the
-     * Phase 22 / Task 17 follow-up that swapped the iteration source from
-     * `ConcurrentHashMap.entries` to the persisted list, that duplication was
-     * masked because the map keyed by URL implicitly absorbed it. The list
-     * iteration is now the source of truth for ordering, so the dedup must
+     * URL to match an existing server B can persist `[B, B]`. The list
+     * iteration is the source of truth for ordering, so the dedup must
      * happen here — otherwise a duplicate URL would trigger a duplicate
      * `executeTool` call against the same connected client (catastrophic for
      * non-idempotent tools) and emit duplicate tools from `getAvailableTools`.

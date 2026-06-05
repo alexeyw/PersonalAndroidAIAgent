@@ -3,13 +3,8 @@ package ai.agent.android.presentation.ui.chat.home
 import app.knotwork.design.components.chips.Risk
 
 /**
- * Sealed UI state for the redesigned chat home (`compose/screens/README.md
- * §C1 · Chat (home)`). Drives the 9-state visual matrix locked-in by Phase
- * 21 / Task 8.
- *
- * The state is **deterministic** — the stub [ChatHomeViewModel] flips
- * between variants for the debug state picker and the real orchestrator
- * wiring lands in a follow-up task after v0.1.
+ * Sealed UI state for the redesigned chat home. Drives the 9-state visual
+ * matrix.
  *
  * The dark-theme variant is cross-cutting (driven by `isSystemInDarkTheme`
  * via `KnotworkTheme`) and is therefore not modelled as a separate state.
@@ -21,7 +16,7 @@ sealed interface ChatHomeUiState {
      * delivering the first message snapshot. Distinct from [Empty]: while
      * `Loading`, the surface shows a centered progress indicator (no empty
      * placeholder copy) so users don't see the "no messages yet" hero flash
-     * for a frame on every app launch. Phase 22 / Task 16 follow-up F4.
+     * for a frame on every app launch.
      */
     data object Loading : ChatHomeUiState
 

@@ -35,7 +35,7 @@ import app.knotwork.design.tokens.KnotworkTextStyles
  * Pipeline-run status banner — the prominent strip the designer puts above the
  * canvas to communicate run progress at a glance.
  *
- * Mockup reference (designer-supplied 2026-05-23):
+ * Variants:
  *  - **Done:** green left dot + `DONE` label + per-run metrics (`11 / 11 · 12.8
  *    s · 2 408 tok`) + trailing `Trace` action.
  *  - **Running:** amber left dot + `RUNNING` label + live counter (`step 6 / 11
@@ -71,9 +71,9 @@ fun RunStatusBanner(
     val background = backgroundTintFor(accent)
     // Single Surface owns BOTH the background tint AND the accent border so the
     // two are always the same shape and size. Wrapping the content in a second
-    // Surface (the prior layout) made the border anchor to a fixed-min-height
-    // box that didn't grow with the row content — the border visibly framed a
-    // smaller area than the background tint. Material3 `Surface` accepts a
+    // Surface would make the border anchor to a fixed-min-height
+    // box that didn't grow with the row content — the border would visibly frame
+    // a smaller area than the background tint. Material3 `Surface` accepts a
     // `border` parameter directly; use it.
     Surface(
         modifier = modifier
@@ -168,7 +168,7 @@ private fun labelFor(status: RunStatus): String = when (status) {
     is RunStatus.Done -> stringResource(R.string.knotwork_run_banner_label_done)
 }
 
-/** Left dot + uppercase status label. Mirrors the mockup `● RUNNING` / `● DONE` group. */
+/** Left dot + uppercase status label — the `● RUNNING` / `● DONE` group. */
 @Composable
 private fun StatusBadge(accent: Color, label: String) {
     Row(
@@ -295,7 +295,7 @@ private fun ActionsRow(
     }
 }
 
-/** Formats elapsed seconds as `"4.2"` (1 decimal) to match the mockup wording. */
+/** Formats elapsed seconds as `"4.2"` (1 decimal). */
 private fun formatSeconds(seconds: Float): String {
     // Use Locale-stable formatting rounded (not truncated) to 1 decimal — banner
     // copy is "4.2 s", not a precise telemetry readout. `kotlin.math.round` is
@@ -307,7 +307,7 @@ private fun formatSeconds(seconds: Float): String {
     return "$intPart.$decPart"
 }
 
-/** Formats token counts with a thin-space thousands grouping (matches mockup `2 408 tok`). */
+/** Formats token counts with a thin-space thousands grouping (e.g. `2 408 tok`). */
 private fun formatTokens(tokens: Int): String {
     val abs = kotlin.math.abs(tokens)
     if (abs < THOUSANDS_GROUP) return tokens.toString()
@@ -316,7 +316,7 @@ private fun formatTokens(tokens: Int): String {
     val sb = StringBuilder()
     val rem = s.length % GROUP_DIGITS
     s.forEachIndexed { index, c ->
-        // U+2009 THIN SPACE — matches the designer mockup's typographic
+        // U+2009 THIN SPACE — the typographic
         // thousands separator. A regular space (U+0020) would render visibly
         // wider on most fonts and break the compact `2 408 tok` look.
         if (index != 0 && (index - rem) % GROUP_DIGITS == 0) sb.append(THIN_SPACE)

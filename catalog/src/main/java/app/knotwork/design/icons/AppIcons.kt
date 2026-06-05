@@ -100,18 +100,17 @@ import app.knotwork.design.icons.imagevector.knotworkXIcon
  * Knotwork icon facade.
  *
  * Holds the custom single-stroke icon family: the brand marks, the 12 pipeline
- * node glyphs, and the spec §0.7 `I.*` general-UI set (`menu`, `back`, `search`,
- * `add`, `edit`, `trash`, …) sourced from the `project_docs/design/icons-src`
- * SVG set.
+ * node glyphs, and the `I.*` general-UI set (`menu`, `back`, `search`,
+ * `add`, `edit`, `trash`, …) built from the source SVG set.
  * Prefer these over Material Icons so the UI reads as one stroke family; a
  * handful of low-frequency glyphs with no `I.*` counterpart still use Material
- * Icons directly (tracked in `project_docs/ui-audit-phase26.md`).
+ * Icons directly.
  *
  * Implementations live in [imagevector] (one file per icon). Each file
  * exposes a top-level `internal val knotwork<Name>Icon: ImageVector`
  * lazily built from SVG path data, and the facade delegates to it. The
  * `*Active` variants restroke the bottom-nav glyphs at 2.0 for the selected
- * tab (spec §0.7).
+ * tab.
  */
 object AppIcons {
     /** Knotwork wordmark glyph (used in compact contexts; the literal "Knotwork" text wordmark is rendered with Inter). */
@@ -165,7 +164,7 @@ object AppIcons {
     /** Memory entry / "Memory" navigation glyph. */
     val Brain: ImageVector get() = knotworkBrainIcon
 
-    // ── Active (2.0 stroke) bottom-nav variants (spec §0.7) ───────────────
+    // ── Active (2.0 stroke) bottom-nav variants ───────────────────────────
     /** `I.chat` at active 2.0 stroke — selected Chat tab. */
     val ChatActive: ImageVector get() = knotworkChatActiveIcon
 
@@ -178,7 +177,7 @@ object AppIcons {
     /** `I.more2` at active 2.0 stroke — selected More tab. */
     val More2Active: ImageVector get() = knotworkMore2ActiveIcon
 
-    // ── General UI icon family (spec §0.7 `I.*`) ──────────────────────────
+    // ── General UI icon family (`I.*`) ────────────────────────────────────
     /** `I.menu` — hamburger / drawer. */
     val Menu: ImageVector get() = knotworkMenuIcon
 
@@ -299,7 +298,7 @@ object AppIcons {
     /** `I.pin` in its pin-on (solid-filled) state. */
     val PinOn: ImageVector get() = knotworkPinOnIcon
 
-    // ── General UI icon family — round 2 additions (spec §0.7) ───────────
+    // ── General UI icon family — additional glyphs ────────────────────────
     /** `I.refresh` — retry / refresh. */
     val Refresh: ImageVector get() = knotworkRefreshIcon
 

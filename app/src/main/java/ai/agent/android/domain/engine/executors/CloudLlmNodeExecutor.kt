@@ -68,7 +68,8 @@ class CloudLlmNodeExecutor @Inject constructor(
 
         // `inputText` is the assembled context produced upstream by NodeContextBuilder
         // according to the node's NodeContextConfig. Re-fetching chat history or
-        // long-term memory here would silently override those flags and break Phase 15.
+        // long-term memory here would silently override those flags and break the
+        // per-node context-config contract.
         val fullPrompt = "$baseSystemPrompt\n\n$inputText\nAGENT: "
 
         val startTime = System.currentTimeMillis()

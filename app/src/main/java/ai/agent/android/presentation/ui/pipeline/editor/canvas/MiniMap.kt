@@ -44,8 +44,6 @@ import kotlin.math.roundToInt
  * hue; the current viewport is outlined as an accent rectangle. Tapping inside
  * the body centres the canvas on the tapped canvas-space point.
  *
- * Mockup reference: mockup-4 (Overview state).
- *
  * Visibility is driven by `EditorState.miniMapOpen`; this composable assumes the
  * caller already gated on that flag.
  *
@@ -212,7 +210,7 @@ private fun MiniMapBody(
     }
 }
 
-/** Formats a CanvasTransform scale as `"0.42×"` to match the mockup wording. */
+/** Formats a CanvasTransform scale as `"0.42×"`. */
 internal fun formatScalePercent(scale: Float): String {
     val hundredths = (scale * 100f).roundToInt()
     val whole = hundredths / HUNDREDTHS_PER_UNIT

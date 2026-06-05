@@ -3,8 +3,7 @@ package app.knotwork.design.icons.imagevector
 import androidx.compose.ui.graphics.vector.ImageVector
 
 /**
- * `I.refresh` glyph (retry / refresh) — spec §0.7 single-stroke icon family (round 2).
- * Source: `project_docs/design/icons-src/refresh.svg`.
+ * `I.refresh` glyph (retry / refresh) — single-stroke icon family.
  */
 internal val knotworkRefreshIcon: ImageVector by lazy { build() }
 

@@ -93,8 +93,7 @@ class ChatRepositoryImpl @Inject constructor(private val chatDao: ChatDao, priva
         }
 
     override suspend fun saveSession(session: ChatSession) {
-        // Single round-trip via Room's @Upsert — eliminates the SELECT + INSERT/UPDATE
-        // N+1 pattern previously used here. The DAO conflicts on primary key (`id`).
+        // Single round-trip via Room's @Upsert. The DAO conflicts on primary key (`id`).
         chatDao.upsertSession(session.toEntity())
     }
 

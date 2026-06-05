@@ -26,8 +26,7 @@ import app.knotwork.design.theme.KnotworkTheme
  * Always-visible zoom rail anchored to the canvas right edge — three stacked
  * 40 dp tiles: `+` (zoom in), `−` (zoom out), and `⤡` (fit-to-view).
  *
- * Mockup reference: every canvas screenshot from the Phase 22 / Task 14 mockup
- * batch shows the rail in this exact position, regardless of editing /
+ * The rail keeps this exact position regardless of editing /
  * validating / running / overview state. The rail is therefore part of the
  * canvas overlay (not the toolbar) and does not toggle.
  *
@@ -35,7 +34,7 @@ import app.knotwork.design.theme.KnotworkTheme
  * enable flags ([canZoomIn] / [canZoomOut]) so the icons grey out at the
  * scale-range boundaries instead of becoming silent no-ops.
  *
- * **Tile sizing.** Phase 22 / Task 14 review caught that `IconButton` enforces
+ * **Tile sizing.** `IconButton` enforces
  * a 48 dp minimum interactive size that overrode the 40 dp tile constraint —
  * adjacent tiles visibly overlapped. The rail now uses `Surface + clickable +
  * Icon` directly so the 40 dp tile size is respected. The 4 dp inter-tile gap

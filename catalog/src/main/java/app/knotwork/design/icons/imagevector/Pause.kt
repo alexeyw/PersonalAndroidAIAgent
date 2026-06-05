@@ -3,8 +3,7 @@ package app.knotwork.design.icons.imagevector
 import androidx.compose.ui.graphics.vector.ImageVector
 
 /**
- * `I.pause` glyph (pause (solid)) — spec §0.7 single-stroke icon family.
- * Source: `project_docs/design/icons-src/pause.svg`.
+ * `I.pause` glyph (pause (solid)) — single-stroke icon family.
  */
 internal val knotworkPauseIcon: ImageVector by lazy { build() }
 

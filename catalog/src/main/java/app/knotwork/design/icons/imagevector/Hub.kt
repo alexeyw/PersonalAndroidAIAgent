@@ -3,8 +3,7 @@ package app.knotwork.design.icons.imagevector
 import androidx.compose.ui.graphics.vector.ImageVector
 
 /**
- * `I.hub` glyph (hub / integrations) — spec §0.7 single-stroke icon family (round 2).
- * Source: `project_docs/design/icons-src/hub.svg`.
+ * `I.hub` glyph (hub / integrations) — single-stroke icon family.
  */
 internal val knotworkHubIcon: ImageVector by lazy { build() }
 

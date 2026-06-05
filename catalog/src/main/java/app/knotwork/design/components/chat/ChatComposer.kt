@@ -54,7 +54,6 @@ import app.knotwork.design.tokens.KnotworkTextStyles
  * Composer state machine — drives the send / stop morph, the input enabled
  * state, and the inline error banner.
  *
- * Mirrors `compose/components/README.md` §Chat surface §ChatComposer.
  */
 sealed interface ComposerState {
 
@@ -81,7 +80,7 @@ sealed interface ComposerState {
  * Knotwork chat composer — pill-shaped multiline input + circular brand
  * action button.
  *
- * Visual contract (`compose/components/README.md` §Chat surface §ChatComposer):
+ * Visual contract:
  *  - A single pill (`KnotworkTheme.shapes.full`) on `extended.surface1` hosts
  *    the borderless input on the left and a circular filled brand-color
  *    action button on the right.
@@ -95,7 +94,7 @@ sealed interface ComposerState {
  * **Stateless** — `value` is hoisted to the caller; this composable never
  * stores text. The screen ViewModel owns persistence and history.
  *
- * Trailing action-button state matrix (`inputs-and-chips.md` §5):
+ * Trailing action-button state matrix:
  *
  * | composer state                                  | icon  | tint     |
  * |-------------------------------------------------|-------|----------|
@@ -341,7 +340,7 @@ private fun ComposerActionButton(
     }
 }
 
-/** Duration of the send ↔ stop cross-fade per `compose/components/animations.md` §Chat. */
+/** Duration of the send ↔ stop cross-fade. */
 private const val COMPOSER_MORPH_MS = 200
 
 /** Inline error banner stacked above the input row. */

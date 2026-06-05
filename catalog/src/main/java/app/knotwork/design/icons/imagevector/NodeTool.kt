@@ -3,8 +3,7 @@ package app.knotwork.design.icons.imagevector
 import androidx.compose.ui.graphics.vector.ImageVector
 
 /**
- * Pipeline `TOOL` node glyph — wrench inside a hex frame. Source:
- * `project_docs/design/icons-src/node-tool.svg`.
+ * Pipeline `TOOL` node glyph — wrench inside a hex frame.
  */
 internal val knotworkNodeToolIcon: ImageVector by lazy { build() }
 

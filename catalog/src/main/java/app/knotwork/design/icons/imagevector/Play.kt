@@ -3,8 +3,7 @@ package app.knotwork.design.icons.imagevector
 import androidx.compose.ui.graphics.vector.ImageVector
 
 /**
- * `I.play` glyph (run (solid)) — spec §0.7 single-stroke icon family.
- * Source: `project_docs/design/icons-src/play.svg`.
+ * `I.play` glyph (run (solid)) — single-stroke icon family.
  */
 internal val knotworkPlayIcon: ImageVector by lazy { build() }
 

@@ -66,7 +66,7 @@ fun KnotworkModalRoute(
     // predictive-back animation when `enableOnBackInvokedCallback` is true
     // in the manifest (it is — see AndroidManifest.xml); we still register
     // a handler so a sheet body that intercepts dismiss for confirmation
-    // (e.g. unsaved-changes warning in NodeConfigSheet — Task 7) can do so
+    // (e.g. unsaved-changes warning in NodeConfigSheet) can do so
     // without losing the gesture.
     PredictiveBackHandler { progress: Flow<androidx.activity.BackEventCompat> ->
         runCatching { progress.collect { /* observe to keep the handler alive */ } }

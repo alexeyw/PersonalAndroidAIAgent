@@ -34,11 +34,11 @@ import app.knotwork.design.components.pipelineeditor.NodeType as CatalogNodeType
  * [NodeModel] persistence layer.
  *
  * Two responsibilities:
- *  - **Encode / decode** the configuration as a JSON blob written to `NodeModel.configJson`
- *    (Phase 21 / Task 9 — see `node-specs.md` for the schema). The blob carries the typed
+ *  - **Encode / decode** the configuration as a JSON blob written to `NodeModel.configJson`.
+ *    The blob carries the typed
  *    payload introduced by the new `NodeConfigSheet`.
  *  - **Derive defaults** from the legacy flat fields (`systemPrompt`, `cloudProvider`,
- *    `toolName`, `conditionComplexity`, …) when a row was saved before Phase 21. This way
+ *    `toolName`, `conditionComplexity`, …) when a row was saved by an older app version. This way
  *    pre-existing pipelines open in the new editor with sensible field values without
  *    forcing a one-shot data migration.
  *
@@ -121,7 +121,7 @@ internal object NodeConfigCodec {
             is LiteRtConfig -> withJson.copy(
                 systemPrompt = config.systemPrompt,
                 // Blank `modelId` is the explicit "Active model" sentinel
-                // (Phase 22 / Task 16 follow-up F8) — persist as `null` on
+                // — persist as `null` on
                 // the domain row so `LoadModelUseCase(null)` falls back to
                 // the current `LocalModelRepository.getActiveModel()` at
                 // execute time. Earlier this branch preserved the previous
@@ -144,8 +144,8 @@ internal object NodeConfigCodec {
                 systemPrompt = config.questionTemplate,
             )
             // OUTPUT mirrors `systemPrompt` onto the domain row so the
-            // `OutputNodeExecutor` can read it via `node.systemPrompt`
-            // (Phase 22 / Task 16 follow-up F10). Empty string is allowed
+            // `OutputNodeExecutor` can read it via `node.systemPrompt`.
+            // Empty string is allowed
             // and the executor reads it as "echo upstream verbatim".
             is OutputConfig -> withJson.copy(systemPrompt = config.systemPrompt)
             is IntentRouterConfig,
@@ -235,12 +235,12 @@ internal object NodeConfigCodec {
     }
 
     // ─────────────────────────────────────────────────────────────────────
-    // Legacy-field derivation (pre-Phase-21 rows)
+    // Legacy-field derivation (older saved rows)
     // ─────────────────────────────────────────────────────────────────────
 
     private fun deriveFromLegacy(node: NodeModel): NodeConfig {
         val title = node.label.ifBlank { node.type.name }
-        // Phase 22 / Task 14 review round 3: when a legacy node persists with
+        // When a legacy node persists with
         // an empty `systemPrompt` (older pipelines created before
         // `DefaultPrompts.getDefaultPromptForNodeType` was wired into NodeModel
         // construction), fall back to the registered default prompt instead of
@@ -409,8 +409,7 @@ internal object NodeConfigCodec {
         title = title,
         description = description,
         format = enumOrDefault(p.optStringOrNull("format"), OutputFormat.PLAIN_TEXT),
-        // Optional — older persisted rows that pre-date Phase 22 / Task 16
-        // follow-up F10 simply lack this key and fall back to the default
+        // Optional — older persisted rows simply lack this key and fall back to the default
         // empty string (echo-through mode).
         systemPrompt = p.optString("systemPrompt"),
     )
@@ -576,7 +575,7 @@ internal object NodeConfigCodec {
         runCatching { enumValueOf<T>(it) }.getOrNull()
     }
 
-    // Numeric defaults mirror `node-specs.md`.
+    // Numeric defaults for node configuration.
     private const val DEFAULT_TEMPERATURE = 0.7
     private const val DEFAULT_TOP_P = 0.9
     private const val DEFAULT_MAX_NEW_TOKENS = 512

@@ -95,7 +95,7 @@ import app.knotwork.design.theme.KnotworkTheme
 import app.knotwork.design.tokens.KnotworkTextStyles
 import kotlinx.coroutines.launch
 
-/** Horizontal padding around chat-message rows (per `screens/README.md §C1`). */
+/** Horizontal padding around chat-message rows. */
 private val ChatHorizontalPadding = 16.dp
 
 /** Vertical gap between consecutive chat-message rows. */
@@ -124,7 +124,7 @@ private const val CONSOLE_DRAG_HANDLE_ALPHA = 0.30f
 
 /**
  * Stateless Knotwork Chat home — the primary user-facing surface. Drives the
- * 9 documented states (`compose/screens/README.md §C1`) deterministically
+ * 9 documented states deterministically
  * from [state]; the caller (`:app/ChatHomeScreen`) owns navigation, IME
  * insets, deep-link arguments, and the real ViewModel wiring.
  *
@@ -151,7 +151,7 @@ private const val CONSOLE_DRAG_HANDLE_ALPHA = 0.30f
  *   `ChatContent.Markdown` body. The catalog stays free of any markdown
  *   library — the app supplies the renderer (typically
  *   `com.mikepenz.markdown.m3.Markdown { source -> Markdown(content = source) }`).
- *   When `null` the body falls back to plain text. Phase 22 / Task 16 follow-up F2.
+ *   When `null` the body falls back to plain text.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -189,7 +189,7 @@ fun ChatHomeContent(
                 messageListState = messageListState,
             )
         }
-        // Drawer slide-in honours `animations.md §Chat` — 280 ms emphasised
+        // Drawer slide-in — 280 ms emphasised
         // slide + fade enter; reduced-motion collapses to an 80 ms crossfade
         // through `respectReducedMotionTransitions`.
         val drawerTransitions = respectReducedMotionTransitions(
@@ -331,7 +331,7 @@ private const val TOKEN_FORMAT_THRESHOLD = 1000
  * next turn.
  *
  * When [ChatHomeViewState.agentStatusLine] is non-null a single-line
- * mono pill is rendered above the composer (matches the spec mockup's
+ * mono pill is rendered above the composer (the
  * `[NODE]  idle · ready` strip).
  */
 @Composable
@@ -357,7 +357,7 @@ private fun ChatHomeBottomBar(state: ChatHomeViewState, callbacks: ChatHomeCallb
  * renders as one continuous mono line.
  *
  * Tappable: the pill is the user-facing affordance for opening the
- * console pane (Phase 22 / Task 3). The host wires [onClick] to its
+ * console pane. The host wires [onClick] to its
  * `openConsole(Partial)` callback. The whole row carries Role.Button +
  * `contentDescription` so TalkBack announces it as a button rather than
  * two separate text labels.
@@ -437,7 +437,7 @@ private fun ChatHomeBody(
  * Cold-start body — a centred [CircularProgressIndicator] on the chat
  * surface. Renders before the chat repository delivers its first snapshot
  * so the user never sees the [ChatHomeEmptyBody] hero flash for a frame
- * on every app launch (Phase 22 / Task 16 follow-up F4).
+ * on every app launch.
  */
 @Composable
 private fun ChatHomeLoadingBody(padding: PaddingValues) {
@@ -713,7 +713,7 @@ private fun ChatHomeErrorTile(message: String, onRetry: () -> Unit) {
 
 /**
  * Slide-in drawer overlay rendered when [ChatHomeVisualState.DrawerOpen]
- * is active. Mirrors the second-pass mockup:
+ * is active:
  *  - `SESSIONS` mono header.
  *  - Big rounded `+ New chat` pill on `Accent50` with brand-primary glyph
  *    and label.
@@ -833,8 +833,7 @@ private fun ChatHomeDrawerThreadRow(row: ChatHomeThreadRow, onClick: () -> Unit,
     // Pair the selected-row background and the on-row text colour through the
     // Material3 colour scheme so the contrast stays WCAG-AA in both themes.
     // The previous `KnotworkPalette.Accent50` was a static tan that washed out
-    // against `onSurface` on dark theme (mirror of the onboarding row fix that
-    // landed in Phase 22 / Task 13 post-review feedback).
+    // against `onSurface` on dark theme (mirror of the onboarding row fix).
     val selected = row.active || row.selected
     val rowBg = if (selected) {
         MaterialTheme.colorScheme.primaryContainer
@@ -1110,8 +1109,7 @@ private fun Modifier.absorbClicks(): Modifier {
 
 /**
  * Per-row resolution of the `allowOnceEnabled` flag passed into
- * [ChatMessage] for HITL confirmations. Mirrors the rule documented in
- * `compose/components/README.md §HitlConfirmationCard`:
+ * [ChatMessage] for HITL confirmations. By rule:
  *  - Readonly → auto-allowed (CTA hidden by the card).
  *  - Sensitive → always enabled.
  *  - Destructive → enabled only when the typed confirmation reads "yes".

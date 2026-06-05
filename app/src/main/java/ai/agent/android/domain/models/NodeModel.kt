@@ -26,12 +26,12 @@ import ai.agent.android.domain.constants.DefaultPrompts
  * @property contextConfig Per-node selection of pipeline context blocks
  * (chat history, original task, previous node output, long-term memory, tool
  * results) that the orchestrator concatenates into the node's input on every
- * execution. Defaults to [NodeContextConfig.ALL_ENABLED] so legacy pipelines
- * keep their pre-Phase-15 behaviour.
+ * execution. Defaults to [NodeContextConfig.ALL_ENABLED] so older pipelines
+ * keep their default behaviour.
  * @property configJson Optional JSON payload encoding the per-type
  * [app.knotwork.design.components.pipelineeditor.NodeConfig] populated from
- * the Phase-21 `NodeConfigSheet` (see `node-specs.md`). `null` for legacy
- * pipelines saved before Phase 21; the editor falls back to deriving a
+ * the `NodeConfigSheet`. `null` for older pipelines without per-node config;
+ * the editor falls back to deriving a
  * default config from the flat fields above on first edit. Serialised /
  * deserialised by `presentation/ui/pipeline/editor/config/NodeConfigCodec`.
  */

@@ -59,8 +59,7 @@ private val FreeformInputMinHeight = 40.dp
 /**
  * Knotwork clarification card — pinned-prompt surface rendered inline in
  * the assistant message stream while the agent is waiting on a typed
- * answer. Mirrors the spec mockup (Phase 21 / Task 10 follow-up,
- * Phase 22 / Task 5 dark-contrast + composer-aligned input fixes):
+ * answer:
  *
  *  - **Container.** Rounded `Accent50` tile so the prompt stands apart
  *    from the surrounding assistant bubble without competing with the

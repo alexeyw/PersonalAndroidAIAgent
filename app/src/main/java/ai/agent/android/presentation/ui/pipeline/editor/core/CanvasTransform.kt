@@ -14,7 +14,7 @@ import kotlin.math.round
  *
  * `screen = canvas * scale + offset` ⇔ `canvas = (screen - offset) / scale`
  *
- * Bounds match `node-specs.md` §canvas: scale clamped to `[0.4f, 2.0f]`.
+ * Scale clamped to `[0.4f, 2.0f]`.
  *
  * @property scale uniform scale factor; `1.0f` means 1 canvas-px == 1 screen-px.
  * @property offsetX horizontal screen-space translation applied after scaling.
@@ -130,10 +130,10 @@ data class CanvasTransform(val scale: Float = 1f, val offsetX: Float = 0f, val o
     }
 
     companion object {
-        /** Lower bound for [scale] per `node-specs.md` §canvas. */
+        /** Lower bound for [scale]. */
         const val MIN_SCALE: Float = 0.4f
 
-        /** Upper bound for [scale] per `node-specs.md` §canvas. */
+        /** Upper bound for [scale]. */
         const val MAX_SCALE: Float = 2.0f
 
         /**
@@ -142,7 +142,7 @@ data class CanvasTransform(val scale: Float = 1f, val offsetX: Float = 0f, val o
          */
         const val ZOOM_STEP: Float = 1.25f
 
-        /** Canvas-space grid spacing for snap-to-grid (`node-specs.md` §Drag-and-drop). */
+        /** Canvas-space grid spacing for snap-to-grid. */
         const val GRID_PX: Float = 24f
 
         /**

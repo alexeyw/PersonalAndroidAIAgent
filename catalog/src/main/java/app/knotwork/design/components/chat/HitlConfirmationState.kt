@@ -14,7 +14,7 @@ object HitlConfirmationState {
 
     /**
      * Resolves the enabled-state of the "Allow once" CTA. Mirrors the rules
-     * in `compose/components/README.md` §Chat surface §HitlConfirmationCard:
+     * for the HITL confirmation card:
      *  - `Readonly` is auto-approved upstream; the CTA is never shown — return
      *    `true` defensively so a misuse renders a tappable button.
      *  - `Sensitive` is always allow-able; the user just taps Allow.

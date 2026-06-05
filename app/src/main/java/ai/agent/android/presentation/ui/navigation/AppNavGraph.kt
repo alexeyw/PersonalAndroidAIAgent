@@ -42,7 +42,7 @@ import timber.log.Timber
 /**
  * The single [NavHost] for the whole app.
  *
- * Layout follows `screens/README.md §Navigation map`:
+ * Navigation map:
  *  - Splash and Onboarding are top-level "shell-less" destinations — the
  *    bottom-nav is hidden for them (see [shouldShowBottomNav]). After
  *    onboarding completes, the user lands on the Chat tab.

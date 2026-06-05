@@ -43,8 +43,8 @@ import app.knotwork.design.tokens.knotworkTypography
  * via the [KnotworkTheme] accessor object below.
  *
  * Material You / dynamic colour is intentionally **not** exposed as a
- * parameter: the design system pins its own accent ramp (see the design
- * decisions log §8 — "Material You disabled"). If a user ever asks for a
+ * parameter: the design system pins its own accent ramp
+ * ("Material You disabled"). If a user ever asks for a
  * wallpaper-derived primary, that ships as a separate Settings flag, never
  * as a constructor parameter on this theme.
  *
@@ -119,7 +119,7 @@ object KnotworkTheme {
         @ReadOnlyComposable
         get() = LocalKnotworkMotion.current
 
-    /** Accessibility scaffolding (reduced motion, font scale) — see `decisions.md §14`. */
+    /** Accessibility scaffolding (reduced motion, font scale). */
     val a11y: KnotworkA11y
         @Composable
         @ReadOnlyComposable

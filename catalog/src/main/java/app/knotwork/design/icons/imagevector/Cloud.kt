@@ -3,8 +3,7 @@ package app.knotwork.design.icons.imagevector
 import androidx.compose.ui.graphics.vector.ImageVector
 
 /**
- * `I.cloud` glyph (cloud LLM) — spec §0.7 single-stroke icon family.
- * Source: `project_docs/design/icons-src/cloud.svg`.
+ * `I.cloud` glyph (cloud LLM) — single-stroke icon family.
  */
 internal val knotworkCloudIcon: ImageVector by lazy { build() }
 

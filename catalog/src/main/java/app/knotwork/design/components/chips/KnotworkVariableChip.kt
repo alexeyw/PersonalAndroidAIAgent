@@ -18,7 +18,7 @@ import app.knotwork.design.tokens.KnotworkTextStyles
  * Mono variable chip — the affordance that inserts a `$NAME` token into a
  * nearby text input or copies it to the clipboard.
  *
- * Geometry (`inputs-and-chips.md` §6.4): transparent fill, 1 dp outline
+ * Geometry: transparent fill, 1 dp outline
  * border (the spec calls for `dashed`; Compose lacks a first-class dashed
  * `BorderStroke`, so the chip relies on the mono typography + accent label
  * to read as "template, not value"), mono typography with accent fill

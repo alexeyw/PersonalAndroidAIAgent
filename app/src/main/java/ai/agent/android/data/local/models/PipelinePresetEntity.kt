@@ -5,7 +5,7 @@ import androidx.room.PrimaryKey
 
 /**
  * Room entity backing the user-saved pipeline-preset catalogue introduced
- * in schema v24 (Phase 24 / Task 1).
+ * in schema v24.
  *
  * Bundled presets live in `assets/presets/pipelines` and never reach this
  * table — only presets created via `SavePipelineAsPresetUseCase` are

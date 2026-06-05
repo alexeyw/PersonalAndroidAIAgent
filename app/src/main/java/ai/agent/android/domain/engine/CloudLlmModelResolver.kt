@@ -9,7 +9,7 @@ import ai.agent.android.domain.models.CloudProvider
  * fallback chain (user-configured id → provider default). Centralising this in the
  * data-layer impl (`KoogCloudLlmModelResolver`) keeps the executor free of both
  * `ai.agent.android.data.*` imports and the per-provider `ApiKeyRepository.get*Model()`
- * branching that previously lived in the call site.
+ * branching.
  */
 interface CloudLlmModelResolver {
     /**

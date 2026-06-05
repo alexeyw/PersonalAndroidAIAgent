@@ -39,7 +39,7 @@ import javax.inject.Inject
  *
  * Asset I/O and JSON parsing run on [Dispatchers.IO]. Malformed asset
  * files are logged and skipped rather than failing the whole catalogue
- * load, so a single corrupt file added in Task 2/9 cannot hide the rest
+ * load, so a single corrupt file cannot hide the rest
  * of the starter set from the user.
  */
 class LocalPipelinePresetRepositoryImpl @Inject constructor(
@@ -99,10 +99,10 @@ class LocalPipelinePresetRepositoryImpl @Inject constructor(
         val fileNames: Array<String> = try {
             assetManager.list(ASSETS_BUNDLED_DIR) ?: emptyArray()
         } catch (e: java.io.IOException) {
-            // The directory itself is missing — this is legitimate during
-            // Task 1/9 of Phase 24 (the catalogue file set is filled in
-            // Task 2/9). Log once and return an empty list so the picker
-            // simply shows the "no bundled presets yet" empty state.
+            // The directory itself is missing — this is legitimate when no
+            // bundled catalogue has been shipped yet. Log once and return an
+            // empty list so the picker simply shows the "no bundled presets
+            // yet" empty state.
             Timber.w(e, "No bundled preset directory at assets/%s", ASSETS_BUNDLED_DIR)
             return emptyList()
         }

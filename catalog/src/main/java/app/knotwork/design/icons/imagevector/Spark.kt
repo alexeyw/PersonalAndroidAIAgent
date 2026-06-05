@@ -3,8 +3,7 @@ package app.knotwork.design.icons.imagevector
 import androidx.compose.ui.graphics.vector.ImageVector
 
 /**
- * `I.spark` glyph (auto / AI action) — spec §0.7 single-stroke icon family.
- * Source: `project_docs/design/icons-src/spark.svg`.
+ * `I.spark` glyph (auto / AI action) — single-stroke icon family.
  */
 internal val knotworkSparkIcon: ImageVector by lazy { build() }
 

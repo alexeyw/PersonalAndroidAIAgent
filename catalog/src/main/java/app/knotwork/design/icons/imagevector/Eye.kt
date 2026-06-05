@@ -3,8 +3,7 @@ package app.knotwork.design.icons.imagevector
 import androidx.compose.ui.graphics.vector.ImageVector
 
 /**
- * `I.eye` glyph (show password) — spec §0.7 single-stroke icon family (round 2).
- * Source: `project_docs/design/icons-src/eye.svg`.
+ * `I.eye` glyph (show password) — single-stroke icon family.
  */
 internal val knotworkEyeIcon: ImageVector by lazy { build() }
 

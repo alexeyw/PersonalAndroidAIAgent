@@ -32,7 +32,7 @@ import app.knotwork.design.screens.prompts.PromptPresetTagChip
 internal enum class PromptPresetTab { BUNDLED, MINE }
 
 /**
- * Bottom-sheet picker for prompt presets — Phase 24 / Task 5.
+ * Bottom-sheet picker for prompt presets.
  *
  * Hosts the catalog [PromptPresetPickerSheet] body inside a
  * [ModalBottomSheet] and owns the screen-local interaction state: tab

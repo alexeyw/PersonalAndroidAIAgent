@@ -31,8 +31,8 @@ import ai.agent.android.domain.models.NodeType
 object DefaultPrompts {
     /**
      * Matches a literal `${'$'}KEY` placeholder where `KEY` follows the project-wide
-     * variable convention `[A-Z_][A-Z0-9_]*` (see DESCRIPTION.md §5). Lowercase
-     * tokens or sequences like `${'$'}50` are deliberately not matched.
+     * variable convention `[A-Z_][A-Z0-9_]*`. Lowercase tokens or sequences
+     * like `${'$'}50` are deliberately not matched.
      */
     private val PLACEHOLDER_REGEX = Regex("\\\$([A-Z_][A-Z0-9_]*)")
 

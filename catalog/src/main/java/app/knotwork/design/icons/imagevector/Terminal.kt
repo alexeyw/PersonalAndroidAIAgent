@@ -3,8 +3,7 @@ package app.knotwork.design.icons.imagevector
 import androidx.compose.ui.graphics.vector.ImageVector
 
 /**
- * `I.terminal` glyph (console >_) — spec §0.7 single-stroke icon family (round 2).
- * Source: `project_docs/design/icons-src/terminal.svg`.
+ * `I.terminal` glyph (console >_) — single-stroke icon family.
  */
 internal val knotworkTerminalIcon: ImageVector by lazy { build() }
 

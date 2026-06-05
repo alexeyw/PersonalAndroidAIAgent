@@ -17,7 +17,7 @@ object NavRoutes {
     /** Cold-start splash / loading screen. */
     const val SPLASH: String = "splash"
 
-    /** Onboarding flow shown on first launch (Phase 21 / Task 4 stub; full pager in Task 10). */
+    /** Onboarding flow shown on first launch. */
     const val ONBOARDING: String = "onboarding"
 
     // ─── Top-level tab destinations ────────────────────────────────────────
@@ -107,10 +107,10 @@ object NavRoutes {
     /** Prompt-template library (under More). */
     const val PROMPTS: String = "prompts"
 
-    /** Pipeline-preset manager (under More → Library). Phase 24 / Task 3. */
+    /** Pipeline-preset manager (under More → Library). */
     const val PIPELINE_PRESETS: String = "pipeline-presets"
 
-    /** About screen (under More). Phase 21 / Task 4 stub; full body in Task 10. */
+    /** About screen (under More). */
     const val ABOUT: String = "about"
 
     /**
@@ -125,15 +125,12 @@ object NavRoutes {
     /** Picker sheet shown when the user taps "+ Add provider". */
     const val ADD_PROVIDER: String = "settings/provider/add"
 
-    // ─── Modal bottom-sheet placeholder routes ─────────────────────────────
-    // Phase 21 / Task 4 introduces the [KnotworkModalRoute] wrapper used by
-    // every modal surface. The three sheets below are registered as empty
-    // placeholders so navigation wiring (and `BottomNavVisibility`) is
-    // testable from this task; their bodies arrive in Tasks 6 / 7 / 10.
+    // ─── Modal bottom-sheet routes ─────────────────────────────────────────
+    // The [KnotworkModalRoute] wrapper is used by every modal surface.
 
-    /** Node config sheet — opened from the pipeline editor (filled in Task 7). */
+    /** Node config sheet — opened from the pipeline editor. */
     const val SHEET_NODE_CONFIG: String = "sheet/node-config"
 
-    /** Console pane sheet — opened from chat (filled in Task 6). */
+    /** Console pane sheet — opened from chat. */
     const val SHEET_CONSOLE: String = "sheet/console"
 }

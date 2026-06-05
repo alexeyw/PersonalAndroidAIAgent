@@ -53,7 +53,7 @@ private val AccentStripWidth = 2.dp
 /** Stroke width applied to the inner JSON args block. */
 private val JsonBlockBorderWidth = 1.dp
 
-/** Summary clamp limit per `compose/components/README.md` §HitlConfirmationCard. */
+/** Summary clamp limit for the HITL confirmation card. */
 private const val SUMMARY_MAX_LINES = 3
 
 /** Collapsed line count for the JSON args block. */
@@ -65,8 +65,7 @@ private const val JSON_COLLAPSED_MAX_LINES = 2
  * one-line summary, a collapsible JSON arguments block, and an action row
  * gated on the risk level.
  *
- * Full visual contract: `compose/components/README.md` §Chat surface
- * §HitlConfirmationCard. State helpers are factored to [HitlConfirmationState]
+ * State helpers are factored to [HitlConfirmationState]
  * so the gating logic is unit-testable without Compose.
  *
  * **Stateless** — the typed-confirm input is hoisted to the caller; the card

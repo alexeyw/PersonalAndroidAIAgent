@@ -57,7 +57,7 @@ sealed class OutboundPort(val label: String) {
  *  - outbound is a list of typed [OutboundPort]s — labels render under
  *    each dot when `outbound.size > 1`.
  *
- * Build via [forType] so callers stay in sync with `node-specs.md` without
+ * Build via [forType] so callers stay in sync without
  * re-declaring port lists at every call site.
  *
  * @property inbound count of inbound dots (always 0 or 1 for the current
@@ -72,9 +72,9 @@ data class NodePorts(val inbound: Int = 1, val outbound: List<OutboundPort> = li
          * parameterised on type-specific data needed to enumerate the
          * outbound ports.
          *
-         * `node-specs.md` is the single source of truth — this factory
-         * exists so the canvas, the edge labels, and the validator all
-         * read the same port enumeration without re-deriving it.
+         * This factory is the single source of truth — the canvas, the
+         * edge labels, and the validator all read the same port enumeration
+         * without re-deriving it.
          *
          * @param type the node type to size for.
          * @param intentClasses class names for [NodeType.INTENT_ROUTER];

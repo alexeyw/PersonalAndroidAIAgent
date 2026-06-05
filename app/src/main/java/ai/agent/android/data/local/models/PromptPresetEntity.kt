@@ -5,7 +5,7 @@ import androidx.room.PrimaryKey
 
 /**
  * Room entity backing the user-saved prompt-preset catalogue introduced
- * in schema v25 (Phase 24 / Task 4).
+ * in schema v25.
  *
  * Bundled presets live in `assets/presets/prompts` and never reach this
  * table — only presets created via `SavePromptAsPresetUseCase` are

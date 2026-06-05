@@ -93,7 +93,7 @@ abstract class AppDatabase : RoomDatabase() {
 
     /**
      * Provides access to the [PipelinePresetDao] backing the user-saved
-     * pipeline-preset catalogue (Phase 24 / Task 1).
+     * pipeline-preset catalogue.
      *
      * @return The [PipelinePresetDao] instance.
      */
@@ -101,7 +101,7 @@ abstract class AppDatabase : RoomDatabase() {
 
     /**
      * Provides access to the [PromptPresetDao] backing the user-saved
-     * prompt-preset catalogue (Phase 24 / Task 4).
+     * prompt-preset catalogue.
      *
      * @return The [PromptPresetDao] instance.
      */
@@ -255,8 +255,7 @@ abstract class AppDatabase : RoomDatabase() {
          * per-node [ai.agent.android.domain.models.NodeContextConfig] as a JSON
          * blob. The default value enables every flag (`chatHistory`,
          * `originalTask`, `nodeInput`, `longTermMemory`, `toolResults`) so that
-         * existing pipelines keep their pre-Phase-15 behaviour: every node
-         * receives the full context it used to receive.
+         * existing pipelines keep receiving the full context on every node.
          */
         val MIGRATION_17_18 = object : Migration(17, 18) {
             override fun migrate(db: SupportSQLiteDatabase) {
@@ -269,13 +268,12 @@ abstract class AppDatabase : RoomDatabase() {
         }
 
         /**
-         * Migration from version 18 to 19 (Phase 17.2 — Pipeline binding to chat).
+         * Migration from version 18 to 19 — pipeline binding to chat.
          *
          * Adds the nullable `pipelineId` column to `chat_sessions`. `NULL` means the
          * chat uses the application-wide default pipeline (the first pipeline
          * returned by `PipelineRepository.getAllPipelines()`), preserving the
-         * pre-Phase-17.2 behaviour for every existing row without requiring a
-         * data backfill.
+         * prior default for every existing row without requiring a data backfill.
          */
         val MIGRATION_18_19 = object : Migration(18, 19) {
             override fun migrate(db: SupportSQLiteDatabase) {
@@ -284,7 +282,7 @@ abstract class AppDatabase : RoomDatabase() {
         }
 
         /**
-         * Adds the `isFinal` and `isStarred` columns to `chat_messages` (Phase 17.3).
+         * Adds the `isFinal` and `isStarred` columns to `chat_messages`.
          *
          * - `isFinal` — distinguishes user-facing messages (USER input, final AGENT
          *   answers) from intermediate node outputs (tool observations, internal
@@ -305,15 +303,14 @@ abstract class AppDatabase : RoomDatabase() {
         }
 
         /**
-         * Migration from version 20 to 21 (Phase 21 / Task 9 — Pipeline editor).
+         * Migration from version 20 to 21 — pipeline editor.
          *
          * Adds the nullable `config_json` column to `pipeline_nodes`. The column
-         * stores the per-type `NodeConfig` payload edited by the new
-         * `NodeConfigSheet` (catalog `pipelineeditor.NodeConfig`) as a JSON blob
-         * — schema in `project_docs/design/compose/components/node-specs.md`.
+         * stores the per-type `NodeConfig` payload edited by the
+         * `NodeConfigSheet` (catalog `pipelineeditor.NodeConfig`) as a JSON blob.
          *
-         * `NULL` is the canonical "no payload yet" value for every row created
-         * before Phase 21; on first edit the editor derives a default config
+         * `NULL` is the canonical "no payload yet" value for every pre-existing
+         * row; on first edit the editor derives a default config
          * from the flat columns (`systemPrompt`, `cloudProvider`, `toolName`,
          * `conditionComplexity`, …) and writes the encoded payload here. The
          * flat columns are kept untouched so the orchestrator runtime path
@@ -326,14 +323,11 @@ abstract class AppDatabase : RoomDatabase() {
         }
 
         /**
-         * Migration from version 21 to 22 (Phase 22 / Task 4 — Chat home
-         * secondary affordances).
+         * Migration from version 21 to 22 — chat-session favorites.
          *
          * Adds the `isStarred` column to `chat_sessions` so the drawer can
          * surface favorited chats at the top of the list. Backfilled to `0`
-         * for every existing row — the legacy chat surface had no
-         * session-level favorite affordance, so no historical data needs to
-         * be carried over.
+         * for every existing row.
          *
          * Distinct from the message-level `isStarred` introduced in
          * `MIGRATION_19_20` on `chat_messages`.
@@ -347,15 +341,12 @@ abstract class AppDatabase : RoomDatabase() {
         }
 
         /**
-         * Migration from version 22 to 23 (Phase 22 / Task 6 — Memory edit +
-         * pin persistence).
+         * Migration from version 22 to 23 — memory chunk pinning.
          *
          * Adds the `isPinned` column to `memory_chunks` so users can mark a
          * memory chunk as pinned. Pinned rows sort ahead of unpinned rows on
          * the memory surface and are exempt from future `compactMemory()`
-         * passes. Backfilled to `0` for every existing row — before this
-         * migration the schema had no notion of pinning, so no historical
-         * data needs to be carried over.
+         * passes. Backfilled to `0` for every existing row.
          */
         val MIGRATION_22_23 = object : Migration(22, 23) {
             override fun migrate(db: SupportSQLiteDatabase) {
@@ -366,8 +357,7 @@ abstract class AppDatabase : RoomDatabase() {
         }
 
         /**
-         * Migration from version 23 to 24 (Phase 24 / Task 1 — Pipeline
-         * presets).
+         * Migration from version 23 to 24 — pipeline presets.
          *
          * Adds the `pipeline_presets` table backing the user-saved
          * preset catalogue. Bundled presets live in
@@ -397,8 +387,7 @@ abstract class AppDatabase : RoomDatabase() {
         }
 
         /**
-         * Migration from version 24 to 25 (Phase 24 / Task 4 — Prompt
-         * presets).
+         * Migration from version 24 to 25 — prompt presets.
          *
          * Adds the `prompt_presets` table backing the user-saved
          * prompt-preset catalogue. Bundled presets live in
@@ -423,8 +412,7 @@ abstract class AppDatabase : RoomDatabase() {
         }
 
         /**
-         * Migration from version 25 to 26 (Phase 25 / Task 2 — Memory write
-         * auto-extraction).
+         * Migration from version 25 to 26 — memory chunk provenance.
          *
          * Adds the `source` column to `memory_chunks` recording each chunk's
          * provenance ([ai.agent.android.domain.models.MemorySource]) as a
@@ -462,8 +450,7 @@ abstract class AppDatabase : RoomDatabase() {
         }
 
         /**
-         * Migration from version 27 to 28 (Phase 25 / Task 8 — Memory
-         * export/import).
+         * Migration from version 27 to 28 — memory export/import.
          *
          * Adds the `needsReembedding` column to `memory_chunks`. Set to `1` on
          * chunks imported from a device whose active embedding provider differs

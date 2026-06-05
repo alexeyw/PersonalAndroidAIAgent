@@ -3,8 +3,7 @@ package app.knotwork.design.icons.imagevector
 import androidx.compose.ui.graphics.vector.ImageVector
 
 /**
- * `I.lock` glyph (lock) — spec §0.7 single-stroke icon family.
- * Source: `project_docs/design/icons-src/lock.svg`.
+ * `I.lock` glyph (lock) — single-stroke icon family.
  */
 internal val knotworkLockIcon: ImageVector by lazy { build() }
 

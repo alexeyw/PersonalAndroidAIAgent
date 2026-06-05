@@ -6,7 +6,7 @@ import androidx.compose.ui.unit.dp
 /**
  * Size variants for [KnotworkFilterChip] / [KnotworkSuggestionChip] / [KnotworkInputChip].
  *
- * Spec mapping (`inputs-and-chips.md` §6):
+ * Spec mapping:
  *  - [Xs] (28 dp) — dense rows where vertical space is at premium.
  *  - [Sm] (32 dp) — default for segmented controls, library filters,
  *    yes/no toggles.
@@ -16,7 +16,7 @@ enum class KnotworkChipSize { Xs, Sm, Md }
 
 /**
  * Shared size, padding, icon, and motion defaults for every Knotwork chip
- * atom. Numbers track the design spec in `inputs-and-chips.md` §6 and §7.
+ * atom. Numbers track the design spec for chips.
  * Inline literals at call sites would scatter the chip family — prefer
  * reading from this object.
  */

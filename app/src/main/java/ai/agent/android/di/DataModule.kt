@@ -203,8 +203,7 @@ abstract class DataModule {
 
     /**
      * Binds [LocalPipelinePresetRepositoryImpl] to [PipelinePresetRepository] — composes the
-     * bundled assets/presets/pipelines catalogue with the user-saved Room rows
-     * (Phase 24 / Task 1).
+     * bundled assets/presets/pipelines catalogue with the user-saved Room rows.
      */
     @Binds
     @Singleton
@@ -212,8 +211,7 @@ abstract class DataModule {
 
     /**
      * Binds [LocalPromptPresetRepositoryImpl] to [PromptPresetRepository] — composes the
-     * bundled assets/presets/prompts catalogue with the user-saved Room rows
-     * (Phase 24 / Task 4).
+     * bundled assets/presets/prompts catalogue with the user-saved Room rows.
      */
     @Binds
     @Singleton
@@ -265,7 +263,7 @@ abstract class DataModule {
     /**
      * Binds [WorkManagerMemoryReembedScheduler] to [MemoryReembedScheduler] —
      * enqueues the background re-embed pass that repairs chunks imported under a
-     * different embedding provider (Phase 25 / Task 8).
+     * different embedding provider.
      */
     @Binds
     @Singleton

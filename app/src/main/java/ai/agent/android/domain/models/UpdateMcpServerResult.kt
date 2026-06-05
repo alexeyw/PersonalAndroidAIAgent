@@ -4,12 +4,11 @@ package ai.agent.android.domain.models
  * Typed outcome of
  * [ai.agent.android.domain.repositories.SettingsRepository.updateMcpServer].
  *
- * The persistence layer used to return [Unit] and would happily replace
- * an MCP server row by index even when the new URL collided with another
- * existing row's URL — producing a `[B, B]` list with the original
- * server's auth / headers silently lost. This sealed result lets the UI
- * detect that case ([UrlCollision]) and surface an inline error before
- * the user discovers the loss later when the agent fails to connect.
+ * Replacing an MCP server row by index when the new URL collides with
+ * another existing row's URL would produce a `[B, B]` list with the
+ * original server's auth / headers silently lost. This sealed result lets
+ * the UI detect that case ([UrlCollision]) and surface an inline error
+ * before the user discovers the loss later when the agent fails to connect.
  *
  * The downstream MCP router (`ToolRepositoryImpl.distinctMcpConfigs`)
  * still deduplicates defensively — this type only guarantees the

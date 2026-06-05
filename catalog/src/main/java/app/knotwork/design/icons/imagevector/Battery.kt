@@ -3,8 +3,7 @@ package app.knotwork.design.icons.imagevector
 import androidx.compose.ui.graphics.vector.ImageVector
 
 /**
- * `I.battery` glyph (battery alert) — spec §0.7 single-stroke icon family (round 2).
- * Source: `project_docs/design/icons-src/battery.svg`.
+ * `I.battery` glyph (battery alert) — single-stroke icon family.
  */
 internal val knotworkBatteryIcon: ImageVector by lazy { build() }
 

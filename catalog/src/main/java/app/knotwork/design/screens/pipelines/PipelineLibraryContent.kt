@@ -65,8 +65,7 @@ private val RowLeadingIconSize = 24.dp
 private val DefaultBadgeHeight = 22.dp
 
 /**
- * Stateless Knotwork pipeline-library surface. Mirrors the spec mockups
- * shipped in `compose/screens/<C3-mockup>.png` (Phase 21 / Task 10):
+ * Stateless Knotwork pipeline-library surface:
  *
  *  - `TopAppBar` with title `Pipelines` + `N saved · M default` subtitle,
  *    leading drawer (hamburger) icon, trailing search + overflow icons.
@@ -83,8 +82,8 @@ private val DefaultBadgeHeight = 22.dp
  *    / Delete`. Visibility is driven by [PipelineLibraryViewState.openOverflowRowId]
  *    so the host owns the open/close transitions.
  *
- * The pill FAB (`+ New pipeline`) is **not** rendered here. The mockup
- * places it half-overlapping the bottom-nav, which only the host
+ * The pill FAB (`+ New pipeline`) is **not** rendered here. It is
+ * placed half-overlapping the bottom-nav, which only the host
  * `AppShellScaffold` can position cleanly — `:app` overlays the catalog
  * `PipelineLibraryFab` composable above the bottom nav.
  */
@@ -114,7 +113,7 @@ fun PipelineLibraryContent(
 
 /**
  * Standalone pill FAB rendered outside [PipelineLibraryContent] so the host
- * can stack it over the bottom navigation bar per the spec mockup. Returns
+ * can stack it over the bottom navigation bar. Returns
  * `Unit` and is positioned by the caller; this composable owns colours and
  * label only.
  */

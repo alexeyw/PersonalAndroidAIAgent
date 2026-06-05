@@ -69,12 +69,11 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /**
- * Redesigned Knotwork chat home — the user-facing surface introduced in
- * Phase 21 / Task 8 and incrementally wired across Phase 22:
- *  - Task 1 — agent orchestrator, sessions, pipeline binding, token meter.
- *  - Task 2 — HITL approval gate + clarification.
- *  - Task 3 — console pane.
- *  - Task 4 — secondary affordances (this file): new-chat / rename /
+ * Redesigned Knotwork chat home — the user-facing surface that wires up:
+ *  - agent orchestrator, sessions, pipeline binding, token meter;
+ *  - HITL approval gate + clarification;
+ *  - console pane;
+ *  - secondary affordances: new-chat / rename /
  *    favorite / import / model picker / overflow (export, delete,
  *    clear-console) and the deep-link to Settings + Models.
  *
@@ -327,8 +326,7 @@ fun ChatHomeScreen(
         onOpenSettings = onOpenSettings,
         onSamplePromptCard = { card -> viewModel.onComposerValueChange(card.title) },
         // Tapping the agent-status pill above the composer opens the
-        // console pane at the Partial snap — the one-tap drill-in
-        // affordance from `compose/screens/README.md §C1`.
+        // console pane at the Partial snap — a one-tap drill-in affordance.
         onAgentStatusClick = { viewModel.openConsole() },
         onMessageContextAction = { rowId, action ->
             when (action) {
@@ -356,7 +354,7 @@ fun ChatHomeScreen(
         },
     )
 
-    // Inset wiring (Phase 21 / Task 8 review fixes):
+    // Inset wiring:
     //  - `AppShellScaffold` already wraps its Scaffold in `.imePadding()`,
     //    so the body + composer slide up with the keyboard in sync with
     //    the bottom-nav. Adding `.imePadding()` here would double-count.
@@ -384,8 +382,7 @@ fun ChatHomeScreen(
             // Catalog stays free of any markdown dependency on the screen
             // side; the app wires the `com.mikepenz.markdown.m3.Markdown`
             // renderer here so agent bubbles get the Knotwork-themed
-            // typography + colors for headings, lists, and code fences
-            // (Phase 22 / Task 16 follow-up F2).
+            // typography + colors for headings, lists, and code fences.
             markdownRenderer = { source ->
                 Markdown(
                     content = source,

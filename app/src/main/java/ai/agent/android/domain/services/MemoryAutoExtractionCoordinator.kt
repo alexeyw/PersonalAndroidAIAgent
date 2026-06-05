@@ -135,9 +135,9 @@ class MemoryAutoExtractionCoordinator @Inject constructor(
 
     private companion object {
         /**
-         * Quiet period after a completion before extraction runs. 30 s matches
-         * the debounce called out in the Phase 25 plan: long enough to coalesce
-         * a multi-turn burst, short enough that facts land well before the
+         * Quiet period after a completion before extraction runs. 30 s is long
+         * enough to coalesce a multi-turn burst, short enough that facts land
+         * well before the
          * model is unloaded by `AgentIdleManager` (5 min idle).
          */
         const val DEBOUNCE_MS: Long = 30L * TimeAndIdConstants.MS_PER_SECOND

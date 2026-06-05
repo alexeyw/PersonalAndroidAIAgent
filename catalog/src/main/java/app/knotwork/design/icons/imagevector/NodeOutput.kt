@@ -3,8 +3,7 @@ package app.knotwork.design.icons.imagevector
 import androidx.compose.ui.graphics.vector.ImageVector
 
 /**
- * Pipeline `OUTPUT` node glyph — outbound arrow from a rounded square. Source:
- * `project_docs/design/icons-src/node-output.svg`.
+ * Pipeline `OUTPUT` node glyph — outbound arrow from a rounded square.
  */
 internal val knotworkNodeOutputIcon: ImageVector by lazy { build() }
 

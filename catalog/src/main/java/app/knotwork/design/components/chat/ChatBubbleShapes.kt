@@ -6,7 +6,7 @@ import androidx.compose.ui.unit.dp
 /**
  * Asymmetric chat-bubble shapes consumed by [ChatMessage].
  *
- * Visual contract (`compose/components/README.md` §Chat surface):
+ * Visual contract:
  *  - User bubble: trailing-bottom corner tightens to 4 dp, the other three
  *    stay at 16 dp — giving the bubble a clear "anchored to the user side"
  *    silhouette.
@@ -30,7 +30,6 @@ object ChatBubbleShapes {
     /**
      * User-side bubble shape: uniformly rounded pill so the user's
      * contribution reads as a quick spoken-style chip in the thread.
-     * Mirrors the spec mockup (Phase 21 / Task 10 follow-up).
      */
     val User = RoundedCornerShape(size = UserCornerRadius)
 

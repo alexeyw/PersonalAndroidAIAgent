@@ -146,8 +146,8 @@ class PromptPresetPickerCallbacks(
 )
 
 /**
- * Stateless bottom-sheet body for the prompt-preset picker — matches the
- * Phase 24 / Task 5 mockup: title row with search + close icons, coloured
+ * Stateless bottom-sheet body for the prompt-preset picker: title row with
+ * search + close icons, coloured
  * node-type pill subtitle, Bundled / Mine tab bar with counters, search
  * field, leading `All N` chip + per-tag filter chips, radio-style row
  * list with optional `● CURRENT` pill and per-row preview icon, sticky
@@ -229,7 +229,7 @@ private fun HeaderRow(
 private fun NodeTypePill(nodeType: NodeType) {
     val tint = nodeType.headerTint()
     val onTint = headerOnColor(tint)
-    // Spec §4.2: JetBrains Mono 700, 11 px, +0.6 tracking, height 22, padding 0 9, radius xs.
+    // JetBrains Mono 700, 11 px, +0.6 tracking, height 22, padding 0 9, radius xs.
     Box(
         contentAlignment = Alignment.Center,
         modifier = Modifier
@@ -528,7 +528,7 @@ private fun PresetRow(
 @Composable
 private fun CurrentBadge(label: String, accent: Color) {
     val onAccent = headerOnColor(accent)
-    // Spec §4.3: JetBrains Mono 700, 9.5 px, +0.6 tracking, height 20, radius full, 5 px leading dot.
+    // JetBrains Mono 700, 9.5 px, +0.6 tracking, height 20, radius full, 5 px leading dot.
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(CURRENT_PILL_DOT_GAP),

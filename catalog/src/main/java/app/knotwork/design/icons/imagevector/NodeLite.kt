@@ -4,8 +4,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 
 /**
  * Pipeline `LITE_RT` node glyph — silicon chip with a lightning spark
- * indicating local on-device inference. Source:
- * `project_docs/design/icons-src/node-lite.svg`.
+ * indicating local on-device inference.
  */
 internal val knotworkNodeLiteIcon: ImageVector by lazy { build() }
 

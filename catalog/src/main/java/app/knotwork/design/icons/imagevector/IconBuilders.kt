@@ -23,7 +23,7 @@ internal const val ICON_VIEWPORT = 24f
 internal val ICON_SIZE = 24.dp
 
 /**
- * Stroke-width tokens (spec §0.7). The vector path geometry bakes in the
+ * Stroke-width tokens. The vector path geometry bakes in the
  * default weight; [IconStroke.ACTIVE] / [IconStroke.CONTEXTUAL] are applied by
  * restroked icon variants (selected bottom-nav tab + active segmented control →
  * Active; select-mode app-bar actions → Contextual).
@@ -35,8 +35,7 @@ internal object IconStroke {
 }
 
 /**
- * Starts a 24×24 [ImageVector.Builder] with the canonical Knotwork defaults
- * (matches the SVGs in `project_docs/design/icons-src/`).
+ * Starts a 24×24 [ImageVector.Builder] with the canonical Knotwork defaults.
  */
 internal fun iconBuilder(name: String): ImageVector.Builder = ImageVector.Builder(
     name = name,

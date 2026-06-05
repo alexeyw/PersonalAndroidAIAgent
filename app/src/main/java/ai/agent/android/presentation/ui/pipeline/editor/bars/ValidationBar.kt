@@ -36,7 +36,7 @@ private val BAR_MIN_HEIGHT = 36.dp
 /**
  * Bottom bar listing every [PipelineValidationError] for the active pipeline.
  *
- * Phase 22 / Task 14 (mockup-3) extends the bar with:
+ * The bar provides:
  *  - a header banner showing the issue count + `Auto-fix` action
  *  - per-row severity icons (blocker vs. warning)
  *  - a trailing `Go ↗` button that focuses the offending node when one exists
@@ -203,8 +203,7 @@ private enum class Severity(val icon: ImageVector) {
 
 /**
  * Classifies [error] as `Blocker` (hard gate, the run won't start) or `Warning`
- * (recoverable, the run might still produce something useful). Matches the
- * severity glyphs from mockup-3.
+ * (recoverable, the run might still produce something useful).
  */
 private fun severityOf(error: PipelineValidationError): Severity = when (error) {
     PipelineValidationError.MissingInput,

@@ -56,7 +56,7 @@ import kotlinx.coroutines.withContext
  * Library screen listing every saved pipeline. Acts as the entry point for
  * the orchestrator feature.
  *
- * Phase 21 / Task 10 rewrite (mockup-driven): the catalog
+ * The catalog
  * [PipelineLibraryContent] composable owns the visual surface; this screen
  * subscribes to [OrchestratorViewModel], projects `OrchestratorUiState` to
  * the catalog [PipelineLibraryViewState], and dispatches user-triggered

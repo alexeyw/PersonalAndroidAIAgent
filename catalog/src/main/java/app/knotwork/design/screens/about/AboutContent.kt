@@ -137,7 +137,7 @@ private fun VersionCard(state: AboutViewState, strings: AboutStrings) {
     //  - `BodyBase` primary value
     //  - `Caption` secondary lines (build / commit / etc.)
     // The previous mix of `TitleMd` + `MonoBase` per card is what the
-    // user flagged as "разные шрифты".
+    // user flagged as "mismatched fonts".
     AboutCard {
         SectionLabel(text = strings.sectionVersion)
         Text(

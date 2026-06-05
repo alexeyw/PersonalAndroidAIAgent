@@ -176,10 +176,9 @@ internal object ChatHomePreview {
 
     /**
      * HITL Confirm state. Default risk is `Sensitive` (most common path); the
-     * Phase 22 / Task 5 audit expanded the matrix to the 3 risk variants so
-     * the snapshot baseline catches palette / glyph regressions across every
-     * level the spec defines (see `compose/components/README.md §Buttons` and
-     * `domain/models/ToolRisk.kt`).
+     * matrix covers all 3 risk variants so the snapshot baseline catches
+     * palette / glyph regressions across every level defined in
+     * `domain/models/ToolRisk.kt`.
      */
     fun hitlConfirm(risk: Risk = Risk.Sensitive): ChatHomeViewState {
         val toolName = when (risk) {

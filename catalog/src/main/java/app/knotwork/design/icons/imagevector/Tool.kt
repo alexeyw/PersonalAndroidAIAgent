@@ -3,8 +3,7 @@ package app.knotwork.design.icons.imagevector
 import androidx.compose.ui.graphics.vector.ImageVector
 
 /**
- * `I.tool` glyph (tool) — spec §0.7 single-stroke icon family.
- * Source: `project_docs/design/icons-src/tool.svg`.
+ * `I.tool` glyph (tool) — single-stroke icon family.
  */
 internal val knotworkToolIcon: ImageVector by lazy { build(IconStroke.DEFAULT) }
 

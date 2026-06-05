@@ -30,8 +30,7 @@ import app.knotwork.design.screens.prompts.PromptRow
  * [PromptLibraryViewModel.uiState], folds the projection into the catalog
  * [PromptLibraryViewState], and hosts the editor `ModalBottomSheet`.
  *
- * Phase 24 / Task 5 swaps the data source from legacy `PromptTemplate`
- * to [PromptPreset] (bundled + user). The catalog DTOs stay the same; the
+ * The data source is [PromptPreset] (bundled + user). The
  * mapper folds each preset into a `PromptRow` keyed by the preset's
  * String id.
  */
@@ -56,7 +55,7 @@ fun PromptLibraryScreen(
     }
     val callbacks = PromptLibraryCallbacks(
         onBack = onBack,
-        // The library's text search was retired in Phase 24 / Task 5 (the
+        // The library's text search was retired (the
         // catalog `TopAppBar` actions slot is intentionally empty); the
         // catalogue is now browsed by category tab via `onCategorySelected`.
         // `onSearch` survives on the catalog callbacks bag as a vestigial

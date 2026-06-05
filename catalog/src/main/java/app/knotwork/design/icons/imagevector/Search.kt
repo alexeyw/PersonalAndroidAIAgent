@@ -3,8 +3,7 @@ package app.knotwork.design.icons.imagevector
 import androidx.compose.ui.graphics.vector.ImageVector
 
 /**
- * `I.search` glyph (search) — spec §0.7 single-stroke icon family.
- * Source: `project_docs/design/icons-src/search.svg`.
+ * `I.search` glyph (search) — single-stroke icon family.
  */
 internal val knotworkSearchIcon: ImageVector by lazy { build() }
 

@@ -3,8 +3,7 @@ package app.knotwork.design.icons.imagevector
 import androidx.compose.ui.graphics.vector.ImageVector
 
 /**
- * Pipeline `EVALUATION` node glyph — balance scale. Source:
- * `project_docs/design/icons-src/node-eval.svg`.
+ * Pipeline `EVALUATION` node glyph — balance scale.
  */
 internal val knotworkNodeEvalIcon: ImageVector by lazy { build() }
 

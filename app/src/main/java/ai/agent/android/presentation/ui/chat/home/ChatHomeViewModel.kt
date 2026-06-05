@@ -59,9 +59,9 @@ import java.util.UUID
 import javax.inject.Inject
 
 /**
- * Hilt [ViewModel] backing the redesigned Knotwork chat home
- * (`compose/screens/README.md §C1`). Phase 22 / Task 1/17 replaces the
- * Phase 21 stub VM with real wiring to:
+ * Hilt [ViewModel] backing the redesigned Knotwork chat home.
+ *
+ * Wires together:
  *  - [AgentOrchestratorUseCase] for the agent execution stream;
  *  - [ChatRepository] for session + message persistence;
  *  - [PipelineRepository] for pipeline-binding observation and the
@@ -72,21 +72,13 @@ import javax.inject.Inject
  *  - [GetContextWindowUseCase] for the rough token-counter TopAppBar
  *    readout (v0.1 — `text.length / 4`).
  *
- * Scope of Task 1/17 (the rest is split across follow-up tasks of the
- * same phase): user-prompted generation cycle (`Idle → Generating →
- * Idle / Error`), pipeline binding + deleted-pipeline fallback, session
- * initialisation + thread switching, token counter.
- *
- * Out of scope here (handled later):
- *  - Task 2/17 — HITL (`WaitingForApproval`) and Clarification
- *    (`AwaitingClarification`) wiring.
- *  - Task 3/17 — Console pane (`ConsoleLog`) streaming.
- *  - Task 4/17 — drawer / composer / overflow secondary actions
- *    (new-thread, rename, favorite, import, model picker, settings).
- *
- * Until those tasks land, intermediate orchestrator states stay folded
- * into [ChatHomeUiState.Generating] so the user still gets visual
- * feedback while a request is in flight.
+ * Covers the user-prompted generation cycle (`Idle → Generating →
+ * Idle / Error`), HITL (`WaitingForApproval`) and Clarification
+ * (`AwaitingClarification`) wiring, Console pane (`ConsoleLog`) streaming,
+ * pipeline binding + deleted-pipeline fallback, session initialisation +
+ * thread switching, the token counter, and the drawer / composer / overflow
+ * secondary actions (new-thread, rename, favorite, import, model picker,
+ * settings).
  */
 @HiltViewModel
 @Suppress(
@@ -143,8 +135,7 @@ class ChatHomeViewModel @Inject constructor(
 
     // Running approximate token count for the in-flight LLM stream. Reset on
     // each new send / Completed / Error and surfaced through the agent
-    // status pill so the user sees forward progress during long generations
-    // (Phase 22 / Task 16 follow-up F9).
+    // status pill so the user sees forward progress during long generations.
     private val _streamingTokens: MutableStateFlow<Int> = MutableStateFlow(0)
     private val _exportEvents: MutableSharedFlow<ChatExportPayload> = MutableSharedFlow(extraBufferCapacity = 1)
     private val _importErrorEvents: MutableSharedFlow<String> = MutableSharedFlow(extraBufferCapacity = 1)
@@ -189,8 +180,8 @@ class ChatHomeViewModel @Inject constructor(
     /**
      * Running approximate count of tokens produced by the in-flight LLM
      * stream. Surfaced through the agent status pill as `generating · N tok`
-     * so users see forward progress on long generations (Phase 22 / Task 16
-     * follow-up F9). Zero outside of [ChatHomeUiState.Generating].
+     * so users see forward progress on long generations. Zero outside of
+     * [ChatHomeUiState.Generating].
      */
     val streamingTokens: StateFlow<Int> = _streamingTokens.asStateFlow()
 
@@ -852,7 +843,7 @@ class ChatHomeViewModel @Inject constructor(
             is AgentOrchestratorState.Thinking ->
                 // Approximate-token estimate from the cumulative partial text
                 // length divided by `TOKEN_CHARS_PER_TOKEN`. Same heuristic
-                // we use for the chat-level token meter (Phase 22 / F9).
+                // we use for the chat-level token meter.
                 _streamingTokens.value = state.partialText.length / TOKEN_CHARS_PER_TOKEN
             is AgentOrchestratorState.Answering ->
                 _streamingTokens.value = state.partialText.length / TOKEN_CHARS_PER_TOKEN
@@ -1472,7 +1463,7 @@ class ChatHomeViewModel @Inject constructor(
             // fences from the LLM); surface as `ChatContent.Markdown` so the
             // host-supplied renderer formats them. User input never carries
             // intentional markdown — stick with plain text to avoid e.g. a
-            // stray `#` turning into a heading. Phase 22 / Task 16 follow-up F2.
+            // stray `#` turning into a heading.
             val content = when (role) {
                 ChatRole.Assistant, ChatRole.Tool -> ChatContent.Markdown(message.content)
                 else -> ChatContent.Text(message.content)

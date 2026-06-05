@@ -3,8 +3,7 @@ package app.knotwork.design.icons.imagevector
 import androidx.compose.ui.graphics.vector.ImageVector
 
 /**
- * Memory-screen entry glyph (two-lobed brain). Source:
- * `project_docs/design/icons-src/brain.svg`.
+ * Memory-screen entry glyph (two-lobed brain).
  */
 internal val knotworkBrainIcon: ImageVector by lazy { build() }
 

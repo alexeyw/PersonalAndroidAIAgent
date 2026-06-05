@@ -83,7 +83,7 @@ private val TraceBarHeight = 4.dp
  * depending on. The screen layer wraps the catalog component with its own
  * pager / pull-loader machinery.
  *
- * Visual contract: `compose/components/README.md` §Chat surface §ConsolePane.
+ * Console pane surface.
  *
  * **Peek layout (44 dp budget).** The full Partial/Full header is 56 dp,
  * so Peek renders a *separate* compact header (8 dp drag handle + 18 dp
@@ -131,7 +131,7 @@ private val TraceBarHeight = 4.dp
  * @param modifier optional layout modifier applied to the pane root.
  */
 @Composable
-@Suppress("LongParameterList") // Stable public API mirroring `components/README.md`.
+@Suppress("LongParameterList") // Stable public API.
 fun ConsolePane(
     tab: ConsoleTab,
     onTabChange: (ConsoleTab) -> Unit,

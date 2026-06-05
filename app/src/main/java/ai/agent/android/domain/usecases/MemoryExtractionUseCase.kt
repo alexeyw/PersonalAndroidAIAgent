@@ -39,7 +39,7 @@ import javax.inject.Inject
  *
  * The use case is intentionally free of the auto-extract feature toggle: the
  * trigger that calls it owns that gate, leaving this use case reusable by the
- * manual "Save to memory" path (Phase 25 / Task 7). It never throws for an
+ * manual "Save to memory" path. It never throws for an
  * empty / malformed model reply or a model that cannot be loaded — it returns a
  * zero-result [MemoryExtractionOutcome] instead, so a best-effort background
  * pass can never break a conversation.

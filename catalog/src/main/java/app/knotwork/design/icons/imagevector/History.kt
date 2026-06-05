@@ -3,8 +3,7 @@ package app.knotwork.design.icons.imagevector
 import androidx.compose.ui.graphics.vector.ImageVector
 
 /**
- * `I.history` glyph (history) — spec §0.7 single-stroke icon family.
- * Source: `project_docs/design/icons-src/history.svg`.
+ * `I.history` glyph (history) — single-stroke icon family.
  */
 internal val knotworkHistoryIcon: ImageVector by lazy { build() }
 

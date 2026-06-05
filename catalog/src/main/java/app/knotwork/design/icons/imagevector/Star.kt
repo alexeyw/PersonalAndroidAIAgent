@@ -3,8 +3,7 @@ package app.knotwork.design.icons.imagevector
 import androidx.compose.ui.graphics.vector.ImageVector
 
 /**
- * `I.star` glyph (favorite / pin-list) — spec §0.7 single-stroke icon family.
- * Source: `project_docs/design/icons-src/star.svg`.
+ * `I.star` glyph (favorite / pin-list) — single-stroke icon family.
  */
 internal val knotworkStarIcon: ImageVector by lazy { build() }
 

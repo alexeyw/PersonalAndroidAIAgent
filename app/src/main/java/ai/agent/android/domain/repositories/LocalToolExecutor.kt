@@ -3,9 +3,9 @@ package ai.agent.android.domain.repositories
 /**
  * Strategy interface for executing a single locally-registered agent tool.
  *
- * Replaces the long `if-else` chain previously hard-coded inside
- * `ToolRepositoryImpl.executeTool` for the built-in `schedule_task`, `delegate_task` and
- * `search_tool` cases. Each implementation is registered into a Hilt multibinding map
+ * Decouples `ToolRepositoryImpl.executeTool` from the built-in `schedule_task`,
+ * `delegate_task` and `search_tool` cases so the repository carries no per-tool
+ * branching. Each implementation is registered into a Hilt multibinding map
  * keyed by [toolName]; the repository looks up an executor by name and either invokes it
  * or fails fast with `IllegalArgumentException` instead of silently returning a fake
  * "Local tool executed: …" success string.

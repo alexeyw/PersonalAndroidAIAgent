@@ -94,9 +94,8 @@ private const val LOADING_ROWS_PER_SECTION = 3
 
 /**
  * Opacity applied to the server row and its nested tools when the server's
- * connection state is [McpConnectionState.Disconnected] (`screens/README.md
- * §C4`). Pairs the colour-only signal (warning dot) with a second visual
- * cue per `decisions.md §14`.
+ * connection state is [McpConnectionState.Disconnected]. Pairs the colour-only
+ * signal (warning dot) with a second visual cue for accessibility.
  */
 private const val DISCONNECTED_ROW_ALPHA = 0.6f
 
@@ -109,8 +108,7 @@ private const val DISCONNECTED_ROW_ALPHA = 0.6f
 private data class ServerSubtitle(val state: McpConnectionState, val label: String, val count: Int)
 
 /**
- * Stateless Knotwork tools surface. Mirrors the second-pass mockup
- * (Phase 21 / Task 10):
+ * Stateless Knotwork tools surface.
  *
  *  - TopAppBar with title + monospace "N built-in · M MCP" subtitle;
  *    trailing overflow icon.
@@ -280,7 +278,7 @@ private fun ToolsList(state: ToolsViewState, callbacks: ToolsCallbacks, padding:
             )
         }
         state.mcpServers.forEach { server ->
-            // Per `screens/README.md §C4` Disconnected state, the server row plus
+            // In the Disconnected state, the server row plus
             // every nested tool row renders at 60 % opacity so the disabled-by-
             // server-failure affordances read at a glance. The opacity stops at
             // the row level (it does NOT cascade into the catalog `EmptyState`
@@ -453,7 +451,7 @@ private fun McpServerRowView(server: McpServerRow, callbacks: ToolsCallbacks, ro
     // monospace `<N tools · <label>` line re-flows when the label widens —
     // e.g. `Connecting → Connected` shrinks, `Connected → Error("reason")`
     // grows). Under reduced motion both animations collapse to an instant
-    // snap per `decisions.md §14`.
+    // snap.
     val animationDurationMs = if (reducedMotion) 0 else KnotworkTheme.motion.dur3
     val dotColor by animateColorAsState(
         targetValue = targetDotColor,
@@ -936,9 +934,8 @@ fun ToolDetailContent(
                 ) {
                     // Horizontal-scroll the monospace schema preview so long
                     // lines (deep JSON-Schema, MCP tool inputs) stay legible
-                    // without wrapping — required at fontScale 2× per
-                    // `screens/README.md §C4` (`ToolDetailScreen` rule:
-                    // "schema-preview remains horizontally-scrollable").
+                    // without wrapping — required at fontScale 2× so the
+                    // schema-preview remains horizontally-scrollable.
                     Text(
                         text = state.schemaJson.orEmpty(),
                         style = KnotworkTextStyles.MonoBase,

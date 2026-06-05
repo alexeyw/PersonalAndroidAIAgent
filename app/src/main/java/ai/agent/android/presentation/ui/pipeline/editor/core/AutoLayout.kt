@@ -32,7 +32,7 @@ object AutoLayout {
 
     /**
      * Horizontal step between siblings on the same layer in canvas-space px. Mirrors the
-     * `node-specs.md` §canvas "min 80 dp horizontal" baseline; an additional pad keeps
+     * "min 80 dp horizontal" baseline; an additional pad keeps
      * the 168 dp NodeCard from kissing its neighbour.
      */
     const val SIBLING_GAP_X: Float = 216f

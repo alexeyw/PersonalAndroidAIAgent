@@ -46,7 +46,7 @@ import java.util.Locale
 import kotlin.math.roundToInt
 
 /**
- * Long-term-memory screen — Phase 25 redesign. Subscribes to [MemoryViewModel],
+ * Long-term-memory screen. Subscribes to [MemoryViewModel],
  * maps [MemoryUiState] to the catalog [MemoryViewState] (stats header,
  * provenance breakdown, category chips, time-grouped sections, detail sheet,
  * dialogs), and forwards every interaction back to the VM.

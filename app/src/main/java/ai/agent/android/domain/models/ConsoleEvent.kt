@@ -2,8 +2,8 @@ package ai.agent.android.domain.models
 
 /**
  * Atomic record of a single notable action surfaced through the agent console
- * (collapsed mini-console above the input bar in Phase 17.4 and the expanded
- * full-log bottom sheet in Phase 17.5).
+ * (collapsed mini-console above the input bar and the expanded full-log
+ * bottom sheet).
  *
  * Events are produced by [ai.agent.android.domain.engine.GraphExecutionEngine]
  * during pipeline execution and forwarded to the UI through
@@ -24,7 +24,7 @@ data class ConsoleEvent(val timestamp: Long, val type: ConsoleEventType, val mes
 /**
  * Category of a [ConsoleEvent]. Modelled as a sealed interface with `data
  * object` variants so the renderer can pattern-match exhaustively and the
- * Phase 17.5 filter chips map 1-to-1 to types without a magic-string lookup.
+ * filter chips map 1-to-1 to types without a magic-string lookup.
  */
 sealed interface ConsoleEventType {
     /** Lifecycle of a pipeline node — start (`▶`) or completion (`✓`). */

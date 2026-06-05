@@ -4,7 +4,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 
 /**
  * Editor toolbar "Auto layout" affordance — grid lines (decorative, dimmed)
- * plus four anchor dots. Source: `project_docs/design/icons-src/auto-layout.svg`.
+ * plus four anchor dots.
  */
 internal val knotworkAutoLayoutIcon: ImageVector by lazy { build() }
 

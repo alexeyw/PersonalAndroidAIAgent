@@ -32,11 +32,11 @@ import app.knotwork.design.tokens.KnotworkTextStyles
  * type as they type; pressing Enter (`ImeAction.Search`) jumps to the first
  * match.
  *
- * Migrated to the Knotwork [KnotworkTextField] search variant
- * (`inputs-and-chips.md` §2) — pill shape, `surface2` container, leading
- * [AppIcons.Search] glyph baked into the field rather than rendered
- * as a sibling. Trailing `×` stays as a standalone [IconButton] because it
- * closes the overlay entirely rather than clearing the query.
+ * Uses the Knotwork [KnotworkTextField] search variant — pill shape,
+ * `surface2` container, leading [AppIcons.Search] glyph baked into the field
+ * rather than rendered as a sibling. Trailing `×` stays as a standalone
+ * [IconButton] because it closes the overlay entirely rather than clearing the
+ * query.
  *
  * @param query current query string.
  * @param matchCount number of nodes matching [query] in the live graph.

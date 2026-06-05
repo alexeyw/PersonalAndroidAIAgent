@@ -41,7 +41,7 @@ data class PromptRow(
 )
 
 /**
- * Editor-sheet body. Mirrors the "Edit prompt" mockup.
+ * Editor-sheet body.
  *
  * @property id `null` for a new draft, non-null when editing an existing prompt.
  * @property name current value of the Name field.

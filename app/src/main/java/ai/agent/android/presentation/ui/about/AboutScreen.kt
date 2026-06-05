@@ -17,7 +17,7 @@ import app.knotwork.design.screens.about.AcknowledgmentEntry
 /**
  * App-side About surface. Renders the Knotwork [AboutContent] with brand
  * metadata pulled from [BuildConfig] and a hand-maintained acknowledgments
- * list (`PHASE 22 — Task 15`: the auto-discovery alternative would pull in
+ * list (the auto-discovery alternative would pull in
  * a heavy dependency and is deferred to a follow-up).
  */
 @Composable
@@ -78,7 +78,7 @@ private const val PRIVACY_URL = "https://github.com/alexeyw/PersonalAndroidAIAge
  *
  * This list is the user-facing companion of the repository `NOTICE` file and is
  * reconciled against the actual `gradle/libs.versions.toml` runtime dependency
- * set (`PHASE 26 — Task 7`). It intentionally excludes test-only artifacts
+ * set. It intentionally excludes test-only artifacts
  * (MockK, Roborazzi, Robolectric, JUnit, org.json) since they are not
  * distributed with the application. `internal` so the
  * `AboutAcknowledgmentsTest` drift guard can read it.

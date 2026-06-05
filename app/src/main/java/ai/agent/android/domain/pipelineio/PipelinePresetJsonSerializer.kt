@@ -12,8 +12,7 @@ import org.json.JSONObject
 /**
  * Two-way mapper between [PipelinePreset] and the schema-versioned JSON
  * format used by the bundled JSON files under `assets/presets/pipelines`
- * and by the browser-side editor's `.preset.json` export (introduced in
- * Phase 24 / Task 7).
+ * and by the browser-side editor's `.preset.json` export.
  *
  * The preset format is **a strict superset** of the pipeline format owned
  * by [PipelineJsonSerializer]: it embeds the same `schemaVersion` / `id` /

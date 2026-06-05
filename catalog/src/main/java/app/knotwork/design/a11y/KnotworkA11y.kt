@@ -25,8 +25,8 @@ import androidx.compose.ui.platform.LocalContext
  *
  * Components MUST go through [KnotworkA11y] (re-exported as
  * `KnotworkTheme.a11y`) instead of touching `LocalConfiguration` or
- * `Settings.Global` directly. Centralising the read keeps the rules in
- * `decisions.md §14` enforceable in one place and lets tests inject a
+ * `Settings.Global` directly. Centralising the read keeps the
+ * accessibility rules enforceable in one place and lets tests inject a
  * deterministic implementation via [LocalKnotworkA11y].
  *
  * The default implementation is [DefaultKnotworkA11y]; tests may install
@@ -39,7 +39,7 @@ interface KnotworkA11y {
      * Returns `true` when the user has disabled (or near-disabled) animations
      * system-wide. Components MUST collapse every animation longer than
      * `motionSm` (180 ms) to either an instant state change or an alpha-only
-     * 80 ms crossfade per `decisions.md §14`.
+     * 80 ms crossfade.
      *
      * @return `true` if the system reports `TRANSITION_ANIMATION_SCALE == 0f`
      * or `ANIMATOR_DURATION_SCALE == 0f`.

@@ -3,8 +3,7 @@ package app.knotwork.design.icons.imagevector
 import androidx.compose.ui.graphics.vector.ImageVector
 
 /**
- * `I.minusCircle` glyph (remove item) — spec §0.7 single-stroke icon family (round 2).
- * Source: `project_docs/design/icons-src/minusCircle.svg`.
+ * `I.minusCircle` glyph (remove item) — single-stroke icon family.
  */
 internal val knotworkMinusCircleIcon: ImageVector by lazy { build() }
 

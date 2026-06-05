@@ -4,8 +4,7 @@ import ai.agent.android.domain.models.PipelinePreset
 import kotlinx.coroutines.flow.Flow
 
 /**
- * Repository over the two-tier pipeline-preset catalogue introduced in
- * Phase 24:
+ * Repository over the two-tier pipeline-preset catalogue:
  *
  * - **Bundled presets** are read-only and ship inside the APK under
  *   `assets/presets/pipelines`. They form the curated starter catalogue

@@ -3,8 +3,7 @@ package app.knotwork.design.icons.imagevector
 import androidx.compose.ui.graphics.vector.ImageVector
 
 /**
- * `I.more` glyph (overflow ⋮ (solid)) — spec §0.7 single-stroke icon family.
- * Source: `project_docs/design/icons-src/more.svg`.
+ * `I.more` glyph (overflow ⋮ (solid)) — single-stroke icon family.
  */
 internal val knotworkMoreIcon: ImageVector by lazy { build() }
 

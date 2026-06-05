@@ -39,7 +39,7 @@ import javax.inject.Singleton
  * pure noise for the model. If every enabled block is empty (or no flags are
  * enabled at all) the builder returns an empty string; callers must decide
  * how to handle that, since the ban on fully-empty contexts is enforced at
- * the validation layer (see Phase 15 task 3/6).
+ * the validation layer.
  */
 @Singleton
 class NodeContextBuilder @Inject constructor() {

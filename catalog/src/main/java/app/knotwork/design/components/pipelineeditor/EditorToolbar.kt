@@ -47,11 +47,9 @@ private val ToolbarHeightWithSubtitle = 64.dp
 /**
  * Pipeline-editor top toolbar — `[← back] [Title + Subtitle stack] [Primary action] [Overflow]`.
  *
- * Visual contract: `compose/components/README.md` §EditorToolbar.
- *
- * The previous Phase-21 layout exposed `Undo / Redo / Delete / Auto-layout` as
- * permanent icon buttons; the Phase-22 designer mockups demoted them to the
- * overflow menu so the toolbar stays uncluttered across every state (Editing /
+ * `Undo / Redo / Delete / Auto-layout` live in the overflow menu rather than
+ * as permanent icon buttons so the toolbar stays uncluttered across every
+ * state (Editing /
  * Validating / Running / Done / Overview). The caller owns the overflow
  * `DropdownMenu` — this composable just invokes [onOverflow] when the icon is
  * tapped.

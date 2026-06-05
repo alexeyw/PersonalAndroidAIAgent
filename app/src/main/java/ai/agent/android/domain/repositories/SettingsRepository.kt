@@ -51,7 +51,7 @@ interface SettingsRepository {
      * cannot key off it. The two flags evolve independently — seeding the
      * default pipeline runs exactly once per fresh install, while
      * onboarding can be re-shown later via Settings → Reset onboarding
-     * (Phase 21 / Task 10) without re-seeding.
+     * without re-seeding.
      */
     val hasCompletedOnboarding: Flow<Boolean>
 

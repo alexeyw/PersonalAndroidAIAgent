@@ -10,7 +10,7 @@ import androidx.compose.runtime.Composable
  * Pair of [EnterTransition] / [ExitTransition] honouring the reduced-motion
  * gate from [KnotworkA11y]. When the user has reduced motion enabled the
  * caller's enter/exit pair is replaced with an alpha-only crossfade
- * (80 ms, per `decisions.md §14`).
+ * (80 ms).
  *
  * Used by `AnimatedVisibility(enter = .., exit = ..)` call sites that need
  * a single switch — pass the resulting pair components individually:
@@ -28,7 +28,7 @@ import androidx.compose.runtime.Composable
  */
 data class RespectReducedMotionTransitions(val enter: EnterTransition, val exit: ExitTransition)
 
-/** Constant duration for the reduced-motion crossfade fallback (`decisions.md §14`). */
+/** Constant duration for the reduced-motion crossfade fallback. */
 private const val REDUCED_MOTION_CROSSFADE_MS = 80
 
 /**

@@ -36,7 +36,7 @@ private val MEMORY_PIN_GLYPH_SIZE = 16.dp
 /**
  * Knotwork memory-entry row.
  *
- * Visual contract (see `compose/components/README.md` §List items):
+ * Visual contract:
  *  - Variable height (no fixed `height`); rows expand to fit body + tags.
  *  - `TitleMd` title, `BodyBase` body clamped to 3 lines with ellipsis,
  *    footer `FlowRow` containing tag chips + `MonoSm` relevance score +

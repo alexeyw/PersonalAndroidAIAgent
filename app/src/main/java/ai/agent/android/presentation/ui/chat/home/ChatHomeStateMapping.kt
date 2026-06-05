@@ -30,8 +30,8 @@ import java.util.Locale
 /**
  * Pure-Kotlin projection of the sealed [ChatHomeUiState] onto the catalog
  * [ChatHomeViewState] consumed by `ChatHomeContent`. Lives in `:app` because
- * the catalog cannot reach `ai.agent.android.*` (Clean Architecture +
- * `decisions.md §3` keep `:catalog` free of `:app` types).
+ * the catalog cannot reach `ai.agent.android.*` (Clean Architecture keeps
+ * `:catalog` free of `:app` types).
  *
  * The mapping is intentionally chunky — every state owns a complete fixture
  * block. The stub-VM stage holds no real conversation history, so a
@@ -134,7 +134,7 @@ fun ChatHomeUiState.toViewState(
             favorite = favorite,
             // Append the running token count so the pill reads
             // "generating · 42 tok" — gives the user visible progress on
-            // long generations (Phase 22 / Task 16 follow-up F9).
+            // long generations.
             agentStatusLine = formatGeneratingStatus(fixtures.statusGenerating, streamingTokens),
             console = consoleState,
         )
@@ -436,7 +436,6 @@ internal fun debugConsoleSnapForId(id: String): ConsoleSnap? = when (id) {
 /**
  * Composes the agent status pill text for the Generating state, appending
  * the running token count when non-zero ("generating" → "generating · 42 tok").
- * Phase 22 / Task 16 follow-up F9.
  *
  * @param baseLabel the locale-resolved "generating" string from
  *   [ChatHomeFixtures.statusGenerating].

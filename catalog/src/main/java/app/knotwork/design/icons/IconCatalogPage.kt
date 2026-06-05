@@ -31,8 +31,8 @@ import app.knotwork.design.tokens.KnotworkTextStyles
 
 /**
  * Catalog page that renders every custom icon from [AppIcons] plus a curated
- * sample of Material Icons Extended entries from `icon-mapping.md`. The page
- * is the visual smoke-test for the hybrid icon strategy (decisions.md §5):
+ * sample of Material Icons Extended entries. The page
+ * is the visual smoke-test for the hybrid icon strategy:
  * each row shows the glyph at the three canonical UI sizes (24/32/48 dp) over
  * a light and a dark swatch, with the source label ("Custom" or "Material")
  * pinned to the name.
@@ -86,8 +86,8 @@ private val customEntries: List<IconEntry> = listOf(
 )
 
 /**
- * Curated sample of Material Icons Extended entries listed in
- * `icon-mapping.md`. Not exhaustive — it is enough to confirm the visual
+ * Curated sample of Material Icons Extended entries. Not exhaustive — it is
+ * enough to confirm the visual
  * weight matches the custom glyphs at the same size.
  */
 private val materialEntries: List<IconEntry> = listOf(

@@ -3,8 +3,7 @@ package app.knotwork.design.icons.imagevector
 import androidx.compose.ui.graphics.vector.ImageVector
 
 /**
- * `I.mic` glyph (voice input) — spec §0.7 single-stroke icon family (round 2).
- * Source: `project_docs/design/icons-src/mic.svg`.
+ * `I.mic` glyph (voice input) — single-stroke icon family.
  */
 internal val knotworkMicIcon: ImageVector by lazy { build() }
 

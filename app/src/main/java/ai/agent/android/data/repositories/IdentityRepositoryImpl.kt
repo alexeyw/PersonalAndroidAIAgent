@@ -19,9 +19,9 @@ import javax.inject.Singleton
  *
  * The fingerprint is intentionally truncated to 8 hex characters formatted
  * as `XXXX-XXXX`. Two reasons: the full 16-character ANDROID_ID adds noise
- * to a UI label that is only meant to confirm "yes this is your device",
- * and the truncation matches the mockup verbatim. ANDROID_ID itself is
- * already scoped per (app-signing-key, user, device) on modern Android, so
+ * to a UI label that is only meant to confirm "yes this is your device".
+ * ANDROID_ID itself is already scoped per (app-signing-key, user, device)
+ * on modern Android, so
  * we are NOT leaking a stable cross-app identifier.
  */
 @Singleton

@@ -36,7 +36,7 @@ import app.knotwork.design.tokens.KnotworkTextStyles
  * Pipeline / connection run status. Maps to the `extended.signal*` palette
  * and the new neutral / dim tones for queued / cancelled runs.
  *
- * Spec mapping (`inputs-and-chips.md` §6.7):
+ * Spec mapping:
  *  - [Queued] — neutral muted tone, no animation.
  *  - [Running] — accent primary, **pulsing dot** (alpha 0.4↔1.0 over 1.4 s).
  *  - [Success] — `signalSuccess`.
@@ -75,7 +75,7 @@ enum class Status {
  * Knotwork status pill — same geometry as [RiskPill], colour family bound
  * to the pipeline state machine.
  *
- * Visual contract (`inputs-and-chips.md` §6.7):
+ * Visual contract:
  *  - 24 dp tall pill, `KnotworkTheme.shapes.full`, transparent fill,
  *    1 dp coloured border + leading 6 dp dot, `Mono13` label.
  *  - [Status.Running] pulses the dot's alpha through an

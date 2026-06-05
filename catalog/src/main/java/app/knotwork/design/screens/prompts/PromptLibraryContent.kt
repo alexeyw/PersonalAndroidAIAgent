@@ -163,8 +163,7 @@ private fun PromptsTopBar(
                 )
             }
         },
-        // TopAppBar slot intentionally empty — search was removed in Phase 24 /
-        // Task 5 review pass. Reserved for future actions (Import / Export).
+        // TopAppBar slot intentionally empty. Reserved for future actions (Import / Export).
         actions = {},
         colors = TopAppBarDefaults.topAppBarColors(
             containerColor = MaterialTheme.colorScheme.surface,
@@ -211,8 +210,7 @@ private fun PromptsCategoryTabs(state: PromptLibraryViewState, callbacks: Prompt
                         text = category,
                         // Mono small so category labels (`IF_CONDITION`,
                         // `INTENT_ROUTER`, …) keep an even character
-                        // grid identical to the in-card pill — matches
-                        // the design mockup.
+                        // grid identical to the in-card pill.
                         style = KnotworkTextStyles.MonoSm,
                         color = if (index == selectedIndex) {
                             selectedTint
@@ -345,7 +343,7 @@ private fun PromptCard(
                         text = prompt.category,
                         // Mono small to match the tab labels — both
                         // surfaces read as the same `IF_CONDITION`
-                        // typographic gesture (per `prompts` mockup).
+                        // typographic gesture.
                         style = KnotworkTextStyles.MonoSm,
                         color = categoryTint,
                     )
@@ -441,7 +439,7 @@ private fun CompactIconButton(
 /**
  * Highlight every `$VAR` token in [text] with a tonal background pill so
  * placeholders pop visually inside the body. Uses [SpanStyle] backgrounds
- * rather than `InlineTextContent` chips — close enough to the mockup, and
+ * rather than `InlineTextContent` chips, which
  * preserves the wrapping behaviour of the surrounding body text.
  */
 @Composable
@@ -669,7 +667,7 @@ private fun EditorTextField(
     multiline: Boolean = false,
 ) {
     // Multi-line bodies render in mono (matches the Settings system-instructions
-    // card — Phase 22 / Task 16 follow-up F7) so prompt sources read with the
+    // card) so prompt sources read with the
     // same monospaced rhythm everywhere they're edited. The single-line Name
     // field keeps the proportional [BodyBase] face — it's a display label, not
     // a code-like payload.

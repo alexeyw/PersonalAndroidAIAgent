@@ -15,10 +15,10 @@ import androidx.compose.ui.unit.dp
 import app.knotwork.design.theme.KnotworkTheme
 import app.knotwork.design.tokens.KnotworkTextStyles
 
-/** Outer-border stroke width for [EdgeLabel] (spec §EdgeLabel). */
+/** Outer-border stroke width for [EdgeLabel]. */
 private val EdgeLabelBorderWidth = 1.dp
 
-/** Inner padding around the [EdgeLabel] text (spec §EdgeLabel). */
+/** Inner padding around the [EdgeLabel] text. */
 private val EdgeLabelInnerPadding = 4.dp
 
 /**
@@ -26,7 +26,7 @@ private val EdgeLabelInnerPadding = 4.dp
  * the edge represents (`True / False / Item / Done / Pass / Retry / Fail`
  * or an `IntentRouter` class name).
  *
- * Visual contract (spec §EdgeLabel): `LabelSm` text on `surface1` with a
+ * Visual contract: `LabelSm` text on `surface1` with a
  * 1 dp `outline` border and 4 dp padding. `Shape.Sm` corners.
  *
  * **Stateless** — the canvas owns positioning the chip over the edge; this

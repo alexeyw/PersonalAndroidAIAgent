@@ -74,28 +74,28 @@ import app.knotwork.design.tokens.KnotworkTextStyles
 /** Minimum width fraction so a tiny breakdown segment still renders a sliver. */
 private const val MIN_SEGMENT_FRACTION = 0.0001f
 
-/** Height of the provenance breakdown bar (spec §6 — 6 px). */
+/** Height of the provenance breakdown bar (6 px). */
 private val BreakdownBarHeight = 6.dp
 
-/** Width of a row's leading provenance accent bar (spec §4.1 — 3 px rail). */
+/** Width of a row's leading provenance accent bar (3 px rail). */
 private val AccentBarWidth = 3.dp
 
-/** Provenance legend dot diameter (spec §4.7 — 7 px). */
+/** Provenance legend dot diameter (7 px). */
 private val LegendDotSize = 7.dp
 
-/** Search field height (spec §4.5 — 42 px). */
+/** Search field height (42 px). */
 private val SearchFieldHeight = 42.dp
 
-/** Source-tag pill padding (spec §4.1 — `0 6`, with 2 px optical vertical). */
+/** Source-tag pill padding (`0 6`, with 2 px optical vertical). */
 private val SourceBadgePaddingH = 6.dp
 private val SourceBadgePaddingV = 2.dp
 
-/** Card vertical rhythm (spec §6): title → description 2 px, description → meta 8 px. */
+/** Card vertical rhythm: title → description 2 px, description → meta 8 px. */
 private val CARD_TITLE_GAP = 2.dp
 private val CARD_BODY_GAP = 8.dp
 
 /**
- * Stateless Knotwork memory surface — Phase 25 redesign.
+ * Stateless Knotwork memory surface.
  *
  * Renders the stats header (count / size / last-compacted / provenance
  * breakdown + Compact), the category chip row, the sort + date dropdowns, the
@@ -296,7 +296,7 @@ private fun MemorySearchField(query: String, callbacks: MemoryCallbacks) {
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(vertical = KnotworkTheme.spacing.sp2)
-                // Spec §4.5: height 42, pill radius, surface-2 fill, 1 px outline-strong (§6 input rule).
+                // Height 42, pill radius, surface-2 fill, 1 px outline-strong (input rule).
                 .height(SearchFieldHeight)
                 .clip(KnotworkTheme.shapes.full)
                 .background(KnotworkTheme.extended.surface2)
@@ -1029,7 +1029,7 @@ private fun MemoryAddDialog(callbacks: MemoryCallbacks) {
     )
 }
 
-/** Source-tag rail / segment colour (spec §4.1 `rail`, §4.7 split-bar segments). */
+/** Source-tag rail / segment colour (`rail`, split-bar segments). */
 @Composable
 private fun sourceRail(kind: MemorySourceKind): Color = when (kind) {
     MemorySourceKind.Auto -> KnotworkTheme.extended.memAutoRail
@@ -1038,7 +1038,7 @@ private fun sourceRail(kind: MemorySourceKind): Color = when (kind) {
     MemorySourceKind.Unknown -> KnotworkTheme.extended.onSurfaceMuted
 }
 
-/** Source-tag pill fill (spec §4.1 `bg`). */
+/** Source-tag pill fill (`bg`). */
 @Composable
 private fun sourceBadgeBg(kind: MemorySourceKind): Color = when (kind) {
     MemorySourceKind.Auto -> KnotworkTheme.extended.memAutoBg
@@ -1047,7 +1047,7 @@ private fun sourceBadgeBg(kind: MemorySourceKind): Color = when (kind) {
     MemorySourceKind.Unknown -> KnotworkTheme.extended.surface3
 }
 
-/** Source-tag pill text (spec §4.1 `fg`). */
+/** Source-tag pill text (`fg`). */
 @Composable
 private fun sourceBadgeFg(kind: MemorySourceKind): Color = when (kind) {
     MemorySourceKind.Auto -> KnotworkTheme.extended.memAutoFg

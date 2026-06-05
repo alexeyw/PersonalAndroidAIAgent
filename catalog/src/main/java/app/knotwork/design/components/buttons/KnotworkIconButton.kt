@@ -26,10 +26,10 @@ import app.knotwork.design.tokens.KnotworkTextStyles
 /** Visual size of the icon-button target (touch target stays 48 dp via Material's default). */
 private val IconButtonVisualSize = 40.dp
 
-/** Glyph diameter inside the icon-button (spec §2.2 — 22 dp). */
+/** Glyph diameter inside the icon-button (22 dp). */
 private val IconGlyphSize = KnotworkIconSizes.AppBar
 
-/** Diameter of the badge bubble overlaid on the top-right of the icon-button (spec §2.2 — 14 dp). */
+/** Diameter of the badge bubble overlaid on the top-right of the icon-button (14 dp). */
 private val BadgeDiameter = 14.dp
 
 /** Maximum integer rendered inside the badge before it switches to "9+". */
@@ -38,11 +38,11 @@ private const val BADGE_OVERFLOW_THRESHOLD = 9
 /**
  * Knotwork icon button — square 40 dp visual with an optional badge.
  *
- * Visual contract (see `compose/components/README.md` §Buttons):
+ * Visual contract:
  *  - 40 dp square visual; touch target stays 48 × 48 via Material's default
  *    `IconButton` minimum interactive size.
  *  - Badge is rendered top-right when [badge] is non-null and `> 0`. Background
- *    `primary`, label Inter 700 10 px in `onPrimary` (spec §2.2). Values
+ *    `primary`, label Inter 700 10 px in `onPrimary`. Values
  *    above [BADGE_OVERFLOW_THRESHOLD] render as `"9+"`.
  *  - The badge ignores touches; the underlying [IconButton] receives the click.
  *
@@ -93,7 +93,7 @@ fun KnotworkIconButton(
                 contentAlignment = Alignment.Center,
             ) {
                 Text(
-                    // Spec §2.2: Inter 700, 10 px.
+                    // Inter 700, 10 px.
                     text = if (badge > BADGE_OVERFLOW_THRESHOLD) "9+" else badge.toString(),
                     style = KnotworkTextStyles.LabelSm.copy(fontSize = 10.sp, fontWeight = FontWeight.Bold),
                     color = MaterialTheme.colorScheme.onPrimary,

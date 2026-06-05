@@ -58,23 +58,22 @@ private const val USER_BUBBLE_MAX_WIDTH_FRACTION = 0.80f
 /** Insets reserved opposite the assistant bubble so it never reaches the screen edge. */
 private val AssistantBubbleTrailingInset = 64.dp
 
-/** Press-down scale target (per `compose/components/README.md` §Chat surface long-press). */
+/** Press-down scale target (chat surface long-press). */
 private const val LONG_PRESS_SCALE_TARGET = 0.98f
 
-/** Long-press scale animation duration in ms (per `compose/components/animations.md` §Chat). */
+/** Long-press scale animation duration in ms. */
 private const val LONG_PRESS_SCALE_DURATION_MS = 60
 
 /**
  * Root chat-message renderer. Dispatches on [content] to one of the surface
- * variants documented in `compose/components/README.md` §Chat surface, and
+ * variants for the chat surface, and
  * applies the bubble chrome (background colour, shape, alignment, max-width)
  * matching [role].
  *
  * Long-press on the bubble surfaces a [ChatContextAction] dropdown (copy /
  * re-run / rate). The press itself scales the bubble to 0.98 over 60 ms and
  * fires a `HapticFeedbackType.LongPress`. Under reduced motion
- * (`KnotworkTheme.a11y.reducedMotion()`) the scale is skipped per
- * `decisions.md §14`.
+ * (`KnotworkTheme.a11y.reducedMotion()`) the scale is skipped.
  *
  * The composable is stateless — typed-confirm input, tool retries, voice
  * recording, and console interactions are owned by the screen-level
@@ -212,8 +211,8 @@ private fun BubbleMessage(
             )
             // Clarification / HITL confirmation cards are self-contained
             // panels with their own internal status indicators; rendering
-            // the standard timestamp + model footer underneath them clashes
-            // with the spec mockup. Every other variant keeps the footer.
+            // the standard timestamp + model footer underneath them would
+            // clash. Every other variant keeps the footer.
             if (content !is ChatContent.Clarification && content !is ChatContent.Confirmation) {
                 BubbleFooter(role = role, metadata = metadata)
             }
@@ -354,7 +353,7 @@ private fun TextBubble(role: ChatRole, text: String, onContextAction: ((ChatCont
  * Renders [ChatContent.Markdown] through the host-supplied [renderer]. When
  * [renderer] is `null` the catalog falls back to plain text so the bubble
  * still reads correctly without forcing every catalog consumer to pull in
- * a markdown library (Phase 22 / Task 16 follow-up F2).
+ * a markdown library.
  */
 @Composable
 private fun MarkdownBubble(
@@ -373,7 +372,7 @@ private fun MarkdownBubble(
 }
 
 /** Resolves the per-role text colour used by [TextBubble] — paired with the
- * matching bubble background in [ChatBubbleChrome] (spec §1 chat pairs). */
+ * matching bubble background in [ChatBubbleChrome] (chat pairs). */
 @Composable
 private fun chatBubbleTextColor(role: ChatRole): androidx.compose.ui.graphics.Color = when (role) {
     ChatRole.User -> KnotworkTheme.extended.chatUserFg

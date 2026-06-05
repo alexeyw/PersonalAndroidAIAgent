@@ -3,8 +3,7 @@ package app.knotwork.design.icons.imagevector
 import androidx.compose.ui.graphics.vector.ImageVector
 
 /**
- * `I.book` glyph (documentation) — spec §0.7 single-stroke icon family (round 2).
- * Source: `project_docs/design/icons-src/book.svg`.
+ * `I.book` glyph (documentation) — single-stroke icon family.
  */
 internal val knotworkBookIcon: ImageVector by lazy { build() }
 

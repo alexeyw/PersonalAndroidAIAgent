@@ -126,8 +126,7 @@ sealed interface AgentOrchestratorState {
      * [ai.agent.android.domain.engine.GraphExecutionEngine] every time a new
      * [ConsoleEvent] is appended; the UI mirrors [events] into
      * `ChatUiState.consoleLines` and renders the latest entries in the
-     * collapsed mini-console (Phase 17.4) and the full bottom sheet
-     * (Phase 17.5).
+     * collapsed mini-console and the full bottom sheet.
      *
      * @property events Append-only ordered list of console events for the
      *   current run. The engine emits a fresh immutable copy on every change.

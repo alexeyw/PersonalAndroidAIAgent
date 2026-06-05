@@ -3,8 +3,7 @@ package app.knotwork.design.icons.imagevector
 import androidx.compose.ui.graphics.vector.ImageVector
 
 /**
- * `I.shield` glyph (privacy / security) — spec §0.7 single-stroke icon family.
- * Source: `project_docs/design/icons-src/shield.svg`.
+ * `I.shield` glyph (privacy / security) — single-stroke icon family.
  */
 internal val knotworkShieldIcon: ImageVector by lazy { build() }
 

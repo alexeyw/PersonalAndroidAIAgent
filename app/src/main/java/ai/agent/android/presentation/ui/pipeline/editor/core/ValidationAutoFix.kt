@@ -12,8 +12,8 @@ import java.util.UUID
  * `PipelineGraph.validate()`. Each recipe transforms an input graph into a
  * (hopefully) valid one without user intervention.
  *
- * Drives the `Auto-fix` action on the redesigned `ValidationBar`
- * (Phase 22 / Task 14 — mockup-3). Idempotent: applying the recipes to an
+ * Drives the `Auto-fix` action on the redesigned `ValidationBar`.
+ * Idempotent: applying the recipes to an
  * already-valid graph returns it unchanged.
  *
  * The fixer is **conservative** — it only acts when the fix can't make the

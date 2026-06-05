@@ -155,14 +155,14 @@ object AppModule {
 
     /**
      * Provides the [PipelinePresetDao] backing the user-saved
-     * pipeline-preset catalogue introduced in Phase 24 / Task 1.
+     * pipeline-preset catalogue.
      */
     @Provides
     fun providePipelinePresetDao(database: AppDatabase): PipelinePresetDao = database.pipelinePresetDao()
 
     /**
      * Provides the [PromptPresetDao] backing the user-saved
-     * prompt-preset catalogue introduced in Phase 24 / Task 4.
+     * prompt-preset catalogue.
      */
     @Provides
     fun providePromptPresetDao(database: AppDatabase): PromptPresetDao = database.promptPresetDao()

@@ -144,8 +144,7 @@ private const val MIN_WAIT_TIMEOUT_MS = 0
  * Pure-Kotlin validator that walks a [NodeConfig] and returns one entry
  * per offending field. An empty map means the form may enable Save.
  *
- * The implementation mirrors `node-specs.md` §Validation rules — the
- * table there is the authoritative spec. Pipeline-wide title uniqueness
+ * Pipeline-wide title uniqueness
  * is delegated to the caller, which supplies [peerTitles] (the set of
  * sibling node titles excluding the one currently being edited).
  *
@@ -213,7 +212,7 @@ object NodeConfigValidation {
     private fun validateLiteRt(config: LiteRtConfig): Map<FieldId, ValidationFailure> {
         val errors = mutableMapOf<FieldId, ValidationFailure>()
         // `modelId.isBlank()` means "use the currently-active model" — a
-        // valid first-class choice (Phase 22 / Task 16 follow-up F8). No
+        // valid first-class choice. No
         // REQUIRED error in that case; the executor resolves the model at
         // run-time through `LoadModelUseCase`'s null fallback.
         if (config.systemPrompt.isBlank()) errors[FieldId.SYSTEM_PROMPT] = ValidationFailure.REQUIRED
@@ -227,9 +226,9 @@ object NodeConfigValidation {
 
     private fun validateCloud(config: CloudConfig): Map<FieldId, ValidationFailure> {
         val errors = mutableMapOf<FieldId, ValidationFailure>()
-        // `CloudConfig.model` was removed from the sheet in Phase 22 / Task 14
-        // review round 3 (model ids live once per provider in Settings →
-        // External providers, not per-node). The validator therefore no
+        // `CloudConfig.model` is not part of the sheet (model ids live once
+        // per provider in Settings → External providers, not per-node). The
+        // validator therefore no
         // longer flags a blank model — the executor falls back to the
         // provider's configured model at runtime when this field is empty.
         if (config.systemPrompt.isBlank()) errors[FieldId.SYSTEM_PROMPT] = ValidationFailure.REQUIRED

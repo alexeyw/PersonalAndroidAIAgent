@@ -99,7 +99,7 @@ object NodeConfigForms {
     ) {
         Column(
             modifier = Modifier.fillMaxWidth(),
-            // Sheet density tightening (Phase 22 / Task 14 review): inter-field
+            // Sheet density tightening: inter-field
             // gap dropped sp3 → sp2 so a 3-4 field form fits a phone viewport
             // without scroll. Per-form `Column` arrangements keep their own
             // tighter sp1 internal spacing.
@@ -280,7 +280,7 @@ private fun TitleField(title: String, error: ValidationFailure?, onChange: (Stri
             onValueChange = onChange,
             singleLine = true,
             isError = error != null,
-            // Phase 22 / Task 14 review pass 3: every field on the sheet
+            // Every field on the sheet
             // adopts `MonoBase` so identifiers, prompts, model ids, and titles
             // all read in the same JetBrains Mono face. Mixed body/mono fonts
             // read as accidentally inconsistent on the sheet.
@@ -297,8 +297,8 @@ private fun TitleField(title: String, error: ValidationFailure?, onChange: (Stri
  * Layout: `[FieldLabel + optional library button] / [OutlinedTextField] /
  * [InlineError]`. The library button stays in a sibling row above the field
  * (not inside the field's `trailingIcon`) so prompt-bearing fields preserve
- * room for the chips row underneath. Every field uses `MonoBase` (Phase 22 /
- * Task 14 review round 3) so the sheet reads as a uniform stack regardless
+ * room for the chips row underneath. Every field uses `MonoBase`
+ * so the sheet reads as a uniform stack regardless
  * of which field is prose vs identifier vs prompt.
  */
 @Composable
@@ -501,7 +501,7 @@ private fun OutputFormBody(
     )
     // Optional system prompt — when blank the executor forwards the
     // upstream text verbatim; when set the LLM wraps the upstream payload
-    // through this template. Phase 22 / Task 16 follow-up F10.
+    // through this template.
     TextField(
         label = stringResource(R.string.knotwork_node_field_system_prompt),
         value = config.systemPrompt,
@@ -592,8 +592,8 @@ private fun CloudFormBody(
         selected = config.provider,
         onSelect = { next -> onChange(config.copy(provider = next)) },
     )
-    // The cloud-model id field used to live here. Phase 22 / Task 14 review
-    // round 3 removes it from the sheet — cloud-provider model ids are
+    // The cloud-model id field is intentionally absent from the sheet —
+    // cloud-provider model ids are
     // configured once per provider in Settings → External providers and
     // shared across every Cloud node, so duplicating the field on every
     // node confused users. The `CloudConfig.model` field stays on the
@@ -1008,7 +1008,7 @@ private fun ToolPicker(
  * reveals a free-text input for paths not in the registry (e.g., a sideloaded
  * `.tflite` the user hasn't added to the LocalModelRepository yet).
  *
- * **Active sentinel.** Phase 22 / Task 16 follow-up F8 introduced the rule that
+ * **Active sentinel.** By rule,
  * an empty [LiteRtConfig.modelId] means "resolve to whichever model is active
  * at execute time". Previously the picker eagerly wrote the current active id
  * into the field on open via `LaunchedEffect`, which froze the pipeline to that
@@ -1080,7 +1080,7 @@ private fun ModelPicker(
                     onDismissRequest = { menuExpanded = false },
                 ) {
                     // Sentinel: blank `modelId` resolves to the live active
-                    // model at execute time (Phase 22 / Task 16 follow-up F8).
+                    // model at execute time.
                     DropdownMenuItem(
                         text = { Text(text = activeLabel, style = KnotworkTextStyles.MonoBase) },
                         onClick = {

@@ -36,8 +36,8 @@ data class TabDestination(
 )
 
 /**
- * The four top-level destinations of the bottom-nav, in display order
- * (`decisions.md §12`). Chat is the start tab — the app opens here after
+ * The four top-level destinations of the bottom-nav, in display order.
+ * Chat is the start tab — the app opens here after
  * splash / onboarding, and the system Back gesture exits from this tab.
  */
 val TAB_DESTINATIONS: List<TabDestination> = listOf(

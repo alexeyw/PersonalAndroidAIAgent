@@ -3,8 +3,7 @@ package app.knotwork.design.icons.imagevector
 import androidx.compose.ui.graphics.vector.ImageVector
 
 /**
- * `I.stop` glyph (stop run (solid square)) — spec §0.7 single-stroke icon family (round 2).
- * Source: `project_docs/design/icons-src/stop.svg`.
+ * `I.stop` glyph (stop run (solid square)) — single-stroke icon family.
  */
 internal val knotworkStopIcon: ImageVector by lazy { build() }
 

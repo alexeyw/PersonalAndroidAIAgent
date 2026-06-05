@@ -4,7 +4,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 
 /**
  * Pipelines tab glyph — three connected nodes mirroring the visual identity of
- * the editor canvas. Source: `project_docs/design/icons-src/flow.svg`.
+ * the editor canvas.
  */
 internal val knotworkFlowIcon: ImageVector by lazy { build(IconStroke.DEFAULT) }
 

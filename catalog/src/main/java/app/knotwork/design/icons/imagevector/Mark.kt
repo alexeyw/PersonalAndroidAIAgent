@@ -5,10 +5,8 @@ import androidx.compose.ui.graphics.vector.ImageVector
 /**
  * Knotwork brand mark — the single canonical glyph: **two nodes joined by one
  * edge** (input → output). 24×24 grid, identical geometry to the launcher icon
- * and `brand/mark.svg` (logo guide §1) so About, splash, onboarding and the
+ * and `brand/mark.svg` so About, splash, onboarding and the
  * launcher all show the same glyph.
- *
- * Source: `project_docs/design/icons-src/mark.svg`.
  */
 internal val knotworkMarkIcon: ImageVector by lazy { build() }
 

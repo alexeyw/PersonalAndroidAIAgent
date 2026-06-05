@@ -46,8 +46,7 @@ import app.knotwork.design.tokens.KnotworkTextStyles
 
 /**
  * Modal bottom sheet exposing the bundled / user pipeline-preset catalogue
- * as a "tap to instantiate" surface. Layout mirrors the mockup shipped with
- * the Phase 24 / Task 3 review pass:
+ * as a "tap to instantiate" surface. Layout:
  *
  *  - Header row: `Choose a preset` title + `X` close icon.
  *  - `PresetTabRow` (shared with the manager screen) — Bundled · N / Mine · N.
@@ -100,8 +99,8 @@ fun PresetPickerSheet(
                 .fillMaxWidth()
                 .fillMaxHeight(SHEET_HEIGHT_FRACTION),
         ) {
-            // Header row: title + close. Compact `titleMedium` per the
-            // mockup — `titleLarge` overpowered the row content.
+            // Header row: title + close. Compact `titleMedium` —
+            // `titleLarge` overpowered the row content.
             Row(
                 modifier = Modifier
                     .fillMaxWidth()

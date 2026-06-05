@@ -149,7 +149,7 @@ internal fun portsFor(node: NodeModel): NodePorts {
  * @param runningEdgeIds set of edge ids that should render the traveling-dot animation
  * (run-trace mode). Pass empty when the pipeline is not running.
  * @param reducedMotion when `true`, the traveling dot is rendered as a static cursor at
- * the midpoint instead of an animated transit — `decisions.md §14`.
+ * the midpoint instead of an animated transit.
  */
 @Composable
 @Suppress("LongParameterList") // The canvas layer needs every input as one frame.
@@ -171,7 +171,7 @@ internal fun EditorEdges(
     val dotRadius = with(density) { 4.dp.toPx() }
     val dotTravelSpeedPx = with(density) { DOT_TRAVEL_SPEED_DP_PER_SEC.dp.toPx() }
     // Per-source-node hue lookup — used to tint running edges with their source
-    // node's header colour (mockup-5: the active "complex" branch is rendered in
+    // node's header colour (the active "complex" branch is rendered in
     // the IF_CONDITION hue). Each domain `NodeType` resolves to its catalog
     // analogue's header tint; the table is computed once per theme change and
     // looked up by the source node's type in the draw loop.
@@ -222,7 +222,7 @@ internal fun EditorEdges(
                 isRunning -> EDGE_STROKE_RUNNING_FACTOR
                 else -> 1f
             }
-            // Running edges adopt the source node's header hue (mockup-5: the
+            // Running edges adopt the source node's header hue (the
             // active branch is tinted in the upstream node's colour). Selected
             // edges keep the generic accent so the user's deliberate pick stands
             // apart from the live run signal.

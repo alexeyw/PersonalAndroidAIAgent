@@ -5,7 +5,7 @@ package app.knotwork.design.tokens
 import androidx.compose.ui.unit.dp
 
 /**
- * Icon render-size tokens (spec §0.7). The custom `AppIcons.*` vectors use a
+ * Icon render-size tokens. The custom `AppIcons.*` vectors use a
  * fixed 24×24 viewBox; these are the on-screen `Modifier.size` targets per
  * surface context, so a glyph reads at a consistent optical size everywhere it
  * appears.

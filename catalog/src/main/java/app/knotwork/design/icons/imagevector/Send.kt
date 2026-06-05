@@ -3,8 +3,7 @@ package app.knotwork.design.icons.imagevector
 import androidx.compose.ui.graphics.vector.ImageVector
 
 /**
- * `I.send` glyph (send message) — spec §0.7 single-stroke icon family.
- * Source: `project_docs/design/icons-src/send.svg`.
+ * `I.send` glyph (send message) — single-stroke icon family.
  */
 internal val knotworkSendIcon: ImageVector by lazy { build() }
 

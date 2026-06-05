@@ -64,8 +64,6 @@ private const val MENU_EDGE_MARGIN_DP = MENU_RADIUS_DP + TILE_LABEL_WIDTH_DP / 2
  * 12-tile radial quick-add menu. Triggered by long-press on empty canvas space; tiles
  * arrange in a circle around the anchor and tapping a tile dispatches `onPick(type)`.
  *
- * Visual / behavioural contract: `node-specs.md` §canvas + `decisions.md §quick-add`.
- *
  * **Stateless** — caller toggles visibility through the `screenAnchor` parameter
  * (non-null shows the menu at that screen-space position; `null` hides it). The
  * scrim consumes outside taps via [onDismiss].

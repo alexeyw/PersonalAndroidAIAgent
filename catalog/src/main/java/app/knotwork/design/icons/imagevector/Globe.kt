@@ -3,8 +3,7 @@ package app.knotwork.design.icons.imagevector
 import androidx.compose.ui.graphics.vector.ImageVector
 
 /**
- * `I.globe` glyph (network / locale) — spec §0.7 single-stroke icon family.
- * Source: `project_docs/design/icons-src/globe.svg`.
+ * `I.globe` glyph (network / locale) — single-stroke icon family.
  */
 internal val knotworkGlobeIcon: ImageVector by lazy { build() }
 

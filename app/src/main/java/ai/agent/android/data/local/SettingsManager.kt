@@ -80,7 +80,7 @@ class SettingsManager @Inject constructor(private val dataStore: DataStore<Prefe
         val CRASH_REPORTING_ENABLED = booleanPreferencesKey("crash_reporting_enabled")
         val CONSOLE_PREFERRED_TAB = stringPreferencesKey("console_preferred_tab")
 
-        // Phase 22 / Task 9 — Settings redesign.
+        // Settings redesign.
         val TOOL_APPROVAL_POLICY = stringPreferencesKey("tool_approval_policy")
         val BLOCK_DESTRUCTIVE_TOOLS = booleanPreferencesKey("block_destructive_tools")
         val BLOCK_NETWORK_FROM_LOCAL_MODEL = booleanPreferencesKey("block_network_from_local_model")
@@ -91,18 +91,18 @@ class SettingsManager @Inject constructor(private val dataStore: DataStore<Prefe
         val LONG_RUNNING_TASKS_NOTIFICATIONS = booleanPreferencesKey("long_running_tasks_notifications")
         val LAST_TEST_PROBE_RESULT = stringPreferencesKey("last_test_probe_result")
 
-        // Phase 25 / Task 1 — Embedding provider abstraction.
+        // Embedding provider abstraction.
         val ACTIVE_EMBEDDING_PROVIDER_ID = stringPreferencesKey("active_embedding_provider_id")
 
-        // Phase 25 / Task 2 — Memory write auto-extraction.
+        // Memory write auto-extraction.
         val AUTO_EXTRACT_ENABLED = booleanPreferencesKey("auto_extract_enabled")
 
-        // Phase 25 / Task 5 — Background memory compaction.
+        // Background memory compaction.
         val MEMORY_COMPACTION_ENABLED = booleanPreferencesKey("memory_compaction_enabled")
         val MEMORY_COMPACTION_AGE_DAYS = intPreferencesKey("memory_compaction_age_days")
         val MAX_MEMORY_CHUNKS = intPreferencesKey("max_memory_chunks")
 
-        // Phase 25 / Task 6 — Memory observability.
+        // Memory observability.
         val VERBOSE_MEMORY_LOGGING_ENABLED = booleanPreferencesKey("verbose_memory_logging_enabled")
     }
 

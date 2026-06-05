@@ -51,7 +51,7 @@ import app.knotwork.design.tokens.KnotworkTextStyles
  * insert-chip strip that Material3's text field can't host without
  * acrobatics.
  *
- * Features (spec §3):
+ * Features:
  *  - Same 7-state visual table as [KnotworkTextField] — default / hovered /
  *    focused / filled / disabled / readOnly / error.
  *  - Optional mono typography ([monospace] = true, default for prompts).

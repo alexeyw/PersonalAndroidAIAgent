@@ -10,8 +10,8 @@ package ai.agent.android.domain.models
  *    compaction or export can group facts by the conversation that produced
  *    them;
  *  - the in-app "Save to memory" action tags chunks as [Manual];
- *  - the background consolidation worker (Phase 25 / Task 5) emits
- *    [Compaction] carrying the ids of the chunks it merged;
+ *  - the background consolidation worker emits [Compaction] carrying the
+ *    ids of the chunks it merged;
  *  - rows written before this concept existed (or any payload that fails to
  *    parse) resolve to [Unknown].
  *
@@ -42,7 +42,7 @@ sealed interface MemorySource {
 
     /**
      * The chunk was saved explicitly by the user (e.g. the "Save to memory"
-     * long-press action on a chat message — Phase 25 / Task 7).
+     * long-press action on a chat message).
      */
     data object Manual : MemorySource {
         override val type: String get() = TYPE_MANUAL
@@ -50,7 +50,7 @@ sealed interface MemorySource {
 
     /**
      * The chunk is the consolidated summary of several older chunks produced by
-     * the background compaction worker (Phase 25 / Task 5).
+     * the background compaction worker.
      *
      * @property originalChunkIds Ids of the chunks that were merged into this
      *   one. Retained so observability can explain a compaction and so a future

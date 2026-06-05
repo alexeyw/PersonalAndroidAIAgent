@@ -3,8 +3,7 @@ package app.knotwork.design.icons.imagevector
 import androidx.compose.ui.graphics.vector.ImageVector
 
 /**
- * `I.hourglass` glyph (pending / queued) — spec §0.7 single-stroke icon family (round 2).
- * Source: `project_docs/design/icons-src/hourglass.svg`.
+ * `I.hourglass` glyph (pending / queued) — single-stroke icon family.
  */
 internal val knotworkHourglassIcon: ImageVector by lazy { build() }
 

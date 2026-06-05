@@ -100,7 +100,7 @@ internal object CloudProviderMapper {
      * and [DomainCloudProvider.OLLAMA] map to the catalog's `COMPATIBLE` tile.
      *
      * @return the catalog enum entry the form should pre-select; defaults to [CatalogCloudProvider.OPEN_AI]
-     * when [provider] is `null` (legacy CLOUD nodes saved before Phase 21 with no explicit provider).
+     * when [provider] is `null` (legacy CLOUD nodes saved by older app versions with no explicit provider).
      */
     fun toCatalog(provider: DomainCloudProvider?): CatalogCloudProvider = when (provider) {
         DomainCloudProvider.OPENAI -> CatalogCloudProvider.OPEN_AI

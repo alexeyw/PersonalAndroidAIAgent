@@ -3,8 +3,7 @@ package app.knotwork.design.icons.imagevector
 import androidx.compose.ui.graphics.vector.ImageVector
 
 /**
- * `I.expand` glyph (fullscreen / open in full) — spec §0.7 single-stroke icon family (round 2).
- * Source: `project_docs/design/icons-src/expand.svg`.
+ * `I.expand` glyph (fullscreen / open in full) — single-stroke icon family.
  */
 internal val knotworkExpandIcon: ImageVector by lazy { build() }
 

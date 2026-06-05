@@ -61,7 +61,7 @@ private val ActiveDotSize = 8.dp
 private val ProgressBarHeight = 3.dp
 
 /**
- * Stateless Knotwork Models surface. Mirrors the Models mockup
+ * Stateless Knotwork Models surface
  * (Active card → HF auth → Custom URL → Available presets).
  *
  * @param state immutable view state — drives loader / empty / default / error layouts.
@@ -242,7 +242,7 @@ private fun ModelsBody(
             )
         }
         item(key = "presets-section") {
-            // "All ↗" link from the original mockup is intentionally
+            // "All ↗" link is intentionally
             // hidden until we have a destination to send users to —
             // a no-op button is worse UX than no button.
             SectionHeader(label = strings.presetsSection)
@@ -411,8 +411,8 @@ private fun AuthTokenField(state: ModelsViewState, strings: ModelsStrings, callb
         onChange = callbacks.onAuthTokenChange,
         masked = true,
         trailing = {
-            // Sm size so the inline action stays compact and matches the
-            // mockup's chip-style "+ Paste" affordance.
+            // Sm size so the inline action stays compact, a
+            // chip-style "+ Paste" affordance.
             KnotworkPrimaryButton(
                 text = strings.hfPaste,
                 onClick = callbacks.onAuthTokenPaste,
@@ -437,7 +437,7 @@ private fun CustomUrlRow(state: ModelsViewState, strings: ModelsStrings, callbac
             masked = false,
             modifier = Modifier.weight(1f),
         )
-        // Sm size matches the inline mockup: the action chip is anchored
+        // Sm size keeps it inline: the action chip is anchored
         // to the field row, not a standalone full-width CTA.
         KnotworkPrimaryButton(
             text = strings.customUrlGet,
