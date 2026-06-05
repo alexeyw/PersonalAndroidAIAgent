@@ -3,8 +3,7 @@ package app.knotwork.design.icons.imagevector
 import androidx.compose.ui.graphics.vector.ImageVector
 
 /**
- * `I.chat` glyph (chat tab) — spec §0.7 single-stroke icon family.
- * Source: `project_docs/design/icons-src/chat.svg`.
+ * `I.chat` glyph (chat tab) — single-stroke icon family.
  */
 internal val knotworkChatIcon: ImageVector by lazy { build(IconStroke.DEFAULT) }
 

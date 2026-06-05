@@ -3,8 +3,7 @@ package app.knotwork.design.icons.imagevector
 import androidx.compose.ui.graphics.vector.ImageVector
 
 /**
- * `I.monitor` glyph (monitoring / metrics) — spec §0.7 single-stroke icon family.
- * Source: `project_docs/design/icons-src/monitor.svg`.
+ * `I.monitor` glyph (monitoring / metrics) — single-stroke icon family.
  */
 internal val knotworkMonitorIcon: ImageVector by lazy { build() }
 

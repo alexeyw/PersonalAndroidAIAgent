@@ -1,8 +1,7 @@
 package app.knotwork.design.screens.settings
 
 /**
- * Visual variant of the settings surface. Mirrors
- * `compose/screens/README.md §C7 · Settings` with two additions kept
+ * Visual variant of the settings surface, with two additions kept
  * orthogonal to the section state (Search and Saving) because they
  * apply globally regardless of which card is open.
  */

@@ -127,7 +127,7 @@ sealed interface PromptPreviewState {
 /**
  * Live pipeline-run state surfaced by the editor's run-trace bar and node-running pulse.
  *
- * Phase-21 placeholder while the orchestrator-runtime wiring is finalised: the editor
+ * Placeholder while the orchestrator-runtime wiring is finalised: the editor
  * exercises both fields through a debug toggle so the bar can be reviewed end-to-end
  * before the agent loop wires them up post-v0.1.
  *

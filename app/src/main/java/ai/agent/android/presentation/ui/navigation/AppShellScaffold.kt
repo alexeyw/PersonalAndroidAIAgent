@@ -52,7 +52,7 @@ import app.knotwork.design.tokens.KnotworkTextStyles
  * Owns three responsibilities:
  *
  *  1. **Bottom-nav chrome.** Renders the M3 [NavigationBar] with the four
- *     [TAB_DESTINATIONS] tabs (`decisions.md §12`). Visibility per route is
+ *     [TAB_DESTINATIONS] tabs. Visibility per route is
  *     decided by [shouldShowBottomNav] (a pure function so it is
  *     unit-testable). Show/hide uses an [AnimatedVisibility] slide so the
  *     editor / onboarding entry doesn't snap the body.
@@ -64,14 +64,12 @@ import app.knotwork.design.tokens.KnotworkTextStyles
  *
  *  3. **Root-tab Back behaviour.** While on a tab's start-destination,
  *     [BackHandler] short-circuits to `activity.finish()` so the app
- *     exits — matches the task brief "BackHandler on root tabs closes the
- *     app, not switches to the previous tab". On deeper screens the
+ *     exits — on root tabs, Back closes the app rather than switching to
+ *     the previous tab. On deeper screens the
  *     handler is disabled and default Back (pop the inner stack) takes
  *     over.
  *
- * The animated theme-flip crossfade specified in the design brief ships
- * with Task 10 alongside the manual theme toggle in `SettingsScreen`;
- * here the host activity's `AndroidAIAgentTheme` is the single source of
+ * The host activity's `AndroidAIAgentTheme` is the single source of
  * truth for the current scheme, and system-theme changes already cause a
  * natural Compose recomposition.
  *
@@ -131,7 +129,7 @@ fun AppShellScaffold(
             // Bind the bottom-nav slide to `KnotworkTheme.motion.dur3` (`easeStd`)
             // so the duration rides the design-system token rather than the
             // Compose internal default. Reduced-motion collapses the transition
-            // to an instant swap per `decisions.md §14` — Material's slide spec
+            // to an instant swap — Material's slide spec
             // is not respected by the system `TRANSITION_ANIMATION_SCALE`, so an
             // explicit gate is the only way to honour the user preference.
             val reduceMotion = KnotworkTheme.a11y.reducedMotion()

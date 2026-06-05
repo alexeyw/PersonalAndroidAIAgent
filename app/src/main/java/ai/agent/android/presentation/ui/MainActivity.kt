@@ -95,7 +95,7 @@ class MainActivity : ComponentActivity() {
             memoryReembedScheduler.rearmIfPending()
         }
 
-        // Phase 21 / Task 1/11: pin transparent status- and navigation-bar
+        // Pin transparent status- and navigation-bar
         // scrims so the Knotwork design system can paint surfaces all the
         // way to the device edges. `SystemBarStyle.auto(...)` flips between
         // the light- and dark-content variants based on the current theme.
@@ -114,8 +114,8 @@ class MainActivity : ComponentActivity() {
                 // already been flipped to `false`. The dedicated
                 // `hasCompletedOnboarding` flag survives initialization
                 // and is the right gate for the UI surface. Re-emits if
-                // the user resets onboarding from Settings (wired in
-                // Task 10). Default `initial = false` (i.e. "treat as
+                // the user resets onboarding from Settings.
+                // Default `initial = false` (i.e. "treat as
                 // returning user until DataStore confirms otherwise") so
                 // we never flash onboarding for a returning user during
                 // the brief read window; on a fresh install, the splash

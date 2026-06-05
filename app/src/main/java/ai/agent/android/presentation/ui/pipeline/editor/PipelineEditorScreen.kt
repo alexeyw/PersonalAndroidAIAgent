@@ -75,13 +75,13 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /**
- * Phase-21 production pipeline editor — the Knotwork-redesigned canvas surface.
+ * Production pipeline editor — the Knotwork-redesigned canvas surface.
  *
  * Replaces the legacy `VisualOrchestratorScreen`. Shares the `OrchestratorViewModel`
  * scoped to the `pipelines` nested nav-graph with the library screen so a freshly
  * created / loaded pipeline appears here without an extra read.
  *
- * Phase 22 / Task 14 reshapes the toolbar to the designer's `[← back] [title +
+ * The toolbar follows a `[← back] [title +
  * subtitle] [primary action] [overflow]` layout. The overflow `DropdownMenu`
  * lives here (not in the catalog atom) so the production surface can fold in
  * features (Fit to view, Toggle grid, Find node, …) without churning the
@@ -257,8 +257,7 @@ fun PipelineEditorScreen(viewModel: OrchestratorViewModel, onBack: () -> Unit) {
         val runPreviewMessage = stringResource(R.string.pipeline_editor_run_preview)
         // Banner shows Running while the orchestrator reports the run is live; falls
         // back to Idle (banner hidden) otherwise. Done / Paused variants land when
-        // real run-completion telemetry arrives (out of scope for Phase 22 / Task
-        // 14 — engine wiring is tracked separately).
+        // real run-completion telemetry arrives (engine wiring is tracked separately).
         //
         // The `remember` key set MUST include every `runState` field the derived
         // calculation reads, otherwise the banner's step-counter sticks at the
@@ -392,7 +391,7 @@ fun PipelineEditorScreen(viewModel: OrchestratorViewModel, onBack: () -> Unit) {
             },
             onNavigateUp = onBack,
             onPrimaryAction = {
-                // Phase 22 / Task 14 ships only the UI-side run banner +
+                // This ships only the UI-side run banner +
                 // dimming + traveling-dot scaffolding. The real
                 // `GraphExecutionEngine` wiring (actual node execution, token
                 // streaming, tool dispatch, completion-state Done variant)

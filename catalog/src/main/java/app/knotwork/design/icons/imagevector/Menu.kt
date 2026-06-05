@@ -3,8 +3,7 @@ package app.knotwork.design.icons.imagevector
 import androidx.compose.ui.graphics.vector.ImageVector
 
 /**
- * `I.menu` glyph (hamburger / drawer) — spec §0.7 single-stroke icon family.
- * Source: `project_docs/design/icons-src/menu.svg`.
+ * `I.menu` glyph (hamburger / drawer) — single-stroke icon family.
  */
 internal val knotworkMenuIcon: ImageVector by lazy { build() }
 

@@ -8,7 +8,7 @@ import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
 
 /**
- * Hilt [EntryPoint] resolved from the application context by the Phase 20 / Task 6/7
+ * Hilt [EntryPoint] resolved from the application context by the
  * instrumented test (`AppFunctionsEndToEndTest`).
  *
  * The instrumented test runs in the agent app's own process — `@HiltAndroidApp` on

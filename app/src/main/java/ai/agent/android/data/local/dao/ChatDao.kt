@@ -157,9 +157,8 @@ interface ChatDao {
 
     /**
      * Inserts the given session, or updates it if a row with the same primary key already
-     * exists. Replaces the SELECT-then-INSERT/UPDATE pattern previously used in
-     * [ai.agent.android.data.repositories.ChatRepositoryImpl.saveSession], collapsing two
-     * round-trips into one.
+     * exists. Collapses what would otherwise be a SELECT-then-INSERT/UPDATE into a single
+     * round-trip.
      *
      * @param session The [ChatSessionEntity] to persist.
      */

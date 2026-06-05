@@ -6,7 +6,7 @@ package ai.agent.android.presentation.ui.navigation
  * Kept as a standalone function (not a `Modifier`/`Composable`) so it is
  * unit-testable on the JVM and the rule table lives in one grep-able place.
  *
- * Visibility policy (`decisions.md §12`, `screens/README.md §Navigation map`):
+ * Visibility policy:
  *  - Visible on the four top-level tabs and their secondary screens reachable
  *    via the More menu (Memory / Models / Settings / About / etc.) — staying
  *    inside the nav structure should never hide the chrome that lets you
@@ -14,7 +14,7 @@ package ai.agent.android.presentation.ui.navigation
  *  - Hidden on full-screen, focus-mode surfaces:
  *      - Splash and Onboarding — these live outside the bottom-nav lifecycle.
  *      - Pipeline editor and the parameterised `pipeline/{id}/edit` alias —
- *        the canvas needs the full screen height for pan/zoom (Task 9).
+ *        the canvas needs the full screen height for pan/zoom.
  *  - Hidden on modal bottom-sheet routes (`sheet/...`) — the sheet provides
  *    its own dismiss affordances and overlays the host destination, which
  *    keeps the bar painted underneath.

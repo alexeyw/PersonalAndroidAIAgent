@@ -5,10 +5,7 @@ package app.knotwork.design.components.pipelineeditor
  * sheet's chrome (drag handle, type pill, sticky action row) is shared;
  * the body switches on `when (config)` to a per-type form.
  *
- * Schemas are a 1-to-1 port of
- * `project_docs/design/compose/components/node-specs.md` — adding a new
- * field or relaxing a range there is the authoritative change; this file
- * follows. Each variant captures the *value*; the matching form
+ * Each variant captures the *value*; the matching form
  * composable in `forms/` captures the *rendering*.
  */
 sealed interface NodeConfig {
@@ -81,8 +78,7 @@ data class InputConfig(
  *   formats the final response. When blank the node forwards the upstream
  *   text verbatim (the engine wraps a non-blank prompt around the LLM
  *   call). Supports `$DATE` / `$TIME` / `$TOOLS` / `$MODEL` /
- *   `$MEMORY_SUMMARY` variables. Phase 22 / Task 16 follow-up F10 restored
- *   this field after the catalog redesign dropped it.
+ *   `$MEMORY_SUMMARY` variables.
  */
 data class OutputConfig(
     override val title: String,

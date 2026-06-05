@@ -12,7 +12,7 @@ import app.knotwork.design.tokens.KnotworkTextStyles
 /**
  * Non-interactive section-divider chip for the chat stream.
  *
- * Geometry (`inputs-and-chips.md` §6.5): 24 dp tall pill (the explicit
+ * Geometry: 24 dp tall pill (the explicit
  * exception to Knotwork's 8 dp chip rule — pill reads better as a
  * separator), `surface2` fill, `onSurface2` label, [KnotworkTextStyles.LabelSm]
  * typography, 10 dp horizontal padding.

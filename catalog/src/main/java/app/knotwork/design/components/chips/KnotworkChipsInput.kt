@@ -36,7 +36,7 @@ import app.knotwork.design.tokens.KnotworkTextStyles
  * Composite input atom that renders an existing list of values as
  * [KnotworkInputChip]s and offers an inline text input to append new ones.
  *
- * Behaviour (`inputs-and-chips.md` §6.3):
+ * Behaviour:
  *  - [FlowRow] with 6×6 dp spacing — chips wrap onto multiple lines.
  *  - The trailing input shares the same row as the last chip; it commits a
  *    new value on `Enter` (IME `Done`) or `,`. Empty / duplicate values

@@ -103,7 +103,7 @@ class OrchestratorViewModel @Inject constructor(
 
     /**
      * One-shot stream of node ids that the editor should centre the canvas on.
-     * Emitted by the Phase 21 [requestFocusNode] hook used by `ValidationBar` taps.
+     * Emitted by the [requestFocusNode] hook used by `ValidationBar` taps.
      * Replays are intentionally not retained — every emission represents a fresh tap.
      */
     val focusNodeRequest: SharedFlow<String> = _focusNodeRequest.asSharedFlow()
@@ -111,8 +111,7 @@ class OrchestratorViewModel @Inject constructor(
     private val _runState = MutableStateFlow(PipelineRunState())
 
     /**
-     * Live run state surfaced by the editor's `RunStatusBanner` (Phase 22 /
-     * Task 14 — replaces the prior bottom `RunTraceBar`).
+     * Live run state surfaced by the editor's `RunStatusBanner`.
      *
      * Wired by [setRunning] / [setActiveRunningNode] today; the real orchestrator
      * integration that drives these fields end-to-end lands post-v0.1 alongside the
@@ -1007,7 +1006,7 @@ class OrchestratorViewModel @Inject constructor(
         _uiState.update { it.copy(previewState = PromptPreviewState.Hidden) }
     }
 
-    // ─── Phase 21 / Task 9 — Pipeline editor hooks ───────────────────────────
+    // ─── Pipeline editor hooks ───────────────────────────────────────────────
 
     /**
      * Replaces the persisted [NodeModel] for [nodeId] with [updated]. Used by the new
@@ -1026,7 +1025,7 @@ class OrchestratorViewModel @Inject constructor(
     }
 
     /**
-     * Replaces the entire `currentPipeline` graph in one shot. Used by the Phase-21
+     * Replaces the entire `currentPipeline` graph in one shot. Used by the
      * editor for undo / redo (which restores a previously captured snapshot) and the
      * auto-layout commit (which writes the recomputed node positions in bulk).
      */
@@ -1044,7 +1043,7 @@ class OrchestratorViewModel @Inject constructor(
     }
 
     /**
-     * Flips the editor's run banner between idle and active. Phase-21 placeholder —
+     * Flips the editor's run banner between idle and active. Placeholder —
      * the real run loop lands post-v0.1; until then the editor exposes a debug toggle
      * so the banner can be exercised end-to-end.
      *
@@ -1162,9 +1161,9 @@ class OrchestratorViewModel @Inject constructor(
 
     /**
      * Packages a freshly-edited system prompt as a user prompt preset via
-     * [SavePromptAsPresetUseCase] (Phase 24 / Task 4). Invoked by
+     * [SavePromptAsPresetUseCase]. Invoked by
      * `PipelineEditorScreen` from the 💾 button on prompt-bearing fields
-     * inside `NodeConfigSheet` (Phase 24 / Task 5).
+     * inside `NodeConfigSheet`.
      *
      * Errors are reported through [OrchestratorUiState.errorMessage] /
      * [OrchestratorUiState.feedbackMessage] using the same channel as

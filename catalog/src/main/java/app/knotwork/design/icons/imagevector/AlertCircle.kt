@@ -3,8 +3,7 @@ package app.knotwork.design.icons.imagevector
 import androidx.compose.ui.graphics.vector.ImageVector
 
 /**
- * `I.alertCircle` glyph (error/info in circle (≠ warn triangle)) — spec §0.7 single-stroke icon family (round 2).
- * Source: `project_docs/design/icons-src/alertCircle.svg`.
+ * `I.alertCircle` glyph (error/info in circle (≠ warn triangle)) — single-stroke icon family.
  */
 internal val knotworkAlertCircleIcon: ImageVector by lazy { build() }
 

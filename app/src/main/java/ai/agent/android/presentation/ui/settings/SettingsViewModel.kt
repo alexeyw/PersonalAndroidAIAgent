@@ -46,7 +46,7 @@ import java.io.OutputStream
 import javax.inject.Inject
 
 /**
- * ViewModel backing the Phase 22 / Task 9 redesigned Settings screen.
+ * ViewModel backing the redesigned Settings screen.
  *
  * Aggregates every persisted preference + repository projection into a
  * single [SettingsUiState] and exposes typed mutator methods grouped by

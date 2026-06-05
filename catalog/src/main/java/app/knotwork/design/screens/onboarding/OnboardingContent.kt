@@ -70,18 +70,17 @@ private const val PERCENT_SCALE: Float = 100f
 
 /**
  * Maximum effective `fontScale` honoured by the onboarding headlines.
- * Per `decisions.md §14`, the headline visual on the onboarding pager
- * is part of the spec, so above the system "Largest" preset (2.0×) the
- * type is clamped to 1.6× to keep the four-step pager from clipping
- * its CTA / progress segments off the bottom edge.
+ * The headline visual on the onboarding pager is layout-critical, so above
+ * the system "Largest" preset (2.0×) the type is clamped to 1.6× to keep the
+ * four-step pager from clipping its CTA / progress segments off the bottom edge.
  */
 private const val HEADLINE_FONT_SCALE_CLAMP: Float = 1.6f
 
 /**
  * Threshold above which the reduced-motion fallback collapses the step-2
  * download bar to a static full-width fill instead of running the M3
- * `LinearProgressIndicator` stripe animation. Matches the task brief
- * "под reduced-motion — статичный full bar при `>= 0.99f`".
+ * `LinearProgressIndicator` stripe animation: under reduced motion, show a
+ * static full bar at `>= 0.99f`.
  */
 private const val PROGRESS_FULL_BAR_THRESHOLD: Float = 0.99f
 
@@ -91,7 +90,7 @@ private const val PROGRESS_FULL_BAR_THRESHOLD: Float = 0.99f
  * `HorizontalPager` if the swipe gesture is desired; the catalog stays
  * snapshot-deterministic by deriving the visible step from [state] alone.
  *
- * Layout (per the second-pass mockups, Phase 21 / Task 10):
+ * Layout:
  *  - Top bar: brand glyph + product title left, Skip link right.
  *  - Body: mono "0N · {label}" step indicator + headline + body + per-step
  *    content (welcome tiles / radio cards / cloud rows / pipeline preview).
@@ -254,8 +253,8 @@ private fun StepIndicator(step: OnboardingStep) {
 
 @Composable
 private fun StepHeadline(text: String) {
-    // Per `decisions.md §14`, the onboarding headline visual is part of the
-    // design spec; above 1.6× the layout starts pushing the CTA / progress
+    // The onboarding headline visual is layout-critical;
+    // above 1.6× the layout starts pushing the CTA / progress
     // segments past the bottom edge. We clamp the effective `fontScale` to
     // 1.6× via an overridden [LocalDensity] for this subtree only — the
     // user's preference still applies up to that ceiling and every other
@@ -263,8 +262,7 @@ private fun StepHeadline(text: String) {
     //
     // Style choice: `TitleXl` (24sp) rather than `Display2xl` (30sp) so the
     // headline + body block does not eat half the viewport on smaller
-    // phones. Matches the second-pass JSX mockup target of ~28sp at the
-    // upper bound of the Knotwork title scale.
+    // phones. Targets ~28sp at the upper bound of the Knotwork title scale.
     val systemScale = KnotworkTheme.a11y.fontScale()
     val outer = LocalDensity.current
     val clampedScale = if (systemScale > HEADLINE_FONT_SCALE_CLAMP) {

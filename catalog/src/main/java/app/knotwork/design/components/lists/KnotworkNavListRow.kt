@@ -37,7 +37,7 @@ private val LeadingIconSize = 22.dp
  * Compact navigation list row used by surfaces that primarily route the
  * user to other screens (e.g. the `More` tab).
  *
- * Visual contract (see the More mockup):
+ * Visual contract:
  *  - 72 dp tall; full-width clickable surface.
  *  - Leading 48 dp rounded-square tile filled with `KnotworkTheme.extended.surface1`,
  *    centred [leadingIcon] tinted `KnotworkTheme.extended.onSurfaceMuted`.

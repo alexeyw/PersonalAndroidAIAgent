@@ -3,8 +3,7 @@ package app.knotwork.design.icons.imagevector
 import androidx.compose.ui.graphics.vector.ImageVector
 
 /**
- * `I.eyeOff` glyph (hide password) — spec §0.7 single-stroke icon family (round 2).
- * Source: `project_docs/design/icons-src/eyeOff.svg`.
+ * `I.eyeOff` glyph (hide password) — single-stroke icon family.
  */
 internal val knotworkEyeOffIcon: ImageVector by lazy { build() }
 

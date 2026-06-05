@@ -3,8 +3,7 @@ package app.knotwork.design.icons.imagevector
 import androidx.compose.ui.graphics.vector.ImageVector
 
 /**
- * `I.bookmark` glyph (saved / bookmark) — spec §0.7 single-stroke icon family (round 2).
- * Source: `project_docs/design/icons-src/bookmark.svg`.
+ * `I.bookmark` glyph (saved / bookmark) — single-stroke icon family.
  */
 internal val knotworkBookmarkIcon: ImageVector by lazy { build() }
 

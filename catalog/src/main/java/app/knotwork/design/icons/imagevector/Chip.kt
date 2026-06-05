@@ -3,8 +3,7 @@ package app.knotwork.design.icons.imagevector
 import androidx.compose.ui.graphics.vector.ImageVector
 
 /**
- * `I.chip` glyph (on-device / NPU) — spec §0.7 single-stroke icon family.
- * Source: `project_docs/design/icons-src/chip.svg`.
+ * `I.chip` glyph (on-device / NPU) — single-stroke icon family.
  */
 internal val knotworkChipIcon: ImageVector by lazy { build() }
 

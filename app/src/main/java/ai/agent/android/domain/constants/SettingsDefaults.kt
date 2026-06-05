@@ -127,8 +127,8 @@ object SettingsDefaults {
 
     /**
      * Default fraction of the memory context budget at which automatic
-     * summarization kicks in. Range `0f..1f`. `0.8f` matches the mockup
-     * (80 %). Lower values trigger summarisation sooner at the cost of more
+     * summarization kicks in. Range `0f..1f`. `0.8f` corresponds to 80 %.
+     * Lower values trigger summarisation sooner at the cost of more
      * embedding work; higher values keep raw chunks around longer.
      */
     const val AUTO_SUMMARIZE_THRESHOLD_DEFAULT: Float = 0.8f
@@ -165,7 +165,7 @@ object SettingsDefaults {
      * (`MemoryCompactionWorker`, charging + idle only) clusters old non-pinned
      * chunks and consolidates each dense cluster into a single summary chunk.
      * Users who prefer their raw facts untouched can turn it off in
-     * Settings → Memory (UI lands in Phase 25 / Task 9).
+     * Settings → Memory.
      */
     const val MEMORY_COMPACTION_ENABLED_DEFAULT: Boolean = true
 

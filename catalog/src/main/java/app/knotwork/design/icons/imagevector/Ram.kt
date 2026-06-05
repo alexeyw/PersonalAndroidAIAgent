@@ -3,8 +3,7 @@ package app.knotwork.design.icons.imagevector
 import androidx.compose.ui.graphics.vector.ImageVector
 
 /**
- * `I.ram` glyph (memory / RAM (settings)) — spec §0.7 single-stroke icon family (round 2).
- * Source: `project_docs/design/icons-src/ram.svg`.
+ * `I.ram` glyph (memory / RAM (settings)) — single-stroke icon family.
  */
 internal val knotworkRamIcon: ImageVector by lazy { build() }
 

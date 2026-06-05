@@ -27,9 +27,9 @@ enum class ProviderId(
 }
 
 /**
- * Collapsed external-provider row rendered by Settings. Mirrors the
- * mockup where each provider folds to a single tappable nav-row with
- * fingerprint + model name + chevron.
+ * Collapsed external-provider row rendered by Settings. Each provider
+ * folds to a single tappable nav-row with fingerprint + model name +
+ * chevron.
  *
  * @property id Stable identifier for the provider.
  * @property displayName Localized provider name shown as the row title.

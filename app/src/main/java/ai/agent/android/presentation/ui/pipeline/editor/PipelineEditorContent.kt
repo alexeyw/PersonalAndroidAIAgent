@@ -27,7 +27,7 @@ import app.knotwork.design.theme.KnotworkTheme
  * Vertical stack: top toolbar (or multi-select bar) → editor canvas → validation bar
  * (or run-trace bar when a run is in progress).
  *
- * Phase-22 / Task 14 reshapes the toolbar to the mockup `[← back] [title +
+ * The toolbar follows a `[← back] [title +
  * subtitle] [primary action] [overflow]` layout. Undo / Redo / Delete /
  * Auto-layout have moved into the overflow `DropdownMenu` owned by
  * [PipelineEditorScreen] — keeping that lookup table out of this pure-layout

@@ -3,8 +3,7 @@ package app.knotwork.design.icons.imagevector
 import androidx.compose.ui.graphics.vector.ImageVector
 
 /**
- * `I.redo` glyph (redo) — spec §0.7 single-stroke icon family (round 2).
- * Source: `project_docs/design/icons-src/redo.svg`.
+ * `I.redo` glyph (redo) — single-stroke icon family.
  */
 internal val knotworkRedoIcon: ImageVector by lazy { build() }
 

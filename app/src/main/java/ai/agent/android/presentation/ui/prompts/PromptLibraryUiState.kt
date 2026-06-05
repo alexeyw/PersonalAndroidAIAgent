@@ -6,9 +6,8 @@ import ai.agent.android.domain.prompt.PromptSegment
 import ai.agent.android.presentation.ui.common.UiText
 
 /**
- * Represents the UI state for the Prompt Library screen — Phase 24 / Task 5
- * rewires this screen to surface [PromptPreset]s (bundled + user) instead of
- * the legacy [ai.agent.android.domain.models.PromptTemplate] catalogue.
+ * Represents the UI state for the Prompt Library screen. This screen surfaces
+ * [PromptPreset]s (bundled + user).
  *
  * @property bundledPresets Bundled, read-only presets that ship inside the
  *   APK (`assets/presets/prompts`). Surfaced grouped by [NodeType].

@@ -3,8 +3,7 @@ package app.knotwork.design.icons.imagevector
 import androidx.compose.ui.graphics.vector.ImageVector
 
 /**
- * `I.arrowR` glyph (forward / expand →) — spec §0.7 single-stroke icon family.
- * Source: `project_docs/design/icons-src/arrowR.svg`.
+ * `I.arrowR` glyph (forward / expand →) — single-stroke icon family.
  */
 internal val knotworkArrowRIcon: ImageVector by lazy { build() }
 

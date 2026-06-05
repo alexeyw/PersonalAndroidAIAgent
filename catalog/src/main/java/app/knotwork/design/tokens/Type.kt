@@ -148,7 +148,7 @@ object KnotworkTextStyles {
         lineHeight = 18.sp,
     )
 
-    /** 14 sp / 20 sp SemiBold, +0.1 tracking — button labels (spec §2.1). */
+    /** 14 sp / 20 sp SemiBold, +0.1 tracking — button labels. */
     val ButtonLabel get() = TextStyle(
         fontFamily = inter,
         fontWeight = FontWeight.SemiBold,

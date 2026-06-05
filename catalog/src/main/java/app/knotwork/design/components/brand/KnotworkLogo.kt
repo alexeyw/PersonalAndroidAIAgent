@@ -37,7 +37,7 @@ private val LOGO_SM = 32.dp
 private val LOGO_MD = 64.dp
 private val LOGO_LG = 128.dp
 
-/** Tile corner radius as a fraction of the tile side (logo guide §5 — ~0.25·size). */
+/** Tile corner radius as a fraction of the tile side (~0.25·size). */
 private const val TILE_CORNER_FRACTION = 0.25f
 
 /** Mark inset inside the icon tile (fraction of side ≈ launcher safe-zone 66/108). */
@@ -47,7 +47,7 @@ private const val TILE_MARK_FRACTION = 0.6f
  * Knotwork brand **logo** — the bare canonical mark ([AppIcons.Mark]: two nodes
  * joined by one edge), no plate, tinted [tint] (defaults to `primary`).
  *
- * This is the single brand glyph (logo guide §1) — splash, onboarding, empty
+ * This is the single brand glyph — splash, onboarding, empty
  * states and headers all render it via this composable, so there is exactly one
  * mark across the app and it matches the launcher icon. Use [KnotworkAppIconTile]
  * for the plated app-icon presentation (About row, share cards).
@@ -72,7 +72,7 @@ fun KnotworkLogo(
 
 /**
  * Knotwork **app-icon** presentation — the white [AppIcons.Mark] on a rounded
- * `primary` tile, mirroring the launcher adaptive icon 1:1 (logo guide §2, §5).
+ * `primary` tile, mirroring the launcher adaptive icon 1:1.
  * Used in the About hero / row and share cards.
  *
  * @param modifier additional layout modifier applied to the tile.

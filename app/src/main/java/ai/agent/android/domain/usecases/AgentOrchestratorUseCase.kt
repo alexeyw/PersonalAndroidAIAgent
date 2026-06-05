@@ -38,7 +38,7 @@ class AgentOrchestratorUseCase @Inject constructor(private val taskQueueManager:
      * @param userPrompt The new prompt from the user.
      * @param pipelineId Identifier of the pipeline that should run this task. Pass
      *   the value of `ChatSession.pipelineId` so each chat executes against its
-     *   own bound pipeline (Phase 17.2). `null` defers to the application-wide
+     *   own bound pipeline. `null` defers to the application-wide
      *   default pipeline.
      * @return A [Flow] of [AgentOrchestratorState] emitting the progress of the agent.
      */

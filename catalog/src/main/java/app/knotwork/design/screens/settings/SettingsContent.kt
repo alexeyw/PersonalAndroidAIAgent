@@ -76,10 +76,9 @@ import app.knotwork.design.theme.KnotworkTheme
 import app.knotwork.design.tokens.KnotworkTextStyles
 
 /**
- * Stateless Knotwork Settings surface — Phase 22 / Task 9 redesign.
+ * Stateless Knotwork Settings surface.
  *
- * Renders the full settings stack described in `compose/screens/README.md
- * §C7`: identity card, system instructions textarea, restrictions panel,
+ * Renders the full settings stack: identity card, system instructions textarea, restrictions panel,
  * LLM parameters sliders, local-model card, external-provider list,
  * memory stats + actions, notifications, and the privacy crash-reporting
  * toggle.
@@ -158,8 +157,7 @@ private fun SettingsTopBar(state: SettingsViewState, onBack: () -> Unit) {
                 if (subtitle.isNotBlank()) {
                     Text(
                         text = subtitle,
-                        // Mono secondary text matches the cloud-provider rows
-                        // (Phase 22 / Task 16 follow-up F5).
+                        // Mono secondary text matches the cloud-provider rows.
                         style = KnotworkTextStyles.MonoSm,
                         color = KnotworkTheme.extended.onSurfaceMuted,
                     )
@@ -504,7 +502,7 @@ private fun IconToggleRow(
             ),
             // Material3's default Switch is 52×32 dp which dwarfs the
             // row-titles at our 14sp scale. Shrink the rendering box to
-            // ~78% so the visual matches the mockup; the actual touch
+            // ~78% so the visual stays balanced; the actual touch
             // target lives on the parent Row (`Modifier.clickable`), so
             // we keep the documented 48 dp interactive floor.
             modifier = Modifier.scale(SWITCH_SCALE),
@@ -736,7 +734,7 @@ private fun LocalModelCard(state: LocalModelCardState, callbacks: SettingsCallba
                     text = state.testProbeText,
                     // Switched to MonoSm so the Test backend metadata line
                     // matches the cloud-provider rows and similar Settings
-                    // secondary text (Phase 22 / Task 16 follow-up F5).
+                    // secondary text.
                     style = KnotworkTextStyles.MonoSm,
                     color = if (state.testProbeIsError) {
                         KnotworkTheme.extended.signalError
@@ -750,7 +748,7 @@ private fun LocalModelCard(state: LocalModelCardState, callbacks: SettingsCallba
                 onClick = callbacks.onTestBackendClick,
                 // Match the small-size memory-section buttons (Export /
                 // Clear / Reset) instead of the default Md tier so the row
-                // chrome stays tight (Phase 22 / Task 16 follow-up F6).
+                // chrome stays tight.
                 size = app.knotwork.design.components.buttons.KnotworkButtonSize.Sm,
             )
         }
@@ -1259,7 +1257,7 @@ private const val SEGMENTED_TRAILING_WEIGHT = 2.5f
  * Visual scale of the Material3 Switch inside the restrictions /
  * notifications / privacy toggle rows. The default 52×32 dp control
  * dwarfs the surrounding 14 sp row title; 78% trims it to ~40×25 dp
- * which matches the mockup. The interactive 48 dp floor stays intact
+ * which keeps it balanced. The interactive 48 dp floor stays intact
  * because the parent `Row` carries the `clickable` modifier.
  */
 private const val SWITCH_SCALE = 0.78f

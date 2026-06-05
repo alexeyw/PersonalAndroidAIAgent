@@ -6,7 +6,7 @@ package app.knotwork.design.components.pipelineeditor
  * Independent of `ai.agent.android.domain.models.NodeType` so the design
  * catalog has zero dependency on the production `:app` module. The two
  * enums are kept name-for-name aligned; callers in `:app` translate via a
- * thin mapper when wiring the editor screen (Task 9).
+ * thin mapper when wiring the editor screen.
  *
  * Order matches the radial quick-add menu and the catalog harness layout
  * (input / outputs first, then LLM-driven, then control-flow, then post-

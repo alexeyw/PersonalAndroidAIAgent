@@ -21,10 +21,9 @@ import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 /**
- * ViewModel for the Prompt Library screen — Phase 24 / Task 5 swaps the
- * source from the legacy `PromptTemplate` plumbing over to
+ * ViewModel for the Prompt Library screen. Sources presets from
  * [PromptPresetRepository], so the same catalogue surfaced in the editor
- * picker is now editable here too.
+ * picker is editable here too.
  *
  * Bundled presets are read-only. User presets can be edited (in-place
  * upsert via [SavePromptAsPresetUseCase] with an `existingId`), duplicated

@@ -11,9 +11,8 @@ package ai.agent.android.domain.models
  * Storage note: tokens / passwords live in the same JSON-encoded
  * `MCP_SERVERS_JSON` DataStore entry as the rest of the config. They
  * are **not** routed through `EncryptedSharedPreferences` today — the
- * threat model matches the existing arbitrary-headers field that
- * shipped with Phase 22 / Task 10. Hardening this to use the encrypted
- * store is tracked as a follow-up.
+ * threat model matches the existing arbitrary-headers field. Hardening
+ * this to use the encrypted store is tracked as a follow-up.
  */
 sealed interface McpAuth {
     /** No authentication. */

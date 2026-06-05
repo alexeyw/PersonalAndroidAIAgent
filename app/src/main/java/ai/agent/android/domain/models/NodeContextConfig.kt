@@ -12,7 +12,7 @@ package ai.agent.android.domain.models
  * (LITE_RT) more reliable.
  *
  * The default value enables every flag — this preserves backward compatibility
- * with pipelines created before Phase 15 was introduced.
+ * with older pipelines.
  *
  * @property chatHistory When `true`, the agent's chat history block is added.
  * @property originalTask When `true`, the original user message that triggered

@@ -18,7 +18,7 @@ import java.time.format.DateTimeFormatter
  * Pure-Kotlin mappers that bridge the domain orchestrator output to the
  * catalog console-pane row models consumed by `ChatHomeContent`. Lives in
  * `:app` because the catalog layer cannot reach `ai.agent.android.*` types
- * (Clean Architecture + `decisions.md §3`).
+ * (Clean Architecture).
  *
  * All public functions are deterministic and free of Android dependencies
  * beyond `org.json.JSONObject` (already used elsewhere in the chat-home

@@ -64,7 +64,7 @@ import kotlinx.coroutines.launch
 /**
  * Full-screen manager for bundled and user-saved pipeline presets.
  *
- * Mockup-driven layout (Phase 24 / Task 3 review pass):
+ * Layout:
  *
  *  - `KnotworkTopAppBarShell` with the back arrow, "Pipeline presets" title,
  *    and a mono-spaced "N bundled · M saved" subtitle.

@@ -26,9 +26,7 @@ private val BAR_HEIGHT = 48.dp
 /**
  * Top toolbar that swaps in over the [app.knotwork.design.components.pipelineeditor.EditorToolbar]
  * while the user is in multi-select mode. Shows the selection count, a cancel
- * action, a Copy action (Phase 22 / Task 14), and a destructive Delete action.
- *
- * Visual contract: `node-specs.md` §editor toolbar — bulk actions row.
+ * action, a Copy action, and a destructive Delete action.
  *
  * @param count number of selected node ids.
  * @param onCancel exits multi-select mode without acting.

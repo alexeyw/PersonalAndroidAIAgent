@@ -6,8 +6,7 @@ package ai.agent.android.domain.models
  * The status flow is hot: it transitions `Connecting → Connected` on a successful
  * `tools/list` fetch and `Connecting → Error` when the handshake or the JSON-RPC
  * call throws. UI surfaces (`ToolsScreen`) render the current value as a status
- * pill in the trailing slot of the server row; design audit (Phase 22 / Task 11)
- * owns the transition animation.
+ * pill in the trailing slot of the server row, including the transition animation.
  */
 sealed interface McpConnectionStatus {
     /** Initial state — emitted before the first fetch attempt and on force-refresh. */

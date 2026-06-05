@@ -3,8 +3,7 @@ package app.knotwork.design.icons.imagevector
 import androidx.compose.ui.graphics.vector.ImageVector
 
 /**
- * `I.undo` glyph (undo) — spec §0.7 single-stroke icon family (round 2).
- * Source: `project_docs/design/icons-src/undo.svg`.
+ * `I.undo` glyph (undo) — single-stroke icon family.
  */
 internal val knotworkUndoIcon: ImageVector by lazy { build() }
 

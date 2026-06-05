@@ -82,7 +82,7 @@ class EditorUndoRedo(private val capacity: Int = DEFAULT_CAPACITY) {
     }
 
     companion object {
-        /** Maximum snapshots retained on either side of the head — `node-specs.md` §editor. */
+        /** Maximum snapshots retained on either side of the head. */
         const val DEFAULT_CAPACITY: Int = 50
     }
 }

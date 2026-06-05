@@ -3,8 +3,7 @@ package app.knotwork.design.icons.imagevector
 import androidx.compose.ui.graphics.vector.ImageVector
 
 /**
- * `I.bolt` glyph (quick action / energy) — spec §0.7 single-stroke icon family.
- * Source: `project_docs/design/icons-src/bolt.svg`.
+ * `I.bolt` glyph (quick action / energy) — single-stroke icon family.
  */
 internal val knotworkBoltIcon: ImageVector by lazy { build() }
 

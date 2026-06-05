@@ -4,7 +4,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 
 /**
  * Pipeline `QUEUE_PROCESSOR` node glyph — stacked items plus a return-loop
- * arrow. Source: `project_docs/design/icons-src/node-queue.svg`.
+ * arrow.
  */
 internal val knotworkNodeQueueIcon: ImageVector by lazy { build() }
 

@@ -10,13 +10,13 @@ import androidx.room.PrimaryKey
  * @property id The unique identifier for the session.
  * @property name The display name of the chat session.
  * @property updatedAt The timestamp of the last activity in this session, in milliseconds since epoch.
- * @property pipelineId Identifier of the pipeline bound to the chat (Phase 17.2).
+ * @property pipelineId Identifier of the pipeline bound to the chat.
  *   `null` means "use the application default pipeline"; this is the value
  *   produced by `MIGRATION_18_19` for every pre-existing row so legacy chats
  *   continue to behave exactly as before.
  * @property isStarred Whether the user has favorited this chat. Favorited
- *   chats sort to the top of the drawer thread list. Added in Phase 22 /
- *   Task 4 via `MIGRATION_21_22` (default `0`).
+ *   chats sort to the top of the drawer thread list. Added via
+ *   `MIGRATION_21_22` (default `0`).
  */
 @Entity(tableName = "chat_sessions")
 data class ChatSessionEntity(

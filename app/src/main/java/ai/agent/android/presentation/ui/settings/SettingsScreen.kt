@@ -61,7 +61,7 @@ import java.util.Locale
 import kotlin.math.roundToInt
 
 /**
- * Phase 22 / Task 9 — redesigned Settings surface.
+ * Redesigned Settings surface.
  *
  * Slim mapper between [SettingsViewModel] state and the catalog's
  * [SettingsContent]. Hosts the SAF launcher for memory export and the

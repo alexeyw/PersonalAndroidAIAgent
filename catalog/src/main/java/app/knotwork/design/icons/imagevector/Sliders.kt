@@ -3,8 +3,7 @@ package app.knotwork.design.icons.imagevector
 import androidx.compose.ui.graphics.vector.ImageVector
 
 /**
- * `I.sliders` glyph (tune (≠ filter funnel)) — spec §0.7 single-stroke icon family (round 2).
- * Source: `project_docs/design/icons-src/sliders.svg`.
+ * `I.sliders` glyph (tune (≠ filter funnel)) — single-stroke icon family.
  */
 internal val knotworkSlidersIcon: ImageVector by lazy { build() }
 

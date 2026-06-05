@@ -10,7 +10,7 @@ import app.knotwork.design.tokens.KnotworkTextStyles
  * Per-spec sizing tier for every Knotwork brand button.
  *
  * Label typography is `ButtonLabel` (Inter 600 / 14 sp / +0.1) across all
- * tiers per spec §2.1 — only height and padding vary by size:
+ * tiers — only height and padding vary by size:
  *
  * |       | height | h-padding | text style    |
  * |-------|--------|-----------|---------------|
@@ -26,9 +26,9 @@ import app.knotwork.design.tokens.KnotworkTextStyles
 enum class KnotworkButtonSize { Sm, Md, Lg }
 
 /**
- * Numeric constants powering [KnotworkButtonSize]. Kept in lock-step with
- * `buttons.md § Размерные константы`; changing a value here is the single
- * source of truth for every button composable in `:catalog`.
+ * Numeric constants powering [KnotworkButtonSize] (the size constants);
+ * changing a value here is the single source of truth for every button
+ * composable in `:catalog`.
  *
  * The `forXxx` helpers translate a [KnotworkButtonSize] into the
  * appropriate height / padding / text style without requiring callers
@@ -91,7 +91,7 @@ object KnotworkButtonDefaults {
         KnotworkButtonSize.Md, KnotworkButtonSize.Lg -> IconSizeMd
     }
 
-    /** Returns the label text style — `ButtonLabel` for every tier (spec §2.1). */
+    /** Returns the label text style — `ButtonLabel` for every tier. */
     fun textStyleFor(size: KnotworkButtonSize): TextStyle = when (size) {
         KnotworkButtonSize.Sm, KnotworkButtonSize.Md, KnotworkButtonSize.Lg ->
             KnotworkTextStyles.ButtonLabel

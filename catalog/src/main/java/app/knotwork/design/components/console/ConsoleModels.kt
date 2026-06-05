@@ -9,11 +9,6 @@ import androidx.compose.ui.unit.dp
  * [Partial] ↔ `PartiallyExpanded`, [Full] ↔ `Expanded`. The screen layer
  * leaves height control to the sheet's own anchored-draggable engine —
  * the [height] property is retained for previews / snapshot fixtures only.
- *
- * The historical `Peek` snap (44 dp ticker strip) was retired together
- * with the custom-drawn overlay; it duplicated the ticker that already
- * lives in the agent-status pill above the composer and proved to be a
- * dead-end UX in user testing (every action required expanding further).
  */
 enum class ConsoleSnap(val height: Dp) {
     /** ≈ 50 % of screen — active monitoring during a pipeline run. */

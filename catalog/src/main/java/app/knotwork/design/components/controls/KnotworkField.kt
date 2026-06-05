@@ -19,7 +19,7 @@ import app.knotwork.design.tokens.KnotworkTextStyles
  * (mono) on the same row, [content] in the middle, optional helper / error /
  * counter row below.
  *
- * This is the spec's canonical "[Field]" pattern (`inputs-and-chips.md` §1):
+ * This is the canonical "[Field]" pattern:
  * Material3's floating label is intentionally off everywhere in Knotwork
  * because (a) it consumes vertical rhythm on dense NodeConfigSheet rows and
  * (b) the all-caps label is a brand signal repeated across every form.

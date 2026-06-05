@@ -3,8 +3,7 @@ package app.knotwork.design.icons.imagevector
 import androidx.compose.ui.graphics.vector.ImageVector
 
 /**
- * `I.trash` glyph (delete) — spec §0.7 single-stroke icon family.
- * Source: `project_docs/design/icons-src/trash.svg`.
+ * `I.trash` glyph (delete) — single-stroke icon family.
  */
 internal val knotworkTrashIcon: ImageVector by lazy { build() }
 

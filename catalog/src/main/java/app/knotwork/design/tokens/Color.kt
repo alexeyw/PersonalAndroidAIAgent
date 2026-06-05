@@ -88,7 +88,7 @@ object KnotworkLight {
     val RiskSensitive = KnotworkPalette.SignalWarn
     val RiskDestructive = KnotworkPalette.SignalError
 
-    // Chat bubble pairs (spec §1): user / agent / tool, each bg + fg.
+    // Chat bubble pairs: user / agent / tool, each bg + fg.
     val ChatUserBg = KnotworkPalette.Accent100
     val ChatUserFg = KnotworkPalette.Accent800
     val ChatAgentBg = Surface1
@@ -100,7 +100,7 @@ object KnotworkLight {
     val ConsoleFg = Color(0xFFE7E4E0)
     val ConsoleTag = KnotworkPalette.Accent300
 
-    // Memory source-tag provenance (spec §4.1): AUTO hue 220 (blue),
+    // Memory source-tag provenance: AUTO hue 220 (blue),
     // MANUAL hue 70 (brand amber), COMPACT hue 285 (violet). bg / fg / 3px rail.
     val MemAutoBg = Color(0xFFD6F0F9)
     val MemAutoFg = Color(0xFF005E78)
@@ -147,7 +147,7 @@ object KnotworkDark {
     val RiskSensitive = Color(0xFFE9B452)
     val RiskDestructive = Color(0xFFF97770)
 
-    // Chat bubble pairs (spec §1): user / agent / tool, each bg + fg.
+    // Chat bubble pairs: user / agent / tool, each bg + fg.
     val ChatUserBg = Color(0xFF412805)
     val ChatUserFg = KnotworkPalette.Accent100
     val ChatAgentBg = Surface2
@@ -159,7 +159,7 @@ object KnotworkDark {
     val ConsoleFg = Color(0xFFDAD7D3)
     val ConsoleTag = KnotworkPalette.Accent300
 
-    // Memory source-tag provenance (spec §4.1) — dark variants.
+    // Memory source-tag provenance — dark variants.
     val MemAutoBg = Color(0xFF07333F)
     val MemAutoFg = Color(0xFF7ED2ED)
     val MemAutoRail = Color(0xFF4AADC9)
@@ -177,7 +177,7 @@ object KnotworkDark {
  * Knotwork roles are mapped onto Material3 slots as follows:
  *  - `primary` → [KnotworkPalette.Accent600] (light) / `Accent300` (dark) —
  *    accent-600 (L 0.58) keeps white `on-primary` above the 3:1 UI-contrast
- *    floor on filled buttons; accent-500 (L 0.66) fell short (spec §1).
+ *    floor on filled buttons; accent-500 (L 0.66) fell short.
  *  - `secondary` → `Accent700` (light) / `Accent300` (dark)
  *  - `tertiary` → readonly-risk hue (the cool blue-cyan node colour)
  *  - `error` → [KnotworkPalette.SignalError] / dark equivalent

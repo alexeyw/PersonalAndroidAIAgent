@@ -36,7 +36,7 @@ enum class SnackbarVariant {
  * Knotwork snackbar — thin wrapper over Material3 [Snackbar] that recolours
  * by [variant] and pushes the action label through [KnotworkTextStyles].
  *
- * Visual contract (see `compose/components/README.md` §Misc):
+ * Visual contract:
  *  - Default: container `extended.surface3`, label `onSurface`.
  *  - Error:   container `colorScheme.errorContainer`, label
  *    `colorScheme.onErrorContainer`.

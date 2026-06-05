@@ -30,7 +30,7 @@ import app.knotwork.design.tokens.KnotworkTextStyles
  * Removable Knotwork chip — a value the user has added (stop tokens, quick
  * replies, list-of-strings).
  *
- * Geometry (`inputs-and-chips.md` §6.3):
+ * Geometry:
  *  - 32 dp tall `KnotworkTheme.shapes.sm` container, `surface2` fill, no
  *    border (the container colour already separates it from the field
  *    background).

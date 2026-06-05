@@ -29,7 +29,7 @@ import app.knotwork.design.theme.KnotworkTheme
  * Knotwork brand **secondary** button — transparent container with a
  * 1 dp outline.
  *
- * Mirrors `project_docs/buttons.md § KnotworkSecondaryButton`:
+ * Visual contract:
  *  - Container: `Color.Transparent`.
  *  - Border: 1 dp, `extended.outlineStrong` by default, swaps to
  *    `extended.riskDestructive` when [destructive] is `true`.

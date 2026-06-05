@@ -29,7 +29,7 @@ import app.knotwork.design.tokens.KnotworkTextStyles
  * Per-tool risk classification used by HITL prompts and agent dashboards.
  *
  * Maps to `extended.risk*` colours; never re-themed by accent (the colour
- * conveys state, not aesthetic — see `decisions.md §14`).
+ * conveys state, not aesthetic).
  */
 enum class Risk {
     /** Auto-approved read-only tool. */
@@ -46,7 +46,7 @@ enum class Risk {
  * Knotwork risk pill — transparent fill, 1 dp border in the risk colour,
  * leading 6 dp dot, mono `Mono13` label.
  *
- * Visual contract (`inputs-and-chips.md` §6.6):
+ * Visual contract:
  *  - 24 dp tall pill, `KnotworkTheme.shapes.full`, 10 dp horizontal padding.
  *  - Container: transparent. The border + dot carry the colour signal so
  *    the pill reads on every surface (white card, console, chat bubble)
@@ -54,7 +54,7 @@ enum class Risk {
  *  - Glyph dropped in favour of the leading dot to match the
  *    `StatusPill` family and keep the family geometry consistent — the
  *    label still carries the risk name, so the colour-is-not-the-only-signal
- *    rule (`decisions.md §14`) is satisfied by `text + colour + dot`.
+ *    rule is satisfied by `text + colour + dot`.
  *  - `contentDescription` reads `"Risk level: <level>"`.
  *
  * @param risk Risk tier driving border colour, dot colour, and label.
@@ -84,7 +84,7 @@ fun RiskPill(risk: Risk, modifier: Modifier = Modifier) {
             )
             Text(
                 text = risk.label,
-                // Spec §2.5: JetBrains Mono 500, 11 px, +0.2 tracking.
+                // JetBrains Mono 500, 11 px, +0.2 tracking.
                 style = KnotworkTextStyles.MonoSm.copy(
                     fontWeight = FontWeight.Medium,
                     letterSpacing = 0.2.sp,

@@ -39,7 +39,7 @@ import kotlinx.coroutines.flow.Flow
  * and the activity-level host inside `AppShellScaffold` renders it on
  * top of whichever destination is current after navigation settles.
  *
- * ### Predictive-back handling (Phase 22 / Task 13)
+ * ### Predictive-back handling
  *
  * On steps 2–4 a committed system back gesture rewinds the pager one
  * step via [OnboardingViewModel.back] — matching the visual progress

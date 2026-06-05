@@ -3,15 +3,15 @@ package ai.agent.android.domain.constants
 import ai.agent.android.domain.models.NodeType
 
 /**
- * Cross-module constants shared by the prompt-preset domain
- * (Phase 24 / Task 4): name / prompt-length limits and the set of node
- * types that can have a system-prompt preset.
+ * Cross-module constants shared by the prompt-preset domain: name /
+ * prompt-length limits and the set of node types that can have a
+ * system-prompt preset.
  *
  * Co-locating the LLM-driven set with the limits keeps every prompt-preset
  * code path — domain validation (`SavePromptAsPresetUseCase`), bundled
  * catalogue validation (`PromptPresetCatalogValidationTest`), and the UI
- * filter in `PromptPresetPickerDialog` (Phase 24 / Task 5) — pointing at
- * one source of truth instead of redeclaring the rule each time.
+ * filter in `PromptPresetPickerDialog` — pointing at one source of truth
+ * instead of redeclaring the rule each time.
  */
 object PromptPresetConstants {
 

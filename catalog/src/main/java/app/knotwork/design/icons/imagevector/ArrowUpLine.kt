@@ -3,8 +3,7 @@ package app.knotwork.design.icons.imagevector
 import androidx.compose.ui.graphics.vector.ImageVector
 
 /**
- * `I.arrowUpLine` glyph (up / scroll-to-top (straight)) — spec §0.7 single-stroke icon family (round 2).
- * Source: `project_docs/design/icons-src/arrowUpLine.svg`.
+ * `I.arrowUpLine` glyph (up / scroll-to-top (straight)) — single-stroke icon family.
  */
 internal val knotworkArrowUpLineIcon: ImageVector by lazy { build() }
 

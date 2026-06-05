@@ -3,8 +3,7 @@ package app.knotwork.design.icons.imagevector
 import androidx.compose.ui.graphics.vector.ImageVector
 
 /**
- * `I.db` glyph (storage / DB) — spec §0.7 single-stroke icon family.
- * Source: `project_docs/design/icons-src/db.svg`.
+ * `I.db` glyph (storage / DB) — single-stroke icon family.
  */
 internal val knotworkDbIcon: ImageVector by lazy { build() }
 

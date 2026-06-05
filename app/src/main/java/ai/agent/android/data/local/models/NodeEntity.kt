@@ -29,9 +29,9 @@ import androidx.room.PrimaryKey
  * (chat history, original task, previous node output, long-term memory,
  * tool results) injected on every execution. Stored as JSON via the
  * `NodeContextConfig` Room TypeConverter; defaults to all flags `true`
- * for backward compatibility with rows created before Phase 15.
- * @property configJson Optional Phase-21 per-type `NodeConfig` payload as
- * a JSON blob (schema in `node-specs.md`). `null` for legacy rows; the
+ * for backward compatibility with older rows that predate this column.
+ * @property configJson Optional per-type `NodeConfig` payload as
+ * a JSON blob. `null` for legacy rows; the
  * editor lazily derives a default from the flat fields above on first
  * edit and writes the encoded payload back here on save.
  */

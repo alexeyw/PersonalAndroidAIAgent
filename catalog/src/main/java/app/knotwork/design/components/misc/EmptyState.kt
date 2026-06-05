@@ -26,7 +26,7 @@ private val DefaultIllustrationSize = 160.dp
  * optional primary CTA. Used in screens that have no data to show
  * (`PipelineLibraryScreen` empty, `MemoryScreen` no-results, …).
  *
- * Visual contract (see `compose/components/README.md` §Misc):
+ * Visual contract:
  *  - Default illustration is a [StripedPlaceholder] sized to 160 × 160 dp;
  *    callers may override the [illustration] slot to drop in a real asset.
  *  - Title `TitleLg`, subtitle `BodyBase` in `extended.onSurfaceMuted`,

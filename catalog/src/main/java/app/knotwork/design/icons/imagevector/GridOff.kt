@@ -3,8 +3,7 @@ package app.knotwork.design.icons.imagevector
 import androidx.compose.ui.graphics.vector.ImageVector
 
 /**
- * `I.gridOff` glyph (snap grid off) — spec §0.7 single-stroke icon family (round 2).
- * Source: `project_docs/design/icons-src/gridOff.svg`.
+ * `I.gridOff` glyph (snap grid off) — single-stroke icon family.
  */
 internal val knotworkGridOffIcon: ImageVector by lazy { build() }
 

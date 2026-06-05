@@ -27,7 +27,7 @@ import app.knotwork.design.theme.KnotworkTheme
 /**
  * Knotwork brand **primary** button — filled, accent container.
  *
- * Mirrors `project_docs/buttons.md § KnotworkPrimaryButton`:
+ * Visual contract:
  *  - Container: `colorScheme.primary` (Accent500 light / Accent400 dark).
  *  - Content: `onPrimary`.
  *  - Shape: `KnotworkTheme.shapes.full` (pill).

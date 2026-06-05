@@ -3,8 +3,7 @@ package app.knotwork.design.icons.imagevector
 import androidx.compose.ui.graphics.vector.ImageVector
 
 /**
- * `I.circle` glyph (empty state dot (radio unchecked)) — spec §0.7 single-stroke icon family (round 2).
- * Source: `project_docs/design/icons-src/circle.svg`.
+ * `I.circle` glyph (empty state dot (radio unchecked)) — single-stroke icon family.
  */
 internal val knotworkCircleIcon: ImageVector by lazy { build() }
 

@@ -4,7 +4,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 
 /**
  * Pipeline `DECOMPOSITION` node glyph — one-to-many fan from a single dot to
- * three small bins. Source: `project_docs/design/icons-src/node-decompose.svg`.
+ * three small bins.
  */
 internal val knotworkNodeDecomposeIcon: ImageVector by lazy { build() }
 

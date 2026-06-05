@@ -3,14 +3,13 @@ package app.knotwork.design.icons.imagevector
 import androidx.compose.ui.graphics.vector.ImageVector
 
 /**
- * `I.pin` glyph (pin / keep, outline) — spec §0.7 single-stroke icon family.
- * Source: `project_docs/design/icons-src/pin.svg`.
+ * `I.pin` glyph (pin / keep, outline) — single-stroke icon family.
  */
 internal val knotworkPinIcon: ImageVector by lazy { build() }
 
 /**
- * `I.pin` in its **pin-on** state — a distinct solid-filled pushpin (spec §0.7
- * solid exception), not just the outline filled. Used for the "pinned" toggle.
+ * `I.pin` in its **pin-on** state — a distinct solid-filled pushpin (a solid
+ * exception), not just the outline filled. Used for the "pinned" toggle.
  */
 internal val knotworkPinOnIcon: ImageVector by lazy { buildOn() }
 

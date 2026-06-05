@@ -19,9 +19,8 @@ import app.knotwork.design.theme.KnotworkTheme
  * can splice it at the current cursor position. An empty [variables] list
  * collapses to an empty row.
  *
- * Migrated from the M3 `AssistChip` baseline to [KnotworkVariableChip]
- * (`inputs-and-chips.md` §6.4) so prompt-variable affordances render in the
- * mono/accent/dashed-border family the spec calls "template, not value".
+ * Renders each variable as a [KnotworkVariableChip] in the
+ * mono/accent/dashed-border family that reads as "template, not value".
  *
  * @param variables Tokens to display as chips. Items may include or omit the
  *  leading `$` — [KnotworkVariableChip] normalises the prefix.

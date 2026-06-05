@@ -3,8 +3,7 @@ package app.knotwork.design.icons.imagevector
 import androidx.compose.ui.graphics.vector.ImageVector
 
 /**
- * `I.filter` glyph (filter / facets) — spec §0.7 single-stroke icon family.
- * Source: `project_docs/design/icons-src/filter.svg`.
+ * `I.filter` glyph (filter / facets) — single-stroke icon family.
  */
 internal val knotworkFilterIcon: ImageVector by lazy { build() }
 

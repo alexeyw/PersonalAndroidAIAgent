@@ -3,8 +3,7 @@ package app.knotwork.design.icons.imagevector
 import androidx.compose.ui.graphics.vector.ImageVector
 
 /**
- * `I.dot` glyph (marker dot (solid)) — spec §0.7 single-stroke icon family.
- * Source: `project_docs/design/icons-src/dot.svg`.
+ * `I.dot` glyph (marker dot (solid)) — single-stroke icon family.
  */
 internal val knotworkDotIcon: ImageVector by lazy { build() }
 

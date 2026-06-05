@@ -67,8 +67,8 @@ class EditorState(undoCapacity: Int = EditorUndoRedo.DEFAULT_CAPACITY) {
     var miniMapOpen: Boolean by mutableStateOf(false)
 
     /**
-     * `true` when the canvas renders the dot grid background. Mirrors the
-     * mockup default — visual grid is on initially because the user expects to
+     * `true` when the canvas renders the dot grid background. The visual grid
+     * is on initially because the user expects to
      * see snap-to-grid feedback while dragging. Toggled from the overflow menu
      * so power users can hide it for a clean visual.
      */

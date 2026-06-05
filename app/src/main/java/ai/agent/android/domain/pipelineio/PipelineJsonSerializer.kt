@@ -51,7 +51,7 @@ import org.json.JSONObject
  *
  * ### Rich per-node config (`nodeConfig`)
  *
- * The optional `nodeConfig` object carries the full Phase-21
+ * The optional `nodeConfig` object carries the full
  * `NodeConfig` payload (the `NodeConfigCodec` envelope: `{ "v": 1,
  * "type", "title", ...type-specific... }`) so the browser editor and the
  * in-app editor can round-trip every form field, not just the flat
@@ -144,7 +144,7 @@ object PipelineJsonSerializer {
         // Embed the rich per-node config (the `NodeConfigCodec` payload stored
         // in [NodeModel.configJson]) as an opaque nested `nodeConfig` object so
         // the browser editor and other app instances can round-trip the full
-        // Phase-21 `NodeConfig`. The domain layer intentionally does NOT
+        // `NodeConfig`. The domain layer intentionally does NOT
         // interpret this blob — it is passed through verbatim, keeping the
         // serializer free of any presentation-layer dependency. The flat
         // `config` block above stays authoritative for the runtime engine.

@@ -3,8 +3,7 @@ package app.knotwork.design.icons.imagevector
 import androidx.compose.ui.graphics.vector.ImageVector
 
 /**
- * `I.edit` glyph (edit / rename) — spec §0.7 single-stroke icon family.
- * Source: `project_docs/design/icons-src/edit.svg`.
+ * `I.edit` glyph (edit / rename) — single-stroke icon family.
  */
 internal val knotworkEditIcon: ImageVector by lazy { build() }
 

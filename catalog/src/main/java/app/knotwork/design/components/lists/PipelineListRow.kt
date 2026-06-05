@@ -47,7 +47,7 @@ import app.knotwork.design.tokens.KnotworkTextStyles
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
-/** Row visual height (`compose/components/README.md` §List items). */
+/** Row visual height. */
 private val PipelineRowHeight = 72.dp
 
 /** Diameter of the leading pipeline mark + tinted halo. */
@@ -84,7 +84,7 @@ enum class PipelineSwipeAction {
 /**
  * Knotwork pipeline-library list row.
  *
- * Visual contract (see `compose/components/README.md` §List items):
+ * Visual contract:
  *  - 72 dp tall; leading 40 dp tinted mark, `TitleMd` title (1 line, ellipsis),
  *    `BodySm onSurfaceMuted` subtitle (last-run timestamp + status), trailing
  *    24 dp `MoreVert` overflow.

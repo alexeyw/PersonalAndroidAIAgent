@@ -19,7 +19,7 @@ import app.knotwork.design.icons.AppIcons
  * eye-toggle trailing icon that flips between [AppIcons.Eye]
  * and [AppIcons.EyeOff].
  *
- * Spec mapping (`inputs-and-chips.md` §4):
+ * Spec mapping:
  *  - `enabled = false` callers can compose with [KnotworkField] helper to
  *    show the masked-with-suffix variant (`••••••••YOUR`) themselves — the
  *    last-4 reveal is a presentation-layer concern, not a control-layer

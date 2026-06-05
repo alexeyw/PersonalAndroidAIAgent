@@ -19,7 +19,7 @@ enum class ToolCallStatus {
 /**
  * Sealed body of a [ChatMessage]. Every variant is rendered by [ChatMessage];
  * adding a new variant requires extending the `when` block there. The base
- * variants mirror `compose/components/README.md` §Chat surface.
+ * variants match the chat surface.
  *
  * Catalog API takes already-prepared strings (no JSON / Markdown parsing) so
  * `:catalog` stays self-contained — interpretation of JSON args, AST building
@@ -36,7 +36,7 @@ sealed interface ChatContent {
 
     /**
      * Markdown body. Rendered as plain text in catalog v0 (no markdown
-     * library dependency). The `:app` integration in Phase 21 Task 8/9
+     * library dependency). The `:app` integration
      * upgrades this to a real renderer; the catalog API is forward-compatible
      * because callers already pass the raw source.
      *

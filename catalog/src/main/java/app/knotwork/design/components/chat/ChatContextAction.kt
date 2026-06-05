@@ -3,7 +3,7 @@ package app.knotwork.design.components.chat
 /**
  * Actions exposed by the long-press context menu on a [ChatMessage].
  *
- * Matches `compose/components/README.md` §Chat surface: long-press opens a
+ * Chat surface behaviour: long-press opens a
  * small dropdown with copy / re-run / rate / save-to-memory. The catalog
  * component only surfaces the user's choice via `onContextAction(action)` —
  * the screen decides what each action does (copy to clipboard, replay the

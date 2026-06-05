@@ -12,7 +12,7 @@ import java.util.UUID
  * @property timestamp The time the task was created.
  * @property pipelineId Identifier of the pipeline that should run this task. `null`
  *   means the orchestrator should fall back to the application-wide default
- *   pipeline (Phase 17.2 — pipelines are bound per-chat, not globally). The id
+ *   pipeline (pipelines are bound per-chat, not globally). The id
  *   is captured at enqueue time so a later edit to `ChatSession.pipelineId`
  *   does not retroactively reroute an in-flight task.
  */

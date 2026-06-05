@@ -3,8 +3,7 @@ package app.knotwork.design.icons.imagevector
 import androidx.compose.ui.graphics.vector.ImageVector
 
 /**
- * `I.check` glyph (confirm / tick) — spec §0.7 single-stroke icon family.
- * Source: `project_docs/design/icons-src/check.svg`.
+ * `I.check` glyph (confirm / tick) — single-stroke icon family.
  */
 internal val knotworkCheckIcon: ImageVector by lazy { build() }
 

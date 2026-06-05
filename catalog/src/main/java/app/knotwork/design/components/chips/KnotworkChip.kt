@@ -46,7 +46,7 @@ enum class ChipStyle {
 /**
  * Knotwork chip — horizontal pill with optional leading and trailing icons.
  *
- * Visual contract (see `compose/components/README.md` §Chips & pills):
+ * Visual contract:
  *  - 32 dp tall, shape `KnotworkTheme.shapes.full`, horizontal padding 12 dp.
  *  - `selected = true`: container `Accent100` (light) / `primaryContainer`
  *    (dark), label `onPrimaryContainer` — independent of [style].
@@ -176,7 +176,7 @@ private fun chipContainerColor(style: ChipStyle, selected: Boolean, enabled: Boo
     // dark — exactly the container shade `onPrimaryContainer` (used as the
     // chip label colour) is meant to land on. Hardcoding the palette
     // `Accent100` here makes the dark-theme Tonal chip render light-on-light
-    // text. Mirrors `compose/components/README.md §Chips`.
+    // text.
     if (selected) return MaterialTheme.colorScheme.primaryContainer
     return when (style) {
         ChipStyle.Default -> KnotworkTheme.extended.surface2

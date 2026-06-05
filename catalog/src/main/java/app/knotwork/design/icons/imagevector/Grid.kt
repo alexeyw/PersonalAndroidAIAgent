@@ -3,8 +3,7 @@ package app.knotwork.design.icons.imagevector
 import androidx.compose.ui.graphics.vector.ImageVector
 
 /**
- * `I.grid` glyph (snap grid on) — spec §0.7 single-stroke icon family (round 2).
- * Source: `project_docs/design/icons-src/grid.svg`.
+ * `I.grid` glyph (snap grid on) — single-stroke icon family.
  */
 internal val knotworkGridIcon: ImageVector by lazy { build() }
 

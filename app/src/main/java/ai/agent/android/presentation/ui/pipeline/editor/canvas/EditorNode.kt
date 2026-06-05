@@ -41,8 +41,8 @@ private const val DRAG_PICKUP_SCALE = 1.04f
 private const val DRAG_PICKUP_DURATION_MS = 100
 
 /**
- * Opacity applied to non-active nodes while a run is in progress. Tuned by the
- * mockup-5 reference — low enough to clearly demote them, high enough to keep
+ * Opacity applied to non-active nodes while a run is in progress. Tuned to be
+ * low enough to clearly demote them, high enough to keep
  * the pipeline shape readable so the user follows along visually.
  */
 private const val DIMMED_ALPHA = 0.40f
@@ -53,7 +53,7 @@ private const val DIMMED_ALPHA = 0.40f
  * to connection mode.
  *
  * Position is rendered through `graphicsLayer.translationX / Y` so a node moving never
- * triggers a re-measure of the canvas surface (`animations.md` §Performance notes). The
+ * triggers a re-measure of the canvas surface. The
  * pickup scale animation (1.00 → 1.04 over 100 ms, ease-out) and the release settle
  * (`spring(.7f, 15f)`) live on local [AnimFloat] handles.
  *
