@@ -63,7 +63,6 @@ This file maps the contents of the main application package.
     - `McpClient.kt` - Generic MCP client interface/impl.
   - `network/` - Network handling.
     - `AndroidModelDownloadManager.kt` - Download manager for models.
-  - `remote/` - Remote API components.
   - `repositories/` - Repository implementations.
     - `ChatRepositoryImpl.kt` - Chat repository implementation.
     - `ClarificationRepositoryImpl.kt` - In-memory implementation of `ClarificationRepository` that suspends pipeline coroutines until the user answers (or the request times out).
@@ -79,6 +78,7 @@ This file maps the contents of the main application package.
     - `NetworkActivityTrackerImpl.kt` - Records `System.currentTimeMillis()` on every outbound cloud-LLM and MCP call. Drives the More tab footer privacy pill via `NetworkActivityTracker.lastOutboundAt`.
     - `NetworkStateRepositoryImpl.kt` - Network state repository implementation.
     - `PowerStateRepositoryImpl.kt` - Power state repository implementation.
+    - `PromptRepositoryImpl.kt` - Room-backed implementation of `PromptRepository` (prompt-template CRUD).
     - `ToolRepositoryImpl.kt` - Tool repository implementation.
   - `services/` - Android Background/Foreground Services.
     - `AgentForegroundService.kt` - Foreground service for agent.
@@ -135,7 +135,19 @@ This file maps the contents of the main application package.
     - `PipelineExecutionContext.kt` - Immutable per-iteration snapshot of pipeline-scoped data (original user message, chat history, previous node output, tool invocation results, memory entries) consumed by `NodeContextBuilder`.
     - `TaskQueueManager.kt` - Task queue manager interface.
     - `TextEmbeddingEngine.kt` - Text embedding engine interface.
-    - `executors/ClarificationNodeExecutor.kt` - Executor for `NodeType.CLARIFICATION` that asks the local LLM to generate a question/options JSON, suspends on `ClarificationRepository.requestAnswer`, and forwards the user's reply downstream.
+    - `executors/` - Per-`NodeType` `NodeExecutor` strategies dispatched by `NodeExecutorFactory`.
+      - `NodeExecutor.kt` - Strategy interface defining the node-execution contract (streams progress as `NodeOutput` via `Flow`).
+      - `NodeExecutorFactory.kt` - Hilt-injected dispatch table mapping each `NodeType` to its concrete `NodeExecutor`.
+      - `InputNodeExecutor.kt` - Pass-through executor for `INPUT` nodes; forwards the user's original message downstream unmodified.
+      - `LiteRtNodeExecutor.kt` - Executor for `LITE_RT` nodes; runs on-device model inference and streams token output as orchestrator state updates.
+      - `CloudLlmNodeExecutor.kt` - Executor for `CLOUD` nodes; dispatches to a cloud LLM provider with streaming support.
+      - `OutputNodeExecutor.kt` - Terminal executor; optionally formats upstream text via the local model before persisting the final agent response.
+      - `SummaryNodeExecutor.kt` - Executor for `SUMMARY` nodes; synthesises upstream subtask results into a coherent summary.
+      - `SystemNodeExecutor.kt` - Shared system-prompt-driven executor for `INTENT_ROUTER`, `DECOMPOSITION`, and `EVALUATION` nodes.
+      - `ToolNodeExecutor.kt` - Executor for `TOOL` nodes; dispatches tool calls with the Human-in-the-Loop approval gate.
+      - `IfConditionNodeExecutor.kt` - Executor for `IF_CONDITION` branching nodes; evaluates the boolean condition and routes downstream.
+      - `QueueProcessorNodeExecutor.kt` - Pass-through executor for the `QUEUE_PROCESSOR` routing marker consumed by `GraphExecutionEngine`.
+      - `ClarificationNodeExecutor.kt` - Executor for `NodeType.CLARIFICATION` that asks the local LLM to generate a question/options JSON, suspends on `ClarificationRepository.requestAnswer`, and forwards the user's reply downstream.
   - `memoryio/` - JSON serialisation gateway for long-term memory export/import (Phase 25 / Task 8).
     - `MemorySourceJson.kt` - Single source of truth for the `MemorySource` ↔ JSON wire shape; shared by the Room `source` column converter (`data/local/Converters`) and `MemoryJsonSerializer` so the column encoding and the export file stay byte-identical.
     - `MemoryJsonSerializer.kt` - Two-way mapper between the memory table and the portable `schemaVersion: 1` export document (`embeddingProviderId` + `exportedAt` + per-chunk `id`/`text`/`embedding`/`source`/`timestamp`/`isPinned`/`tags`). Never-throwing `parse` returns `Success / SchemaMismatch / Failure`.
@@ -149,6 +161,7 @@ This file maps the contents of the main application package.
     - `PromptTemplateEngine.kt` - Renders templates by substituting `$KEY` placeholders.
     - `PromptSegment.kt` - Sealed interface modelling rendered prompt chunks (literal/resolved/unknown) for previews.
   - `models/` - Domain entity models.
+    - `ActiveModelMeta.kt` - Rich metadata for the currently active local model rendered on the Settings local-model card.
     - `AgentMetrics.kt` - Agent metrics model.
     - `AgentOrchestratorState.kt` - Orchestrator state model.
     - `AgentTask.kt` - Agent task model.
@@ -162,6 +175,7 @@ This file maps the contents of the main application package.
     - `ConsoleEvent.kt` - Domain model of a single agent-console entry (`timestamp`, `type`, `message`) with `ConsoleEventType` sealed interface (`NodeExecution`, `ToolCall`, `MemoryAccess`, `SystemMessage`, `Error`).
     - `InitProgress.kt` - Domain model of cold-start progress (`stage`, `message`, `completedSteps`, `totalSteps`) plus `InitStage` sealed interface (Initializing, LoadingModel, LoadingPipelines, LoadingChats, LoadingMemory, Done, Failed) consumed by the splash screen.
     - `DownloadState.kt` - Download state model.
+    - `Identity.kt` - Snapshot of the device-local identity (display name, 8-hex device id, AndroidKeyStore availability) shown on the Settings identity card.
     - `LocalBackend.kt` - Typed enum for the on-device LiteRT execution backend (CPU/GPU/NPU); owns the persisted wire keys via `LocalBackend.key`.
     - `LocalModel.kt` - Domain model for local models.
     - `McpAuth.kt` - Sealed authentication scheme (`None` / `Bearer` / `Basic` / `ApiKey`) carried by `McpServerConfig.auth`. `KoogMcpClient.composeHeaders` renders the matching request header at connect time.
@@ -174,6 +188,7 @@ This file maps the contents of the main application package.
     - `MemoryImportOutcome.kt` - Sealed result of parsing a memory export document (`Success` / `SchemaMismatch` / `Failure`), mirroring the pipeline / prompt-preset import outcomes (Phase 25 / Task 8).
     - `MemoryImportStrategy.kt` - How an import reconciles with the existing store: `Merge` (skip duplicate ids) / `Replace` (wipe then load) (Phase 25 / Task 8).
     - `MemorySource.kt` - Provenance of a memory chunk (`ChatSession` / `Manual` / `Compaction` / `Unknown`) with stable wire keys; persisted via the `memory_chunks.source` column.
+    - `MemoryStats.kt` - Aggregate memory counters (chunk count / byte size / last-compacted) powering the Settings memory card and the More tab.
     - `MemorySummary.kt` - Lightweight memory projection (id/text/timestamp) used by `$MEMORY_SUMMARY`.
     - `NetworkState.kt` - Network state model.
     - `NodeContextConfig.kt` - Per-node selection of pipeline context blocks (chat history, original task, previous node output, long-term memory, tool results) injected on every execution.
@@ -187,6 +202,8 @@ This file maps the contents of the main application package.
     - `PipelinePresetImportOutcome.kt` - Sealed result of parsing a preset JSON document (Success / SchemaMismatch / Failure), mirroring `PipelineImportOutcome`.
     - `PromptPreset.kt` - Domain model of a reusable system-prompt template (Phase 24 / Task 4). Carries `id`, `name`, `description`, `nodeType: NodeType` (must be LLM-driven), `systemPrompt`, `tags`, `isBundled`.
     - `PromptPresetImportOutcome.kt` - Sealed result of parsing a prompt-preset JSON document (Success / SchemaMismatch / Failure).
+    - `PromptTemplate.kt` - Domain model of a prompt template (`id`, `name`, `text`, `category`) backing the legacy Prompt-template repository.
+    - `ProviderSummary.kt` - Per-provider summary (`CloudProvider` + key-configured flag) of the external LLM providers surfaced in Settings.
     - `PipelineValidationError.kt` - Pipeline validation error model.
     - `PipelineValidationException.kt` - Pipeline validation exception model.
     - `PowerState.kt` - Power state model.
@@ -194,6 +211,8 @@ This file maps the contents of the main application package.
     - `Role.kt` - Chat role enum.
     - `RoutingDecision.kt` - Routing decision model.
     - `TaskPriority.kt` - Task priority enum.
+    - `TestProbeResult.kt` - Persisted outcome of a local-model backend probe (token count, duration, throughput) shown on the Settings backend-test row.
+    - `ToolApprovalPolicy.kt` - Enum driving the Human-in-the-Loop approval semantics for tool execution (`AllCalls` / `SensitiveOrDestructive` / `NeverPrompt`).
     - `ToolInvocationResult.kt` - Snapshot of a single tool invocation (toolName + output) accumulated by `GraphExecutionEngine` during a pipeline run for the `--- Tool Results ---` block.
     - `ToolRisk.kt` - Per-tool risk classification (`READ_ONLY` / `SENSITIVE` / `DESTRUCTIVE`) consumed by the HITL gate; canonical resolution lives in `ToolRepository.getRisk`.
     - `UpdateMcpServerResult.kt` - Sealed outcome of `SettingsRepository.updateMcpServer` (`Success` / `UrlCollision(collidingUrl, collidingDisplayName)`). Lets the Edit-MCP-server form surface an inline error instead of silently overwriting a sibling row when the user types a URL that already belongs to another persisted server.
@@ -204,6 +223,7 @@ This file maps the contents of the main application package.
     - `McpServerRepository.kt` - Per-server gateway interface (`fetchToolList` with 5-min cache + `forceRefresh`, `observeConnectionStatus`, `disconnect`). Data-layer impl: `McpServerRepositoryImpl`.
     - `ClarificationRepository.kt` - Bridges the agent (suspending until the user answers) and the UI (publishing the pending question, forwarding the reply).
     - `CrashReportingRepository.kt` - Domain gateway for anonymous crash reporting (opt-in). All methods are no-op until `SettingsRepository.crashReportingEnabled` becomes `true`.
+    - `IdentityRepository.kt` - Read-only gateway exposing the device-local identity snapshot. Data-layer impl: `IdentityRepositoryImpl`.
     - `LocalModelRepository.kt` - Local model repository interface.
     - `MemoryRepository.kt` - Memory repository interface.
     - `MetricsRepository.kt` - Metrics repository interface.
@@ -212,6 +232,7 @@ This file maps the contents of the main application package.
     - `NetworkStateRepository.kt` - Network state repository interface.
     - `PipelinePresetRepository.kt` - Domain gateway over the two-tier pipeline-preset catalogue: bundled (read-only, from APK assets) + user-saved (mutable, Room-backed). Data-layer impl: `LocalPipelinePresetRepositoryImpl` (Phase 24 / Task 1).
     - `PromptPresetRepository.kt` - Domain gateway over the two-tier prompt-preset catalogue: bundled (read-only, from APK assets) + user-saved (mutable, Room-backed). Exposes a per-`NodeType` filtered flow used by the Prompt Library. Data-layer impl: `LocalPromptPresetRepositoryImpl` (Phase 24 / Task 4).
+    - `PromptRepository.kt` - Prompt-template repository interface (CRUD over `PromptTemplate`). Data-layer impl: `PromptRepositoryImpl`.
     - `PipelineRepository.kt` - Pipeline repository interface.
     - `PowerStateRepository.kt` - Power state repository interface.
     - `SettingsRepository.kt` - Settings repository interface.
@@ -221,6 +242,7 @@ This file maps the contents of the main application package.
     - `EmbeddingProvider.kt` - Text-embedding backend abstraction (`embed` / `dimension` / `id` / `displayName`) + provider-id constants and `EmbeddingException`.
     - `EmbeddingProviderResolver.kt` - Resolves the active `EmbeddingProvider` from the Hilt map and `SettingsRepository.activeEmbeddingProviderId`, falling back to on-device USE.
     - `KMeansClusterer.kt` - Deterministic k-means clusterer over embedding vectors (farthest-first seeding, cosine distance, no randomness). Groups stale memory chunks for `MemoryCompactionUseCase`; `k = max(1, floor(sqrt(N) / 2))`.
+    - `LongRunningTaskNotifier.kt` - Domain seam for posting a notification when a backgrounded pipeline run exceeds the configured duration. Data-layer impl: `LongRunningTaskNotifierImpl`.
     - `MemoryReembedScheduler.kt` - Domain seam for scheduling the background re-embed pass over chunks flagged `needsReembedding`. Keeps `MemoryImportUseCase` free of WorkManager; data-layer impl: `WorkManagerMemoryReembedScheduler` (Phase 25 / Task 8).
     - `MemoryAutoExtractionCoordinator.kt` - App-scoped, debounced (30s/session) trigger that runs `MemoryExtractionUseCase` after a pipeline completes; short-circuits when `SettingsRepository.autoExtractEnabled` is off, and defers (re-waits a debounce window) while `TaskQueueManager.globalState` shows an active pipeline so it never races a foreground generation on the single-conversation engine. Notified by `ChatHomeViewModel` on the terminal `Completed` state.
     - `MemoryReranker.kt` - Pure, clock-free re-ranker for long-term-memory search hits. Re-scores `(MemoryChunk, similarity)` pairs with recency decay (half-life-based), a flat pinned boost (+0.2, hard-sorted to the top and threshold-exempt), 80-char-prefix deduplication (newest survivor), and a final-score threshold filter. Used by `RetrieveRelevantMemoryUseCase`; the caller supplies `nowMillis`.
@@ -229,8 +251,10 @@ This file maps the contents of the main application package.
     - `AppInitializationUseCase.kt` - Cold-start orchestrator: streams `InitProgress` snapshots while running first-launch defaults, loading the LiteRT model, and prefetching pipelines / chat sessions / memory summaries. Drives the splash screen.
     - `EvaluateIfConditionUseCase.kt` - Use case for evaluating IF condition nodes.
     - `GetContextWindowUseCase.kt` - Use case to get context window.
+    - `GetPromptTemplatesUseCase.kt` - Streams all prompt templates, seeding the bundled defaults on first observation when the table is empty.
     - `CreatePipelineUseCase.kt` - Creates and persists a new pipeline pre-seeded with `INPUT → OUTPUT` so it passes `PipelineGraph.validate` immediately; powers the library FAB.
     - `DeletePipelineUseCase.kt` - Deletes a pipeline by id; refuses to delete the pipeline currently loaded in the editor (caller passes the active id).
+    - `DeletePromptTemplateUseCase.kt` - Deletes a prompt template by id via `PromptRepository`.
     - `DuplicatePipelineUseCase.kt` - Deep-copies an existing pipeline with fresh ids for the graph and every node/connection; suffixes the name with `(copy)`.
     - `ImportPipelineUseCase.kt` - Parses a pipeline JSON document via `PipelineJsonSerializer` and persists clean imports through `SavePipelineUseCase`; defers schema-mismatch persistence to a separate `persistConfirmed` step.
     - `InitializeAppUseCase.kt` - First-launch initialiser: persists the default system prompts and materialises the bundled `showcase_full_agent` preset (via `LoadPipelineFromPresetUseCase`) as the seed/default pipeline, falling back to `DefaultPipelineFactory` if the preset asset is unavailable. Idempotent on `isFirstLaunch`.
@@ -244,6 +268,7 @@ This file maps the contents of the main application package.
     - `SavePipelineAsPresetUseCase.kt` - Packages the currently-edited `PipelineGraph` into a user-saved `PipelinePreset` (validates name, runs `PipelineGraph.validate()`, enforces `isBundled=false`). Phase 24 / Task 1.
     - `SavePromptAsPresetUseCase.kt` - Packages a freshly-edited system prompt into a user-saved `PromptPreset`. Validates name (1..60), `systemPrompt` (non-blank, ≤ `MAX_SYSTEM_PROMPT_LENGTH`), and that the target `NodeType` is LLM-driven. Phase 24 / Task 4.
     - `SavePipelineUseCase.kt` - Use case to save a pipeline.
+    - `SavePromptTemplateUseCase.kt` - Creates or updates a prompt template via `PromptRepository`.
     - `ScheduleTaskUseCase.kt` - Use case to schedule tasks.
     - `TaskRouterUseCase.kt` - Use case to route tasks.
     - `ResetSamplingDefaultsUseCase.kt` - Resets temperature / top-K / top-P / repetition penalty / max context / max steps to the documented defaults.
@@ -259,12 +284,6 @@ This file maps the contents of the main application package.
 - `presentation/` - UI and presentation layer.
   - `common/` - Cross-feature presentation utilities.
     - `DisplayFormat.kt` - Shared display formatters (`formatBytes` byte-size ladder, `approxTokenCount`, `CHARS_PER_TOKEN`) so byte sizes / token estimates render identically across Memory and Settings instead of drifting between per-screen copies.
-    - `UiText.kt` - Sealed `UiText` (`Resource` / `Dynamic` / `Joined` / `Empty`) used by `UiState`s to carry user-visible text without holding a `Context`.
-    - `UiTextExt.kt` - `@Composable UiText.asString()` and `Context.resolve(UiText)` resolution helpers.
-  - `components/` - Reusable UI components.
-    - `VariableChipsRow.kt` - Horizontal chip row for inserting `$VARIABLE` tokens into prompt editors.
-    - `PromptPreviewBottomSheet.kt` - Modal bottom sheet that renders a prompt with substituted values highlighted.
-    - `TextFieldValueExt.kt` - `insertAtCursor` extension for splicing chip-selected tokens at the caret.
   - `notifications/` - Notification handling.
     - `ApprovalNotificationManager.kt` - Manager for approval notifications.
   - `receivers/` - Broadcast receivers.
@@ -279,6 +298,13 @@ This file maps the contents of the main application package.
     - `KnotworkFontsBootstrap.kt` - Builds the bundled Inter / JetBrains Mono `FontFamily` instances from `R.font.*` and installs them into `:catalog`'s `KnotworkFonts`. Called once from `App.onCreate()` so the design-system typography renders against the brand fonts on the first frame.
   - `ui/` - UI screens and ViewModels.
     - `MainActivity.kt` - Main activity. Owns the platform splash, edge-to-edge insets, and the root Compose tree that wires `AppShellScaffold` + `AppNavGraph`.
+    - `common/` - Cross-screen presentation helpers.
+      - `UiText.kt` - Sealed `UiText` (`Resource` / `Dynamic` / `Joined` / `Empty`) used by `UiState`s to carry user-visible text without holding a `Context`.
+      - `UiTextExt.kt` - `@Composable UiText.asString()` and `Context.resolve(UiText)` resolution helpers.
+    - `components/` - Reusable UI components.
+      - `VariableChipsRow.kt` - Horizontal chip row for inserting `$VARIABLE` tokens into prompt editors.
+      - `PromptPreviewBottomSheet.kt` - Modal bottom sheet that renders a prompt with substituted values highlighted.
+      - `TextFieldValueExt.kt` - `insertAtCursor` extension for splicing chip-selected tokens at the caret.
     - `navigation/` - App shell, bottom-nav scaffold, and the single nav-graph for the app.
       - `NavRoutes.kt` - Canonical `const val` registry of every Jetpack Navigation Compose route string, including the chat deep-link template and modal-sheet placeholders.
       - `TabDestination.kt` - `TabDestination` data class + `TAB_DESTINATIONS` for the four bottom-nav tabs (Chat / Pipelines / Tools / More).
@@ -300,6 +326,7 @@ This file maps the contents of the main application package.
         - `ChatHomeStateMapping.kt` - Pure-Kotlin mapper from `ChatHomeUiState` to the catalog `ChatHomeViewState`, plus debug-picker fixtures and the `DebugStateIds` constants.
         - `ChatHomeConsoleMapping.kt` - Pure-Kotlin mappers from the domain orchestrator output to the catalog console-pane row models: `ConsoleEvent → ConsoleLine`, `TraceStep → ConsoleTraceSpan`, `NodeIO → List<ConsoleVarRow>`.
         - `ChatHomeDebugStatePicker.kt` - Triple-tap state picker (`DropdownMenu`) — visible only in debug builds via `BuildConfig.DEBUG` guard.
+        - `ChatHomeFixtures.kt` - Bundle of resolved UI strings (status pills, stub rows, suggestions) consumed by the `ChatHomeScreen` view-state mapping.
     - `memory/` - Memory screen components (Phase 25 / Task 7 redesign).
       - `MemoryScreen.kt` - Slim mapper. Subscribes to `MemoryViewModel`, projects `MemoryUiState` to the catalog `MemoryContent` (stats header + provenance breakdown, category chips, sort/date dropdowns, time-grouped sections, semantic-search rows with scores, detail sheet, Compact/Add dialogs). Owns the pure `toViewState` projection (grouping / breakdown / relative-time + detail labels) and the SAF launcher for full export.
       - `MemoryUiState.kt` - Memory UI state: raw chunk list + size + last-compacted + session-name cache, plus the view selections (category / sort / date / semantic-search) and transient detail/dialog flags.
