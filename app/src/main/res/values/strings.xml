@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">Android AI Agent</string>
+    <string name="app_name">Knotwork</string>
 
     <!-- Approval notification (Human-in-the-loop fallback when chat is not visible) -->
     <string name="approval_channel_sensitive_name">Agent Approvals</string>

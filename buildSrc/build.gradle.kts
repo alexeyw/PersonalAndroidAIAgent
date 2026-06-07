@@ -1,7 +1,7 @@
 /*
  * Build-logic module hosting the pure-Kotlin generators used by the app build.
  *
- * Currently exposes [ai.agent.android.buildtools.BrowserEditorConstantsGenerator],
+ * Currently exposes [app.knotwork.android.buildtools.BrowserEditorConstantsGenerator],
  * which derives the browser pipeline-editor's mirrored constants
  * (`NODE_TYPES`, `PROMPT_VARIABLES`, `AVAILABLE_TOOLS`, `DEFAULT_SYSTEM_PROMPTS`)
  * straight from the Android domain sources so `pipeline-editor.html` can no

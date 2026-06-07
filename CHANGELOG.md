@@ -80,12 +80,22 @@ details.
 
 ### Changed
 
+- **Rename the application to Knotwork**: the launcher/display name
+  is now **Knotwork** (`app_name`), and the application id / package namespace
+  moved from `ai.agent.android` to **`app.knotwork.android`** across the `:app`,
+  `:tools-probe`, and `buildSrc` modules (package directories, Room exported
+  schema path, `<queries>` package-visibility entries, the placeholder
+  `google-services.json` client, the `checkNoInternalFqn` scan target, and all
+  Kover exclusion FQNs were updated in lock-step). The application id is locked
+  before the public release because Google Play treats it as the permanent,
+  immutable app identifier. The internal codename (repository, branches, and the
+  Gradle root project) stays `android-ai-agent`.
 - **Bump LiteRT-LM `0.13.0` → `0.13.1`**: a bug-fix-only patch release of
   `com.google.ai.edge.litertlm:litertlm-android` (no API or behavior changes).
   Clears the `GradleDependency` lint error that flagged the newer version as
   available and was blocking `./gradlew check`.
 - **`FILE_MAP.md` navigation reconciliation** (Phase 26 / Task 8/10): the
-  `app/src/main/java/ai/agent/android/FILE_MAP.md` agent/contributor navigation
+  `app/src/main/java/app/knotwork/android/FILE_MAP.md` agent/contributor navigation
   map was re-synced with the actual source tree — added the 11 missing pipeline
   `NodeExecutor` strategies (only `ClarificationNodeExecutor` had been listed),
   `PromptRepositoryImpl`, seven domain models (`ActiveModelMeta`, `Identity`,
@@ -714,7 +724,7 @@ executor / DAO / Robolectric / Compose `androidTest` suites).
   `mock<Screen>ViewModel` factory (relaxed MockK VM + mutable state-flow
   handles so tests drive transitions without re-stubbing) and 2–6 test
   classes under
-  `app/src/androidTest/java/ai/agent/android/presentation/ui/<screen>/`.
+  `app/src/androidTest/java/app/knotwork/android/presentation/ui/<screen>/`.
   Coverage: `MemoryScreenSearchTest` (200 ms debounce gated by
   `mainClock.advanceTimeBy`), `MemoryScreenInteractionsTest` (row pin /
   edit-commit which exercises the re-embedding call site / delete /
@@ -830,8 +840,8 @@ executor / DAO / Robolectric / Compose `androidTest` suites).
   partitioned slot, dedup-free repeat delivery). Used the same Hilt-bypass
   reflection trick as `AgentForegroundServiceTest` so `@AndroidEntryPoint`
   doesn't require a `HiltTestApplication` runner. The previous
-  `ai.agent.android.presentation.notifications.*` and
-  `ai.agent.android.presentation.receivers.*` Kover exclusions are gone —
+  `app.knotwork.android.presentation.notifications.*` and
+  `app.knotwork.android.presentation.receivers.*` Kover exclusions are gone —
   both packages now show **100 % LINE** in `koverHtmlReportDebug`.
 - **Robolectric coverage for `data.services`** (Phase 23 / Task 4). Added
   `AgentForegroundServiceTest` (channel registration with `IMPORTANCE_LOW`,
@@ -850,7 +860,7 @@ executor / DAO / Robolectric / Compose `androidTest` suites).
   (`LONG_RUNNING_TASKS` channel registration, opt-out gate, `POST_NOTIFICATIONS`
   permission gate, channel-id and stable per-pipeline notification-id
   contract, empty-flow defaults-to-disabled). The previous
-  `ai.agent.android.data.services.*` Kover exclusion is gone — package
+  `app.knotwork.android.data.services.*` Kover exclusion is gone — package
   coverage rose from **44.0 %** to **99.4 % LINE** (171 / 172). Pinned
   Robolectric runtime SDK to 36 via `app/src/test/resources/robolectric.properties`
   and enabled `unitTests.isIncludeAndroidResources = true` so `getString`
@@ -2446,7 +2456,7 @@ of README hero shots regenerated from new Roborazzi baselines.
   `@AppFunction`, so its KSP-generated entry in `app_functions_v2.xml` advertises the
   function to external callers. **The wire id contains literal backticks around the
   `data` package segment** —
-  `` ai.agent.android.`data`.tools.local.appfunctions.SearchAppFunction#invoke `` —
+  `` app.knotwork.android.`data`.tools.local.appfunctions.SearchAppFunction#invoke `` —
   because the AppFunctions compiler bakes Kotlin source-level escaping for soft
   keywords into the id string. External callers must include the backticks verbatim,
   exactly as `AppFunctionsEndToEndTest.SEARCH_TOOL_ID` and the `:tools-probe`

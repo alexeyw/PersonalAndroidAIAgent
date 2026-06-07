@@ -1163,7 +1163,7 @@
 
     /* -------------------------------------------------------------------- *
      *  Node type catalogue
-     *  Mirrors ai.agent.android.domain.models.NodeType and the colour
+     *  Mirrors app.knotwork.android.domain.models.NodeType and the colour
      *  palette used in DraggableNode.kt. Inputs/outputs match the runtime
      *  shape: INPUT 0/1, OUTPUT 1/0, IF_CONDITION & QUEUE_PROCESSOR 1/2,
      *  everything else 1/1.
@@ -1188,7 +1188,7 @@
 
     /* -------------------------------------------------------------------- *
      *  Default system prompts — port of
-     *  ai.agent.android.domain.constants.DefaultPrompts.
+     *  app.knotwork.android.domain.constants.DefaultPrompts.
      *
      *  KEEP IN SYNC with the Android source. When DefaultPrompts changes
      *  (new node type, edited prompt) the corresponding entry here must
@@ -3419,7 +3419,7 @@
 
     /* -------------------------------------------------------------------- *
      *  Cloud providers and tool registry
-     *  Provider list mirrors ai.agent.android.domain.models.CloudProvider
+     *  Provider list mirrors app.knotwork.android.domain.models.CloudProvider
      *  (openai / anthropic / google / deepseek / ollama) plus the `auto`
      *  UI sentinel (CloudProvider.AUTO_KEY). KEEP IN SYNC with that enum.
      *
@@ -5944,7 +5944,7 @@
     const PIPELINE_PRESETS_STORAGE_KEY = 'pipeline-editor-pipeline-presets';
 
     /**
-     * Preset categories — mirror ai.agent.android.domain.models.PresetCategory
+     * Preset categories — mirror app.knotwork.android.domain.models.PresetCategory
      * (key = lower-case enum name). KEEP IN SYNC. See DESCRIPTION.md §8.2.
      */
     const PRESET_CATEGORIES = [

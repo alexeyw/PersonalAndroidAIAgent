@@ -22,7 +22,7 @@ The codebase is split into three Gradle modules:
 ```
 
 Inside `:app`, the source tree is split into the three Clean Architecture
-layers under `app/src/main/java/ai/agent/android/`:
+layers under `app/src/main/java/app/knotwork/android/`:
 
 ```
 app/
@@ -476,14 +476,14 @@ Caveat: when a wrapper's package path contains a Kotlin soft keyword
 (`data`, `value`, …), the AppFunctions compiler bakes Kotlin
 source-level escaping into the generated wire id. `SearchAppFunction`'s
 id therefore embeds literal backticks around `data`:
-`` ai.agent.android.`data`.tools.local.appfunctions.SearchAppFunction#invoke ``
+`` app.knotwork.android.`data`.tools.local.appfunctions.SearchAppFunction#invoke ``
 External callers must pass the backticks verbatim. The
 end-to-end test (`AppFunctionsEndToEndTest.SEARCH_TOOL_ID`) and the
 `:tools-probe` `MainActivity` constant are the source-of-truth literals.
 
 Every tool — built-in, discovered AppFunction, or MCP — carries an
 effective
-[`ToolRisk`](../app/src/main/java/ai/agent/android/domain/models/ToolRisk.kt):
+[`ToolRisk`](../app/src/main/java/app/knotwork/android/domain/models/ToolRisk.kt):
 
 ```kotlin
 enum class ToolRisk { READ_ONLY, SENSITIVE, DESTRUCTIVE }

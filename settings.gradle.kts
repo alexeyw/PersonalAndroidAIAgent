@@ -22,7 +22,7 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "Android AI Agent"
+rootProject.name = "android-ai-agent"
 include(":app")
 include(":catalog")
 include(":tools-probe")

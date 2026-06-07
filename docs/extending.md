@@ -38,7 +38,7 @@ type into the browser-based editor so users can place it on the canvas.
 ### 1.1. Extend the `NodeType` enum
 
 Add a new constant to
-[`domain/models/NodeType.kt`](../app/src/main/java/ai/agent/android/domain/models/NodeType.kt).
+[`domain/models/NodeType.kt`](../app/src/main/java/app/knotwork/android/domain/models/NodeType.kt).
 Keep the name SCREAMING_SNAKE_CASE and group it logically with similar
 existing types (e.g. control-flow next to `IF_CONDITION`,
 LLM-driven next to `LITE_RT` / `CLOUD`).
@@ -46,9 +46,9 @@ LLM-driven next to `LITE_RT` / `CLOUD`).
 ### 1.2. Implement `NodeExecutor`
 
 Create a new class under
-`app/src/main/java/ai/agent/android/domain/engine/executors/` that
+`app/src/main/java/app/knotwork/android/domain/engine/executors/` that
 implements
-[`NodeExecutor`](../app/src/main/java/ai/agent/android/domain/engine/executors/NodeExecutor.kt):
+[`NodeExecutor`](../app/src/main/java/app/knotwork/android/domain/engine/executors/NodeExecutor.kt):
 
 ```kotlin
 class MyNewNodeExecutor @Inject constructor(
@@ -83,7 +83,7 @@ Contract reminders:
 
 ### 1.3. Register the executor in the factory
 
-[`NodeExecutorFactory`](../app/src/main/java/ai/agent/android/domain/engine/executors/NodeExecutorFactory.kt)
+[`NodeExecutorFactory`](../app/src/main/java/app/knotwork/android/domain/engine/executors/NodeExecutorFactory.kt)
 is the single dispatch point used by `GraphExecutionEngine`. Inject
 the new executor and add a branch to the `when`:
 
@@ -110,7 +110,7 @@ fresh class.
 ### 1.4. Provide default context flags
 
 `NodeContextConfig.defaultForType(type)` in
-[`domain/models/NodeContextConfig.kt`](../app/src/main/java/ai/agent/android/domain/models/NodeContextConfig.kt)
+[`domain/models/NodeContextConfig.kt`](../app/src/main/java/app/knotwork/android/domain/models/NodeContextConfig.kt)
 returns the recommended starting context for a freshly-created node of
 each type. Add a `when` branch for your new type that selects the
 minimum set of blocks the executor actually needs:
@@ -132,7 +132,7 @@ tool node should not default to seeing long-term memory.
 
 ### 1.5. Update graph validation if needed
 
-[`PipelineGraph.validate()`](../app/src/main/java/ai/agent/android/domain/models/PipelineGraph.kt)
+[`PipelineGraph.validate()`](../app/src/main/java/app/knotwork/android/domain/models/PipelineGraph.kt)
 already enforces the universal invariants (exactly one `INPUT`, at
 least one `OUTPUT`, DAG, no dangling connections, non-empty
 `contextConfig` for executor-driven types). You only need to touch
@@ -166,7 +166,7 @@ nodes with the same baseline as the Android app.
 - A unit test for the executor that covers the happy path, at least
   one error branch, and (if relevant) the empty-input case.
 - A new case in
-  [`GraphExecutionEngineTest`](../app/src/test/java/ai/agent/android/domain/engine/GraphExecutionEngineTest.kt)
+  [`GraphExecutionEngineTest`](../app/src/test/java/app/knotwork/android/domain/engine/GraphExecutionEngineTest.kt)
   that walks a minimal graph including the new node type.
 - If `defaultForType` or `validate()` changed, add a unit test in the
   matching test file.
@@ -182,9 +182,9 @@ class plus one `@Binds` line.
 ### 2.1. Implement `LocalToolExecutor`
 
 Create a class under
-`app/src/main/java/ai/agent/android/data/tools/local/executors/` that
+`app/src/main/java/app/knotwork/android/data/tools/local/executors/` that
 implements
-[`LocalToolExecutor`](../app/src/main/java/ai/agent/android/domain/repositories/LocalToolExecutor.kt):
+[`LocalToolExecutor`](../app/src/main/java/app/knotwork/android/domain/repositories/LocalToolExecutor.kt):
 
 ```kotlin
 class MyToolExecutor @Inject constructor(
@@ -208,17 +208,17 @@ class MyToolExecutor @Inject constructor(
 
 Existing implementations to crib from:
 
-- [`SearchToolExecutor`](../app/src/main/java/ai/agent/android/data/tools/local/executors/SearchToolExecutor.kt)
+- [`SearchToolExecutor`](../app/src/main/java/app/knotwork/android/data/tools/local/executors/SearchToolExecutor.kt)
   — calls a public HTTP API.
-- [`DelegateTaskExecutor`](../app/src/main/java/ai/agent/android/data/tools/local/executors/DelegateTaskExecutor.kt)
+- [`DelegateTaskExecutor`](../app/src/main/java/app/knotwork/android/data/tools/local/executors/DelegateTaskExecutor.kt)
   — delegates to a different LLM provider via the cloud client factory.
-- [`ScheduleTaskExecutor`](../app/src/main/java/ai/agent/android/data/tools/local/executors/ScheduleTaskExecutor.kt)
+- [`ScheduleTaskExecutor`](../app/src/main/java/app/knotwork/android/data/tools/local/executors/ScheduleTaskExecutor.kt)
   — bridges to a domain use case (`ScheduleTaskUseCase`).
 
 ### 2.2. Register the executor
 
 Add one `@Binds @IntoMap @StringKey(...)` entry to
-[`di/LocalToolsModule.kt`](../app/src/main/java/ai/agent/android/di/LocalToolsModule.kt):
+[`di/LocalToolsModule.kt`](../app/src/main/java/app/knotwork/android/di/LocalToolsModule.kt):
 
 ```kotlin
 @Binds
@@ -228,7 +228,7 @@ abstract fun bindMyToolExecutor(executor: MyToolExecutor): LocalToolExecutor
 ```
 
 That is the only DI touch-point.
-[`ToolRepositoryImpl`](../app/src/main/java/ai/agent/android/data/repositories/ToolRepositoryImpl.kt)
+[`ToolRepositoryImpl`](../app/src/main/java/app/knotwork/android/data/repositories/ToolRepositoryImpl.kt)
 already consumes the multibinding map and dispatches by name; you do
 not edit it.
 
@@ -254,7 +254,7 @@ from other packages), the default is `SENSITIVE` — the platform
 `AppFunctionManager` metadata gives no trustworthy signal about side
 effects. The user can downgrade a specific tool to `READ_ONLY` (or
 upgrade it to `DESTRUCTIVE`) via
-[`SettingsRepository.setAppFunctionRiskOverride(toolName, risk)`](../app/src/main/java/ai/agent/android/domain/repositories/SettingsRepository.kt),
+[`SettingsRepository.setAppFunctionRiskOverride(toolName, risk)`](../app/src/main/java/app/knotwork/android/domain/repositories/SettingsRepository.kt),
 which writes into the `appFunctionRiskOverrides` flow persisted under
 DataStore key `app_function_risk_overrides`. `ToolRepository.getRisk(name)`
 consults the override map first and falls back to the conservative
@@ -273,7 +273,7 @@ default.
 If you want a third-party app to be able to call your tool through the
 system [`AppFunctionManager`](https://developer.android.com/reference/android/app/appfunctions/AppFunctionManager),
 add an `@AppFunction`-annotated wrapper next to the existing
-[`SearchAppFunction`](../app/src/main/java/ai/agent/android/data/tools/local/appfunctions/SearchAppFunction.kt).
+[`SearchAppFunction`](../app/src/main/java/app/knotwork/android/data/tools/local/appfunctions/SearchAppFunction.kt).
 The library's
 [`PlatformAppFunctionService`](https://developer.android.com/reference/androidx/appfunctions/service/PlatformAppFunctionService)
 is auto-merged from `appfunctions-service` and dispatches incoming
@@ -346,7 +346,7 @@ user's expectation of agency).
      (`mockk(relaxed = true)`). Cover happy path, invalid arguments,
      and the blank-fallback if applicable.
    - Add a scenario to
-     [`AppFunctionsEndToEndTest`](../app/src/androidTest/java/ai/agent/android/AppFunctionsEndToEndTest.kt)
+     [`AppFunctionsEndToEndTest`](../app/src/androidTest/java/app/knotwork/android/AppFunctionsEndToEndTest.kt)
      that resolves the metadata via `observeAppFunctions` and invokes
      the function through `AppFunctionManager.executeAppFunction(...)`.
      The test currently skips on stock Android 16 because
@@ -370,7 +370,7 @@ and the engine untouched.
 ### 3.1. Extend the `CloudProvider` enum
 
 Add a constant to
-[`domain/models/CloudProvider.kt`](../app/src/main/java/ai/agent/android/domain/models/CloudProvider.kt)
+[`domain/models/CloudProvider.kt`](../app/src/main/java/app/knotwork/android/domain/models/CloudProvider.kt)
 with a stable wire-id (the lowercase string used in pipeline JSON,
 e.g. `"mistral"`). Existing values are
 `OPENAI`, `ANTHROPIC`, `GOOGLE`, `DEEPSEEK`, `OLLAMA`.
@@ -378,7 +378,7 @@ e.g. `"mistral"`). Existing values are
 ### 3.2. Implement client construction
 
 Add a branch in
-[`KoogClientFactory.createClient(...)`](../app/src/main/java/ai/agent/android/data/engine/KoogClientFactory.kt)
+[`KoogClientFactory.createClient(...)`](../app/src/main/java/app/knotwork/android/data/engine/KoogClientFactory.kt)
 that constructs the Koog executor for the new provider. If the
 provider's SDK needs extra configuration (base URL, organization id),
 keep all of that inside the helper method — `CloudLlmNodeExecutor`
@@ -386,7 +386,7 @@ should remain provider-agnostic.
 
 ### 3.3. Teach the model resolver
 
-[`KoogCloudLlmModelResolver`](../app/src/main/java/ai/agent/android/data/engine/KoogCloudLlmModelResolver.kt)
+[`KoogCloudLlmModelResolver`](../app/src/main/java/app/knotwork/android/data/engine/KoogCloudLlmModelResolver.kt)
 owns the per-provider default model id and (for Ollama-shaped
 providers) the context-window lookup. Add an entry so the resolver
 can map a free-text model id to a concrete Koog `LLModel`.
@@ -397,7 +397,7 @@ API keys live in `EncryptedSharedPreferences` only — never in
 DataStore, never in `local.properties`, never committed to git.
 
 - Add a new key constant in
-  [`ApiKeyManager`](../app/src/main/java/ai/agent/android/data/local/ApiKeyManager.kt)
+  [`ApiKeyManager`](../app/src/main/java/app/knotwork/android/data/local/ApiKeyManager.kt)
   (e.g. `MISTRAL_KEY`).
 - Add reader/writer methods for the new key (or extend the generic
   ones if your provider follows the standard shape).
@@ -411,7 +411,7 @@ the catalog
 [`SettingsContent`](../catalog/src/main/java/app/knotwork/design/screens/settings/SettingsContent.kt).
 Each row arrives as a `SettingsRowState` and is mapped to a Compose
 control via the `rowContent` lambda in
-[`SettingsScreen`](../app/src/main/java/ai/agent/android/presentation/ui/settings/SettingsScreen.kt).
+[`SettingsScreen`](../app/src/main/java/app/knotwork/android/presentation/ui/settings/SettingsScreen.kt).
 
 To add a new provider:
 
@@ -455,8 +455,8 @@ The five built-in variables (`$DATE`, `$TIME`, `$TOOLS`, `$MODEL`,
 ### 4.1. Implement `PromptVariableProvider`
 
 Create a class under
-`app/src/main/java/ai/agent/android/data/prompt/` that implements
-[`PromptVariableProvider`](../app/src/main/java/ai/agent/android/domain/prompt/PromptVariableProvider.kt):
+`app/src/main/java/app/knotwork/android/data/prompt/` that implements
+[`PromptVariableProvider`](../app/src/main/java/app/knotwork/android/domain/prompt/PromptVariableProvider.kt):
 
 ```kotlin
 class WeatherVariableProvider @Inject constructor(
@@ -484,7 +484,7 @@ Rules:
 ### 4.2. Register the provider via Hilt
 
 Add a `@Binds @IntoSet` method to
-[`di/PromptTemplateModule.kt`](../app/src/main/java/ai/agent/android/di/PromptTemplateModule.kt):
+[`di/PromptTemplateModule.kt`](../app/src/main/java/app/knotwork/android/di/PromptTemplateModule.kt):
 
 ```kotlin
 @Binds
@@ -634,7 +634,7 @@ it automatically on export.
 
 **Step 2 — register the filename in `PipelinePresetCatalogValidationTest`.**
 `expectedFileNames` in
-`app/src/test/java/ai/agent/android/domain/pipelineio/PipelinePresetCatalogValidationTest.kt`
+`app/src/test/java/app/knotwork/android/domain/pipelineio/PipelinePresetCatalogValidationTest.kt`
 is a hard whitelist of the shipped catalogue. Add the new filename in the
 same PR; otherwise the test refuses the new file (or misses a deletion).
 
@@ -706,7 +706,7 @@ Rules:
 **Step 2 — register the filename in `PromptPresetCatalogValidationTest`.**
 
 `expectedFileNames` in
-`app/src/test/java/ai/agent/android/domain/promptio/PromptPresetCatalogValidationTest.kt`
+`app/src/test/java/app/knotwork/android/domain/promptio/PromptPresetCatalogValidationTest.kt`
 is a hard whitelist of the shipped catalogue. Add the new filename in
 the same commit; otherwise the catalogue test will refuse the new file
 (or, if you removed one, miss the deletion). The test also asserts that
@@ -754,9 +754,9 @@ full memory lifecycle these vectors flow through is documented in
 ### 6.1. Implement the `EmbeddingProvider` interface
 
 Add a class in
-[`data/services/embedding/`](../app/src/main/java/ai/agent/android/data/services/embedding/)
+[`data/services/embedding/`](../app/src/main/java/app/knotwork/android/data/services/embedding/)
 implementing
-[`EmbeddingProvider`](../app/src/main/java/ai/agent/android/domain/services/EmbeddingProvider.kt):
+[`EmbeddingProvider`](../app/src/main/java/app/knotwork/android/domain/services/EmbeddingProvider.kt):
 
 - `id` — a stable, lowercase wire key (persisted in settings; **never**
   change it once shipped).
@@ -785,7 +785,7 @@ fallback, and `SettingsDefaults`.
 ### 6.3. Bind it into the Hilt map
 
 Append one binding to
-[`EmbeddingModule`](../app/src/main/java/ai/agent/android/di/EmbeddingModule.kt):
+[`EmbeddingModule`](../app/src/main/java/app/knotwork/android/di/EmbeddingModule.kt):
 
 ```kotlin
 @Binds

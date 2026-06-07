@@ -45,7 +45,7 @@ Closes #
       `[Unreleased]`.
 - [ ] `FILE_MAP.md` updated when files or directories were added, moved,
       or removed (package map under
-      `app/src/main/java/ai/agent/android/FILE_MAP.md` and/or the root
+      `app/src/main/java/app/knotwork/android/FILE_MAP.md` and/or the root
       `FILE_MAP.md` for top-level changes).
 - [ ] Commit messages follow
       [Conventional Commits](https://www.conventionalcommits.org/) (see

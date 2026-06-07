@@ -27,7 +27,7 @@ This invokes (transitively):
 | `:app:lintDebug`                              | Android Lint over the debug variant + library dependencies.             |
 | `:app:testDebugUnitTest`                      | JVM unit tests for the debug variant.                                   |
 | `:app:koverVerifyDebug`                       | Test-coverage threshold enforcement.                                    |
-| `:app:checkNoInternalFqn`                     | Custom rule: forbid `ai.agent.android.*` FQN references in code body.   |
+| `:app:checkNoInternalFqn`                     | Custom rule: forbid `app.knotwork.android.*` FQN references in code body.   |
 
 Pre-flight tip: run `./gradlew :app:ktlintFormat` first to auto-fix the
 safely-correctable subset before invoking `check`.
@@ -151,7 +151,7 @@ class set covers:
 - Generated code (Hilt factories, Room `*_Impl`, AppDatabase, AutoMigrations,
   ComposableSingletons, `BuildConfig`, BR, DataBinding).
 - All `*Preview.kt` files and `@Preview`-annotated functions.
-- Hilt DI modules (`ai.agent.android.di.*`).
+- Hilt DI modules (`app.knotwork.android.di.*`).
 - `App.kt` and `MainActivity` — Android-runtime-bound bootstrap.
 - All `*Screen` Composables and `presentation.ui.*.components.*`, plus the
   Phase 23 sub-packages `presentation.ui.navigation.*`,

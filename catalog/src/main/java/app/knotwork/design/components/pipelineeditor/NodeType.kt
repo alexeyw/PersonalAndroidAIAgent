@@ -3,7 +3,7 @@ package app.knotwork.design.components.pipelineeditor
 /**
  * Catalog-side enumeration of the twelve pipeline-editor node types.
  *
- * Independent of `ai.agent.android.domain.models.NodeType` so the design
+ * Independent of `app.knotwork.android.domain.models.NodeType` so the design
  * catalog has zero dependency on the production `:app` module. The two
  * enums are kept name-for-name aligned; callers in `:app` translate via a
  * thin mapper when wiring the editor screen.

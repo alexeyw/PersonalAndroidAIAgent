@@ -1,4 +1,4 @@
-import ai.agent.android.buildtools.BrowserEditorConstantsGenerator
+import app.knotwork.android.buildtools.BrowserEditorConstantsGenerator
 import dev.detekt.gradle.Detekt
 
 /**
@@ -52,13 +52,13 @@ ksp {
 }
 
 android {
-    namespace = "ai.agent.android"
+    namespace = "app.knotwork.android"
     compileSdk {
         version = release(37)
     }
 
     defaultConfig {
-        applicationId = "ai.agent.android"
+        applicationId = "app.knotwork.android"
         minSdk = 36
         targetSdk = 37
         versionCode = 3
@@ -281,10 +281,10 @@ kover {
                     // (the schema migrations themselves are bundled inside it).
                     "*_Impl",
                     "*_Impl$*",
-                    "ai.agent.android.data.local.AppDatabase",
-                    "ai.agent.android.data.local.AppDatabase_Impl*",
+                    "app.knotwork.android.data.local.AppDatabase",
+                    "app.knotwork.android.data.local.AppDatabase_Impl*",
                     "*_AutoMigration_*",
-                    "ai.agent.android.data.local.dao.*",
+                    "app.knotwork.android.data.local.dao.*",
                     // Compose synthetic singletons + project-convention preview files
                     // (every Compose `@Preview` lives in a `*Preview.kt` file).
                     "*ComposableSingletons*",
@@ -292,38 +292,38 @@ kover {
                     "*Preview",
                     "*PreviewKt",
                     // Hilt DI modules — wiring code, no business logic to cover.
-                    "ai.agent.android.di.*",
+                    "app.knotwork.android.di.*",
                     // Generated build artefacts.
-                    "ai.agent.android.BuildConfig",
+                    "app.knotwork.android.BuildConfig",
                     "*.databinding.*",
                     "*.BR",
                     // Android-runtime-bound presentation classes that need
                     // instrumented (androidTest / Compose UI test) coverage,
                     // out of scope for the JVM-only Kover pipeline.
-                    "ai.agent.android.App",
-                    "ai.agent.android.presentation.ui.MainActivity",
-                    "ai.agent.android.presentation.ui.MainActivity$*",
-                    "ai.agent.android.presentation.ui.*Screen",
-                    "ai.agent.android.presentation.ui.*ScreenKt",
-                    "ai.agent.android.presentation.ui.*Screen$*",
+                    "app.knotwork.android.App",
+                    "app.knotwork.android.presentation.ui.MainActivity",
+                    "app.knotwork.android.presentation.ui.MainActivity$*",
+                    "app.knotwork.android.presentation.ui.*Screen",
+                    "app.knotwork.android.presentation.ui.*ScreenKt",
+                    "app.knotwork.android.presentation.ui.*Screen$*",
                     // Legacy chat surface (Phase 21 / Task 8: moved under chat/legacy/
                     // pending the post-v0.1 orchestrator-rewiring task).
-                    "ai.agent.android.presentation.ui.chat.legacy.ConsoleFullLogSheet*",
-                    "ai.agent.android.presentation.ui.chat.legacy.ConsolePanelCollapsed*",
-                    "ai.agent.android.presentation.ui.chat.legacy.AgentThoughtIndicator*",
-                    "ai.agent.android.presentation.ui.chat.legacy.ClarificationCard*",
-                    "ai.agent.android.presentation.ui.chat.legacy.PipelineTraceCard*",
-                    "ai.agent.android.presentation.ui.chat.legacy.ApprovalBanner*",
-                    "ai.agent.android.presentation.ui.chat.legacy.ChatScreen*",
+                    "app.knotwork.android.presentation.ui.chat.legacy.ConsoleFullLogSheet*",
+                    "app.knotwork.android.presentation.ui.chat.legacy.ConsolePanelCollapsed*",
+                    "app.knotwork.android.presentation.ui.chat.legacy.AgentThoughtIndicator*",
+                    "app.knotwork.android.presentation.ui.chat.legacy.ClarificationCard*",
+                    "app.knotwork.android.presentation.ui.chat.legacy.PipelineTraceCard*",
+                    "app.knotwork.android.presentation.ui.chat.legacy.ApprovalBanner*",
+                    "app.knotwork.android.presentation.ui.chat.legacy.ChatScreen*",
                     // Redesigned chat-home Composables (Phase 21 / Task 8) — Compose
                     // surfaces are covered by `:catalog` Roborazzi snapshots; the
                     // testable VM / state-mapping live next to them and are
                     // included in coverage.
-                    "ai.agent.android.presentation.ui.chat.home.ChatHomeScreen*",
-                    "ai.agent.android.presentation.ui.chat.home.ChatHomeDebugStatePicker*",
-                    "ai.agent.android.presentation.ui.chat.home.DebugStateRows*",
-                    "ai.agent.android.presentation.ui.components.*",
-                    "ai.agent.android.presentation.ui.orchestrator.components.*",
+                    "app.knotwork.android.presentation.ui.chat.home.ChatHomeScreen*",
+                    "app.knotwork.android.presentation.ui.chat.home.ChatHomeDebugStatePicker*",
+                    "app.knotwork.android.presentation.ui.chat.home.DebugStateRows*",
+                    "app.knotwork.android.presentation.ui.components.*",
+                    "app.knotwork.android.presentation.ui.orchestrator.components.*",
                     // Phase 21 / Task 9 — pipeline editor Compose layer. Gestures,
                     // animations, and Bezier draw paths are intentionally outside the
                     // JVM Kover scope; the pure-Kotlin core (CanvasTransform,
@@ -331,14 +331,14 @@ kover {
                     // the VM hooks ARE covered. Screen-level visual coverage rides
                     // on the catalog's PipelineEditorCatalogPageSnapshotTest (Task 7)
                     // and the Phase 21 / Task 11 a11y + release-candidate gate.
-                    "ai.agent.android.presentation.ui.pipeline.editor.canvas.*",
-                    "ai.agent.android.presentation.ui.pipeline.editor.bars.*",
-                    "ai.agent.android.presentation.ui.pipeline.editor.sheet.*",
-                    "ai.agent.android.presentation.ui.pipeline.editor.PipelineEditorContent*",
-                    "ai.agent.android.presentation.ui.pipeline.editor.PipelineEditorScreen*",
-                    "ai.agent.android.presentation.ui.splash.SplashScreen*",
-                    "ai.agent.android.presentation.theme.*",
-                    "ai.agent.android.presentation.state.*",
+                    "app.knotwork.android.presentation.ui.pipeline.editor.canvas.*",
+                    "app.knotwork.android.presentation.ui.pipeline.editor.bars.*",
+                    "app.knotwork.android.presentation.ui.pipeline.editor.sheet.*",
+                    "app.knotwork.android.presentation.ui.pipeline.editor.PipelineEditorContent*",
+                    "app.knotwork.android.presentation.ui.pipeline.editor.PipelineEditorScreen*",
+                    "app.knotwork.android.presentation.ui.splash.SplashScreen*",
+                    "app.knotwork.android.presentation.theme.*",
+                    "app.knotwork.android.presentation.state.*",
                     // Phase 23 / Task 9/9 — additional Compose-surface / nav-glue
                     // packages introduced during phase/23. Same rationale as the
                     // existing presentation.ui.*Screen exclusions: rendering and
@@ -347,25 +347,25 @@ kover {
                     // AppNavGraph, TabDestination, BottomNavVisibility,
                     // KnotworkModalRoute, NavRoutes) is pure UI wiring; route
                     // constants in NavRoutes are unreachable in JVM tests.
-                    "ai.agent.android.presentation.ui.navigation.*",
+                    "app.knotwork.android.presentation.ui.navigation.*",
                     // Single static About surface (AboutScreen.kt). The
                     // `AboutAcknowledgments` private object lives in the same
                     // file and is pure declarative data feeding the Composable.
-                    "ai.agent.android.presentation.ui.about.AboutScreen*",
-                    "ai.agent.android.presentation.ui.about.AboutAcknowledgments*",
+                    "app.knotwork.android.presentation.ui.about.AboutScreen*",
+                    "app.knotwork.android.presentation.ui.about.AboutAcknowledgments*",
                     // Bottom-nav "More" hub Composable. The MoreViewModel /
                     // MoreUiState in the same package remain inside the gate.
-                    "ai.agent.android.presentation.ui.more.MoreScreen*",
+                    "app.knotwork.android.presentation.ui.more.MoreScreen*",
                     // Provider picker and detail Compose screens under
                     // presentation/ui/settings/provider — covered by the
                     // catalog snapshot suite, not JVM unit tests.
-                    "ai.agent.android.presentation.ui.settings.provider.ProviderPickerScreen*",
-                    "ai.agent.android.presentation.ui.settings.provider.ProviderDetailScreen*",
+                    "app.knotwork.android.presentation.ui.settings.provider.ProviderPickerScreen*",
+                    "app.knotwork.android.presentation.ui.settings.provider.ProviderDetailScreen*",
                     // AppFunctions callee-side wrapper (SearchAppFunction). The
                     // KSP-generated `*_AppFunctionInvoker` infrastructure and
                     // the platform `PlatformAppFunctionService` need the Android
                     // runtime plus the AppFunctions service host to execute.
-                    "ai.agent.android.data.tools.local.appfunctions.*",
+                    "app.knotwork.android.data.tools.local.appfunctions.*",
                     // Phase 23 / Task 4/9 — `data.services.*` is now covered by
                     // Robolectric tests (`AgentForegroundServiceTest`,
                     // `AgentWorkerTest`, `AgentIdleManagerTest`,
@@ -381,11 +381,11 @@ kover {
                     // Tool-execution Android glue (AppFunctions service, search
                     // tool HTTP client, delegate-task LLM bridge) needs either
                     // an Android runtime or live LLM/HTTP fixtures.
-                    "ai.agent.android.data.tools.local.AgentAppFunctionService",
-                    "ai.agent.android.data.tools.local.AgentAppFunctionService$*",
-                    "ai.agent.android.data.tools.local.LocalAppFunctionManager",
-                    "ai.agent.android.data.tools.local.SearchTool*",
-                    "ai.agent.android.data.tools.local.DelegateTaskTool*",
+                    "app.knotwork.android.data.tools.local.AgentAppFunctionService",
+                    "app.knotwork.android.data.tools.local.AgentAppFunctionService$*",
+                    "app.knotwork.android.data.tools.local.LocalAppFunctionManager",
+                    "app.knotwork.android.data.tools.local.SearchTool*",
+                    "app.knotwork.android.data.tools.local.DelegateTaskTool*",
                     // NOTE: `data.tools.local.executors.*` are pure JSON-arg
                     // parsers that delegate to the (excluded) Android-runtime
                     // tools above — they are JVM-unit-testable and covered by
@@ -399,7 +399,7 @@ kover {
                     // `FirebaseCrashReportingRepositoryImplTest` /
                     // `CrashlyticsTimberTreeTest`, but the production
                     // `getInstance()` paths are not exercised on the JVM.
-                    "ai.agent.android.data.logging.CrashlyticsTimberTree*",
+                    "app.knotwork.android.data.logging.CrashlyticsTimberTree*",
                 )
                 // Belt-and-braces: also skip any @Preview-annotated function that
                 // happens to live outside a *Preview.kt file.
@@ -438,15 +438,15 @@ kover {
 tasks.named("check") { dependsOn("koverVerifyDebug") }
 
 // Phase 18 / Task 7/10 — enforces "no internal FQN" rule for the
-// `ai.agent.android.*` package. References like
-// `ai.agent.android.domain.models.NodeType` outside `import`/`package`
+// `app.knotwork.android.*` package. References like
+// `app.knotwork.android.domain.models.NodeType` outside `import`/`package`
 // statements must be replaced with a top-level import + short name. KDoc
 // lines (whitespace-then-`*`) and the `.editorconfig` pinned ktlint rules
 // catch the rest (wildcard imports, unused imports, import ordering).
 val checkNoInternalFqn by tasks.registering {
     group = "verification"
     description =
-        "Fails the build if any internal `ai.agent.android.*` FQN reference appears in source code " +
+        "Fails the build if any internal `app.knotwork.android.*` FQN reference appears in source code " +
         "outside of `import`/`package` statements or KDoc comments."
     val sourceRoots = listOf(
         "src/main/java",
@@ -461,7 +461,7 @@ val checkNoInternalFqn by tasks.registering {
     }
     inputs.files(ktFiles)
     doLast {
-        val fqnPattern = Regex("""\bai\.agent\.android\.[a-z_]+\.[A-Za-z]""")
+        val fqnPattern = Regex("""\bapp\.knotwork\.android\.[a-z_]+\.[A-Za-z]""")
         val violations = mutableListOf<String>()
         ktFiles.forEach { file ->
             file.useLines { lines ->
@@ -502,17 +502,17 @@ tasks.named("check") { dependsOn(checkNoInternalFqn) }
 // `buildSrc` (`BrowserEditorConstantsGenerator`) and is unit-tested there.
 val browserEditorHtmlFile = file("$rootDir/pipeline-editor.html")
 val browserEditorNodeTypeFile =
-    file("$projectDir/src/main/java/ai/agent/android/domain/models/NodeType.kt")
+    file("$projectDir/src/main/java/app/knotwork/android/domain/models/NodeType.kt")
 val browserEditorDefaultPromptsFile =
-    file("$projectDir/src/main/java/ai/agent/android/domain/constants/DefaultPrompts.kt")
+    file("$projectDir/src/main/java/app/knotwork/android/domain/constants/DefaultPrompts.kt")
 val browserEditorPromptModuleFile =
-    file("$projectDir/src/main/java/ai/agent/android/di/PromptTemplateModule.kt")
+    file("$projectDir/src/main/java/app/knotwork/android/di/PromptTemplateModule.kt")
 val browserEditorToolsModuleFile =
-    file("$projectDir/src/main/java/ai/agent/android/di/LocalToolsModule.kt")
+    file("$projectDir/src/main/java/app/knotwork/android/di/LocalToolsModule.kt")
 // Provider `KEY` constants + tool `TOOL_NAME` constants the generator must resolve.
 val browserEditorClassSourceFiles: Set<File> = buildSet {
-    addAll(fileTree("$projectDir/src/main/java/ai/agent/android/data/prompt") { include("**/*.kt") }.files)
-    addAll(fileTree("$projectDir/src/main/java/ai/agent/android/data/tools/local") { include("**/*.kt") }.files)
+    addAll(fileTree("$projectDir/src/main/java/app/knotwork/android/data/prompt") { include("**/*.kt") }.files)
+    addAll(fileTree("$projectDir/src/main/java/app/knotwork/android/data/tools/local") { include("**/*.kt") }.files)
 }
 // Every file whose content feeds the generated blocks; drives up-to-date checks.
 val browserEditorInputFiles: Set<File> = browserEditorClassSourceFiles + setOf(
