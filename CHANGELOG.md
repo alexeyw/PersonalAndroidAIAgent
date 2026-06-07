@@ -177,6 +177,14 @@ details.
 
 ### Fixed
 
+- **Auto-Layout crashed (`StackOverflowError`) on pipelines with a loop**:
+  the editor's `AutoLayout` longest-path layering recursed without a cycle
+  guard, so any graph containing a legitimate back-edge — e.g. a
+  `QUEUE_PROCESSOR` re-iteration loop, as in the `multi_step_research` and
+  `showcase_full_agent` bundled presets — overflowed the stack the moment
+  **Auto-Layout** was tapped. The depth resolver now tracks its recursion
+  stack and ignores back-edges (and self-loops) for layering, so cyclic
+  pipelines lay out without crashing.
 - **TOOL node with "Auto" tool failed at runtime**: a
   TOOL node left on the Auto option (persisted as a blank `toolName`) errored
   with "Tool node is missing toolName configuration" instead of letting the

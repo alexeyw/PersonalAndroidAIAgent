@@ -111,4 +111,65 @@ class AutoLayoutTest {
         assertEquals(1, result.depths["c"])
         assertEquals(2, result.depths["d"])
     }
+
+    @Test
+    fun `given graph with a back-edge when compute then it terminates and lays out every node`() {
+        // QUEUE_PROCESSOR re-iteration loop: in -> queue -> worker -> queue (back-edge) -> out.
+        // Before the cycle guard this overflowed the resolution stack.
+        val input = node(NodeType.INPUT, "in")
+        val queue = node(NodeType.QUEUE_PROCESSOR, "queue")
+        val worker = node(NodeType.LITE_RT, "worker")
+        val output = node(NodeType.OUTPUT, "out")
+        val graph = PipelineGraph(
+            id = "g",
+            name = "g",
+            nodes = listOf(input, queue, worker, output),
+            connections = listOf(
+                ConnectionModel(id = "1", sourceNodeId = "in", targetNodeId = "queue"),
+                ConnectionModel(id = "2", sourceNodeId = "queue", targetNodeId = "worker"),
+                ConnectionModel(id = "3", sourceNodeId = "worker", targetNodeId = "queue"),
+                ConnectionModel(id = "4", sourceNodeId = "queue", targetNodeId = "out"),
+            ),
+        )
+        val result = AutoLayout.compute(graph)
+        assertEquals(4, result.positions.size)
+        assertEquals(4, result.depths.size)
+        // The acyclic prefix still layers monotonically; the back-edge is ignored.
+        assertEquals(0, result.depths["in"])
+        assertTrue(result.depths.getValue("queue") > result.depths.getValue("in"))
+    }
+
+    @Test
+    fun `given a self-looping node when compute then it terminates and the node stays at depth 0`() {
+        val a = node(NodeType.QUEUE_PROCESSOR, "a")
+        val graph = PipelineGraph(
+            id = "g",
+            name = "g",
+            nodes = listOf(a),
+            connections = listOf(
+                ConnectionModel(id = "self", sourceNodeId = "a", targetNodeId = "a"),
+            ),
+        )
+        val result = AutoLayout.compute(graph)
+        assertEquals(1, result.positions.size)
+        assertEquals(0, result.depths["a"])
+    }
+
+    @Test
+    fun `given a two-node cycle when compute then it terminates and lays out both nodes`() {
+        val a = node(NodeType.QUEUE_PROCESSOR, "a")
+        val b = node(NodeType.LITE_RT, "b")
+        val graph = PipelineGraph(
+            id = "g",
+            name = "g",
+            nodes = listOf(a, b),
+            connections = listOf(
+                ConnectionModel(id = "ab", sourceNodeId = "a", targetNodeId = "b"),
+                ConnectionModel(id = "ba", sourceNodeId = "b", targetNodeId = "a"),
+            ),
+        )
+        val result = AutoLayout.compute(graph)
+        assertEquals(2, result.positions.size)
+        assertEquals(2, result.depths.size)
+    }
 }
