@@ -6,7 +6,7 @@ make a change, and open a pull request.
 
 ## Pre-release notice
 
-The project is currently at version **0.3.0** and is published primarily
+The project is currently at version **0.4.0** and is published primarily
 for review and experimentation. Expect breaking changes between minor
 versions: the Kotlin public surface, pipeline JSON schema, on-device
 storage formats, and settings layout are **not** stability-guaranteed

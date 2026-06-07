@@ -13,6 +13,8 @@ details.
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-06-07
+
 ### Added
 
 - **Browser editor ↔ app full node-config parity**:
@@ -2661,7 +2663,8 @@ that produced the initial 0.1.0 snapshot.
 - **Master key**: `EncryptedSharedPreferences` is rooted in the Android
   Keystore, so the master key is hardware-backed where available.
 
-[Unreleased]: https://github.com/alexeyw/PersonalAndroidAIAgent/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/alexeyw/PersonalAndroidAIAgent/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/alexeyw/PersonalAndroidAIAgent/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/alexeyw/PersonalAndroidAIAgent/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/alexeyw/PersonalAndroidAIAgent/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/alexeyw/PersonalAndroidAIAgent/releases/tag/v0.1.0
