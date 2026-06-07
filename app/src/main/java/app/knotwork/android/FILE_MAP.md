@@ -27,8 +27,8 @@ This file maps the contents of the main application package.
       - `LocalModelDao.kt` - Local models DAO.
       - `MemoryDao.kt` - Memory chunks DAO.
       - `PipelineDao.kt` - Pipelines DAO.
-      - `PipelinePresetDao.kt` - User-saved pipeline-preset DAO (Phase 24 / Task 1). Backs the `pipeline_presets` table; bundled presets live in `assets/presets/pipelines/` and never reach this DAO.
-      - `PromptPresetDao.kt` - User-saved prompt-preset DAO (Phase 24 / Task 4). Backs the `prompt_presets` table; bundled presets live in `assets/presets/prompts/` and never reach this DAO.
+      - `PipelinePresetDao.kt` - User-saved pipeline-preset DAO. Backs the `pipeline_presets` table; bundled presets live in `assets/presets/pipelines/` and never reach this DAO.
+      - `PromptPresetDao.kt` - User-saved prompt-preset DAO. Backs the `prompt_presets` table; bundled presets live in `assets/presets/prompts/` and never reach this DAO.
       - `PromptTemplateDao.kt` - Prompt templates DAO.
       - `TraceStepDao.kt` - Trace steps DAO.
     - `models/` - Local DB entity models.
@@ -39,8 +39,8 @@ This file maps the contents of the main application package.
       - `MemoryChunkEntity.kt` - Memory chunk entity.
       - `NodeEntity.kt` - Pipeline node entity.
       - `PipelineEntity.kt` - Pipeline entity.
-      - `PipelinePresetEntity.kt` - User-saved pipeline preset row (Phase 24 / Task 1). Stores `id`, `name`, `description`, `categoryKey`, `graphJson` (full preset payload serialised by `PipelinePresetJsonSerializer`), `tagsCsv`, `createdAt`.
-      - `PromptPresetEntity.kt` - User-saved prompt preset row (Phase 24 / Task 4). Stores `id`, `name`, `description`, `nodeTypeKey`, `systemPrompt`, `tagsCsv`, `createdAt`.
+      - `PipelinePresetEntity.kt` - User-saved pipeline preset row. Stores `id`, `name`, `description`, `categoryKey`, `graphJson` (full preset payload serialised by `PipelinePresetJsonSerializer`), `tagsCsv`, `createdAt`.
+      - `PromptPresetEntity.kt` - User-saved prompt preset row. Stores `id`, `name`, `description`, `nodeTypeKey`, `systemPrompt`, `tagsCsv`, `createdAt`.
       - `PipelineWithNodesAndConnections.kt` - Pipeline relational model.
       - `PromptTemplateEntity.kt` - Prompt template entity.
       - `TraceStepEntity.kt` - Trace step entity.
@@ -69,9 +69,9 @@ This file maps the contents of the main application package.
     - `FirebaseCrashReportingRepositoryImpl.kt` - Firebase-backed `CrashReportingRepository`. Every method is gated on `SettingsRepository.crashReportingEnabled` and short-circuits to no-op when the user has not opted in.
     - `IdentityRepositoryImpl.kt` - Resolves the Settings identity card snapshot (ANDROID_ID → 8-hex device id, AndroidKeyStore probe).
     - `LocalModelRepositoryImpl.kt` - Local model repository implementation; observes the active model file metadata for the Settings local-model card.
-    - `LocalPipelinePresetRepositoryImpl.kt` - Local impl of `PipelinePresetRepository` (Phase 24 / Task 1). Composes the bundled `assets/presets/pipelines/*.json` catalogue (lazy IO-dispatched read, cached for process lifetime, malformed files skipped) with user-saved Room rows; rejects bundled presets on the user-save path.
+    - `LocalPipelinePresetRepositoryImpl.kt` - Local impl of `PipelinePresetRepository`. Composes the bundled `assets/presets/pipelines/*.json` catalogue (lazy IO-dispatched read, cached for process lifetime, malformed files skipped) with user-saved Room rows; rejects bundled presets on the user-save path.
     - `LocalPipelineRepositoryImpl.kt` - Local pipeline repository implementation.
-    - `LocalPromptPresetRepositoryImpl.kt` - Local impl of `PromptPresetRepository` (Phase 24 / Task 4). Composes the bundled `assets/presets/prompts/*.json` catalogue (lazy IO-dispatched read, cached for process lifetime, malformed files skipped) with user-saved Room rows; rejects bundled presets on the user-save path; drops user rows whose stored `nodeTypeKey` no longer maps to a known `NodeType`.
+    - `LocalPromptPresetRepositoryImpl.kt` - Local impl of `PromptPresetRepository`. Composes the bundled `assets/presets/prompts/*.json` catalogue (lazy IO-dispatched read, cached for process lifetime, malformed files skipped) with user-saved Room rows; rejects bundled presets on the user-save path; drops user rows whose stored `nodeTypeKey` no longer maps to a known `NodeType`.
     - `McpServerRepositoryImpl.kt` - Per-server gateway over the raw `McpClient` transport; owns lazy connections, the 5-minute tool-list cache, and per-URL `McpConnectionStatus` flows consumed by `ToolsViewModel`.
     - `MemoryRepositoryImpl.kt` - Memory repository implementation.
     - `MetricsRepositoryImpl.kt` - Metrics repository implementation.
@@ -87,8 +87,8 @@ This file maps the contents of the main application package.
     - `AgentWorker.kt` - WorkManager worker for agent tasks.
     - `MemoryCompactionScheduler.kt` - Owns the WorkManager scheduling of `MemoryCompactionWorker`: a daily periodic job (charging + device-idle) plus an out-of-schedule `startHardLimitWatch` that fires an immediate relaxed-constraint pass when the chunk count crosses `maxMemoryChunks`. Wired from `MainActivity.onCreate`.
     - `MemoryCompactionWorker.kt` - `@HiltWorker` that runs one long-term memory compaction pass. Gates on `SettingsRepository.memoryCompactionEnabled` and delegates clustering/consolidation to `MemoryCompactionUseCase`.
-    - `MemoryReembedWorker.kt` - `@HiltWorker` that re-embeds memory chunks flagged `needsReembedding` (imported under a different provider) off the hot path, delegating to `RecomputePendingEmbeddingsUseCase`; `Result.retry()` on failure so WorkManager backs off and retries (Phase 25 / Task 8).
-    - `WorkManagerMemoryReembedScheduler.kt` - Data-layer `MemoryReembedScheduler`: enqueues a unique one-off `MemoryReembedWorker` (relaxed constraints + exponential backoff, `KEEP` coalescing) when an import flags chunks for re-embedding (Phase 25 / Task 8).
+    - `MemoryReembedWorker.kt` - `@HiltWorker` that re-embeds memory chunks flagged `needsReembedding` (imported under a different provider) off the hot path, delegating to `RecomputePendingEmbeddingsUseCase`; `Result.retry()` on failure so WorkManager backs off and retries.
+    - `WorkManagerMemoryReembedScheduler.kt` - Data-layer `MemoryReembedScheduler`: enqueues a unique one-off `MemoryReembedWorker` (relaxed constraints + exponential backoff, `KEEP` coalescing) when an import flags chunks for re-embedding.
     - `LongRunningTaskNotifierImpl.kt` - Notifier for the `LongRunningTasksChannel`; gated on the Settings → Notifications toggle.
     - `embedding/` - `EmbeddingProvider` implementations and the Koog client seam.
       - `KoogEmbedderFactory.kt` - Factory (+ default impl) building Koog OpenAI/Ollama embedding clients; `List<Double> → FloatArray` helper.
@@ -118,7 +118,7 @@ This file maps the contents of the main application package.
 - `domain/` - Domain layer containing core business logic and Use Cases.
   - `constants/` - Domain-level constants.
     - `DefaultPrompts.kt` - Default system prompts.
-    - `PromptPresetConstants.kt` - Cross-module limits + `LLM_DRIVEN_NODE_TYPES` set shared by the prompt-preset domain (Phase 24 / Task 4): `MAX_NAME_LENGTH = 60`, `MAX_SYSTEM_PROMPT_LENGTH = 8000`, and the set of node types that can host a system-prompt preset.
+    - `PromptPresetConstants.kt` - Cross-module limits + `LLM_DRIVEN_NODE_TYPES` set shared by the prompt-preset domain: `MAX_NAME_LENGTH = 60`, `MAX_SYSTEM_PROMPT_LENGTH = 8000`, and the set of node types that can host a system-prompt preset.
     - `NotificationChannels.kt` - Canonical ids of every Android `NotificationChannel` (foreground service status, approval prompts).
     - `OnboardingModelCatalog.kt` - Maps the catalog-side `OnboardingLiteRtModel.id` (`gemma_4_e2b` / `gemma_4_e4b`) to the on-disk filename + HuggingFace URL consumed by `OnboardingViewModel.startDownload` and `LocalModelRepository.isInstalled`. Also derives a filename from the user-supplied custom URL row.
     - `PipelineExecutionDefaults.kt` - Engine-level timing and log-size constants consumed by `GraphExecutionEngine` and the LLM-backed node executors (post-emit pause, LiteRT pre-warm delay, node-IO log char limit).
@@ -148,13 +148,13 @@ This file maps the contents of the main application package.
       - `IfConditionNodeExecutor.kt` - Executor for `IF_CONDITION` branching nodes; evaluates the boolean condition and routes downstream.
       - `QueueProcessorNodeExecutor.kt` - Pass-through executor for the `QUEUE_PROCESSOR` routing marker consumed by `GraphExecutionEngine`.
       - `ClarificationNodeExecutor.kt` - Executor for `NodeType.CLARIFICATION` that asks the local LLM to generate a question/options JSON, suspends on `ClarificationRepository.requestAnswer`, and forwards the user's reply downstream.
-  - `memoryio/` - JSON serialisation gateway for long-term memory export/import (Phase 25 / Task 8).
+  - `memoryio/` - JSON serialisation gateway for long-term memory export/import.
     - `MemorySourceJson.kt` - Single source of truth for the `MemorySource` ↔ JSON wire shape; shared by the Room `source` column converter (`data/local/Converters`) and `MemoryJsonSerializer` so the column encoding and the export file stay byte-identical.
     - `MemoryJsonSerializer.kt` - Two-way mapper between the memory table and the portable `schemaVersion: 1` export document (`embeddingProviderId` + `exportedAt` + per-chunk `id`/`text`/`embedding`/`source`/`timestamp`/`isPinned`/`tags`). Never-throwing `parse` returns `Success / SchemaMismatch / Failure`.
   - `pipelineio/` - JSON serialisation gateway for pipeline import/export.
     - `PipelineJsonSerializer.kt` - Two-way mapper between `PipelineGraph` and the `schemaVersion: 1` JSON document shared with the browser-side editor (`pipeline-editor.html`). Carries the flat runtime `config` fields plus an optional opaque `nodeConfig` object (the rich `NodeConfigCodec` payload) round-tripped verbatim into `NodeModel.configJson` without interpreting it.
-    - `PipelinePresetJsonSerializer.kt` - Two-way mapper between `PipelinePreset` and the pipeline-preset JSON format used by `assets/presets/pipelines/*.json` and the browser editor's `*.preset.json` export. Strict superset of the pipeline JSON; delegates the graph half to `PipelineJsonSerializer` (Phase 24 / Task 1).
-  - `promptio/` - JSON serialisation gateway for prompt-preset import/export (Phase 24 / Task 4).
+    - `PipelinePresetJsonSerializer.kt` - Two-way mapper between `PipelinePreset` and the pipeline-preset JSON format used by `assets/presets/pipelines/*.json` and the browser editor's `*.preset.json` export. Strict superset of the pipeline JSON; delegates the graph half to `PipelineJsonSerializer`.
+  - `promptio/` - JSON serialisation gateway for prompt-preset import/export.
     - `PromptPresetJsonSerializer.kt` - Two-way mapper between `PromptPreset` and its `schemaVersion: 1` JSON document. Rejects unknown / non-LLM `NodeType` values at parse time; never throws (returns `Success / SchemaMismatch / Failure`).
   - `prompt/` - Prompt templating layer.
     - `PromptVariableProvider.kt` - Contract for a single substitutable prompt variable.
@@ -184,9 +184,9 @@ This file maps the contents of the main application package.
     - `McpTool.kt` - Domain model for one tool advertised by an MCP server (`id = "mcp:<sha8(serverUrl)>:<toolName>"`, `serverUrl`, `name`, `description`, `inputSchemaJson`, optional `risk`).
     - `McpTransport.kt` - Transport selector backing `McpServerConfig.transport`. Both variants are end-to-end wired on Koog 1.0.0: `SSE` via Koog's `defaultSseTransport`, `STREAMABLE_HTTP` via the MCP Kotlin SDK's `HttpClient.mcpStreamableHttpTransport` (see `KoogMcpClient`).
     - `MemoryChunk.kt` - Memory chunk model.
-    - `MemoryExportDocument.kt` - Parsed representation of a memory export file (`embeddingProviderId`, `exportedAt`, `chunks`) produced by `MemoryJsonSerializer.parse` and consumed by `MemoryImportUseCase` (Phase 25 / Task 8).
-    - `MemoryImportOutcome.kt` - Sealed result of parsing a memory export document (`Success` / `SchemaMismatch` / `Failure`), mirroring the pipeline / prompt-preset import outcomes (Phase 25 / Task 8).
-    - `MemoryImportStrategy.kt` - How an import reconciles with the existing store: `Merge` (skip duplicate ids) / `Replace` (wipe then load) (Phase 25 / Task 8).
+    - `MemoryExportDocument.kt` - Parsed representation of a memory export file (`embeddingProviderId`, `exportedAt`, `chunks`) produced by `MemoryJsonSerializer.parse` and consumed by `MemoryImportUseCase`.
+    - `MemoryImportOutcome.kt` - Sealed result of parsing a memory export document (`Success` / `SchemaMismatch` / `Failure`), mirroring the pipeline / prompt-preset import outcomes.
+    - `MemoryImportStrategy.kt` - How an import reconciles with the existing store: `Merge` (skip duplicate ids) / `Replace` (wipe then load).
     - `MemorySource.kt` - Provenance of a memory chunk (`ChatSession` / `Manual` / `Compaction` / `Unknown`) with stable wire keys; persisted via the `memory_chunks.source` column.
     - `MemoryStats.kt` - Aggregate memory counters (chunk count / byte size / last-compacted) powering the Settings memory card and the More tab.
     - `MemorySummary.kt` - Lightweight memory projection (id/text/timestamp) used by `$MEMORY_SUMMARY`.
@@ -198,9 +198,9 @@ This file maps the contents of the main application package.
     - `NodeType.kt` - Node type enum.
     - `PipelineGraph.kt` - Pipeline graph model.
     - `PipelineImportOutcome.kt` - Sealed result of parsing a pipeline JSON document (Success / SchemaMismatch / Failure) consumed by `ImportPipelineUseCase`.
-    - `PipelinePreset.kt` - Domain model of a reusable pipeline template (Phase 24 / Task 1). Carries `id`, `name`, `description`, `category` (`PresetCategory` enum with wire keys), `graph: PipelineGraph` (template), `tags`, `isBundled`.
+    - `PipelinePreset.kt` - Domain model of a reusable pipeline template. Carries `id`, `name`, `description`, `category` (`PresetCategory` enum with wire keys), `graph: PipelineGraph` (template), `tags`, `isBundled`.
     - `PipelinePresetImportOutcome.kt` - Sealed result of parsing a preset JSON document (Success / SchemaMismatch / Failure), mirroring `PipelineImportOutcome`.
-    - `PromptPreset.kt` - Domain model of a reusable system-prompt template (Phase 24 / Task 4). Carries `id`, `name`, `description`, `nodeType: NodeType` (must be LLM-driven), `systemPrompt`, `tags`, `isBundled`.
+    - `PromptPreset.kt` - Domain model of a reusable system-prompt template. Carries `id`, `name`, `description`, `nodeType: NodeType` (must be LLM-driven), `systemPrompt`, `tags`, `isBundled`.
     - `PromptPresetImportOutcome.kt` - Sealed result of parsing a prompt-preset JSON document (Success / SchemaMismatch / Failure).
     - `PromptTemplate.kt` - Domain model of a prompt template (`id`, `name`, `text`, `category`) backing the legacy Prompt-template repository.
     - `ProviderSummary.kt` - Per-provider summary (`CloudProvider` + key-configured flag) of the external LLM providers surfaced in Settings.
@@ -230,8 +230,8 @@ This file maps the contents of the main application package.
     - `ModelDownloadManager.kt` - Model download manager interface.
     - `NetworkActivityTracker.kt` - Domain interface tracking the timestamp of the most recent outbound LLM / MCP call. Used by the More tab privacy footer to compute "no network calls in last N m" without observing connectivity.
     - `NetworkStateRepository.kt` - Network state repository interface.
-    - `PipelinePresetRepository.kt` - Domain gateway over the two-tier pipeline-preset catalogue: bundled (read-only, from APK assets) + user-saved (mutable, Room-backed). Data-layer impl: `LocalPipelinePresetRepositoryImpl` (Phase 24 / Task 1).
-    - `PromptPresetRepository.kt` - Domain gateway over the two-tier prompt-preset catalogue: bundled (read-only, from APK assets) + user-saved (mutable, Room-backed). Exposes a per-`NodeType` filtered flow used by the Prompt Library. Data-layer impl: `LocalPromptPresetRepositoryImpl` (Phase 24 / Task 4).
+    - `PipelinePresetRepository.kt` - Domain gateway over the two-tier pipeline-preset catalogue: bundled (read-only, from APK assets) + user-saved (mutable, Room-backed). Data-layer impl: `LocalPipelinePresetRepositoryImpl`.
+    - `PromptPresetRepository.kt` - Domain gateway over the two-tier prompt-preset catalogue: bundled (read-only, from APK assets) + user-saved (mutable, Room-backed). Exposes a per-`NodeType` filtered flow used by the Prompt Library. Data-layer impl: `LocalPromptPresetRepositoryImpl`.
     - `PromptRepository.kt` - Prompt-template repository interface (CRUD over `PromptTemplate`). Data-layer impl: `PromptRepositoryImpl`.
     - `PipelineRepository.kt` - Pipeline repository interface.
     - `PowerStateRepository.kt` - Power state repository interface.
@@ -243,7 +243,7 @@ This file maps the contents of the main application package.
     - `EmbeddingProviderResolver.kt` - Resolves the active `EmbeddingProvider` from the Hilt map and `SettingsRepository.activeEmbeddingProviderId`, falling back to on-device USE.
     - `KMeansClusterer.kt` - Deterministic k-means clusterer over embedding vectors (farthest-first seeding, cosine distance, no randomness). Groups stale memory chunks for `MemoryCompactionUseCase`; `k = max(1, floor(sqrt(N) / 2))`.
     - `LongRunningTaskNotifier.kt` - Domain seam for posting a notification when a backgrounded pipeline run exceeds the configured duration. Data-layer impl: `LongRunningTaskNotifierImpl`.
-    - `MemoryReembedScheduler.kt` - Domain seam for scheduling the background re-embed pass over chunks flagged `needsReembedding`. Keeps `MemoryImportUseCase` free of WorkManager; data-layer impl: `WorkManagerMemoryReembedScheduler` (Phase 25 / Task 8).
+    - `MemoryReembedScheduler.kt` - Domain seam for scheduling the background re-embed pass over chunks flagged `needsReembedding`. Keeps `MemoryImportUseCase` free of WorkManager; data-layer impl: `WorkManagerMemoryReembedScheduler`.
     - `MemoryAutoExtractionCoordinator.kt` - App-scoped, debounced (30s/session) trigger that runs `MemoryExtractionUseCase` after a pipeline completes; short-circuits when `SettingsRepository.autoExtractEnabled` is off, and defers (re-waits a debounce window) while `TaskQueueManager.globalState` shows an active pipeline so it never races a foreground generation on the single-conversation engine. Notified by `ChatHomeViewModel` on the terminal `Completed` state.
     - `MemoryReranker.kt` - Pure, clock-free re-ranker for long-term-memory search hits. Re-scores `(MemoryChunk, similarity)` pairs with recency decay (half-life-based), a flat pinned boost (+0.2, hard-sorted to the top and threshold-exempt), 80-char-prefix deduplication (newest survivor), and a final-score threshold filter. Used by `RetrieveRelevantMemoryUseCase`; the caller supplies `nowMillis`.
   - `usecases/` - Business logic Use Cases.
@@ -259,25 +259,25 @@ This file maps the contents of the main application package.
     - `ImportPipelineUseCase.kt` - Parses a pipeline JSON document via `PipelineJsonSerializer` and persists clean imports through `SavePipelineUseCase`; defers schema-mismatch persistence to a separate `persistConfirmed` step.
     - `InitializeAppUseCase.kt` - First-launch initialiser: persists the default system prompts and materialises the bundled `showcase_full_agent` preset (via `LoadPipelineFromPresetUseCase`) as the seed/default pipeline, falling back to `DefaultPipelineFactory` if the preset asset is unavailable. Idempotent on `isFirstLaunch`.
     - `LoadModelUseCase.kt` - Use case to load a model.
-    - `LoadPipelineFromPresetUseCase.kt` - Materialises a `PipelinePreset` into a concrete `PipelineGraph` with fresh ids (pipeline + nodes + connections), drops orphan connections, validates, persists via `PipelineRepository.savePipeline`, returns the new pipeline id (Phase 24 / Task 1).
+    - `LoadPipelineFromPresetUseCase.kt` - Materialises a `PipelinePreset` into a concrete `PipelineGraph` with fresh ids (pipeline + nodes + connections), drops orphan connections, validates, persists via `PipelineRepository.savePipeline`, returns the new pipeline id.
     - `LoadPipelineUseCase.kt` - Use case to load a pipeline.
     - `RenamePipelineUseCase.kt` - Validates and applies a new display name to an existing pipeline; canonical name-validation gate (trim + length).
     - `MemoryCompactionUseCase.kt` - Runs one background memory-compaction pass: loads non-pinned chunks older than `memoryCompactionAgeDays`, clusters them via `KMeansClusterer`, and for each cluster of ≥ 3 runs a local-model consolidation prompt, embeds the summary with the active provider, saves it tagged `MemorySource.Compaction`, and deletes the originals. Best-effort: a blank reply or embedding failure skips only that cluster.
     - `RetrieveRelevantMemoryUseCase.kt` - Use case to retrieve memories.
     - `MemoryExtractionUseCase.kt` - Distils durable facts (`{type, text}` JSON) from a finished conversation via one local-model pass, batch-embeds them with the active `EmbeddingProvider` (single `embed(List)` call), dedups (cosine ≥ 0.92) against stored + same-pass facts, and saves survivors tagged `MemorySource.ChatSession`. The manual "Save to memory" path uses the lighter `SaveMessageToMemoryUseCase` instead (no LLM distillation pass).
-    - `SavePipelineAsPresetUseCase.kt` - Packages the currently-edited `PipelineGraph` into a user-saved `PipelinePreset` (validates name, runs `PipelineGraph.validate()`, enforces `isBundled=false`). Phase 24 / Task 1.
-    - `SavePromptAsPresetUseCase.kt` - Packages a freshly-edited system prompt into a user-saved `PromptPreset`. Validates name (1..60), `systemPrompt` (non-blank, ≤ `MAX_SYSTEM_PROMPT_LENGTH`), and that the target `NodeType` is LLM-driven. Phase 24 / Task 4.
+    - `SavePipelineAsPresetUseCase.kt` - Packages the currently-edited `PipelineGraph` into a user-saved `PipelinePreset` (validates name, runs `PipelineGraph.validate()`, enforces `isBundled=false`)..
+    - `SavePromptAsPresetUseCase.kt` - Packages a freshly-edited system prompt into a user-saved `PromptPreset`. Validates name (1..60), `systemPrompt` (non-blank, ≤ `MAX_SYSTEM_PROMPT_LENGTH`), and that the target `NodeType` is LLM-driven..
     - `SavePipelineUseCase.kt` - Use case to save a pipeline.
     - `SavePromptTemplateUseCase.kt` - Creates or updates a prompt template via `PromptRepository`.
     - `ScheduleTaskUseCase.kt` - Use case to schedule tasks.
     - `TaskRouterUseCase.kt` - Use case to route tasks.
     - `ResetSamplingDefaultsUseCase.kt` - Resets temperature / top-K / top-P / repetition penalty / max context / max steps to the documented defaults.
     - `ClearAllMemoryUseCase.kt` - Wipes every memory chunk (pinned and unpinned). Gated behind the typed-confirm dialog.
-    - `ExportMemoryBaseUseCase.kt` - Serialises the memory table to a portable `schemaVersion: 1` JSON blob via `MemoryJsonSerializer` (stamping the active `embeddingProviderId` + `exportedAt`). SAF-driven from `SettingsScreen` (full table) and from the Memory screen's multi-select "Export selected" action (optional `ids` subset, Phase 25 / Task 7). The import counterpart is `MemoryImportUseCase` (Phase 25 / Task 8).
-    - `MemoryImportUseCase.kt` - Imports a memory export file: `parse` surfaces the `MemoryImportOutcome`; `import(document, strategy, activeProviderId)` reconciles under `Merge` (insert non-duplicate ids) / `Replace` (transactional wipe+load; no-op on an empty document), preserving each chunk's id / provenance / pin state / tags. On a provider mismatch it flags chunks for re-embedding and schedules the background pass via `MemoryReembedScheduler` (Phase 25 / Task 8).
-    - `RecomputePendingEmbeddingsUseCase.kt` - Re-embeds chunks flagged `needsReembedding` (imported under a different provider) with the active provider and clears the flag. Run off the hot path by `MemoryReembedWorker`; a batch-embed failure propagates so the worker can retry with backoff (Phase 25 / Task 8).
-    - `SaveMessageToMemoryUseCase.kt` - Direct-wrapper manual save path behind the chat "Save to memory" action and the Memory screen's Add-memory dialog (Phase 25 / Task 7): embeds the chosen text with the active `EmbeddingProvider` (via `EmbeddingProviderResolver`) and stores it tagged `MemorySource.Manual`. Returns `SaveToMemoryOutcome` (Saved / Skipped / Failed); blank input is skipped, embedding failures are swallowed for the caller's snackbar.
-    - `EstimateCompactionUseCase.kt` - LLM-free preview of a prospective compaction pass (Phase 25 / Task 7): loads the same candidate set as `MemoryCompactionUseCase`, derives the clusterer's `k`, and returns a `CompactionEstimate` (≈ removed chunks / freed bytes / runtime) for the Memory screen's "Compact memory?" confirm dialog.
+    - `ExportMemoryBaseUseCase.kt` - Serialises the memory table to a portable `schemaVersion: 1` JSON blob via `MemoryJsonSerializer` (stamping the active `embeddingProviderId` + `exportedAt`). SAF-driven from `SettingsScreen` (full table) and from the Memory screen's multi-select "Export selected" action (optional `ids` subset). The import counterpart is `MemoryImportUseCase`.
+    - `MemoryImportUseCase.kt` - Imports a memory export file: `parse` surfaces the `MemoryImportOutcome`; `import(document, strategy, activeProviderId)` reconciles under `Merge` (insert non-duplicate ids) / `Replace` (transactional wipe+load; no-op on an empty document), preserving each chunk's id / provenance / pin state / tags. On a provider mismatch it flags chunks for re-embedding and schedules the background pass via `MemoryReembedScheduler`.
+    - `RecomputePendingEmbeddingsUseCase.kt` - Re-embeds chunks flagged `needsReembedding` (imported under a different provider) with the active provider and clears the flag. Run off the hot path by `MemoryReembedWorker`; a batch-embed failure propagates so the worker can retry with backoff.
+    - `SaveMessageToMemoryUseCase.kt` - Direct-wrapper manual save path behind the chat "Save to memory" action and the Memory screen's Add-memory dialog: embeds the chosen text with the active `EmbeddingProvider` (via `EmbeddingProviderResolver`) and stores it tagged `MemorySource.Manual`. Returns `SaveToMemoryOutcome` (Saved / Skipped / Failed); blank input is skipped, embedding failures are swallowed for the caller's snackbar.
+    - `EstimateCompactionUseCase.kt` - LLM-free preview of a prospective compaction pass: loads the same candidate set as `MemoryCompactionUseCase`, derives the clusterer's `k`, and returns a `CompactionEstimate` (≈ removed chunks / freed bytes / runtime) for the Memory screen's "Compact memory?" confirm dialog.
     - `ReembedAllMemoriesUseCase.kt` - Re-runs the active embedding engine over every chunk; streams `0f..1f` progress.
     - `TestBackendUseCase.kt` - Runs a fixed prompt-probe against the active local model and persists `TestProbeResult` so the Settings row keeps showing the latest throughput.
     - `GetSystemPromptVariableCatalogUseCase.kt` - Materialises the `$VARIABLE` chip catalog with live preview samples for the Settings → System instructions card.
@@ -312,10 +312,10 @@ This file maps the contents of the main application package.
       - `KnotworkModalRoute.kt` - Generic `ModalBottomSheet` + `PredictiveBackHandler` wrapper reused by every modal-sheet route (`NodeConfigSheet`, `ConsolePane`, `AddMcpServerScreen` — bodies arrive in Tasks 6/7/10).
       - `AppShellScaffold.kt` - Root scaffold: bottom-nav chrome, tab-switch state preservation, root-tab `BackHandler = activity.finish()`, theme-flip crossfade.
       - `AppNavGraph.kt` - The single `NavHost` for the app, hosting splash → onboarding → tabs (Chat / Pipelines nested-graph / Tools / More) + secondary screens + modal-sheet placeholders. Reads `isFirstLaunch` to drive the onboarding gate.
-    - `onboarding/` - First-launch onboarding gate with the 4-step Knotwork pager (Phase 22 / Task 12 wired the real download / model-load flow on top of the Phase 21 catalog surface).
+    - `onboarding/` - First-launch onboarding gate with the 4-step Knotwork pager (wires the real download / model-load flow on top of the catalog surface).
       - `OnboardingScreen.kt` - Composable entry: subscribes to `OnboardingViewModel.state`, forwards finish/skip callbacks into the nav-graph, hosts a `SnackbarHost` for the skip-flow hint emitted on `OnboardingViewModel.skipSnackbarEvents`.
       - `OnboardingViewModel.kt` - Hilt ViewModel orchestrating the download + warm-up flow. Injects `LocalModelRepository`, `ModelDownloadManager`, `LoadModelUseCase`; folds `DownloadState` into the catalog `OnboardingViewState`, persists the freshly-downloaded `LocalModel`, runs `LoadModelUseCase` to warm the inference handle, and emits one-shot snackbar pings on skip. Sets `hasCompletedOnboarding` on finish / skip.
-    - `about/` - About screen (Phase 22 / Task 15 — full Knotwork redesign on top of `AboutContent`: hero brand mark + version / license / acknowledgments / privacy cards).
+    - `about/` - About screen (full Knotwork redesign on top of `AboutContent`: hero brand mark + version / license / acknowledgments / privacy cards).
       - `AboutScreen.kt` - Slim wrapper around the catalog `AboutContent`. Owns the 15-entry hand-maintained acknowledgments list and the `ACTION_VIEW` intents for License / Privacy CTAs.
     - `chat/` - Chat surface — production surface lives in `home/`.
       - `home/` - Redesigned Knotwork chat home. Wired to `CHAT_TAB` via `AppNavGraph`.
@@ -327,27 +327,27 @@ This file maps the contents of the main application package.
         - `ChatHomeConsoleMapping.kt` - Pure-Kotlin mappers from the domain orchestrator output to the catalog console-pane row models: `ConsoleEvent → ConsoleLine`, `TraceStep → ConsoleTraceSpan`, `NodeIO → List<ConsoleVarRow>`.
         - `ChatHomeDebugStatePicker.kt` - Triple-tap state picker (`DropdownMenu`) — visible only in debug builds via `BuildConfig.DEBUG` guard.
         - `ChatHomeFixtures.kt` - Bundle of resolved UI strings (status pills, stub rows, suggestions) consumed by the `ChatHomeScreen` view-state mapping.
-    - `memory/` - Memory screen components (Phase 25 / Task 7 redesign).
+    - `memory/` - Memory screen components.
       - `MemoryScreen.kt` - Slim mapper. Subscribes to `MemoryViewModel`, projects `MemoryUiState` to the catalog `MemoryContent` (stats header + provenance breakdown, category chips, sort/date dropdowns, time-grouped sections, semantic-search rows with scores, detail sheet, Compact/Add dialogs). Owns the pure `toViewState` projection (grouping / breakdown / relative-time + detail labels) and the SAF launcher for full export.
       - `MemoryUiState.kt` - Memory UI state: raw chunk list + size + last-compacted + session-name cache, plus the view selections (category / sort / date / semantic-search) and transient detail/dialog flags.
       - `MemoryViewModel.kt` - Memory ViewModel. Loads chunks/stats/last-compacted/session-names; owns category/sort/date selection, debounced semantic search (`RetrieveRelevantMemoryUseCase.retrieveScored`), inline edit + tag editing, manual add (`SaveMessageToMemoryUseCase`), pin toggling, manual compaction (`MemoryCompactionUseCase` + `EstimateCompactionUseCase`), and full export.
-    - `models/` - Models screen components (Phase 22 / Task 15 — Knotwork redesign with inline Active card + HF auth + Custom URL + Presets list).
+    - `models/` - Models screen components (Knotwork redesign with inline Active card + HF auth + Custom URL + Presets list).
       - `ModelsScreen.kt` - Slim mapper. Folds `ModelsUiState` into the catalog `ModelsViewState` (Active card / HF auth section / Custom URL / Presets list with Idle / Downloading / OnDisk variants).
       - `ModelsUiState.kt` - Models UI state. Adds `activeDownloadFileName: String?` so the catalog can render the in-flight progress on the matching preset row.
       - `ModelsViewModel.kt` - Models ViewModel. Adds `cancelDownload` (cancels the active download job) and `deleteModel`.
     - `monitoring/` - Monitoring screen components.
-      - `MonitoringScreen.kt` - Slim mapper. Folds `MonitoringUiState` into the catalog `MonitoringViewState` and renders `MonitoringContent` (Phase 22 / Task 15).
+      - `MonitoringScreen.kt` - Slim mapper. Folds `MonitoringUiState` into the catalog `MonitoringViewState` and renders `MonitoringContent`.
       - `MonitoringUiState.kt` - Monitoring UI state.
       - `MonitoringViewModel.kt` - Monitoring ViewModel.
-    - `orchestrator/` - Pipeline library + shared orchestrator ViewModel (the canvas surface moved to `pipeline/editor/` in Phase 21 / Task 9).
+    - `orchestrator/` - Pipeline library + shared orchestrator ViewModel (the canvas surface moved to `pipeline/editor/`).
       - `OrchestratorUiState.kt` - Orchestrator UI state and `PromptPreviewState` / `PipelineRunState`.
-      - `OrchestratorViewModel.kt` - Orchestrator ViewModel. Owns graph mutation, persistence, validation, run-state placeholder, and the editor `focusNodeRequest` SharedFlow. Phase 24 / Task 3 adds `saveCurrentAsPreset` + `saveAsPresetFromLibrary` powered by `SavePipelineAsPresetUseCase`. Phase 24 / Task 4 adds `saveCurrentPromptAsPreset` powered by `SavePromptAsPresetUseCase` (UI surface lands in Task 5).
-      - `PipelineLibraryScreen.kt` - Library screen listing every saved pipeline. Phase 24 / Task 3 replaces the single FAB with `PipelineLibrarySpeedDial` (+ New / + From preset), wires `onBrowseTemplates` to `PresetPickerSheet`, and adds the `Save as preset` row overflow action.
+      - `OrchestratorViewModel.kt` - Orchestrator ViewModel. Owns graph mutation, persistence, validation, run-state placeholder, and the editor `focusNodeRequest` SharedFlow. Exposes `saveCurrentAsPreset` + `saveAsPresetFromLibrary` powered by `SavePipelineAsPresetUseCase`, and `saveCurrentPromptAsPreset` powered by `SavePromptAsPresetUseCase`.
+      - `PipelineLibraryScreen.kt` - Library screen listing every saved pipeline. Replaces the single FAB with `PipelineLibrarySpeedDial` (+ New / + From preset), wires `onBrowseTemplates` to `PresetPickerSheet`, and adds the `Save as preset` row overflow action.
       - `components/` - Orchestrator UI components.
         - `NodeContextConfigSection.kt` - "Input Data" section of the node configuration dialog: five checkboxes mapped to `NodeContextConfig` flags (with `nodeInput` rendered locked-on) plus a hint banner.
-        - `PromptPresetPickerDialog.kt` - App-side bottom-sheet wrapper around the catalog `PromptPresetPickerSheet` (Phase 24 / Task 5). Owns the screen-local state: tab selection, 200 ms debounced search, tag filter, currently-selected row, search-expanded toggle. Exposes `filterPresets`, `buildTagChips`, `estimateTokens` for unit tests. Replaces the legacy `PromptLibraryDialog`.
-        - `SavePromptAsPresetDialog.kt` - Name/description/tags dialog raised when the user taps the 💾 button on a prompt-bearing field in `NodeConfigSheet` (Phase 24 / Task 5). Validates against `PromptPresetConstants` (60-char name cap) and hands a `SavePromptAsPresetResult` back to the editor. Exposes `parsePromptPresetTags(...)` and `canSavePromptPreset(...)` for unit tests.
-      - `presets/` - Pipeline preset UI (Phase 24 / Task 3).
+        - `PromptPresetPickerDialog.kt` - App-side bottom-sheet wrapper around the catalog `PromptPresetPickerSheet`. Owns the screen-local state: tab selection, 200 ms debounced search, tag filter, currently-selected row, search-expanded toggle. Exposes `filterPresets`, `buildTagChips`, `estimateTokens` for unit tests. Replaces the legacy `PromptLibraryDialog`.
+        - `SavePromptAsPresetDialog.kt` - Name/description/tags dialog raised when the user taps the 💾 button on a prompt-bearing field in `NodeConfigSheet`. Validates against `PromptPresetConstants` (60-char name cap) and hands a `SavePromptAsPresetResult` back to the editor. Exposes `parsePromptPresetTags(...)` and `canSavePromptPreset(...)` for unit tests.
+      - `presets/` - Pipeline preset UI.
         - `PipelinePresetsViewModel.kt` - Hilt VM driving `PresetPickerSheet` and `PipelinePresetsManagerScreen`. Owns bundled/user catalogue flows, tab+chip selection, load-from-preset hand-off, rename/delete/export of user presets.
         - `PipelinePresetsUiState.kt` - UI state for the picker and manager (bundled/user lists, active tab, category chip, `pendingPipelineIdFromPreset` editor hand-off).
         - `PresetPickerSheet.kt` - `ModalBottomSheet` exposing the bundled/user catalogue as a tap-to-instantiate picker with category chips and a graph-flow preview per card.
@@ -356,7 +356,7 @@ This file maps the contents of the main application package.
         - `PipelineLibrarySpeedDial.kt` - Two-action speed-dial that replaces the catalog `PipelineLibraryFab` overlay (`+ New pipeline` / `+ From preset`).
         - `GraphFlowPreview.kt` - Pure-Kotlin helper rendering a one-line `INPUT → LITE_RT → OUTPUT` summary used in preset cards.
         - `PresetCategoryStyle.kt` - Theme-aware mapping from `PresetCategory` to its Knotwork accent colour + the shared `PresetCategoryBadge` chip used on every preset card.
-    - `pipeline/editor/` - Phase 21 / Task 9 — production pipeline editor (Phase 22 / Task 14 reshapes the toolbar + adds RunStatusBanner, ZoomRail, MiniMap, FilterBar, EmptyPipelineState, DotGridBackground, ValidationAutoFix, copy/paste, search, grid toggle).
+    - `pipeline/editor/` - Production pipeline editor — toolbar with RunStatusBanner, ZoomRail, MiniMap, FilterBar, EmptyPipelineState, DotGridBackground, ValidationAutoFix, copy/paste, search, grid toggle.
       - `PipelineEditorScreen.kt` - Stateful entry composable: subscribes to `OrchestratorViewModel` + `runState`, owns the screen-local `EditorState`, computes the toolbar subtitle / primary-action variant, hosts the overflow `DropdownMenu` (Undo / Redo / Rename… / Delete / Auto-layout / Mini-map / grid toggle / Find node… / Paste), the catalog `NodeConfigSheet`, the rename dialog, and the run-banner clock.
       - `PipelineEditorContent.kt` - Pure-layout content. Vertical stack of `EditorToolbar` (or `MultiSelectToolbar`) + `RunStatusBanner` + `EditorCanvas` + `ValidationBar`.
       - `config/NodeConfigCodec.kt` - JSON ↔ catalog `NodeConfig` codec + legacy-field derivation for pre-Phase-21 rows + `defaultFor(type, title)` factory.
@@ -377,29 +377,29 @@ This file maps the contents of the main application package.
       - `canvas/ZoomRail.kt` - Always-visible right-edge `+` / `−` / `⤡` (fit-to-view) tile stack.
       - `canvas/FilterBar.kt` - Top-edge `Find node…` bar (opened from overflow). Auto-focuses; submit centres on the first matching node and selects it.
       - `canvas/EmptyPipelineState.kt` - Empty-canvas hero: brand-mark tile + helper copy + `Start with INPUT` / `From template` CTAs + canvas-geometry info pill.
-      - `bars/ValidationBar.kt` - Bottom bar listing `PipelineValidationError`s. Phase 22 / Task 14 adds a header banner (issue count + `Auto-fix` action), per-row severity glyphs (`Blocker` / `Warning`), and a trailing `Go ↗` button that focuses the offending node when one exists.
+      - `bars/ValidationBar.kt` - Bottom bar listing `PipelineValidationError`s: a header banner (issue count + `Auto-fix` action), per-row severity glyphs (`Blocker` / `Warning`), and a trailing `Go ↗` button that focuses the offending node when one exists.
       - `bars/MultiSelectToolbar.kt` - Top bar that replaces `EditorToolbar` while multi-select is active; surfaces count + Cancel / Copy / Delete.
       - `sheet/NodeConfigSheetHost.kt` - Thin adapter exposing the catalog `NodeConfigSheet` (with all 12 per-type forms + validator) to the editor screen.
-    - `prompts/` - Prompt Library screen components. Phase 24 / Task 5 rewires the screen end-to-end onto the new `PromptPreset` catalogue (bundled + user) — the legacy `PromptTemplate` source is no longer consulted here.
+    - `prompts/` - Prompt Library screen components. The screen is wired end-to-end onto the new `PromptPreset` catalogue (bundled + user) — the legacy `PromptTemplate` source is no longer consulted here.
       - `PromptLibraryScreen.kt` - Slim mapper. Folds `PromptLibraryUiState` (bundled + user presets) into the catalog `PromptLibraryViewState`, hosts the editor `ModalBottomSheet` with `PromptEditorSheetBody`. Categories come from `PromptPresetConstants.LLM_DRIVEN_NODE_TYPES`.
       - `PromptLibraryUiState.kt` - Prompt library UI state. Carries `bundledPresets`, `userPresets`, `selectedCategory: String?`, `editorDraft: PromptEditorDraft?` (draft id is now `String`, with optional `description` + `tags` preserved on edit).
       - `PromptLibraryViewModel.kt` - Prompt library ViewModel. Injects `PromptPresetRepository` + `SavePromptAsPresetUseCase`. Exposes `selectCategory`, `openEditor(id?)`, `closeEditor`, per-field editor setters, `saveEditor` (upsert via `existingId`), `duplicatePrompt`, `deletePrompt` (bundled-aware no-op).
-    - `splash/` - Cold-start splash / loading screen (Phase 22 / Task 15 wired to the Knotwork `SplashContent` catalog surface).
+    - `splash/` - Cold-start splash / loading screen (wired to the Knotwork `SplashContent` catalog surface).
       - `SplashScreen.kt` - Slim mapper. Folds `SplashUiState` into `SplashViewState` (Initializing / Loading / Error) and renders `SplashContent`.
       - `SplashUiState.kt` - Render state of `SplashScreen` (message, progressFraction, isDone, errorMessage).
       - `SplashViewModel.kt` - Hilt ViewModel that subscribes to `AppInitializationUseCase`, folds each `InitProgress` into `SplashUiState`, and exposes `retry()` to re-run the pipeline after a fatal failure.
-    - `more/` - "More" tab landing screen (Phase 22 / Task 15 — Knotwork-converted, now stateful with live counters + footer privacy pill).
+    - `more/` - "More" tab landing screen (Knotwork-converted, now stateful with live counters + footer privacy pill).
       - `MoreScreen.kt` - Slim mapper. Subscribes to `MoreViewModel.uiState`, builds the `MoreViewState`, renders `MoreContent`.
       - `MoreUiState.kt` - Pre-formatted display strings for each row subtitle + the footer pill (memory chunks, active model, prompt categories, active task counts, network status, user-preset count for Library).
-      - `MoreViewModel.kt` - Aggregates the live counters from `MemoryRepository.observeStats`, `LocalModelRepository.getAllModels`, `PromptRepository.getAllPrompts`, `TaskQueueManager.activeSessionsState`, `NetworkActivityTracker.lastOutboundAt`, and `PipelinePresetRepository.getUserPresets` (Phase 24 / Task 3). Owns the pure-Kotlin formatters (`formatMemoryStats`, `formatPromptsStats`, `formatLibraryStats`, `formatNetworkStatus`).
-    - `settings/` - Settings screen components. Phase 22 / Task 9 redesigned the surface end-to-end: nine cards (identity / system instructions / restrictions / LLM parameters / local model / external providers / memory / notifications / privacy) drive the catalog `SettingsContent`.
+      - `MoreViewModel.kt` - Aggregates the live counters from `MemoryRepository.observeStats`, `LocalModelRepository.getAllModels`, `PromptRepository.getAllPrompts`, `TaskQueueManager.activeSessionsState`, `NetworkActivityTracker.lastOutboundAt`, and `PipelinePresetRepository.getUserPresets`. Owns the pure-Kotlin formatters (`formatMemoryStats`, `formatPromptsStats`, `formatLibraryStats`, `formatNetworkStatus`).
+    - `settings/` - Settings screen components, redesigned end-to-end: nine cards (identity / system instructions / restrictions / LLM parameters / local model / external providers / memory / notifications / privacy) drive the catalog `SettingsContent`.
       - `SettingsScreen.kt` - Slim mapper. Translates `SettingsUiState` into the catalog `SettingsViewState`, hosts the SAF launcher for memory export, the `ProcessPhoenix.triggerRebirth` restart hook, and the `SnackbarHost`.
       - `SettingsUiState.kt` - Per-card state slices (identity, system instructions + variable chip catalog, restrictions, LLM params, local model + active-model meta, providers, memory stats, notifications, privacy, restart-required flag, destructive-action staging).
       - `SettingsViewModel.kt` - Aggregates every preference + repository projection. Owns the restart-required baseline snapshot, the destructive typed-confirm gate (Clear memory / Reset settings), and the test-backend probe runner.
       - `provider/` - Standalone provider editor reached from the External providers nav-rows.
         - `ProviderDetailScreen.kt` - Hosts `KnotworkProviderRow` for the selected provider. Routes through `ProviderDetailViewModel` to `ApiKeyRepository`.
         - `ProviderPickerScreen.kt` - "+ Add provider" picker — full-screen list of the 5 known providers.
-    - `taskmonitor/` - Task monitoring screen (Phase 22 / Task 15 — Knotwork-converted; swipe-to-cancel + detail `ModalBottomSheet`).
+    - `taskmonitor/` - Task monitoring screen (Knotwork-converted; swipe-to-cancel + detail `ModalBottomSheet`).
       - `TaskMonitorScreen.kt` - Slim mapper. Folds `TaskMonitorState` into the catalog `TaskMonitorViewState` (filter chips + rows + optional `TaskMonitorDetail`), hosts the detail bottom sheet, wires `openDetails` / `closeDetails`.
       - `TaskMonitorState.kt` - Task monitor UI state. Adds `detailTaskId: String?` for the bottom-sheet host.
       - `TaskMonitorViewModel.kt` - Task monitor ViewModel. `openDetails` / `closeDetails` toggle the detail sheet via a private `_detailTaskId` flow combined into the unified state.

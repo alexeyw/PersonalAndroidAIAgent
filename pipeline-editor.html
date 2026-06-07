@@ -834,7 +834,7 @@
             outline-offset: 2px;
         }
 
-        /* ---- Pipeline preset library + save dialogs (Phase 24 / Task 7) ---- */
+        /* ---- Pipeline preset library + save dialogs ---- */
         dialog#preset-library,
         dialog#preset-save {
             border: 1px solid var(--border);
@@ -1102,7 +1102,7 @@
     </form>
 </dialog>
 
-<!-- Pipeline preset library (Phase 24 / Task 7): bundled catalogue + per-browser
+<!-- Pipeline preset library: bundled catalogue + per-browser
      "Mine" presets stored in localStorage. Load instantiates a preset onto the
      canvas; Export writes a `.preset.json`; Import adds a file to "Mine". -->
 <dialog id="preset-library">
@@ -1230,8 +1230,8 @@
     /**
      * Built-in prompt library exposed by the "📚 Prompts" popover in the
      * config dialog. Mirrors the bundled prompt-preset catalogue shipped in
-     * the Android APK under `assets/presets/prompts/*.json` (Phase 24 /
-     * Task 4) — one entry per bundled preset, keyed by `nodeType` so the
+     * the Android APK under `assets/presets/prompts/*.json` — one entry
+     * per bundled preset, keyed by `nodeType` so the
      * popover can offer only the presets relevant to the node being edited
      * (same per-NodeType filtering the Android Prompt Library applies).
      *
@@ -1534,7 +1534,7 @@
 
     /**
      * Bundled pipeline-preset catalogue surfaced by the "📚 Presets"
-     * modal (Phase 24 / Task 7). Each entry is a full preset document in
+     * modal. Each entry is a full preset document in
      * the `.preset.json` format owned by
      * `domain/pipelineio/PipelinePresetJsonSerializer.kt` — a strict
      * superset of the pipeline JSON with three extra top-level fields
@@ -1542,7 +1542,7 @@
      * copied verbatim from the Android APK assets under
      * `assets/presets/pipelines/*.json`.
      *
-     * KEEP IN SYNC with `assets/presets/pipelines/`. Phase 24 / Task 8
+     * KEEP IN SYNC with `assets/presets/pipelines/`. A later change
      * will replace this hand-maintained block with a gradle-generated
      * one (`generateBrowserEditorConstants`). See DESCRIPTION.md §8.2.
      */
@@ -5932,7 +5932,7 @@
     }
 
     /* ==================================================================== *
-     *  Pipeline presets (Phase 24 / Task 7)
+     *  Pipeline presets
      *
      *  A preset is a `.preset.json` document — a strict superset of the
      *  pipeline JSON owned by PipelineJsonSerializer, with three extra

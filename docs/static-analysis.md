@@ -142,7 +142,7 @@ deliberate batch of fixes:
 
 Plugin: `org.jetbrains.kotlinx.kover` `0.9.8`. Strict mode: a single
 aggregate rule enforces **≥ 75 % LINE coverage** over the unit-testable
-surface (raised from 70 % in Phase 23 / Task 9/9).
+surface (raised from 70 %).
 
 Kover 0.9.x does not support per-rule filters (that landed in 0.10+), so
 filtering is done globally via `reports.filters.excludes`. The excluded
@@ -154,13 +154,13 @@ class set covers:
 - Hilt DI modules (`app.knotwork.android.di.*`).
 - `App.kt` and `MainActivity` — Android-runtime-bound bootstrap.
 - All `*Screen` Composables and `presentation.ui.*.components.*`, plus the
-  Phase 23 sub-packages `presentation.ui.navigation.*`,
+  sub-packages `presentation.ui.navigation.*`,
   `presentation.ui.about.AboutScreen*` / `AboutAcknowledgments*`,
   `presentation.ui.more.MoreScreen*`, and
   `presentation.ui.settings.provider.{ProviderPickerScreen, ProviderDetailScreen}*`.
 - `presentation.theme/state.*` — declarative Compose constants.
 - `data.tools.local.*` Android-runtime glue (AppFunctions service, search HTTP,
-  delegate-task), including the Phase 23 sub-package
+  delegate-task), including the sub-package
   `data.tools.local.appfunctions.*`.
 - `data.local.dao.*` interfaces (impls are auto-excluded via the `*_Impl` pattern).
 - `data.logging.CrashlyticsTimberTree*` — Firebase Crashlytics Timber bridge.

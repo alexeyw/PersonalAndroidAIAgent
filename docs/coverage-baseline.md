@@ -4,12 +4,12 @@ Living record of the project's unit-test LINE coverage and the gate
 configuration that backs it. Updated at the end of each phase that touches
 coverage materially.
 
-## Snapshot — Phase 23 / Task 9/9 (current)
+## Snapshot — 2026-05-26 (current)
 
 | Field        | Value                                                          |
 |--------------|----------------------------------------------------------------|
 | Date         | 2026-05-26                                                     |
-| Branch base  | `phase/23` (closing the phase)                                 |
+| Branch base  | integration branch at the 2026-05-26 refresh                   |
 | Kover        | 0.9.8 (latest on the Gradle Plugin Portal)                     |
 | Variant      | `debug` (Android default unit-test variant)                    |
 | Test command | `./gradlew :app:testDebugUnitTest`                             |
@@ -18,23 +18,23 @@ coverage materially.
 `./gradlew :app:koverLog` headline figure: **`application line coverage: 77.62 %`**
 (5 968 / 7 689 lines after exclusions).
 
-> **Phase 26 / Task 4/10 refresh (2026-06-02):** aggregate LINE is now
+> **Coverage refresh (2026-06-02):** aggregate LINE is now
 > **79.05 %** (7 816 / 9 888 lines after exclusions) — the line total grew with
-> the Phase 24/25 feature work, and Task 4 closed the `presentation.ui.more`
+> later feature work, and the refresh closed the `presentation.ui.more`
 > (→ 100 %) and `presentation.ui.settings.provider` (→ 100 %) gaps and raised
 > `presentation.ui.prompts` to 67.9 %. The three rows below carry an
-> `↑ Phase 26 / Task 4` note; the remaining per-package figures are still the
-> Phase-23 measurement and will be re-measured wholesale at the next coverage
-> task.
+> `↑ 2026-06-02` note; the remaining per-package figures are still the
+> earlier measurement and will be re-measured wholesale at the next coverage
+> refresh.
 
 ### Historical snapshots
 
-| Phase / Task            | Date       | Aggregate LINE | Gate  |
+| Milestone               | Date       | Aggregate LINE | Gate  |
 |-------------------------|------------|----------------|-------|
-| Phase 18 / Task 2/10    | 2026-05-10 | 45.3 % (raw, no exclusions yet) | — (measurement only) |
-| Phase 18 / Task 9-10    | 2026-05-?? | ~80 % (with exclusions, claimed) | 70 % |
-| Phase 23 / Task 9/9     | 2026-05-26 | 77.6 % (after extending exclusions for nav/about/more/provider screens + AppFunctions glue) | **75 %** |
-| Phase 26 / Task 4/10    | 2026-06-02 | 79.05 % (closed `MoreViewModel` / `ProviderDetailViewModel` gaps) | **75 %** |
+| Initial measurement     | 2026-05-10 | 45.3 % (raw, no exclusions yet) | — (measurement only) |
+| First exclusions        | 2026-05-?? | ~80 % (with exclusions, claimed) | 70 % |
+| Gate raised to 75 %     | 2026-05-26 | 77.6 % (after extending exclusions for nav/about/more/provider screens + AppFunctions glue) | **75 %** |
+| ViewModel gaps closed   | 2026-06-02 | 79.05 % (closed `MoreViewModel` / `ProviderDetailViewModel` gaps) | **75 %** |
 
 ## Per-package LINE coverage (post-exclusions)
 
@@ -76,7 +76,7 @@ package — not a meaningful target (`n/a`).
 | `data.tools.local`            | 74.53 %  | 199 / 267       | ≥ 70 %  |
 | `data.tools.local.executors`  | 100.00 % | 21 / 21         | ≥ 95 %  |
 
-`data.services` jumped from 44 % to 99 % during Phase 23 / Task 4/9 when
+`data.services` jumped from 44 % to 99 % when
 Robolectric coverage of `AgentForegroundService`, `AgentWorker`,
 `AgentIdleManager`, `AgentPowerManager`, and `LongRunningTaskNotifierImpl`
 landed; the previous `data.services.*` exclusion was lifted in that task
@@ -93,21 +93,21 @@ and remains lifted.
 | `presentation.ui.memory`                      | 92.86 %  | 52 / 56         | ≥ 85 %  |
 | `presentation.ui.models`                      | 82.14 %  | 92 / 112        | ≥ 75 %  |
 | `presentation.ui.monitoring`                  | 100.00 % | 30 / 30         | ≥ 95 %  |
-| `presentation.ui.more`                        | 100.00 % | 80 / 80         | ↑ Phase 26 / Task 4 — `MoreViewModelTest` closes the gap |
+| `presentation.ui.more`                        | 100.00 % | 80 / 80         | ↑ `MoreViewModelTest` closes the gap |
 | `presentation.ui.onboarding`                  | 86.61 %  | 110 / 127       | ≥ 80 %  |
 | `presentation.ui.orchestrator`                | 85.03 %  | 335 / 394       | ≥ 80 %  |
-| `presentation.ui.pipeline.editor.config`      | 52.40 %  | 175 / 334       | known gap — `NodeConfigCodec` round-trip tests (Phase 24 follow-up) |
+| `presentation.ui.pipeline.editor.config`      | 52.40 %  | 175 / 334       | known gap — `NodeConfigCodec` round-trip tests (follow-up) |
 | `presentation.ui.pipeline.editor.core`        | 85.16 %  | 310 / 364       | ≥ 80 %  |
-| `presentation.ui.prompts`                     | 67.91 %  | 91 / 134        | ↑ Phase 26 / Task 4 — the baseline's `PromptVariablesViewModel` no longer exists; the surface is `PromptLibraryViewModel` (covered). Residual gap is the `toViewState` mapper. |
+| `presentation.ui.prompts`                     | 67.91 %  | 91 / 134        | ↑ the baseline's `PromptVariablesViewModel` no longer exists; the surface is `PromptLibraryViewModel` (covered). Residual gap is the `toViewState` mapper. |
 | `presentation.ui.settings`                    | 88.89 %  | 256 / 288       | ≥ 80 %  |
-| `presentation.ui.settings.provider`           | 100.00 % | 83 / 83         | ↑ Phase 26 / Task 4 — `ProviderDetailViewModelTest` closes the gap |
+| `presentation.ui.settings.provider`           | 100.00 % | 83 / 83         | ↑ `ProviderDetailViewModelTest` closes the gap |
 | `presentation.ui.splash`                      | 97.30 %  | 36 / 37         | ≥ 90 %  |
 | `presentation.ui.taskmonitor`                 | 90.91 %  | 100 / 110       | ≥ 85 %  |
 | `presentation.ui.tools`                       | 92.34 %  | 205 / 222       | ≥ 85 %  |
 
 The 0 % / sub-50 % rows above are **testable** code (ViewModel + UiState
 classes) that simply lacks coverage today. They are not excluded from the
-gate — they pull the aggregate down — and are tracked as Phase 24 follow-up
+gate — they pull the aggregate down — and are tracked as follow-up
 items rather than being silently filtered. The "Target" column is
 **informational**: with Kover 0.9.x the build only enforces the global 75 %
 aggregate; per-package floors will be promoted to enforced rules when Kover
@@ -153,20 +153,20 @@ Each is justified below.
 | `app.knotwork.android.presentation.ui.*Screen*`       | Top-level Compose screen files (project convention: `*Screen.kt`).        |
 | `app.knotwork.android.presentation.ui.components.*`   | Reusable Compose components used by multiple screens.                     |
 | `app.knotwork.android.presentation.ui.orchestrator.components.*` | Sub-package of orchestrator Compose components.                |
-| `app.knotwork.android.presentation.ui.chat.legacy.*` (selected) | Phase 21 / Task 8 — legacy chat surface kept until orchestrator rewire.|
+| `app.knotwork.android.presentation.ui.chat.legacy.*` (selected) | Legacy chat surface kept until orchestrator rewire.|
 | `app.knotwork.android.presentation.ui.chat.home.ChatHomeScreen*`, `ChatHomeDebugStatePicker*`, `DebugStateRows*` | Compose surfaces of the redesigned chat home. |
-| `app.knotwork.android.presentation.ui.pipeline.editor.canvas.*` | Phase 21 / Task 9 — gesture / animation / Bezier draw layer.       |
+| `app.knotwork.android.presentation.ui.pipeline.editor.canvas.*` | Gesture / animation / Bezier draw layer.       |
 | `app.knotwork.android.presentation.ui.pipeline.editor.bars.*`   | Editor top / bottom bars (Compose).                                  |
 | `app.knotwork.android.presentation.ui.pipeline.editor.sheet.*`  | Editor bottom sheets (Compose).                                      |
 | `app.knotwork.android.presentation.ui.pipeline.editor.PipelineEditorContent*`, `PipelineEditorScreen*` | Pipeline editor host Composables.        |
 | `app.knotwork.android.presentation.ui.splash.SplashScreen*`     | Splash Composable.                                                   |
 | `app.knotwork.android.presentation.theme.*`           | Material 3 colour / typography constants. Pure declarative data.         |
 | `app.knotwork.android.presentation.state.*`           | Tiny constant-only state types historically used by Compose code.        |
-| `app.knotwork.android.presentation.ui.navigation.*`   | **New in Phase 23 / Task 9/9.** `AppShellScaffold`, `AppNavGraph`, `TabDestination`, `BottomNavVisibility`, `KnotworkModalRoute`, `NavRoutes` — bottom-nav shell + nav-graph wiring. Pure UI / nav glue; route constants unreachable in JVM tests. |
-| `app.knotwork.android.presentation.ui.about.AboutScreen*`, `AboutAcknowledgments*` | **New in Phase 23 / Task 9/9.** Single-file Compose About surface plus its private declarative acknowledgments list. |
-| `app.knotwork.android.presentation.ui.more.MoreScreen*` | **New in Phase 23 / Task 9/9.** Bottom-nav More hub Composable. The sibling `MoreViewModel` / `MoreUiState` remain inside the gate. |
-| `app.knotwork.android.presentation.ui.settings.provider.ProviderPickerScreen*`, `ProviderDetailScreen*` | **New in Phase 23 / Task 9/9.** Provider picker and per-provider configuration screens — covered by the catalog Roborazzi snapshots, not JVM unit tests. |
-| `app.knotwork.android.data.tools.local.appfunctions.*` | **New in Phase 23 / Task 9/9.** AppFunctions callee wrapper (`SearchAppFunction`); the platform `PlatformAppFunctionService` host needs the Android runtime to dispatch. |
+| `app.knotwork.android.presentation.ui.navigation.*`   | **New.** `AppShellScaffold`, `AppNavGraph`, `TabDestination`, `BottomNavVisibility`, `KnotworkModalRoute`, `NavRoutes` — bottom-nav shell + nav-graph wiring. Pure UI / nav glue; route constants unreachable in JVM tests. |
+| `app.knotwork.android.presentation.ui.about.AboutScreen*`, `AboutAcknowledgments*` | **New.** Single-file Compose About surface plus its private declarative acknowledgments list. |
+| `app.knotwork.android.presentation.ui.more.MoreScreen*` | **New.** Bottom-nav More hub Composable. The sibling `MoreViewModel` / `MoreUiState` remain inside the gate. |
+| `app.knotwork.android.presentation.ui.settings.provider.ProviderPickerScreen*`, `ProviderDetailScreen*` | **New.** Provider picker and per-provider configuration screens — covered by the catalog Roborazzi snapshots, not JVM unit tests. |
+| `app.knotwork.android.data.tools.local.appfunctions.*` | **New.** AppFunctions callee wrapper (`SearchAppFunction`); the platform `PlatformAppFunctionService` host needs the Android runtime to dispatch. |
 | `app.knotwork.android.data.tools.local.AgentAppFunctionService*`, `LocalAppFunctionManager`, `SearchTool*`, `DelegateTaskTool*` | Tool-execution Android glue (live HTTP / LLM bridge).                    |
 | `app.knotwork.android.data.logging.CrashlyticsTimberTree*` | Firebase Crashlytics Timber bridge; `getInstance()` paths need Google Play services on Android. |
 
@@ -216,7 +216,7 @@ which is unnecessary for this single-variant project.
 This PR does **not** add a `.github/workflows/coverage.yml` job that publishes
 the HTML report as a PR artefact. The PAT used for the current Git remote
 lacks the `workflow` scope required to push files into `.github/workflows/`,
-so the same constraint that blocked Task 1/10's CI workflow applies here.
+so the same constraint that blocked the CI workflow applies here.
 
 The eventual workflow should:
 
@@ -243,8 +243,8 @@ blocked on it.
 ## Enforced threshold (current)
 
 `koverVerifyDebug` fails the build when aggregate LINE coverage over the
-unit-testable surface drops below **75 %** (raised from 70 % in Phase 23 /
-Task 9/9). Today's measurement is **77.6 %**, giving the gate ~2.6 pp of
+unit-testable surface drops below **75 %** (raised from 70 %).
+Today's measurement is **77.6 %**, giving the gate ~2.6 pp of
 headroom against silent regression.
 
 Kover 0.9.x has no rule-level `filters { ... }` block — that DSL element is
@@ -254,9 +254,9 @@ application-wide rule operating over the globally-filtered class set in
 The per-package floors in the tables above are **informational targets**;
 promote them to enforced rules once Kover 0.10 ships.
 
-Phase 23 / Task 9/9 also added several Compose-surface / Android-runtime
-exclusions that fell through the existing wildcards because they live in
-new sub-packages introduced during this phase:
+Several Compose-surface / Android-runtime exclusions were also added that
+fell through the existing wildcards because they live in newly introduced
+sub-packages:
 `presentation.ui.navigation.*`, `presentation.ui.about.AboutScreen*` (+ its
 private `AboutAcknowledgments` data list), `presentation.ui.more.MoreScreen*`,
 `presentation.ui.settings.provider.{ProviderPickerScreen, ProviderDetailScreen}*`,
