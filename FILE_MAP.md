@@ -13,7 +13,7 @@
 - `.kotlin/` - Kotlin compiler working cache directory.
 - `app/` - The main Android application module containing the UI and business logic.
 - `catalog/` - Knotwork design-system Android library module. Hosts `KnotworkTheme`, design tokens, atomic components, and catalog preview pages. Consumed by `:app` as an `implementation` dependency; depends on nothing else in the project. See `catalog/FILE_MAP.md`.
-- `tools-probe/` - Debug-only companion Android module shipping a single `@AppFunction echo(message)` plus a one-button launcher activity. Provides a deterministic remote target for the Phase 20 `AppFunctionsEndToEndTest` (installed automatically as a prerequisite of the agent's instrumented tests) and a manual smoke for the agent's callee-side `search_tool` surface on the reference device.
+- `tools-probe/` - Debug-only companion Android module shipping a single `@AppFunction echo(message)` plus a one-button launcher activity. Provides a deterministic remote target for the `AppFunctionsEndToEndTest` (installed automatically as a prerequisite of the agent's instrumented tests) and a manual smoke for the agent's callee-side `search_tool` surface on the reference device.
 - `build/` - Root build output directory for the project.
 - `config/detekt/` - Detekt static-analysis rule configuration (`detekt.yml`).
 - `docs/` - Project documentation (architecture, user guide, extending, code style, testing, API conventions, static analysis, coverage baseline).

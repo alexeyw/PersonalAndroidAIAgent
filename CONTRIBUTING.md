@@ -115,7 +115,7 @@ Before requesting review, please confirm:
 - [ ] Public documentation is updated where the change affects user-
       facing behaviour, the public API surface, or the build / dev setup.
 - [ ] `FILE_MAP.md` (the file map under
-      `app/src/main/java/ai/agent/android/`, and the root one for
+      `app/src/main/java/app/knotwork/android/`, and the root one for
       top-level changes) is updated when files or directories are added,
       moved, or removed.
 - [ ] The PR description summarises **what** changed, **why** it changed,

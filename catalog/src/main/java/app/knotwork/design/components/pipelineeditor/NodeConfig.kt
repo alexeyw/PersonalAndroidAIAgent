@@ -26,7 +26,7 @@ enum class OutputFormat { PLAIN_TEXT, MARKDOWN, JSON }
  * One installed local model the user can pick in the LiteRt config sheet. Defined here
  * (catalog side) as a plain pair of id / display name plus an `isActive` flag so the
  * design module does not depend on the `:app` `LocalModel` Room entity. The screen
- * maps `ai.agent.android.domain.models.LocalModel` to this type at the sheet boundary.
+ * maps `app.knotwork.android.domain.models.LocalModel` to this type at the sheet boundary.
  *
  * @property id canonical model identifier — typically the model file path. This is the
  * value written back into [LiteRtConfig.modelId] when the user picks the model.

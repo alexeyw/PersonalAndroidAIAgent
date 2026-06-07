@@ -55,7 +55,7 @@ project — `:app` consumes it as an `implementation` dependency.
   - `imagevector/` — one file per custom `ImageVector` (brand mark,
     wordmark, flow, 12 node glyphs, auto-layout, brain).
 - `src/main/java/app/knotwork/design/components/` — atomic components
-  (Phase 21 / Task 5/11).
+ .
   - `ComponentsCatalogPage.kt` — single-scroll page composing every
     component category (Buttons, Chips & pills, List rows, Misc, Chat,
     Console).
@@ -116,7 +116,7 @@ project — `:app` consumes it as an `implementation` dependency.
   - `misc/` — `KnotworkLoader` / `KnotworkSnackbar` / `EmptyState` /
     `StripedPlaceholder` / `KnotworkSectionAction` (right-aligned action
     link) / `KnotworkStatCell` (counter grid cell) + previews.
-  - `chat/` — chat-surface components (Phase 21 / Task 6/11).
+  - `chat/` — chat-surface components.
     - `ChatRole.kt` — `User | Assistant | System | Tool` enum.
     - `ChatMetadata.kt` — `ChatMetadata` data class + `ChatMessageStatus`
       enum driving the trailing footer glyph.
@@ -143,7 +143,7 @@ project — `:app` consumes it as an `implementation` dependency.
       Error` state machine and send ↔ stop morph.
     - `ChatCatalogContent.kt` — single-column harness covering every
       chat variant + theme previews (used by the Roborazzi baseline).
-  - `console/` — agent console components (Phase 21 / Task 6/11).
+  - `console/` — agent console components.
     - `ConsoleModels.kt` — `ConsoleSnap`, `ConsoleTab`, `ConsoleSource`,
       `ConsoleLevel`, `ConsoleFilter`, `ConsoleLine`, `ConsoleVarRow`,
       `ConsoleTraceSpan`, `SpanStatus`.
@@ -151,7 +151,7 @@ project — `:app` consumes it as an `implementation` dependency.
       three tabs, source-filter chips, and per-tab body.
     - `ConsoleCatalogContent.kt` — single-column harness covering each
       snap × tab combination + theme previews.
-  - `pipelineeditor/` — pipeline-editor base components (Phase 21).
+  - `pipelineeditor/` — pipeline-editor base components.
     - `NodeType.kt` — enum of the 12 editor node types (Input, Output,
       LiteRT, Cloud, IntentRouter, IfCondition, Clarification, Tool,
       Decomposition, QueueProcessor, Evaluation, Summary).
@@ -195,7 +195,7 @@ project — `:app` consumes it as an `implementation` dependency.
     the page in both themes.
 - `src/main/java/app/knotwork/design/screens/` — screen-level catalog
   surfaces (`*Content` composables + `*ViewState` render contracts)
-  consumed by `:app`'s slim mapper screens (Phase 22).
+  consumed by `:app`'s slim mapper screens.
   - `about/`
     - `AboutContent.kt` — hero brand mark + version / license /
       acknowledgments / privacy cards in a scrollable `LazyColumn`.

@@ -27,7 +27,7 @@ enum class SettingsVisualState {
 
 /**
  * Approve-tool-calls segmented control state — mirrors
- * [ai.agent.android.domain.models.ToolApprovalPolicy] but stays free of
+ * [app.knotwork.android.domain.models.ToolApprovalPolicy] but stays free of
  * domain imports so the catalog module keeps its zero-app dependency.
  */
 enum class ApproveToolCallsOption {
@@ -134,7 +134,7 @@ data class LlmParametersCardState(val sliders: List<LlmParameterSlider>)
  * @property backendOptions Available backend dropdown options.
  * @property selectedBackend Currently selected backend key.
  * @property testProbeText Subtitle for the Test backend row. The screen
- *   formats the [ai.agent.android.domain.models.TestProbeResult] before
+ *   formats the [app.knotwork.android.domain.models.TestProbeResult] before
  *   passing it down so the catalog stays format-agnostic.
  * @property testProbeIsError `true` when the last probe failed — drives
  *   the error tint on the subtitle.

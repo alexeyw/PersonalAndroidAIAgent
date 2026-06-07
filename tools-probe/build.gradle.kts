@@ -18,13 +18,13 @@ ksp {
 }
 
 android {
-    namespace = "ai.agent.android.toolsprobe"
+    namespace = "app.knotwork.android.toolsprobe"
     compileSdk {
         version = release(37)
     }
 
     defaultConfig {
-        applicationId = "ai.agent.android.toolsprobe"
+        applicationId = "app.knotwork.android.toolsprobe"
         minSdk = 36
         targetSdk = 37
         versionCode = 1

@@ -834,7 +834,7 @@
             outline-offset: 2px;
         }
 
-        /* ---- Pipeline preset library + save dialogs (Phase 24 / Task 7) ---- */
+        /* ---- Pipeline preset library + save dialogs ---- */
         dialog#preset-library,
         dialog#preset-save {
             border: 1px solid var(--border);
@@ -1102,7 +1102,7 @@
     </form>
 </dialog>
 
-<!-- Pipeline preset library (Phase 24 / Task 7): bundled catalogue + per-browser
+<!-- Pipeline preset library: bundled catalogue + per-browser
      "Mine" presets stored in localStorage. Load instantiates a preset onto the
      canvas; Export writes a `.preset.json`; Import adds a file to "Mine". -->
 <dialog id="preset-library">
@@ -1163,7 +1163,7 @@
 
     /* -------------------------------------------------------------------- *
      *  Node type catalogue
-     *  Mirrors ai.agent.android.domain.models.NodeType and the colour
+     *  Mirrors app.knotwork.android.domain.models.NodeType and the colour
      *  palette used in DraggableNode.kt. Inputs/outputs match the runtime
      *  shape: INPUT 0/1, OUTPUT 1/0, IF_CONDITION & QUEUE_PROCESSOR 1/2,
      *  everything else 1/1.
@@ -1188,7 +1188,7 @@
 
     /* -------------------------------------------------------------------- *
      *  Default system prompts — port of
-     *  ai.agent.android.domain.constants.DefaultPrompts.
+     *  app.knotwork.android.domain.constants.DefaultPrompts.
      *
      *  KEEP IN SYNC with the Android source. When DefaultPrompts changes
      *  (new node type, edited prompt) the corresponding entry here must
@@ -1230,8 +1230,8 @@
     /**
      * Built-in prompt library exposed by the "📚 Prompts" popover in the
      * config dialog. Mirrors the bundled prompt-preset catalogue shipped in
-     * the Android APK under `assets/presets/prompts/*.json` (Phase 24 /
-     * Task 4) — one entry per bundled preset, keyed by `nodeType` so the
+     * the Android APK under `assets/presets/prompts/*.json` — one entry
+     * per bundled preset, keyed by `nodeType` so the
      * popover can offer only the presets relevant to the node being edited
      * (same per-NodeType filtering the Android Prompt Library applies).
      *
@@ -1534,7 +1534,7 @@
 
     /**
      * Bundled pipeline-preset catalogue surfaced by the "📚 Presets"
-     * modal (Phase 24 / Task 7). Each entry is a full preset document in
+     * modal. Each entry is a full preset document in
      * the `.preset.json` format owned by
      * `domain/pipelineio/PipelinePresetJsonSerializer.kt` — a strict
      * superset of the pipeline JSON with three extra top-level fields
@@ -1542,7 +1542,7 @@
      * copied verbatim from the Android APK assets under
      * `assets/presets/pipelines/*.json`.
      *
-     * KEEP IN SYNC with `assets/presets/pipelines/`. Phase 24 / Task 8
+     * KEEP IN SYNC with `assets/presets/pipelines/`. A later change
      * will replace this hand-maintained block with a gradle-generated
      * one (`generateBrowserEditorConstants`). See DESCRIPTION.md §8.2.
      */
@@ -3419,7 +3419,7 @@
 
     /* -------------------------------------------------------------------- *
      *  Cloud providers and tool registry
-     *  Provider list mirrors ai.agent.android.domain.models.CloudProvider
+     *  Provider list mirrors app.knotwork.android.domain.models.CloudProvider
      *  (openai / anthropic / google / deepseek / ollama) plus the `auto`
      *  UI sentinel (CloudProvider.AUTO_KEY). KEEP IN SYNC with that enum.
      *
@@ -5932,7 +5932,7 @@
     }
 
     /* ==================================================================== *
-     *  Pipeline presets (Phase 24 / Task 7)
+     *  Pipeline presets
      *
      *  A preset is a `.preset.json` document — a strict superset of the
      *  pipeline JSON owned by PipelineJsonSerializer, with three extra
@@ -5944,7 +5944,7 @@
     const PIPELINE_PRESETS_STORAGE_KEY = 'pipeline-editor-pipeline-presets';
 
     /**
-     * Preset categories — mirror ai.agent.android.domain.models.PresetCategory
+     * Preset categories — mirror app.knotwork.android.domain.models.PresetCategory
      * (key = lower-case enum name). KEEP IN SYNC. See DESCRIPTION.md §8.2.
      */
     const PRESET_CATEGORIES = [

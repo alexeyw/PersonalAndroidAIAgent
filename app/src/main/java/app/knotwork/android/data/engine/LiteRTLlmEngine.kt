@@ -1,0 +1,284 @@
+package app.knotwork.android.data.engine
+
+import android.content.ComponentCallbacks2
+import android.content.Context
+import android.content.res.Configuration
+import app.knotwork.android.domain.engine.LlmInferenceEngine
+import app.knotwork.android.domain.models.AppError
+import app.knotwork.android.domain.models.LocalBackend
+import app.knotwork.android.domain.models.Result
+import app.knotwork.android.domain.repositories.SettingsRepository
+import com.google.ai.edge.litertlm.Backend
+import com.google.ai.edge.litertlm.Content
+import com.google.ai.edge.litertlm.Conversation
+import com.google.ai.edge.litertlm.Engine
+import com.google.ai.edge.litertlm.EngineConfig
+import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
+import timber.log.Timber
+import java.io.File
+import javax.inject.Inject
+import javax.inject.Singleton
+
+/**
+ * An implementation of [LlmInferenceEngine] using the specialized LiteRT-LM library.
+ *
+ * This engine manages the lifecycle of the LiteRT-LM [Engine], which is optimized
+ * specifically for Large Language Models (LLMs) on edge devices.
+ */
+@Singleton
+class LiteRTLlmEngine @Inject constructor(
+    @ApplicationContext private val context: Context,
+    private val settingsRepository: SettingsRepository,
+) : LlmInferenceEngine,
+    ComponentCallbacks2 {
+
+    private var engine: Engine? = null
+    private var conversation: Conversation? = null
+    private var _currentModelPath: String? = null
+
+    /**
+     * Serialises every [generateResponseStream] call. LiteRT-LM allows only
+     * one active [Conversation], and each generation tears the previous
+     * conversation down before opening a fresh one — so two overlapping
+     * generations (e.g. a foreground pipeline and a background memory-extraction
+     * pass) would corrupt each other's session and can crash the native layer.
+     * Holding this mutex for the whole stream guarantees one generation runs to
+     * completion (or is cancelled) before the next acquires the conversation.
+     */
+    private val generationMutex = Mutex()
+
+    /**
+     * Indicates whether the engine has been successfully initialized and is ready for use.
+     */
+    override val isInitialized: Boolean get() = engine != null
+
+    /**
+     * Returns the file path of the currently loaded model, or null if no model is loaded.
+     */
+    override val currentModelPath: String? get() = _currentModelPath
+
+    init {
+        context.registerComponentCallbacks(this)
+    }
+
+    /**
+     * Internal error mapping implementation for system/unknown errors.
+     */
+    private object LlmSystemError : AppError.System
+
+    /**
+     * Initializes the LiteRT-LM engine by configuring its options with the
+     * specified model path.
+     *
+     * @param modelPath The exact path to the locally downloaded model file.
+     * @return [Result.Success] on successful initialization, or [Result.Error] on failure.
+     */
+    override suspend fun initialize(modelPath: String): Result<Unit, AppError> = withContext(Dispatchers.IO) {
+        try {
+            val file = File(modelPath)
+            if (!file.exists()) {
+                val errorMsg = "Model file does not exist at path: $modelPath"
+                Timber.e(errorMsg)
+                _currentModelPath = null
+                return@withContext Result.Error(
+                    error = LlmSystemError,
+                    message = errorMsg,
+                )
+            }
+
+            // Close existing engine if present to release previous resources
+            unload()
+
+            val maxTokens = settingsRepository.maxContextLength.first()
+            val configuredKey = settingsRepository.localModelBackend.first()
+            val configured = LocalBackend.fromKey(configuredKey) ?: LocalBackend.CPU
+
+            // Crash-recovery: if the previous attempt crashed the process
+            // mid-init with this exact backend (sentinel still set), force
+            // CPU and reset the persisted backend so subsequent restarts
+            // are stable. The native LiteRT dispatch failure ("No dispatch
+            // library found …" for GPU / NPU on devices that don't ship
+            // one) can SIGABRT before Kotlin try/catch fires, so we have
+            // to gate the attempt before it starts.
+            val previousAttempt = settingsRepository.lastInitBackendAttempt.first()
+            val resolved = if (
+                configured != LocalBackend.CPU &&
+                previousAttempt == configured.key
+            ) {
+                Timber.w(
+                    "LiteRT backend '%s' crashed during previous init — falling back to CPU.",
+                    configured.key,
+                )
+                settingsRepository.setLocalModelBackend(LocalBackend.CPU.key)
+                settingsRepository.setLastInitBackendAttempt(null)
+                LocalBackend.CPU
+            } else {
+                configured
+            }
+
+            // Drop the breadcrumb before invoking the native engine.
+            // Cleared after a successful init (and after the recovery
+            // path above forces CPU). CPU is intentionally not gated:
+            // the CPU backend ships in-process and cannot fail to find
+            // its dispatch library.
+            if (resolved != LocalBackend.CPU) {
+                settingsRepository.setLastInitBackendAttempt(resolved.key)
+            } else {
+                settingsRepository.setLastInitBackendAttempt(null)
+            }
+
+            val backend = when (resolved) {
+                LocalBackend.GPU -> Backend.GPU()
+                LocalBackend.NPU -> Backend.NPU()
+                LocalBackend.CPU -> Backend.CPU()
+            }
+
+            // Initialize Engine Configuration
+            val config = EngineConfig(
+                modelPath = modelPath,
+                backend = backend,
+                visionBackend = null,
+                audioBackend = null,
+                maxNumTokens = maxTokens,
+                cacheDir = context.cacheDir.absolutePath,
+            )
+
+            // Create Engine from config and initialize
+            engine = Engine(config).apply {
+                initialize()
+            }
+            _currentModelPath = modelPath
+            // Init succeeded — clear the crash-recovery breadcrumb so the
+            // next launch trusts the persisted backend.
+            settingsRepository.setLastInitBackendAttempt(null)
+            Timber.i("LiteRT-LM Engine successfully initialized with $modelPath")
+
+            Result.Success(Unit)
+        } catch (e: Throwable) {
+            // Catch `Throwable` (not just `Exception`) so JVM-side
+            // `Error`s thrown by the LiteRT JNI layer (e.g.
+            // `UnsatisfiedLinkError`, `AssertionError`) also land here
+            // instead of escaping to the default uncaught-exception
+            // handler and killing the process. The crash-recovery
+            // breadcrumb stays set on disk so the next cold-start
+            // auto-falls back to CPU.
+            Timber.e(e, "Failed to initialize LiteRTLlmEngine")
+            _currentModelPath = null
+            if (e is CancellationException) throw e
+            Result.Error(
+                error = LlmSystemError,
+                message = e.localizedMessage ?: "Unknown initialization error",
+                throwable = e,
+            )
+        }
+    }
+
+    /**
+     * Generates a response stream from the LLM based on the provided prompt.
+     *
+     * @param prompt The input text prompt for the LLM.
+     * @return A [Flow] of strings representing the generated tokens as they are produced.
+     */
+    override fun generateResponseStream(prompt: String): Flow<String> = flow {
+        val currentEngine = engine
+        if (currentEngine == null) {
+            Timber.e("Engine is not initialized")
+            throw IllegalStateException("LLM Engine not initialized")
+        }
+
+        try {
+            Timber.d("Starting inference for prompt: %s", prompt)
+
+            // Serialise the whole generation: closing/recreating the single
+            // conversation and streaming its tokens must not interleave with
+            // another concurrent generation (foreground pipeline vs background
+            // memory extraction), which would tear down an in-flight session.
+            generationMutex.withLock {
+                // LiteRT-LM allows only one active session. Since the Orchestrator manually
+                // supplies the full history context every time, we must close the old conversation
+                // and create a fresh one to prevent token accumulation and OOM crashes.
+                conversation?.close()
+                conversation = currentEngine.createConversation()
+
+                // Stream the tokens directly from the LiteRT-LM conversation
+                conversation?.let { conversation ->
+                    conversation.sendMessageAsync(prompt).collect { chunk ->
+                        val textParts = chunk.contents.contents.filterIsInstance<Content.Text>()
+                        val text = textParts.joinToString("") { it.text }
+                        if (text.isNotEmpty()) {
+                            emit(text)
+                        }
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            Timber.e(e, "Error during text generation")
+            throw e
+        }
+    }.flowOn(Dispatchers.IO)
+
+    /**
+     * Unloads the engine from memory, releasing heavy resources.
+     */
+    override fun unload() {
+        try {
+            conversation?.close()
+            engine?.close()
+            Timber.i("LiteRT-LM engine unloaded successfully")
+        } catch (e: Exception) {
+            Timber.e(e, "Error unloading LiteRT-LM engine")
+        } finally {
+            conversation = null
+            engine = null
+            _currentModelPath = null
+        }
+    }
+
+    /**
+     * Closes the engine and removes the callbacks to prevent leaks.
+     */
+    override fun close() {
+        unload()
+        context.unregisterComponentCallbacks(this)
+    }
+
+    /**
+     * Called by the system when the device configuration changes while your component is running.
+     *
+     * @param newConfig The new device configuration.
+     */
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        // No action needed
+    }
+
+    /**
+     * This is called when the overall system is running low on memory, and actively running processes should trim their memory usage.
+     * Unloads the engine to free up resources.
+     */
+    override fun onLowMemory() {
+        Timber.w("onLowMemory called, unloading engine")
+        unload()
+    }
+
+    /**
+     * Called when the operating system has determined that it is a good time for a process to trim unneeded memory from its process.
+     * Unloads the engine if the memory trim level is critical.
+     *
+     * @param level The context of the trim, giving a hint of the amount of trimming the application may like to perform.
+     */
+    override fun onTrimMemory(level: Int) {
+        if (level >= ComponentCallbacks2.TRIM_MEMORY_BACKGROUND) {
+            Timber.w("onTrimMemory called with critical level \$level, unloading engine")
+            unload()
+        }
+    }
+}

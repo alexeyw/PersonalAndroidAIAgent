@@ -18,7 +18,7 @@
         errorLine1="        every { context.registerReceiver(any(), any&lt;IntentFilter>()) } answers {"
         errorLine2="                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
-            file="src/test/java/ai/agent/android/data/repositories/PowerStateRepositoryImplTest.kt"
+            file="src/test/java/app/knotwork/android/data/repositories/PowerStateRepositoryImplTest.kt"
             line="30"
             column="17"/>
     </issue>
@@ -29,7 +29,7 @@
         errorLine1="        every { context.registerReceiver(isNull(), any&lt;IntentFilter>()) } returns initialIntent"
         errorLine2="                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
-            file="src/test/java/ai/agent/android/data/repositories/PowerStateRepositoryImplTest.kt"
+            file="src/test/java/app/knotwork/android/data/repositories/PowerStateRepositoryImplTest.kt"
             line="41"
             column="17"/>
     </issue>

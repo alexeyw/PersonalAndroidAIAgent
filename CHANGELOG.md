@@ -15,7 +15,7 @@ details.
 
 ### Added
 
-- **Browser editor ↔ app full node-config parity** (Phase 26 / Task 6/10):
+- **Browser editor ↔ app full node-config parity**:
   the standalone `pipeline-editor.html` now mirrors every in-app
   `NodeConfigSheet` form field-for-field. The pipeline JSON interchange gained
   an optional, additive `nodeConfig` object per node — the exact
@@ -38,7 +38,7 @@ details.
   and an in-app sheet save instead of silently decoding to OpenAI. Verified
   with a full export→import→export round-trip across all 12 node types in a
   headless browser.
-- **CI on GitHub Actions** (Phase 26 / Task 2/10): the `.github/workflows/check.yml`
+- **CI on GitHub Actions**: the `.github/workflows/check.yml`
   gate is now tracked in the repository (previously kept locally and gitignored
   because the remote PAT lacked the `workflow` scope). The job runs
   `./gradlew check` — detekt, ktlintCheck, lintDebug, testDebugUnitTest,
@@ -49,12 +49,12 @@ details.
   caches Gradle, and uploads detekt / ktlint / lint / unit-test / Kover /
   Roborazzi reports as artifacts on failure. A live build badge was added to
   `README.md`.
-- **JetBrains Mono SemiBold (600) + Bold (700)** (Phase 26 / Task 3/10): the
+- **JetBrains Mono SemiBold (600) + Bold (700)**: the
   brand monospace family now ships its load-bearing heavier cuts as real
   Latin-subset font files (SIL OFL 1.1) instead of relying on synthetic bold —
   source / status tags, node-kind labels, badges and stat numbers render in
   Mono 700 at 9.5–11 px without smearing.
-- **Custom `I.*` icon family** (Phase 26 / Task 3/10): the spec §0.7
+- **Custom `I.*` icon family**: the spec §0.7
   single-stroke icon set (73 glyphs — `menu`, `back`, `search`, `add`, `edit`,
   `trash`, `send`, `play`, `refresh`, `eye`, `terminal`, `undo`/`redo`, …, plus
   `pin`/`pin-on`) ships as custom `AppIcons.*` vectors built from the designer's
@@ -65,7 +65,7 @@ details.
   built-in glyph). The selected bottom-nav tab renders at the active 2.0 stroke.
   Stroke-weight and render-size icon tokens (`IconStroke`, `KnotworkIconSizes`)
   back the family.
-- **`showcase_full_agent` bundled pipeline preset** (Phase 26 / Task 6/10): a
+- **`showcase_full_agent` bundled pipeline preset**: a
   seventh bundled preset under `assets/presets/pipelines/` — a 22-node
   on-device agent that triages each message (chat / factual / task) and runs a
   tailored branch: a direct `LITE_RT` reply for chat; an `IF_CONDITION`
@@ -80,12 +80,22 @@ details.
 
 ### Changed
 
+- **Rename the application to Knotwork**: the launcher/display name
+  is now **Knotwork** (`app_name`), and the application id / package namespace
+  moved from `ai.agent.android` to **`app.knotwork.android`** across the `:app`,
+  `:tools-probe`, and `buildSrc` modules (package directories, Room exported
+  schema path, `<queries>` package-visibility entries, the placeholder
+  `google-services.json` client, the `checkNoInternalFqn` scan target, and all
+  Kover exclusion FQNs were updated in lock-step). The application id is locked
+  before the public release because Google Play treats it as the permanent,
+  immutable app identifier. The internal codename (repository, branches, and the
+  Gradle root project) stays `android-ai-agent`.
 - **Bump LiteRT-LM `0.13.0` → `0.13.1`**: a bug-fix-only patch release of
   `com.google.ai.edge.litertlm:litertlm-android` (no API or behavior changes).
   Clears the `GradleDependency` lint error that flagged the newer version as
   available and was blocking `./gradlew check`.
-- **`FILE_MAP.md` navigation reconciliation** (Phase 26 / Task 8/10): the
-  `app/src/main/java/ai/agent/android/FILE_MAP.md` agent/contributor navigation
+- **`FILE_MAP.md` navigation reconciliation**: the
+  `app/src/main/java/app/knotwork/android/FILE_MAP.md` agent/contributor navigation
   map was re-synced with the actual source tree — added the 11 missing pipeline
   `NodeExecutor` strategies (only `ClarificationNodeExecutor` had been listed),
   `PromptRepositoryImpl`, seven domain models (`ActiveModelMeta`, `Identity`,
@@ -98,7 +108,7 @@ details.
   previously-undocumented `screens/` tree (13 screen surfaces) plus the
   `components/{brand,pipelineeditor,topbar}` groups, missing tokens/components,
   and the new screen-level tests. No code changed.
-- **Third-party license attribution audit** (Phase 26 / Task 7/10): added a
+- **Third-party license attribution audit**: added a
   repository `NOTICE` file inventorying every bundled runtime component, the
   required BSD-3-Clause notice for SQLCipher (`net.zetetic:sqlcipher-android`),
   the SIL OFL 1.1 copyright lines for the bundled Inter / JetBrains Mono fonts
@@ -117,18 +127,18 @@ details.
   absent). The README tech-stack "Network" row was corrected from
   "Retrofit, Coil" to "OkHttp + Ktor (via Koog)". All bundled licenses were
   verified Apache-2.0-compatible.
-- **Context-window default** (Phase 26 / Task 6/10): the
+- **Context-window default**: the
   **Settings → LLM parameters → Max context** default is now **4096 tokens**
   (was 4000), landing exactly on a slider notch (range 512–8192, 512-token
   steps). A higher ceiling was trialled and reverted — large windows OOM-crash
   the on-device model on real hardware.
-- **First-launch seed materialised from a preset** (Phase 26 / Task 6/10):
+- **First-launch seed materialised from a preset**:
   `InitializeAppUseCase` now seeds the default pipeline by materialising the
   bundled `showcase_full_agent` preset through `LoadPipelineFromPresetUseCase`
   (fresh ids, validated, persisted) instead of hardcoding
   `DefaultPipelineFactory`. The factory remains a fallback if the preset asset
   cannot be loaded, so first launch never leaves the library empty.
-- **`KnotworkChip` un-deprecated** (Phase 26 / Task 5/10): the general-purpose
+- **`KnotworkChip` un-deprecated**: the general-purpose
   pill chip (`Default / Tonal / Outline` styles + decorative no-`onClick`
   variant) is reinstated as a supported design-system component rather than a
   removal target — it fills the decorative-tag / badge role the intent-specific
@@ -136,7 +146,7 @@ details.
   does not cover. The `@Deprecated` annotation and the preview's stale
   `@file:Suppress("DEPRECATION")` were removed.
 - **Design-token reconciliation against the Controls & Components spec**
-  (Phase 26 / Task 3/10): aligned the Knotwork tokens and shared controls to the
+ : aligned the Knotwork tokens and shared controls to the
   canonical `tokens.css` source of truth.
   - **Colour.** `primary` moved from accent-500 to **accent-600** (light) /
     **accent-300** (dark) so white `on-primary` clears the 3:1 UI-contrast floor
@@ -156,7 +166,7 @@ details.
 
 ### Removed
 
-- **Dead string resources** (Phase 26 / Task 5/10): removed 54 unused string
+- **Dead string resources**: removed 54 unused string
   resources that lingered as legacy duplicates after screen bodies moved into
   the `:catalog` module — 52 from the app's `strings_*.xml` files (the fully
   orphaned `strings_tools.xml` was deleted outright) and 2 `knotwork_*` strings
@@ -167,25 +177,40 @@ details.
 
 ### Fixed
 
-- **TOOL node with "Auto" tool failed at runtime** (Phase 26 / Task 6/10): a
+- **Auto-Layout crashed (`StackOverflowError`) on pipelines with a loop**:
+  the editor's `AutoLayout` longest-path layering recursed without a cycle
+  guard, so any graph containing a legitimate back-edge — e.g. a
+  `QUEUE_PROCESSOR` re-iteration loop, as in the `multi_step_research` and
+  `showcase_full_agent` bundled presets — overflowed the stack the moment
+  **Auto-Layout** was tapped. The depth resolver now tracks its recursion
+  stack and ignores back-edges (and self-loops) for layering, so cyclic
+  pipelines lay out without crashing.
+- **Auto-Layout overlapped nodes on high-density screens**: the layout
+  gaps were fixed canvas-px values, but a `NodeCard` is sized in dp and the
+  canvas maps one unit to one screen-px, so on a 3×-density display each card
+  rendered ~3× wider than the spacing assumed and the cards piled on top of
+  each other. The editor now derives the sibling / layer gaps from the card
+  footprint in dp, scaled through the screen `Density`, so nodes keep clear
+  air between them at any density.
+- **TOOL node with "Auto" tool failed at runtime**: a
   TOOL node left on the Auto option (persisted as a blank `toolName`) errored
   with "Tool node is missing toolName configuration" instead of letting the
   model pick a tool. `ToolNodeExecutor` now treats a blank/null `toolName` the
   same as the explicit `"auto"` sentinel (LLM-driven auto-select); only a
   configured-but-unknown tool name is an error.
 - **Chat token-usage indicator counted a token budget as characters**
-  (Phase 26 / Task 6/10): `GetContextWindowUseCase` compared message
+ : `GetContextWindowUseCase` compared message
   **character** lengths against `maxContextLength` (a **token** budget), so the
   history was truncated to ~¼ of the window and the TopAppBar "tokens used"
   bar capped at ~25%. It now converts the token budget to characters
   (`× CHARS_PER_TOKEN`) before truncating. Display-only — the actual prompt and
   the engine's `maxNumTokens` windowing were already correct.
-- **Deleting a local model now removes its file** (Phase 26 / Task 6/10):
+- **Deleting a local model now removes its file**:
   `LocalModelRepository.deleteModelById` only dropped the Room record, leaving
   the (often multi-GB) weights file orphaned on disk. It now deletes the
   on-disk file at the model's path first (best-effort — a missing/unreadable
   file never blocks the record removal).
-- **Dependency freshness** (Phase 26 / Task 6/10): bumped `androidx.core:core-ktx`
+- **Dependency freshness**: bumped `androidx.core:core-ktx`
   1.18.0 → 1.19.0 and `com.google.ai.edge.litertlm:litertlm-android` 0.12.0 →
   0.13.0 (both Apache-2.0, no new transitive licences). The `GradleDependency`
   and `NewerVersionAvailable` lint checks are kept enabled so outdated
@@ -194,7 +219,7 @@ details.
   mediapipe false positive (its version scheme sorts `0.20230731` as newer than
   the actual-latest `0.10.35`) are grandfathered individually in
   `lint-baseline.xml`.
-- **Documentation ↔ code reconciliation** (Phase 26 / Task 6/10): a sweep
+- **Documentation ↔ code reconciliation**: a sweep
   aligning the public docs with current behaviour. `FILE_MAP.md` no longer
   claims MCP "Only SSE … through Koog 0.8; STREAMABLE_HTTP falls back to SSE" —
   both transports are end-to-end wired on Koog 1.0.0 (`KoogMcpClient` uses
@@ -202,7 +227,7 @@ details.
   variables (was missing `$LANG` / `$LOCATION` / `$USER` / `$DEVICE`) and
   documents the first-launch showcase pipeline; `docs/extending.md` and
   `DESCRIPTION.md` reflect the seven bundled presets and the preset-backed seed.
-- **UI functional verification — every control does something** (Phase 26 / Task 4/10):
+- **UI functional verification — every control does something**:
   a screen-by-screen sweep wiring orphaned callbacks, fixing node-config
   forms, and removing dead / misleading affordances.
   - Pipeline editor: the empty-state **"From template"** CTA now fills the
@@ -236,17 +261,16 @@ details.
 ## [0.3.0] - 2026-05-30
 
 Rolls up the post-`0.2.0` work that landed on `main`: the complete long-term
-**memory lifecycle** (Phase 25 — extraction, embedding-provider abstraction,
+**memory lifecycle** (extraction, embedding-provider abstraction,
 retrieval + re-rank, background compaction, export / import, memory-screen
 redesign and tuning controls), **pipeline & prompt presets** end-to-end
-(Phase 24 — bundled catalogues, in-app pickers, browser-editor preset support
+(bundled catalogues, in-app pickers, browser-editor preset support
 and gradle-driven constant-sync automation), and the **test / coverage
-hardening** that raised the enforced Kover gate to 75 % (Phase 23 —
-executor / DAO / Robolectric / Compose `androidTest` suites).
+hardening** that raised the enforced Kover gate to 75 % (executor / DAO / Robolectric / Compose `androidTest` suites).
 
 ### Added
 
-- **Long-term memory documentation + end-to-end test** (Phase 25 / Task 10/10):
+- **Long-term memory documentation + end-to-end test**:
   - `DESCRIPTION.md` §6 now documents the full memory subsystem (extraction,
     embedding providers, storage, retrieval/re-rank, context injection,
     compaction, import/export, and the message-to-retrieval lifecycle).
@@ -260,7 +284,7 @@ executor / DAO / Robolectric / Compose `androidTest` suites).
     use cases) over an in-memory database: a fact extracted in one session is
     retrieved into the next session's `--- Long-Term Memory ---` block and a
     pinned chunk survives a compaction pass.
-- **Memory tuning controls** (Phase 25 / Task 9/10) — *Settings → Memory*
+- **Memory tuning controls** — *Settings → Memory*
   now exposes the long-term-memory parameters that previously only had code
   defaults:
   - **Sliders** for retrieval *Search results (top-K)* (1–20), *Similarity
@@ -271,7 +295,7 @@ executor / DAO / Robolectric / Compose `androidTest` suites).
     the active selection.
   - Out-of-range or unknown-provider edits are rejected at the ViewModel layer
     with an inline validation message and are never persisted.
-- **Memory export / import** (Phase 25 / Task 8/10) — move an agent's
+- **Memory export / import** — move an agent's
   long-term memory between devices:
   - **Export** — *Settings → Memory → Export* writes the table to a
     `schemaVersion: 1` JSON file via the Storage Access Framework, stamped with
@@ -289,7 +313,7 @@ executor / DAO / Robolectric / Compose `androidTest` suites).
     at import time), so transferred memories become findable off the hot path
     without stalling retrieval or needing a manual re-embed. The manual
     *Settings → Memory → Re-embed* action now also clears the flag.
-- **Memory screen redesign** (Phase 25 / Task 7/10) — a full rework of the
+- **Memory screen redesign** — a full rework of the
   long-term-memory surface:
   - **Save to memory from chat** — the message long-press menu gains a
     *Save to memory* action that embeds the message text with the active
@@ -324,8 +348,8 @@ executor / DAO / Robolectric / Compose `androidTest` suites).
 ### Fixed
 
 - **Long-term memory now embeds every read and write with the active provider**
-  (Phase 25 / Task 3/10). Retrieval embedded the search query with the fixed
-  on-device Universal Sentence Encoder (512-d) while auto-extraction (Task 2)
+ . Retrieval embedded the search query with the fixed
+  on-device Universal Sentence Encoder (512-d) while auto-extraction
   stored chunks via the user-selected `EmbeddingProvider` — so with a non-`use`
   provider active (OpenAI 1536-d, Ollama 768-d) query and stored vectors lived
   in different dimensions, cosine similarity collapsed to `0`, and the
@@ -339,7 +363,7 @@ executor / DAO / Robolectric / Compose `androidTest` suites).
     query could never match. Re-embed remains the canonical way to migrate the
     whole corpus into a newly selected provider's space.
 - **Memory retrieval is skipped when no executed node requests it**
-  (Phase 25 / Task 3/10). `GraphExecutionEngine` previously embedded the user
+ . `GraphExecutionEngine` previously embedded the user
   prompt at run start unconditionally. It now resolves long-term memory lazily —
   at most once, the first time an executed node actually opts into the
   `longTermMemory` context block — so graphs with memory disabled never embed
@@ -348,7 +372,7 @@ executor / DAO / Robolectric / Compose `androidTest` suites).
 
 ### Added
 
-- **Memory observability in the agent console** (Phase 25 / Task 6/10). Every
+- **Memory observability in the agent console**. Every
   long-term-memory retrieval now surfaces in the chat console as a dedicated
   `MEMORY` source line (previously collapsed into the generic `RUNTIME`
   source), so the new `MEMORY` filter chip isolates memory activity from node
@@ -359,7 +383,7 @@ executor / DAO / Robolectric / Compose `androidTest` suites).
   off, `SettingsRepository.verboseMemoryLoggingEnabled`) expands each retrieval
   line with a per-hit snippet + score, and makes `MemoryCompactionUseCase` log
   the cluster membership (merged chunk ids) of every consolidation to logcat.
-- **Background memory compaction** (Phase 25 / Task 5/10). A daily
+- **Background memory compaction**. A daily
   `MemoryCompactionWorker` (WorkManager, constrained to charging + device-idle)
   consolidates stale, redundant long-term memory so the `memory_chunks` table
   does not balloon with near-duplicate facts over weeks of use. The pass loads
@@ -375,8 +399,8 @@ executor / DAO / Robolectric / Compose `androidTest` suites).
   triggers an immediate, relaxed-constraint pass when the table grows past
   `maxMemoryChunks` (default 5000). New settings `memoryCompactionEnabled`
   (default on), `memoryCompactionAgeDays` and `maxMemoryChunks` back the feature
-  (the Settings → Memory UI for them lands in Task 9).
-- **Memory retrieval re-ranking** (Phase 25 / Task 4/10). Raw cosine
+  (the Settings → Memory UI for them lands separately).
+- **Memory retrieval re-ranking**. Raw cosine
   similarity is no longer the final word on what reaches the prompt. A new
   pure-domain `MemoryReranker` re-scores the full scored search pool before
   the top-K cut, applying four deterministic rules:
@@ -396,14 +420,14 @@ executor / DAO / Robolectric / Compose `androidTest` suites).
   `MemoryExtractionUseCase`'s near-duplicate detection. The use case now pulls
   the full scored pool so a pinned or fresh chunk just outside the raw-cosine
   top-K can still be promoted.
-- **Configurable memory retrieval tuning** (Phase 25 / Task 3/10). The
+- **Configurable memory retrieval tuning**. The
   retrieval top-K and relevance threshold are no longer hard-coded:
   `SettingsRepository.memorySearchTopK` (default 5) and
   `memorySearchThreshold` (default 0.55) back them via DataStore.
   `RetrieveRelevantMemoryUseCase` reads these by default (callers may still
   override per-call). The Settings UI for these controls lands with the later
   Settings/tuning task of this phase.
-- **Automatic memory extraction** (Phase 25 / Task 2/10). After a pipeline run
+- **Automatic memory extraction**. After a pipeline run
   completes, the agent now mines the conversation for durable facts and writes
   the novel ones into long-term memory — making the "remembers past chats"
   capability actually populate memory instead of relying on manual saves.
@@ -430,7 +454,7 @@ executor / DAO / Robolectric / Compose `androidTest` suites).
   - New `Settings → Memory → Auto-extract from conversations` toggle
     (`SettingsRepository.autoExtractEnabled`, default on) describing exactly what
     is collected.
-- **Embedding provider abstraction** (Phase 25 / Task 1/10). Long-term memory
+- **Embedding provider abstraction**. Long-term memory
   no longer hard-codes the on-device Universal Sentence Encoder. A new
   `EmbeddingProvider` domain abstraction (`embed` / batch `embed` /
   `dimension` / `id` / `displayName`) is implemented by three backends, Hilt-
@@ -453,7 +477,7 @@ executor / DAO / Robolectric / Compose `androidTest` suites).
   cancellation is propagated unwrapped. Existing embedding consumers are
   unchanged in this task; migrating them onto the resolver lands with the
   later memory tasks of this phase.
-- **Browser-editor constant sync automation** (Phase 24 / Task 8/9). The
+- **Browser-editor constant sync automation**. The
   `:app:generateBrowserEditorConstants` Gradle task regenerates the
   `NODE_TYPES`, `PROMPT_VARIABLES`, `AVAILABLE_TOOLS` and
   `DEFAULT_SYSTEM_PROMPTS` blocks of `pipeline-editor.html` straight from the
@@ -462,17 +486,17 @@ executor / DAO / Robolectric / Compose `androidTest` suites).
   `AUTO-GEN` markers. `:app:verifyBrowserEditorConstants` — wired into
   `./gradlew check` — fails the build if the committed HTML has drifted,
   replacing the previous review-only "KEEP IN SYNC" rule that had let those
-  mirrors diverge (Task 6). The pure generation logic lives in `buildSrc`
+  mirrors diverge. The pure generation logic lives in `buildSrc`
   (`BrowserEditorConstantsGenerator`) with its own JUnit suite; editor-only
   metadata (palette order, colours, icons, tool labels) is cross-checked
   against the domain set so adding a `NodeType`/tool without metadata fails
   generation.
-- **Pipeline presets — browser editor** (Phase 24 / Task 7/9). The
+- **Pipeline presets — browser editor**. The
   standalone `pipeline-editor.html` gains a `📚 Presets` top-bar button
   opening a modal with **Bundled** and **Mine** tabs:
   - **Bundled** mirrors the 6 starter presets shipped in the APK under
     `assets/presets/pipelines/*.json`, inlined as the
-    `BUILTIN_PIPELINE_PRESETS` JS constant (Task 8 will replace the
+    `BUILTIN_PIPELINE_PRESETS` JS constant (a later change will replace the
     hand-maintained block with a gradle-generated one).
   - **Mine** lists per-browser presets persisted in `localStorage`
     (degrades to an empty in-memory list in private-mode browsers).
@@ -491,8 +515,8 @@ executor / DAO / Robolectric / Compose `androidTest` suites).
     `PipelinePresetJsonSerializer.kt`, so files round-trip between the
     browser editor and the Android app.
 
-- **Prompt presets — UI** (Phase 24 / Task 5/9). Wires the bundled and
-  user-saved prompt-preset catalogue (Task 4) into the two production
+- **Prompt presets — UI**. Wires the bundled and
+  user-saved prompt-preset catalogue into the two production
   surfaces:
   - The pipeline editor's `NodeConfigSheet` gets a 📚 / 💾 pair on
     every prompt-bearing field. 📚 opens a new Knotwork-styled
@@ -520,8 +544,7 @@ executor / DAO / Robolectric / Compose `androidTest` suites).
   Replaces the legacy `PromptLibraryDialog` (Knotwork-styled
   `AlertDialog`) that was backed by the older `PromptTemplate` model.
 
-- **Prompt presets — domain model & bundled catalogue** (Phase 24 /
-  Task 4/9). New first-class entity for reusable system-prompt templates,
+- **Prompt presets — domain model & bundled catalogue**. New first-class entity for reusable system-prompt templates,
   attached to a single LLM-driven `NodeType` (LITE_RT, CLOUD, OUTPUT,
   SUMMARY, INTENT_ROUTER, DECOMPOSITION, EVALUATION, CLARIFICATION).
   Bundled presets ship inside the APK at `assets/presets/prompts/` (18
@@ -541,9 +564,9 @@ executor / DAO / Robolectric / Compose `androidTest` suites).
   resolves against the registered provider whitelist, every
   `systemPrompt` fits within the soft limit, and every LLM-driven type
   has at least one bundled preset. The Prompt-Library UI rewiring that
-  actually surfaces this catalogue lives in Task 5/9.
+  actually surfaces this catalogue lands separately.
 
-- **Pipeline presets — UI** (Phase 24 / Task 3/9). Surfaces the Phase 24
+- **Pipeline presets — UI**. Surfaces the
   preset catalogue end-to-end through three user-facing entry points:
   - **Speed-dial FAB** on the pipeline library — replaces the single
     "+ New pipeline" FAB with a two-action speed-dial (`+ New pipeline` /
@@ -562,7 +585,7 @@ executor / DAO / Robolectric / Compose `androidTest` suites).
     user presets expose Rename / Export-JSON (via SAF) / Delete with
     a destructive-confirm dialog.
 
-- **Bundled pipeline-preset catalogue** (Phase 24 / Task 2/9). Ships six
+- **Bundled pipeline-preset catalogue**. Ships six
   curated starter presets under `assets/presets/pipelines/` covering the
   typical entry-point scenarios: `local_only_qa` (offline INPUT → LITE_RT →
   OUTPUT), `cloud_assist` (cloud with chat history + long-term memory),
@@ -579,12 +602,12 @@ executor / DAO / Robolectric / Compose `androidTest` suites).
   a broken preset, an unknown variable, or accidentally deleting one of
   the six fails the build.
 
-- **Pipeline preset — domain model and storage** (Phase 24 / Task 1/9).
+- **Pipeline preset — domain model and storage**.
   Introduces `PipelinePreset` as a reusable pre-built pipeline template
   with two persistence tiers:
   - **Bundled** presets ship inside the APK under
-    `assets/presets/pipelines/*.json` (catalogue files filled in by
-    Task 2/9; Task 1 wires the loader and lays the empty directory).
+    `assets/presets/pipelines/*.json` (the loader and the empty
+    directory land first; the catalogue files are filled in afterwards).
   - **User** presets are persisted in a new `pipeline_presets` Room
     table (schema **v23 → v24** via `MIGRATION_23_24`).
   `LoadPipelineFromPresetUseCase` materialises a preset into a concrete
@@ -599,18 +622,18 @@ executor / DAO / Robolectric / Compose `androidTest` suites).
 
 ### Changed
 
-- **`MemoryAccess` console events carry query + scores** (Phase 25 / Task 6/10).
+- **`MemoryAccess` console events carry query + scores**.
   The format moved from `Memory: N chunk(s) retrieved` to a richer line built
   by the new pure `MemoryAccessLogFormatter`. `RetrieveRelevantMemoryUseCase`
   gains a score-preserving `retrieveScored(...)` entry point (the score-free
   `invoke(...)` now delegates to it) so the engine can render scores without a
   second retrieval.
-- **Browser pipeline editor — full sync sweep** (Phase 24 / Task 6/9).
+- **Browser pipeline editor — full sync sweep**.
   Re-synced `pipeline-editor.html` with the Android source of truth after
-  the Phase 20–24 drift:
+  the accumulated drift:
   - `BUILTIN_PROMPT_TEMPLATES` (the 📚 Prompts popover) now mirrors the
     21-entry bundled prompt-preset catalogue from
-    `assets/presets/prompts/` (Task 4) verbatim — `systemPrompt`,
+    `assets/presets/prompts/` verbatim — `systemPrompt`,
     name, and description copied byte-for-byte — replacing the 7 legacy
     generic per-type entries. The popover filters built-ins by the node's
     `NodeType`, matching the Android Prompt Library; each row carries the
@@ -638,7 +661,7 @@ executor / DAO / Robolectric / Compose `androidTest` suites).
 ### Fixed
 
 - **Preset pickers no longer apply a hidden selection after a filter
-  change** (Phase 24). In `PresetPickerSheet` (pipeline presets) and
+  change**. In `PresetPickerSheet` (pipeline presets) and
   `PromptPresetPickerDialog` (prompt presets), selecting a preset and then
   switching the tab / category / tag chip left the previous selection
   active: the footer CTA stayed enabled on the non-null id and applied the
@@ -650,7 +673,7 @@ executor / DAO / Robolectric / Compose `androidTest` suites).
 
 ### Build / coverage
 
-- **Coverage gate raised 70 % → 75 % LINE aggregate** (Phase 23 / Task 9/9).
+- **Coverage gate raised 70 % → 75 % LINE aggregate**.
   `koverVerifyDebug` (run via `./gradlew check`) now fails the build if
   aggregate line coverage over the unit-testable surface drops below 75 %.
   Today's measurement after the new exclusions sits at ~77.6 %, leaving
@@ -677,7 +700,7 @@ executor / DAO / Robolectric / Compose `androidTest` suites).
 
 ### Documentation
 
-- **Preset feature documented end-to-end** (Phase 24 / Task 9/9).
+- **Preset feature documented end-to-end**.
   `docs/extending.md` §5 is restructured into "Add a bundled preset"
   with a new pipeline-preset recipe (asset schema, `PresetCategory`
   keys, `validate()` / variable-whitelist rules, the
@@ -693,7 +716,7 @@ executor / DAO / Robolectric / Compose `androidTest` suites).
 
 ### Tests
 
-- **Preset end-to-end integration tests** (Phase 24 / Task 9/9). Two
+- **Preset end-to-end integration tests**. Two
   pure-JVM suites that wire the real production classes together rather
   than the shipped artefacts alone (which the catalogue tests already
   pin): `PipelinePresetIntegrationTest` reads each bundled
@@ -710,11 +733,11 @@ executor / DAO / Robolectric / Compose `androidTest` suites).
 
 - **Compose `androidTest` coverage for the remaining `presentation.ui`
   surfaces — Memory / Settings / Tools / Onboarding / Prompt Library**
-  (Phase 23 / Task 8). Each screen gets a shared
+ . Each screen gets a shared
   `mock<Screen>ViewModel` factory (relaxed MockK VM + mutable state-flow
   handles so tests drive transitions without re-stubbing) and 2–6 test
   classes under
-  `app/src/androidTest/java/ai/agent/android/presentation/ui/<screen>/`.
+  `app/src/androidTest/java/app/knotwork/android/presentation/ui/<screen>/`.
   Coverage: `MemoryScreenSearchTest` (200 ms debounce gated by
   `mainClock.advanceTimeBy`), `MemoryScreenInteractionsTest` (row pin /
   edit-commit which exercises the re-embedding call site / delete /
@@ -737,14 +760,14 @@ executor / DAO / Robolectric / Compose `androidTest` suites).
   opens a new draft, per-card Edit / Delete / Duplicate icons fire
   their VM hooks), `PromptLibraryScreenEditorTest` (bottom-sheet
   visibility on a non-null draft, prefilled fields, Save / Cancel
-  dispatch). All factories follow the Phase 23 / Task 6 + Task 7
+  dispatch). All factories follow the same
   pattern (`createComposeRule()` + relaxed MockK VM); no production
   code changes were required. Note: `SettingsUiState` does not expose
   the "pending change" or "ValidationError" surfaces mentioned in the
   task brief, so those branches are deliberately out-of-scope.
 
 - **Compose `androidTest` coverage for `presentation.ui.pipeline.editor`**
-  (Phase 23 / Task 7). Twelve test files mirroring the Phase 23 / Task 6
+ . Twelve test files mirroring the
   chat-home pattern: `createComposeRule()` + a shared
   `mockOrchestratorViewModel` factory (exposes mutable `StateFlow` /
   `SharedFlow` handles for `uiState`, `runState`, `focusNodeRequest`
@@ -786,7 +809,7 @@ executor / DAO / Robolectric / Compose `androidTest` suites).
   covered by `CanvasTransformTest`, and `ZoomRail` exposes the same
   code path through deterministic buttons.
 - **Compose `androidTest` coverage for `presentation.ui.chat.home`**
-  (Phase 23 / Task 6). Extended the existing
+ . Extended the existing
   `createComposeRule()` + mocked `ChatHomeViewModel` pattern with a shared
   `mockChatHomeViewModel` factory (exposes mutable `StateFlow` handles so
   tests drive `Idle → Generating → Idle`, HITL approve, Clarification
@@ -816,7 +839,7 @@ executor / DAO / Robolectric / Compose `androidTest` suites).
   needs screenshot coverage and is out of scope. Refactored the
   existing `ChatHomeOverflowMenuTest` onto the shared factory.
 - **Robolectric coverage for `presentation.notifications` + `presentation.receivers`**
-  (Phase 23 / Task 5). Added `ApprovalNotificationManagerTest` (risk-based
+ . Added `ApprovalNotificationManagerTest` (risk-based
   channel routing: `AGENT_APPROVAL_DESTRUCTIVE` vs `AGENT_APPROVAL` with
   `READ_ONLY` sharing the `SENSITIVE` channel, `IMPORTANCE_HIGH` per channel,
   idempotent channel registration across repeat sends, active-session
@@ -830,10 +853,10 @@ executor / DAO / Robolectric / Compose `androidTest` suites).
   partitioned slot, dedup-free repeat delivery). Used the same Hilt-bypass
   reflection trick as `AgentForegroundServiceTest` so `@AndroidEntryPoint`
   doesn't require a `HiltTestApplication` runner. The previous
-  `ai.agent.android.presentation.notifications.*` and
-  `ai.agent.android.presentation.receivers.*` Kover exclusions are gone —
+  `app.knotwork.android.presentation.notifications.*` and
+  `app.knotwork.android.presentation.receivers.*` Kover exclusions are gone —
   both packages now show **100 % LINE** in `koverHtmlReportDebug`.
-- **Robolectric coverage for `data.services`** (Phase 23 / Task 4). Added
+- **Robolectric coverage for `data.services`**. Added
   `AgentForegroundServiceTest` (channel registration with `IMPORTANCE_LOW`,
   `startForeground` notification with `FLAG_ONGOING_EVENT`, wake-lock
   acquire/release across `Thinking` / `ExecutingTool` / `Idle` / `Error`
@@ -850,12 +873,12 @@ executor / DAO / Robolectric / Compose `androidTest` suites).
   (`LONG_RUNNING_TASKS` channel registration, opt-out gate, `POST_NOTIFICATIONS`
   permission gate, channel-id and stable per-pipeline notification-id
   contract, empty-flow defaults-to-disabled). The previous
-  `ai.agent.android.data.services.*` Kover exclusion is gone — package
+  `app.knotwork.android.data.services.*` Kover exclusion is gone — package
   coverage rose from **44.0 %** to **99.4 % LINE** (171 / 172). Pinned
   Robolectric runtime SDK to 36 via `app/src/test/resources/robolectric.properties`
   and enabled `unitTests.isIncludeAndroidResources = true` so `getString`
   on notifier strings resolves against the real merged resources.
-- **Room DAO + migration regression suite** (Phase 23 / Task 3). Brought the
+- **Room DAO + migration regression suite**. Brought the
   in-memory `Room.inMemoryDatabaseBuilder` coverage on `data.local.dao` up to
   every public method on `ChatDao` (including `Upsert`, `renameSession`,
   `setSessionStarred`, single-column `UPDATE`s, `getDisplayMessagesBySessionId`
@@ -882,7 +905,7 @@ executor / DAO / Robolectric / Compose `androidTest` suites).
   alongside the migration. Added `androidx.room:room-testing` to
   `androidTestImplementation`.
 - **`LocalAppFunctionManager` unit-test suite + extra codec edge cases**
-  (Phase 23 / Task 2). 29 JVM tests for `LocalAppFunctionManager` cover the
+ . 29 JVM tests for `LocalAppFunctionManager` cover the
   pure JSON-Schema generator (all supported and unsupported parameter types,
   description handling, required-array emission), discovery via
   `mockkObject(AppFunctionManager.Companion)` (empty manager → empty list +
@@ -900,7 +923,7 @@ executor / DAO / Robolectric / Compose `androidTest` suites).
   is the `invokeByName` happy path that constructs `AppFunctionData`
   (Android-stub `Bundle` reference makes it unreachable from JVM tests —
   covered by `AppFunctionsEndToEndTest`).
-- **`data.tools.local.executors` unit-test suite** (Phase 23 / Task 1).
+- **`data.tools.local.executors` unit-test suite**.
   Added GWT-style JUnit + MockK coverage for `DelegateTaskExecutor`,
   `ScheduleTaskExecutor`, and `SearchToolExecutor` — happy path, JSON
   default branches (`targetModel` → `anthropic`, `intervalHours` /
@@ -913,15 +936,14 @@ executor / DAO / Robolectric / Compose `androidTest` suites).
 
 ## [0.2.0] - 2026-05-25
 
-Ships Phase 22 end-to-end: every Knotwork-redesigned screen wired to its
+Ships the Knotwork redesign end-to-end: every redesigned screen wired to its
 real backend, MCP routing hardened against config-edit / disabled /
 flaky-provider regressions, R8-minified release variant, and a fresh set
 of README hero shots regenerated from new Roborazzi baselines.
 
 ### Fixed
 
-- **MCP routing — three regressions in `ToolRepositoryImpl`** (Phase 22 /
-  Task 17 follow-up).
+- **MCP routing — three regressions in `ToolRepositoryImpl`** (follow-up).
   - `syncMcpClients` now keys the pool by the full `McpServerConfig`
     (not just the URL) and tears the connection down + reconnects when
     any of auth / transport / headers / display name change for an
@@ -972,8 +994,7 @@ of README hero shots regenerated from new Roborazzi baselines.
 
 ### Added
 
-- **R8 minification + resource shrinking on the release build** (Phase 22 /
-  Task 17). `buildTypes.release` now sets `isMinifyEnabled = true` /
+- **R8 minification + resource shrinking on the release build**. `buildTypes.release` now sets `isMinifyEnabled = true` /
   `isShrinkResources = true`, and `app/proguard-rules.pro` carries keep
   rules for every reflection-driven subsystem (kotlinx.serialization, Gson,
   MediaPipe / LiteRT JNI, SQLCipher, Koog + Ktor, AppFunctions KSP-generated
@@ -1002,7 +1023,7 @@ of README hero shots regenerated from new Roborazzi baselines.
 ### Changed
 
 - **Public documentation actualised against the post-legacy code state**
-  (Phase 22 / Task 17 follow-up). Removed references to deleted legacy
+  (follow-up). Removed references to deleted legacy
   classes (`ChatScreen` / `ChatViewModel` / `ChatUiState`), retired the
   "Saving and filtering messages" feature description, rewrote the
   **Console** section to describe the agent-status pill + independent
@@ -1013,15 +1034,15 @@ of README hero shots regenerated from new Roborazzi baselines.
   the **Settings** section of `docs/extending.md` to list all nine cards
   (was: six), refreshed the `PROMPT_VARIABLES` example in
   `docs/extending.md` + `pipeline-editor.html` to include the four new
-  variables (`LANG / LOCATION / USER / DEVICE`) that landed in Phase 22 /
-  Task 9, corrected the SDK install requirement in `CONTRIBUTING.md`
+  variables (`LANG / LOCATION / USER / DEVICE`) that landed earlier,
+  corrected the SDK install requirement in `CONTRIBUTING.md`
   (compileSdk is API 37, not API 36), wired `docs/release.md` into
   `README.md`, `CONTRIBUTING.md` (Further reading + Build & test), and
   `docs/architecture.md` (Further reading), and removed the stale
   duplicate `more/` block in `FILE_MAP.md`.
 
 - **Jansi non-Android native binaries excluded from the release APK**
-  (Phase 22 / Task 17). `android.packaging.resources` drops
+ . `android.packaging.resources` drops
   `org/fusesource/jansi/internal/native/{Windows,Mac,Linux,FreeBSD}/**` and
   `META-INF/native-image/jansi/**` — Jansi ships through Koog's logger and
   only its ANSI-escape rendering runs on JVM hosts. Saves ~430 KB on the
@@ -1032,7 +1053,7 @@ of README hero shots regenerated from new Roborazzi baselines.
 - **Legacy chat surface** (`presentation/ui/chat/legacy/`) — 13 production
   files + paired tests (2 unit tests, 4 instrumented tests). The
   redesigned `chat/home/` package has been the production surface since
-  Phase 21 / Task 8 and absorbed every behaviour that mattered
+  the redesign and absorbed every behaviour that mattered
   (orchestrator core, HITL, Clarification, console pane, chat export);
   the legacy package was kept around as a reference while wiring landed,
   and is now removed so future grep / FILE_MAP / file-tree audits stay
@@ -1040,13 +1061,12 @@ of README hero shots regenerated from new Roborazzi baselines.
   `ChatExportPayload`, `AppNavGraph`, `HitlIntegrationTest`, and
   `ClarificationIntegrationTest` are cleaned up alongside the deletion.
 
-- **Global UI audit on Knotwork-converted screens** (Phase 22 / Task 16).
+- **Global UI audit on Knotwork-converted screens**.
   Swept `app/src/main/` for design-system violations across hex colours,
   shape / typography / dp / motion tokens, theme single-source, and
   component reuse. One Block-grade and eight Major findings were
   closed in this PR; the full triage and the deferred TalkBack + dynamic-
-  type release-smoke checklists landed in `project_docs/ui-audit-phase22.md`
-  under the new `## Task 16` section.
+  type release-smoke checklists are tracked separately.
   - `NodeContextConfigSection.kt` swaps the hint `Surface` shape from
     `RoundedCornerShape(8.dp)` to `KnotworkTheme.shapes.sm` and rebinds
     paddings to spacing tokens.
@@ -1067,7 +1087,7 @@ of README hero shots regenerated from new Roborazzi baselines.
     pending a `trailingIcon` slot on the catalog button (filed as
     Minor in the audit doc).
 
-- **Phase 22 / Task 16 post-merge fixes (F1–F10).** Ten review
+- **Post-merge fixes (F1–F10).** Ten review
   findings landed in the same PR by user request. Roborazzi
   baselines for `chat_home_*`, `settings_*`, and
   `prompts_editor_*` were re-recorded.
@@ -1139,7 +1159,7 @@ of README hero shots regenerated from new Roborazzi baselines.
 
 ### Added
 
-- **Knotwork conversion of the remaining screens** (Phase 22 / Task 15).
+- **Knotwork conversion of the remaining screens**.
   Splash, Models, Prompt library, Task monitor, Live metrics, More, and
   About now share the catalog-driven Compose surface used by the §C1–C8
   screens. Each app-side screen is a slim mapper that folds its
@@ -1206,8 +1226,7 @@ of README hero shots regenerated from new Roborazzi baselines.
   tab and a candidate for the secondary surfaces that still use
   Material 3 `ListItem`.
 
-- **Inputs & chips — design-system alignment** (Phase 22 / Task 14
-  follow-up). Brings every text input and chip on screen onto the
+- **Inputs & chips — design-system alignment** (follow-up). Brings every text input and chip on screen onto the
   canonical Knotwork atom family laid out in
   `inputs-and-chips.md`. Before this change the catalog had a single
   `KnotworkChip` (pill-shaped, three styles squeezed into one atom)
@@ -1357,8 +1376,7 @@ of README hero shots regenerated from new Roborazzi baselines.
     publishes the `…-previewN` series and `-preview7` is the
     latest). Re-baseline together with the next genuine bump.
 
-- **Pipeline editor — review follow-up** (Phase 22 / Task 14/17,
-  second pass) — eight issues caught on a real device after the
+- **Pipeline editor — review follow-up** (second pass) — eight issues caught on a real device after the
   initial alignment landed: the `RunStatusBanner` now uses a single
   Material `Surface` with a `border` parameter so the inner border
   and the outer background tint always paint the same rectangle (the
@@ -1391,7 +1409,7 @@ of README hero shots regenerated from new Roborazzi baselines.
   baselines regenerated to reflect the new toolbar + banner layout.
 
 - **Clarification node — default prompt + library seeds**
-  (Phase 22 / Task 14/17, review fix) — two regressions caught on a
+  (review fix) — two regressions caught on a
   fresh Clarification node:
   - `NodeConfigCodec.defaultFor(CLARIFICATION)` now seeds
     `questionTemplate` from `DefaultPrompts.getDefaultPromptForNodeType(CLARIFICATION)`.
@@ -1411,7 +1429,7 @@ of README hero shots regenerated from new Roborazzi baselines.
     "Clarification-missing → inserted" paths.
 
 - **App-wide slider — single `KnotworkCompactSlider` atom**
-  (Phase 22 / Task 14/17, review polish) — extracted the
+  (review polish) — extracted the
   inline `CompactSlider` that the Settings screen had been rolling
   privately into a new catalog atom at
   `components/controls/KnotworkCompactSlider.kt`. Every slider in
@@ -1429,8 +1447,7 @@ of README hero shots regenerated from new Roborazzi baselines.
   constants, private Settings `CompactSlider`) is now `dead-code`
   removed.
 
-- **Pipeline editor — polish round 3** (Phase 22 / Task 14/17,
-  second real-device review pass) — six fixes on `NodeConfigSheet`:
+- **Pipeline editor — polish round 3** (second real-device review pass) — six fixes on `NodeConfigSheet`:
   - Every field on the sheet now uses `KnotworkTextStyles.MonoBase`
     (Title + plain text fields + identifier fields). The mixed
     BodyBase / MonoBase stack read as accidentally inconsistent on
@@ -1471,8 +1488,7 @@ of README hero shots regenerated from new Roborazzi baselines.
     construction now see the registered defaults on first open.
   - Catalog `pipeline_editor_*` snapshot baselines regenerated.
 
-- **Pipeline editor — polish round 2** (Phase 22 / Task 14/17,
-  real-device review pass) — eight more issues:
+- **Pipeline editor — polish round 2** (real-device review pass) — eight more issues:
   - `NodeConfigSheet` Title field now uses `KnotworkTextStyles.BodyBase`
     instead of Material3's default `bodyLarge` so it no longer reads
     larger / different from every other field on the sheet.
@@ -1503,8 +1519,7 @@ of README hero shots regenerated from new Roborazzi baselines.
     "I tapped Run, nothing happened" confusion.
   - Catalog `pipeline_editor_*` snapshot baselines regenerated.
 
-- **NodeConfigSheet — density tightening** (Phase 22 / Task 14/17,
-  same review pass) — every per-field label now rides on
+- **NodeConfigSheet — density tightening** (same review pass) — every per-field label now rides on
   `OutlinedTextField`'s floating-label slot instead of a separate row
   above (saves ~24 dp per field across 12 forms). The optional
   prompt-library button moves into the field's `trailingIcon` slot at
@@ -1517,7 +1532,7 @@ of README hero shots regenerated from new Roborazzi baselines.
   the tighter sheet.
 
 - **Pipeline editor — design alignment & feature backfill**
-  (Phase 22 / Task 14/17) — closes every divergence the diff document
+  — closes every divergence the diff document
   caught between the spec, the production code, and the new designer
   mockups. The catalog `EditorToolbar` is reshaped to
   `[← back] [title + subtitle] [primary action] [overflow]`
@@ -1547,7 +1562,7 @@ of README hero shots regenerated from new Roborazzi baselines.
   with the radial quick-add menu — best landed alongside broader
   wide-screen layouts).
 
-- **Onboarding — review follow-up** (Phase 22 / Task 13/17, second
+- **Onboarding — review follow-up** (second
   pass) — three issues caught on a real device after the initial
   audit landed: the Step-2 selected `LiteRtModelRow` background
   switched from the static `Accent50` palette to
@@ -1563,7 +1578,7 @@ of README hero shots regenerated from new Roborazzi baselines.
   flips on whatever is actually persisted — not on which row the user
   tapped.
 
-- **Onboarding — design audit & alignment** (Phase 22 / Task 13/17) —
+- **Onboarding — design audit & alignment** —
   the four-step pager now honours every chrome rule called out in the
   task brief: the `StepHeadline` composable clamps the user's
   `fontScale` to 1.6× per `decisions.md §14` (via an overridden
@@ -1582,13 +1597,12 @@ of README hero shots regenerated from new Roborazzi baselines.
   Default)` so the skip-hint sits on `extended.surface3` instead of
   the raw Material3 chrome. Roborazzi baseline grew from 8 → 16 PNGs
   with new fixtures for step-2 `Downloading`, step-2 `DownloadError`,
-  step-2 `CustomUrlInput`, and step-4 `ModelReady`. Findings logged
-  in `project_docs/ui-audit-phase22.md` (`## Task 13 — Onboarding`);
-  `screens/README.md §C5` rewritten to match the second-pass JSX
+  step-2 `CustomUrlInput`, and step-4 `ModelReady`. Findings are tracked
+  separately; `screens/README.md §C5` rewritten to match the second-pass JSX
   artboard family that `OnboardingViewState` was designed against,
   replacing the stale first-pass spec.
 
-- **Onboarding — LiteRT model download wiring** (Phase 22 / Task 12/17)
+- **Onboarding — LiteRT model download wiring**
   — Step 2 of the onboarding pager now actually downloads the picked
   LiteRT model. The CTA stays disabled until the model is on disk or a
   download is in flight, so the user can no longer advance into chat
@@ -1607,7 +1621,7 @@ of README hero shots regenerated from new Roborazzi baselines.
   `domain/constants/OnboardingModelCatalog.kt` and are shared between
   the onboarding catalog and the data-layer downloader.
 
-- **Tools — full MCP server configuration** (Phase 22 / Task 10/17) —
+- **Tools — full MCP server configuration** —
   Each MCP server now carries a full [McpServerConfig]: optional
   display name, transport selection (SSE via Koog's
   `defaultSseTransport`; Streamable HTTP via the upstream MCP
@@ -1627,8 +1641,7 @@ of README hero shots regenerated from new Roborazzi baselines.
   configs in the new `mcp_servers_json` key — the manager one-shot
   migrates the legacy key on the first read, and writes the new
   shape on the next mutation.
-- **Tools — MCP per-tool detail and tool-list fetcher** (Phase 22 /
-  Task 10/17) — Tools surface now drives a real
+- **Tools — MCP per-tool detail and tool-list fetcher** — Tools surface now drives a real
   `tools/list` MCP round-trip through the new
   `McpServerRepository` (data impl: `McpServerRepositoryImpl`).
   Per-server snapshots in `ToolsUiState` carry the live
@@ -1648,7 +1661,7 @@ of README hero shots regenerated from new Roborazzi baselines.
   + file deleted — the inline add-form on `ToolsScreen` is the
   single entry point.
 
-- **Settings — redesign + full backend wiring** (Phase 22 / Task 9/17) —
+- **Settings — redesign + full backend wiring** —
   Settings was rewritten end-to-end to match the new mockup. New surface
   hosts nine cards: identity (device-id + Keystore probe), system
   instructions (with variable chip row and char/token counter),
@@ -1689,7 +1702,7 @@ of README hero shots regenerated from new Roborazzi baselines.
   version / commit / license / acknowledgments / privacy policy
   sections.
 - **Settings — port provider/sampling forms in the Knotwork style**
-  (Phase 22 / Task 8/17) — the Settings screen now drives the catalog
+  — the Settings screen now drives the catalog
   `SettingsContent` as the single source of truth for chrome (TopAppBar,
   sections, scroll, visual states). Provider configuration moved to the
   catalog: `KnotworkProviderRow` renders a collapsible card with masked
@@ -1707,18 +1720,18 @@ of README hero shots regenerated from new Roborazzi baselines.
   title-subtitle-trailing row with the richer Knotwork variants without
   forking the catalog scaffolding, and an optional `onBack` callback so
   the embedded TopAppBar can render a navigation icon. Restart-required
-  / destructive-confirm wiring stays deferred to Task 9 (audit pass).
-- **Memory — design audit & alignment** (Phase 22 / Task 7/17) — full 7-state
+  / destructive-confirm wiring stays deferred to a later audit pass.
+- **Memory — design audit & alignment** — full 7-state
   Roborazzi baseline (Empty / Populated / Searching / LoadingMore /
   EntryExpanded / Editing / Error) in both themes plus a populated-pinned
-  snapshot covering the Task 6 glyph. Detail-sheet tag chips switched from
+  snapshot covering the pinned glyph. Detail-sheet tag chips switched from
   `ChipStyle.Outline` to `ChipStyle.Tonal` per `screens/README.md §C6`. New
   `MemoryAccessibilityTest` enumerates the TalkBack-reachable surfaces on
   happy path #5 (Search → expand → delete) and asserts the pinned-row
   glyph publishes a non-blank `contentDescription` so colour is never the
   only signal. Audit findings (closed / deferred) appended to
   `project_docs/ui-audit-phase22.md`.
-- **Memory — edit + pin persistence** (Phase 22 / Task 6/17) — the
+- **Memory — edit + pin persistence** — the
   detail-sheet Edit and Pin affordances on the Memory screen now drive
   real persistence instead of "coming soon" snackbars.
   `MemoryRepository` gains `updateMemory(id, text, embedding)` and
@@ -1731,7 +1744,7 @@ of README hero shots regenerated from new Roborazzi baselines.
   sheet pin button toggles between "Pin to top" and "Unpin" depending
   on the current state. Room migrates `v22 → v23` adding
   `memory_chunks.isPinned INTEGER NOT NULL DEFAULT 0`.
-- **Chat home — design audit & alignment** (Phase 22 / Task 5/17) — token
+- **Chat home — design audit & alignment** — token
   sweep over the production chat scope, drawer slide-in motion gated
   through `respectReducedMotionTransitions`, HitlConfirm snapshot matrix
   expanded to the 3 risk variants (`Readonly` / `Sensitive` /
@@ -1740,7 +1753,7 @@ of README hero shots regenerated from new Roborazzi baselines.
   drawer, HITL card, and console pane each publish the minimum number of
   TalkBack-reachable nodes. Audit findings (closed / deferred) live in
   `project_docs/ui-audit-phase22.md`.
-- **Chat home — secondary affordances** (Phase 22 / Task 4/17) — the
+- **Chat home — secondary affordances** — the
   drawer, top app bar, and composer-overflow callbacks that were left
   stubbed in Tasks 1–3 now drive real backend operations. Every entry
   point in `compose/screens/README.md §C1` is wired:
@@ -1782,7 +1795,7 @@ of README hero shots regenerated from new Roborazzi baselines.
   pre-existing row. Distinct from `MIGRATION_19_20` which introduced the
   message-level `isStarred` on `chat_messages`.
 - **`ChatExportPayload`** relocated from `chat/legacy/` to `chat/home/`
-  so the legacy package can be deleted in Phase 22 / Task 17 without a
+  so the legacy package can be deleted without a
   dangling import.
 - **Catalog: `ChatHomeThreadRow.starred: Boolean`** + leading star glyph
   in `ChatHomeDrawerThreadRow`.
@@ -1799,7 +1812,7 @@ of README hero shots regenerated from new Roborazzi baselines.
 - `ChatHomeViewModel._modelName` is now derived from the active
   `LocalModel.name` instead of the static `"Local model"` placeholder.
 
-- **Chat home — Console pane real-time wiring** (Phase 22 / Task 3/17) —
+- **Chat home — Console pane real-time wiring** —
   replaces the `sampleConsoleLines()` / `sampleConsoleVars()` /
   `sampleConsoleTraces()` fixtures with live data streamed off the agent
   orchestrator. The console pane now reflects the real pipeline run on
@@ -1906,8 +1919,7 @@ of README hero shots regenerated from new Roborazzi baselines.
     `PeekTabStrip` / `PeekTickerRow` / `DragHandleStrip` composables,
     and the custom `resolveDragOutcome` snap-cycle helper are deleted.
 
-- **Chat home — HITL and Clarification real-time wiring** (Phase 22 /
-  Task 2/17) — replaces the `forceState(...)` stubs in
+- **Chat home — HITL and Clarification real-time wiring** — replaces the `forceState(...)` stubs in
   `ChatHomeScreen.onHitlAllowOnce` / `onHitlReject` / `onClarificationReply`
   with live orchestrator round-trips.
   - `ChatHomeViewModel` now injects `ClarificationRepository` and exposes
@@ -1938,8 +1950,8 @@ of README hero shots regenerated from new Roborazzi baselines.
     when no real pending snapshot is available (preserves the debug
     state picker).
 
-- **Chat home — orchestrator core wiring** (Phase 22 / Task 1/17) —
-  replaces the Phase 21 stub `ChatHomeViewModel` (canned delay + reply)
+- **Chat home — orchestrator core wiring** —
+  replaces the earlier stub `ChatHomeViewModel` (canned delay + reply)
   with a fully wired Hilt ViewModel that runs the agent orchestrator on
   the redesigned chat surface.
   - `ChatHomeViewModel` now injects `AgentOrchestratorUseCase`,
@@ -1971,7 +1983,7 @@ of README hero shots regenerated from new Roborazzi baselines.
     constants are gone.
   - Auto-renames a new chat to the first user message (truncated to 20
     characters) on send, matching legacy parity.
-- **Accessibility + release-candidate gate** (Phase 21 / Task 11/11) —
+- **Accessibility + release-candidate gate** —
   finalises the v0.1 surface against `decisions.md §14`:
   - Localised the only hard-coded English `contentDescription` left in
     the catalog (`PipelineListRow` overflow icon now resolves through
@@ -2006,10 +2018,9 @@ of README hero shots regenerated from new Roborazzi baselines.
     is committed under `:catalog/src/test/snapshots/` so
     `:catalog:verifyRoborazziDebug` runs green without `*-actual.png`
     leftovers.
-  - **`REVIEW_RETRO_phase21.md`** — internal retrospective walk through
-    the [`REVIEW.md`](project_docs/design/compose/components/REVIEW.md)
-    checklist for every Phase 21 sub-task, with the gaps closed in
-    Task 11 explicitly cross-linked.
+  - **Internal review retrospective** — walks through the component
+    review checklist for every sub-task, with the gaps closed in a
+    follow-up explicitly cross-linked.
   - **Release APK build** — `:app:assembleRelease` now produces an
     installable APK signed with the debug keystore (until a release
     keystore is provisioned), targeting `arm64-v8a` only (every
@@ -2025,7 +2036,7 @@ of README hero shots regenerated from new Roborazzi baselines.
   catalog Roborazzi baseline. Replaces the missing visual entry the
   README has carried since the rewrite started.
 
-- Redesigned **remaining screens C3 – C8** (Phase 21 / Task 10/11) — six
+- Redesigned **remaining screens C3 – C8** — six
   user-facing surfaces now driven by stateless catalog content
   composables, each backed by a sealed `*ViewState` matrix mirroring
   `compose/screens/README.md`:
@@ -2043,7 +2054,7 @@ of README hero shots regenerated from new Roborazzi baselines.
     preview + enable/disable toggle. Routes `TOOL_DETAIL` and
     `ADD_MCP_SERVER` now resolve to real screens.
   - **C5 Onboarding pager** (`OnboardingContent`) — replaces the
-    single-screen Task 4 stub with a 4-step flow (Welcome → Model
+    single-screen stub with a 4-step flow (Welcome → Model
     source → Permissions → Sample pipelines) plus a custom
     `OnboardingScaffold` (progress dots, skip, back / next, finish).
     `OnboardingViewModel` records the user's model-source pick, API-key
@@ -2070,10 +2081,10 @@ of README hero shots regenerated from new Roborazzi baselines.
   dark across the documented state matrix): pipeline library,
   onboarding, memory, settings, tools / tool detail / add-MCP-server.
 
-- Redesigned **Pipeline editor screen** (Phase 21 / Task 9/11) —
+- Redesigned **Pipeline editor screen** —
   `PipelineEditorScreen` under `presentation/ui/pipeline/editor/*`
   becomes the production canvas surface, replacing the legacy
-  `VisualOrchestratorScreen`. Composes the catalog atoms from Task 7
+  `VisualOrchestratorScreen`. Composes the catalog atoms
   (`NodeCard`, `EditorToolbar`, `NodeConfigSheet` + all 12 per-type
   `NodeConfigForms`) into a working editor:
   - **Infinite canvas** with pan + 2-finger pinch zoom clamped to
@@ -2141,7 +2152,7 @@ of README hero shots regenerated from new Roborazzi baselines.
   `NULL`, derived from the legacy flat fields on first edit so
   pre-Phase-21 rows open in the new editor without a data migration.
 
-- Redesigned **Chat home screen** (Phase 21 / Task 8/11) — the new primary
+- Redesigned **Chat home screen** — the new primary
   surface of the app, built on the Knotwork design system. `ChatHomeScreen`
   covers the eight documented visual states from `compose/screens/README.md
   §C1` (Empty, Idle, Generating, HITL Confirm, Clarification, Error, Drawer
@@ -2171,7 +2182,7 @@ of README hero shots regenerated from new Roborazzi baselines.
   reference implementation for the post-v0.1 orchestrator integration
   task that will reattach the real backend to `ChatHomeScreen`.
 
-- Knotwork pipeline-editor base components (Phase 21 / Task 7/11), shipped
+- Knotwork pipeline-editor base components, shipped
   under `:catalog/app.knotwork.design.components.pipelineeditor.*`:
   - **NodeCard** — 168 dp × 64..96 dp card covering idle / selected /
     multi-selected / running / runtime-error / validation-error states in
@@ -2207,7 +2218,7 @@ of README hero shots regenerated from new Roborazzi baselines.
     `REQUIRED` errors). Wired into `ComponentsCatalogPage` under
     "Pipeline editor" and snapshot-tested via Roborazzi in both themes
     with `FixedKnotworkA11y(reducedMotion = true)` for determinism.
-- Knotwork chat-surface components (Phase 21 / Task 6/11), shipped under
+- Knotwork chat-surface components, shipped under
   `:catalog/app.knotwork.design.components.chat.*` and
   `:catalog/app.knotwork.design.components.console.*`:
   - **ChatMessage** with sealed `ChatContent` (`Text`, `Markdown`,
@@ -2246,7 +2257,7 @@ of README hero shots regenerated from new Roborazzi baselines.
     `console_light.png`, `console_dark.png`. Behavioural coverage:
     `HitlConfirmationStateTest`, `ChatBubbleShapesTest`,
     `ConsoleFilterTest`, `ConsoleSnapTest`.
-- Knotwork base component library (Phase 21 / Task 5/11), shipped under
+- Knotwork base component library, shipped under
   `:catalog/app.knotwork.design.components.*`:
   - **Buttons** — `KnotworkPrimaryButton`, `KnotworkSecondaryButton`
     (with `destructive` flag for HITL `Reject`), `KnotworkTextButton`,
@@ -2301,7 +2312,7 @@ of README hero shots regenerated from new Roborazzi baselines.
   through this accessor instead of touching `LocalConfiguration` /
   `Settings.Global` directly.
 - App shell with bottom navigation, single unified nav-graph, and a
-  first-launch onboarding gate (Phase 21 / Task 4/11):
+  first-launch onboarding gate:
   - Four-tab `NavigationBar` — **Chat** (start) / **Pipelines** /
     **Tools** / **More** — replaces the legacy hub-style `HomeScreen`.
     Tab state (back-stack, scroll position) is preserved across
@@ -2328,8 +2339,8 @@ of README hero shots regenerated from new Roborazzi baselines.
     `isFirstLaunch`, which `InitializeAppUseCase` clears during
     cold-start seeding and therefore cannot drive the UI gate). The
     full 4-step `HorizontalPager` (Welcome → Models → Permissions →
-    Sample pipelines) is Task 10's deliverable.
-- Bundled brand fonts in `:app/src/main/res/font/` (Phase 21 / Task 3/11):
+    Sample pipelines) ships separately.
+- Bundled brand fonts in `:app/src/main/res/font/`:
   Inter Regular / Medium / SemiBold / Bold and JetBrains Mono Regular /
   Medium. Sources are the SIL OFL 1.1 upstreams (Inter v4.0,
   JetBrains Mono v2.304) subset to Latin-1 plus a handful of typographic
@@ -2370,7 +2381,7 @@ of README hero shots regenerated from new Roborazzi baselines.
   the existing in-app `SplashScreen` composable without a blank-frame
   flash.
 - Knotwork design tokens ported into `:catalog` under
-  `app.knotwork.design.tokens` (Phase 21 / Task 2/11). Six token files —
+  `app.knotwork.design.tokens`. Six token files —
   `Color.kt`, `ExtendedColors.kt`, `Type.kt`, `Spacing.kt`, `Shape.kt`,
   `Elevation.kt`, `Motion.kt` — establish the canonical Compose-side
   source of truth for colour, typography, spacing, shape, elevation and
@@ -2397,7 +2408,7 @@ of README hero shots regenerated from new Roborazzi baselines.
   Knotwork tokens through the standard Android resource pipeline.
   Compose code keeps reading from `:catalog` `KnotworkTheme.*`. Resources
   are pre-published — `tools:ignore="UnusedResources"` is applied at the
-  file level until the consuming surfaces land in later Phase 21 tasks.
+  file level until the consuming surfaces land in later changes.
 - Snapshot-testing infrastructure: Roborazzi `1.60.0` + Robolectric
   `4.16.1` wired into `:catalog`, with the first baseline (light + dark
   PNGs of `FoundationsCatalogPage`) committed under
@@ -2406,20 +2417,20 @@ of README hero shots regenerated from new Roborazzi baselines.
   is the CI gate. Aggregated `./gradlew check` already triggers
   `verifyRoborazziDebug` via the `testDebugUnitTest` chain.
 - `:catalog` Android library module hosting the Knotwork design system.
-  Phase 21 / Task 1/11 shipped the project scaffold: namespace
+  The project scaffold shipped first: namespace
   `app.knotwork.design`, `minSdk 36` / `compileSdk 37`, Compose BOM,
-  ktlint and detekt mirrored from `:app`. Task 2/11 replaced the
+  ktlint and detekt mirrored from `:app`. A follow-up replaced the
   pass-through `KnotworkTheme` with the real token-wired implementation
   (see entries above).
 - `androidx.core.splashscreen 1.0.1` dependency wired into `:app`. The
-  platform-side `installSplashScreen(...)` call lands in Task 3/11 once
+  platform-side `installSplashScreen(...)` call lands in a follow-up once
   the brand mark and accent ramp are available; declaring the artefact
   here unblocks downstream tasks without touching the existing Compose
   `SplashScreen` route.
 - `android:enableOnBackInvokedCallback="true"` declared on the agent
   `<application>` element to opt the app in to Android's predictive-back
   gesture stack. Surface-level `PredictiveBackHandler` wiring on modal
-  sheets follows in Task 4/11.
+  sheets follows later.
 
 ### Changed
 
@@ -2429,7 +2440,7 @@ of README hero shots regenerated from new Roborazzi baselines.
   in both light and dark themes. Visible behaviour is unchanged on the
   current screens.
 - `CONTRIBUTING.md` now lists JDK 21 as the required toolchain for
-  running unit tests (Phase 21 / Task 2/11). Roborazzi's Robolectric
+  running unit tests. Roborazzi's Robolectric
   backend requires JDK 21 to render against `minSdk 36`. Production
   code still compiles to `JavaVersion.VERSION_17` / `JvmTarget.JVM_17`.
   Note for repo owner: the Action runner in `.github/workflows/check.yml`
@@ -2446,7 +2457,7 @@ of README hero shots regenerated from new Roborazzi baselines.
   `@AppFunction`, so its KSP-generated entry in `app_functions_v2.xml` advertises the
   function to external callers. **The wire id contains literal backticks around the
   `data` package segment** —
-  `` ai.agent.android.`data`.tools.local.appfunctions.SearchAppFunction#invoke `` —
+  `` app.knotwork.android.`data`.tools.local.appfunctions.SearchAppFunction#invoke `` —
   because the AppFunctions compiler bakes Kotlin source-level escaping for soft
   keywords into the id string. External callers must include the backticks verbatim,
   exactly as `AppFunctionsEndToEndTest.SEARCH_TOOL_ID` and the `:tools-probe`
@@ -2465,7 +2476,7 @@ of README hero shots regenerated from new Roborazzi baselines.
 ### Added
 
 - `:tools-probe` debug-only Android module shipping a single
-  `@AppFunction echo(message)` so the Phase 20 end-to-end instrumented test
+  `@AppFunction echo(message)` so the end-to-end instrumented test
   (`AppFunctionsEndToEndTest` in `:app/src/androidTest`) has a deterministic
   remote target. The probe APK is installed on the device before the
   agent's instrumented tests via a Gradle task hook that adds
@@ -2474,7 +2485,7 @@ of README hero shots regenerated from new Roborazzi baselines.
   (`./gradlew :app:connectedDebugAndroidTest`) and Android Studio's Run
   Test flows. Its `MainActivity` doubles as a one-tap manual smoke for the
   agent's callee-side surface (`search_tool` query "Knotwork") on the
-  Phase 20 reference device.
+  reference device.
 - `AppFunctionsEndToEndTest` covering four end-to-end scenarios on Android
   16+: caller-side `ToolRepository.executeTool` round-trip, HITL gate
   emission of `WaitingForApproval` for SENSITIVE-by-default AppFunctions
@@ -2494,7 +2505,7 @@ of README hero shots regenerated from new Roborazzi baselines.
   with a detailed transcript. The probe's manual MainActivity button hits
   the same platform restriction (plus a second pre-requisite: the agent's
   `search_tool` will only show up in `app_functions_v2.xml` once it gains
-  an `@AppFunction` annotation in Phase 20-7). Both gates re-open
+  an `@AppFunction` annotation-7). Both gates re-open
   automatically on future Android builds that relax the permission's
   protection level for debuggable apps.
 - `AppFunctionsE2ETestEntryPoint` (Hilt `EntryPoint`) under
@@ -2572,7 +2583,7 @@ of README hero shots regenerated from new Roborazzi baselines.
 - `ApprovalBannerTest` and `ChatScreenTest` no longer fail to compile on the
   current Compose / `UiText` surfaces. The fixes (a stale `assertDoesNotExist`
   import and a raw `String` passed where a `UiText?` is expected) had drifted
-  silently because CI runs JVM-only `./gradlew check`; the new Phase 20-6
+  silently because CI runs JVM-only `./gradlew check`; the new
   instrumented-test work made the breakage observable.
 
 ### Security

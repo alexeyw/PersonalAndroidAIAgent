@@ -70,7 +70,7 @@ object NodeConfigForms {
      * field. Forms perform pure copy()-style updates — no internal state.
      * @param availableToolIds canonical tool ids exposed to [ToolFormBody] for its
      * dropdown. Empty list (the default) falls back to a free-text input — useful for
-     * the catalog harness which has no app-level [ai.agent.android.domain.repositories.ToolRepository].
+     * the catalog harness which has no app-level [app.knotwork.android.domain.repositories.ToolRepository].
      * @param availableModels installed local models exposed to [LiteRtFormBody] for
      * its dropdown. Empty list (the default) falls back to a free-text input.
      * @param onPickFromLibrary optional hook to open the prompt-library picker from
