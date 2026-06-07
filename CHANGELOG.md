@@ -185,6 +185,13 @@ details.
   **Auto-Layout** was tapped. The depth resolver now tracks its recursion
   stack and ignores back-edges (and self-loops) for layering, so cyclic
   pipelines lay out without crashing.
+- **Auto-Layout overlapped nodes on high-density screens**: the layout
+  gaps were fixed canvas-px values, but a `NodeCard` is sized in dp and the
+  canvas maps one unit to one screen-px, so on a 3×-density display each card
+  rendered ~3× wider than the spacing assumed and the cards piled on top of
+  each other. The editor now derives the sibling / layer gaps from the card
+  footprint in dp, scaled through the screen `Density`, so nodes keep clear
+  air between them at any density.
 - **TOOL node with "Auto" tool failed at runtime**: a
   TOOL node left on the Auto option (persisted as a blank `toolName`) errored
   with "Tool node is missing toolName configuration" instead of letting the

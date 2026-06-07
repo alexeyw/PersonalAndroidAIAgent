@@ -9,6 +9,7 @@ import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.util.UUID
+import kotlin.math.abs
 
 class AutoLayoutTest {
 
@@ -153,6 +154,44 @@ class AutoLayoutTest {
         val result = AutoLayout.compute(graph)
         assertEquals(1, result.positions.size)
         assertEquals(0, result.depths["a"])
+    }
+
+    @Test
+    fun `given a larger sibling gap when compute then siblings spread further apart`() {
+        val input = node(NodeType.INPUT, "in")
+        val left = node(NodeType.LITE_RT, "l")
+        val right = node(NodeType.LITE_RT, "r")
+        val graph = PipelineGraph(
+            id = "g",
+            name = "g",
+            nodes = listOf(input, left, right),
+            connections = listOf(
+                ConnectionModel(id = "1", sourceNodeId = "in", targetNodeId = "l"),
+                ConnectionModel(id = "2", sourceNodeId = "in", targetNodeId = "r"),
+            ),
+        )
+        val narrow = AutoLayout.compute(graph)
+        val wide = AutoLayout.compute(graph, siblingGapPx = 600f, layerGapPx = AutoLayout.LAYER_GAP_Y)
+        val narrowSpan = abs(narrow.positions.getValue("l").first - narrow.positions.getValue("r").first)
+        val wideSpan = abs(wide.positions.getValue("l").first - wide.positions.getValue("r").first)
+        assertTrue(wideSpan > narrowSpan)
+    }
+
+    @Test
+    fun `given a larger layer gap when compute then layers spread further apart`() {
+        val a = node(NodeType.INPUT, "a")
+        val b = node(NodeType.LITE_RT, "b")
+        val graph = PipelineGraph(
+            id = "g",
+            name = "g",
+            nodes = listOf(a, b),
+            connections = listOf(ConnectionModel(id = "ab", sourceNodeId = "a", targetNodeId = "b")),
+        )
+        val narrow = AutoLayout.compute(graph)
+        val wide = AutoLayout.compute(graph, siblingGapPx = AutoLayout.SIBLING_GAP_X, layerGapPx = 600f)
+        val narrowDy = abs(narrow.positions.getValue("a").second - narrow.positions.getValue("b").second)
+        val wideDy = abs(wide.positions.getValue("a").second - wide.positions.getValue("b").second)
+        assertTrue(wideDy > narrowDy)
     }
 
     @Test

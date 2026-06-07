@@ -36,6 +36,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -311,9 +312,21 @@ fun PipelineEditorScreen(viewModel: OrchestratorViewModel, onBack: () -> Unit) {
                 }
             }
         }
+        // Auto-layout gaps are authored in dp and converted to canvas-px here, where the
+        // screen [Density] is known. `CanvasTransform` maps 1 canvas-unit to 1 screen-px,
+        // but a `NodeCard` is sized in dp, so it occupies `cardSizeDp × density` canvas-px
+        // on screen — passing a fixed-px gap (as the bare `SIBLING_GAP_X`/`LAYER_GAP_Y`
+        // defaults do) lets the cards overlap on any high-density display.
+        val density = LocalDensity.current
+        val autoLayoutSiblingGapPx = with(density) { AUTO_LAYOUT_SIBLING_GAP.toPx() }
+        val autoLayoutLayerGapPx = with(density) { AUTO_LAYOUT_LAYER_GAP.toPx() }
         val onAutoLayoutClick: () -> Unit = autoLayoutClick@{
             editor.undoRedo.push(pipeline)
-            val result = AutoLayout.compute(pipeline)
+            val result = AutoLayout.compute(
+                graph = pipeline,
+                siblingGapPx = autoLayoutSiblingGapPx,
+                layerGapPx = autoLayoutLayerGapPx,
+            )
             if (result.positions.isEmpty()) return@autoLayoutClick
             // `AutoLayout.compute` emits coordinates anchored at the canvas
             // origin (`(0, 0)` for the seed layer); without an offset the
@@ -1038,3 +1051,16 @@ private const val NANOS_PER_SECOND: Float = 1_000_000_000f
  */
 private const val NODE_CARD_WIDTH_PX: Float = 168f
 private const val NODE_CARD_HEIGHT_PX: Float = 96f
+
+/**
+ * Auto-layout horizontal centre-to-centre step, in **dp** (converted to canvas-px through
+ * the screen [androidx.compose.ui.unit.Density] at the call site). The 168 dp card width
+ * plus a 72 dp gutter, so siblings keep clear air between them at any display density.
+ */
+private val AUTO_LAYOUT_SIBLING_GAP = 240.dp
+
+/**
+ * Auto-layout vertical centre-to-centre step, in **dp**. The card runs up to ~126 dp tall
+ * once inbound / outbound port labels inset it, so 216 dp leaves ~90 dp between layers.
+ */
+private val AUTO_LAYOUT_LAYER_GAP = 216.dp
