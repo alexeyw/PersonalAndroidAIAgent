@@ -6,7 +6,7 @@ import app.knotwork.design.components.chips.Status
 
 /**
  * Visual variant of the pipeline-library surface. Drives the 7 documented
- * states (`compose/screens/README.md §C3 · Pipeline library`) and lets
+ * states and lets
  * snapshot tests iterate them deterministically.
  *
  * The presentation layer in `:app` maps its `OrchestratorUiState` onto this
@@ -44,8 +44,8 @@ enum class PipelineLibraryFilter {
     Recent,
 
     /**
-     * Pipelines shared with other devices / accounts. Phase 21 ships this
-     * affordance disabled because the multi-device sync backend is not
+     * Pipelines shared with other devices / accounts. This affordance ships
+     * disabled because the multi-device sync backend is not
      * available yet — the chip is rendered but the screen forbids selecting
      * it.
      */
@@ -76,8 +76,7 @@ enum class PipelineLibraryFilter {
  * @property leadingTint hue used for the 40 dp leading mark.
  * @property leadingIcon vector rendered inside the leading mark.
  * @property isActive `true` when this is the pipeline currently loaded in
- * the editor. Renders the full-row warm-cream tint shown in the spec
- * mockup.
+ * the editor. Renders the full-row warm-cream tint.
  * @property isDefault `true` when this pipeline is the user's default;
  * renders a brown `DEFAULT` pill next to the title.
  * @property selected `true` when this row is part of the active multi-select
@@ -114,9 +113,8 @@ enum class PipelineSecondaryLineKind {
 }
 
 /**
- * Top-level immutable input to `PipelineLibraryContent`. Mirrors
- * `compose/screens/README.md §C3` and the 7-state matrix locked in by
- * Phase 21 / Task 10.
+ * Top-level immutable input to `PipelineLibraryContent`. Covers the
+ * 7-state matrix for the pipeline library.
  *
  * @property visualState which of the documented states to render.
  * @property pipelines rows passed through to the list body; empty when
@@ -171,7 +169,6 @@ class PipelineLibraryCallbacks(
     val onSaveAsPreset: (String) -> Unit = {},
     val onImportJson: () -> Unit = {},
     val onOpenDrawer: () -> Unit = {},
-    val onTopOverflow: () -> Unit = {},
     val onNewPipeline: () -> Unit = {},
     val onBrowseTemplates: () -> Unit = {},
     val onErrorRetry: () -> Unit = {},

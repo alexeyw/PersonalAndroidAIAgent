@@ -30,7 +30,7 @@ import app.knotwork.design.tokens.KnotworkTextStyles
  * Two-state Knotwork chip used for segmented controls, library filters, and
  * single-choice rows (yes/no, Format, Style, Risk gate).
  *
- * Geometry (`inputs-and-chips.md` §6.1):
+ * Geometry:
  *  - Shape: `KnotworkTheme.shapes.sm` (8 dp). Spec deliberately diverges
  *    from Material's pill-shaped filter chip — Knotwork uses 8 dp rectangles
  *    everywhere except the dedicated `RiskPill` / `StatusPill` family.

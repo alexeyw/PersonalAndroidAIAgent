@@ -30,7 +30,6 @@ private val LoaderDotSize = 8.dp
 
 /**
  * Total visible loop duration (full alpha down-and-up cycle), in milliseconds.
- * Matches `compose/components/README.md` §Misc.
  *
  * The per-direction tween is half of this — `RepeatMode.Reverse` plays the
  * tween forward and then backward, so a 1200 ms full cycle needs a 600 ms
@@ -54,10 +53,10 @@ private const val LOADER_MAX_ALPHA = 1.0f
  * `Accent300 → Accent400 → Accent500` (no `Accent600`; the spec ramp ends
  * at 500). Used for chat "Generating…" and editor "Validating…".
  *
- * Visual contract (see `compose/components/README.md` §Misc):
+ * Visual contract:
  *  - 1.2 s loop with a 200 ms stagger between dots; each dot fades from 1.0
  *    to 0.2 to 1.0 alpha.
- *  - Reduced motion (per `decisions.md §14`): looping animation collapses to
+ *  - Reduced motion: looping animation collapses to
  *    a static `"•••"` glyph in `LabelLg onSurfaceMuted` — never strobes.
  *  - Marked `contentDescription = "Loading"` so TalkBack announces the
  *    state instead of decorative dots.

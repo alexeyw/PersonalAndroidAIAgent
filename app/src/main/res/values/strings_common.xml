@@ -15,26 +15,12 @@
     <string name="common_close">Close</string>
     <string name="common_back">Back</string>
     <string name="common_retry">Retry</string>
-    <string name="common_ok">OK</string>
-    <string name="common_enable">Enable</string>
-    <string name="common_disable">Disable</string>
-    <string name="common_edit">Edit</string>
-    <string name="common_rename">Rename</string>
-    <string name="common_duplicate">Duplicate</string>
-    <string name="common_load">Load</string>
-    <string name="common_done">Done</string>
-    <string name="common_apply">Apply</string>
 
     <!-- Bottom navigation tab labels (Phase 21 / Task 4) -->
     <string name="nav_tab_chat">Chat</string>
     <string name="nav_tab_pipelines">Pipelines</string>
     <string name="nav_tab_tools">Tools</string>
     <string name="nav_tab_more">More</string>
-
-    <!-- Onboarding stub (Phase 21 / Task 4; full pager in Task 10) -->
-    <string name="onboarding_headline">Welcome to Knotwork</string>
-    <string name="onboarding_subtitle">An on-device AI agent for Android. Set up takes a moment.</string>
-    <string name="onboarding_get_started">Get started</string>
 
     <!-- "More" tab landing screen rows -->
     <string name="more_row_memory">Memory</string>

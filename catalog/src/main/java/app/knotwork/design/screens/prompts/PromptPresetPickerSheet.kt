@@ -22,8 +22,6 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -41,12 +39,14 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import app.knotwork.design.components.buttons.KnotworkButtonSize
 import app.knotwork.design.components.buttons.KnotworkPrimaryButton
 import app.knotwork.design.components.buttons.KnotworkTextButton
 import app.knotwork.design.components.pipelineeditor.NodeType
 import app.knotwork.design.components.pipelineeditor.headerOnColor
 import app.knotwork.design.components.pipelineeditor.headerTint
+import app.knotwork.design.icons.AppIcons
 import app.knotwork.design.theme.KnotworkTheme
 import app.knotwork.design.tokens.KnotworkTextStyles
 
@@ -146,8 +146,8 @@ class PromptPresetPickerCallbacks(
 )
 
 /**
- * Stateless bottom-sheet body for the prompt-preset picker — matches the
- * Phase 24 / Task 5 mockup: title row with search + close icons, coloured
+ * Stateless bottom-sheet body for the prompt-preset picker: title row with
+ * search + close icons, coloured
  * node-type pill subtitle, Bundled / Mine tab bar with counters, search
  * field, leading `All N` chip + per-tag filter chips, radio-style row
  * list with optional `● CURRENT` pill and per-row preview icon, sticky
@@ -216,7 +216,7 @@ private fun HeaderRow(
         }
         IconButton(onClick = callbacks.onClose) {
             Icon(
-                imageVector = Icons.Outlined.Close,
+                imageVector = AppIcons.X,
                 contentDescription = strings.closeCd,
                 tint = MaterialTheme.colorScheme.onSurface,
             )
@@ -229,20 +229,28 @@ private fun HeaderRow(
 private fun NodeTypePill(nodeType: NodeType) {
     val tint = nodeType.headerTint()
     val onTint = headerOnColor(tint)
+    // JetBrains Mono 700, 11 px, +0.6 tracking, height 22, padding 0 9, radius xs.
     Box(
+        contentAlignment = Alignment.Center,
         modifier = Modifier
-            .clip(KnotworkTheme.shapes.full)
+            .height(NODE_KIND_PILL_HEIGHT)
+            .clip(KnotworkTheme.shapes.xs)
             .background(color = tint)
-            .padding(horizontal = KnotworkTheme.spacing.sp2, vertical = KnotworkTheme.spacing.sp1),
+            .padding(horizontal = NODE_KIND_PILL_PADDING_H),
     ) {
         Text(
             text = nodeType.name.uppercase(),
-            style = KnotworkTextStyles.LabelSm,
+            style = KnotworkTextStyles.MonoSm.copy(
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 0.6.sp,
+            ),
             color = onTint,
-            fontWeight = FontWeight.Bold,
         )
     }
 }
+
+private val NODE_KIND_PILL_HEIGHT = 22.dp
+private val NODE_KIND_PILL_PADDING_H = 9.dp
 
 @Composable
 private fun TabRowSection(
@@ -491,7 +499,7 @@ private fun PresetRow(
             }
             IconButton(onClick = onPreview, modifier = Modifier.size(PREVIEW_ICON_TARGET.dp)) {
                 Icon(
-                    imageVector = Icons.Outlined.Search,
+                    imageVector = AppIcons.Search,
                     contentDescription = strings.previewCd,
                     tint = KnotworkTheme.extended.onSurfaceMuted,
                 )
@@ -519,20 +527,38 @@ private fun PresetRow(
 /** Compact `● CURRENT` pill rendered when the row's prompt matches the field value. */
 @Composable
 private fun CurrentBadge(label: String, accent: Color) {
-    Box(
+    val onAccent = headerOnColor(accent)
+    // JetBrains Mono 700, 9.5 px, +0.6 tracking, height 20, radius full, 5 px leading dot.
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(CURRENT_PILL_DOT_GAP),
         modifier = Modifier
+            .height(CURRENT_PILL_HEIGHT)
             .clip(KnotworkTheme.shapes.full)
             .background(color = accent)
-            .padding(horizontal = KnotworkTheme.spacing.sp2, vertical = 2.dp),
+            .padding(horizontal = CURRENT_PILL_PADDING_H),
     ) {
+        Box(
+            modifier = Modifier
+                .size(CURRENT_PILL_DOT_SIZE)
+                .background(color = onAccent, shape = CircleShape),
+        )
         Text(
-            text = "● $label",
-            style = KnotworkTextStyles.LabelSm,
-            color = headerOnColor(accent),
-            fontWeight = FontWeight.SemiBold,
+            text = label,
+            style = KnotworkTextStyles.MonoSm.copy(
+                fontWeight = FontWeight.Bold,
+                fontSize = 9.5.sp,
+                letterSpacing = 0.6.sp,
+            ),
+            color = onAccent,
         )
     }
 }
+
+private val CURRENT_PILL_HEIGHT = 20.dp
+private val CURRENT_PILL_PADDING_H = 6.dp
+private val CURRENT_PILL_DOT_SIZE = 5.dp
+private val CURRENT_PILL_DOT_GAP = 4.dp
 
 /** Mono row showing `218 tok · cot · reasoning` style metadata. */
 @Composable

@@ -25,7 +25,7 @@ import app.knotwork.design.tokens.KnotworkTextStyles
  * Action-only Knotwork chip — quick-reply, suggested action, onboarding
  * suggestion.
  *
- * Geometry (`inputs-and-chips.md` §6.2): same 8 dp `sm` shape as
+ * Geometry: same 8 dp `sm` shape as
  * [KnotworkFilterChip], but always rendered with a 1 dp outline and
  * `surface1` container so the chip reads on top of chat bubbles
  * (filter chips use a transparent fill, which would disappear into the

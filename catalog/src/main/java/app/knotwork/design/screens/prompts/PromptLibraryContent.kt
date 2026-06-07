@@ -20,14 +20,9 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.Bolt
-import androidx.compose.material.icons.outlined.Close
-import androidx.compose.material.icons.outlined.DeleteOutline
 import androidx.compose.material.icons.outlined.Edit
-import androidx.compose.material.icons.outlined.KeyboardArrowDown
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -56,6 +51,7 @@ import app.knotwork.design.components.buttons.KnotworkTextButton
 import app.knotwork.design.components.chips.KnotworkChip
 import app.knotwork.design.components.misc.EmptyState
 import app.knotwork.design.components.pipelineeditor.headerTint
+import app.knotwork.design.icons.AppIcons
 import app.knotwork.design.theme.KnotworkTheme
 import app.knotwork.design.tokens.KnotworkTextStyles
 
@@ -106,7 +102,7 @@ fun PromptLibraryContent(
                     shape = KnotworkTheme.shapes.md,
                 ) {
                     Icon(
-                        imageVector = Icons.Outlined.Add,
+                        imageVector = AppIcons.Add,
                         contentDescription = strings.fabCd,
                         modifier = Modifier.size(FabIconSize),
                     )
@@ -146,7 +142,7 @@ private fun PromptsTopBar(
             Column {
                 Text(
                     text = strings.title,
-                    style = KnotworkTextStyles.TitleLg,
+                    style = KnotworkTextStyles.TitleMd,
                     color = MaterialTheme.colorScheme.onSurface,
                 )
                 if (state.subtitle.isNotEmpty()) {
@@ -161,14 +157,13 @@ private fun PromptsTopBar(
         navigationIcon = {
             IconButton(onClick = callbacks.onBack) {
                 Icon(
-                    imageVector = Icons.AutoMirrored.Outlined.ArrowBack,
+                    imageVector = AppIcons.Back,
                     contentDescription = strings.backCd,
                     tint = MaterialTheme.colorScheme.onSurface,
                 )
             }
         },
-        // TopAppBar slot intentionally empty — search was removed in Phase 24 /
-        // Task 5 review pass. Reserved for future actions (Import / Export).
+        // TopAppBar slot intentionally empty. Reserved for future actions (Import / Export).
         actions = {},
         colors = TopAppBarDefaults.topAppBarColors(
             containerColor = MaterialTheme.colorScheme.surface,
@@ -215,8 +210,7 @@ private fun PromptsCategoryTabs(state: PromptLibraryViewState, callbacks: Prompt
                         text = category,
                         // Mono small so category labels (`IF_CONDITION`,
                         // `INTENT_ROUTER`, …) keep an even character
-                        // grid identical to the in-card pill — matches
-                        // the design mockup.
+                        // grid identical to the in-card pill.
                         style = KnotworkTextStyles.MonoSm,
                         color = if (index == selectedIndex) {
                             selectedTint
@@ -349,7 +343,7 @@ private fun PromptCard(
                         text = prompt.category,
                         // Mono small to match the tab labels — both
                         // surfaces read as the same `IF_CONDITION`
-                        // typographic gesture (per `prompts` mockup).
+                        // typographic gesture.
                         style = KnotworkTextStyles.MonoSm,
                         color = categoryTint,
                     )
@@ -367,14 +361,14 @@ private fun PromptCard(
                 // Preview is available on every row (read-only OR mutable);
                 // Edit + Delete only render when the row is mutable.
                 CompactIconButton(
-                    icon = Icons.Outlined.Search,
+                    icon = AppIcons.Search,
                     contentDescription = strings.previewCd,
                     onClick = onPreview,
                 )
                 if (!prompt.isReadOnly) {
-                    CompactIconButton(icon = Icons.Outlined.Edit, contentDescription = strings.editCd, onClick = onEdit)
+                    CompactIconButton(icon = AppIcons.Edit, contentDescription = strings.editCd, onClick = onEdit)
                     CompactIconButton(
-                        icon = Icons.Outlined.DeleteOutline,
+                        icon = AppIcons.Trash,
                         contentDescription = strings.deleteCd,
                         onClick = onDelete,
                     )
@@ -445,7 +439,7 @@ private fun CompactIconButton(
 /**
  * Highlight every `$VAR` token in [text] with a tonal background pill so
  * placeholders pop visually inside the body. Uses [SpanStyle] backgrounds
- * rather than `InlineTextContent` chips — close enough to the mockup, and
+ * rather than `InlineTextContent` chips, which
  * preserves the wrapping behaviour of the surrounding body text.
  */
 @Composable
@@ -513,7 +507,7 @@ fun PromptEditorSheetBody(
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(
-                    imageVector = Icons.Outlined.Edit,
+                    imageVector = AppIcons.Edit,
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(EditorHeaderGlyph),
@@ -529,7 +523,7 @@ fun PromptEditorSheetBody(
             )
             IconButton(onClick = callbacks.onEditorCancel) {
                 Icon(
-                    imageVector = Icons.Outlined.Close,
+                    imageVector = AppIcons.X,
                     contentDescription = strings.closeCd,
                     tint = MaterialTheme.colorScheme.onSurface,
                 )
@@ -632,7 +626,7 @@ private fun CategoryDropdown(value: String, placeholder: String, onValueChange: 
                 modifier = Modifier.weight(1f),
             )
             Icon(
-                imageVector = Icons.Outlined.KeyboardArrowDown,
+                imageVector = AppIcons.ArrowDown,
                 contentDescription = null,
                 tint = KnotworkTheme.extended.onSurfaceMuted,
             )
@@ -673,7 +667,7 @@ private fun EditorTextField(
     multiline: Boolean = false,
 ) {
     // Multi-line bodies render in mono (matches the Settings system-instructions
-    // card — Phase 22 / Task 16 follow-up F7) so prompt sources read with the
+    // card) so prompt sources read with the
     // same monospaced rhythm everywhere they're edited. The single-line Name
     // field keeps the proportional [BodyBase] face — it's a display label, not
     // a code-like payload.
@@ -715,7 +709,7 @@ private fun FooterHint(text: String) {
             .padding(KnotworkTheme.spacing.sp3),
     ) {
         Icon(
-            imageVector = Icons.Outlined.Bolt,
+            imageVector = AppIcons.Bolt,
             contentDescription = null,
             tint = MaterialTheme.colorScheme.primary,
         )

@@ -21,14 +21,13 @@ import app.knotwork.design.components.console.ConsoleVarRow
  *
  * The presentation layer in `:app` maps its sealed `ChatHomeUiState` onto
  * this enum at the boundary — the catalog stays free of `:app` types.
- * Mirrors `compose/screens/README.md §C1 · Chat (home)`.
  */
 enum class ChatHomeVisualState {
     /**
      * Cold-start state — emitted before the chat repository delivers its
      * first message snapshot. Rendered as a centred progress indicator with
      * no placeholder copy so the user never sees the empty-state hero flash
-     * for a frame on every launch. Phase 22 / Task 16 follow-up F4.
+     * for a frame on every launch.
      */
     Loading,
 
@@ -96,8 +95,7 @@ data class ChatHomeThreadRow(
      * `true` when the user has favorited this thread. Renders a small
      * leading star glyph in the drawer and lets the host sort favorited
      * threads to the top of the list. Mirrors the session-level
-     * `isStarred` flag persisted in `chat_sessions.isStarred` (Phase 22 /
-     * Task 4).
+     * `isStarred` flag persisted in `chat_sessions.isStarred`.
      */
     val starred: Boolean = false,
 )
@@ -157,8 +155,7 @@ data class ChatHomeConsoleState(
  * that can change the visual is funnelled through this one type so the
  * stateless content stays trivially snapshot-testable.
  *
- * Mirrors `compose/screens/README.md §C1 · Chat (home)` and the 9-state
- * matrix locked-in by Phase 21 / Task 8.
+ * Covers the 9-state matrix for Chat (home).
  *
  * @property visualState which of the 9 documented states to render.
  * @property threadTitle text displayed as the TopAppBar title.

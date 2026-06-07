@@ -10,8 +10,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -24,6 +22,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import app.knotwork.design.icons.AppIcons
 import app.knotwork.design.theme.KnotworkTheme
 import app.knotwork.design.tokens.KnotworkTextStyles
 
@@ -31,7 +30,7 @@ import app.knotwork.design.tokens.KnotworkTextStyles
  * Removable Knotwork chip — a value the user has added (stop tokens, quick
  * replies, list-of-strings).
  *
- * Geometry (`inputs-and-chips.md` §6.3):
+ * Geometry:
  *  - 32 dp tall `KnotworkTheme.shapes.sm` container, `surface2` fill, no
  *    border (the container colour already separates it from the field
  *    background).
@@ -87,7 +86,7 @@ fun KnotworkInputChip(
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(
-                    imageVector = Icons.Outlined.Close,
+                    imageVector = AppIcons.X,
                     contentDescription = null,
                     tint = ext.onSurfaceMuted,
                     modifier = Modifier.size(RemoveIconSize),

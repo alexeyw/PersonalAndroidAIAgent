@@ -12,9 +12,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.ArrowBack
-import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -30,6 +27,7 @@ import app.knotwork.design.R
 import app.knotwork.design.components.buttons.KnotworkButtonSize
 import app.knotwork.design.components.buttons.KnotworkIconButton
 import app.knotwork.design.components.buttons.KnotworkPrimaryButton
+import app.knotwork.design.icons.AppIcons
 import app.knotwork.design.theme.KnotworkTheme
 import app.knotwork.design.tokens.KnotworkTextStyles
 
@@ -49,11 +47,9 @@ private val ToolbarHeightWithSubtitle = 64.dp
 /**
  * Pipeline-editor top toolbar — `[← back] [Title + Subtitle stack] [Primary action] [Overflow]`.
  *
- * Visual contract: `compose/components/README.md` §EditorToolbar.
- *
- * The previous Phase-21 layout exposed `Undo / Redo / Delete / Auto-layout` as
- * permanent icon buttons; the Phase-22 designer mockups demoted them to the
- * overflow menu so the toolbar stays uncluttered across every state (Editing /
+ * `Undo / Redo / Delete / Auto-layout` live in the overflow menu rather than
+ * as permanent icon buttons so the toolbar stays uncluttered across every
+ * state (Editing /
  * Validating / Running / Done / Overview). The caller owns the overflow
  * `DropdownMenu` — this composable just invokes [onOverflow] when the icon is
  * tapped.
@@ -108,7 +104,7 @@ fun EditorToolbar(
             KnotworkIconButton(
                 onClick = onNavigateUp,
                 contentDescription = stringResource(R.string.knotwork_editor_action_navigate_up),
-                icon = Icons.AutoMirrored.Outlined.ArrowBack,
+                icon = AppIcons.Back,
             )
             TitleStack(
                 name = name,
@@ -139,7 +135,7 @@ fun EditorToolbar(
             KnotworkIconButton(
                 onClick = onOverflow,
                 contentDescription = stringResource(R.string.knotwork_editor_action_overflow),
-                icon = Icons.Outlined.MoreVert,
+                icon = AppIcons.More,
             )
         }
     }

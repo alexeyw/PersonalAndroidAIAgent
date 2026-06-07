@@ -1,0 +1,185 @@
+package app.knotwork.android.data.local.dao
+
+import androidx.room.Dao
+import androidx.room.Insert
+import androidx.room.OnConflictStrategy
+import androidx.room.Query
+import androidx.room.Update
+import androidx.room.Upsert
+import app.knotwork.android.data.local.models.ChatMessageEntity
+import app.knotwork.android.data.local.models.ChatSessionEntity
+import kotlinx.coroutines.flow.Flow
+
+/**
+ * Data Access Object for chat messages.
+ * Provides methods to interact with the chat_messages table in the Room database.
+ */
+@Dao
+interface ChatDao {
+    /**
+     * Inserts a new chat message into the database.
+     *
+     * @param message The [ChatMessageEntity] to insert.
+     */
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertMessage(message: ChatMessageEntity)
+
+    /**
+     * Retrieves all chat messages for a specific session as a stream.
+     * Messages are ordered by timestamp in ascending order.
+     *
+     * @param sessionId The ID of the session to retrieve messages for.
+     * @return A [Flow] emitting a list of [ChatMessageEntity] ordered by time.
+     */
+    @Query("SELECT * FROM chat_messages WHERE sessionId = :sessionId ORDER BY timestamp ASC")
+    fun getMessagesBySessionId(sessionId: String): Flow<List<ChatMessageEntity>>
+
+    /**
+     * Retrieves only the user-facing (final) chat messages for a session, ordered by time.
+     * Intermediate node outputs (`isFinal = 0`) are excluded — they remain queryable via
+     * [getMessagesBySessionId] for the agent console / context-window logic.
+     *
+     * @param sessionId The ID of the session to retrieve messages for.
+     * @return A [Flow] emitting a list of final [ChatMessageEntity]s ordered by time.
+     */
+    @Query(
+        "SELECT * FROM chat_messages " +
+            "WHERE sessionId = :sessionId AND isFinal = 1 " +
+            "ORDER BY timestamp ASC",
+    )
+    fun getDisplayMessagesBySessionId(sessionId: String): Flow<List<ChatMessageEntity>>
+
+    /**
+     * Updates the starred state of a single message.
+     *
+     * @param messageId The id of the row to update.
+     * @param starred `true` to mark as starred, `false` to unstar.
+     */
+    @Query("UPDATE chat_messages SET isStarred = :starred WHERE id = :messageId")
+    suspend fun setMessageStarred(messageId: Long, starred: Boolean)
+
+    /**
+     * Retrieves every starred message across all sessions, ordered chronologically
+     * (ascending timestamp) to match the main chat list — keeps `ChatScreen`'s
+     * "scroll-to-last" auto-scroll consistent across filter toggles.
+     *
+     * @return A [Flow] emitting the current list of starred [ChatMessageEntity]s.
+     */
+    @Query("SELECT * FROM chat_messages WHERE isStarred = 1 ORDER BY timestamp ASC")
+    fun getStarredMessages(): Flow<List<ChatMessageEntity>>
+
+    /**
+     * Deletes all chat messages associated with a specific session.
+     *
+     * @param sessionId The ID of the session to delete.
+     */
+    @Query("DELETE FROM chat_messages WHERE sessionId = :sessionId")
+    suspend fun deleteSessionMessages(sessionId: String)
+
+    /**
+     * Retrieves a list of all distinct chat session IDs from messages.
+     * Deprecated: Use getSessionsFlow() instead.
+     *
+     * @return A list of unique session IDs.
+     */
+    @Query("SELECT DISTINCT sessionId FROM chat_messages")
+    suspend fun getAllSessions(): List<String>
+
+    /**
+     * Deletes a specific chat message by its ID.
+     *
+     * @param messageId The ID of the message to delete.
+     */
+    @Query("DELETE FROM chat_messages WHERE id = :messageId")
+    suspend fun deleteMessageById(messageId: Long)
+
+    /**
+     * Retrieves recent messages of a specific role, used for monitoring logs.
+     *
+     * @param role The role of the messages to retrieve.
+     * @param limit The maximum number of messages to retrieve.
+     * @return A [Flow] emitting a list of recent [ChatMessageEntity].
+     */
+    @Query("SELECT * FROM chat_messages WHERE role = :role ORDER BY timestamp DESC LIMIT :limit")
+    fun getRecentMessagesByRole(role: String, limit: Int = 100): Flow<List<ChatMessageEntity>>
+
+    /**
+     * Inserts a new chat session into the database.
+     *
+     * @param session The [ChatSessionEntity] to insert.
+     */
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertSession(session: ChatSessionEntity)
+
+    /**
+     * Updates an existing chat session.
+     *
+     * @param session The [ChatSessionEntity] to update.
+     */
+    @Update
+    suspend fun updateSession(session: ChatSessionEntity)
+
+    /**
+     * Retrieves all chat sessions ordered by the last update time (descending).
+     *
+     * @return A [Flow] emitting a list of [ChatSessionEntity].
+     */
+    @Query("SELECT * FROM chat_sessions ORDER BY updatedAt DESC")
+    fun getSessionsFlow(): Flow<List<ChatSessionEntity>>
+
+    /**
+     * Retrieves a specific chat session by its ID.
+     *
+     * @param id The ID of the session.
+     * @return The [ChatSessionEntity] if found, null otherwise.
+     */
+    @Query("SELECT * FROM chat_sessions WHERE id = :id")
+    suspend fun getSessionById(id: String): ChatSessionEntity?
+
+    /**
+     * Deletes a chat session by its ID.
+     *
+     * @param id The ID of the session to delete.
+     */
+    @Query("DELETE FROM chat_sessions WHERE id = :id")
+    suspend fun deleteSession(id: String)
+
+    /**
+     * Updates only the [updatedAt] timestamp of an existing session without a SELECT round-trip.
+     * Used by [app.knotwork.android.data.repositories.ChatRepositoryImpl] to avoid an N+1 query
+     * pattern during streaming, where the session is already known to exist.
+     *
+     * @param sessionId The ID of the session to update.
+     * @param timestamp The new timestamp in milliseconds since epoch.
+     */
+    @Query("UPDATE chat_sessions SET updatedAt = :timestamp WHERE id = :sessionId")
+    suspend fun updateSessionTimestamp(sessionId: String, timestamp: Long)
+
+    /**
+     * Inserts the given session, or updates it if a row with the same primary key already
+     * exists. Collapses what would otherwise be a SELECT-then-INSERT/UPDATE into a single
+     * round-trip.
+     *
+     * @param session The [ChatSessionEntity] to persist.
+     */
+    @Upsert
+    suspend fun upsertSession(session: ChatSessionEntity)
+
+    /**
+     * Renames an existing session in place. No-op when no row matches [sessionId].
+     *
+     * @param sessionId The id of the session to rename.
+     * @param newName The new display name to persist.
+     */
+    @Query("UPDATE chat_sessions SET name = :newName WHERE id = :sessionId")
+    suspend fun renameSession(sessionId: String, newName: String)
+
+    /**
+     * Toggles the session-level favorite flag. No-op when no row matches [sessionId].
+     *
+     * @param sessionId The id of the session to update.
+     * @param starred The new favorite flag to persist.
+     */
+    @Query("UPDATE chat_sessions SET isStarred = :starred WHERE id = :sessionId")
+    suspend fun setSessionStarred(sessionId: String, starred: Boolean)
+}

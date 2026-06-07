@@ -22,7 +22,7 @@ import app.knotwork.design.theme.KnotworkTheme
 /**
  * Knotwork **text** button — chrome-less, label-only.
  *
- * Mirrors `project_docs/buttons.md § KnotworkTextButton`:
+ * Visual contract:
  *  - Container: `Color.Transparent`.
  *  - Label: `colorScheme.primary` (or `extended.riskDestructive` when
  *    [destructive] is `true`).

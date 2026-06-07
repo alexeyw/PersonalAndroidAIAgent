@@ -1,12 +1,10 @@
 package app.knotwork.design.screens.pipelines
 
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.AltRoute
 import androidx.compose.material.icons.outlined.Bolt
-import androidx.compose.material.icons.outlined.Build
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.ui.graphics.Color
 import app.knotwork.design.components.chips.Status
+import app.knotwork.design.icons.AppIcons
 
 /**
  * Deterministic fixtures backing the `PipelineLibraryContent` preview and
@@ -21,7 +19,7 @@ internal object PipelineLibraryPreview {
             subtitle = "Last run 8 min ago · 4 nodes",
             status = Status.Success,
             leadingTint = Color(color = 0xFF6FBF73),
-            leadingIcon = Icons.Outlined.Bolt,
+            leadingIcon = AppIcons.Bolt,
         ),
         PipelineLibraryRow(
             id = "p2",
@@ -29,7 +27,7 @@ internal object PipelineLibraryPreview {
             subtitle = "Last run yesterday · 7 nodes",
             status = Status.Warning,
             leadingTint = Color(color = 0xFFEAA84A),
-            leadingIcon = Icons.Outlined.Search,
+            leadingIcon = AppIcons.Search,
         ),
         PipelineLibraryRow(
             id = "p3",
@@ -37,7 +35,7 @@ internal object PipelineLibraryPreview {
             subtitle = "Last run 3 days ago · 6 nodes",
             status = Status.Idle,
             leadingTint = Color(color = 0xFF7A8CFF),
-            leadingIcon = Icons.Outlined.Build,
+            leadingIcon = AppIcons.Tool,
         ),
         PipelineLibraryRow(
             id = "p4",
@@ -45,7 +43,7 @@ internal object PipelineLibraryPreview {
             subtitle = "Never run · 3 nodes",
             status = Status.Idle,
             leadingTint = Color(color = 0xFFC97AFF),
-            leadingIcon = Icons.AutoMirrored.Outlined.AltRoute,
+            leadingIcon = AppIcons.Branch,
         ),
     )
 

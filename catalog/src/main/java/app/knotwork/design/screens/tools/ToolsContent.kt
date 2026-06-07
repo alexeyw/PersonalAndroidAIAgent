@@ -31,16 +31,9 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Add
-import androidx.compose.material.icons.outlined.DeleteOutline
 import androidx.compose.material.icons.outlined.Edit
-import androidx.compose.material.icons.outlined.ExpandLess
-import androidx.compose.material.icons.outlined.ExpandMore
-import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.outlined.Refresh
-import androidx.compose.material.icons.outlined.WarningAmber
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -78,6 +71,7 @@ import app.knotwork.design.components.buttons.KnotworkPrimaryButton
 import app.knotwork.design.components.buttons.KnotworkTextButton
 import app.knotwork.design.components.misc.EmptyState
 import app.knotwork.design.components.misc.StripedPlaceholder
+import app.knotwork.design.icons.AppIcons
 import app.knotwork.design.theme.KnotworkTheme
 import app.knotwork.design.tokens.KnotworkTextStyles
 
@@ -100,9 +94,8 @@ private const val LOADING_ROWS_PER_SECTION = 3
 
 /**
  * Opacity applied to the server row and its nested tools when the server's
- * connection state is [McpConnectionState.Disconnected] (`screens/README.md
- * §C4`). Pairs the colour-only signal (warning dot) with a second visual
- * cue per `decisions.md §14`.
+ * connection state is [McpConnectionState.Disconnected]. Pairs the colour-only
+ * signal (warning dot) with a second visual cue for accessibility.
  */
 private const val DISCONNECTED_ROW_ALPHA = 0.6f
 
@@ -115,8 +108,7 @@ private const val DISCONNECTED_ROW_ALPHA = 0.6f
 private data class ServerSubtitle(val state: McpConnectionState, val label: String, val count: Int)
 
 /**
- * Stateless Knotwork tools surface. Mirrors the second-pass mockup
- * (Phase 21 / Task 10):
+ * Stateless Knotwork tools surface.
  *
  *  - TopAppBar with title + monospace "N built-in · M MCP" subtitle;
  *    trailing overflow icon.
@@ -144,7 +136,7 @@ fun ToolsContent(
         containerColor = MaterialTheme.colorScheme.surface,
         topBar = {
             app.knotwork.design.components.topbar.KnotworkTopAppBarShell {
-                ToolsTopBar(state = state, callbacks = callbacks)
+                ToolsTopBar(state = state)
             }
         },
         // The outer `AppShellScaffold` already absorbs both the system
@@ -165,13 +157,13 @@ fun ToolsContent(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun ToolsTopBar(state: ToolsViewState, callbacks: ToolsCallbacks) {
+private fun ToolsTopBar(state: ToolsViewState) {
     TopAppBar(
         title = {
             Column {
                 Text(
                     text = stringResource(R.string.knotwork_tools_title),
-                    style = KnotworkTextStyles.TitleLg,
+                    style = KnotworkTextStyles.TitleMd,
                     color = MaterialTheme.colorScheme.onSurface,
                 )
                 Text(
@@ -186,15 +178,9 @@ private fun ToolsTopBar(state: ToolsViewState, callbacks: ToolsCallbacks) {
                 )
             }
         },
-        actions = {
-            IconButton(onClick = callbacks.onTopOverflow) {
-                Icon(
-                    imageVector = Icons.Outlined.MoreVert,
-                    contentDescription = stringResource(R.string.knotwork_tools_top_overflow_cd),
-                    tint = MaterialTheme.colorScheme.onSurface,
-                )
-            }
-        },
+        // No top-bar overflow: connect-server lives on the FAB / empty-state
+        // CTA and per-server actions live inline on each server card, so the
+        // menu had nothing to host.
         colors = TopAppBarDefaults.topAppBarColors(
             containerColor = MaterialTheme.colorScheme.surface,
             titleContentColor = MaterialTheme.colorScheme.onSurface,
@@ -237,7 +223,7 @@ private fun ToolsError(state: ToolsViewState, callbacks: ToolsCallbacks, padding
         modifier = Modifier.fillMaxSize().padding(padding).padding(KnotworkTheme.spacing.sp6),
     ) {
         Icon(
-            imageVector = Icons.Outlined.WarningAmber,
+            imageVector = AppIcons.Warn,
             contentDescription = null,
             tint = KnotworkTheme.extended.signalError,
             modifier = Modifier.size(KnotworkTheme.spacing.sp16),
@@ -278,7 +264,7 @@ private fun ToolsList(state: ToolsViewState, callbacks: ToolsCallbacks, padding:
                         modifier = Modifier.clickable(onClick = callbacks.onAddServerOpen),
                     ) {
                         Icon(
-                            imageVector = Icons.Outlined.Add,
+                            imageVector = AppIcons.Add,
                             contentDescription = null,
                             tint = MaterialTheme.colorScheme.primary,
                         )
@@ -292,7 +278,7 @@ private fun ToolsList(state: ToolsViewState, callbacks: ToolsCallbacks, padding:
             )
         }
         state.mcpServers.forEach { server ->
-            // Per `screens/README.md §C4` Disconnected state, the server row plus
+            // In the Disconnected state, the server row plus
             // every nested tool row renders at 60 % opacity so the disabled-by-
             // server-failure affordances read at a glance. The opacity stops at
             // the row level (it does NOT cascade into the catalog `EmptyState`
@@ -355,7 +341,7 @@ private fun BuiltInToolRowView(tool: BuiltInToolRow, callbacks: ToolsCallbacks) 
                 .background(color = KnotworkTheme.extended.surface2),
         ) {
             Icon(
-                imageVector = Icons.Outlined.Edit,
+                imageVector = AppIcons.Edit,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.size(LeadingIconSize),
@@ -465,7 +451,7 @@ private fun McpServerRowView(server: McpServerRow, callbacks: ToolsCallbacks, ro
     // monospace `<N tools · <label>` line re-flows when the label widens —
     // e.g. `Connecting → Connected` shrinks, `Connected → Error("reason")`
     // grows). Under reduced motion both animations collapse to an instant
-    // snap per `decisions.md §14`.
+    // snap.
     val animationDurationMs = if (reducedMotion) 0 else KnotworkTheme.motion.dur3
     val dotColor by animateColorAsState(
         targetValue = targetDotColor,
@@ -529,9 +515,9 @@ private fun McpServerRowView(server: McpServerRow, callbacks: ToolsCallbacks, ro
             IconButton(onClick = { callbacks.onServerExpandToggle(server.id) }) {
                 Icon(
                     imageVector = if (server.expanded) {
-                        Icons.Outlined.ExpandLess
+                        AppIcons.ArrowUp
                     } else {
-                        Icons.Outlined.ExpandMore
+                        AppIcons.ArrowDown
                     },
                     contentDescription = stringResource(R.string.knotwork_tools_expand_server_cd),
                     tint = KnotworkTheme.extended.onSurfaceMuted,
@@ -548,7 +534,7 @@ private fun ServerRowOverflowMenu(server: McpServerRow, callbacks: ToolsCallback
     Box {
         IconButton(onClick = { menuOpen = true }) {
             Icon(
-                imageVector = Icons.Outlined.MoreVert,
+                imageVector = AppIcons.More,
                 contentDescription = stringResource(R.string.knotwork_tools_row_overflow_cd),
                 tint = KnotworkTheme.extended.onSurfaceMuted,
             )
@@ -562,7 +548,7 @@ private fun ServerRowOverflowMenu(server: McpServerRow, callbacks: ToolsCallback
                 },
                 leadingIcon = {
                     Icon(
-                        imageVector = Icons.Outlined.Refresh,
+                        imageVector = AppIcons.Refresh,
                         contentDescription = null,
                     )
                 },
@@ -575,7 +561,7 @@ private fun ServerRowOverflowMenu(server: McpServerRow, callbacks: ToolsCallback
                 },
                 leadingIcon = {
                     Icon(
-                        imageVector = Icons.Outlined.Edit,
+                        imageVector = AppIcons.Edit,
                         contentDescription = null,
                     )
                 },
@@ -593,7 +579,7 @@ private fun ServerRowOverflowMenu(server: McpServerRow, callbacks: ToolsCallback
                 },
                 leadingIcon = {
                     Icon(
-                        imageVector = Icons.Outlined.DeleteOutline,
+                        imageVector = AppIcons.Trash,
                         contentDescription = null,
                         tint = KnotworkTheme.extended.signalError,
                     )
@@ -627,7 +613,7 @@ private fun McpToolEntryRowView(entry: McpToolEntry, callbacks: ToolsCallbacks, 
                 .background(color = KnotworkTheme.extended.surface2),
         ) {
             Icon(
-                imageVector = Icons.Outlined.Edit,
+                imageVector = AppIcons.Edit,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.size(LeadingIconSize),
@@ -825,7 +811,7 @@ private fun HeaderRow(
         )
         IconButton(onClick = onRemove) {
             Icon(
-                imageVector = Icons.Outlined.DeleteOutline,
+                imageVector = AppIcons.Trash,
                 contentDescription = stringResource(R.string.knotwork_tools_form_header_remove_cd),
                 tint = KnotworkTheme.extended.onSurfaceMuted,
             )
@@ -854,30 +840,32 @@ fun ToolDetailContent(
         // visible gap under the schema box.
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
-            TopAppBar(
-                title = {
-                    Text(
-                        text = state.toolName,
-                        style = KnotworkTextStyles.TitleLg,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                },
-                navigationIcon = {
-                    IconButton(onClick = callbacks.onBack) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Outlined.ArrowBack,
-                            contentDescription = stringResource(R.string.knotwork_tools_detail_back),
-                            tint = MaterialTheme.colorScheme.onSurface,
+            app.knotwork.design.components.topbar.KnotworkTopAppBarShell {
+                TopAppBar(
+                    title = {
+                        Text(
+                            text = state.toolName,
+                            style = KnotworkTextStyles.TitleMd,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
                         )
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface,
-                    titleContentColor = MaterialTheme.colorScheme.onSurface,
-                ),
-            )
+                    },
+                    navigationIcon = {
+                        IconButton(onClick = callbacks.onBack) {
+                            Icon(
+                                imageVector = AppIcons.Back,
+                                contentDescription = stringResource(R.string.knotwork_tools_detail_back),
+                                tint = MaterialTheme.colorScheme.onSurface,
+                            )
+                        }
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = MaterialTheme.colorScheme.surface,
+                        titleContentColor = MaterialTheme.colorScheme.onSurface,
+                    ),
+                )
+            }
         },
     ) { padding ->
         Column(
@@ -946,9 +934,8 @@ fun ToolDetailContent(
                 ) {
                     // Horizontal-scroll the monospace schema preview so long
                     // lines (deep JSON-Schema, MCP tool inputs) stay legible
-                    // without wrapping — required at fontScale 2× per
-                    // `screens/README.md §C4` (`ToolDetailScreen` rule:
-                    // "schema-preview remains horizontally-scrollable").
+                    // without wrapping — required at fontScale 2× so the
+                    // schema-preview remains horizontally-scrollable.
                     Text(
                         text = state.schemaJson.orEmpty(),
                         style = KnotworkTextStyles.MonoBase,
@@ -988,32 +975,34 @@ fun McpServerConfigContent(
         containerColor = MaterialTheme.colorScheme.surface,
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
-            TopAppBar(
-                title = {
-                    Text(
-                        text = if (form.isEdit) {
-                            stringResource(R.string.knotwork_tools_form_title_edit)
-                        } else {
-                            stringResource(R.string.knotwork_tools_form_title_add)
-                        },
-                        style = KnotworkTextStyles.TitleLg,
-                        color = MaterialTheme.colorScheme.onSurface,
-                    )
-                },
-                navigationIcon = {
-                    IconButton(onClick = callbacks.onCancel) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Outlined.ArrowBack,
-                            contentDescription = stringResource(R.string.knotwork_tools_add_form_cancel),
-                            tint = MaterialTheme.colorScheme.onSurface,
+            app.knotwork.design.components.topbar.KnotworkTopAppBarShell {
+                TopAppBar(
+                    title = {
+                        Text(
+                            text = if (form.isEdit) {
+                                stringResource(R.string.knotwork_tools_form_title_edit)
+                            } else {
+                                stringResource(R.string.knotwork_tools_form_title_add)
+                            },
+                            style = KnotworkTextStyles.TitleMd,
+                            color = MaterialTheme.colorScheme.onSurface,
                         )
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface,
-                    titleContentColor = MaterialTheme.colorScheme.onSurface,
-                ),
-            )
+                    },
+                    navigationIcon = {
+                        IconButton(onClick = callbacks.onCancel) {
+                            Icon(
+                                imageVector = AppIcons.Back,
+                                contentDescription = stringResource(R.string.knotwork_tools_add_form_cancel),
+                                tint = MaterialTheme.colorScheme.onSurface,
+                            )
+                        }
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = MaterialTheme.colorScheme.surface,
+                        titleContentColor = MaterialTheme.colorScheme.onSurface,
+                    ),
+                )
+            }
         },
     ) { padding ->
         Column(

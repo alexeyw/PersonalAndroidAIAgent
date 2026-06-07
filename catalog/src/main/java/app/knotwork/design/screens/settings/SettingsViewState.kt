@@ -1,8 +1,7 @@
 package app.knotwork.design.screens.settings
 
 /**
- * Visual variant of the settings surface. Mirrors
- * `compose/screens/README.md §C7 · Settings` with two additions kept
+ * Visual variant of the settings surface, with two additions kept
  * orthogonal to the section state (Search and Saving) because they
  * apply globally regardless of which card is open.
  */
@@ -28,7 +27,7 @@ enum class SettingsVisualState {
 
 /**
  * Approve-tool-calls segmented control state — mirrors
- * [ai.agent.android.domain.models.ToolApprovalPolicy] but stays free of
+ * [app.knotwork.android.domain.models.ToolApprovalPolicy] but stays free of
  * domain imports so the catalog module keeps its zero-app dependency.
  */
 enum class ApproveToolCallsOption {
@@ -135,7 +134,7 @@ data class LlmParametersCardState(val sliders: List<LlmParameterSlider>)
  * @property backendOptions Available backend dropdown options.
  * @property selectedBackend Currently selected backend key.
  * @property testProbeText Subtitle for the Test backend row. The screen
- *   formats the [ai.agent.android.domain.models.TestProbeResult] before
+ *   formats the [app.knotwork.android.domain.models.TestProbeResult] before
  *   passing it down so the catalog stays format-agnostic.
  * @property testProbeIsError `true` when the last probe failed — drives
  *   the error tint on the subtitle.
@@ -348,7 +347,6 @@ enum class DestructiveActionKind {
 @Suppress("LongParameterList")
 class SettingsCallbacks(
     val onBack: () -> Unit = {},
-    val onSearchClick: () -> Unit = {},
 
     // System instructions.
     val onSystemInstructionsChange: (String) -> Unit = {},
@@ -367,7 +365,6 @@ class SettingsCallbacks(
 
     // Local model.
     val onManageModelsClick: () -> Unit = {},
-    val onChangeModelClick: () -> Unit = {},
     val onBackendSelected: (String) -> Unit = {},
     val onTestBackendClick: () -> Unit = {},
 

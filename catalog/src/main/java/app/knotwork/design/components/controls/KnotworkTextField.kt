@@ -44,9 +44,9 @@ import app.knotwork.design.tokens.KnotworkTextStyles
  * padding map, mono vs sans typography, leading/trailing icon insets) and
  * stay independent of Material3's `OutlinedTextField` decoration box —
  * which doesn't expose enough control over hover / focus / read-only state
- * transitions to fit the Knotwork spec (see `inputs-and-chips.md` §2).
+ * transitions to fit the Knotwork spec.
  *
- * State table (`§2 Состояния`):
+ * State table:
  * | state               | container  | border               | text         |
  * |---------------------|-----------|----------------------|--------------|
  * | default             | surface1  | outline 1 dp         | onSurface    |
@@ -81,7 +81,7 @@ import app.knotwork.design.tokens.KnotworkTextStyles
  * @param monospace `true` switches the text style to [KnotworkTextStyles.MonoBase]
  *  (the spec's `Mono13`) for tokens / URLs / expressions / JSON.
  * @param search When `true`, paints the field as the search-bar variant:
- *  pill shape, `surface2` container, no border (spec §2 *Search variant*).
+ *  pill shape, `surface2` container, no border (the *Search variant*).
  *  Pair with `leadingIcon = AppIcons.Search` at the call site.
  * @param contentDescription Optional a11y label, passed through to the
  *  outer box semantics. Required when [KnotworkField]'s caps-label is empty

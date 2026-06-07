@@ -18,14 +18,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.ArrowBack
-import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
-import androidx.compose.material.icons.outlined.Close
-import androidx.compose.material.icons.outlined.DeveloperBoard
 import androidx.compose.material.icons.outlined.Download
-import androidx.compose.material.icons.outlined.MoreVert
-import androidx.compose.material.icons.outlined.VpnKey
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -51,6 +44,7 @@ import androidx.compose.ui.unit.dp
 import app.knotwork.design.components.buttons.KnotworkButtonSize
 import app.knotwork.design.components.buttons.KnotworkPrimaryButton
 import app.knotwork.design.components.misc.EmptyState
+import app.knotwork.design.icons.AppIcons
 import app.knotwork.design.theme.KnotworkTheme
 import app.knotwork.design.tokens.KnotworkTextStyles
 
@@ -67,7 +61,7 @@ private val ActiveDotSize = 8.dp
 private val ProgressBarHeight = 3.dp
 
 /**
- * Stateless Knotwork Models surface. Mirrors the Models mockup
+ * Stateless Knotwork Models surface
  * (Active card → HF auth → Custom URL → Available presets).
  *
  * @param state immutable view state — drives loader / empty / default / error layouts.
@@ -121,7 +115,7 @@ private fun ModelsTopBar(state: ModelsViewState, strings: ModelsStrings, callbac
             Column {
                 Text(
                     text = strings.title,
-                    style = KnotworkTextStyles.TitleLg,
+                    style = KnotworkTextStyles.TitleMd,
                     color = MaterialTheme.colorScheme.onSurface,
                 )
                 if (state.subtitle.isNotEmpty()) {
@@ -136,21 +130,15 @@ private fun ModelsTopBar(state: ModelsViewState, strings: ModelsStrings, callbac
         navigationIcon = {
             IconButton(onClick = callbacks.onBack) {
                 Icon(
-                    imageVector = Icons.AutoMirrored.Outlined.ArrowBack,
+                    imageVector = AppIcons.Back,
                     contentDescription = strings.backCd,
                     tint = MaterialTheme.colorScheme.onSurface,
                 )
             }
         },
-        actions = {
-            IconButton(onClick = callbacks.onOverflowMenu) {
-                Icon(
-                    imageVector = Icons.Outlined.MoreVert,
-                    contentDescription = strings.overflowCd,
-                    tint = MaterialTheme.colorScheme.onSurface,
-                )
-            }
-        },
+        // No top-bar overflow: the model-management actions it would host are
+        // not part of v0.x, so the affordance is omitted rather than shown as a
+        // dead button.
         colors = TopAppBarDefaults.topAppBarColors(
             containerColor = MaterialTheme.colorScheme.surface,
             titleContentColor = MaterialTheme.colorScheme.onSurface,
@@ -222,7 +210,7 @@ private fun ModelsBody(
     ) {
         state.active?.let { active ->
             item(key = "active") {
-                ActiveModelCard(active = active, strings = strings, onClick = callbacks.onActiveOpen)
+                ActiveModelCard(active = active, strings = strings)
             }
         }
         item(key = "hf-section") {
@@ -254,7 +242,7 @@ private fun ModelsBody(
             )
         }
         item(key = "presets-section") {
-            // "All ↗" link from the original mockup is intentionally
+            // "All ↗" link is intentionally
             // hidden until we have a destination to send users to —
             // a no-op button is worse UX than no button.
             SectionHeader(label = strings.presetsSection)
@@ -300,7 +288,7 @@ private fun CustomDownloadRow(
             )
             IconButton(onClick = { callbacks.onCustomDownloadCancel() }) {
                 Icon(
-                    imageVector = Icons.Outlined.Close,
+                    imageVector = AppIcons.X,
                     contentDescription = strings.presetCancelCd,
                     tint = KnotworkTheme.extended.onSurfaceMuted,
                 )
@@ -344,7 +332,10 @@ private fun SectionHeader(label: String, modifier: Modifier = Modifier, trailing
 }
 
 @Composable
-private fun ActiveModelCard(active: ActiveModelRow, strings: ModelsStrings, onClick: () -> Unit) {
+private fun ActiveModelCard(active: ActiveModelRow, strings: ModelsStrings) {
+    // Non-interactive status card: there is no active-model detail surface in
+    // v0.x, so the card neither clicks nor shows a trailing chevron (a chevron
+    // would falsely imply navigation).
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp3),
@@ -352,7 +343,6 @@ private fun ActiveModelCard(active: ActiveModelRow, strings: ModelsStrings, onCl
             .fillMaxWidth()
             .clip(KnotworkTheme.shapes.md)
             .background(color = KnotworkTheme.extended.surface3)
-            .clickable(onClick = onClick, role = Role.Button)
             .padding(horizontal = KnotworkTheme.spacing.sp3, vertical = KnotworkTheme.spacing.sp3),
     ) {
         LeadingChipTile(background = MaterialTheme.colorScheme.surface)
@@ -386,11 +376,6 @@ private fun ActiveModelCard(active: ActiveModelRow, strings: ModelsStrings, onCl
                 color = KnotworkTheme.extended.onSurfaceMuted,
             )
         }
-        Icon(
-            imageVector = Icons.AutoMirrored.Outlined.KeyboardArrowRight,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurface,
-        )
     }
 }
 
@@ -403,7 +388,7 @@ private fun LeadingChipTile(background: Color) {
         contentAlignment = Alignment.Center,
     ) {
         Icon(
-            imageVector = Icons.Outlined.DeveloperBoard,
+            imageVector = AppIcons.Chip,
             contentDescription = null,
             tint = KnotworkTheme.extended.onSurface2,
             modifier = Modifier.size(LeadingGlyphSize),
@@ -416,7 +401,7 @@ private fun AuthTokenField(state: ModelsViewState, strings: ModelsStrings, callb
     InlineFieldRow(
         leadingIcon = {
             Icon(
-                imageVector = Icons.Outlined.VpnKey,
+                imageVector = AppIcons.Key,
                 contentDescription = null,
                 tint = KnotworkTheme.extended.onSurfaceMuted,
             )
@@ -426,8 +411,8 @@ private fun AuthTokenField(state: ModelsViewState, strings: ModelsStrings, callb
         onChange = callbacks.onAuthTokenChange,
         masked = true,
         trailing = {
-            // Sm size so the inline action stays compact and matches the
-            // mockup's chip-style "+ Paste" affordance.
+            // Sm size so the inline action stays compact, a
+            // chip-style "+ Paste" affordance.
             KnotworkPrimaryButton(
                 text = strings.hfPaste,
                 onClick = callbacks.onAuthTokenPaste,
@@ -452,13 +437,13 @@ private fun CustomUrlRow(state: ModelsViewState, strings: ModelsStrings, callbac
             masked = false,
             modifier = Modifier.weight(1f),
         )
-        // Sm size matches the inline mockup: the action chip is anchored
+        // Sm size keeps it inline: the action chip is anchored
         // to the field row, not a standalone full-width CTA.
         KnotworkPrimaryButton(
             text = strings.customUrlGet,
             onClick = callbacks.onCustomUrlSubmit,
             enabled = state.customUrlEnabled && state.customUrl.isNotBlank(),
-            leadingIcon = Icons.Outlined.Download,
+            leadingIcon = AppIcons.Download,
             size = KnotworkButtonSize.Sm,
         )
     }
@@ -593,12 +578,12 @@ private fun PresetTrailing(preset: PresetRow, strings: ModelsStrings, callbacks:
         is PresetStatus.Idle -> KnotworkPrimaryButton(
             text = strings.presetGet,
             onClick = { callbacks.onPresetDownload(preset.id) },
-            leadingIcon = Icons.Outlined.Download,
+            leadingIcon = AppIcons.Download,
             size = KnotworkButtonSize.Sm,
         )
         is PresetStatus.Downloading -> IconButton(onClick = { callbacks.onPresetCancelDownload(preset.id) }) {
             Icon(
-                imageVector = Icons.Outlined.Close,
+                imageVector = AppIcons.X,
                 contentDescription = strings.presetCancelCd,
                 tint = KnotworkTheme.extended.onSurfaceMuted,
             )
@@ -655,7 +640,7 @@ private fun PresetOverflowMenu(
     Box {
         IconButton(onClick = { expanded.value = true }) {
             Icon(
-                imageVector = Icons.Outlined.MoreVert,
+                imageVector = AppIcons.More,
                 contentDescription = strings.rowMenuCd,
                 tint = KnotworkTheme.extended.onSurfaceMuted,
             )

@@ -18,11 +18,7 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Archive
-import androidx.compose.material.icons.outlined.ContentCopy
-import androidx.compose.material.icons.outlined.DeleteOutline
-import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -45,12 +41,13 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import app.knotwork.design.components.chips.Status
 import app.knotwork.design.components.chips.StatusPill
+import app.knotwork.design.icons.AppIcons
 import app.knotwork.design.theme.KnotworkTheme
 import app.knotwork.design.tokens.KnotworkTextStyles
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
-/** Row visual height (`compose/components/README.md` §List items). */
+/** Row visual height. */
 private val PipelineRowHeight = 72.dp
 
 /** Diameter of the leading pipeline mark + tinted halo. */
@@ -87,7 +84,7 @@ enum class PipelineSwipeAction {
 /**
  * Knotwork pipeline-library list row.
  *
- * Visual contract (see `compose/components/README.md` §List items):
+ * Visual contract:
  *  - 72 dp tall; leading 40 dp tinted mark, `TitleMd` title (1 line, ellipsis),
  *    `BodySm onSurfaceMuted` subtitle (last-run timestamp + status), trailing
  *    24 dp `MoreVert` overflow.
@@ -240,7 +237,7 @@ fun PipelineListRow(
             if (offsetAnimatable.value > -revealPx / 2f) {
                 IconButton(onClick = onOverflow) {
                     Icon(
-                        imageVector = Icons.Outlined.MoreVert,
+                        imageVector = AppIcons.More,
                         contentDescription = stringResource(
                             app.knotwork.design.R.string.knotwork_library_row_overflow_cd,
                             title,
@@ -265,21 +262,21 @@ fun PipelineListRow(
 private fun SwipeActionStrip(onAction: (PipelineSwipeAction) -> Unit, modifier: Modifier = Modifier) {
     Row(modifier = modifier) {
         SwipeActionButton(
-            icon = Icons.Outlined.ContentCopy,
+            icon = AppIcons.Copy,
             label = "Duplicate",
             tintBackground = KnotworkTheme.extended.surface4,
             tintForeground = KnotworkTheme.extended.onSurface2,
             onClick = { onAction(PipelineSwipeAction.Duplicate) },
         )
         SwipeActionButton(
-            icon = Icons.Outlined.Archive,
+            icon = AppIcons.Archive,
             label = "Archive",
             tintBackground = KnotworkTheme.extended.signalWarn,
             tintForeground = MaterialTheme.colorScheme.onPrimary,
             onClick = { onAction(PipelineSwipeAction.Archive) },
         )
         SwipeActionButton(
-            icon = Icons.Outlined.DeleteOutline,
+            icon = AppIcons.Trash,
             label = "Delete",
             tintBackground = KnotworkTheme.extended.signalError,
             tintForeground = MaterialTheme.colorScheme.onPrimary,

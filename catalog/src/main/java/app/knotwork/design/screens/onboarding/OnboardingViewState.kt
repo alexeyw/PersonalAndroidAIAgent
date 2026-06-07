@@ -2,7 +2,6 @@ package app.knotwork.design.screens.onboarding
 
 /**
  * Four-step pager state for the catalog `OnboardingContent` composable.
- * Mirrors the redesigned mockups (Phase 21 / Task 10, second pass).
  */
 enum class OnboardingStep(val pageIndex: Int, val indicatorLabel: String) {
     /** Welcome / brand pitch. Step 1. */

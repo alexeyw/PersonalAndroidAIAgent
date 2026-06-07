@@ -304,6 +304,17 @@ device. The active pipeline is highlighted; sending a message uses
 whichever pipeline is bound to the current chat (or the default
 pipeline if the chat has no explicit binding).
 
+On the very first launch the app seeds one pipeline for you — a
+**showcase** graph materialised from the bundled `showcase_full_agent`
+preset and marked as the default. It triages each message into
+**chat**, **factual** or **task** and runs a tailored branch: a quick
+on-device reply for chat; a Wikipedia-grounded lookup for factual
+questions (with a complexity gate that can break hard questions into a
+small research loop); and a plan → subtask-loop → synthesis flow for
+actionable tasks, including a human-in-the-loop clarification step when
+a subtask needs your input. It runs entirely on-device. It is an
+ordinary pipeline: edit, duplicate, rename or delete it like any other.
+
 Tap the `⋮` button on a row, or long-press the row, to see the
 per-pipeline menu:
 
@@ -344,8 +355,10 @@ exist:
   pipeline's `⋮` menu). These live in the app's local database.
 
 Spawn a pipeline from a preset with the FAB's **+ From preset** option
-(see above); loading a preset always creates a *fresh* pipeline with new
-ids, so the template is never modified. Presets are interchangeable with
+(see above), or — when you open the editor on an empty pipeline — tap the
+canvas's **From template** button to pick a preset without leaving the
+editor. Either way, loading a preset always creates a *fresh* pipeline
+with new ids, so the template is never modified. Presets are interchangeable with
 the [browser pipeline editor](#browser-pipeline-editor): a bundled preset
 can be exported as a `*.preset.json` file (see below) and imported into
 the editor, and the editor can export its own `*.preset.json` for import
@@ -459,6 +472,10 @@ Built-in variables:
 | `$TOOLS`           | The active tools list, one `name — description` per line.|
 | `$MODEL`           | The display name of the currently active local model.    |
 | `$MEMORY_SUMMARY`  | A numbered list of recent long-term memory entries. The default upper bound is configurable from **Settings → Memory → Memory summary default limit** (1–50). |
+| `$LANG`            | The device locale as a BCP-47 language tag (e.g. `en-US`). |
+| `$LOCATION`        | The device's coarse region — the locale country code (e.g. `US`). |
+| `$USER`            | The display name from your identity card (currently the literal `Anonymous`). |
+| `$DEVICE`          | A short `manufacturer model · Android <version>` descriptor. |
 
 When you edit a system prompt in a node's configuration dialog, a
 row of chips beneath the prompt field shows every available variable.

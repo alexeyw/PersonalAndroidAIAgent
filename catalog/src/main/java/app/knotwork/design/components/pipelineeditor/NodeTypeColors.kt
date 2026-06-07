@@ -40,7 +40,7 @@ fun NodeType.headerTint(): Color {
 /**
  * Picks an on-tone foreground colour (glyph + label) that reads on top of
  * the given header [strip] tint. Implements the L-band rule from
- * `components/README.md` §NodeCard:
+ * NodeCard tints:
  *
  *  - `L < 0.5` → `Color.White` (hue is dark enough that white reads cleanly).
  *  - `L ≥ 0.7` → `MaterialTheme.colorScheme.onSurface` (hue is light enough

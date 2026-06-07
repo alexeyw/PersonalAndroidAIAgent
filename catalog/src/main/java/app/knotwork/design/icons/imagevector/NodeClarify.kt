@@ -3,8 +3,7 @@ package app.knotwork.design.icons.imagevector
 import androidx.compose.ui.graphics.vector.ImageVector
 
 /**
- * Pipeline `CLARIFICATION` node glyph — chat bubble with question mark. Source:
- * `project_docs/design/icons-src/node-clarify.svg`.
+ * Pipeline `CLARIFICATION` node glyph — chat bubble with question mark.
  */
 internal val knotworkNodeClarifyIcon: ImageVector by lazy { build() }
 

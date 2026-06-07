@@ -5,10 +5,7 @@ package app.knotwork.design.components.pipelineeditor
  * sheet's chrome (drag handle, type pill, sticky action row) is shared;
  * the body switches on `when (config)` to a per-type form.
  *
- * Schemas are a 1-to-1 port of
- * `project_docs/design/compose/components/node-specs.md` — adding a new
- * field or relaxing a range there is the authoritative change; this file
- * follows. Each variant captures the *value*; the matching form
+ * Each variant captures the *value*; the matching form
  * composable in `forms/` captures the *rendering*.
  */
 sealed interface NodeConfig {
@@ -29,7 +26,7 @@ enum class OutputFormat { PLAIN_TEXT, MARKDOWN, JSON }
  * One installed local model the user can pick in the LiteRt config sheet. Defined here
  * (catalog side) as a plain pair of id / display name plus an `isActive` flag so the
  * design module does not depend on the `:app` `LocalModel` Room entity. The screen
- * maps `ai.agent.android.domain.models.LocalModel` to this type at the sheet boundary.
+ * maps `app.knotwork.android.domain.models.LocalModel` to this type at the sheet boundary.
  *
  * @property id canonical model identifier — typically the model file path. This is the
  * value written back into [LiteRtConfig.modelId] when the user picks the model.
@@ -39,8 +36,14 @@ enum class OutputFormat { PLAIN_TEXT, MARKDOWN, JSON }
  */
 data class LocalModelOption(val id: String, val displayName: String, val isActive: Boolean)
 
-/** Cloud LLM provider for [CloudConfig]. */
-enum class CloudProvider { OPEN_AI, ANTHROPIC, GOOGLE, COMPATIBLE }
+/**
+ * Cloud LLM provider for [CloudConfig].
+ *
+ * [AUTO] defers the choice to runtime — the executor picks a provider from the
+ * configured API keys. It maps to the domain `CloudProvider.AUTO_KEY` wire
+ * sentinel (`"auto"`) rather than a concrete provider.
+ */
+enum class CloudProvider { OPEN_AI, ANTHROPIC, GOOGLE, COMPATIBLE, AUTO }
 
 /** Summary rendering style for [SummaryConfig]. */
 enum class SummaryFormat { BULLETS, PARAGRAPH, CUSTOM }
@@ -75,8 +78,7 @@ data class InputConfig(
  *   formats the final response. When blank the node forwards the upstream
  *   text verbatim (the engine wraps a non-blank prompt around the LLM
  *   call). Supports `$DATE` / `$TIME` / `$TOOLS` / `$MODEL` /
- *   `$MEMORY_SUMMARY` variables. Phase 22 / Task 16 follow-up F10 restored
- *   this field after the catalog redesign dropped it.
+ *   `$MEMORY_SUMMARY` variables.
  */
 data class OutputConfig(
     override val title: String,

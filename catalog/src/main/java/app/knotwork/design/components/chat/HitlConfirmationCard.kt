@@ -17,9 +17,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.ExpandLess
-import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -42,6 +39,7 @@ import app.knotwork.design.components.buttons.KnotworkSecondaryButton
 import app.knotwork.design.components.buttons.KnotworkTextButton
 import app.knotwork.design.components.chips.Risk
 import app.knotwork.design.components.chips.RiskPill
+import app.knotwork.design.icons.AppIcons
 import app.knotwork.design.theme.KnotworkTheme
 import app.knotwork.design.tokens.KnotworkPalette
 import app.knotwork.design.tokens.KnotworkTextStyles
@@ -55,7 +53,7 @@ private val AccentStripWidth = 2.dp
 /** Stroke width applied to the inner JSON args block. */
 private val JsonBlockBorderWidth = 1.dp
 
-/** Summary clamp limit per `compose/components/README.md` §HitlConfirmationCard. */
+/** Summary clamp limit for the HITL confirmation card. */
 private const val SUMMARY_MAX_LINES = 3
 
 /** Collapsed line count for the JSON args block. */
@@ -67,8 +65,7 @@ private const val JSON_COLLAPSED_MAX_LINES = 2
  * one-line summary, a collapsible JSON arguments block, and an action row
  * gated on the risk level.
  *
- * Full visual contract: `compose/components/README.md` §Chat surface
- * §HitlConfirmationCard. State helpers are factored to [HitlConfirmationState]
+ * State helpers are factored to [HitlConfirmationState]
  * so the gating logic is unit-testable without Compose.
  *
  * **Stateless** — the typed-confirm input is hoisted to the caller; the card
@@ -216,7 +213,7 @@ private fun JsonArgsBlock(arguments: Map<String, String>) {
                 modifier = Modifier.weight(1f),
             )
             Icon(
-                imageVector = if (expanded) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore,
+                imageVector = if (expanded) AppIcons.ArrowUp else AppIcons.ArrowDown,
                 contentDescription = stringResource(
                     if (expanded) R.string.knotwork_hitl_args_collapse else R.string.knotwork_hitl_args_expand,
                 ),

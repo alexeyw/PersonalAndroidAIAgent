@@ -4,7 +4,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 
 /**
  * Pipeline `INTENT_ROUTER` node glyph — input dot fanning out to three target
- * circles. Source: `project_docs/design/icons-src/node-intent-router.svg`.
+ * circles.
  */
 internal val knotworkNodeIntentRouterIcon: ImageVector by lazy { build() }
 

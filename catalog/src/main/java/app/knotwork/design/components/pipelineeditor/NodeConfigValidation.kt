@@ -144,8 +144,7 @@ private const val MIN_WAIT_TIMEOUT_MS = 0
  * Pure-Kotlin validator that walks a [NodeConfig] and returns one entry
  * per offending field. An empty map means the form may enable Save.
  *
- * The implementation mirrors `node-specs.md` §Validation rules — the
- * table there is the authoritative spec. Pipeline-wide title uniqueness
+ * Pipeline-wide title uniqueness
  * is delegated to the caller, which supplies [peerTitles] (the set of
  * sibling node titles excluding the one currently being edited).
  *
@@ -213,7 +212,7 @@ object NodeConfigValidation {
     private fun validateLiteRt(config: LiteRtConfig): Map<FieldId, ValidationFailure> {
         val errors = mutableMapOf<FieldId, ValidationFailure>()
         // `modelId.isBlank()` means "use the currently-active model" — a
-        // valid first-class choice (Phase 22 / Task 16 follow-up F8). No
+        // valid first-class choice. No
         // REQUIRED error in that case; the executor resolves the model at
         // run-time through `LoadModelUseCase`'s null fallback.
         if (config.systemPrompt.isBlank()) errors[FieldId.SYSTEM_PROMPT] = ValidationFailure.REQUIRED
@@ -227,9 +226,9 @@ object NodeConfigValidation {
 
     private fun validateCloud(config: CloudConfig): Map<FieldId, ValidationFailure> {
         val errors = mutableMapOf<FieldId, ValidationFailure>()
-        // `CloudConfig.model` was removed from the sheet in Phase 22 / Task 14
-        // review round 3 (model ids live once per provider in Settings →
-        // External providers, not per-node). The validator therefore no
+        // `CloudConfig.model` is not part of the sheet (model ids live once
+        // per provider in Settings → External providers, not per-node). The
+        // validator therefore no
         // longer flags a blank model — the executor falls back to the
         // provider's configured model at runtime when this field is empty.
         if (config.systemPrompt.isBlank()) errors[FieldId.SYSTEM_PROMPT] = ValidationFailure.REQUIRED
@@ -289,7 +288,8 @@ object NodeConfigValidation {
 
     private fun validateTool(config: ToolConfig): Map<FieldId, ValidationFailure> {
         val errors = mutableMapOf<FieldId, ValidationFailure>()
-        if (config.toolId.isBlank()) errors[FieldId.TOOL_ID] = ValidationFailure.REQUIRED
+        // A blank toolId is the "Auto" selection — the agent picks the tool at
+        // run time — so it is valid and must NOT block Save.
         val names = config.argumentMapping.map { it.name }
         when {
             config.argumentMapping.any { it.name.isBlank() || it.expression.isBlank() } -> {
@@ -316,7 +316,9 @@ object NodeConfigValidation {
 
     private fun validateQueueProcessor(config: QueueProcessorConfig): Map<FieldId, ValidationFailure> {
         val errors = mutableMapOf<FieldId, ValidationFailure>()
-        if (config.inputList.isBlank()) errors[FieldId.INPUT_LIST] = ValidationFailure.REQUIRED
+        // The input-list expression is optional: left blank, the processor
+        // consumes the list produced by the previous node (typically
+        // DECOMPOSITION). It must not be a required field.
         if (config.itemVariable.isBlank()) errors[FieldId.ITEM_VARIABLE] = ValidationFailure.REQUIRED
         if (config.parallelism !in PARALLELISM_RANGE) {
             errors[FieldId.PARALLELISM] = ValidationFailure.PARALLELISM_RANGE

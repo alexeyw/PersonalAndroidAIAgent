@@ -1,8 +1,7 @@
 package app.knotwork.design.screens.tools
 
 /**
- * Visual variant of the tools surface. Mirrors the second-pass mockup
- * (`compose/screens/<C4-mockup>.png`, Phase 21 / Task 10):
+ * Visual variant of the tools surface:
  *  - `Empty` is reserved for the (rare) state where neither built-in
  *    tools nor MCP servers exist.
  *  - `Loading` is rendered during the initial discovery handshake.
@@ -207,7 +206,6 @@ class ToolsCallbacks(
     val onAddServerOpen: () -> Unit = {},
     val onErrorRetry: () -> Unit = {},
     val onOpenDrawer: () -> Unit = {},
-    val onTopOverflow: () -> Unit = {},
 )
 
 /** Convenience factory returning a callbacks bundle that ignores every event. */

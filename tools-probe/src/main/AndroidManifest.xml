@@ -14,7 +14,7 @@
         `search_tool` metadata when the user taps the probe's invoke button.
     -->
     <queries>
-        <package android:name="ai.agent.android" />
+        <package android:name="app.knotwork.android" />
     </queries>
 
     <application

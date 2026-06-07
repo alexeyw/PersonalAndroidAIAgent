@@ -12,16 +12,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.outlined.Cable
-import androidx.compose.material.icons.outlined.ChatBubbleOutline
-import androidx.compose.material.icons.outlined.DarkMode
-import androidx.compose.material.icons.outlined.DeleteOutline
 import androidx.compose.material.icons.outlined.Extension
-import androidx.compose.material.icons.outlined.MoreHoriz
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Terminal
 import androidx.compose.material3.Icon
@@ -33,13 +25,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
+import app.knotwork.design.icons.AppIcons
 import app.knotwork.design.theme.KnotworkTheme
 import app.knotwork.design.tokens.KnotworkTextStyles
 
 /**
  * Catalog page that renders every custom icon from [AppIcons] plus a curated
- * sample of Material Icons Extended entries from `icon-mapping.md`. The page
- * is the visual smoke-test for the hybrid icon strategy (decisions.md §5):
+ * sample of Material Icons Extended entries. The page
+ * is the visual smoke-test for the hybrid icon strategy:
  * each row shows the glyph at the three canonical UI sizes (24/32/48 dp) over
  * a light and a dark swatch, with the source label ("Custom" or "Material")
  * pinned to the name.
@@ -93,22 +86,22 @@ private val customEntries: List<IconEntry> = listOf(
 )
 
 /**
- * Curated sample of Material Icons Extended entries listed in
- * `icon-mapping.md`. Not exhaustive — it is enough to confirm the visual
+ * Curated sample of Material Icons Extended entries. Not exhaustive — it is
+ * enough to confirm the visual
  * weight matches the custom glyphs at the same size.
  */
 private val materialEntries: List<IconEntry> = listOf(
-    IconEntry("Chat (nav)", Icons.Outlined.ChatBubbleOutline, IconSource.Material),
-    IconEntry("Tools (nav)", Icons.Outlined.Extension, IconSource.Material),
-    IconEntry("More (nav)", Icons.Outlined.MoreHoriz, IconSource.Material),
-    IconEntry("Send", Icons.Filled.ArrowUpward, IconSource.Material),
-    IconEntry("Console", Icons.Outlined.Terminal, IconSource.Material),
-    IconEntry("Run", Icons.Filled.PlayArrow, IconSource.Material),
-    IconEntry("Confirm", Icons.Filled.Check, IconSource.Material),
-    IconEntry("Delete", Icons.Outlined.DeleteOutline, IconSource.Material),
-    IconEntry("Search", Icons.Outlined.Search, IconSource.Material),
-    IconEntry("MCP", Icons.Outlined.Cable, IconSource.Material),
-    IconEntry("Theme", Icons.Outlined.DarkMode, IconSource.Material),
+    IconEntry("Chat (nav)", AppIcons.Chat, IconSource.Material),
+    IconEntry("Tools (nav)", AppIcons.Extension, IconSource.Material),
+    IconEntry("More (nav)", AppIcons.More2, IconSource.Material),
+    IconEntry("Send", AppIcons.ArrowUpLine, IconSource.Material),
+    IconEntry("Console", AppIcons.Terminal, IconSource.Material),
+    IconEntry("Run", AppIcons.Play, IconSource.Material),
+    IconEntry("Confirm", AppIcons.Check, IconSource.Material),
+    IconEntry("Delete", AppIcons.Trash, IconSource.Material),
+    IconEntry("Search", AppIcons.Search, IconSource.Material),
+    IconEntry("MCP", AppIcons.Link, IconSource.Material),
+    IconEntry("Theme", AppIcons.Theme, IconSource.Material),
 )
 
 @Composable

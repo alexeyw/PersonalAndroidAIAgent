@@ -1,9 +1,6 @@
 package app.knotwork.design.components.controls
 
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Visibility
-import androidx.compose.material.icons.outlined.VisibilityOff
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -14,14 +11,15 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
+import app.knotwork.design.icons.AppIcons
 
 /**
  * Password / API-key / token Knotwork input. Wraps [KnotworkTextField] with
  * a [PasswordVisualTransformation] (`•` glyph) by default and a built-in
- * eye-toggle trailing icon that flips between [Icons.Outlined.Visibility]
- * and [Icons.Outlined.VisibilityOff].
+ * eye-toggle trailing icon that flips between [AppIcons.Eye]
+ * and [AppIcons.EyeOff].
  *
- * Spec mapping (`inputs-and-chips.md` §4):
+ * Spec mapping:
  *  - `enabled = false` callers can compose with [KnotworkField] helper to
  *    show the masked-with-suffix variant (`••••••••YOUR`) themselves — the
  *    last-4 reveal is a presentation-layer concern, not a control-layer
@@ -54,7 +52,7 @@ fun KnotworkPasswordField(
     size: KnotworkFieldSize = KnotworkFieldSize.Sm,
 ) {
     var revealed by remember { mutableStateOf(initiallyRevealed) }
-    val trailing: ImageVector = if (revealed) Icons.Outlined.VisibilityOff else Icons.Outlined.Visibility
+    val trailing: ImageVector = if (revealed) AppIcons.EyeOff else AppIcons.Eye
     val transformation: VisualTransformation = if (revealed) {
         VisualTransformation.None
     } else {

@@ -1,7 +1,3 @@
-@file:Suppress("DEPRECATION") // Preview intentionally renders the legacy `KnotworkChip` one last time
-// before its scheduled removal — the new family is documented through
-// `KnotworkFilterChip` / `KnotworkSuggestionChip` / `KnotworkInputChip` previews.
-
 package app.knotwork.design.components.chips
 
 import androidx.compose.foundation.layout.Arrangement
@@ -9,14 +5,12 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.outlined.FilterList
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
+import app.knotwork.design.icons.AppIcons
 import app.knotwork.design.theme.KnotworkTheme
 import app.knotwork.design.tokens.KnotworkTextStyles
 
@@ -58,15 +52,15 @@ fun KnotworkChipsCatalogContent() {
                 KnotworkChip(
                     label = "Filter",
                     onClick = {},
-                    leadingIcon = Icons.Outlined.FilterList,
+                    leadingIcon = AppIcons.Filter,
                 )
                 KnotworkChip(
                     label = "Models",
                     onClick = {},
-                    trailingIcon = Icons.Filled.Close,
+                    trailingIcon = AppIcons.X,
                     selected = true,
                 )
-                KnotworkChip(label = "Decorative", leadingIcon = Icons.Outlined.FilterList)
+                KnotworkChip(label = "Decorative", leadingIcon = AppIcons.Filter)
             }
 
             SectionLabel(text = "RiskPill")

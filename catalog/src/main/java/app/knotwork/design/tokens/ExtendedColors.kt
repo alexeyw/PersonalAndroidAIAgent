@@ -24,17 +24,30 @@ import androidx.compose.ui.graphics.Color
  * @property onSurface2 secondary text colour on top of any surface step.
  * @property onSurfaceMuted muted text colour for captions and timestamps.
  * @property onSurfaceDim dim text colour for placeholder hints.
- * @property chatUserBg background colour of the user-side chat bubble.
- * @property chatBotBg background colour of the assistant-side chat bubble.
+ * @property chatUserBg background of the user chat bubble.
+ * @property chatUserFg foreground (text) of the user chat bubble.
+ * @property chatAgentBg background of the assistant chat bubble.
+ * @property chatAgentFg foreground (text) of the assistant chat bubble.
+ * @property chatToolBg background of the tool-result chat bubble (one surface
+ * step deeper than the agent bubble so tool output stays visually quieter).
+ * @property chatToolFg foreground (text) of the tool-result chat bubble.
  * @property riskReadonly accent for `READ_ONLY` HITL prompts and risk pills.
  * @property riskSensitive accent for `SENSITIVE` HITL prompts and risk pills.
  * @property riskDestructive accent for `DESTRUCTIVE` HITL prompts and risk pills.
  * @property signalSuccess hue-locked success signal (status pills, validation OK).
  * @property signalWarn hue-locked warning signal (status pills, validation warn).
  * @property signalError hue-locked error signal (status pills, validation error).
+ * @property memAutoBg/memAutoFg/memAutoRail source-tag tones for auto-extracted
+ * memory chunks (blue, hue 220). bg = pill fill, fg = pill text, rail = 3px card edge.
+ * @property memManualBg/memManualFg/memManualRail source-tag tones for manually
+ * saved chunks (brand amber, hue 70).
+ * @property memCompactBg/memCompactFg/memCompactRail source-tag tones for
+ * compaction-derived chunks (violet, hue 285).
  * @property consoleBg console / log surface background — always near-black even
  * in light theme so monospace logs read like a terminal.
  * @property consoleFg console / log foreground (off-white) — paired with [consoleBg].
+ * @property consoleTag console accent for trace prefixes (`[NODE]`, `[TOOL]`) and
+ * timestamps — accent-300 in both themes so it reads on the near-black surface.
  * @property nodeInput hue for `NodeType.INPUT` cards in the pipeline editor.
  * @property nodeIntentRouter hue for `NodeType.INTENT_ROUTER` cards.
  * @property nodeIfCondition hue for `NodeType.IF_CONDITION` cards.
@@ -59,17 +72,29 @@ data class KnotworkExtendedColors(
     val onSurfaceMuted: Color,
     val onSurfaceDim: Color,
     val chatUserBg: Color,
-    val chatBotBg: Color,
+    val chatUserFg: Color,
+    val chatAgentBg: Color,
+    val chatAgentFg: Color,
+    val chatToolBg: Color,
+    val chatToolFg: Color,
     val riskReadonly: Color,
     val riskSensitive: Color,
     val riskDestructive: Color,
     val signalSuccess: Color,
     val signalWarn: Color,
     val signalError: Color,
-    val memoryAuto: Color,
-    val memoryCompaction: Color,
+    val memAutoBg: Color,
+    val memAutoFg: Color,
+    val memAutoRail: Color,
+    val memManualBg: Color,
+    val memManualFg: Color,
+    val memManualRail: Color,
+    val memCompactBg: Color,
+    val memCompactFg: Color,
+    val memCompactRail: Color,
     val consoleBg: Color,
     val consoleFg: Color,
+    val consoleTag: Color,
     val nodeInput: Color,
     val nodeIntentRouter: Color,
     val nodeIfCondition: Color,
@@ -104,17 +129,29 @@ fun knotworkExtendedColorsLight() = KnotworkExtendedColors(
     onSurfaceMuted = KnotworkLight.OnSurfaceMuted,
     onSurfaceDim = KnotworkLight.OnSurfaceDim,
     chatUserBg = KnotworkLight.ChatUserBg,
-    chatBotBg = KnotworkLight.ChatBotBg,
+    chatUserFg = KnotworkLight.ChatUserFg,
+    chatAgentBg = KnotworkLight.ChatAgentBg,
+    chatAgentFg = KnotworkLight.ChatAgentFg,
+    chatToolBg = KnotworkLight.ChatToolBg,
+    chatToolFg = KnotworkLight.ChatToolFg,
     riskReadonly = KnotworkLight.RiskReadonly,
     riskSensitive = KnotworkLight.RiskSensitive,
     riskDestructive = KnotworkLight.RiskDestructive,
     signalSuccess = KnotworkPalette.SignalSuccess,
     signalWarn = KnotworkPalette.SignalWarn,
     signalError = KnotworkPalette.SignalError,
-    memoryAuto = KnotworkPalette.MemoryAuto,
-    memoryCompaction = KnotworkPalette.MemoryCompaction,
+    memAutoBg = KnotworkLight.MemAutoBg,
+    memAutoFg = KnotworkLight.MemAutoFg,
+    memAutoRail = KnotworkLight.MemAutoRail,
+    memManualBg = KnotworkLight.MemManualBg,
+    memManualFg = KnotworkLight.MemManualFg,
+    memManualRail = KnotworkLight.MemManualRail,
+    memCompactBg = KnotworkLight.MemCompactBg,
+    memCompactFg = KnotworkLight.MemCompactFg,
+    memCompactRail = KnotworkLight.MemCompactRail,
     consoleBg = KnotworkLight.ConsoleBg,
     consoleFg = KnotworkLight.ConsoleFg,
+    consoleTag = KnotworkLight.ConsoleTag,
     nodeInput = KnotworkPalette.NodeInput,
     nodeIntentRouter = KnotworkPalette.NodeIntentRouter,
     nodeIfCondition = KnotworkPalette.NodeIfCondition,
@@ -152,17 +189,29 @@ fun knotworkExtendedColorsDark() = KnotworkExtendedColors(
     onSurfaceMuted = KnotworkDark.OnSurfaceMuted,
     onSurfaceDim = KnotworkDark.OnSurfaceDim,
     chatUserBg = KnotworkDark.ChatUserBg,
-    chatBotBg = KnotworkDark.ChatBotBg,
+    chatUserFg = KnotworkDark.ChatUserFg,
+    chatAgentBg = KnotworkDark.ChatAgentBg,
+    chatAgentFg = KnotworkDark.ChatAgentFg,
+    chatToolBg = KnotworkDark.ChatToolBg,
+    chatToolFg = KnotworkDark.ChatToolFg,
     riskReadonly = KnotworkDark.RiskReadonly,
     riskSensitive = KnotworkDark.RiskSensitive,
     riskDestructive = KnotworkDark.RiskDestructive,
     signalSuccess = KnotworkPalette.SignalSuccess,
     signalWarn = KnotworkDark.RiskSensitive,
     signalError = KnotworkDark.RiskDestructive,
-    memoryAuto = KnotworkPalette.MemoryAuto,
-    memoryCompaction = KnotworkPalette.MemoryCompaction,
+    memAutoBg = KnotworkDark.MemAutoBg,
+    memAutoFg = KnotworkDark.MemAutoFg,
+    memAutoRail = KnotworkDark.MemAutoRail,
+    memManualBg = KnotworkDark.MemManualBg,
+    memManualFg = KnotworkDark.MemManualFg,
+    memManualRail = KnotworkDark.MemManualRail,
+    memCompactBg = KnotworkDark.MemCompactBg,
+    memCompactFg = KnotworkDark.MemCompactFg,
+    memCompactRail = KnotworkDark.MemCompactRail,
     consoleBg = KnotworkDark.ConsoleBg,
     consoleFg = KnotworkDark.ConsoleFg,
+    consoleTag = KnotworkDark.ConsoleTag,
     nodeInput = KnotworkPalette.NodeInput,
     nodeIntentRouter = KnotworkPalette.NodeIntentRouter,
     nodeIfCondition = KnotworkPalette.NodeIfCondition,

@@ -6,7 +6,7 @@ import androidx.compose.ui.unit.dp
 /**
  * Size variants for [KnotworkTextField] / [KnotworkTextArea] / [KnotworkPasswordField].
  *
- * Spec mapping (`inputs-and-chips.md` §1):
+ * Spec mapping:
  *  - [Sm] (40 dp) — primary form fields (NodeConfigSheet, settings rows).
  *  - [Md] (48 dp) — search bars (`MoreScreen`, `PromptLibraryScreen`).
  *  - [Lg] (56 dp) — hero fields in onboarding (token, model URL).
@@ -20,7 +20,7 @@ enum class KnotworkFieldSize { Sm, Md, Lg, Composer }
  * across the catalog and gives downstream call sites a single token to override
  * (e.g. `Modifier.heightIn(min = KnotworkFieldDefaults.HeightSm)`).
  *
- * Numbers track the design spec in `inputs-and-chips.md` §1 and §7. Do not
+ * Numbers track the design spec for fields. Do not
  * inline literals at call sites — read from this object so future tuning lands
  * in one place.
  */

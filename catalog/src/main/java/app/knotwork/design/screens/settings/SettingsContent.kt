@@ -24,19 +24,12 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.Block
 import androidx.compose.material.icons.outlined.Bolt
-import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.Download
-import androidx.compose.material.icons.outlined.ExpandMore
-import androidx.compose.material.icons.outlined.Memory
 import androidx.compose.material.icons.outlined.Refresh
-import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Shield
-import androidx.compose.material.icons.outlined.WarningAmber
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -78,14 +71,14 @@ import app.knotwork.design.components.misc.KnotworkLoader
 import app.knotwork.design.components.misc.KnotworkSectionAction
 import app.knotwork.design.components.misc.KnotworkStatCell
 import app.knotwork.design.components.misc.StripedPlaceholder
+import app.knotwork.design.icons.AppIcons
 import app.knotwork.design.theme.KnotworkTheme
 import app.knotwork.design.tokens.KnotworkTextStyles
 
 /**
- * Stateless Knotwork Settings surface — Phase 22 / Task 9 redesign.
+ * Stateless Knotwork Settings surface.
  *
- * Renders the full settings stack described in `compose/screens/README.md
- * §C7`: identity card, system instructions textarea, restrictions panel,
+ * Renders the full settings stack: identity card, system instructions textarea, restrictions panel,
  * LLM parameters sliders, local-model card, external-provider list,
  * memory stats + actions, notifications, and the privacy crash-reporting
  * toggle.
@@ -111,7 +104,7 @@ fun SettingsContent(
             containerColor = MaterialTheme.colorScheme.surface,
             topBar = {
                 app.knotwork.design.components.topbar.KnotworkTopAppBarShell {
-                    SettingsTopBar(state = state, onBack = callbacks.onBack, onSearch = callbacks.onSearchClick)
+                    SettingsTopBar(state = state, onBack = callbacks.onBack)
                 }
             },
             // The outer `AppShellScaffold` already applies the system /
@@ -147,13 +140,13 @@ fun SettingsContent(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun SettingsTopBar(state: SettingsViewState, onBack: () -> Unit, onSearch: () -> Unit) {
+private fun SettingsTopBar(state: SettingsViewState, onBack: () -> Unit) {
     TopAppBar(
         title = {
             Column {
                 Text(
                     text = androidx.compose.ui.res.stringResource(R.string.knotwork_settings_title),
-                    style = KnotworkTextStyles.TitleLg,
+                    style = KnotworkTextStyles.TitleMd,
                     color = MaterialTheme.colorScheme.onSurface,
                 )
                 val subtitle = listOf(
@@ -164,8 +157,7 @@ private fun SettingsTopBar(state: SettingsViewState, onBack: () -> Unit, onSearc
                 if (subtitle.isNotBlank()) {
                     Text(
                         text = subtitle,
-                        // Mono secondary text matches the cloud-provider rows
-                        // (Phase 22 / Task 16 follow-up F5).
+                        // Mono secondary text matches the cloud-provider rows.
                         style = KnotworkTextStyles.MonoSm,
                         color = KnotworkTheme.extended.onSurfaceMuted,
                     )
@@ -175,21 +167,14 @@ private fun SettingsTopBar(state: SettingsViewState, onBack: () -> Unit, onSearc
         navigationIcon = {
             IconButton(onClick = onBack) {
                 Icon(
-                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                    imageVector = AppIcons.Back,
                     contentDescription = androidx.compose.ui.res.stringResource(R.string.knotwork_settings_back),
                     tint = MaterialTheme.colorScheme.onSurface,
                 )
             }
         },
-        actions = {
-            IconButton(onClick = onSearch) {
-                Icon(
-                    imageVector = Icons.Outlined.Search,
-                    contentDescription = androidx.compose.ui.res.stringResource(R.string.knotwork_settings_search_cd),
-                    tint = MaterialTheme.colorScheme.onSurface,
-                )
-            }
-        },
+        // No search action: Settings is a short, sectioned list with no search
+        // surface, so the icon (which opened an empty sheet) is omitted.
         colors = TopAppBarDefaults.topAppBarColors(
             containerColor = MaterialTheme.colorScheme.surface,
             titleContentColor = MaterialTheme.colorScheme.onSurface,
@@ -451,21 +436,21 @@ private fun RestrictionsCard(state: RestrictionsCardState, callbacks: SettingsCa
             )
         }
         IconToggleRow(
-            icon = Icons.Outlined.Shield,
+            icon = AppIcons.Shield,
             title = androidx.compose.ui.res.stringResource(R.string.knotwork_settings_restrictions_block_destructive),
             subtitle = state.blockDestructiveSubtitle,
             checked = state.blockDestructive,
             onCheckedChange = callbacks.onBlockDestructiveChange,
         )
         IconToggleRow(
-            icon = Icons.Outlined.Block,
+            icon = AppIcons.Block,
             title = androidx.compose.ui.res.stringResource(R.string.knotwork_settings_restrictions_block_network),
             subtitle = state.blockNetworkSubtitle,
             checked = state.blockNetwork,
             onCheckedChange = callbacks.onBlockNetworkChange,
         )
         IconValueRow(
-            icon = Icons.Outlined.WarningAmber,
+            icon = AppIcons.Warn,
             title = androidx.compose.ui.res.stringResource(R.string.knotwork_settings_restrictions_cap_steps),
             subtitle = state.capStepsSubtitle,
             valueLabel = state.capSteps.toString(),
@@ -517,7 +502,7 @@ private fun IconToggleRow(
             ),
             // Material3's default Switch is 52×32 dp which dwarfs the
             // row-titles at our 14sp scale. Shrink the rendering box to
-            // ~78% so the visual matches the mockup; the actual touch
+            // ~78% so the visual stays balanced; the actual touch
             // target lives on the parent Row (`Modifier.clickable`), so
             // we keep the documented 48 dp interactive floor.
             modifier = Modifier.scale(SWITCH_SCALE),
@@ -596,7 +581,7 @@ private fun LocalModelCard(state: LocalModelCardState, callbacks: SettingsCallba
         trailing = {
             KnotworkSectionAction(
                 label = androidx.compose.ui.res.stringResource(R.string.knotwork_settings_local_model_manage),
-                icon = Icons.Outlined.Download,
+                icon = AppIcons.Download,
                 onClick = callbacks.onManageModelsClick,
             )
         },
@@ -620,7 +605,7 @@ private fun LocalModelCard(state: LocalModelCardState, callbacks: SettingsCallba
                         .background(color = KnotworkTheme.extended.surface2),
                 ) {
                     Icon(
-                        imageVector = Icons.Outlined.Bolt,
+                        imageVector = AppIcons.Bolt,
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.onSurface,
                     )
@@ -657,10 +642,9 @@ private fun LocalModelCard(state: LocalModelCardState, callbacks: SettingsCallba
                         )
                     }
                 }
-                KnotworkTextButton(
-                    text = androidx.compose.ui.res.stringResource(R.string.knotwork_settings_local_model_change),
-                    onClick = callbacks.onChangeModelClick,
-                )
+                // "Change" removed: it duplicated the section-level "Manage"
+                // action (both routed to the Models screen). "Manage" is kept
+                // as the single entry point.
             }
         }
 
@@ -680,7 +664,7 @@ private fun LocalModelCard(state: LocalModelCardState, callbacks: SettingsCallba
                     ),
             ) {
                 Icon(
-                    imageVector = Icons.Outlined.Bolt,
+                    imageVector = AppIcons.Bolt,
                     contentDescription = null,
                     tint = KnotworkTheme.extended.onSurfaceMuted,
                     modifier = Modifier.size(KnotworkTheme.spacing.sp5),
@@ -706,7 +690,7 @@ private fun LocalModelCard(state: LocalModelCardState, callbacks: SettingsCallba
                     color = KnotworkTheme.extended.onSurfaceMuted,
                 )
                 Icon(
-                    imageVector = Icons.Outlined.ExpandMore,
+                    imageVector = AppIcons.ArrowDown,
                     contentDescription = null,
                     tint = KnotworkTheme.extended.onSurfaceMuted,
                 )
@@ -733,7 +717,7 @@ private fun LocalModelCard(state: LocalModelCardState, callbacks: SettingsCallba
             modifier = Modifier.fillMaxWidth(),
         ) {
             Icon(
-                imageVector = Icons.Outlined.Bolt,
+                imageVector = AppIcons.Bolt,
                 contentDescription = null,
                 tint = KnotworkTheme.extended.onSurfaceMuted,
                 modifier = Modifier.size(KnotworkTheme.spacing.sp5),
@@ -750,7 +734,7 @@ private fun LocalModelCard(state: LocalModelCardState, callbacks: SettingsCallba
                     text = state.testProbeText,
                     // Switched to MonoSm so the Test backend metadata line
                     // matches the cloud-provider rows and similar Settings
-                    // secondary text (Phase 22 / Task 16 follow-up F5).
+                    // secondary text.
                     style = KnotworkTextStyles.MonoSm,
                     color = if (state.testProbeIsError) {
                         KnotworkTheme.extended.signalError
@@ -764,7 +748,7 @@ private fun LocalModelCard(state: LocalModelCardState, callbacks: SettingsCallba
                 onClick = callbacks.onTestBackendClick,
                 // Match the small-size memory-section buttons (Export /
                 // Clear / Reset) instead of the default Md tier so the row
-                // chrome stays tight (Phase 22 / Task 16 follow-up F6).
+                // chrome stays tight.
                 size = app.knotwork.design.components.buttons.KnotworkButtonSize.Sm,
             )
         }
@@ -798,7 +782,7 @@ private fun ExternalProvidersCard(state: ExternalProvidersCardState, callbacks: 
         trailing = {
             KnotworkSectionAction(
                 label = androidx.compose.ui.res.stringResource(R.string.knotwork_settings_providers_add),
-                icon = Icons.Outlined.Add,
+                icon = AppIcons.Add,
                 onClick = callbacks.onAddProviderClick,
             )
         },
@@ -827,7 +811,7 @@ private fun ProviderNavRow(row: ProviderRowState, onClick: () -> Unit) {
                 .background(color = KnotworkTheme.extended.surface2),
         ) {
             Icon(
-                imageVector = Icons.Outlined.Bolt,
+                imageVector = AppIcons.Bolt,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.onSurface,
             )
@@ -874,7 +858,7 @@ private fun ProviderNavRow(row: ProviderRowState, onClick: () -> Unit) {
             )
         }
         Icon(
-            imageVector = Icons.Outlined.ChevronRight,
+            imageVector = AppIcons.ArrowR,
             contentDescription = null,
             tint = KnotworkTheme.extended.onSurfaceMuted,
         )
@@ -907,7 +891,7 @@ private fun MemoryCard(state: MemoryCardState, callbacks: SettingsCallbacks) {
             }
         }
         IconToggleRow(
-            icon = Icons.Outlined.Bolt,
+            icon = AppIcons.Bolt,
             title = state.autoExtractLabel,
             subtitle = state.autoExtractSubtitle,
             checked = state.autoExtractEnabled,
@@ -932,7 +916,7 @@ private fun MemoryCard(state: MemoryCardState, callbacks: SettingsCallbacks) {
             )
         }
         IconToggleRow(
-            icon = Icons.Outlined.Refresh,
+            icon = AppIcons.Refresh,
             title = state.compactionLabel,
             subtitle = state.compactionSubtitle,
             checked = state.compactionEnabled,
@@ -1038,7 +1022,7 @@ private fun EmbeddingProviderDropdown(state: MemoryCardState, callbacks: Setting
                 .testTag(MEMORY_EMBEDDING_ROW_TAG),
         ) {
             Icon(
-                imageVector = Icons.Outlined.Memory,
+                imageVector = AppIcons.Ram,
                 contentDescription = null,
                 tint = KnotworkTheme.extended.onSurfaceMuted,
                 modifier = Modifier.size(KnotworkTheme.spacing.sp5),
@@ -1056,7 +1040,7 @@ private fun EmbeddingProviderDropdown(state: MemoryCardState, callbacks: Setting
                 )
             }
             Icon(
-                imageVector = Icons.Outlined.ExpandMore,
+                imageVector = AppIcons.ArrowDown,
                 contentDescription = null,
                 tint = KnotworkTheme.extended.onSurfaceMuted,
             )
@@ -1086,7 +1070,7 @@ private fun NotificationsCard(state: NotificationsCardState, callbacks: Settings
         title = androidx.compose.ui.res.stringResource(R.string.knotwork_settings_section_notifications),
     ) {
         IconToggleRow(
-            icon = Icons.Outlined.Refresh,
+            icon = AppIcons.Refresh,
             title = androidx.compose.ui.res.stringResource(R.string.knotwork_settings_notifications_long_running),
             subtitle = androidx.compose.ui.res.stringResource(
                 R.string.knotwork_settings_notifications_long_running_subtitle,
@@ -1105,14 +1089,14 @@ private fun PrivacyCard(state: PrivacyCardState, callbacks: SettingsCallbacks) {
         title = androidx.compose.ui.res.stringResource(R.string.knotwork_settings_section_privacy),
     ) {
         IconToggleRow(
-            icon = Icons.Outlined.Shield,
+            icon = AppIcons.Shield,
             title = androidx.compose.ui.res.stringResource(R.string.knotwork_settings_crash_reporting_label),
             subtitle = androidx.compose.ui.res.stringResource(R.string.knotwork_settings_crash_reporting_hint),
             checked = state.crashReportingEnabled,
             onCheckedChange = callbacks.onCrashReportingToggle,
         )
         IconToggleRow(
-            icon = Icons.Outlined.Memory,
+            icon = AppIcons.Ram,
             title = androidx.compose.ui.res.stringResource(R.string.knotwork_settings_verbose_memory_logging_label),
             subtitle = androidx.compose.ui.res.stringResource(R.string.knotwork_settings_verbose_memory_logging_hint),
             checked = state.verboseMemoryLoggingEnabled,
@@ -1273,7 +1257,7 @@ private const val SEGMENTED_TRAILING_WEIGHT = 2.5f
  * Visual scale of the Material3 Switch inside the restrictions /
  * notifications / privacy toggle rows. The default 52×32 dp control
  * dwarfs the surrounding 14 sp row title; 78% trims it to ~40×25 dp
- * which matches the mockup. The interactive 48 dp floor stays intact
+ * which keeps it balanced. The interactive 48 dp floor stays intact
  * because the parent `Row` carries the `clickable` modifier.
  */
 private const val SWITCH_SCALE = 0.78f

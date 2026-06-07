@@ -16,9 +16,6 @@ import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowUpward
-import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -45,6 +42,7 @@ import androidx.compose.ui.unit.dp
 import app.knotwork.design.R
 import app.knotwork.design.components.chips.ChipStyle
 import app.knotwork.design.components.chips.KnotworkChip
+import app.knotwork.design.icons.AppIcons
 import app.knotwork.design.theme.KnotworkTheme
 import app.knotwork.design.tokens.KnotworkPalette
 import app.knotwork.design.tokens.KnotworkTextStyles
@@ -61,8 +59,7 @@ private val FreeformInputMinHeight = 40.dp
 /**
  * Knotwork clarification card — pinned-prompt surface rendered inline in
  * the assistant message stream while the agent is waiting on a typed
- * answer. Mirrors the spec mockup (Phase 21 / Task 10 follow-up,
- * Phase 22 / Task 5 dark-contrast + composer-aligned input fixes):
+ * answer:
  *
  *  - **Container.** Rounded `Accent50` tile so the prompt stands apart
  *    from the surrounding assistant bubble without competing with the
@@ -243,7 +240,7 @@ private fun ClarificationSendButton(enabled: Boolean, onClick: () -> Unit) {
             },
     ) {
         Icon(
-            imageVector = Icons.Filled.ArrowUpward,
+            imageVector = AppIcons.ArrowUpLine,
             contentDescription = null,
             tint = tint,
             modifier = Modifier.size(ClarificationActionIconSize),
@@ -264,7 +261,7 @@ private fun HeaderRow() {
             modifier = Modifier.size(HeaderIconSize),
         ) {
             Icon(
-                imageVector = Icons.Outlined.AutoAwesome,
+                imageVector = AppIcons.Spark,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.size(HeaderIconSize),
@@ -287,7 +284,7 @@ private fun RepliedSummary(text: String, modifier: Modifier = Modifier) {
         modifier = modifier.padding(vertical = KnotworkTheme.spacing.sp1),
     ) {
         Icon(
-            imageVector = Icons.Outlined.Check,
+            imageVector = AppIcons.Check,
             contentDescription = null,
             tint = KnotworkTheme.extended.onSurfaceMuted,
             modifier = Modifier.size(KnotworkTheme.spacing.sp4),

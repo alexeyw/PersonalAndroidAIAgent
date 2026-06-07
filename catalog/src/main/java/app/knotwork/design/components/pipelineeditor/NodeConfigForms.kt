@@ -13,12 +13,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.AddCircleOutline
-import androidx.compose.material.icons.outlined.AutoStories
 import androidx.compose.material.icons.outlined.BookmarkAdd
 import androidx.compose.material.icons.outlined.Check
-import androidx.compose.material.icons.outlined.RemoveCircleOutline
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
@@ -42,6 +38,7 @@ import app.knotwork.design.R
 import app.knotwork.design.components.buttons.KnotworkTextButton
 import app.knotwork.design.components.chips.ChipStyle
 import app.knotwork.design.components.chips.KnotworkChip
+import app.knotwork.design.icons.AppIcons
 import app.knotwork.design.screens.settings.KnotworkParamSlider
 import app.knotwork.design.theme.KnotworkTheme
 import app.knotwork.design.tokens.KnotworkTextStyles
@@ -73,7 +70,7 @@ object NodeConfigForms {
      * field. Forms perform pure copy()-style updates — no internal state.
      * @param availableToolIds canonical tool ids exposed to [ToolFormBody] for its
      * dropdown. Empty list (the default) falls back to a free-text input — useful for
-     * the catalog harness which has no app-level [ai.agent.android.domain.repositories.ToolRepository].
+     * the catalog harness which has no app-level [app.knotwork.android.domain.repositories.ToolRepository].
      * @param availableModels installed local models exposed to [LiteRtFormBody] for
      * its dropdown. Empty list (the default) falls back to a free-text input.
      * @param onPickFromLibrary optional hook to open the prompt-library picker from
@@ -102,7 +99,7 @@ object NodeConfigForms {
     ) {
         Column(
             modifier = Modifier.fillMaxWidth(),
-            // Sheet density tightening (Phase 22 / Task 14 review): inter-field
+            // Sheet density tightening: inter-field
             // gap dropped sp3 → sp2 so a 3-4 field form fits a phone viewport
             // without scroll. Per-form `Column` arrangements keep their own
             // tighter sp1 internal spacing.
@@ -196,6 +193,16 @@ private fun FieldLabel(text: String) {
     )
 }
 
+/** Muted helper caption rendered under a field to explain its purpose. */
+@Composable
+private fun FieldCaption(text: String) {
+    Text(
+        text = text,
+        style = KnotworkTextStyles.BodySm,
+        color = KnotworkTheme.extended.onSurfaceMuted,
+    )
+}
+
 /** Inline error rendered under a field when validation fails. */
 @Composable
 private fun InlineError(failure: ValidationFailure?) {
@@ -273,7 +280,7 @@ private fun TitleField(title: String, error: ValidationFailure?, onChange: (Stri
             onValueChange = onChange,
             singleLine = true,
             isError = error != null,
-            // Phase 22 / Task 14 review pass 3: every field on the sheet
+            // Every field on the sheet
             // adopts `MonoBase` so identifiers, prompts, model ids, and titles
             // all read in the same JetBrains Mono face. Mixed body/mono fonts
             // read as accidentally inconsistent on the sheet.
@@ -290,8 +297,8 @@ private fun TitleField(title: String, error: ValidationFailure?, onChange: (Stri
  * Layout: `[FieldLabel + optional library button] / [OutlinedTextField] /
  * [InlineError]`. The library button stays in a sibling row above the field
  * (not inside the field's `trailingIcon`) so prompt-bearing fields preserve
- * room for the chips row underneath. Every field uses `MonoBase` (Phase 22 /
- * Task 14 review round 3) so the sheet reads as a uniform stack regardless
+ * room for the chips row underneath. Every field uses `MonoBase`
+ * so the sheet reads as a uniform stack regardless
  * of which field is prose vs identifier vs prompt.
  */
 @Composable
@@ -330,7 +337,7 @@ private fun TextField(
                         modifier = Modifier.size(LIBRARY_BUTTON_TARGET_DP.dp),
                     ) {
                         Icon(
-                            imageVector = Icons.Outlined.AutoStories,
+                            imageVector = AppIcons.Book,
                             contentDescription = stringResource(R.string.knotwork_node_action_load_from_library),
                         )
                     }
@@ -341,7 +348,7 @@ private fun TextField(
                         modifier = Modifier.size(LIBRARY_BUTTON_TARGET_DP.dp),
                     ) {
                         Icon(
-                            imageVector = Icons.Outlined.BookmarkAdd,
+                            imageVector = AppIcons.BookmarkAdd,
                             contentDescription = stringResource(R.string.knotwork_node_action_save_as_preset),
                         )
                     }
@@ -442,7 +449,7 @@ private fun <T> SegmentedChipRow(label: String, values: List<Pair<T, String>>, s
                     // which made the Summary format (and other segmented-chip groups) look
                     // unmarked. A leading check unambiguously surfaces the active state
                     // regardless of theme contrast.
-                    leadingIcon = if (isSelected) Icons.Outlined.Check else null,
+                    leadingIcon = if (isSelected) AppIcons.Check else null,
                 )
             }
         }
@@ -494,7 +501,7 @@ private fun OutputFormBody(
     )
     // Optional system prompt — when blank the executor forwards the
     // upstream text verbatim; when set the LLM wraps the upstream payload
-    // through this template. Phase 22 / Task 16 follow-up F10.
+    // through this template.
     TextField(
         label = stringResource(R.string.knotwork_node_field_system_prompt),
         value = config.systemPrompt,
@@ -576,6 +583,7 @@ private fun CloudFormBody(
     SegmentedChipRow(
         label = stringResource(R.string.knotwork_node_field_provider),
         values = listOf(
+            CloudProvider.AUTO to "Auto",
             CloudProvider.OPEN_AI to "OpenAI",
             CloudProvider.ANTHROPIC to "Anthropic",
             CloudProvider.GOOGLE to "Google",
@@ -584,8 +592,8 @@ private fun CloudFormBody(
         selected = config.provider,
         onSelect = { next -> onChange(config.copy(provider = next)) },
     )
-    // The cloud-model id field used to live here. Phase 22 / Task 14 review
-    // round 3 removes it from the sheet — cloud-provider model ids are
+    // The cloud-model id field is intentionally absent from the sheet —
+    // cloud-provider model ids are
     // configured once per provider in Settings → External providers and
     // shared across every Cloud node, so duplicating the field on every
     // node confused users. The `CloudConfig.model` field stays on the
@@ -673,7 +681,7 @@ private fun IntentRouterFormBody(
                     enabled = canRemove,
                 ) {
                     Icon(
-                        imageVector = Icons.Outlined.RemoveCircleOutline,
+                        imageVector = AppIcons.MinusCircle,
                         contentDescription = stringResource(R.string.knotwork_node_action_remove_class),
                     )
                 }
@@ -701,7 +709,7 @@ private fun IntentRouterFormBody(
                 onChange(config.copy(classes = updated))
             },
             enabled = canAdd,
-            leadingIcon = Icons.Outlined.AddCircleOutline,
+            leadingIcon = AppIcons.Add,
         )
         InlineError(failure = errors[FieldId.CLASSES])
     }
@@ -807,14 +815,34 @@ private fun ClarificationFormBody(
         error = errors[FieldId.QUICK_REPLIES],
         onChange = { next -> onChange(config.copy(quickReplies = next)) },
     )
-    TextField(
-        label = stringResource(R.string.knotwork_node_field_timeout_optional),
-        value = config.timeoutMs?.toString().orEmpty(),
-        error = errors[FieldId.TIMEOUT_OPTIONAL],
-        singleLine = true,
-        onChange = { next -> onChange(config.copy(timeoutMs = next.toIntOrNull())) },
+    // Timeout is edited in whole seconds (0–360). 0 means "no timeout" and
+    // maps back to a null `timeoutMs`; any other value is stored as
+    // milliseconds. A slider replaces the old free-text ms field so the unit
+    // and bounds are unambiguous.
+    val timeoutSeconds = ((config.timeoutMs ?: 0) / MILLIS_PER_SECOND).coerceIn(0, CLARIFY_TIMEOUT_MAX_SECONDS)
+    KnotworkParamSlider(
+        label = stringResource(R.string.knotwork_node_field_timeout_seconds),
+        valueLabel = if (timeoutSeconds == 0) {
+            stringResource(R.string.knotwork_node_field_timeout_none)
+        } else {
+            stringResource(R.string.knotwork_node_field_timeout_seconds_value, timeoutSeconds)
+        },
+        value = timeoutSeconds.toFloat(),
+        onValueChange = { next ->
+            val secs = next.toInt()
+            onChange(config.copy(timeoutMs = if (secs == 0) null else secs * MILLIS_PER_SECOND))
+        },
+        valueRange = 0f..CLARIFY_TIMEOUT_MAX_SECONDS.toFloat(),
+        steps = 0,
+        errorText = errors[FieldId.TIMEOUT_OPTIONAL]?.let { stringResource(it.stringRes) },
     )
 }
+
+/** Milliseconds per second — Clarify timeout slider works in whole seconds. */
+private const val MILLIS_PER_SECOND: Int = 1_000
+
+/** Upper bound (seconds) of the Clarify wait-timeout slider. */
+private const val CLARIFY_TIMEOUT_MAX_SECONDS: Int = 360
 
 /**
  * Comma-separated quick-reply editor.
@@ -850,6 +878,7 @@ private fun QuickRepliesField(replies: List<String>, error: ValidationFailure?, 
     }
     Column(verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp1)) {
         FieldLabel(text = stringResource(R.string.knotwork_node_field_quick_replies))
+        FieldCaption(text = stringResource(R.string.knotwork_node_field_quick_replies_help))
         OutlinedTextField(
             value = rawText,
             onValueChange = { next ->
@@ -979,7 +1008,7 @@ private fun ToolPicker(
  * reveals a free-text input for paths not in the registry (e.g., a sideloaded
  * `.tflite` the user hasn't added to the LocalModelRepository yet).
  *
- * **Active sentinel.** Phase 22 / Task 16 follow-up F8 introduced the rule that
+ * **Active sentinel.** By rule,
  * an empty [LiteRtConfig.modelId] means "resolve to whichever model is active
  * at execute time". Previously the picker eagerly wrote the current active id
  * into the field on open via `LaunchedEffect`, which froze the pipeline to that
@@ -1051,7 +1080,7 @@ private fun ModelPicker(
                     onDismissRequest = { menuExpanded = false },
                 ) {
                     // Sentinel: blank `modelId` resolves to the live active
-                    // model at execute time (Phase 22 / Task 16 follow-up F8).
+                    // model at execute time.
                     DropdownMenuItem(
                         text = { Text(text = activeLabel, style = KnotworkTextStyles.MonoBase) },
                         onClick = {
@@ -1221,6 +1250,7 @@ private fun QueueProcessorFormBody(
         singleLine = true,
         onChange = { next -> onChange(config.copy(inputList = next)) },
     )
+    FieldCaption(text = stringResource(R.string.knotwork_node_field_input_list_help))
     TextField(
         label = stringResource(R.string.knotwork_node_field_item_variable),
         value = config.itemVariable,

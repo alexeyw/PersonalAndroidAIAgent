@@ -10,8 +10,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -22,6 +20,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import app.knotwork.design.icons.AppIcons
 import app.knotwork.design.theme.KnotworkTheme
 import app.knotwork.design.tokens.KnotworkTextStyles
 
@@ -38,7 +37,7 @@ private val LeadingIconSize = 22.dp
  * Compact navigation list row used by surfaces that primarily route the
  * user to other screens (e.g. the `More` tab).
  *
- * Visual contract (see the More mockup):
+ * Visual contract:
  *  - 72 dp tall; full-width clickable surface.
  *  - Leading 48 dp rounded-square tile filled with `KnotworkTheme.extended.surface1`,
  *    centred [leadingIcon] tinted `KnotworkTheme.extended.onSurfaceMuted`.
@@ -116,7 +115,7 @@ fun KnotworkNavListRow(
             trailing()
         }
         Icon(
-            imageVector = Icons.Outlined.ChevronRight,
+            imageVector = AppIcons.ArrowR,
             contentDescription = null,
             tint = KnotworkTheme.extended.onSurfaceMuted,
         )

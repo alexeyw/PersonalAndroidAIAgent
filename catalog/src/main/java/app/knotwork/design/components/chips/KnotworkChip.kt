@@ -46,7 +46,7 @@ enum class ChipStyle {
 /**
  * Knotwork chip — horizontal pill with optional leading and trailing icons.
  *
- * Visual contract (see `compose/components/README.md` §Chips & pills):
+ * Visual contract:
  *  - 32 dp tall, shape `KnotworkTheme.shapes.full`, horizontal padding 12 dp.
  *  - `selected = true`: container `Accent100` (light) / `primaryContainer`
  *    (dark), label `onPrimaryContainer` — independent of [style].
@@ -58,22 +58,13 @@ enum class ChipStyle {
  * @param modifier optional layout modifier applied to the chip root.
  * @param leadingIcon optional vector rendered before the label (16 dp).
  * @param trailingIcon optional vector rendered after the label (16 dp); pair
- * with `Icons.Filled.Close` for filter chips that toggle off.
+ * with `AppIcons.X` for filter chips that toggle off.
  * @param selected when `true`, renders the selected palette regardless of
  * [style].
  * @param style controls the resting (unselected) palette.
  * @param enabled when `false`, the chip is non-interactive and renders the
  * disabled tone.
  */
-@Deprecated(
-    message = "Use KnotworkFilterChip / KnotworkSuggestionChip / KnotworkInputChip — the spec " +
-        "(`inputs-and-chips.md` §6) splits the chip family by intent. KnotworkChip is kept for one " +
-        "release so existing call sites do not break in the middle of the inputs-and-chips migration.",
-    replaceWith = ReplaceWith(
-        expression = "KnotworkFilterChip(label = label, selected = selected, onClick = onClick ?: {})",
-        imports = ["app.knotwork.design.components.chips.KnotworkFilterChip"],
-    ),
-)
 @Composable
 @Suppress("LongParameterList") // Chip API has a stable shape — collapsing the params hides intent.
 fun KnotworkChip(
@@ -185,7 +176,7 @@ private fun chipContainerColor(style: ChipStyle, selected: Boolean, enabled: Boo
     // dark — exactly the container shade `onPrimaryContainer` (used as the
     // chip label colour) is meant to land on. Hardcoding the palette
     // `Accent100` here makes the dark-theme Tonal chip render light-on-light
-    // text. Mirrors `compose/components/README.md §Chips`.
+    // text.
     if (selected) return MaterialTheme.colorScheme.primaryContainer
     return when (style) {
         ChipStyle.Default -> KnotworkTheme.extended.surface2

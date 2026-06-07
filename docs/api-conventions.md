@@ -55,7 +55,7 @@ interface LiteRtRepository {
   conversion between the LLM-emitted JSON argument string and the typed
   `AppFunctionData` consumed by `AppFunctionManager.executeAppFunction(...)`
   goes through
-  [`AppFunctionDataCodec`](../app/src/main/java/ai/agent/android/data/tools/local/AppFunctionDataCodec.kt).
+  [`AppFunctionDataCodec`](../app/src/main/java/app/knotwork/android/data/tools/local/AppFunctionDataCodec.kt).
   Likewise for the response: `ExecuteAppFunctionResponse` → flat JSON
   for the agent's observation log. Do not hand-roll `JSONObject`
   walking in callers — the codec is the source of truth for type

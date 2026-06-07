@@ -26,7 +26,7 @@ object KnotworkPalette {
     val Accent200 = Color(0xFFF0C595)
     val Accent300 = Color(0xFFE1AC6E)
     val Accent400 = Color(0xFFD49648)
-    val Accent500 = Color(0xFFC48225) // primary in light theme
+    val Accent500 = Color(0xFFC48225) // MANUAL source rail (light); not the primary role
     val Accent600 = Color(0xFFA76C12)
     val Accent700 = Color(0xFF81520A)
     val Accent800 = Color(0xFF54360B)
@@ -44,10 +44,6 @@ object KnotworkPalette {
     val NodeIfCondition = Color(0xFF43A96E)
     val NodeClarification = Color(0xFFD49648)
 
-    // Memory provenance accents (Auto = teal, Compaction = violet); Manual reuses
-    // the brand primary at the call site.
-    val MemoryAuto = Color(0xFF1F9AA8)
-    val MemoryCompaction = Color(0xFF7A6AD8)
     val NodeLiteRt = Color(0xFFA76C12)
     val NodeCloud = Color(0xFF5F9DB0)
     val NodeTool = Color(0xFFD5A13C)
@@ -92,11 +88,29 @@ object KnotworkLight {
     val RiskSensitive = KnotworkPalette.SignalWarn
     val RiskDestructive = KnotworkPalette.SignalError
 
+    // Chat bubble pairs: user / agent / tool, each bg + fg.
     val ChatUserBg = KnotworkPalette.Accent100
-    val ChatBotBg = Surface2
+    val ChatUserFg = KnotworkPalette.Accent800
+    val ChatAgentBg = Surface1
+    val ChatAgentFg = OnSurface
+    val ChatToolBg = Surface2
+    val ChatToolFg = OnSurface2
 
     val ConsoleBg = Color(0xFF191511)
     val ConsoleFg = Color(0xFFE7E4E0)
+    val ConsoleTag = KnotworkPalette.Accent300
+
+    // Memory source-tag provenance: AUTO hue 220 (blue),
+    // MANUAL hue 70 (brand amber), COMPACT hue 285 (violet). bg / fg / 3px rail.
+    val MemAutoBg = Color(0xFFD6F0F9)
+    val MemAutoFg = Color(0xFF005E78)
+    val MemAutoRail = Color(0xFF1F9BBA)
+    val MemManualBg = KnotworkPalette.Accent100
+    val MemManualFg = KnotworkPalette.Accent800
+    val MemManualRail = KnotworkPalette.Accent500
+    val MemCompactBg = Color(0xFFE8E9FF)
+    val MemCompactFg = Color(0xFF534F8D)
+    val MemCompactRail = Color(0xFF807CC6)
 }
 
 /**
@@ -133,18 +147,37 @@ object KnotworkDark {
     val RiskSensitive = Color(0xFFE9B452)
     val RiskDestructive = Color(0xFFF97770)
 
+    // Chat bubble pairs: user / agent / tool, each bg + fg.
     val ChatUserBg = Color(0xFF412805)
-    val ChatBotBg = Surface2
+    val ChatUserFg = KnotworkPalette.Accent100
+    val ChatAgentBg = Surface2
+    val ChatAgentFg = OnSurface
+    val ChatToolBg = Surface3
+    val ChatToolFg = OnSurface2
 
     val ConsoleBg = Color(0xFF070504)
     val ConsoleFg = Color(0xFFDAD7D3)
+    val ConsoleTag = KnotworkPalette.Accent300
+
+    // Memory source-tag provenance — dark variants.
+    val MemAutoBg = Color(0xFF07333F)
+    val MemAutoFg = Color(0xFF7ED2ED)
+    val MemAutoRail = Color(0xFF4AADC9)
+    val MemManualBg = Color(0xFF462D0B)
+    val MemManualFg = KnotworkPalette.Accent100
+    val MemManualRail = KnotworkPalette.Accent300
+    val MemCompactBg = Color(0xFF2B2A46)
+    val MemCompactFg = Color(0xFFBDBCFD)
+    val MemCompactRail = Color(0xFF928FD4)
 }
 
 /**
  * Builds the Material3 [ColorScheme] for the light Knotwork palette.
  *
  * Knotwork roles are mapped onto Material3 slots as follows:
- *  - `primary` → [KnotworkPalette.Accent500] (light) / `Accent400` (dark)
+ *  - `primary` → [KnotworkPalette.Accent600] (light) / `Accent300` (dark) —
+ *    accent-600 (L 0.58) keeps white `on-primary` above the 3:1 UI-contrast
+ *    floor on filled buttons; accent-500 (L 0.66) fell short.
  *  - `secondary` → `Accent700` (light) / `Accent300` (dark)
  *  - `tertiary` → readonly-risk hue (the cool blue-cyan node colour)
  *  - `error` → [KnotworkPalette.SignalError] / dark equivalent
@@ -158,7 +191,7 @@ object KnotworkDark {
  * theme switch, so callers do not need to memoise.
  */
 fun knotworkLightColorScheme(): ColorScheme = lightColorScheme(
-    primary = KnotworkPalette.Accent500,
+    primary = KnotworkPalette.Accent600,
     onPrimary = KnotworkLight.OnPrimary,
     primaryContainer = KnotworkLight.PrimaryContainer,
     onPrimaryContainer = KnotworkLight.OnPrimaryContainer,
@@ -210,7 +243,7 @@ fun knotworkLightColorScheme(): ColorScheme = lightColorScheme(
  * @return a freshly built [ColorScheme]; cheap to recompute on theme flips.
  */
 fun knotworkDarkColorScheme(): ColorScheme = darkColorScheme(
-    primary = KnotworkPalette.Accent400,
+    primary = KnotworkPalette.Accent300,
     onPrimary = KnotworkDark.OnPrimary,
     primaryContainer = KnotworkDark.PrimaryContainer,
     onPrimaryContainer = KnotworkDark.OnPrimaryContainer,

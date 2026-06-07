@@ -4,6 +4,7 @@
 package app.knotwork.design.screens.memory
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -28,17 +29,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.PushPin
-import androidx.compose.material.icons.outlined.ArrowDropDown
-import androidx.compose.material.icons.outlined.AutoAwesome
-import androidx.compose.material.icons.outlined.Close
-import androidx.compose.material.icons.outlined.MoreVert
-import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.material.icons.outlined.Search
-import androidx.compose.material.icons.outlined.WarningAmber
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -75,24 +67,35 @@ import app.knotwork.design.components.buttons.KnotworkSecondaryButton
 import app.knotwork.design.components.buttons.KnotworkTextButton
 import app.knotwork.design.components.chips.KnotworkFilterChip
 import app.knotwork.design.components.misc.EmptyState
+import app.knotwork.design.icons.AppIcons
 import app.knotwork.design.theme.KnotworkTheme
 import app.knotwork.design.tokens.KnotworkTextStyles
 
 /** Minimum width fraction so a tiny breakdown segment still renders a sliver. */
 private const val MIN_SEGMENT_FRACTION = 0.0001f
 
-/** Height of the provenance breakdown bar (spec §6 — 6 px). */
+/** Height of the provenance breakdown bar (6 px). */
 private val BreakdownBarHeight = 6.dp
 
-/** Width of a row's leading provenance accent bar. */
+/** Width of a row's leading provenance accent bar (3 px rail). */
 private val AccentBarWidth = 3.dp
 
-/** Card vertical rhythm (spec §6): title → description 2 px, description → meta 8 px. */
+/** Provenance legend dot diameter (7 px). */
+private val LegendDotSize = 7.dp
+
+/** Search field height (42 px). */
+private val SearchFieldHeight = 42.dp
+
+/** Source-tag pill padding (`0 6`, with 2 px optical vertical). */
+private val SourceBadgePaddingH = 6.dp
+private val SourceBadgePaddingV = 2.dp
+
+/** Card vertical rhythm: title → description 2 px, description → meta 8 px. */
 private val CARD_TITLE_GAP = 2.dp
 private val CARD_BODY_GAP = 8.dp
 
 /**
- * Stateless Knotwork memory surface — Phase 25 redesign.
+ * Stateless Knotwork memory surface.
  *
  * Renders the stats header (count / size / last-compacted / provenance
  * breakdown + Compact), the category chip row, the sort + date dropdowns, the
@@ -126,7 +129,7 @@ fun MemoryContent(
                         onClick = callbacks.onAddClick,
                         containerColor = MaterialTheme.colorScheme.primary,
                         contentColor = MaterialTheme.colorScheme.onPrimary,
-                        icon = { Icon(Icons.Filled.Add, contentDescription = null) },
+                        icon = { Icon(AppIcons.Add, contentDescription = null) },
                         text = { Text(stringResource(R.string.knotwork_memory_add_memory)) },
                     )
                 }
@@ -176,7 +179,7 @@ private fun MemoryTopBar(searching: Boolean, callbacks: MemoryCallbacks) {
         navigationIcon = {
             IconButton(onClick = callbacks.onBack) {
                 Icon(
-                    imageVector = Icons.AutoMirrored.Outlined.ArrowBack,
+                    imageVector = AppIcons.Back,
                     contentDescription = stringResource(R.string.knotwork_common_back),
                     tint = MaterialTheme.colorScheme.onSurface,
                 )
@@ -185,7 +188,7 @@ private fun MemoryTopBar(searching: Boolean, callbacks: MemoryCallbacks) {
         actions = {
             IconButton(onClick = callbacks.onSearchOpen) {
                 Icon(
-                    imageVector = Icons.Outlined.Search,
+                    imageVector = AppIcons.Search,
                     contentDescription = stringResource(R.string.knotwork_memory_search_cd),
                     tint = if (searching) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
                 )
@@ -193,7 +196,7 @@ private fun MemoryTopBar(searching: Boolean, callbacks: MemoryCallbacks) {
             Box {
                 IconButton(onClick = { menuOpen = true }) {
                     Icon(
-                        imageVector = Icons.Outlined.MoreVert,
+                        imageVector = AppIcons.More,
                         contentDescription = stringResource(R.string.knotwork_memory_overflow_cd),
                         tint = MaterialTheme.colorScheme.onSurface,
                     )
@@ -293,11 +296,18 @@ private fun MemorySearchField(query: String, callbacks: MemoryCallbacks) {
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(vertical = KnotworkTheme.spacing.sp2)
-                .clip(KnotworkTheme.shapes.md)
+                // Height 42, pill radius, surface-2 fill, 1 px outline-strong (input rule).
+                .height(SearchFieldHeight)
+                .clip(KnotworkTheme.shapes.full)
                 .background(KnotworkTheme.extended.surface2)
-                .padding(horizontal = KnotworkTheme.spacing.sp3, vertical = KnotworkTheme.spacing.sp2),
+                .border(
+                    width = 1.dp,
+                    color = KnotworkTheme.extended.outlineStrong,
+                    shape = KnotworkTheme.shapes.full,
+                )
+                .padding(horizontal = KnotworkTheme.spacing.sp3),
         ) {
-            Icon(Icons.Outlined.Search, contentDescription = null, tint = KnotworkTheme.extended.onSurfaceMuted)
+            Icon(AppIcons.Search, contentDescription = null, tint = KnotworkTheme.extended.onSurfaceMuted)
             Box(modifier = Modifier.weight(1f)) {
                 BasicTextField(
                     value = query,
@@ -315,14 +325,15 @@ private fun MemorySearchField(query: String, callbacks: MemoryCallbacks) {
                     )
                 }
             }
-            if (query.isNotEmpty()) {
-                IconButton(onClick = callbacks.onClearSearch) {
-                    Icon(
-                        Icons.Outlined.Close,
-                        contentDescription = stringResource(R.string.knotwork_memory_search_clear_cd),
-                        tint = KnotworkTheme.extended.onSurfaceMuted,
-                    )
-                }
+            // Always show the close affordance while the field is open — the
+            // user must be able to dismiss search without first typing a query
+            // (onClearSearch clears the text and collapses the field).
+            IconButton(onClick = callbacks.onClearSearch) {
+                Icon(
+                    AppIcons.X,
+                    contentDescription = stringResource(R.string.knotwork_memory_search_clear_cd),
+                    tint = KnotworkTheme.extended.onSurfaceMuted,
+                )
             }
         }
         Text(
@@ -370,7 +381,7 @@ private fun MemoryStatsCard(header: MemoryStatsHeader, callbacks: MemoryCallback
                 text = stringResource(R.string.knotwork_memory_compact),
                 onClick = callbacks.onCompactClick,
                 size = KnotworkButtonSize.Sm,
-                leadingIcon = Icons.Outlined.AutoAwesome,
+                leadingIcon = AppIcons.Spark,
             )
         }
         if (header.segments.isNotEmpty()) {
@@ -394,7 +405,7 @@ private fun MemoryBreakdownBar(segments: List<MemoryBreakdownSegment>) {
                 modifier = Modifier
                     .weight(segment.fraction.coerceAtLeast(MIN_SEGMENT_FRACTION))
                     .fillMaxSize()
-                    .background(sourceColor(segment.kind)),
+                    .background(sourceRail(segment.kind)),
             )
         }
     }
@@ -407,8 +418,8 @@ private fun MemoryBreakdownLegend(segments: List<MemoryBreakdownSegment>) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 Box(
                     modifier = Modifier.size(
-                        8.dp,
-                    ).clip(RoundedCornerShape(percent = 50)).background(sourceColor(segment.kind)),
+                        LegendDotSize,
+                    ).clip(RoundedCornerShape(percent = 50)).background(sourceRail(segment.kind)),
                 )
                 Text(
                     text = segment.label,
@@ -438,7 +449,7 @@ private fun MemoryCategoryRow(
                 label = stringResource(chip.category.labelRes()),
                 selected = chip.category == selected,
                 onClick = { onSelect(chip.category) },
-                leadingIcon = if (chip.category == MemoryCategory.Pinned) Icons.Filled.PushPin else null,
+                leadingIcon = if (chip.category == MemoryCategory.Pinned) AppIcons.PinOn else null,
                 trailingCount = chip.count,
             )
         }
@@ -488,7 +499,7 @@ private fun <T> MemoryDropdown(
             }.padding(horizontal = 4.dp, vertical = 2.dp),
         ) {
             Text(text = label, style = MemoryType.control, color = MaterialTheme.colorScheme.onSurface)
-            Icon(Icons.Outlined.ArrowDropDown, contentDescription = null, tint = KnotworkTheme.extended.onSurfaceMuted)
+            Icon(AppIcons.ArrowDown, contentDescription = null, tint = KnotworkTheme.extended.onSurfaceMuted)
         }
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
             options.forEach { option ->
@@ -530,7 +541,7 @@ private fun MemorySectionHeader(title: String, count: Int) {
 @Composable
 private fun MemoryListRow(row: MemoryRow, searching: Boolean, callbacks: MemoryCallbacks) {
     Row(modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min)) {
-        Box(modifier = Modifier.width(AccentBarWidth).fillMaxHeight().background(sourceColor(row.sourceKind)))
+        Box(modifier = Modifier.width(AccentBarWidth).fillMaxHeight().background(sourceRail(row.sourceKind)))
         Column(
             modifier = Modifier
                 .weight(1f)
@@ -548,7 +559,7 @@ private fun MemoryListRow(row: MemoryRow, searching: Boolean, callbacks: MemoryC
                 )
                 IconButton(onClick = { callbacks.onEntryPinToggle(row.id) }, modifier = Modifier.size(28.dp)) {
                     Icon(
-                        imageVector = if (row.isPinned) Icons.Filled.PushPin else Icons.Outlined.PushPin,
+                        imageVector = if (row.isPinned) AppIcons.PinOn else AppIcons.Pin,
                         contentDescription = stringResource(
                             if (row.isPinned) R.string.knotwork_memory_unpin else R.string.knotwork_memory_pin,
                         ),
@@ -605,15 +616,14 @@ private fun MemoryListRow(row: MemoryRow, searching: Boolean, callbacks: MemoryC
 
 @Composable
 private fun MemorySourceBadge(kind: MemorySourceKind) {
-    val color = sourceColor(kind)
     Text(
         text = stringResource(kind.labelRes()).uppercase(),
         style = MemoryType.sourceTag,
-        color = color,
+        color = sourceBadgeFg(kind),
         modifier = Modifier
             .clip(KnotworkTheme.shapes.xs)
-            .background(color.copy(alpha = 0.14f))
-            .padding(horizontal = 6.dp, vertical = 2.dp),
+            .background(sourceBadgeBg(kind))
+            .padding(horizontal = SourceBadgePaddingH, vertical = SourceBadgePaddingV),
     )
 }
 
@@ -637,7 +647,7 @@ private fun MemoryError(state: MemoryViewState, callbacks: MemoryCallbacks, padd
         modifier = Modifier.fillMaxSize().padding(padding).padding(KnotworkTheme.spacing.sp6),
     ) {
         Icon(
-            imageVector = Icons.Outlined.WarningAmber,
+            imageVector = AppIcons.Warn,
             contentDescription = null,
             tint = KnotworkTheme.extended.signalError,
             modifier = Modifier.size(KnotworkTheme.spacing.sp16),
@@ -702,7 +712,7 @@ private fun MemoryDetailSheet(detail: MemoryEntryDetail, editing: Boolean, callb
                     Spacer(modifier = Modifier.weight(1f))
                     IconButton(onClick = { callbacks.onEntryPinToggle(detail.id) }) {
                         Icon(
-                            imageVector = if (detail.isPinned) Icons.Filled.PushPin else Icons.Outlined.PushPin,
+                            imageVector = if (detail.isPinned) AppIcons.PinOn else AppIcons.Pin,
                             contentDescription = stringResource(
                                 if (detail.isPinned) R.string.knotwork_memory_unpin else R.string.knotwork_memory_pin,
                             ),
@@ -715,7 +725,7 @@ private fun MemoryDetailSheet(detail: MemoryEntryDetail, editing: Boolean, callb
                     }
                     IconButton(onClick = callbacks.onCloseDetail) {
                         Icon(
-                            Icons.Outlined.Close,
+                            AppIcons.X,
                             contentDescription = stringResource(R.string.knotwork_memory_detail_close),
                             tint = MaterialTheme.colorScheme.onSurface,
                         )
@@ -804,7 +814,7 @@ private fun MemoryTagEditor(
                 if (editing) {
                     Spacer(modifier = Modifier.width(4.dp))
                     Icon(
-                        imageVector = Icons.Outlined.Close,
+                        imageVector = AppIcons.X,
                         contentDescription = stringResource(R.string.knotwork_memory_tag_remove_cd),
                         tint = KnotworkTheme.extended.onSurfaceMuted,
                         modifier = Modifier.size(14.dp).clickable { onRemoveTag(tag) },
@@ -821,7 +831,7 @@ private fun MemoryTagEditor(
                     .padding(horizontal = KnotworkTheme.spacing.sp2, vertical = 4.dp),
             ) {
                 Icon(
-                    Icons.Filled.Add,
+                    AppIcons.Add,
                     contentDescription = null,
                     tint = KnotworkTheme.extended.onSurfaceMuted,
                     modifier = Modifier.size(14.dp),
@@ -1019,12 +1029,30 @@ private fun MemoryAddDialog(callbacks: MemoryCallbacks) {
     )
 }
 
-/** Maps a [MemorySourceKind] to its accent colour. */
+/** Source-tag rail / segment colour (`rail`, split-bar segments). */
 @Composable
-private fun sourceColor(kind: MemorySourceKind): Color = when (kind) {
-    MemorySourceKind.Auto -> KnotworkTheme.extended.memoryAuto
-    MemorySourceKind.Compaction -> KnotworkTheme.extended.memoryCompaction
-    MemorySourceKind.Manual -> MaterialTheme.colorScheme.primary
+private fun sourceRail(kind: MemorySourceKind): Color = when (kind) {
+    MemorySourceKind.Auto -> KnotworkTheme.extended.memAutoRail
+    MemorySourceKind.Manual -> KnotworkTheme.extended.memManualRail
+    MemorySourceKind.Compaction -> KnotworkTheme.extended.memCompactRail
+    MemorySourceKind.Unknown -> KnotworkTheme.extended.onSurfaceMuted
+}
+
+/** Source-tag pill fill (`bg`). */
+@Composable
+private fun sourceBadgeBg(kind: MemorySourceKind): Color = when (kind) {
+    MemorySourceKind.Auto -> KnotworkTheme.extended.memAutoBg
+    MemorySourceKind.Manual -> KnotworkTheme.extended.memManualBg
+    MemorySourceKind.Compaction -> KnotworkTheme.extended.memCompactBg
+    MemorySourceKind.Unknown -> KnotworkTheme.extended.surface3
+}
+
+/** Source-tag pill text (`fg`). */
+@Composable
+private fun sourceBadgeFg(kind: MemorySourceKind): Color = when (kind) {
+    MemorySourceKind.Auto -> KnotworkTheme.extended.memAutoFg
+    MemorySourceKind.Manual -> KnotworkTheme.extended.memManualFg
+    MemorySourceKind.Compaction -> KnotworkTheme.extended.memCompactFg
     MemorySourceKind.Unknown -> KnotworkTheme.extended.onSurfaceMuted
 }
 

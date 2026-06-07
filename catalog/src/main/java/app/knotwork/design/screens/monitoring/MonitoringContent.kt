@@ -13,9 +13,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.ArrowBack
-import androidx.compose.material.icons.outlined.BatteryAlert
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -30,6 +27,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import app.knotwork.design.components.misc.EmptyState
+import app.knotwork.design.icons.AppIcons
 import app.knotwork.design.theme.KnotworkTheme
 import app.knotwork.design.tokens.KnotworkTextStyles
 
@@ -74,12 +72,12 @@ fun MonitoringContent(
 private fun TopBar(strings: MonitoringStrings, callbacks: MonitoringCallbacks) {
     TopAppBar(
         title = {
-            Text(text = strings.title, style = KnotworkTextStyles.TitleLg, color = MaterialTheme.colorScheme.onSurface)
+            Text(text = strings.title, style = KnotworkTextStyles.TitleMd, color = MaterialTheme.colorScheme.onSurface)
         },
         navigationIcon = {
             IconButton(onClick = callbacks.onBack) {
                 Icon(
-                    imageVector = Icons.AutoMirrored.Outlined.ArrowBack,
+                    imageVector = AppIcons.Back,
                     contentDescription = strings.backCd,
                     tint = MaterialTheme.colorScheme.onSurface,
                 )
@@ -188,7 +186,7 @@ private fun PowerSavingBanner(strings: MonitoringStrings) {
             .padding(KnotworkTheme.spacing.sp4),
     ) {
         Icon(
-            imageVector = Icons.Outlined.BatteryAlert,
+            imageVector = AppIcons.Battery,
             contentDescription = null,
             tint = KnotworkTheme.extended.signalWarn,
         )

@@ -37,18 +37,15 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.outlined.Add
-import androidx.compose.material.icons.outlined.BrightnessMedium
 import androidx.compose.material.icons.outlined.Edit
-import androidx.compose.material.icons.outlined.FileDownload
 import androidx.compose.material.icons.outlined.Hub
 import androidx.compose.material.icons.outlined.Menu
-import androidx.compose.material.icons.outlined.MoreVert
-import androidx.compose.material.icons.outlined.StarBorder
 import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -93,15 +90,24 @@ import app.knotwork.design.components.chips.Risk
 import app.knotwork.design.components.console.ConsolePane
 import app.knotwork.design.components.console.ConsoleSnap
 import app.knotwork.design.components.misc.KnotworkLoader
+import app.knotwork.design.icons.AppIcons
 import app.knotwork.design.theme.KnotworkTheme
 import app.knotwork.design.tokens.KnotworkTextStyles
 import kotlinx.coroutines.launch
 
-/** Horizontal padding around chat-message rows (per `screens/README.md §C1`). */
+/** Horizontal padding around chat-message rows. */
 private val ChatHorizontalPadding = 16.dp
 
 /** Vertical gap between consecutive chat-message rows. */
 private val ChatRowGap = 12.dp
+
+/**
+ * Bottom clearance reserved under the message list so a short last message
+ * (clamped to the bottom of the scroll range) clears the single-line
+ * agent-status console pill sitting above the composer. Sized to a one-line
+ * pill (~mono line + its vertical padding).
+ */
+private val ChatConsoleClearance = 40.dp
 
 /** Width of the drawer overlay panel (Material spec for navigation drawers). */
 private val DrawerWidth = 320.dp
@@ -118,7 +124,7 @@ private const val CONSOLE_DRAG_HANDLE_ALPHA = 0.30f
 
 /**
  * Stateless Knotwork Chat home — the primary user-facing surface. Drives the
- * 9 documented states (`compose/screens/README.md §C1`) deterministically
+ * 9 documented states deterministically
  * from [state]; the caller (`:app/ChatHomeScreen`) owns navigation, IME
  * insets, deep-link arguments, and the real ViewModel wiring.
  *
@@ -145,7 +151,7 @@ private const val CONSOLE_DRAG_HANDLE_ALPHA = 0.30f
  *   `ChatContent.Markdown` body. The catalog stays free of any markdown
  *   library — the app supplies the renderer (typically
  *   `com.mikepenz.markdown.m3.Markdown { source -> Markdown(content = source) }`).
- *   When `null` the body falls back to plain text. Phase 22 / Task 16 follow-up F2.
+ *   When `null` the body falls back to plain text.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -154,6 +160,7 @@ fun ChatHomeContent(
     modifier: Modifier = Modifier,
     callbacks: ChatHomeCallbacks = noopChatHomeCallbacks(),
     markdownRenderer: (@Composable (String) -> Unit)? = null,
+    messageListState: LazyListState = rememberLazyListState(),
 ) {
     Box(modifier = modifier.fillMaxSize()) {
         Scaffold(
@@ -179,9 +186,10 @@ fun ChatHomeContent(
                 callbacks = callbacks,
                 padding = padding,
                 markdownRenderer = markdownRenderer,
+                messageListState = messageListState,
             )
         }
-        // Drawer slide-in honours `animations.md §Chat` — 280 ms emphasised
+        // Drawer slide-in — 280 ms emphasised
         // slide + fade enter; reduced-motion collapses to an 80 ms crossfade
         // through `respectReducedMotionTransitions`.
         val drawerTransitions = respectReducedMotionTransitions(
@@ -253,7 +261,7 @@ private fun ChatHomeTopBar(state: ChatHomeViewState, callbacks: ChatHomeCallback
         navigationIcon = {
             IconButton(onClick = callbacks.onOpenDrawer) {
                 Icon(
-                    imageVector = Icons.Outlined.Menu,
+                    imageVector = AppIcons.Menu,
                     contentDescription = stringResource(R.string.knotwork_chat_home_action_threads),
                     tint = MaterialTheme.colorScheme.onSurface,
                 )
@@ -262,7 +270,7 @@ private fun ChatHomeTopBar(state: ChatHomeViewState, callbacks: ChatHomeCallback
         actions = {
             IconButton(onClick = callbacks.onToggleFavorite) {
                 Icon(
-                    imageVector = if (state.favorite) Icons.Filled.Star else Icons.Outlined.StarBorder,
+                    imageVector = if (state.favorite) AppIcons.Star else AppIcons.Star,
                     contentDescription = stringResource(R.string.knotwork_chat_home_action_favorite),
                     tint = if (state.favorite) {
                         MaterialTheme.colorScheme.primary
@@ -273,7 +281,7 @@ private fun ChatHomeTopBar(state: ChatHomeViewState, callbacks: ChatHomeCallback
             }
             IconButton(onClick = callbacks.onOverflow) {
                 Icon(
-                    imageVector = Icons.Outlined.MoreVert,
+                    imageVector = AppIcons.More,
                     contentDescription = stringResource(R.string.knotwork_chat_home_action_overflow),
                     tint = MaterialTheme.colorScheme.onSurface,
                 )
@@ -323,7 +331,7 @@ private const val TOKEN_FORMAT_THRESHOLD = 1000
  * next turn.
  *
  * When [ChatHomeViewState.agentStatusLine] is non-null a single-line
- * mono pill is rendered above the composer (matches the spec mockup's
+ * mono pill is rendered above the composer (the
  * `[NODE]  idle · ready` strip).
  */
 @Composable
@@ -349,7 +357,7 @@ private fun ChatHomeBottomBar(state: ChatHomeViewState, callbacks: ChatHomeCallb
  * renders as one continuous mono line.
  *
  * Tappable: the pill is the user-facing affordance for opening the
- * console pane (Phase 22 / Task 3). The host wires [onClick] to its
+ * console pane. The host wires [onClick] to its
  * `openConsole(Partial)` callback. The whole row carries Role.Button +
  * `contentDescription` so TalkBack announces it as a button rather than
  * two separate text labels.
@@ -410,6 +418,7 @@ private fun ChatHomeBody(
     callbacks: ChatHomeCallbacks,
     padding: PaddingValues,
     markdownRenderer: (@Composable (String) -> Unit)?,
+    messageListState: LazyListState,
 ) {
     when (state.visualState) {
         ChatHomeVisualState.Loading -> ChatHomeLoadingBody(padding = padding)
@@ -419,6 +428,7 @@ private fun ChatHomeBody(
             callbacks = callbacks,
             padding = padding,
             markdownRenderer = markdownRenderer,
+            listState = messageListState,
         )
     }
 }
@@ -427,7 +437,7 @@ private fun ChatHomeBody(
  * Cold-start body — a centred [CircularProgressIndicator] on the chat
  * surface. Renders before the chat repository delivers its first snapshot
  * so the user never sees the [ChatHomeEmptyBody] hero flash for a frame
- * on every app launch (Phase 22 / Task 16 follow-up F4).
+ * on every app launch.
  */
 @Composable
 private fun ChatHomeLoadingBody(padding: PaddingValues) {
@@ -526,7 +536,7 @@ private fun BrandGlyphTile() {
             .background(color = app.knotwork.design.tokens.KnotworkPalette.Accent100),
     ) {
         Icon(
-            imageVector = Icons.Outlined.Hub,
+            imageVector = AppIcons.Hub,
             contentDescription = null,
             tint = MaterialTheme.colorScheme.primary,
             modifier = Modifier.size(BrandGlyphInnerSize),
@@ -582,6 +592,7 @@ private fun ChatHomeMessageList(
     callbacks: ChatHomeCallbacks,
     padding: PaddingValues,
     markdownRenderer: (@Composable (String) -> Unit)?,
+    listState: LazyListState,
 ) {
     // Compose the Scaffold-provided insets with the surface's own 16dp
     // horizontal padding into a single `contentPadding` value. Applying
@@ -593,9 +604,14 @@ private fun ChatHomeMessageList(
         start = padding.calculateStartPadding(LocalLayoutDirection.current) + ChatHorizontalPadding,
         end = padding.calculateEndPadding(LocalLayoutDirection.current) + ChatHorizontalPadding,
         top = padding.calculateTopPadding() + KnotworkTheme.spacing.sp2,
-        bottom = padding.calculateBottomPadding() + KnotworkTheme.spacing.sp2,
+        // Extra bottom clearance so a short last message that clamps to the
+        // bottom of the scroll range rests clear of the single-line agent-status
+        // console pill that sits just above the composer, instead of tucking
+        // under it.
+        bottom = padding.calculateBottomPadding() + KnotworkTheme.spacing.sp2 + ChatConsoleClearance,
     )
     LazyColumn(
+        state = listState,
         modifier = Modifier.fillMaxSize(),
         contentPadding = mergedContentPadding,
         verticalArrangement = Arrangement.spacedBy(ChatRowGap),
@@ -641,7 +657,7 @@ private fun GeneratingLoaderBubble() {
             modifier = Modifier
                 .wrapContentWidth()
                 .clip(KnotworkTheme.shapes.md)
-                .background(color = KnotworkTheme.extended.chatBotBg)
+                .background(color = KnotworkTheme.extended.chatAgentBg)
                 .padding(horizontal = KnotworkTheme.spacing.sp3, vertical = KnotworkTheme.spacing.sp3),
         ) {
             Row(
@@ -697,7 +713,7 @@ private fun ChatHomeErrorTile(message: String, onRetry: () -> Unit) {
 
 /**
  * Slide-in drawer overlay rendered when [ChatHomeVisualState.DrawerOpen]
- * is active. Mirrors the second-pass mockup:
+ * is active:
  *  - `SESSIONS` mono header.
  *  - Big rounded `+ New chat` pill on `Accent50` with brand-primary glyph
  *    and label.
@@ -762,7 +778,7 @@ private fun ChatHomeDrawerOverlay(state: ChatHomeViewState, callbacks: ChatHomeC
                 // -------- Footer entries --------
                 HorizontalDivider(color = KnotworkTheme.extended.divider)
                 DrawerFooterRow(
-                    icon = Icons.Outlined.FileDownload,
+                    icon = AppIcons.Download,
                     title = stringResource(R.string.knotwork_chat_home_drawer_import_title),
                     subtitle = stringResource(R.string.knotwork_chat_home_drawer_import_subtitle),
                     onClick = {
@@ -771,7 +787,7 @@ private fun ChatHomeDrawerOverlay(state: ChatHomeViewState, callbacks: ChatHomeC
                     },
                 )
                 DrawerFooterRow(
-                    icon = Icons.Outlined.BrightnessMedium,
+                    icon = AppIcons.Theme,
                     title = stringResource(R.string.knotwork_chat_home_drawer_settings_title),
                     subtitle = stringResource(R.string.knotwork_chat_home_drawer_settings_subtitle),
                     onClick = {
@@ -798,7 +814,7 @@ private fun DrawerNewChatPill(onClick: () -> Unit) {
             .padding(horizontal = KnotworkTheme.spacing.sp4, vertical = KnotworkTheme.spacing.sp3),
     ) {
         Icon(
-            imageVector = Icons.Outlined.Add,
+            imageVector = AppIcons.Add,
             contentDescription = null,
             tint = MaterialTheme.colorScheme.primary,
         )
@@ -817,8 +833,7 @@ private fun ChatHomeDrawerThreadRow(row: ChatHomeThreadRow, onClick: () -> Unit,
     // Pair the selected-row background and the on-row text colour through the
     // Material3 colour scheme so the contrast stays WCAG-AA in both themes.
     // The previous `KnotworkPalette.Accent50` was a static tan that washed out
-    // against `onSurface` on dark theme (mirror of the onboarding row fix that
-    // landed in Phase 22 / Task 13 post-review feedback).
+    // against `onSurface` on dark theme (mirror of the onboarding row fix).
     val selected = row.active || row.selected
     val rowBg = if (selected) {
         MaterialTheme.colorScheme.primaryContainer
@@ -861,7 +876,7 @@ private fun ChatHomeDrawerThreadRow(row: ChatHomeThreadRow, onClick: () -> Unit,
             ) {
                 if (row.starred) {
                     Icon(
-                        imageVector = Icons.Filled.Star,
+                        imageVector = AppIcons.Star,
                         contentDescription =
                         stringResource(R.string.knotwork_chat_home_drawer_starred_cd),
                         tint = MaterialTheme.colorScheme.primary,
@@ -888,7 +903,7 @@ private fun ChatHomeDrawerThreadRow(row: ChatHomeThreadRow, onClick: () -> Unit,
         }
         IconButton(onClick = onEdit) {
             Icon(
-                imageVector = Icons.Outlined.Edit,
+                imageVector = AppIcons.Edit,
                 contentDescription = stringResource(R.string.knotwork_chat_home_drawer_edit_cd),
                 tint = KnotworkTheme.extended.onSurfaceMuted,
             )
@@ -1094,8 +1109,7 @@ private fun Modifier.absorbClicks(): Modifier {
 
 /**
  * Per-row resolution of the `allowOnceEnabled` flag passed into
- * [ChatMessage] for HITL confirmations. Mirrors the rule documented in
- * `compose/components/README.md §HitlConfirmationCard`:
+ * [ChatMessage] for HITL confirmations. By rule:
  *  - Readonly → auto-allowed (CTA hidden by the card).
  *  - Sensitive → always enabled.
  *  - Destructive → enabled only when the typed confirmation reads "yes".

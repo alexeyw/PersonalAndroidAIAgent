@@ -34,7 +34,7 @@ private const val STRIPE_ALPHA = 0.4f
  * any product surface that ships before its real illustration / hero image
  * is available.
  *
- * Visual contract (see `compose/components/README.md` §Misc):
+ * Visual contract:
  *  - 40 % opacity diagonal stripes drawn in `extended.onSurfaceDim` over a
  *    `extended.surface2` background, clipped to `KnotworkTheme.shapes.md`.
  *  - Optional caption rendered in `MonoSm` at the centre.

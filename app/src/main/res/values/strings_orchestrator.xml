@@ -9,28 +9,12 @@
     Keys follow `orchestrator_<context>_<purpose>`.
 -->
 <resources xmlns:tools="http://schemas.android.com/tools">
-    <!-- Screen titles -->
-    <string name="orchestrator_library_title">Pipelines</string>
-
-    <!-- Default pipeline name -->
-    <string name="orchestrator_default_pipeline_name">New Pipeline</string>
-
     <!-- Library screen -->
-    <string name="orchestrator_library_new_pipeline_cd">New pipeline</string>
     <string name="orchestrator_library_new_pipeline_title">New pipeline</string>
     <string name="orchestrator_library_rename_pipeline_title">Rename pipeline</string>
     <string name="orchestrator_library_delete_pipeline_title">Delete pipeline</string>
     <string name="orchestrator_library_delete_confirm">Delete pipeline «%1$s»? This cannot be undone.</string>
-    <string name="orchestrator_library_pipeline_unnamed">Unnamed (%1$s)</string>
-    <string name="orchestrator_library_badge_active">Active</string>
-    <string name="orchestrator_library_badge_default">Default</string>
-    <string name="orchestrator_library_pipeline_subtitle">Updated %1$s · %2$d nodes</string>
-    <string name="orchestrator_library_pipeline_actions_cd">Pipeline actions</string>
-    <string name="orchestrator_library_menu_default_pipeline">Default pipeline</string>
-    <string name="orchestrator_library_menu_set_as_default">Set as default</string>
     <string name="orchestrator_library_name_field_label">Name</string>
-    <string name="orchestrator_library_empty_title">No pipelines yet</string>
-    <string name="orchestrator_library_empty_subtitle">Tap + to create your first pipeline.</string>
 
     <!-- Snackbars / feedback -->
     <string name="orchestrator_feedback_default_pipeline_updated">Default pipeline updated</string>
@@ -83,8 +67,8 @@
     <!-- Phase 24 / Task 3 — Pipeline presets UI -->
     <!-- Library speed-dial -->
     <string name="orchestrator_library_speed_dial_new">New</string>
-    <string name="orchestrator_library_speed_dial_new_pipeline">+ New pipeline</string>
-    <string name="orchestrator_library_speed_dial_from_preset">+ From preset</string>
+    <string name="orchestrator_library_speed_dial_new_pipeline">New pipeline</string>
+    <string name="orchestrator_library_speed_dial_from_preset">From preset</string>
 
     <!-- Preset picker sheet -->
     <string name="orchestrator_preset_picker_title">Choose a preset</string>
@@ -126,4 +110,10 @@
     <string name="orchestrator_preset_manager_deleted">Preset deleted</string>
     <string name="orchestrator_preset_manager_delete_title">Delete preset?</string>
     <string name="orchestrator_preset_manager_delete_confirm">Delete the preset \"%1$s\"? This cannot be undone.</string>
+
+    <!-- Pipeline JSON import (library) -->
+    <string name="orchestrator_library_import_unreadable">Selected file could not be read.</string>
+    <string name="orchestrator_library_import_schema_title">Schema mismatch</string>
+    <string name="orchestrator_library_import_schema_body" tools:ignore="PluralsCandidate">This pipeline was written for schema v%1$d but this build expects v%2$d. Some configuration may not import cleanly.</string>
+    <string name="orchestrator_library_import_anyway">Import anyway</string>
 </resources>

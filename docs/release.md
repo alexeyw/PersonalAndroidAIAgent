@@ -11,7 +11,7 @@ should be runnable verbatim from a clean checkout.
 | `debug`    | no       | no               | Android debug key   | `app-debug.apk`   |
 | `release`  | yes (R8) | yes              | Android debug key * | `app-release.apk` / `app-release.aab` |
 
-\* See §3 below — v0.2.0 ships signed with the debug keystore. A production
+\* See §3 below — v0.4.0 ships signed with the debug keystore. A production
 keystore is not yet provisioned; the GitHub-Release APK is suitable for
 sideloading on a developer device but **not** acceptable for Play Store
 upload.
@@ -42,7 +42,7 @@ keeps every ABI.
 
 ## 3. Signing (current state vs. production target)
 
-### Current state — v0.2.0
+### Current state — v0.4.0
 
 `buildTypes.release.signingConfig = signingConfigs.getByName("debug")`.
 The Android debug keystore lives at `~/.android/debug.keystore` and is
@@ -147,27 +147,28 @@ If R8 starts stripping something at runtime, drop a new section into
 `proguard-rules.pro` rather than scattering rules across the file, and
 include a one-line comment on the symptom that triggered the keep.
 
-## 5. APK size breakdown — v0.2.0
+## 5. APK size breakdown — v0.4.0
 
-`app-release.apk` measures **59 MB on disk** (~62 MB uncompressed inside
-the APK container). The 30 MB target from the original phase plan is
-**not achievable** with the current dependency set: native libraries +
-the bundled universal-sentence-encoder embedding model already account
-for ~40 MB before a single line of agent code is included.
+`app-release.apk` measures **59.6 MiB on disk** (62,465,437 bytes;
+~59.9 MiB uncompressed inside the APK container). The 30 MB target from
+the original phase plan is **not achievable** with the current dependency
+set: native libraries + the bundled universal-sentence-encoder embedding
+model already account for ~40 MB before a single line of agent code is
+included.
 
 Top contributors (uncompressed bytes inside the APK, arm64-v8a only):
 
 | Entry                                          | Size   | Notes                                     |
 |------------------------------------------------|--------|-------------------------------------------|
-| `lib/arm64-v8a/liblitertlm_jni.so`             | 14.0 MB | LiteRT-LM tokenizer + runtime JNI.        |
-| `classes.dex`                                  | 11.0 MB | App + Koog agents (post-R8).              |
+| `lib/arm64-v8a/liblitertlm_jni.so`             | 14.2 MB | LiteRT-LM tokenizer + runtime JNI.        |
+| `classes.dex`                                  | 11.1 MB | App + Koog agents (post-R8).              |
 | `lib/arm64-v8a/libmediapipe_tasks_jni.so`      | 10.0 MB | MediaPipe Tasks (text embedding host).    |
-| `classes2.dex`                                 |  7.7 MB | App + Koog agents (overflow DEX).         |
+| `classes2.dex`                                 |  7.9 MB | App + Koog agents (overflow DEX).         |
 | `assets/universal_sentence_encoder.tflite`     |  5.8 MB | Bundled embedding model (long-term memory). |
 | `lib/arm64-v8a/libLiteRt.so`                   |  4.8 MB | LiteRT base runtime.                      |
 | `lib/arm64-v8a/libLiteRtClGlAccelerator.so`    |  2.6 MB | LiteRT GPU delegate.                      |
 | `lib/arm64-v8a/libsqlcipher.so`                |  2.0 MB | SQLCipher engine.                         |
-| Everything else combined                       |  ~3 MB  | DataStore native, baseline profiles, fonts, resources, AndroidManifest. |
+| Everything else combined                       |  ~1.4 MB | DataStore native, baseline profiles, fonts, resources, AndroidManifest. |
 
 What we already did to keep this in check:
 
@@ -175,7 +176,7 @@ What we already did to keep this in check:
 - **R8 full mode + resource shrinking.** Saves ~2 MB on DEX vs. unminified.
 - **Strip Jansi non-Android natives.** `org/fusesource/jansi/internal/native/{Windows,Mac,Linux,FreeBSD}/**` and `META-INF/native-image/jansi/**` are dropped via the `android.packaging.resources` exclude list — Jansi ships through Koog's logger and only its ANSI-escape rendering runs on JVM hosts.
 
-Future wins (left out of scope for v0.2.0):
+Future wins (left out of scope for v0.4.0):
 
 - **Move the universal-sentence-encoder model to a first-run download.** Wins ~6 MB; complicates first-run UX. Tracked separately.
 - **Per-ABI dynamic feature module for LiteRT GPU.** Only devices that actually use the GPU delegate would download `libLiteRtClGlAccelerator.so`. Wins ~2.6 MB; requires App Bundle delivery (already in place) plus split-install plumbing.
@@ -185,7 +186,7 @@ Future wins (left out of scope for v0.2.0):
 
 ```bash
 ./gradlew :app:bundleRelease
-# Output: app/build/outputs/bundle/release/app-release.aab  (~37 MB)
+# Output: app/build/outputs/bundle/release/app-release.aab  (~37 MiB)
 ```
 
 The AAB is the format Play Store wants; per-device APKs delivered through

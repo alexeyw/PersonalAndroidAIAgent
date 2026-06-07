@@ -3,8 +3,7 @@ package app.knotwork.design.icons.imagevector
 import androidx.compose.ui.graphics.vector.ImageVector
 
 /**
- * Pipeline `SUMMARY` node glyph — document with bullet lines. Source:
- * `project_docs/design/icons-src/node-summary.svg`.
+ * Pipeline `SUMMARY` node glyph — document with bullet lines.
  */
 internal val knotworkNodeSummaryIcon: ImageVector by lazy { build() }
 

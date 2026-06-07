@@ -19,8 +19,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.WarningAmber
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -38,10 +36,11 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
+import app.knotwork.design.icons.AppIcons
 import app.knotwork.design.theme.KnotworkTheme
 import app.knotwork.design.tokens.KnotworkTextStyles
 
-/** Width of every NodeCard on the canvas (spec §NodeCard). */
+/** Width of every NodeCard on the canvas. */
 private val NodeCardWidth = 168.dp
 
 /** Minimum NodeCard height — body wraps within this floor. */
@@ -50,7 +49,7 @@ private val NodeCardMinHeight = 64.dp
 /** Maximum NodeCard height — body clamps to two lines past this ceiling. */
 private val NodeCardMaxHeight = 96.dp
 
-/** Header strip height (spec §NodeCard). */
+/** Header strip height. */
 private val HeaderStripHeight = 28.dp
 
 /** Selected outer-border stroke (spec). */
@@ -65,7 +64,7 @@ private val IdleBorderWidth = 1.dp
 /** Multi-select corner-chevron side (spec). */
 private val MultiSelectChevronSize = 8.dp
 
-/** Visual port-dot diameter (spec §NodeCard). */
+/** Visual port-dot diameter. */
 private val PortDotVisualDiameter = 12.dp
 
 /** Half the visual port-dot — equals how far each dot protrudes past the card edge. */
@@ -77,7 +76,7 @@ private val PortDotBorderWidth = 1.dp
 /** Header glyph diameter. */
 private val HeaderGlyphSize = 16.dp
 
-/** Vertical gap between an outbound dot and its label (spec §NodeCard). */
+/** Vertical gap between an outbound dot and its label. */
 private val PortLabelGap = 4.dp
 
 /** Approximate height of the `LabelSm` row used for outbound port labels. */
@@ -89,26 +88,24 @@ private const val PULSE_LOW = 0.85f
 /** Header strip pulse range under [running] (upper bound). */
 private const val PULSE_HIGH = 1.0f
 
-/** Header strip pulse cycle in ms (spec §running). */
+/** Header strip pulse cycle in ms. */
 private const val PULSE_DURATION_MS = 1_200
 
-/** Header label letter-tracking (spec §NodeCard). */
+/** Header label letter-tracking. */
 private const val HEADER_LABEL_TRACKING_EM = 0.08f
 
 /**
  * Pipeline-editor node card — single composable covering idle, selected,
  * multi-selected, error (validation / runtime), and running states.
  *
- * The full visual contract lives in
- * `project_docs/design/compose/components/README.md` §NodeCard. Geometry
- * comes from the constants above; tints from
+ * Geometry comes from the constants above; tints from
  * [NodeType.headerTint] / [headerOnColor]; reduced-motion handling reads
- * [KnotworkTheme.a11y] per `decisions.md §14` and collapses the running
+ * [KnotworkTheme.a11y] and collapses the running
  * pulse to a steady-state filled dot.
  *
  * **Stateless** — all interactivity (tap to select, long-press to multi-
  * select, drag from a port to enter connection mode) is owned by the
- * canvas in Task 9. This composable just renders. Selection / running /
+ * canvas. This composable just renders. Selection / running /
  * error visuals are driven by the parameters below.
  *
  * @param type the node type. Drives header tint, glyph, and uppercase
@@ -234,7 +231,7 @@ private fun HeaderStrip(type: NodeType, strip: Color, onStrip: Color, error: Nod
         )
         if (error is NodeError.Validation) {
             Icon(
-                imageVector = Icons.Outlined.WarningAmber,
+                imageVector = AppIcons.Warn,
                 contentDescription = null,
                 tint = onStrip,
                 modifier = Modifier.size(HeaderGlyphSize),
@@ -300,8 +297,8 @@ private fun NodeBody(title: String, subtitle: String?, error: NodeError?) {
  * the Surface top edge (half above the card, half inside the header
  * strip — per spec "baseline -6 dp into the header").
  *
- * Hit-target wrapping (drag-from-port) is the canvas's responsibility in
- * Task 9; the catalog renders the visual only.
+ * Hit-target wrapping (drag-from-port) is the canvas's responsibility;
+ * the catalog renders the visual only.
  */
 @Composable
 private fun androidx.compose.foundation.layout.BoxScope.InboundDot(color: Color) {
@@ -400,7 +397,7 @@ private fun nodeBorderColor(selected: Boolean, multiSelected: Boolean, error: No
 /**
  * Drives the header-strip 1.2 s pulse for the running state. Returns
  * `1.0f` when reduced-motion is on or when [running] is `false` — both
- * cases yield a steady strip per `decisions.md §14`.
+ * cases yield a steady strip.
  */
 @Composable
 private fun headerStripAlpha(running: Boolean): Float {

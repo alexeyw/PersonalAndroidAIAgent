@@ -28,7 +28,7 @@ import app.knotwork.design.theme.KnotworkTheme
  * Modal bottom sheet that hosts the per-type configuration form for one
  * pipeline node.
  *
- * Visual contract: `compose/components/README.md` §NodeConfigSheet. The
+ * The
  * sheet's chrome (drag handle / type pill / scrollable body / sticky
  * Cancel-Save row) is fixed; the body switches on `when (config)` via
  * [NodeConfigForms.Body] and dispatches to the per-type form. Save is

@@ -5,10 +5,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 /**
  * Knotwork wordmark glyph — 24×24 mark used by `AppIcons.Wordmark`. Note that
  * the literal "Knotwork" wordmark is rendered via Compose [androidx.compose.material3.Text]
- * with the bundled Inter font; this glyph is the iconographic fallback (see
- * `decisions.md §13`).
- *
- * Source: `project_docs/design/icons-src/wordmark.svg`.
+ * with the bundled Inter font; this glyph is the iconographic fallback.
  */
 internal val knotworkWordmarkIcon: ImageVector by lazy { build() }
 

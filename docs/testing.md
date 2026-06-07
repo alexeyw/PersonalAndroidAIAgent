@@ -9,7 +9,7 @@ instrumented tests (`app/src/androidTest/`).
 
 Target **100% logic coverage** in new or modified code of the `domain` and
 `data` layers; the build-side gate is **75% LINE aggregate** across the
-module (raised from 70 % at the close of Phase 23 — see
+module (raised from 70 % — see
 [`coverage-baseline.md`](coverage-baseline.md) § *Enforced threshold*).
 Per-package decomposition and informational per-package targets are also
 documented in [`coverage-baseline.md`](coverage-baseline.md); the full

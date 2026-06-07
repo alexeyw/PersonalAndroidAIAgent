@@ -18,11 +18,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Close
-import androidx.compose.material.icons.outlined.ContentCopy
-import androidx.compose.material.icons.outlined.DeleteSweep
-import androidx.compose.material.icons.outlined.FilterAlt
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -46,6 +41,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import app.knotwork.design.R
+import app.knotwork.design.icons.AppIcons
 import app.knotwork.design.theme.KnotworkTheme
 import app.knotwork.design.tokens.KnotworkPalette
 import app.knotwork.design.tokens.KnotworkTextStyles
@@ -87,7 +83,7 @@ private val TraceBarHeight = 4.dp
  * depending on. The screen layer wraps the catalog component with its own
  * pager / pull-loader machinery.
  *
- * Visual contract: `compose/components/README.md` §Chat surface §ConsolePane.
+ * Console pane surface.
  *
  * **Peek layout (44 dp budget).** The full Partial/Full header is 56 dp,
  * so Peek renders a *separate* compact header (8 dp drag handle + 18 dp
@@ -135,7 +131,7 @@ private val TraceBarHeight = 4.dp
  * @param modifier optional layout modifier applied to the pane root.
  */
 @Composable
-@Suppress("LongParameterList") // Stable public API mirroring `components/README.md`.
+@Suppress("LongParameterList") // Stable public API.
 fun ConsolePane(
     tab: ConsoleTab,
     onTabChange: (ConsoleTab) -> Unit,
@@ -264,22 +260,22 @@ private fun FullTabStrip(tab: ConsoleTab, onTabChange: (ConsoleTab) -> Unit, mod
 private fun ConsoleActions(onSearch: () -> Unit, onCopyAll: () -> Unit, onClear: () -> Unit, onClose: () -> Unit) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         ConsoleHeaderIcon(
-            icon = Icons.Outlined.Search,
+            icon = AppIcons.Search,
             contentDescription = stringResource(R.string.knotwork_console_action_search),
             onClick = onSearch,
         )
         ConsoleHeaderIcon(
-            icon = Icons.Outlined.ContentCopy,
+            icon = AppIcons.Copy,
             contentDescription = stringResource(R.string.knotwork_console_action_copy_all),
             onClick = onCopyAll,
         )
         ConsoleHeaderIcon(
-            icon = Icons.Outlined.DeleteSweep,
+            icon = AppIcons.Trash,
             contentDescription = stringResource(R.string.knotwork_console_action_clear),
             onClick = onClear,
         )
         ConsoleHeaderIcon(
-            icon = Icons.Outlined.Close,
+            icon = AppIcons.X,
             contentDescription = stringResource(R.string.knotwork_console_action_close),
             onClick = onClose,
         )
@@ -384,7 +380,7 @@ private fun ConsoleSearchField(query: String, onQueryChange: (String) -> Unit) {
             .padding(horizontal = KnotworkTheme.spacing.sp2, vertical = KnotworkTheme.spacing.sp1),
     ) {
         Icon(
-            imageVector = Icons.Outlined.Search,
+            imageVector = AppIcons.Search,
             contentDescription = null,
             tint = KnotworkTheme.extended.consoleFg.copy(alpha = INACTIVE_TAB_ALPHA),
             modifier = Modifier.size(SEARCH_ICON_SIZE),
@@ -415,7 +411,7 @@ private fun ConsoleSearchField(query: String, onQueryChange: (String) -> Unit) {
                 modifier = Modifier.size(SEARCH_CLEAR_SIZE),
             ) {
                 Icon(
-                    imageVector = Icons.Outlined.Close,
+                    imageVector = AppIcons.X,
                     contentDescription = stringResource(R.string.knotwork_console_search_clear_cd),
                     tint = KnotworkTheme.extended.consoleFg.copy(alpha = INACTIVE_TAB_ALPHA),
                     modifier = Modifier.size(SEARCH_ICON_SIZE),
@@ -533,7 +529,7 @@ private fun ConsoleLineRow(line: ConsoleLine, onCopyLine: () -> Unit, onFilterBy
                 text = { Text(stringResource(R.string.knotwork_console_line_copy)) },
                 leadingIcon = {
                     Icon(
-                        imageVector = Icons.Outlined.ContentCopy,
+                        imageVector = AppIcons.Copy,
                         contentDescription = null,
                     )
                 },
@@ -546,7 +542,7 @@ private fun ConsoleLineRow(line: ConsoleLine, onCopyLine: () -> Unit, onFilterBy
                 text = { Text(stringResource(R.string.knotwork_console_line_filter_only)) },
                 leadingIcon = {
                     Icon(
-                        imageVector = Icons.Outlined.FilterAlt,
+                        imageVector = AppIcons.Filter,
                         contentDescription = null,
                     )
                 },

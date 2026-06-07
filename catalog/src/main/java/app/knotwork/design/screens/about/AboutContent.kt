@@ -12,8 +12,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -26,9 +24,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import app.knotwork.design.components.brand.KnotworkLogo
+import app.knotwork.design.components.brand.KnotworkAppIconTile
 import app.knotwork.design.components.brand.KnotworkLogoSize
 import app.knotwork.design.components.buttons.KnotworkSecondaryButton
+import app.knotwork.design.icons.AppIcons
 import app.knotwork.design.theme.KnotworkTheme
 import app.knotwork.design.tokens.KnotworkTextStyles
 
@@ -93,7 +92,7 @@ private fun TopBar(strings: AboutStrings, callbacks: AboutCallbacks) {
         navigationIcon = {
             IconButton(onClick = callbacks.onBack) {
                 Icon(
-                    imageVector = Icons.AutoMirrored.Outlined.ArrowBack,
+                    imageVector = AppIcons.Back,
                     contentDescription = strings.backCd,
                     tint = MaterialTheme.colorScheme.onSurface,
                 )
@@ -117,7 +116,7 @@ private fun Hero(state: AboutViewState) {
         verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp2),
         modifier = Modifier.fillMaxWidth().padding(vertical = KnotworkTheme.spacing.sp3),
     ) {
-        KnotworkLogo(size = KnotworkLogoSize.Md)
+        KnotworkAppIconTile(size = KnotworkLogoSize.Md)
         Text(
             text = state.appName,
             style = KnotworkTextStyles.TitleXl,
@@ -138,7 +137,7 @@ private fun VersionCard(state: AboutViewState, strings: AboutStrings) {
     //  - `BodyBase` primary value
     //  - `Caption` secondary lines (build / commit / etc.)
     // The previous mix of `TitleMd` + `MonoBase` per card is what the
-    // user flagged as "разные шрифты".
+    // user flagged as "mismatched fonts".
     AboutCard {
         SectionLabel(text = strings.sectionVersion)
         Text(

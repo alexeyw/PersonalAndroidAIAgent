@@ -3,8 +3,7 @@ package app.knotwork.design.icons.imagevector
 import androidx.compose.ui.graphics.vector.ImageVector
 
 /**
- * Pipeline `CLOUD` node glyph — cloud shape with up-arrow. Source:
- * `project_docs/design/icons-src/node-cloud.svg`.
+ * Pipeline `CLOUD` node glyph — cloud shape with up-arrow.
  */
 internal val knotworkNodeCloudIcon: ImageVector by lazy { build() }
 

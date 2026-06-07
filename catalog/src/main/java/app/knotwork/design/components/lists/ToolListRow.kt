@@ -26,7 +26,7 @@ import app.knotwork.design.components.chips.StatusPill
 import app.knotwork.design.theme.KnotworkTheme
 import app.knotwork.design.tokens.KnotworkTextStyles
 
-/** Row visual height (`compose/components/README.md` §List items). */
+/** Row visual height. */
 private val ToolRowHeight = 64.dp
 
 /** Diameter of the leading tool icon halo. */
@@ -57,7 +57,7 @@ enum class ConnectionStatus {
 /**
  * Knotwork tool / MCP-server list row.
  *
- * Visual contract (see `compose/components/README.md` §List items):
+ * Visual contract:
  *  - 64 dp tall; leading 32 dp tool icon, `TitleMd` title, `BodySm` server
  *    name subtitle, trailing connection-status pill (reuses [StatusPill]).
  *  - Tap on the row body invokes [onClick] (typically opens the tool detail

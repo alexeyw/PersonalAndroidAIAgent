@@ -32,12 +32,12 @@
             to every package that publishes an `@AppFunction`, future-proofing the
             visibility surface for production peers (the agent does not know their
             applicationIds at compile time).
-          - The explicit `<package>` for `ai.agent.android.toolsprobe` is the e2e test's
+          - The explicit `<package>` for `app.knotwork.android.toolsprobe` is the e2e test's
             target and is kept as a belt-and-suspenders fallback in case the system
             indexer evaluates the explicit form before the intent-filter form.
     -->
     <queries>
-        <package android:name="ai.agent.android.toolsprobe" />
+        <package android:name="app.knotwork.android.toolsprobe" />
         <intent>
             <action android:name="android.app.appfunctions.AppFunctionService" />
         </intent>
