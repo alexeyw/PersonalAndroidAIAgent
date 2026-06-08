@@ -15,7 +15,7 @@ import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 
 /**
- * Memory-screen a11y audit (Phase 22 / Task 7).
+ * Memory-screen a11y audit.
  *
  * Tighter follow-up to the structural reachability test in
  * [app.knotwork.design.a11y.TalkBackHappyPathsTest]: this suite enumerates

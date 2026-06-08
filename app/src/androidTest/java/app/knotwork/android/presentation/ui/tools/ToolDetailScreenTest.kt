@@ -20,7 +20,7 @@ import org.junit.Test
  * Verifies the two branches the screen ships with: MCP tools render the
  * remote JSON-Schema from the cached [McpTool]; local tools render the
  * real `AgentTool.parameters` (no longer the cosmetic placeholder that
- * Phase 21 / Task 10 shipped).
+ * earlier shipped).
  */
 class ToolDetailScreenTest {
 

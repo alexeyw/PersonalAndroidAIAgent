@@ -16,7 +16,7 @@ import java.io.File
 
 /**
  * End-to-end integration test for the **prompt-preset** path
- * (Phase 24 / Task 9):
+ *
  *
  * ```
  * bundled JSON ──parse──▶ PromptPreset ──apply──▶ NodeModel.systemPrompt

@@ -3,9 +3,9 @@
     User-visible strings for the Knotwork design-system catalog.
 
     Naming convention: `knotwork_<surface>_<role>_<intent>` so a global text search
-    locates every translation site at once. Phase 21 introduces the catalog's
+    locates every translation site at once. The catalog introduces the
     first localised surface (chat + console); existing components keep their
-    inline labels until Phase 21 / Task 11 (a11y + RC) sweeps them in.
+    inline labels until the a11y + RC pass sweeps them in.
 
     Author guidance: never inline a user-visible string in a new component —
     add it here first, then reference it via `stringResource(R.string.…)`.
@@ -265,7 +265,7 @@
     <!-- MCP server config screen title in Edit mode. -->
     <string name="knotwork_tools_form_title_edit">Edit MCP server</string>
 
-    <!-- ============ Settings screen (Phase 22 / Task 9 redesign) ============ -->
+    <!-- ============ Settings screen (redesign) ============ -->
 
     <string name="knotwork_settings_title">Settings</string>
     <string name="knotwork_settings_back">Back</string>
@@ -455,7 +455,7 @@
     <!-- Step 4 CTA label. -->
     <string name="knotwork_onboarding_ready_cta">Open chat</string>
 
-    <!-- Step 1 system-back exit-confirm dialog title (Phase 22 / Task 13). -->
+    <!-- Step 1 system-back exit-confirm dialog title. -->
     <string name="knotwork_onboarding_exit_title">Quit setup?</string>
     <!-- Step 1 system-back exit-confirm dialog body. -->
     <string name="knotwork_onboarding_exit_body">You can finish setup the next time you open the app.</string>
@@ -477,7 +477,7 @@
     <!-- ContentDescription for the overflow icon button. -->
     <string name="knotwork_editor_action_overflow">More actions</string>
 
-    <!-- ============ Pipeline editor — RunStatusBanner (Phase 22 / Task 14) ============ -->
+    <!-- ============ Pipeline editor — RunStatusBanner ============ -->
 
     <!-- Status label for the live run banner — left-side uppercase tag. -->
     <string name="knotwork_run_banner_label_running">RUNNING</string>
@@ -557,8 +557,7 @@
     <string name="knotwork_node_field_model_active_suffix">%1$s · active</string>
     <string name="knotwork_node_field_model_custom">Custom path…</string>
     <!-- LITE_RT model picker — sentinel meaning "use whichever model is
-         currently active at execute time" (empty `modelId`). Phase 22 / Task
-         16 follow-up F8. -->
+         currently active at execute time" (empty `modelId`). -->
     <string name="knotwork_node_field_model_active">Active model</string>
 
     <!-- Validation messages. -->
@@ -573,7 +572,7 @@
     <string name="knotwork_node_validation_class_duplicate">Class names must be unique</string>
     <string name="knotwork_node_validation_arg_key_duplicate">Argument keys must be unique</string>
 
-    <!-- ============ ChatHomeScreen (Phase 21 / Task 8) ============ -->
+    <!-- ============ ChatHomeScreen ============ -->
 
     <!-- TopAppBar action contentDescription: opens the thread drawer. -->
     <string name="knotwork_chat_home_action_threads">Open threads</string>
@@ -582,7 +581,7 @@
     <!-- TopAppBar star/favorite action contentDescription. -->
     <string name="knotwork_chat_home_action_favorite">Toggle favorite</string>
     <!-- TopAppBar subtitle: pipeline name only — the "Pipeline · " prefix was
-         dropped in Phase 22 / Task 16 follow-up F1 so the token counter fits
+         dropped so the token counter fits
          on a single line at the default font scale. -->
     <string name="knotwork_chat_home_topbar_pipeline">%1$s</string>
     <!-- TopAppBar subtitle: token usage — formatted "1.4k / 8k tok". -->

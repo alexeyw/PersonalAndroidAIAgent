@@ -433,7 +433,7 @@ class SettingsManagerTest {
 
     @Test
     fun `mcpServers migrates legacy MCP_SERVER_URLS stringSet to default configs`() = runTest {
-        // Phase 22 / Task 10 expanded the MCP persistence from a stringSet of URLs to a
+        // The MCP persistence expanded from a stringSet of URLs to a
         // JSON-encoded List<McpServerConfig>. Existing installs hold the old key — the
         // manager must surface them as default configs (no headers, SSE transport)
         // until the first write replaces the storage shape.

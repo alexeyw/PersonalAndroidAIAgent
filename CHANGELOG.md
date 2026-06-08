@@ -684,8 +684,7 @@ hardening** that raised the enforced Kover gate to 75 % (executor / DAO / Robole
   [`docs/coverage-baseline.md`](docs/coverage-baseline.md); they will be
   promoted to enforced rules once Kover 0.10 ships rule-level filters
   (0.9.8 is the latest available on the Gradle Plugin Portal). Several
-  Compose-surface and Android-runtime-glue packages introduced earlier in
-  phase/23 were also added to the Kover exclusion list to align with the
+  Compose-surface and Android-runtime-glue packages introduced earlier were also added to the Kover exclusion list to align with the
   existing `presentation.ui.*Screen*` convention:
   `presentation.ui.navigation.*`,
   `presentation.ui.about.{AboutScreen,AboutAcknowledgments}*`,

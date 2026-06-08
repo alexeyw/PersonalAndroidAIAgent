@@ -15,7 +15,7 @@ import org.junit.Test
 import app.knotwork.design.R as KnotworkR
 
 /**
- * Phase 23 / Task 7/9 — verifies the overflow `DropdownMenu` wiring on
+ * Verifies the overflow `DropdownMenu` wiring on
  * [PipelineEditorScreen]. The menu items + click handlers live in
  * `PipelineEditorScreen` (not the catalog atom), so a fast Compose test
  * is enough — no Hilt graph required. We mock the VM with deterministic

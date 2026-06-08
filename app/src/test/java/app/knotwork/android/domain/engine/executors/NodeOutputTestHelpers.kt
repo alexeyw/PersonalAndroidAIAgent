@@ -7,7 +7,7 @@ import app.knotwork.android.domain.models.NodeOutput
 /**
  * Test helper: unwraps a list of [NodeOutput] into the underlying state/result objects.
  *
- * Phase 16-7 / Phase 17 tech-debt cleanup migrated `NodeExecutor.execute` from
+ * A tech-debt cleanup migrated `NodeExecutor.execute` from
  * `Flow<Any>` to `Flow<NodeOutput>`. Existing executor tests were written against the
  * untyped flow and used `is AgentOrchestratorState` / `is NodeExecutionResult` checks
  * directly. This extension preserves those assertion patterns without smuggling the

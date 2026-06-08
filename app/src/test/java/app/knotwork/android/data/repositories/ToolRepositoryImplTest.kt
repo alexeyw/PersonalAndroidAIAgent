@@ -83,7 +83,7 @@ class ToolRepositoryImplTest {
 
     @Test
     fun `getAvailableTools includes discovered AppFunctions alongside built-in and mcp`() = runTest {
-        // Phase 20 — 3/7: discovered AppFunctions (e.g. `get_system_time`) are now part
+        // Discovered AppFunctions (e.g. `get_system_time`) are now part
         // of the advertised catalogue, alongside built-in tools (`schedule_task`,
         // `search_tool`) and MCP-side tools.
         val mcpTools = listOf(AgentTool("test_mcp", "desc", "params"))
@@ -181,7 +181,7 @@ class ToolRepositoryImplTest {
 
     @Test
     fun `executeTool dispatches AppFunction via LocalAppFunctionManager`() = runTest {
-        // Phase 20 — 3/7: the discovered-AppFunction branch delegates the entire
+        // The discovered-AppFunction branch delegates the entire
         // codec + ExecuteAppFunctionRequest + system-call pipeline to the manager. The
         // repository only forwards the verbatim arguments string and returns the rendered
         // result. All Android AppFunctions types stay encapsulated behind invokeByName.
@@ -406,7 +406,7 @@ class ToolRepositoryImplTest {
     }
 
     // ───────────────────────────────────────────────────────────────────
-    // Phase 22 / Task 17 follow-up: MCP routing fixes (3 regressions).
+    // MCP routing fixes (3 regressions).
     // ───────────────────────────────────────────────────────────────────
 
     @Test

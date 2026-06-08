@@ -34,7 +34,7 @@ import org.junit.Test
  * Unit tests for [MoreViewModel] — drives the `combine` + `reduceUiState`
  * projection that powers the More tab's live subtitle counters and footer
  * privacy pill. Closes the `presentation.ui.more` coverage gap recorded in
- * `docs/coverage-baseline.md` (the ViewModel sat at ~23 % through Phase 23;
+ * `docs/coverage-baseline.md` (the ViewModel sat at ~23 % earlier;
  * only the pure formatter helpers were covered by `MoreFormattersTest`).
  *
  * `MoreViewModel` runs an infinite wall-clock `statusTicker()` inside its

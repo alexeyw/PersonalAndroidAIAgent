@@ -6,8 +6,7 @@ import org.junit.Test
 
 /**
  * WCAG 2.1 AA contrast audit for the on-surface text pairs the Knotwork
- * design system depends on in both themes. Ratified by Phase 21 / Task 11
- * (`PLAN.md` — A11y + RC).
+ * design system depends on in both themes.
  *
  * Reference: <https://www.w3.org/TR/WCAG21/#contrast-minimum>.
  *

@@ -24,7 +24,7 @@ import org.junit.Test
  * Unit tests for [ProviderDetailViewModel] — the standalone editor backing the
  * Settings → External providers detail screen. Closes the
  * `presentation.ui.settings.provider` coverage gap recorded in
- * `docs/coverage-baseline.md` (the ViewModel shipped at 0 % in Phase 23).
+ * `docs/coverage-baseline.md` (the ViewModel shipped at 0 % initially).
  *
  * The tests exercise both directions of the contract:
  * - `bind(providerId)` wires the relevant [ApiKeyRepository] read flows into

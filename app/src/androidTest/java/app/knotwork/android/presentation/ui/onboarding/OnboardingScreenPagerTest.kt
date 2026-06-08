@@ -15,7 +15,7 @@ import org.junit.Test
 import app.knotwork.design.R as KnotworkR
 
 /**
- * Phase 23 / Task 8 — covers the 4-step pager wiring on the Onboarding
+ * Covers the 4-step pager wiring on the Onboarding
  * surface: the Welcome step renders the brand title + Continue CTA, the
  * primary CTA on each step forwards to the matching ViewModel call, and
  * the top-bar Skip CTA invokes [OnboardingViewModel.skipOnboarding] plus

@@ -27,7 +27,7 @@ import java.io.File
  * preset would otherwise only surface at runtime on a real device.
  *
  * The four assertions per file are intentionally narrow:
- * - the filename set is the one Task 2/9 promised (catches typos /
+ * - the filename set is the promised one (catches typos /
  *   accidental deletion);
  * - every file parses to [PipelinePresetImportOutcome.Success] with
  *   `isBundled == true`;

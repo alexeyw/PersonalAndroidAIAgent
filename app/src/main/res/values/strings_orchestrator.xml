@@ -2,7 +2,7 @@
 <!--
     User-facing strings for the pipeline library + shared orchestrator
     (`presentation/ui/orchestrator/`). The legacy `VisualOrchestratorScreen`
-    ids were removed in Phase 21 / Task 9 together with that file; the new
+    ids were removed together with that file; the new
     `PipelineEditorScreen` carries its own strings in
     `strings_pipeline_editor.xml`.
 
@@ -23,7 +23,7 @@
     <string name="orchestrator_feedback_pipeline_deleted">Pipeline deleted</string>
     <string name="orchestrator_feedback_pipeline_created">Pipeline created</string>
 
-    <!-- Prompt-preset picker (Phase 24 / Task 5) -->
+    <!-- Prompt-preset picker -->
     <string name="prompt_preset_picker_title">Prompt presets</string>
     <string name="prompt_preset_picker_subtitle">%1$s · pick a preset for this node</string>
     <string name="prompt_preset_picker_tab_bundled">Bundled</string>
@@ -38,7 +38,7 @@
     <string name="prompt_preset_picker_action_use_prompt">Use prompt</string>
     <string name="prompt_preset_picker_action_cancel">Cancel</string>
 
-    <!-- Save-as-prompt-preset dialog (Phase 24 / Task 5) -->
+    <!-- Save-as-prompt-preset dialog -->
     <string name="prompt_preset_save_dialog_title">Save as preset</string>
     <string name="prompt_preset_save_dialog_subtitle">Target node type: %1$s</string>
     <string name="prompt_preset_save_field_name">Name</string>
@@ -64,7 +64,7 @@
     <string name="orchestrator_context_tool_results_hint">Data returned by tools in the current step</string>
     <string name="orchestrator_context_hint">Fewer inputs make the node faster and cheaper. Enable only what\'s needed.</string>
 
-    <!-- Phase 24 / Task 3 — Pipeline presets UI -->
+    <!-- Pipeline presets UI -->
     <!-- Library speed-dial -->
     <string name="orchestrator_library_speed_dial_new">New</string>
     <string name="orchestrator_library_speed_dial_new_pipeline">New pipeline</string>

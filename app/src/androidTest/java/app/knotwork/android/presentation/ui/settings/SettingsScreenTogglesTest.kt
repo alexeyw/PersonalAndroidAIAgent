@@ -16,7 +16,7 @@ import org.junit.Test
 import app.knotwork.design.R as KnotworkR
 
 /**
- * Phase 23 / Task 8 — covers a representative toggle row inside the
+ * Covers a representative toggle row inside the
  * Settings body, exercising the LazyColumn scroll + clickable-row wiring
  * that connects the catalog `IconToggleRow` to its ViewModel callback.
  *

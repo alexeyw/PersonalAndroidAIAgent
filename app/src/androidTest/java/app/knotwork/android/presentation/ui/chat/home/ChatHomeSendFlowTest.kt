@@ -13,7 +13,7 @@ import org.junit.Test
 import app.knotwork.design.R as KnotworkR
 
 /**
- * Phase 23 / Task 6 — covers the user-prompted send flow on the chat home
+ * Covers the user-prompted send flow on the chat home
  * surface: composer value propagation, the Send icon tap firing
  * `sendMessage()`, and the `Idle → Generating → Idle` UI transitions that
  * follow.
@@ -70,10 +70,10 @@ class ChatHomeSendFlowTest {
         val ctx = InstrumentationRegistry.getInstrumentation().targetContext
         val generatingLabel = ctx.getString(KnotworkR.string.knotwork_chat_home_generating_label)
 
-        // Phase 1 — Idle: the loader bubble should not be present.
+        // Step 1 — Idle: the loader bubble should not be present.
         composeTestRule.onNodeWithText(generatingLabel).assertDoesNotExist()
 
-        // Phase 2 — flip to Generating; the loader bubble appears in the body
+        // Step 2 — flip to Generating; the loader bubble appears in the body
         // and the composer's trailing action morphs to the stop affordance.
         handles.stateFlow.value = ChatHomeUiState.Generating
         composeTestRule.waitForIdle()

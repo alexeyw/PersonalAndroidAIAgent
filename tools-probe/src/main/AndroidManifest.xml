@@ -9,7 +9,7 @@
     <uses-permission android:name="android.permission.EXECUTE_APP_FUNCTIONS" />
 
     <!--
-        Phase 20 / Task 6/7: the probe needs `canPackageQuery` access to the agent app
+        The probe needs `canPackageQuery` access to the agent app
         so `AppFunctionManager.observeAppFunctions` can resolve the agent's
         `search_tool` metadata when the user taps the probe's invoke button.
     -->

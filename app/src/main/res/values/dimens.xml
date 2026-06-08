@@ -13,7 +13,7 @@
     <dimen name="chat_compact_console_threshold_height">480dp</dimen>
 
     <!--
-        Knotwork spacing scale (Phase 21 / Task 2/11).
+        Knotwork spacing scale.
 
         Mirror of `KnotworkSpacing` in :catalog/.../tokens/Spacing.kt — the
         4 dp grid the design system is built on. Provided as Android XML

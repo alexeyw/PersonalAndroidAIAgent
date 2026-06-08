@@ -35,7 +35,7 @@ import timber.log.Timber
  * [AppFunctionDataCodec.renderError], [AppFunctionDataCodec.renderSuccess]) and a thin
  * builder-application path. The pure helpers are exercised here on the plain JVM — they
  * never touch `AppFunctionData.Builder`, whose `<clinit>` reaches into Android stubs and
- * cannot run in unit tests. The builder-application path is covered by the Phase 20-6
+ * cannot run in unit tests. The builder-application path is covered by the
  * end-to-end instrumented test.
  */
 class AppFunctionDataCodecTest {

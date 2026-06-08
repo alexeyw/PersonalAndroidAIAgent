@@ -17,7 +17,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 
 /**
- * Instrumented coverage for [PipelinePresetDao] (Phase 24 / Task 1).
+ * Instrumented coverage for [PipelinePresetDao].
  *
  * The DAO is intentionally small (CRUD over a self-contained row) but the
  * SQL semantics — REPLACE on conflict, ORDER BY createdAt DESC, scope of

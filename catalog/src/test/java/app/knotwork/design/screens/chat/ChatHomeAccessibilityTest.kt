@@ -16,7 +16,7 @@ import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 
 /**
- * Chat-home a11y audit (Phase 22 / Task 5).
+ * Chat-home a11y audit.
  *
  * Tighter follow-up to [app.knotwork.design.a11y.TalkBackHappyPathsTest]:
  * the upstream test only asserts that *some* TalkBack-reachable node

@@ -17,7 +17,7 @@ import org.junit.Test
 import app.knotwork.design.R as KnotworkR
 
 /**
- * Phase 23 / Task 8 — covers the built-in (AppFunctions) section of the
+ * Covers the built-in (AppFunctions) section of the
  * Tools screen: row names render with their per-risk pill, and tapping
  * the row click target invokes the ViewModel's toggle hook with the
  * inverted enabled flag.

@@ -15,7 +15,7 @@ import org.junit.Rule
 import org.junit.Test
 
 /**
- * Phase 23 / Task 8 — covers the destructive typed-confirm dialog on the
+ * Covers the destructive typed-confirm dialog on the
  * Settings surface. The dialog is gated on
  * `SettingsUiState.pendingDestructive`; the Confirm button only enables
  * once `destructiveTypedInput` matches the keyword (case-insensitive,

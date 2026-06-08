@@ -16,7 +16,7 @@ import org.junit.Rule
 import org.junit.Test
 
 /**
- * Phase 23 / Task 7/9 — covers the search bar that overlays the canvas
+ * Covers the search bar that overlays the canvas
  * when the user picks "Find node…" from the overflow menu. The bar's
  * inputs and submit/close callbacks are deterministic; we drive them
  * directly without going through the full screen so the test stays

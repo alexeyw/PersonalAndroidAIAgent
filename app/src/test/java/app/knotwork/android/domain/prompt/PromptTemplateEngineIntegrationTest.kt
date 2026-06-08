@@ -119,7 +119,7 @@ class PromptTemplateEngineIntegrationTest {
     @Test
     fun `given preset pipeline template with all three providers when render then substitutes correctly`() = runTest {
         // Mirrors the `Сегодня $DATE, время $TIME. Доступные инструменты: $TOOLS`
-        // smoke prompt called out by the Phase 14 acceptance criteria, exercising
+        // smoke prompt called out by the acceptance criteria, exercising
         // every built-in provider end to end.
         coEvery { toolRepository.getAvailableTools() } returns listOf(
             AgentTool(name = "search", description = "Searches the web", parameters = "{}"),

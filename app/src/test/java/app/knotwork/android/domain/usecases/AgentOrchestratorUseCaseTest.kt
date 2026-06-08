@@ -50,7 +50,7 @@ class AgentOrchestratorUseCaseTest {
     }
 
     /**
-     * Phase 17.2 — the use case must surface the per-chat `pipelineId` on the
+     * The use case must surface the per-chat `pipelineId` on the
      * enqueued [AgentTask] so the orchestrator runs the chat-bound pipeline,
      * not the global default.
      */

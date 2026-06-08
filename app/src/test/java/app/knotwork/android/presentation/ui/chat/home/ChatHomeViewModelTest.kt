@@ -54,7 +54,7 @@ import org.junit.Before
 import org.junit.Test
 
 /**
- * Unit-tests for [ChatHomeViewModel] under Phase 22 / Task 1/17 wiring.
+ * Unit-tests for [ChatHomeViewModel].
  *
  * Covers the orchestrator-driven send/stop cycle, session initialisation,
  * thread switching, the pipeline-binding deleted-fallback Snackbar event,
@@ -62,9 +62,9 @@ import org.junit.Test
  * `ChatMessage → ChatHomeMessageRow` mapping on the companion.
  *
  * Out of scope here (later tasks):
- *  - HITL `WaitingForApproval` / `AwaitingClarification` (Task 2/17)
- *  - Console `ConsoleLog` aggregation (Task 3/17)
- *  - Drawer / overflow / model-picker callbacks (Task 4/17)
+ *  - HITL `WaitingForApproval` / `AwaitingClarification`
+ *  - Console `ConsoleLog` aggregation
+ *  - Drawer / overflow / model-picker callbacks
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 @Suppress(
@@ -222,7 +222,7 @@ class ChatHomeViewModelTest {
         assertEquals(ChatRole.User, rows[0].role)
         assertEquals(ChatRole.Assistant, rows[1].role)
         assertEquals("hi", (rows[0].content as ChatContent.Text).text)
-        // Phase 22 / Task 16 follow-up F2 — agent rows now carry Markdown
+        // Agent rows now carry Markdown
         // content so the host-supplied markdown renderer formats them.
         assertEquals("hello", (rows[1].content as ChatContent.Markdown).source)
         assertEquals(ChatHomeUiState.Idle, viewModel.state.value)
@@ -883,13 +883,13 @@ class ChatHomeViewModelTest {
         assertEquals("Gemma 2B", row.metadata.model)
         assertNotNull(row.metadata.timestamp)
         assertTrue(row.id.startsWith("a-"))
-        // Phase 22 / Task 16 follow-up F2 — agent rows carry Markdown so the
+        // Agent rows carry Markdown so the
         // host-supplied renderer formats headings, lists, code fences, etc.
         assertEquals("ok", (row.content as ChatContent.Markdown).source)
     }
 
     // -----------------------------------------------------------------
-    // Phase 22 / Task 4 — drawer / overflow / model-picker / favorites.
+    // Drawer / overflow / model-picker / favorites.
     // -----------------------------------------------------------------
 
     @Test

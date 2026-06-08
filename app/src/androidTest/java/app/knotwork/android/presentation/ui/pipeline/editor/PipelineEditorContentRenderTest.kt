@@ -18,7 +18,7 @@ import org.junit.Rule
 import org.junit.Test
 
 /**
- * Phase 23 / Task 7/9 — surface render coverage for
+ * Surface render coverage for
  * [PipelineEditorContent], the pure-layout anchor of the editor screen.
  *
  * The screen-level [PipelineEditorScreen] orchestrates VM streams and
