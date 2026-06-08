@@ -38,7 +38,7 @@ coverage materially.
 
 ## Per-package LINE coverage (post-exclusions)
 
-Numbers measured against `phase/23` HEAD, 2026-05-26. Sorted by layer.
+Numbers measured 2026-05-26. Sorted by layer.
 Packages excluded from the gate (Composables, Android-runtime glue, DI,
 generated code) do not appear in this table — they live in the
 "Exclusions applied" section below.

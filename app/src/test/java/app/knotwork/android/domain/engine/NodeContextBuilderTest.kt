@@ -140,7 +140,7 @@ class NodeContextBuilderTest {
 
     @Test
     fun `all-flags-false combination produces empty string`() {
-        // The validation layer (Phase 15-3/6) refuses to save such a config on
+        // The validation layer refuses to save such a config on
         // a context-aware node, but the builder itself must remain a pure
         // function and degrade gracefully — empty in, empty out.
         val rendered = builder.build(

@@ -25,7 +25,7 @@ import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 
 /**
- * Accessibility matrix baseline for Phase 21 / Task 11.
+ * Accessibility matrix baseline.
  *
  * Locks Roborazzi snapshots for the heaviest layouts at `fontScale = 2.0`
  * ("Largest" preset) and at `reducedMotion = true` so the project has a
@@ -78,8 +78,8 @@ class A11yMatrixSnapshotTest {
         fontScale = LARGEST_FONT_SCALE,
     ) {
         // Locks the `ToolDetailScreen` 200 %-fontScale frame so the
-        // `Modifier.horizontalScroll` schema-preview gate (added in Phase 22
-        // / Task 11) keeps long JSON-Schema lines scrollable instead of
+        // `Modifier.horizontalScroll` schema-preview gate keeps long
+        // JSON-Schema lines scrollable instead of
         // wrapping. Captures the layout proof for the spec rule in
         // `screens/README.md §C4 ToolDetailScreen`.
         ToolDetailContent(state = ToolsPreview.toolDetailDefault())

@@ -17,7 +17,7 @@ import org.junit.Test
 import app.knotwork.design.R as KnotworkR
 
 /**
- * Phase 23 / Task 8 — pins the LiteRT model step CTA gate. The CTA label
+ * Pins the LiteRT model step CTA gate. The CTA label
  * and enablement flip across three sub-states:
  *
  *  * No install + no in-flight download → enabled `Download Gemma 4 E2B`

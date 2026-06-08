@@ -48,7 +48,7 @@ import org.junit.Test
  *     `AppFunctionManager.getInstance(Context)` via `mockkStatic` and exercise the cache,
  *     dedup, and `invokeByName` exception-mapping logic. The codec is mocked for
  *     invocation tests so the production codec path (which constructs `AppFunctionData`)
- *     stays inside the Phase 20-6 instrumented suite where the Android runtime is real.
+ *     stays inside the instrumented suite where the Android runtime is real.
  */
 class LocalAppFunctionManagerTest {
 

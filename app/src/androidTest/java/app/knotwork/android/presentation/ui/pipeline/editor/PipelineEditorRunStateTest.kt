@@ -17,7 +17,7 @@ import org.junit.Test
 import app.knotwork.design.R as KnotworkR
 
 /**
- * Phase 23 / Task 7/9 — verifies the run-state plumbing on
+ * Verifies the run-state plumbing on
  * [PipelineEditorScreen]: when the ViewModel emits a Running snapshot,
  * the run-status banner appears, the toolbar primary action is hidden,
  * and the subtitle reads `Running · <node label>`.

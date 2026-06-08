@@ -58,7 +58,7 @@ import java.io.File
 
 /**
  * End-to-end integration test for the **pipeline-preset** path
- * (Phase 24 / Task 9):
+ *
  *
  * ```
  * bundled JSON ──parse──▶ PipelinePreset

@@ -2,7 +2,7 @@
 <!--
     Russian (ru) localization placeholder.
 
-    Phase 18/3 (UI strings → resources) lands the English baseline only;
+    The initial UI-strings-to-resources pass lands the English baseline only;
     every user-facing string lives under `res/values/strings_*.xml`. This
     file marks the entry point for the first translation. To translate:
 
@@ -14,7 +14,7 @@
       3. Add `defaultConfig.resourceConfigurations += setOf("en", "ru")`
          to `app/build.gradle.kts` once the translations are reviewed.
 
-    Empty file by design — Phase 18/3 ships English-only. Removing this
+    Empty file by design — the initial strings pass ships English-only. Removing this
     file later is fine; keeping it now documents the intended path.
 -->
 <resources>

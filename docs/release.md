@@ -255,5 +255,5 @@ bundletool get-size total --apks=app.apks
   hidden by debug-only resources).
 - `bundleRelease` confirms R8 + resource shrinking still produce a valid AAB.
 
-The Phase-22 phase PR (`phase/22 → main`) gates on the same three commands
+The phase integration PR gates on the same three commands
 in CI, plus the manual smoke-test described in `compose/decisions.md §14`.

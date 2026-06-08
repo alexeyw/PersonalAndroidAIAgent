@@ -2,7 +2,7 @@
 <!-- See values/colors.xml for the rationale behind `tools:ignore="UnusedResources"`. -->
 <resources xmlns:tools="http://schemas.android.com/tools" tools:ignore="UnusedResources">
     <!--
-        Knotwork design tokens — dark-theme overrides (Phase 21 / Task 2/11).
+        Knotwork design tokens — dark-theme overrides.
 
         Mirrors the Kotlin tokens in :catalog/.../tokens/Color.kt
         (`KnotworkDark.*`). Accent / signal / node hues are intentionally

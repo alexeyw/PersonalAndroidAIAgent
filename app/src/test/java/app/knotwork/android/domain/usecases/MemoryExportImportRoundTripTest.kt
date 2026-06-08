@@ -25,7 +25,7 @@ import java.io.ByteArrayOutputStream
 
 /**
  * End-to-end round-trip coverage for the memory export/import feature
- * (Phase 25 / Task 8): export → wipe → import (Replace) → assert the store is
+ * Export → wipe → import (Replace) → assert the store is
  * byte-for-byte identical. Exercises [ExportMemoryBaseUseCase] and
  * [MemoryImportUseCase] against a real in-memory store so the serializer, the
  * strategy, and the id/provenance preservation all compose.

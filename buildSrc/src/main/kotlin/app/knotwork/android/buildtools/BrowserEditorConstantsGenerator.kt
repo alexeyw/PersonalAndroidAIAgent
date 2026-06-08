@@ -6,9 +6,9 @@ package app.knotwork.android.buildtools
  * them between dedicated `AUTO-GEN` markers.
  *
  * The editor is a standalone single-file tool that deliberately duplicates a
- * slice of the app's data so it can run with no build step. Before Phase 24 /
- * Task 8 that duplication was kept in sync purely by review, and it drifted
- * (Task 6 had to re-align the prompt constants). This generator removes the
+ * slice of the app's data so it can run with no build step. Before this
+ * automation that duplication was kept in sync purely by review, and it
+ * drifted. This generator removes the
  * human from that loop for the drift-prone blocks:
  *
  *  - **`NODE_TYPES`** — the set and ordering guarantee comes from

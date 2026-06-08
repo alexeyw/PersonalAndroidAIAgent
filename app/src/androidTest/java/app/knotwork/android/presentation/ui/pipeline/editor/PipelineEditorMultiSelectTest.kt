@@ -14,7 +14,7 @@ import org.junit.Rule
 import org.junit.Test
 
 /**
- * Phase 23 / Task 7/9 — verifies the multi-select toolbar swap, count
+ * Verifies the multi-select toolbar swap, count
  * label, and the three actions (Cancel / Copy / Delete).
  *
  * We render the toolbar atom directly with hand-rolled callback recorders

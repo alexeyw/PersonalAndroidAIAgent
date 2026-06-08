@@ -15,7 +15,7 @@ class ChatBubbleShapesTest {
 
     @Test
     fun `user shape is a uniformly rounded pill`() {
-        // Phase 21 / Task 10 follow-up — the mockup tightens the user
+        // The mockup tightens the user
         // bubble to a full pill silhouette rather than the asymmetric
         // 4 dp / 16 dp shape the legacy bubble used.
         val expected = RoundedCornerShape(size = 22.dp)

@@ -16,7 +16,7 @@ import org.junit.Rule
 import org.junit.Test
 
 /**
- * Phase 23 / Task 7/9 — verifies the mini-map overlay renders the
+ * Verifies the mini-map overlay renders the
  * canonical OVERVIEW header (including the scale percent) and the close
  * button dispatches `onClose`.
  *

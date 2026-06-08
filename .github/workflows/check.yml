@@ -1,6 +1,6 @@
 name: Check
 
-# Phase 18 / Task 9-10 — strict-mode CI gate.
+# Strict-mode CI gate.
 # Runs the aggregate `./gradlew check` task, which itself triggers detekt,
 # ktlintCheck, lintDebug, testDebugUnitTest, koverVerifyDebug,
 # verifyBrowserEditorConstants, and the project-level `checkNoInternalFqn`.

@@ -42,7 +42,7 @@ import org.junit.Before
 import org.junit.Test
 
 /**
- * Phase 22 / Task 3/17 — coverage for [ChatHomeViewModel] console pane
+ * Coverage for [ChatHomeViewModel] console pane
  * aggregation: how the orchestrator-emitted `ConsoleLog` / `PipelineTrace`
  * / `NodeIO` states are projected into the three console-pane tabs, and
  * how Clear / Copy / Tab callbacks interact with the resulting flows.

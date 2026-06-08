@@ -16,7 +16,7 @@
     <string name="common_back">Back</string>
     <string name="common_retry">Retry</string>
 
-    <!-- Bottom navigation tab labels (Phase 21 / Task 4) -->
+    <!-- Bottom navigation tab labels -->
     <string name="nav_tab_chat">Chat</string>
     <string name="nav_tab_pipelines">Pipelines</string>
     <string name="nav_tab_tools">Tools</string>

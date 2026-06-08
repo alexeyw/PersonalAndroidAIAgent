@@ -20,7 +20,7 @@ import org.junit.Test
 import app.knotwork.design.R as KnotworkR
 
 /**
- * Phase 23 / Task 7/9 — covers the copy → paste round-trip from the user's
+ * Covers the copy → paste round-trip from the user's
  * point of view.
  *
  * The clipboard lives inside the screen-local `EditorState`, so we can't

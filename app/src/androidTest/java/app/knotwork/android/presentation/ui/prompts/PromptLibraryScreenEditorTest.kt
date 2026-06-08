@@ -12,7 +12,7 @@ import org.junit.Test
 import app.knotwork.android.R as AppR
 
 /**
- * Phase 23 / Task 8 — covers the prompt editor `ModalBottomSheet` on the
+ * Covers the prompt editor `ModalBottomSheet` on the
  * Prompt Library surface. The sheet is gated on
  * `PromptLibraryUiState.editorDraft`; a non-null draft renders the
  * editor body with prefilled fields, and the Save / Cancel CTAs forward

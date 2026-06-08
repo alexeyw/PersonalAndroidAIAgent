@@ -949,7 +949,7 @@ class OrchestratorViewModelTest {
         assertEquals(false, viewModel.uiState.value.pendingEditorNavigation)
     }
 
-    // ─── Phase 21 / Task 9 — Pipeline editor hooks ───────────────────────────
+    // ─── Pipeline editor hooks ───────────────────────────
 
     @Test
     fun `addNode returns the id of the just-added node`() {
@@ -1014,7 +1014,7 @@ class OrchestratorViewModelTest {
         errors.forEach { err -> assertNotNull(viewModel.labelFor(err)) }
     }
 
-    // ─── Phase 24 / Task 3 — Save-as-preset ─────────────────────────────
+    // ─── Save-as-preset ─────────────────────────────
 
     @Test
     fun `saveCurrentAsPreset packages current pipeline through SavePipelineAsPresetUseCase`() = runTest {
@@ -1125,7 +1125,7 @@ class OrchestratorViewModelTest {
         assertNotNull(viewModel.uiState.value.errorMessage)
     }
 
-    // ─── Phase 24 / Task 5 — Prompt preset surface ────────────────────────────
+    // ─── Prompt preset surface ────────────────────────────
 
     @Test
     fun `bundledPresetsForType returns only bundled presets`() = runTest {

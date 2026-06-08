@@ -19,7 +19,7 @@ import org.junit.Test
 import app.knotwork.design.R as KnotworkR
 
 /**
- * Phase 23 / Task 6 — covers the drawer surface plus structural composer
+ * Covers the drawer surface plus structural composer
  * presence in the secondary states.
  *
  * The drawer swipe-from-left gesture itself is owned by the catalog

@@ -14,7 +14,7 @@ import org.junit.Test
 import app.knotwork.design.R as KnotworkR
 
 /**
- * Phase 22 / Task 4 — verifies the TopAppBar overflow menu wiring. The
+ * Verifies the TopAppBar overflow menu wiring. The
  * menu is owned by [ChatHomeScreen] (not the catalog), so a fast Compose
  * test is enough — no Hilt graph required. The test pre-mocks the VM with
  * deterministic StateFlows via [mockChatHomeViewModel], taps the `⋮`

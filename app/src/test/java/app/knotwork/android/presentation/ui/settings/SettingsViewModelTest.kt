@@ -44,7 +44,7 @@ import org.junit.Before
 import org.junit.Test
 
 /**
- * Unit tests for the redesigned [SettingsViewModel] (Phase 22 / Task 9).
+ * Unit tests for the redesigned [SettingsViewModel].
  *
  * Coverage:
  *  - identity load + variable catalog load on init,

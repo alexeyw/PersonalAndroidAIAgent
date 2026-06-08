@@ -15,7 +15,7 @@ import org.junit.Rule
 import org.junit.Test
 
 /**
- * Phase 23 / Task 7/9 — verifies the validation bar header banner,
+ * Verifies the validation bar header banner,
  * per-error rows, the Auto-fix action, and the per-row `Go` deep-link.
  *
  * We render `ValidationBar` directly with a tiny fixture graph so the

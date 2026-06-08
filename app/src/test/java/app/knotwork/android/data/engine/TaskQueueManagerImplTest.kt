@@ -122,7 +122,7 @@ class TaskQueueManagerImplTest {
     }
 
     /**
-     * Phase 17.2 — when an [AgentTask] carries a `pipelineId`, the queue
+     * When an [AgentTask] carries a `pipelineId`, the queue
      * must execute that specific pipeline rather than the global default
      * (the first pipeline in the repository).
      */
@@ -157,7 +157,7 @@ class TaskQueueManagerImplTest {
     }
 
     /**
-     * Phase 17.2 — when the bound pipeline has been deleted while the task
+     * When the bound pipeline has been deleted while the task
      * waited in the queue, fall back to the default pipeline rather than
      * failing the task. The chat-level UI handles the "deleted pipeline"
      * Snackbar fallback separately.
@@ -190,7 +190,7 @@ class TaskQueueManagerImplTest {
     }
 
     /**
-     * Phase 17.2 — when the task carries no `pipelineId`, the queue uses
+     * When the task carries no `pipelineId`, the queue uses
      * the application-wide default (the first pipeline returned by the
      * repository), preserving the pre-Phase-17.2 behaviour.
      */
