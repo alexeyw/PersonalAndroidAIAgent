@@ -13,6 +13,21 @@ details.
 
 ## [Unreleased]
 
+### Changed
+
+- **Release builds now use a dedicated signing config.** The `release`
+  buildType signs with `signingConfigs.release` whose keystore path, store
+  password, key alias, and key password are resolved from `local.properties`
+  or environment variables (`RELEASE_KEYSTORE_PATH` /
+  `RELEASE_KEYSTORE_PASSWORD` / `RELEASE_KEY_ALIAS` / `RELEASE_KEY_PASSWORD`).
+  When no keystore is provisioned the build gracefully falls back to the debug
+  keystore, so a clean checkout still produces a release artefact. Keystore
+  material is never committed. See [docs/release.md](docs/release.md) for
+  keystore generation, CI provisioning via repository secrets, and signature
+  verification. **Note:** the first release-signed build uses a different
+  signer than earlier debug-signed builds, so it cannot be installed over a
+  debug-signed copy in place — see the *Pre-release notice* in the README.
+
 ## [0.4.0] - 2026-06-07
 
 ### Added

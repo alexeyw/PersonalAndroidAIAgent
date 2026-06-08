@@ -35,6 +35,12 @@ experimentation. Expect rough edges:
   and saved presets / prompt templates** — rather than migrate it. Export
   anything you want to keep (chats, memory, and any custom pipelines or saved
   presets) before updating.
+- **Signing identity will change before the first signed release.** Builds up
+  to and including `0.4.0` are signed with the Android debug keystore. Once a
+  real release keystore is configured, the signer changes, and Android will
+  **refuse to update a debug-signed install in place** (signature mismatch).
+  When that happens you must uninstall the old build first — which clears its
+  local data — before installing the release-signed one.
 
 ## Overview
 

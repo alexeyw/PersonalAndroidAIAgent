@@ -1,5 +1,6 @@
 import app.knotwork.android.buildtools.BrowserEditorConstantsGenerator
 import dev.detekt.gradle.Detekt
+import java.util.Properties
 
 /**
  * Resolves the current short git SHA (e.g. `19b9c8f`) via
@@ -20,6 +21,57 @@ fun Project.resolveGitSha(): String = runCatching {
         "unknown"
     }
 }.getOrDefault("unknown")
+
+/**
+ * Resolved release-signing credentials sourced from `local.properties` or
+ * environment variables. Carries the validated keystore file plus its
+ * passwords and key alias so the `signingConfigs.release` block can be
+ * populated without re-reading any properties.
+ *
+ * @property storeFile The keystore file (already verified to exist on disk).
+ * @property storePassword The keystore (store) password.
+ * @property keyAlias The alias of the signing key inside the keystore.
+ * @property keyPassword The password protecting the signing key.
+ */
+private data class ReleaseSigningCredentials(
+    val storeFile: File,
+    val storePassword: String,
+    val keyAlias: String,
+    val keyPassword: String,
+)
+
+/**
+ * Resolves release-signing credentials, preferring `local.properties` (the
+ * developer machine) and falling back to environment variables (CI). The
+ * recognised keys are `RELEASE_KEYSTORE_PATH`, `RELEASE_KEYSTORE_PASSWORD`,
+ * `RELEASE_KEY_ALIAS`, and `RELEASE_KEY_PASSWORD`.
+ *
+ * Returns `null` — which the build interprets as "fall back to the debug
+ * signing identity" — whenever any credential is missing/blank or the
+ * resolved keystore file does not exist. This keeps a clean checkout without
+ * a provisioned key building release artefacts instead of failing
+ * configuration.
+ *
+ * @return The complete, validated set of credentials, or `null` when release
+ *   signing is not provisioned in this environment.
+ */
+private fun Project.resolveReleaseSigning(): ReleaseSigningCredentials? {
+    val localProps = Properties().apply {
+        rootProject.file("local.properties")
+            .takeIf { it.exists() }
+            ?.inputStream()
+            ?.use { load(it) }
+    }
+    fun value(key: String): String? = (localProps.getProperty(key) ?: System.getenv(key))?.trim()?.ifEmpty { null }
+
+    val storePath = value("RELEASE_KEYSTORE_PATH") ?: return null
+    val storePassword = value("RELEASE_KEYSTORE_PASSWORD") ?: return null
+    val keyAlias = value("RELEASE_KEY_ALIAS") ?: return null
+    val keyPassword = value("RELEASE_KEY_PASSWORD") ?: return null
+
+    val storeFile = rootProject.file(storePath).takeIf { it.exists() } ?: return null
+    return ReleaseSigningCredentials(storeFile, storePassword, keyAlias, keyPassword)
+}
 
 plugins {
     alias(libs.plugins.android.application)
@@ -92,6 +144,24 @@ android {
         )
     }
 
+    // Phase 27 / Task 1/7 — real release-signing identity. The credentials are
+    // resolved from `local.properties` (developer machine) or environment
+    // variables (CI repository secrets); `resolveReleaseSigning()` returns null
+    // when none are provisioned, in which case the `release` buildType below
+    // gracefully falls back to the debug keystore so a clean checkout still
+    // builds. Keystore material is never committed (guarded by `.gitignore`).
+    val releaseSigning = resolveReleaseSigning()
+    signingConfigs {
+        if (releaseSigning != null) {
+            create("release") {
+                storeFile = releaseSigning.storeFile
+                storePassword = releaseSigning.storePassword
+                keyAlias = releaseSigning.keyAlias
+                keyPassword = releaseSigning.keyPassword
+            }
+        }
+    }
+
     buildTypes {
         release {
             // Phase 22 / Task 17 — R8 in full mode + resource shrinking.
@@ -106,15 +176,13 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
             )
-            // v0.2.0 ships signed with the debug keystore. A real
-            // `signingConfigs.release` block (with `keyAlias` / `keyPassword`
-            // sourced from `local.properties` or environment variables) is
-            // intentionally deferred: the Play Store submission lands in a
-            // separate task once the production keystore is provisioned,
-            // tracked in `docs/release.md`. Installing the GitHub-Release
-            // APK on a developer device still works with the debug signing
-            // identity.
-            signingConfig = signingConfigs.getByName("debug")
+            // Use the dedicated `release` signing config when its credentials
+            // are provisioned (see `signingConfigs` above); otherwise fall back
+            // to the debug keystore so a clean checkout without a key still
+            // produces a (debug-signed) release artefact. Provisioning details
+            // and signature verification are documented in `docs/release.md`.
+            signingConfig = signingConfigs.findByName("release")
+                ?: signingConfigs.getByName("debug")
             // Strip non-arm64 ABIs from the release APK. With `minSdk = 36`
             // (Android 16) every supported device is 64-bit; shipping
             // `armeabi-v7a` + `x86` + `x86_64` would inflate the artefact
