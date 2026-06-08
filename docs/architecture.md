@@ -564,7 +564,14 @@ trace steps. DAOs are split per aggregate (`ChatDao`, `MemoryDao`,
 Migration rules:
 
 - Schema migrations are explicit
-  (`Migration(oldVersion, newVersion) { … }`).
+  (`Migration(oldVersion, newVersion) { … }`) and registered through
+  `addMigrations(...)` in `AppModule`. There is **no destructive fallback on
+  upgrade**, so an in-place version bump preserves user data; a missing
+  migration fails fast in development instead of silently dropping tables.
+  Destructive recreation is retained only on **downgrade**
+  (`fallbackToDestructiveMigrationOnDowngrade`), which forward migrations
+  cannot handle. The migrations across the exported-schema baseline range are
+  covered by a `MigrationTestHelper` regression suite.
 - Auto-migrations are allowed for additive changes only.
 - DAO methods returning `Flow<T>` are annotated with `@Query` — no
   ad-hoc reactive wrapping.

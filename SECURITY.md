@@ -46,24 +46,32 @@ storage and credentials:
 - The SQLCipher passphrase is a **32-byte random value** generated on first
   launch and persisted in `EncryptedSharedPreferences`. The master key
   protecting `EncryptedSharedPreferences` is stored in the Android Keystore.
-- The app does not retain any plaintext copy of the passphrase. Legacy
-  unencrypted databases from earlier development builds are not migrated; if
-  one is detected, Room recreates the database via destructive migration.
-- **Pre-1.0 data-durability caveat.** The Room database is opened with
-  `fallbackToDestructiveMigration(true)`. Until `1.0.0`, schema migrations are
-  **not guaranteed**: any schema-version bump may drop **all** local tables and
-  recreate them empty rather than migrate the data. This affects every
-  user-authored surface, not just conversations — chats and metadata
-  (`chat_messages`, `chat_sessions`), long-term memory (`memory_chunks`),
-  pipeline run traces (`trace_steps`), **custom pipelines**
-  (`pipelines`, `pipeline_nodes`, `pipeline_connections`), and **saved presets
-  and prompt templates** (`pipeline_presets`, `prompt_presets`,
-  `prompt_templates`). This is a data-loss / availability caveat, not a
-  confidentiality one — discarded rows are destroyed, never exposed. Users who
-  need to retain data across an upgrade should export it first: chats and
-  long-term memory through their in-app export actions, and any custom
-  pipelines / saved presets via the pipeline-library and preset JSON-export
-  actions.
+- The app does not retain any plaintext copy of the passphrase.
+- **Schema migrations preserve data on upgrade.** Every schema-version bump is
+  backed by an explicit Room `Migration` registered through `addMigrations(...)`;
+  the destructive-recreation fallback on upgrade has been removed. An in-place
+  upgrade therefore keeps all local data — chats and metadata (`chat_messages`,
+  `chat_sessions`), long-term memory (`memory_chunks`), pipeline run traces
+  (`trace_steps`), **custom pipelines** (`pipelines`, `pipeline_nodes`,
+  `pipeline_connections`), and **saved presets and prompt templates**
+  (`pipeline_presets`, `prompt_presets`, `prompt_templates`). The migrations
+  across the exported-schema baseline range are covered by a `MigrationTestHelper`
+  regression suite that validates the resulting schema and data preservation.
+- **Residual pre-1.0 caveats.**
+  - *Downgrade.* Installing an **older** build over a newer database recreates
+    it empty (`fallbackToDestructiveMigrationOnDowngrade`), since forward
+    migrations cannot reverse a schema. Avoid downgrading if you want to keep
+    local data.
+  - *Legacy plaintext dev databases.* Unencrypted databases from pre-SQLCipher
+    development builds (which predate the public release) are not supported and
+    cannot be opened. This affects only such dev installs, never a released
+    version.
+
+  Both are data-loss / availability concerns, not confidentiality ones —
+  discarded rows are destroyed, never exposed. If you must downgrade, export
+  anything you want to keep first: chats and long-term memory through their
+  in-app export actions, and any custom pipelines / saved presets via the
+  pipeline-library and preset JSON-export actions.
 
 ### API keys for cloud providers
 

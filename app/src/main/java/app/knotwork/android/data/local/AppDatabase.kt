@@ -29,6 +29,13 @@ import app.knotwork.android.data.local.models.TraceStepEntity
  * Main Room Database for the Android AI Agent.
  *
  * Future entities (e.g., PromptTemplates) will be registered here.
+ *
+ * **Versioning & migrations.** The current schema [version] is the durability baseline:
+ * every bump from here on must add a matching `MIGRATION_<old>_<new>` constant below and
+ * register it in [app.knotwork.android.di.AppModule] via `addMigrations(...)`. There is no
+ * destructive fallback on upgrade, so an unsupplied migration fails fast in development rather
+ * than silently dropping user data. The exported `app/schemas/<package>/<version>.json`
+ * snapshots back the `MigrationTestHelper` regression suite.
  */
 @Database(
     entities = [

@@ -15,6 +15,18 @@ details.
 
 ### Changed
 
+- **Room no longer destroys data on upgrade.** The destructive-migration
+  fallback (`fallbackToDestructiveMigration(true)`) has been removed from the
+  database builder. Every schema-version bump is backed by an explicit
+  `Migration` (the full chain is already registered via `addMigrations(...)`),
+  so an in-place upgrade preserves all local data — chats, long-term memory,
+  run traces, custom pipelines, and saved presets / prompt templates — instead
+  of recreating the tables empty. Destructive recreation is retained only on
+  **downgrade** (`fallbackToDestructiveMigrationOnDowngrade`), which forward
+  migrations cannot handle. A `MigrationTestHelper` regression suite validates
+  data preservation and the resulting schema across the exported-schema
+  baseline range. `SECURITY.md`, `README.md`, and `docs/architecture.md` were
+  updated to describe the new migration policy.
 - **Release builds now use a dedicated signing config.** The `release`
   buildType signs with `signingConfigs.release` whose keystore path, store
   password, key alias, and key password are resolved from `local.properties`

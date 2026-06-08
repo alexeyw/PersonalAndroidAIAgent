@@ -26,15 +26,14 @@ experimentation. Expect rough edges:
 
 - There are no stability guarantees for the public surface (Kotlin APIs,
   pipeline JSON schema, settings layout) between versions.
-- On-device storage formats (Room schema, encrypted preferences, exported
-  pipeline JSON) may change without a migration path.
-- **Local data may be lost on upgrade.** Until `1.0.0`, schema migrations are
-  not guaranteed: the encrypted Room database is opened with
-  `fallbackToDestructiveMigration(true)`, so a schema bump can drop **all**
-  local data — chat history, long-term memory, run traces, **custom pipelines,
-  and saved presets / prompt templates** — rather than migrate it. Export
-  anything you want to keep (chats, memory, and any custom pipelines or saved
-  presets) before updating.
+- On-device storage formats (encrypted preferences, exported pipeline JSON)
+  may still change between versions.
+- **Upgrades preserve local data.** Every Room schema-version bump ships with
+  an explicit migration, so an in-place update keeps your chat history,
+  long-term memory, run traces, custom pipelines, and saved presets / prompt
+  templates. (Note: *downgrading* to an older build recreates the database
+  empty — forward migrations cannot be reversed — so export anything you want
+  to keep before installing an older version.)
 - **Signing identity will change before the first signed release.** Builds up
   to and including `0.4.0` are signed with the Android debug keystore. Once a
   real release keystore is configured, the signer changes, and Android will
