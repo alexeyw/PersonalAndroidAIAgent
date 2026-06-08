@@ -144,12 +144,12 @@ android {
         )
     }
 
-    // Phase 27 / Task 1/7 — real release-signing identity. The credentials are
-    // resolved from `local.properties` (developer machine) or environment
-    // variables (CI repository secrets); `resolveReleaseSigning()` returns null
-    // when none are provisioned, in which case the `release` buildType below
-    // gracefully falls back to the debug keystore so a clean checkout still
-    // builds. Keystore material is never committed (guarded by `.gitignore`).
+    // Real release-signing identity. The credentials are resolved from
+    // `local.properties` (developer machine) or environment variables (CI
+    // repository secrets); `resolveReleaseSigning()` returns null when none are
+    // provisioned, in which case the `release` buildType below gracefully falls
+    // back to the debug keystore so a clean checkout still builds. Keystore
+    // material is never committed (guarded by `.gitignore`).
     val releaseSigning = resolveReleaseSigning()
     signingConfigs {
         if (releaseSigning != null) {
