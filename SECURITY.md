@@ -13,13 +13,14 @@ formats, APIs, or persisted data across versions.
 
 ## Supported Versions
 
-Only the latest commit on `main` is supported. There are no maintained release
-branches or long-term-support tags at this time.
+Only the latest release line is supported. As a solo pre-release project there
+are no maintained back-release branches or long-term-support tags; fixes land on
+the current `0.4.x` line and on the latest commit on `main`.
 
-| Version             | Supported          |
-|---------------------|--------------------|
-| `main` (latest)     | :white_check_mark: |
-| Older commits/tags  | :x:                |
+| Version            | Supported          |
+|--------------------|--------------------|
+| `0.4.x` (latest)   | :white_check_mark: |
+| `< 0.4.0`          | :x:                |
 
 ---
 
