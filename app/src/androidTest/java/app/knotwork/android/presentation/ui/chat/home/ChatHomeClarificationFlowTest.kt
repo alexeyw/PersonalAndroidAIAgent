@@ -11,7 +11,7 @@ import org.junit.Rule
 import org.junit.Test
 
 /**
- * Phase 23 / Task 6 — covers the UI-side Clarification flow at the
+ * Covers the UI-side Clarification flow at the
  * [ChatHomeScreen] boundary.
  *
  * The 5-second timeout watchdog that auto-cancels a pending clarification

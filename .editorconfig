@@ -22,7 +22,7 @@ ktlint_standard_import-ordering = enabled
 # `function-naming` rule must ignore them so the rule still catches misnamed
 # regular functions in the same files.
 ktlint_function_naming_ignore_when_annotated_with = Composable
-# Phase 18 / Task 9-10: the standard `backing-property-naming` rule fires on
+# The standard `backing-property-naming` rule fires on
 # Compose ViewModels that expose a mutable `_uiState: MutableStateFlow` and a
 # read-only `uiState: StateFlow` (well-known idiom). Disable globally — the
 # pattern is used project-wide and IDE inspections still surface real misuse.

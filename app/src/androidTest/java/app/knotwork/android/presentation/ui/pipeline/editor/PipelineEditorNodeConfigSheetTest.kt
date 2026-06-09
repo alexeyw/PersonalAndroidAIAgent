@@ -25,7 +25,7 @@ import org.junit.Test
 import app.knotwork.design.R as KnotworkR
 
 /**
- * Phase 23 / Task 7/9 — verifies the catalog `NodeConfigSheet` form
+ * Verifies the catalog `NodeConfigSheet` form
  * surfaces the per-type fields and round-trips edits + save.
  *
  * We render `NodeConfigSheetBody` (the inline content of the sheet)

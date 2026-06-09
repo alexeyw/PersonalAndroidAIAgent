@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
     `tools:ignore="UnusedResources"` is scoped to the file because the
-    `knotwork_*` token mirror (added in Phase 21 / Task 2/11) is published
+    `knotwork_*` token mirror is published
     ahead of its consumers — non-Compose surfaces such as the foreground
     service notification, widgets and adaptive icon backgrounds will
-    reference these tokens in later Phase 21 tasks. Compose code keeps
+    reference these tokens in later design-system passes. Compose code keeps
     reading from `:catalog` `KnotworkTheme.*` instead.
 -->
 <resources xmlns:tools="http://schemas.android.com/tools" tools:ignore="UnusedResources">
@@ -42,7 +42,7 @@
     <color name="task_status_running">#FF4CAF50</color>
 
     <!--
-        Knotwork design tokens (Phase 21 / Task 2/11).
+        Knotwork design tokens.
 
         These are the static-fallback mirror of the :catalog token Kotlin
         sources, exposed as Android XML resources for the surfaces that

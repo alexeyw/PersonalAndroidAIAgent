@@ -1,5 +1,6 @@
 import app.knotwork.android.buildtools.BrowserEditorConstantsGenerator
 import dev.detekt.gradle.Detekt
+import java.util.Properties
 
 /**
  * Resolves the current short git SHA (e.g. `19b9c8f`) via
@@ -20,6 +21,57 @@ fun Project.resolveGitSha(): String = runCatching {
         "unknown"
     }
 }.getOrDefault("unknown")
+
+/**
+ * Resolved release-signing credentials sourced from `local.properties` or
+ * environment variables. Carries the validated keystore file plus its
+ * passwords and key alias so the `signingConfigs.release` block can be
+ * populated without re-reading any properties.
+ *
+ * @property storeFile The keystore file (already verified to exist on disk).
+ * @property storePassword The keystore (store) password.
+ * @property keyAlias The alias of the signing key inside the keystore.
+ * @property keyPassword The password protecting the signing key.
+ */
+private data class ReleaseSigningCredentials(
+    val storeFile: File,
+    val storePassword: String,
+    val keyAlias: String,
+    val keyPassword: String,
+)
+
+/**
+ * Resolves release-signing credentials, preferring `local.properties` (the
+ * developer machine) and falling back to environment variables (CI). The
+ * recognised keys are `RELEASE_KEYSTORE_PATH`, `RELEASE_KEYSTORE_PASSWORD`,
+ * `RELEASE_KEY_ALIAS`, and `RELEASE_KEY_PASSWORD`.
+ *
+ * Returns `null` — which the build interprets as "fall back to the debug
+ * signing identity" — whenever any credential is missing/blank or the
+ * resolved keystore file does not exist. This keeps a clean checkout without
+ * a provisioned key building release artefacts instead of failing
+ * configuration.
+ *
+ * @return The complete, validated set of credentials, or `null` when release
+ *   signing is not provisioned in this environment.
+ */
+private fun Project.resolveReleaseSigning(): ReleaseSigningCredentials? {
+    val localProps = Properties().apply {
+        rootProject.file("local.properties")
+            .takeIf { it.exists() }
+            ?.inputStream()
+            ?.use { load(it) }
+    }
+    fun value(key: String): String? = (localProps.getProperty(key) ?: System.getenv(key))?.trim()?.ifEmpty { null }
+
+    val storePath = value("RELEASE_KEYSTORE_PATH") ?: return null
+    val storePassword = value("RELEASE_KEYSTORE_PASSWORD") ?: return null
+    val keyAlias = value("RELEASE_KEY_ALIAS") ?: return null
+    val keyPassword = value("RELEASE_KEY_PASSWORD") ?: return null
+
+    val storeFile = rootProject.file(storePath).takeIf { it.exists() } ?: return null
+    return ReleaseSigningCredentials(storeFile, storePassword, keyAlias, keyPassword)
+}
 
 plugins {
     alias(libs.plugins.android.application)
@@ -43,7 +95,7 @@ plugins {
 // `AppFunctionsEndToEndTest` comes back empty.
 ksp {
     arg("appfunctions:aggregateAppFunctions", "true")
-    // Phase 23 / Task 3/9 — export the Room schema for every version so that
+    // Export the Room schema for every version so that
     // `MigrationTestHelper` can validate migrations against frozen JSON
     // snapshots in `app/schemas/`. The corresponding `exportSchema = true`
     // flag is set on the `@Database` annotation. Every future schema bump
@@ -66,20 +118,20 @@ android {
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
-        // Phase 19 / Task 1/10: license metadata exposed as Android string
+        // License metadata exposed as Android string
         // resources so a future "About" dialog can render the license name and
         // link to the canonical text without hardcoding the values in UI code.
         resValue("string", "license_name", "Apache License 2.0")
         resValue("string", "license_url", "https://www.apache.org/licenses/LICENSE-2.0")
 
-        // Phase 22 / Task 8: surface the build's short git SHA inside the
+        // Surface the build's short git SHA inside the
         // About row of the Knotwork settings screen so users can paste a
         // precise build identifier into bug reports without needing the APK
         // hash. Falls back to "unknown" when `git` is unavailable (e.g. a
         // tarball build).
         buildConfigField("String", "GIT_SHA", "\"${resolveGitSha()}\"")
 
-        // Phase 22 / Task 9: build date surfaced in the Settings top-app-bar
+        // Build date surfaced in the Settings top-app-bar
         // subtitle (`v0.9.2 · alpha · 2026.05.18`). Captured at configuration
         // time as an epoch-millis Long so the formatter on the screen owns
         // the locale-specific rendering. Stable across CI builds — the value
@@ -92,9 +144,27 @@ android {
         )
     }
 
+    // Real release-signing identity. The credentials are resolved from
+    // `local.properties` (developer machine) or environment variables (CI
+    // repository secrets); `resolveReleaseSigning()` returns null when none are
+    // provisioned, in which case the `release` buildType below gracefully falls
+    // back to the debug keystore so a clean checkout still builds. Keystore
+    // material is never committed (guarded by `.gitignore`).
+    val releaseSigning = resolveReleaseSigning()
+    signingConfigs {
+        if (releaseSigning != null) {
+            create("release") {
+                storeFile = releaseSigning.storeFile
+                storePassword = releaseSigning.storePassword
+                keyAlias = releaseSigning.keyAlias
+                keyPassword = releaseSigning.keyPassword
+            }
+        }
+    }
+
     buildTypes {
         release {
-            // Phase 22 / Task 17 — R8 in full mode + resource shrinking.
+            // R8 in full mode + resource shrinking.
             // Keep rules for reflection-heavy code paths (Koog, Ktor,
             // kotlinx.serialization, MediaPipe / LiteRT JNI, SQLCipher,
             // AppFunctions KSP-generated wrappers) live in
@@ -106,15 +176,13 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
             )
-            // v0.2.0 ships signed with the debug keystore. A real
-            // `signingConfigs.release` block (with `keyAlias` / `keyPassword`
-            // sourced from `local.properties` or environment variables) is
-            // intentionally deferred: the Play Store submission lands in a
-            // separate task once the production keystore is provisioned,
-            // tracked in `docs/release.md`. Installing the GitHub-Release
-            // APK on a developer device still works with the debug signing
-            // identity.
-            signingConfig = signingConfigs.getByName("debug")
+            // Use the dedicated `release` signing config when its credentials
+            // are provisioned (see `signingConfigs` above); otherwise fall back
+            // to the debug keystore so a clean checkout without a key still
+            // produces a (debug-signed) release artefact. Provisioning details
+            // and signature verification are documented in `docs/release.md`.
+            signingConfig = signingConfigs.findByName("release")
+                ?: signingConfigs.getByName("debug")
             // Strip non-arm64 ABIs from the release APK. With `minSdk = 36`
             // (Android 16) every supported device is 64-bit; shipping
             // `armeabi-v7a` + `x86` + `x86_64` would inflate the artefact
@@ -138,7 +206,7 @@ android {
 
     testOptions {
         unitTests.isReturnDefaultValues = true
-        // Phase 23 / Task 4/9 — Robolectric needs the merged Android resources
+        // Robolectric needs the merged Android resources
         // and assets on the JVM unit-test classpath (string lookups in
         // `LongRunningTaskNotifierImpl`, drawables resolved by NotificationCompat
         // builders). Without this flag Robolectric falls back to its own minimal
@@ -146,7 +214,7 @@ android {
         unitTests.isIncludeAndroidResources = true
     }
 
-    // Phase 23 / Task 3/9 — expose the exported Room schemas to the
+    // Expose the exported Room schemas to the
     // androidTest classpath so `MigrationTestHelper` (which reads them from
     // `assets/`) can validate every migration step against the frozen
     // snapshots in `app/schemas/`.
@@ -157,7 +225,7 @@ android {
     packaging {
         resources {
             excludes += "META-INF/*"
-            // Phase 22 / Task 17 — Jansi (transitive via Koog → log adapter)
+            // Jansi (transitive via Koog → log adapter)
             // ships pre-built native binaries for Windows / Mac / Linux that
             // are dead weight on Android. Stripping them shaves ~430 KB off
             // the release APK without touching runtime behaviour (the
@@ -171,7 +239,7 @@ android {
     }
 
     lint {
-        // Phase 18 / Task 9-10: strict mode. `abortOnError` + `warningsAsErrors`
+        // Strict mode. `abortOnError` + `warningsAsErrors`
         // turn every lint finding into a build failure; `checkDependencies`
         // extends the analysis to library modules so issues in shared code
         // surface on the PR that introduced them. The baseline file
@@ -183,7 +251,7 @@ android {
         checkDependencies = true
         htmlReport = true
         xmlReport = true
-        // Phase 21 / Task 11/11: the release variant ships `arm64-v8a` only
+        // The release variant ships `arm64-v8a` only
         // (every `minSdk = 36` device is 64-bit). ChromeOS support is not in
         // scope for v0.1 — disable the lint check that demands an x86 binary.
         disable += "ChromeOsAbiSupport"
@@ -199,7 +267,7 @@ android {
 detekt {
     config.setFrom(files("$rootDir/config/detekt/detekt.yml"))
     buildUponDefaultConfig = true
-    // Phase 18 / Task 9-10: strict mode. Any finding emitted at
+    // Strict mode. Any finding emitted at
     // `severity: error` (default `failOnSeverity`) now fails the build.
     // The legacy 1.x `failFast` switch was removed in detekt 1.22 and is
     // intentionally not used here.
@@ -221,7 +289,7 @@ tasks.withType<Detekt>().configureEach {
 ktlint {
     version.set("1.5.0")
     android.set(true)
-    // Phase 18 / Task 9-10: strict mode. Any ktlint violation that survives
+    // Strict mode. Any ktlint violation that survives
     // `ktlintFormat` (i.e. cannot be auto-corrected, or the source set
     // was not formatted) fails the build. Compose-specific rule overrides
     // live in `.editorconfig`.
@@ -243,8 +311,8 @@ kotlin {
 }
 
 // Kover — test-coverage measurement & enforcement.
-// Phase 18 / Task 9-10: aggregate threshold enforced via `koverVerifyDebug`.
-// Phase 23 / Task 9/9: aggregate floor raised 70 % → 75 % at end of phase.
+// Aggregate threshold enforced via `koverVerifyDebug`; the aggregate floor was
+// raised 70 % → 75 %.
 //
 // Per-rule filters are a Kover 0.10+ feature; on the 0.9.x line the only
 // way to scope verification is via the (global) `reports.filters` block,
@@ -306,8 +374,8 @@ kover {
                     "app.knotwork.android.presentation.ui.*Screen",
                     "app.knotwork.android.presentation.ui.*ScreenKt",
                     "app.knotwork.android.presentation.ui.*Screen$*",
-                    // Legacy chat surface (Phase 21 / Task 8: moved under chat/legacy/
-                    // pending the post-v0.1 orchestrator-rewiring task).
+                    // Legacy chat surface (moved under chat/legacy/ pending the
+                    // post-v0.1 orchestrator-rewiring task).
                     "app.knotwork.android.presentation.ui.chat.legacy.ConsoleFullLogSheet*",
                     "app.knotwork.android.presentation.ui.chat.legacy.ConsolePanelCollapsed*",
                     "app.knotwork.android.presentation.ui.chat.legacy.AgentThoughtIndicator*",
@@ -315,8 +383,8 @@ kover {
                     "app.knotwork.android.presentation.ui.chat.legacy.PipelineTraceCard*",
                     "app.knotwork.android.presentation.ui.chat.legacy.ApprovalBanner*",
                     "app.knotwork.android.presentation.ui.chat.legacy.ChatScreen*",
-                    // Redesigned chat-home Composables (Phase 21 / Task 8) — Compose
-                    // surfaces are covered by `:catalog` Roborazzi snapshots; the
+                    // Redesigned chat-home Composables — Compose surfaces are
+                    // covered by `:catalog` Roborazzi snapshots; the
                     // testable VM / state-mapping live next to them and are
                     // included in coverage.
                     "app.knotwork.android.presentation.ui.chat.home.ChatHomeScreen*",
@@ -324,13 +392,13 @@ kover {
                     "app.knotwork.android.presentation.ui.chat.home.DebugStateRows*",
                     "app.knotwork.android.presentation.ui.components.*",
                     "app.knotwork.android.presentation.ui.orchestrator.components.*",
-                    // Phase 21 / Task 9 — pipeline editor Compose layer. Gestures,
-                    // animations, and Bezier draw paths are intentionally outside the
-                    // JVM Kover scope; the pure-Kotlin core (CanvasTransform,
-                    // AutoLayout, EditorUndoRedo, BezierEdge, NodeConfigCodec) plus
-                    // the VM hooks ARE covered. Screen-level visual coverage rides
-                    // on the catalog's PipelineEditorCatalogPageSnapshotTest (Task 7)
-                    // and the Phase 21 / Task 11 a11y + release-candidate gate.
+                    // Pipeline editor Compose layer. Gestures, animations, and
+                    // Bezier draw paths are intentionally outside the JVM Kover
+                    // scope; the pure-Kotlin core (CanvasTransform, AutoLayout,
+                    // EditorUndoRedo, BezierEdge, NodeConfigCodec) plus the VM
+                    // hooks ARE covered. Screen-level visual coverage rides on the
+                    // catalog's PipelineEditorCatalogPageSnapshotTest and the
+                    // a11y + release-candidate gate.
                     "app.knotwork.android.presentation.ui.pipeline.editor.canvas.*",
                     "app.knotwork.android.presentation.ui.pipeline.editor.bars.*",
                     "app.knotwork.android.presentation.ui.pipeline.editor.sheet.*",
@@ -339,8 +407,8 @@ kover {
                     "app.knotwork.android.presentation.ui.splash.SplashScreen*",
                     "app.knotwork.android.presentation.theme.*",
                     "app.knotwork.android.presentation.state.*",
-                    // Phase 23 / Task 9/9 — additional Compose-surface / nav-glue
-                    // packages introduced during phase/23. Same rationale as the
+                    // Additional Compose-surface / nav-glue packages. Same
+                    // rationale as the
                     // existing presentation.ui.*Screen exclusions: rendering and
                     // navigation code needs Compose UI tests, not JVM unit tests.
                     // The redesigned bottom-nav shell (AppShellScaffold,
@@ -366,13 +434,13 @@ kover {
                     // the platform `PlatformAppFunctionService` need the Android
                     // runtime plus the AppFunctions service host to execute.
                     "app.knotwork.android.data.tools.local.appfunctions.*",
-                    // Phase 23 / Task 4/9 — `data.services.*` is now covered by
+                    // `data.services.*` is now covered by
                     // Robolectric tests (`AgentForegroundServiceTest`,
                     // `AgentWorkerTest`, `AgentIdleManagerTest`,
                     // `AgentPowerManagerTest`, `LongRunningTaskNotifierImplTest`).
                     // The exclusion that was here while the package waited for
                     // Robolectric coverage has been lifted.
-                    // Phase 23 / Task 5/9 — `presentation.notifications.*` and
+                    // `presentation.notifications.*` and
                     // `presentation.receivers.*` are now covered by Robolectric
                     // tests (`ApprovalNotificationManagerTest`,
                     // `AgentApprovalReceiverTest`). The exclusions that lived
@@ -409,8 +477,8 @@ kover {
 
         verify {
             // Aggregate gate — protects against silent regression across the
-            // whole unit-testable surface. The current measured value (Phase
-            // 23 / Task 9/9, May 2026) is ~77.5 %; the 75 % floor leaves a
+            // whole unit-testable surface. The current measured value
+            // (May 2026) is ~77.5 %; the 75 % floor leaves a
             // ~2.5 pp buffer for in-flight refactors.
             //
             // Per-package thresholds were considered for this task but cannot
@@ -432,12 +500,12 @@ kover {
     }
 }
 
-// Phase 18 / Task 9-10: wire `koverVerifyDebug` into the `check` lifecycle
+// Wire `koverVerifyDebug` into the `check` lifecycle
 // so a single `./gradlew check` invocation runs detekt + ktlintCheck +
 // lintDebug + unit tests + coverage verification.
 tasks.named("check") { dependsOn("koverVerifyDebug") }
 
-// Phase 18 / Task 7/10 — enforces "no internal FQN" rule for the
+// Enforces the "no internal FQN" rule for the
 // `app.knotwork.android.*` package. References like
 // `app.knotwork.android.domain.models.NodeType` outside `import`/`package`
 // statements must be replaced with a top-level import + short name. KDoc
@@ -491,11 +559,11 @@ val checkNoInternalFqn by tasks.registering {
 }
 tasks.named("check") { dependsOn(checkNoInternalFqn) }
 
-// Phase 24 / Task 8/9 — browser pipeline-editor constant sync automation.
+// Browser pipeline-editor constant sync automation.
 //
 // `pipeline-editor.html` mirrors a slice of the Android domain (node types,
 // prompt variables, available tools, default prompts). Those mirrors used to be
-// kept in sync by review alone and drifted (Task 6). `generateBrowserEditorConstants`
+// kept in sync by review alone and drifted. `generateBrowserEditorConstants`
 // regenerates the `AUTO-GEN` blocks straight from the domain sources;
 // `verifyBrowserEditorConstants` (wired into `check`) fails the build if the
 // committed HTML has drifted. The pure generation logic lives in
@@ -575,15 +643,12 @@ val verifyBrowserEditorConstants by tasks.registering {
 tasks.named("check") { dependsOn(verifyBrowserEditorConstants) }
 
 dependencies {
-    // Phase 21 / Task 1/11: design-system module — `KnotworkTheme` (currently
-    // a `MaterialTheme` pass-through) plus the foundations Task 2/11 will
-    // port into Kotlin sources.
+    // Design-system module — `KnotworkTheme` (currently a `MaterialTheme`
+    // pass-through) plus the ported foundations in Kotlin sources.
     implementation(project(":catalog"))
 
-    // Phase 21 / Task 1/11: `androidx.core.splashscreen` artefact — the
-    // platform-side splash is wired in Task 3/11 once the brand mark and
-    // accent token land. Declaring the dependency here keeps the build green
-    // when downstream tasks reference `installSplashScreen(...)`.
+    // `androidx.core.splashscreen` artefact — backs the platform-side splash
+    // (`installSplashScreen(...)`) once the brand mark and accent token land.
     implementation(libs.androidx.core.splashscreen)
 
     implementation(libs.androidx.core.ktx)
@@ -681,7 +746,7 @@ dependencies {
     testImplementation(libs.mockk)
     testImplementation(libs.coroutines.test)
     testImplementation(libs.work.testing)
-    // Phase 23 / Task 4/9 — Robolectric is needed for the foreground service,
+    // Robolectric is needed for the foreground service,
     // notification builder, and Doze (`ShadowPowerManager`) paths under
     // `data.services`. The version is pinned in `gradle/libs.versions.toml`.
     testImplementation(libs.robolectric)
@@ -695,7 +760,7 @@ dependencies {
     androidTestImplementation(libs.room.testing)
 }
 
-// Phase 20 / Task 6/7: install the :tools-probe debug APK alongside the agent's test
+// Install the :tools-probe debug APK alongside the agent's test
 // APK so `AppFunctionsEndToEndTest` can discover the probe's `echo` AppFunction
 // through the system AppFunctionManager. `androidTestUtil(project(":tools-probe"))`
 // would be the ergonomic choice, but AGP 9 publishes the probe as a multi-variant

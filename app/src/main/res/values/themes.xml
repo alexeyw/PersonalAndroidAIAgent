@@ -6,7 +6,7 @@
     <!--
         Platform splash theme (Android 12+ splash screen API).
 
-        Phase 21 / Task 3/11: shows the brand mark on the Knotwork accent-500
+        Shows the brand mark on the Knotwork accent-500
         background while the process boots and Compose installs its first
         frame. `postSplashScreenTheme` swaps to the regular app theme as soon
         as `installSplashScreen()` releases its keep-on-screen condition.

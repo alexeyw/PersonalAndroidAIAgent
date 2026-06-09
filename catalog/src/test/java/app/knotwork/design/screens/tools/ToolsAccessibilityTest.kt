@@ -15,7 +15,7 @@ import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 
 /**
- * Tools-screen a11y audit (Phase 22 / Task 11).
+ * Tools-screen a11y audit.
  *
  * Tighter follow-up to the structural reachability test in
  * [app.knotwork.design.a11y.TalkBackHappyPathsTest], which only asserts that

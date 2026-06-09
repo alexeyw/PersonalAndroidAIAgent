@@ -17,7 +17,7 @@ import org.junit.Test
 import app.knotwork.design.R as KnotworkR
 
 /**
- * Phase 23 / Task 6 — covers the full HITL approval flow through
+ * Covers the full HITL approval flow through
  * [ChatHomeScreen]. The complementary [HitlIntegrationTest] exercises the
  * catalog card in isolation; this suite additionally verifies that the
  * Allow / Reject taps dispatch into the real ChatHomeViewModel hooks

@@ -50,7 +50,7 @@ import java.util.UUID
 import app.knotwork.android.domain.models.Result as DomainResult
 
 /**
- * End-to-end test harness for Phase 20's AppFunctions surface.
+ * End-to-end test harness for the AppFunctions surface.
  *
  * The four scenarios on this class exercise the agent's caller-side, HITL gate,
  * callee-side and risk-override paths against a second app installed alongside the test

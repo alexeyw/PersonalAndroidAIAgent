@@ -6,15 +6,16 @@ should be runnable verbatim from a clean checkout.
 
 ## 1. Variants at a glance
 
-| Variant    | Minified | Resource-shrunk | Signing             | Output            |
-|------------|----------|------------------|---------------------|-------------------|
-| `debug`    | no       | no               | Android debug key   | `app-debug.apk`   |
-| `release`  | yes (R8) | yes              | Android debug key * | `app-release.apk` / `app-release.aab` |
+| Variant    | Minified | Resource-shrunk | Signing                             | Output            |
+|------------|----------|------------------|-------------------------------------|-------------------|
+| `debug`    | no       | no               | Android debug key                   | `app-debug.apk`   |
+| `release`  | yes (R8) | yes              | Release keystore (debug fallback) * | `app-release.apk` / `app-release.aab` |
 
-\* See §3 below — v0.4.0 ships signed with the debug keystore. A production
-keystore is not yet provisioned; the GitHub-Release APK is suitable for
-sideloading on a developer device but **not** acceptable for Play Store
-upload.
+\* See §3 below. The `release` variant uses a dedicated `signingConfigs.release`
+when its credentials are provisioned via `local.properties` or environment
+variables; when they are absent it **falls back to the debug keystore** so a
+clean checkout still builds. A debug-signed `release` artefact is suitable for
+sideloading on a developer device but **not** acceptable for Play Store upload.
 
 ## 2. Building locally
 
@@ -40,16 +41,40 @@ The release variant strips every ABI except `arm64-v8a`
 Emulator-driven smoke-tests should use the `debug` variant instead, which
 keeps every ABI.
 
-## 3. Signing (current state vs. production target)
+## 3. Signing
 
-### Current state — v0.4.0
+The `release` buildType is wired to a dedicated `signingConfigs.release` whose
+credentials are resolved at configuration time from `local.properties` first
+and environment variables second (`build.gradle.kts → resolveReleaseSigning()`).
+The recognised keys are:
 
-`buildTypes.release.signingConfig = signingConfigs.getByName("debug")`.
-The Android debug keystore lives at `~/.android/debug.keystore` and is
-identical across every developer machine, so anyone who builds the project
-locally will produce a byte-compatible signature. This is acceptable for
-the pre-release distribution channel (GitHub Releases, sideload from APK)
-because:
+| Key                         | Meaning                                   |
+|-----------------------------|-------------------------------------------|
+| `RELEASE_KEYSTORE_PATH`     | Path to the keystore, relative to repo root. |
+| `RELEASE_KEYSTORE_PASSWORD` | Keystore (store) password.                |
+| `RELEASE_KEY_ALIAS`         | Alias of the signing key in the keystore. |
+| `RELEASE_KEY_PASSWORD`      | Password protecting the signing key.      |
+
+If **any** key is missing/blank, or the resolved keystore file does not exist,
+`resolveReleaseSigning()` returns `null` and the `release` buildType falls back
+to the debug keystore:
+
+```kotlin
+signingConfig = signingConfigs.findByName("release")
+    ?: signingConfigs.getByName("debug")
+```
+
+So a clean checkout without a provisioned key still produces a (debug-signed)
+release artefact — configuration never fails for the lack of a key. The
+credential values are never committed: `.gitignore` blocks every keystore
+extension (`*.jks` / `*.keystore` / `*.p12` …) plus `local.properties`,
+`keystore.properties`, and `secrets.properties`.
+
+### Current distribution state
+
+Until a maintainer provisions a real release keystore, GitHub-Release builds
+are debug-signed via the fallback above. This is acceptable for the pre-release
+sideload channel because:
 
 - the debug signing identity is well-known and not a secret;
 - sideloading does not require a stable signing identity across releases
@@ -58,43 +83,10 @@ because:
 - a leaked debug-keystore signature cannot impersonate a Play Store
   upload — Play Store rejects debug-signed AABs.
 
-### Production target — before Play Store submission
-
-A real `signingConfigs.release` block must be wired before the AAB is
-uploaded to Play Console. The expected shape:
-
-```kotlin
-android {
-    signingConfigs {
-        create("release") {
-            // Source values from local.properties (developer machine) or
-            // environment variables (CI). Never commit the values themselves.
-            val props = Properties().apply {
-                rootProject.file("local.properties")
-                    .takeIf { it.exists() }
-                    ?.inputStream()
-                    ?.use { load(it) }
-            }
-            storeFile = file(
-                props.getProperty("RELEASE_KEYSTORE_PATH")
-                    ?: System.getenv("RELEASE_KEYSTORE_PATH")
-                    ?: "release.keystore"
-            )
-            storePassword = props.getProperty("RELEASE_KEYSTORE_PASSWORD")
-                ?: System.getenv("RELEASE_KEYSTORE_PASSWORD")
-            keyAlias = props.getProperty("RELEASE_KEY_ALIAS")
-                ?: System.getenv("RELEASE_KEY_ALIAS")
-            keyPassword = props.getProperty("RELEASE_KEY_PASSWORD")
-                ?: System.getenv("RELEASE_KEY_PASSWORD")
-        }
-    }
-    buildTypes {
-        release {
-            signingConfig = signingConfigs.getByName("release")
-        }
-    }
-}
-```
+The first release-signed build will use a different signer than the historical
+debug-signed builds, so an in-place upgrade from a debug-signed install will be
+rejected with a signature mismatch — see the *Pre-release notice* in
+[README.md](../README.md). Plan for a clean install at that transition.
 
 ### Generating the release keystore
 
@@ -117,10 +109,57 @@ keytool \
 ```
 
 Move the resulting `release.keystore` into `app/` (covered by `.gitignore`)
-and record the passwords + alias in `local.properties`. The Play Store
-also requires App Signing by Google Play — upload the keystore once during
-the first release, then Play Store rotates the in-app signing certificate
-on every subsequent release.
+and record the path + passwords + alias in `local.properties`:
+
+```properties
+RELEASE_KEYSTORE_PATH=app/release.keystore
+RELEASE_KEYSTORE_PASSWORD=••••••
+RELEASE_KEY_ALIAS=agent-release
+RELEASE_KEY_PASSWORD=••••••
+```
+
+The Play Store also requires App Signing by Google Play — upload the keystore
+once during the first release, then Play Store rotates the in-app signing
+certificate on every subsequent release.
+
+### Provisioning the keystore in CI
+
+CI builds read the same four keys from the environment, so they are injected
+as **repository secrets** rather than checked-in files. Store the keystore
+itself as a base64-encoded secret and materialise it before the build:
+
+```yaml
+# GitHub Actions — release-signing step (illustrative).
+- name: Decode release keystore
+  run: echo "${{ secrets.RELEASE_KEYSTORE_BASE64 }}" | base64 --decode > app/release.keystore
+- name: Assemble signed release
+  env:
+    RELEASE_KEYSTORE_PATH: app/release.keystore
+    RELEASE_KEYSTORE_PASSWORD: ${{ secrets.RELEASE_KEYSTORE_PASSWORD }}
+    RELEASE_KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
+    RELEASE_KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
+  run: ./gradlew :app:bundleRelease
+```
+
+The default `check.yml` gate does **not** build release artefacts, so it needs
+no signing secrets; wire the snippet above only into a dedicated release/publish
+workflow.
+
+### Verifying the signature
+
+After a signed build, confirm the artefact carries the expected certificate
+(not the debug one) with `apksigner` from the Android SDK build-tools:
+
+```bash
+apksigner verify --print-certs --verbose \
+    app/build/outputs/apk/release/app-release.apk
+```
+
+Check the printed `Signer #1 certificate DN` matches the keystore's
+Distinguished Name (e.g. `CN=On-Device AI Agent`) and that the SHA-256
+fingerprint matches the one Play Console registered for the app. The debug
+keystore prints `CN=Android Debug`, so this is the quickest way to catch an
+accidental fallback to debug signing.
 
 ## 4. R8 minification + resource shrinking
 
@@ -216,5 +255,6 @@ bundletool get-size total --apks=app.apks
   hidden by debug-only resources).
 - `bundleRelease` confirms R8 + resource shrinking still produce a valid AAB.
 
-The Phase-22 phase PR (`phase/22 → main`) gates on the same three commands
-in CI, plus the manual smoke-test described in `compose/decisions.md §14`.
+The integration PR gates on the same three commands in CI, plus the
+manual smoke test on the reference device described in
+[`testing.md`](testing.md) § *What the automated gate does NOT cover*.

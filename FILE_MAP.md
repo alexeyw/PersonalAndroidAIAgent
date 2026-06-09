@@ -16,8 +16,9 @@
 - `tools-probe/` - Debug-only companion Android module shipping a single `@AppFunction echo(message)` plus a one-button launcher activity. Provides a deterministic remote target for the `AppFunctionsEndToEndTest` (installed automatically as a prerequisite of the agent's instrumented tests) and a manual smoke for the agent's callee-side `search_tool` surface on the reference device.
 - `build/` - Root build output directory for the project.
 - `config/detekt/` - Detekt static-analysis rule configuration (`detekt.yml`).
-- `docs/` - Project documentation (architecture, user guide, extending, code style, testing, API conventions, static analysis, coverage baseline).
-  - `screenshots/` - Placeholder directory for README screenshots (`TODO.png` referenced from `README.md`).
+- `docs/` - Project documentation (architecture, user guide, extending, code style, testing, API conventions, static analysis, coverage baseline, roadmap).
+  - `images/` - Hero screenshots referenced from `README.md` (light + dark variants).
+  - `screenshots/` - Empty placeholder directory (kept by `.gitkeep`); current screenshots live in `docs/images/`.
 - `CONTRIBUTING.md` - Contributor guide: dev setup, build & test, branch model, Conventional Commits, PR checklist, language policy.
 - `CODE_OF_CONDUCT.md` - Contributor Covenant 2.1 community standards and enforcement guidelines.
 - `gradle/` - Gradle wrapper and global dependency versions configuration.

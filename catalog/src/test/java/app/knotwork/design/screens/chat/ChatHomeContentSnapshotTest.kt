@@ -34,7 +34,7 @@ import org.robolectric.annotation.GraphicsMode
  * Reduced-motion is pinned via [FixedKnotworkA11y] so the `KnotworkLoader`
  * and any other looping animation collapse to a deterministic steady-state
  * per `decisions.md §14`. The snapshot baseline therefore doubles as the
- * reduced-motion fallback verification (Phase 22 / Task 5).
+ * reduced-motion fallback verification.
  */
 @RunWith(AndroidJUnit4::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)

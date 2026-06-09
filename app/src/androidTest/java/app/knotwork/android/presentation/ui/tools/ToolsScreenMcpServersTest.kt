@@ -14,7 +14,7 @@ import org.junit.Test
 import app.knotwork.design.R as KnotworkR
 
 /**
- * Phase 23 / Task 8 — covers the MCP server section of the Tools screen:
+ * Covers the MCP server section of the Tools screen:
  * connection-status subtitle flips from `connecting…` to `ok`, the expand
  * chevron toggles the nested tool list, and the overflow menu's Refresh
  * action invokes the ViewModel.

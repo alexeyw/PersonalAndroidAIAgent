@@ -28,7 +28,7 @@ import org.junit.Test
 import app.knotwork.design.R as KnotworkR
 
 /**
- * Phase 23 / Task 6 — covers the Console pane plumbing as exposed through
+ * Covers the Console pane plumbing as exposed through
  * [ChatHomeScreen]: tab switching, source-filter toggling, inline-search
  * input, Clear with confirm-dialog, and the Copy-line round-trip into the
  * Compose [ClipboardManager].

@@ -21,7 +21,7 @@ CLAUDE.md
 /.claude
 /project_docs
 
-# --- Secret / credential hardening (Phase 26) ---
+# --- Secret / credential hardening ---
 # Defensive guards against ever committing signing material or credentials to a
 # public repository. None of these are tracked today; the patterns exist so an
 # accidental `git add` of a real keystore or key file is caught by Git itself.

@@ -5,7 +5,7 @@ import androidx.appfunctions.service.AppFunction
 
 /**
  * Single-function AppFunction surface shipped by the `:tools-probe` debug app for the
- * Phase 20 end-to-end test harness.
+ * End-to-end test harness.
  *
  * The class declares one `@AppFunction`: [echo], which returns its `message` argument
  * verbatim. Its sole purpose is to give the agent's caller-side path (`LocalAppFunctionManager`

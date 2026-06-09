@@ -15,7 +15,7 @@ import org.junit.Rule
 import org.junit.Test
 
 /**
- * Phase 23 / Task 7/9 — verifies the quick-add radial menu surfaces
+ * Verifies the quick-add radial menu surfaces
  * every catalog `NodeType` and dispatches the domain pick on tap.
  *
  * We render `QuickAddRadialMenu` directly with hand-rolled callbacks

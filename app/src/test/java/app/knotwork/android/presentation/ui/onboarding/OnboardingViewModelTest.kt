@@ -35,8 +35,8 @@ import org.junit.Before
 import org.junit.Test
 
 /**
- * Verifies the orchestrated download / load flow added in Phase 22 /
- * Task 12 on top of the existing `hasCompletedOnboarding` persistence.
+ * Verifies the orchestrated download / load flow layered on top of the
+ * existing `hasCompletedOnboarding` persistence.
  *
  * The wired flow has three independent invariants that all need to hold
  * for onboarding to leave the user with a working chat:

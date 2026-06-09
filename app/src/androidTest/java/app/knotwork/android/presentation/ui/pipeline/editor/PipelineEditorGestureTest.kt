@@ -16,7 +16,7 @@ import org.junit.Rule
 import org.junit.Test
 
 /**
- * Phase 23 / Task 7/9 — the only file driving real `performTouchInput`
+ * The only file driving real `performTouchInput`
  * gestures against the editor.
  *
  * Drag, long-press, and tap propagation through `EditorNode` /

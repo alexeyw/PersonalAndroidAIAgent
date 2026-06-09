@@ -73,7 +73,7 @@ class NodeConfigValidationTest {
 
     @Test
     fun `given CloudConfig with blank model when validate then no MODEL error (model lives in Settings)`() {
-        // Phase 22 / Task 14 review round 3: the per-node Model field was removed from
+        // The per-node Model field was removed from
         // the Cloud sheet — model ids live once per provider in Settings → External
         // providers. The validator therefore no longer flags a blank `model`; the
         // executor falls back to the provider's configured model at runtime.

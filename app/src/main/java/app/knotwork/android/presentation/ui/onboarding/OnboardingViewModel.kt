@@ -273,7 +273,7 @@ class OnboardingViewModel @Inject constructor(
     fun markCloudProviderConfigured(provider: OnboardingCloudProvider) {
         Timber.w(
             "OnboardingViewModel.markCloudProviderConfigured(${provider.id}) called " +
-                "— this is a no-op since Phase 22 / Task 13. The configured pill " +
+                "— this is a no-op. The configured pill " +
                 "is driven by ApiKeyRepository observation, not by tap.",
         )
     }

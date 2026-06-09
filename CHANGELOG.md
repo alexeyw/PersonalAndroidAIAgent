@@ -13,6 +13,89 @@ details.
 
 ## [Unreleased]
 
+### Added
+
+- **Public roadmap.** New [`docs/roadmap.md`](docs/roadmap.md) describes
+  post-release directions across near / mid / long horizons — agent
+  tool-set expansion (including evaluating file-oriented tools), the first
+  release-signed build, on-device verification beyond the JVM-only CI
+  gate, pipeline-editor refinement, the path to `1.0.0`, and localization
+  — plus how to get involved. Linked from the `README.md` documentation
+  index and from `CONTRIBUTING.md`.
+
+### Changed
+
+- **Bump `com.squareup.okhttp3:okhttp` `5.3.2` → `5.4.0`** to clear the
+  `NewerVersionAvailable` lint gate.
+- **Contributor onboarding refreshed.** `CONTRIBUTING.md` gains a *Where
+  to start* section (roadmap, `good first issue` / `help wanted` labels,
+  extension-point recipes) and its *Branch model* section now describes
+  the actual workflow: changes are integrated on long-lived `phase/<N>`
+  branches that merge into `main` as a batch, so pull requests target the
+  open integration branch when one exists. The stale app-version
+  placeholder in the bug-report issue form was bumped to the current
+  version line.
+
+- **`docs/code-style.md` restores the `*Preview.kt` file convention.** The
+  Compose guidelines again state that preview-only Composables live in
+  dedicated `*Preview.kt` files (as practised in the `:catalog` module);
+  the detail had been dropped when the document was first published.
+- **`docs/testing.md` now states explicitly what the automated gate does NOT
+  cover.** A new section documents that the CI gate is entirely JVM-based
+  (unit + Robolectric + Roborazzi, no emulator or device): instrumented
+  tests are neither run nor compiled by `./gradlew check`, real TalkBack
+  navigation, LiteRT-LM inference, the AppFunctions caller → callee
+  round-trip, opening the SQLCipher-encrypted database, and Foreground
+  Service / WorkManager behaviour are all verified only by a manual smoke
+  test on the reference device (Samsung Galaxy S25 Ultra, Android 16). A
+  green CI run is explicitly not a guarantee that the app works on
+  hardware. The pre-release quality gate in `docs/release.md` now links to
+  this section instead of an unpublished internal note.
+- **Execution-model terminology aligned with the actual engine behaviour.** The
+  core executes the user-authored pipeline graph node by node (graph-driven
+  orchestration with `QUEUE_PROCESSOR`, `EVALUATION`-retry and `IF_CONDITION`
+  control flow); it does not run an autonomous ReAct loop. The
+  `AgentOrchestratorState` KDoc now says so explicitly, and the bundled
+  pipeline preset formerly displayed as *"Tool-using ReAct agent"* is renamed
+  to *"Tool-using agent"* (its single reason → tool → summarise pass is not a
+  ReAct loop; the preset id `tool_using_react` is unchanged for stability).
+  The same rename is mirrored in the browser pipeline editor's built-in
+  preset catalogue and the user guide.
+- **`SECURITY.md` supported-versions now tracks the `0.4.x` release line.** The
+  policy table previously keyed support off an abstract `main` (latest) /
+  older-commits split; it now states the supported line explicitly (`0.4.x`
+  supported, `< 0.4.0` not), matching the published `versionName 0.4.0`. No
+  behavioural change — a documentation-accuracy fix following the public
+  release.
+- **Bump `com.google.firebase:firebase-bom` `34.14.0` → `34.14.1`.** A
+  patch-level BOM update that keeps the Firebase dependency on the current
+  stable release and clears the `GradleDependency` lint warning. No new
+  transitive licences.
+- **Room no longer destroys data on upgrade.** The destructive-migration
+  fallback (`fallbackToDestructiveMigration(true)`) has been removed from the
+  database builder. Every schema-version bump is backed by an explicit
+  `Migration` (the full chain is already registered via `addMigrations(...)`),
+  so an in-place upgrade preserves all local data — chats, long-term memory,
+  run traces, custom pipelines, and saved presets / prompt templates — instead
+  of recreating the tables empty. Destructive recreation is retained only on
+  **downgrade** (`fallbackToDestructiveMigrationOnDowngrade`), which forward
+  migrations cannot handle. A `MigrationTestHelper` regression suite validates
+  data preservation and the resulting schema across the exported-schema
+  baseline range. `SECURITY.md`, `README.md`, and `docs/architecture.md` were
+  updated to describe the new migration policy.
+- **Release builds now use a dedicated signing config.** The `release`
+  buildType signs with `signingConfigs.release` whose keystore path, store
+  password, key alias, and key password are resolved from `local.properties`
+  or environment variables (`RELEASE_KEYSTORE_PATH` /
+  `RELEASE_KEYSTORE_PASSWORD` / `RELEASE_KEY_ALIAS` / `RELEASE_KEY_PASSWORD`).
+  When no keystore is provisioned the build gracefully falls back to the debug
+  keystore, so a clean checkout still produces a release artefact. Keystore
+  material is never committed. See [docs/release.md](docs/release.md) for
+  keystore generation, CI provisioning via repository secrets, and signature
+  verification. **Note:** the first release-signed build uses a different
+  signer than earlier debug-signed builds, so it cannot be installed over a
+  debug-signed copy in place — see the *Pre-release notice* in the README.
+
 ## [0.4.0] - 2026-06-07
 
 ### Added
@@ -684,8 +767,7 @@ hardening** that raised the enforced Kover gate to 75 % (executor / DAO / Robole
   [`docs/coverage-baseline.md`](docs/coverage-baseline.md); they will be
   promoted to enforced rules once Kover 0.10 ships rule-level filters
   (0.9.8 is the latest available on the Gradle Plugin Portal). Several
-  Compose-surface and Android-runtime-glue packages introduced earlier in
-  phase/23 were also added to the Kover exclusion list to align with the
+  Compose-surface and Android-runtime-glue packages introduced earlier were also added to the Kover exclusion list to align with the
   existing `presentation.ui.*Screen*` convention:
   `presentation.ui.navigation.*`,
   `presentation.ui.about.{AboutScreen,AboutAcknowledgments}*`,

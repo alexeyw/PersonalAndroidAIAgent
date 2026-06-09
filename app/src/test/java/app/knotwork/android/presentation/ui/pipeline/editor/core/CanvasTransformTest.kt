@@ -91,7 +91,7 @@ class CanvasTransformTest {
         assertNotEquals(Float.NaN, next.offsetY)
     }
 
-    // ===== fitToBounds — Phase 22 / Task 14 =====
+    // ===== fitToBounds =====
 
     @Test
     fun `given bbox fits in viewport when fitToBounds then scale frames padded bbox edge-to-edge`() {
@@ -146,7 +146,7 @@ class CanvasTransformTest {
         assertEquals(original, original.fitToBounds(bbox, viewportW = 600f, viewportH = 0f, paddingPx = 0f))
     }
 
-    // ===== zoomedOneStep — Phase 22 / Task 14 =====
+    // ===== zoomedOneStep =====
 
     @Test
     fun `given identity transform when zoomedOneStep positive then scale multiplies by ZOOM_STEP`() {
@@ -180,7 +180,7 @@ class CanvasTransformTest {
         assertEquals(CanvasTransform.MIN_SCALE, zoomed.scale, 0f)
     }
 
-    // ===== Bounds — Phase 22 / Task 14 =====
+    // ===== Bounds =====
 
     @Test
     fun `given empty points when Bounds-of then returns null`() {

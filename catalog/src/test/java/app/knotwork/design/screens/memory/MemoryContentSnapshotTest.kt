@@ -17,7 +17,7 @@ import org.robolectric.annotation.GraphicsMode
 
 /**
  * Roborazzi snapshot baseline for the redesigned `MemoryContent`
- * (Phase 25): stats header + category chips + sort/date dropdowns + grouped
+ * stats header + category chips + sort/date dropdowns + grouped
  * list, the semantic-search variant, the detail bottom sheet (read + edit),
  * the Compact dialog, plus the Empty and Error states — in both themes.
  */
@@ -181,7 +181,7 @@ internal object MemoryPreview {
                 row(
                     id = "2",
                     title = "Project deadlines",
-                    body = "Phase 21 ships by 2026-05-20; the v0.1 tag follows once Task 11 closes.",
+                    body = "The next milestone ships by 2026-05-20; the v0.1 tag follows once the release gate closes.",
                     kind = MemorySourceKind.Auto,
                     tags = listOf("project", "deadlines"),
                     time = "2h",

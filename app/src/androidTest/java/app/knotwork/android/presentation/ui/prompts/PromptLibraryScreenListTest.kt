@@ -15,7 +15,7 @@ import org.junit.Test
 import app.knotwork.android.R as AppR
 
 /**
- * Phase 23 / Task 8 — covers the Prompt Library list surface: prompts in
+ * Covers the Prompt Library list surface: prompts in
  * the currently-selected category render with their name; the category
  * `ScrollableTabRow` forwards selections to
  * [PromptLibraryViewModel.selectCategory]; and the per-card Duplicate /

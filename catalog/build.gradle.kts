@@ -51,7 +51,7 @@ android {
     }
 
     lint {
-        // Phase 21 / Task 1/11: mirror :app's strict-mode posture so design-system
+        // Mirror :app's strict-mode posture so design-system
         // code is held to the same gate as the application surface. The baseline is
         // generated lazily — `./gradlew :catalog:updateLintBaseline` writes the file
         // on first run; until then the module has no known issues to grandfather.

@@ -21,7 +21,7 @@
 <!--    </queries>-->
 
     <!--
-        Phase 20 / Task 6/7: the agent must be able to see other AppFunction-providing
+        The agent must be able to see other AppFunction-providing
         packages via `PackageManager.canPackageQuery` so
         `AppFunctionManager.observeAppFunctions` surfaces their metadata. Android 11+
         ships with package visibility on by default; without an explicit `<queries>`

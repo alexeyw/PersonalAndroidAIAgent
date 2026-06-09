@@ -10,7 +10,7 @@ import org.junit.Test
  * Unit tests for [Converters], focusing on the [NodeContextConfig] JSON round
  * trip and its legacy-row fallback contract. The fallback to
  * [NodeContextConfig.ALL_ENABLED] is what keeps pipelines that were stored
- * before Phase 15 functionally identical after the migration runs.
+ * before the context-config column existed functionally identical after the migration runs.
  */
 class ConvertersTest {
 

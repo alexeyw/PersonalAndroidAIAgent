@@ -40,7 +40,7 @@ class ChatHomeStateMappingTest {
         assertEquals(ChatHomeVisualState.Empty, view.visualState)
         assertTrue(view.messages.isEmpty())
         // The empty-state body now renders rich suggestion cards
-        // (mockup, Phase 21 / Task 10 follow-up) instead of the legacy
+        // (mockup) instead of the legacy
         // single-line chip row.
         assertTrue(view.samplePromptCards.isNotEmpty())
         assertNull(view.errorMessage)

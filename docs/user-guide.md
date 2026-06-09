@@ -349,7 +349,7 @@ A **pipeline preset** is a reusable template of a whole graph. Two kinds
 exist:
 
 - **Bundled** — a handful of curated starter presets that ship with the
-  app (local-only Q&A, cloud assist, tool-using ReAct, multi-step
+  app (local-only Q&A, cloud assist, tool-using agent, multi-step
   research, clarify-then-act, routed local/cloud). They are read-only.
 - **Mine** — presets you create yourself with **Save as preset** (from a
   pipeline's `⋮` menu). These live in the app's local database.

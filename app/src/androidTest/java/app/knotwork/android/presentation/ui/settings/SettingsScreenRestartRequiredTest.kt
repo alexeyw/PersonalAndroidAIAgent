@@ -10,7 +10,7 @@ import org.junit.Rule
 import org.junit.Test
 
 /**
- * Phase 23 / Task 8 — covers the restart-required banner on the Settings
+ * Covers the restart-required banner on the Settings
  * surface (`compose/screens/README.md §C5 · Settings`). The banner is
  * gated on `SettingsUiState.restartRequired`; flipping that flag pushes
  * the visual state to `RestartRequired` and overlays the banner above

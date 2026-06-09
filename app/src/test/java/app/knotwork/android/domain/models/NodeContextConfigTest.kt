@@ -5,7 +5,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * Locks the contract that legacy nodes (created before Phase 15 introduced the
+ * Locks the contract that legacy nodes (created before the
  * `context_config` column) keep receiving the full pipeline context. The
  * backward-compatibility migration writes the JSON equivalent of
  * [NodeContextConfig.ALL_ENABLED] for every existing row, so this test is the

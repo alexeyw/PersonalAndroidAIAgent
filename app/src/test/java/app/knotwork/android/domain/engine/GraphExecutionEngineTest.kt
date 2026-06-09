@@ -595,7 +595,7 @@ class GraphExecutionEngineTest {
         )
 
         // LITE_RT must receive the original user query (now wrapped by NodeContextBuilder),
-        // not the routing key. The Phase 17 cleanup removed the legacy "USER/INPUT:" prefix
+        // not the routing key. The cleanup removed the legacy "USER/INPUT:" prefix
         // because the assembled context already carries `--- Previous Node Output ---`,
         // so we assert via the context-builder header instead.
         io.mockk.verify {
@@ -1514,7 +1514,7 @@ class GraphExecutionEngineTest {
 
         val graph = PipelineGraph(
             id = "g1",
-            name = "Phase 15-6 integration",
+            name = "Integration test",
             nodes = listOf(inputNode, toolNode, cloudNode, outputNode),
             connections = listOf(
                 ConnectionModel("c1", "input_1", "tool_1"),
@@ -1596,7 +1596,7 @@ class GraphExecutionEngineTest {
         )
     }
 
-    // ─── Phase 17.4 — Agent console event emissions ──────────────────────────
+    // ─── Agent console event emissions ──────────────────────────
 
     @Test
     fun `given linear pipeline when run completes then console log spans memory and node lifecycle events`() = runTest {
@@ -1746,7 +1746,7 @@ class GraphExecutionEngineTest {
         )
     }
 
-    // ─── Phase 20 / 4 — Risk-based HITL gate end-to-end ──────────────────────
+    // ─── Risk-based HITL gate end-to-end ──────────────────────
 
     @Test
     fun `given pipeline with READ_ONLY tool node when run then completes without HITL pause`() = runTest {

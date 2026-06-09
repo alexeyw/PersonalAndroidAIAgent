@@ -55,7 +55,8 @@ For the broader layering rationale, see
 - Use `LazyColumn` / `LazyRow` for all scrollable lists.
 - Separate stateful (screen-level) and stateless (component-level)
   Composables.
-- Mark preview-only Composables with `@Preview`.
+- Mark preview-only Composables with `@Preview` and keep them in dedicated
+  `*Preview.kt` files, separate from the production Composables they render.
 
 ## Coroutines & Flow
 

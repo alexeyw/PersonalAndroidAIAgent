@@ -16,7 +16,7 @@ import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 
 /**
- * Roborazzi baseline for the Phase 22 / Task 9 redesigned Settings
+ * Roborazzi baseline for the redesigned Settings
  * surface. State matrix mirrors `compose/screens/README.md §C7` post-
  * redesign: Loading / Default / RestartRequired / DestructiveAction
  * (typed-input idle + typed-input yes) × Light/Dark.
