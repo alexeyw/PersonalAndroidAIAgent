@@ -15,6 +15,17 @@ details.
 
 ### Changed
 
+- **`docs/testing.md` now states explicitly what the automated gate does NOT
+  cover.** A new section documents that the CI gate is entirely JVM-based
+  (unit + Robolectric + Roborazzi, no emulator or device): instrumented
+  tests are neither run nor compiled by `./gradlew check`, real TalkBack
+  navigation, LiteRT-LM inference, the AppFunctions caller → callee
+  round-trip, opening the SQLCipher-encrypted database, and Foreground
+  Service / WorkManager behaviour are all verified only by a manual smoke
+  test on the reference device (Samsung Galaxy S25 Ultra, Android 16). A
+  green CI run is explicitly not a guarantee that the app works on
+  hardware. The pre-release quality gate in `docs/release.md` now links to
+  this section instead of an unpublished internal note.
 - **Execution-model terminology aligned with the actual engine behaviour.** The
   core executes the user-authored pipeline graph node by node (graph-driven
   orchestration with `QUEUE_PROCESSOR`, `EVALUATION`-retry and `IF_CONDITION`

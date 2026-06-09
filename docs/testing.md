@@ -102,6 +102,10 @@ fun `given valid input when execute then emits success state`() {
 
 ## Instrumented / Compose UI tests
 
+> **Note:** instrumented tests are **not** part of the automated CI gate —
+> they require a connected device or emulator and are run manually. See
+> [What the automated gate does NOT cover](#what-the-automated-gate-does-not-cover).
+
 ### Setup
 
 ```kotlin
@@ -138,3 +142,72 @@ All tests, static analysis and coverage must pass via:
 This is the same task that CI runs on every pull request. It executes
 detekt, ktlint, Android lint, the unit-test suite, and `koverVerifyDebug`.
 Lint must pass with no new warnings.
+
+## What the automated gate does NOT cover
+
+The entire CI gate is **JVM-based**: plain JUnit + MockK unit tests,
+Robolectric-driven Compose tests, and Roborazzi screenshot tests (in the
+`:catalog` module). CI runs on `ubuntu-latest` with **no emulator and no
+physical device attached**. This is a deliberate trade-off — it keeps the
+gate fast, deterministic, and runnable on every pull request without a
+device farm — but it has a hard consequence that contributors should not
+overestimate:
+
+> **A green `./gradlew check` is NOT a guarantee that the app works on a
+> physical device.** It guarantees that the JVM-testable logic behaves as
+> specified. Everything that needs real Android system services, native
+> libraries, or hardware is outside the gate.
+
+The areas below are **not** exercised by CI, and why:
+
+- **Instrumented / Espresso / on-device tests.** The
+  `app/src/androidTest/` source set (~50 test classes: Room DAO tests,
+  schema-migration tests on `MigrationTestHelper`, Compose UI flow tests,
+  the AppFunctions end-to-end test) is neither run **nor even compiled**
+  by `./gradlew check`. A change can break the instrumented-test build and
+  CI stays green — compile them locally with
+  `./gradlew :app:compileDebugAndroidTestKotlin` and run them with
+  `./gradlew connectedDebugAndroidTest` on a connected device.
+- **Real TalkBack navigation.** `TalkBackHappyPathsTest` (in the
+  `:catalog` test source set) only asserts a structural pre-condition:
+  every surface on the ratified happy paths publishes focusable
+  interactive nodes with non-blank content descriptions. It does **not**
+  drive the actual screen reader — the AccessibilityService bridge cannot
+  be toggled from a Compose test. Whether TalkBack focus order, custom
+  actions, and announcements actually work is verified only by a manual
+  walkthrough with TalkBack enabled.
+- **LiteRT-LM inference.** The native inference engine and real model
+  weights never run in CI. Unit tests mock the engine boundary; model
+  loading, token streaming, delegate selection (CPU/GPU), and memory
+  behaviour under real weights are device-only concerns.
+- **AppFunctions caller/callee.** The end-to-end test that resolves
+  function metadata and invokes a function through
+  `AppFunctionManager.executeAppFunction(...)` is an instrumented test,
+  and it additionally skips on stock Android 16 because the
+  `EXECUTE_APP_FUNCTIONS` permission is signature-level. The full
+  caller → callee round-trip is verifiable only on a device build where
+  the gate applies.
+- **Opening the SQLCipher-encrypted database.** Robolectric cannot load
+  the SQLCipher native library, so JVM tests never open the real
+  encrypted database. That the passphrase provisioning, keystore-backed
+  storage, and encrypted open actually succeed is observable only on a
+  device.
+- **Foreground Service and WorkManager.** Unit tests mock the lifecycle
+  and scheduling boundaries. Real service start/stop semantics,
+  notification behaviour, Doze interactions, and worker execution under
+  OS constraints are not reproduced on the JVM.
+
+### Compensating control: manual smoke on the reference device
+
+These gaps are covered by a **manual smoke test on the reference
+device — Samsung Galaxy S25 Ultra (Android 16)** — performed before every
+integration merge into `main`, plus a manual TalkBack walkthrough of the
+ratified happy paths. The pre-release quality gate in
+[`release.md`](release.md) § *Quality gate before release* builds on the
+same rule: automated checks first, manual on-device verification as the
+final word.
+
+This compromise is reasonable for a small-team project without a device
+farm, but it is a compromise. If a change touches any of the areas listed
+above, do not rely on CI alone — state in the pull request what was
+verified on-device and how.
