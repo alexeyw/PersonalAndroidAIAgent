@@ -15,6 +15,16 @@ details.
 
 ### Changed
 
+- **`SECURITY.md` supported-versions now tracks the `0.4.x` release line.** The
+  policy table previously keyed support off an abstract `main` (latest) /
+  older-commits split; it now states the supported line explicitly (`0.4.x`
+  supported, `< 0.4.0` not), matching the published `versionName 0.4.0`. No
+  behavioural change — a documentation-accuracy fix following the public
+  release.
+- **Bump `com.google.firebase:firebase-bom` `34.14.0` → `34.14.1`.** A
+  patch-level BOM update that keeps the Firebase dependency on the current
+  stable release and clears the `GradleDependency` lint warning. No new
+  transitive licences.
 - **Room no longer destroys data on upgrade.** The destructive-migration
   fallback (`fallbackToDestructiveMigration(true)`) has been removed from the
   database builder. Every schema-version bump is backed by an explicit
