@@ -15,6 +15,10 @@ details.
 
 ### Changed
 
+- **`docs/code-style.md` restores the `*Preview.kt` file convention.** The
+  Compose guidelines again state that preview-only Composables live in
+  dedicated `*Preview.kt` files (as practised in the `:catalog` module);
+  the detail had been dropped when the document was first published.
 - **`docs/testing.md` now states explicitly what the automated gate does NOT
   cover.** A new section documents that the CI gate is entirely JVM-based
   (unit + Robolectric + Roborazzi, no emulator or device): instrumented
