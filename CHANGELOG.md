@@ -25,6 +25,8 @@ details.
 
 ### Changed
 
+- **Bump `com.squareup.okhttp3:okhttp` `5.3.2` → `5.4.0`** to clear the
+  `NewerVersionAvailable` lint gate.
 - **Contributor onboarding refreshed.** `CONTRIBUTING.md` gains a *Where
   to start* section (roadmap, `good first issue` / `help wanted` labels,
   extension-point recipes) and its *Branch model* section now describes
