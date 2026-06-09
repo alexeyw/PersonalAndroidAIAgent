@@ -13,7 +13,26 @@ details.
 
 ## [Unreleased]
 
+### Added
+
+- **Public roadmap.** New [`docs/roadmap.md`](docs/roadmap.md) describes
+  post-release directions across near / mid / long horizons — agent
+  tool-set expansion (including evaluating file-oriented tools), the first
+  release-signed build, on-device verification beyond the JVM-only CI
+  gate, pipeline-editor refinement, the path to `1.0.0`, and localization
+  — plus how to get involved. Linked from the `README.md` documentation
+  index and from `CONTRIBUTING.md`.
+
 ### Changed
+
+- **Contributor onboarding refreshed.** `CONTRIBUTING.md` gains a *Where
+  to start* section (roadmap, `good first issue` / `help wanted` labels,
+  extension-point recipes) and its *Branch model* section now describes
+  the actual workflow: changes are integrated on long-lived `phase/<N>`
+  branches that merge into `main` as a batch, so pull requests target the
+  open integration branch when one exists. The stale app-version
+  placeholder in the bug-report issue form was bumped to the current
+  version line.
 
 - **`docs/code-style.md` restores the `*Preview.kt` file convention.** The
   Compose guidelines again state that preview-only Composables live in

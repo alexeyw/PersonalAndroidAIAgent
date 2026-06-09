@@ -19,6 +19,23 @@ By participating in this project you agree to abide by our
 [Code of Conduct](CODE_OF_CONDUCT.md), adapted from Contributor Covenant
 2.1.
 
+## Where to start
+
+- The [roadmap](docs/roadmap.md) describes where the project is headed
+  and which directions welcome outside help.
+- Issues labelled
+  [`good first issue`](https://github.com/alexeyw/PersonalAndroidAIAgent/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22)
+  are scoped to be approachable without deep knowledge of the codebase:
+  each one states the motivation, the files involved, and concrete
+  acceptance criteria. Issues labelled
+  [`help wanted`](https://github.com/alexeyw/PersonalAndroidAIAgent/issues?q=is%3Aissue+is%3Aopen+label%3A%22help+wanted%22)
+  mark work where contributions are especially welcome.
+- [`docs/extending.md`](docs/extending.md) has step-by-step recipes for
+  the most self-contained contributions — new node types, tools, cloud
+  providers, and prompt variables.
+- Leave a comment on an issue before starting non-trivial work, so effort
+  is not duplicated and the approach can be sanity-checked early.
+
 ## Dev setup
 
 Required toolchain:
@@ -77,9 +94,21 @@ it just trades local feedback for slower CI feedback.
 
 ## Branch model
 
-- `main` is the default branch and always reflects shipped, reviewed work.
-- Feature branches use the pattern `feature/<kebab-name>`.
-- Open pull requests against `main`.
+Development proceeds in thematic batches, each integrated on a
+long-lived branch before reaching `main`:
+
+- `main` is the default branch and always reflects shipped, reviewed
+  work. Every commit on `main` is expected to pass `./gradlew check`.
+- Active development happens on integration branches named `phase/<N>`.
+  Individual changes branch off the current integration branch as
+  `feature/<kebab-name>`, and their pull requests **target the open
+  `phase/<N>` branch**, not `main`. When the batch is complete, the
+  integration branch is merged into `main` with a merge commit and
+  deleted.
+- If no `phase/<N>` branch is currently open (check the
+  [branch list](https://github.com/alexeyw/PersonalAndroidAIAgent/branches)),
+  target `main` directly. When in doubt, open the PR against `main` —
+  maintainers will retarget it if an integration branch is active.
 - Direct pushes to `main` are not permitted; every change lands through a
   reviewed PR.
 
@@ -141,6 +170,8 @@ a bug.
 
 ## Further reading
 
+- [`docs/roadmap.md`](docs/roadmap.md) — where the project is headed and
+  which directions welcome help.
 - [`docs/code-style.md`](docs/code-style.md) — Kotlin style and naming
   conventions.
 - [`docs/testing.md`](docs/testing.md) — test strategy, coverage policy,
