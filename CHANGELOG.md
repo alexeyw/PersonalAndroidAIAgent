@@ -15,6 +15,16 @@ details.
 
 ### Changed
 
+- **Execution-model terminology aligned with the actual engine behaviour.** The
+  core executes the user-authored pipeline graph node by node (graph-driven
+  orchestration with `QUEUE_PROCESSOR`, `EVALUATION`-retry and `IF_CONDITION`
+  control flow); it does not run an autonomous ReAct loop. The
+  `AgentOrchestratorState` KDoc now says so explicitly, and the bundled
+  pipeline preset formerly displayed as *"Tool-using ReAct agent"* is renamed
+  to *"Tool-using agent"* (its single reason → tool → summarise pass is not a
+  ReAct loop; the preset id `tool_using_react` is unchanged for stability).
+  The same rename is mirrored in the browser pipeline editor's built-in
+  preset catalogue and the user guide.
 - **`SECURITY.md` supported-versions now tracks the `0.4.x` release line.** The
   policy table previously keyed support off an abstract `main` (latest) /
   older-commits split; it now states the supported line explicitly (`0.4.x`

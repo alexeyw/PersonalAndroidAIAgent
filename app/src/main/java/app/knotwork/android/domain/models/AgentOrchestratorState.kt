@@ -1,7 +1,9 @@
 package app.knotwork.android.domain.models
 
 /**
- * Represents the current state of the Agent Orchestrator during the ReAct cycle.
+ * Represents the current state of the agent orchestrator while the user-authored
+ * pipeline graph is being executed node by node (graph-driven orchestration —
+ * not an autonomous ReAct loop).
  */
 sealed interface AgentOrchestratorState {
     /**
