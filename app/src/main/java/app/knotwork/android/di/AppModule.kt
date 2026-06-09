@@ -65,9 +65,22 @@ object AppModule {
      *
      * The database is encrypted at rest via SQLCipher. A random 32-byte passphrase is stored
      * in [androidx.security.crypto.EncryptedSharedPreferences] (master key in Android Keystore).
-     * If a legacy plaintext database from an earlier build exists, SQLCipher will fail to open
-     * it and Room will recreate it via [fallbackToDestructiveMigration] — acceptable because
-     * the project has no shipped users yet.
+     *
+     * **Migration policy.** Every schema-version bump is backed by an explicit
+     * [androidx.room.migration.Migration] registered through [addMigrations]; the full chain is
+     * declared on [AppDatabase]. Destructive recreation on **upgrade** has been removed, so a
+     * version bump preserves all user data (chats, long-term memory, run traces, custom
+     * pipelines, saved presets and prompt templates) instead of dropping the tables. A missing
+     * upgrade path is therefore a hard failure surfaced in development rather than silent data
+     * loss in the field.
+     *
+     * Destructive recreation is retained **only on downgrade**
+     * ([fallbackToDestructiveMigrationOnDowngrade]) — forward migrations cannot reverse a schema,
+     * so installing an older build over a newer database recreates it empty rather than crashing.
+     *
+     * Legacy plaintext databases from pre-SQLCipher development builds (which predate the public
+     * release) are not supported: SQLCipher cannot open them and there is no downgrade path to
+     * recreate them. This affects only such dev installs, never a released version.
      */
     @Provides
     @Singleton
@@ -113,7 +126,10 @@ object AppModule {
                 AppDatabase.MIGRATION_26_27,
                 AppDatabase.MIGRATION_27_28,
             )
-            .fallbackToDestructiveMigration(true)
+            // No destructive fallback on upgrade: every version bump must supply an explicit
+            // migration above so user data survives. Destructive recreation is kept only for the
+            // (rare) downgrade case, which forward migrations cannot handle.
+            .fallbackToDestructiveMigrationOnDowngrade(dropAllTables = true)
             .build()
     }
 
