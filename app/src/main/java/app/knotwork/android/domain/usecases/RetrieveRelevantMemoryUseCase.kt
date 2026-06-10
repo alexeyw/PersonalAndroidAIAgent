@@ -115,7 +115,12 @@ class RetrieveRelevantMemoryUseCase @Inject constructor(
         // would have left just outside the top-K. Top-K is applied last.
         memoryRepository.findSimilarMemories(queryEmbedding)
             .also { candidates ->
-                memorySearchStatsTracker.record(candidates.map { it.second })
+                // Pre-trim to the tracker's sample size: the pool can hold
+                // thousands of entries and record() only keeps the head, so
+                // mapping every score would allocate a large list for nothing.
+                memorySearchStatsTracker.record(
+                    candidates.take(MemorySearchStatsTracker.STATS_SAMPLE_SIZE).map { it.second },
+                )
             }
             .let { candidates ->
                 memoryReranker.rerank(

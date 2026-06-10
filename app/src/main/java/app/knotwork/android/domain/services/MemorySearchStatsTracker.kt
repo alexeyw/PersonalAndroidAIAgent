@@ -69,14 +69,17 @@ class MemorySearchStatsTracker @Inject constructor() {
         recentScores.value = emptyList()
     }
 
-    private companion object {
+    /** Shared constants for [MemorySearchStatsTracker]. */
+    companion object {
         /** Number of recent cosine-similarity scores tracked for the AVG SCORE stat cell. */
-        const val RECENT_SIMILARITY_WINDOW: Int = 32
+        private const val RECENT_SIMILARITY_WINDOW: Int = 32
 
         /**
          * Per-call cap on how many of the ranked scores feed the AVG SCORE
          * window. Keeps the stat anchored to the strongest hits even when a
-         * caller requests a large pool for re-ranking.
+         * caller requests a large pool for re-ranking. Public so call sites
+         * that hold a large ranked pool can pre-trim to this size and avoid
+         * mapping thousands of scores [record] would discard anyway.
          */
         const val STATS_SAMPLE_SIZE: Int = 5
     }
