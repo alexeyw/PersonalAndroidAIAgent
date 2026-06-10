@@ -39,7 +39,7 @@ internal object EmbeddingBlobCodec {
      */
     fun encode(array: FloatArray): ByteArray {
         val buffer = ByteBuffer.allocate(array.size * BYTES_PER_FLOAT).order(ByteOrder.LITTLE_ENDIAN)
-        for (value in array) buffer.putFloat(value)
+        buffer.asFloatBuffer().put(array)
         return buffer.array()
     }
 
@@ -64,7 +64,8 @@ internal object EmbeddingBlobCodec {
             Timber.w("Corrupt embedding blob: %d bytes is not a multiple of %d", bytes.size, BYTES_PER_FLOAT)
             return null
         }
-        val buffer = ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN)
-        return FloatArray(bytes.size / BYTES_PER_FLOAT) { buffer.float }
+        val floats = FloatArray(bytes.size / BYTES_PER_FLOAT)
+        ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN).asFloatBuffer().get(floats)
+        return floats
     }
 }
