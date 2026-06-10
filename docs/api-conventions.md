@@ -93,8 +93,11 @@ interface Tool {
   (thread-safe).
 - Connections are lazy: they open on first use and close when the agent
   session ends.
-- Wrap every MCP call in `runCatching` and map errors to
-  `ToolResult.Error`.
+- Every MCP call is wrapped in `try`/`catch` that **re-throws
+  `CancellationException` from a dedicated first catch clause** and maps all
+  other failures to `ToolResult.Error`. `runCatching` is never used around
+  these (suspending) calls — it would swallow cancellation; see
+  [code-style.md](code-style.md) § Coroutines & Flow.
 
 ---
 
