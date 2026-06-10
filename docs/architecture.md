@@ -597,10 +597,36 @@ Encryption applies to every table that may hold user-derived content:
 - `trace_steps` — intermediate pipeline-node outputs derived from
   user input.
 
-The SQLCipher passphrase is a 32-byte random value generated on first
-launch and stored in `EncryptedSharedPreferences`. The master key
-backing those preferences lives in the Android Keystore.
-`EncryptedSharedPreferences` also stores per-provider cloud API keys.
+The SQLCipher passphrase is a 32-byte random value stored in
+`EncryptedSharedPreferences`. The master key backing those preferences
+lives in the Android Keystore. `EncryptedSharedPreferences` also stores
+per-provider cloud API keys.
+
+The passphrase lifecycle is asymmetric by design
+(`EncryptedDbPassphraseProvider`):
+
+- A passphrase is **generated only while no database file exists yet**.
+  Once a database is present it is never regenerated: any failure to read
+  the stored value (unopenable preferences, missing or malformed entry) or
+  a key/file mismatch detected at open time raises a typed
+  `DbPassphraseUnavailableException` that routes to the startup recovery
+  screen, where the user chooses between retrying and an explicitly
+  confirmed wipe. Silent self-healing of the passphrase store is allowed
+  only while no database exists, because then nothing can be orphaned.
+- The passphrase is resolved **lazily at the first real database open**
+  (`DeferredPassphraseOpenHelperFactory`), not during dependency injection,
+  so a keystore failure surfaces where the UI can handle it; best-effort
+  background maintenance skips its work instead of crashing while the
+  recovery screen is up.
+- The API-key store keeps the older recreate-on-corruption recovery —
+  keys are user re-enterable, so availability wins there.
+
+Inside the encrypted database, `memory_chunks.embedding` is stored as a
+**BLOB of little-endian IEEE-754 float32 values** (4 bytes per
+component). `EmbeddingBlobCodec` converts between the binary column and
+the in-memory `FloatArray` at the storage boundary; the memory
+export/import JSON format is unaffected and keeps embeddings as plain
+number arrays.
 
 User-tunable settings (sampling parameters, timeouts, pipeline-step
 bounds, default pipeline id, opt-in flags) live in **DataStore**, one

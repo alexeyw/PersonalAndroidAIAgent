@@ -84,6 +84,15 @@ details.
   placeholder in the bug-report issue form was bumped to the current
   version line.
 
+- **`docs/api-conventions.md` MCP error-handling rule aligned with the
+  cancellation gate.** The MCP section used to prescribe wrapping calls in
+  `runCatching`, which contradicts the coroutine-cancellation contract (and
+  the actual client code): the rule now requires `try`/`catch` with a
+  dedicated `CancellationException` re-throw before mapping failures to
+  `ToolResult.Error`. The architecture document also describes the
+  passphrase lifecycle (generated only while no database exists; typed
+  failures route to the startup recovery screen) and the binary embedding
+  column introduced in this release.
 - **`docs/code-style.md` restores the `*Preview.kt` file convention.** The
   Compose guidelines again state that preview-only Composables live in
   dedicated `*Preview.kt` files (as practised in the `:catalog` module);
@@ -186,6 +195,18 @@ details.
 
 ### Security
 
+- **Prompt injection via tool content is now a documented, accepted risk.**
+  `SECURITY.md` gains a threat-model section describing how content
+  returned by tools (built-in search extracts, MCP-server results,
+  AppFunction responses) flows into the context of subsequent pipeline
+  nodes — including planning and routing nodes — and can influence the
+  arguments of later tool calls. The stated backstop is the
+  human-in-the-loop gate (tool name + exact arguments shown for every
+  sensitive or destructive call; unknown-risk tools, MCP included, default
+  to sensitive), while read-only calls are deliberately ungated. The
+  section recommends switching the tool-approval policy to *approve every
+  call* when connecting untrusted MCP servers. No behaviour change —
+  a disclosure of an existing, deliberate trade-off.
 - **Database passphrase can no longer be destroyed by a transient
   keystore failure.** The store holding the SQLCipher passphrase
   previously deleted and recreated itself whenever its encrypted
