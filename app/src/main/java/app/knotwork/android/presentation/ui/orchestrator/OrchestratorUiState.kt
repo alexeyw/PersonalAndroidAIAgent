@@ -39,9 +39,9 @@ import app.knotwork.android.presentation.ui.common.UiText
  * Cleared via `consumePendingEditorNavigation()` once acted upon.
  * @property defaultPipelineId Id of the pipeline the user has marked as
  * default in the library, observed from `SettingsRepository.defaultPipelineId`.
- * `null` means no explicit choice — the chat surfaces fall back to the
- * first pipeline. Drives the "Default" badge and the menu item state in
- * `PipelineLibraryScreen`.
+ * `null` means no explicit choice — unbound chats then refuse to run
+ * until a default is marked or the chat is bound explicitly. Drives the
+ * "Default" badge and the menu item state in `PipelineLibraryScreen`.
  */
 data class OrchestratorUiState(
     val currentPipeline: PipelineGraph = PipelineGraph(

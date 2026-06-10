@@ -11,10 +11,12 @@ import java.util.UUID
  * @property priority The priority of the task.
  * @property timestamp The time the task was created.
  * @property pipelineId Identifier of the pipeline that should run this task. `null`
- *   means the orchestrator should fall back to the application-wide default
- *   pipeline (pipelines are bound per-chat, not globally). The id
- *   is captured at enqueue time so a later edit to `ChatSession.pipelineId`
- *   does not retroactively reroute an in-flight task.
+ *   means the orchestrator falls back to the application-wide default
+ *   pipeline (`SettingsRepository.defaultPipelineId`); when no default is
+ *   configured either, the task fails with an explicit error instead of
+ *   executing an arbitrary pipeline. The id is captured at enqueue time so
+ *   a later edit to `ChatSession.pipelineId` does not retroactively
+ *   reroute an in-flight task.
  */
 data class AgentTask(
     val id: String = UUID.randomUUID().toString(),

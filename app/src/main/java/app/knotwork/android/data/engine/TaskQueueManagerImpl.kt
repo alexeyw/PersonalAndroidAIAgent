@@ -9,6 +9,7 @@ import app.knotwork.android.domain.models.ChatMessage
 import app.knotwork.android.domain.models.Role
 import app.knotwork.android.domain.repositories.ChatRepository
 import app.knotwork.android.domain.repositories.PipelineRepository
+import app.knotwork.android.domain.repositories.SettingsRepository
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -40,6 +41,7 @@ import javax.inject.Singleton
 class TaskQueueManagerImpl @Inject constructor(
     private val chatRepository: ChatRepository,
     private val pipelineRepository: PipelineRepository,
+    private val settingsRepository: SettingsRepository,
     private val graphExecutionEngine: GraphExecutionEngine,
 ) : TaskQueueManager {
 
@@ -145,21 +147,35 @@ class TaskQueueManagerImpl @Inject constructor(
         )
         chatRepository.saveMessage(userMessage)
 
-        // 2. Load pipeline. Each chat session may bind its own
-        // `pipelineId`; honour that binding first, then fall back to the
-        // application-wide default (the first pipeline returned by the
-        // repository) for legacy chats and for tasks that don't specify a
-        // binding. If the bound pipeline was deleted while the task waited
-        // in the queue we silently fall back to the default rather than
-        // failing — the chat-level UI handles the deleted-pipeline rebind
-        // separately (Snackbar fallback).
+        // 2. Load pipeline. Resolution is a deterministic chain that never
+        // depends on the order pipelines come back from the repository:
+        //   1. `task.pipelineId` — the session binding captured at enqueue
+        //      time, when it still resolves to an existing pipeline;
+        //   2. `SettingsRepository.defaultPipelineId` — the user-marked
+        //      default, when set and still existing;
+        //   3. explicit `Error` — no silent "whatever the DAO returned
+        //      first" substitution.
+        // A bound pipeline deleted while the task waited in the queue falls
+        // through to the default; the chat-level UI handles the rebind +
+        // Snackbar notification separately, so the fall-through is never
+        // silent from the user's perspective.
         val pipelines = pipelineRepository.getAllPipelines().firstOrNull() ?: emptyList()
+        if (pipelines.isEmpty()) {
+            val errState = AgentOrchestratorState.Error(
+                "No active pipeline found. Please create one in the Visual Orchestrator.",
+            )
+            stateFlow.emit(errState)
+            _globalState.value = errState
+            return
+        }
         val boundPipeline = task.pipelineId?.let { id -> pipelines.firstOrNull { it.id == id } }
-        val activePipeline = boundPipeline ?: pipelines.firstOrNull()
+        val defaultPipeline = settingsRepository.defaultPipelineId.firstOrNull()
+            ?.let { id -> pipelines.firstOrNull { it.id == id } }
+        val activePipeline = boundPipeline ?: defaultPipeline
 
         if (activePipeline == null) {
             val errState = AgentOrchestratorState.Error(
-                "No active pipeline found. Please create one in the Visual Orchestrator.",
+                "No default pipeline configured. Set one in Settings or bind a pipeline to this chat.",
             )
             stateFlow.emit(errState)
             _globalState.value = errState

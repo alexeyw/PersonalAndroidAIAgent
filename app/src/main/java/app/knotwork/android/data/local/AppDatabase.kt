@@ -286,9 +286,9 @@ abstract class AppDatabase : RoomDatabase() {
          * Migration from version 18 to 19 — pipeline binding to chat.
          *
          * Adds the nullable `pipelineId` column to `chat_sessions`. `NULL` means the
-         * chat uses the application-wide default pipeline (the first pipeline
-         * returned by `PipelineRepository.getAllPipelines()`), preserving the
-         * prior default for every existing row without requiring a data backfill.
+         * chat uses the application-wide default pipeline (the user-marked
+         * `SettingsRepository.defaultPipelineId`), preserving the prior
+         * default for every existing row without requiring a data backfill.
          */
         val MIGRATION_18_19 = object : Migration(18, 19) {
             override fun migrate(db: SupportSQLiteDatabase) {

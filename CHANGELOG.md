@@ -135,6 +135,17 @@ details.
 
 ### Fixed
 
+- **Unbound chats no longer execute an arbitrary pipeline.** A chat
+  without its own pipeline binding used to run "whatever pipeline the
+  database returned first" — so after creating a second pipeline,
+  unbound chats could silently switch to a different graph. Resolution
+  is now deterministic: the chat's own binding, then the default marked
+  in the pipeline library; when neither resolves, the run fails with an
+  explicit "No default pipeline configured" error instead of a silent
+  substitution. The chat subtitle follows the same chain, and switching
+  to a thread whose bound pipeline has been deleted rebinds it to the
+  default with the usual notification.
+
 - **Old memories are no longer invisible to retrieval.** The similarity
   search behind long-term memory scanned only the most recent chunks (a
   hidden 1,000-row recency window), so an old but relevant fact stopped
