@@ -1,18 +1,17 @@
 package app.knotwork.android.data.local
 
 import android.content.Context
-import android.content.SharedPreferences
-import androidx.security.crypto.EncryptedSharedPreferences
+import app.knotwork.android.data.local.crypto.FakeAeadCipher
+import app.knotwork.android.data.local.crypto.InMemorySharedPreferences
 import app.knotwork.android.domain.models.DbPassphraseUnavailableException
 import io.mockk.every
 import io.mockk.mockk
-import io.mockk.mockkStatic
-import io.mockk.unmockkAll
 import io.mockk.verify
-import org.junit.After
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertThrows
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -28,208 +27,198 @@ import java.io.File
  */
 class EncryptedDbPassphraseProviderTest {
 
+    private companion object {
+        const val PREFS_NAME = "secure_db_passphrase_v2"
+        const val LEGACY_PREFS_NAME = "secure_db_passphrase"
+        const val PASSPHRASE_KEY = "db_passphrase_hex"
+        const val KEY_ALIAS = "knotwork.db_passphrase"
+    }
+
     @get:Rule
     val tempFolder = TemporaryFolder()
 
     private lateinit var context: Context
-    private lateinit var sharedPrefs: SharedPreferences
-    private lateinit var editor: SharedPreferences.Editor
+    private lateinit var prefs: InMemorySharedPreferences
+    private lateinit var cipher: FakeAeadCipher
     private lateinit var dbFile: File
 
     @Before
     fun setup() {
         context = mockk(relaxed = true)
-        sharedPrefs = mockk()
-        editor = mockk(relaxed = true)
-        every { sharedPrefs.edit() } returns editor
+        prefs = InMemorySharedPreferences()
+        cipher = FakeAeadCipher()
+        every { context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE) } returns prefs
 
         dbFile = File(tempFolder.root, AppDatabase.DATABASE_NAME)
         every { context.getDatabasePath(AppDatabase.DATABASE_NAME) } returns dbFile
-
-        mockkStatic(EncryptedSharedPreferences::class)
     }
 
-    @After
-    fun teardown() {
-        unmockkAll()
-    }
+    private fun provider() = EncryptedDbPassphraseProvider(context, cipher)
 
-    private fun stubPrefsCreate(result: () -> SharedPreferences) {
-        every {
-            EncryptedSharedPreferences.create(
-                any<Context>(),
-                any<String>(),
-                any(),
-                any(),
-                any(),
-            )
-        } answers { result() }
-    }
-
-    private fun stubStoredHex(hex: String?) {
-        every { sharedPrefs.getString("db_passphrase_hex", null) } returns hex
+    /** Seeds the backing prefs with [hex] sealed exactly the way the production store seals it. */
+    private fun storeHex(hex: String) {
+        val blob = cipher.encrypt(KEY_ALIAS, "$PREFS_NAME/$PASSPHRASE_KEY".toByteArray(), hex.toByteArray())
+        prefs.values[PASSPHRASE_KEY] = java.util.Base64.getEncoder().encodeToString(blob)
     }
 
     @Test
-    fun `given prefs open failure and existing database when getOrCreatePassphrase then throws and keeps prefs file`() {
+    fun `given undecryptable passphrase and existing database when read then throws and keeps store`() {
         dbFile.writeBytes(byteArrayOf(1, 2, 3))
-        stubPrefsCreate { throw SecurityException("Keystore unavailable") }
-
-        val provider = EncryptedDbPassphraseProvider(context)
+        storeHex("ab".repeat(32))
+        cipher.failDecrypt = true
 
         val thrown = assertThrows(DbPassphraseUnavailableException::class.java) {
-            provider.getOrCreatePassphrase()
+            provider().getOrCreatePassphrase()
         }
-        assertEquals(DbPassphraseUnavailableException.Reason.PREFS_OPEN_FAILED, thrown.reason)
-        // The old recovery path deleted and recreated the store — that must never happen here.
+
+        assertEquals(DbPassphraseUnavailableException.Reason.DECRYPTION_FAILED, thrown.reason)
+        // The old ESP recovery path deleted and recreated the store — that must never happen
+        // here: the stored blob and the Keystore key both survive for a later retry.
+        assertTrue(prefs.values.containsKey(PASSPHRASE_KEY))
+        assertTrue(cipher.deletedAliases.isEmpty())
         verify(exactly = 0) { context.deleteSharedPreferences(any()) }
     }
 
     @Test
     fun `given malformed passphrase and existing database when getOrCreatePassphrase then no regeneration`() {
         dbFile.writeBytes(byteArrayOf(1, 2, 3))
-        stubPrefsCreate { sharedPrefs }
-        stubStoredHex("not-valid-hex!!")
-
-        val provider = EncryptedDbPassphraseProvider(context)
+        storeHex("not-valid-hex!!")
 
         val thrown = assertThrows(DbPassphraseUnavailableException::class.java) {
-            provider.getOrCreatePassphrase()
+            provider().getOrCreatePassphrase()
         }
+
         assertEquals(DbPassphraseUnavailableException.Reason.PASSPHRASE_MALFORMED, thrown.reason)
-        verify(exactly = 0) { editor.putString(any(), any()) }
+        assertEquals(1, prefs.values.size)
     }
 
     @Test
     fun `given missing passphrase and existing database when getOrCreatePassphrase then throws without regenerating`() {
         dbFile.writeBytes(byteArrayOf(1, 2, 3))
-        stubPrefsCreate { sharedPrefs }
-        stubStoredHex(null)
-
-        val provider = EncryptedDbPassphraseProvider(context)
 
         val thrown = assertThrows(DbPassphraseUnavailableException::class.java) {
-            provider.getOrCreatePassphrase()
+            provider().getOrCreatePassphrase()
         }
+
         assertEquals(DbPassphraseUnavailableException.Reason.PASSPHRASE_MISSING, thrown.reason)
-        verify(exactly = 0) { editor.putString(any(), any()) }
+        assertTrue(prefs.values.isEmpty())
     }
 
     @Test
     fun `given fresh install without database when getOrCreatePassphrase then generates and persists`() {
-        stubPrefsCreate { sharedPrefs }
-        stubStoredHex(null)
-        every { editor.commit() } returns true
-
-        val provider = EncryptedDbPassphraseProvider(context)
-        val passphrase = provider.getOrCreatePassphrase()
+        val passphrase = provider().getOrCreatePassphrase()
 
         assertEquals(32, passphrase.size)
-        verify(exactly = 1) { editor.putString("db_passphrase_hex", any()) }
+        assertTrue(prefs.values.containsKey(PASSPHRASE_KEY))
+    }
+
+    @Test
+    fun `given fresh generation when legacy store file exists then it is deleted`() {
+        provider().getOrCreatePassphrase()
+
+        // A fresh passphrase begins a fresh data lifetime; the pre-migration
+        // EncryptedSharedPreferences file no longer guards anything usable.
+        verify(exactly = 1) { context.deleteSharedPreferences(LEGACY_PREFS_NAME) }
+    }
+
+    @Test
+    fun `given failure path when database exists then legacy store file is kept`() {
+        dbFile.writeBytes(byteArrayOf(1, 2, 3))
+
+        assertThrows(DbPassphraseUnavailableException::class.java) {
+            provider().getOrCreatePassphrase()
+        }
+
+        // Downgrading the APK is the remaining manual escape hatch for a
+        // pre-migration database — the legacy file must survive failures.
+        verify(exactly = 0) { context.deleteSharedPreferences(LEGACY_PREFS_NAME) }
     }
 
     @Test
     fun `given malformed passphrase without database when getOrCreatePassphrase then regenerates safely`() {
-        stubPrefsCreate { sharedPrefs }
-        stubStoredHex("zz-not-hex")
-        every { editor.commit() } returns true
+        storeHex("zz-not-hex")
 
-        val provider = EncryptedDbPassphraseProvider(context)
-        val passphrase = provider.getOrCreatePassphrase()
+        val passphrase = provider().getOrCreatePassphrase()
 
         assertEquals(32, passphrase.size)
-        verify(exactly = 1) { editor.putString("db_passphrase_hex", any()) }
     }
 
     @Test
-    fun `given transient prefs failure when retried after recovery then returns original passphrase`() {
+    fun `given transient decrypt failure when retried after recovery then returns original passphrase`() {
         dbFile.writeBytes(byteArrayOf(1, 2, 3))
-        val storedHex = "ab".repeat(32)
-        var attempts = 0
-        stubPrefsCreate {
-            attempts++
-            if (attempts == 1) throw SecurityException("Transient keystore failure") else sharedPrefs
-        }
-        stubStoredHex(storedHex)
+        storeHex("ab".repeat(32))
+        val subject = provider()
 
-        val provider = EncryptedDbPassphraseProvider(context)
-
-        // First attempt: transient failure surfaces as a typed exception.
+        // First attempt: transient Keystore failure surfaces as a typed exception.
+        cipher.failDecrypt = true
         assertThrows(DbPassphraseUnavailableException::class.java) {
-            provider.getOrCreatePassphrase()
+            subject.getOrCreatePassphrase()
         }
 
         // Second attempt (after Keystore recovered): the SAME stored passphrase
         // is returned — the database remains openable.
-        val recovered = provider.getOrCreatePassphrase()
-        val expected = ByteArray(32) { 0xAB.toByte() }
-        assertArrayEquals(expected, recovered)
-        verify(exactly = 0) { editor.putString(any(), any()) }
-        assertEquals(2, attempts)
+        cipher.failDecrypt = false
+        val recovered = subject.getOrCreatePassphrase()
+        assertArrayEquals(ByteArray(32) { 0xAB.toByte() }, recovered)
     }
 
     @Test
     fun `given stored valid passphrase when getOrCreatePassphrase then returns decoded bytes`() {
-        stubPrefsCreate { sharedPrefs }
-        stubStoredHex("01".repeat(32))
+        storeHex("01".repeat(32))
 
-        val provider = EncryptedDbPassphraseProvider(context)
-        val passphrase = provider.getOrCreatePassphrase()
+        val passphrase = provider().getOrCreatePassphrase()
 
         assertArrayEquals(ByteArray(32) { 1 }, passphrase)
     }
 
     @Test
-    fun `given reset requested when resetStoredPassphrase then deletes the prefs store`() {
-        stubPrefsCreate { sharedPrefs }
+    fun `given returned passphrase mutated when read again then stored value is unaffected`() {
+        val subject = provider()
+        val first = subject.getOrCreatePassphrase()
+        val expected = first.copyOf()
 
-        val provider = EncryptedDbPassphraseProvider(context)
-        provider.resetStoredPassphrase()
+        first.fill(0)
 
-        verify(exactly = 1) { context.deleteSharedPreferences("secure_db_passphrase") }
+        assertArrayEquals(expected, subject.getOrCreatePassphrase())
     }
 
     @Test
-    fun `given prefs open failure without database when getOrCreatePassphrase then self-heals and generates`() {
-        // No DB file: nothing can be orphaned, so the corrupt store may be recreated —
-        // e.g. an Auto-Backup-restored prefs file on a device that has no data yet.
-        var attempts = 0
-        stubPrefsCreate {
-            attempts++
-            if (attempts == 1) throw SecurityException("Keyset undecryptable after restore") else sharedPrefs
-        }
-        stubStoredHex(null)
-        every { editor.commit() } returns true
+    fun `given reset requested when resetStoredPassphrase then destroys store and legacy file`() {
+        val subject = provider()
+        subject.getOrCreatePassphrase()
 
-        val provider = EncryptedDbPassphraseProvider(context)
-        val passphrase = provider.getOrCreatePassphrase()
+        subject.resetStoredPassphrase()
+
+        assertTrue(prefs.values.isEmpty())
+        assertEquals(listOf(KEY_ALIAS), cipher.deletedAliases)
+        verify(exactly = 1) { context.deleteSharedPreferences(PREFS_NAME) }
+        verify(exactly = 2) { context.deleteSharedPreferences(LEGACY_PREFS_NAME) }
+    }
+
+    @Test
+    fun `given undecryptable store without database when getOrCreatePassphrase then self-heals and generates`() {
+        // No DB file: nothing can be orphaned, so the unreadable store may be
+        // destroyed and recreated — e.g. an Auto-Backup-restored prefs file on
+        // a device whose Keystore key did not travel with it.
+        storeHex("ab".repeat(32))
+        cipher.failDecrypt = true
+
+        val passphrase = provider().getOrCreatePassphrase()
 
         assertEquals(32, passphrase.size)
-        verify(exactly = 1) { context.deleteSharedPreferences("secure_db_passphrase") }
-        verify(exactly = 1) { editor.putString("db_passphrase_hex", any()) }
-        assertEquals(2, attempts)
+        assertEquals(listOf(KEY_ALIAS), cipher.deletedAliases)
+        verify(exactly = 1) { context.deleteSharedPreferences(PREFS_NAME) }
     }
 
     @Test
-    fun `given cached prefs when reset then next access opens a fresh prefs instance`() {
-        // Context.deleteSharedPreferences declares results undefined while a live instance
-        // for the same name is retained — the reset must drop the cached holder so the
-        // post-wipe regeneration goes through a freshly created store.
-        var createCount = 0
-        stubPrefsCreate {
-            createCount++
-            sharedPrefs
-        }
-        stubStoredHex("01".repeat(32))
-        every { editor.commit() } returns true
+    fun `given reset then next generation produces a different persisted passphrase`() {
+        val subject = provider()
+        val first = subject.getOrCreatePassphrase()
 
-        val provider = EncryptedDbPassphraseProvider(context)
-        provider.getOrCreatePassphrase()
-        assertEquals(1, createCount)
+        subject.resetStoredPassphrase()
+        val second = subject.getOrCreatePassphrase()
 
-        provider.resetStoredPassphrase()
-        provider.getOrCreatePassphrase()
-
-        assertEquals(2, createCount)
+        assertEquals(32, second.size)
+        assertFalse(first.contentEquals(second))
     }
 }

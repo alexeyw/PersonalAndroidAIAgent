@@ -945,8 +945,8 @@ LLMs.
   inference memory. Its mono subtitle shows size, accelerator
   backend, and execution backend.
 - The **HuggingFace** section lets you paste a personal access token
-  (kept in `EncryptedSharedPreferences`) so gated repositories can be
-  downloaded. The `+ Paste` button reads the system clipboard.
+  (stored on-device in the app's preferences) so gated repositories can
+  be downloaded. The `+ Paste` button reads the system clipboard.
 - The **Custom model URL** field accepts a direct link to any
   `.litertlm`, `.task`, or `.gguf` file. Tap `Get` to start
   downloading.

@@ -64,7 +64,8 @@ object AppModule {
      * Provides the singleton instance of the Room Database.
      *
      * The database is encrypted at rest via SQLCipher. A random 32-byte passphrase is stored
-     * in [androidx.security.crypto.EncryptedSharedPreferences] (master key in Android Keystore).
+     * in a [app.knotwork.android.data.local.crypto.KeystoreBackedPrefsStore] (AES-GCM under a
+     * dedicated Android Keystore key).
      *
      * **Migration policy.** Every schema-version bump is backed by an explicit
      * [androidx.room.migration.Migration] registered through [addMigrations]; the full chain is

@@ -1,10 +1,9 @@
 package app.knotwork.android.data.local
 
 import android.content.Context
-import android.content.SharedPreferences
-import androidx.core.content.edit
-import androidx.security.crypto.EncryptedSharedPreferences
-import androidx.security.crypto.MasterKey
+import app.knotwork.android.data.local.crypto.AeadCipher
+import app.knotwork.android.data.local.crypto.KeystoreBackedPrefsStore
+import app.knotwork.android.data.local.crypto.SecureValueUnreadableException
 import app.knotwork.android.domain.constants.SettingsDefaults
 import app.knotwork.android.domain.repositories.ApiKeyRepository
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -12,69 +11,40 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import timber.log.Timber
-import java.io.File
 import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
  * Concrete implementation of [ApiKeyRepository] that securely stores API keys
- * using Android's EncryptedSharedPreferences.
+ * in a [KeystoreBackedPrefsStore] — values encrypted with AES-GCM under a
+ * dedicated, non-exportable Android Keystore key.
  *
  * **Recovery semantics — deliberately different from [EncryptedDbPassphraseProvider].**
- * When the encrypted preferences file cannot be opened (e.g. the Keystore master key was lost
- * during a backup/restore), this class deletes the corrupt store and recreates it empty. That
- * is safe here because API keys are user-re-enterable: the worst outcome is the user pasting
- * their keys again. The database passphrase provider must never do this — its secret cannot be
- * re-derived, and destroying it would render the encrypted database permanently unreadable.
+ * A stored value that can no longer be decrypted (e.g. the Keystore key was lost during a
+ * backup/restore) is treated as absent: the corrupt entry is removed and the getter returns
+ * `null`. That is safe here because API keys are user-re-enterable — the worst outcome is the
+ * user pasting their keys again. The database passphrase provider must never do this: its
+ * secret cannot be re-derived, and destroying it would render the encrypted database
+ * permanently unreadable.
+ *
+ * Earlier releases kept the keys in `EncryptedSharedPreferences` (deprecated upstream and
+ * removed from this project without a data migration, as permitted by the pre-release storage
+ * policy); a leftover legacy file is ignored — previously stored keys simply have to be
+ * re-entered once.
  *
  * @property context The application context used to create the shared preferences.
+ * @param cipher The AEAD boundary used to protect the stored values.
  */
 @Singleton
-class ApiKeyManager @Inject constructor(@ApplicationContext private val context: Context) : ApiKeyRepository {
+class ApiKeyManager @Inject constructor(@ApplicationContext private val context: Context, cipher: AeadCipher) :
+    ApiKeyRepository {
 
-    private val prefsName = "secure_api_keys"
-
-    private val masterKey by lazy {
-        MasterKey.Builder(context)
-            .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
-            .build()
-    }
-
-    private val sharedPreferences: SharedPreferences by lazy {
-        try {
-            createEncryptedSharedPreferences()
-        } catch (e: Exception) {
-            Timber.e(
-                e,
-                "Failed to initialize EncryptedSharedPreferences. Attempting recovery by clearing corrupt data.",
-            )
-            // Recovery path: if data is corrupted (e.g. key lost during backup/restore), delete the file and recreate
-            deleteSharedPreferences(prefsName)
-            createEncryptedSharedPreferences()
-        }
-    }
-
-    private fun createEncryptedSharedPreferences(): SharedPreferences = EncryptedSharedPreferences.create(
-        context,
-        prefsName,
-        masterKey,
-        EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
-        EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM,
+    private val store = KeystoreBackedPrefsStore(
+        context = context,
+        prefsName = PREFS_NAME,
+        keyAlias = KEY_ALIAS,
+        cipher = cipher,
     )
-
-    private fun deleteSharedPreferences(name: String) {
-        try {
-            // Context.deleteSharedPreferences is available in API 24+
-            context.deleteSharedPreferences(name)
-        } catch (e: Exception) {
-            // Fallback for older APIs or if deleteSharedPreferences fails
-            val dir = File(context.applicationInfo.dataDir, "shared_prefs")
-            val file = File(dir, "$name.xml")
-            if (file.exists()) {
-                file.delete()
-            }
-        }
-    }
 
     private object Keys {
         const val OPENAI_KEY = "openai_api_key"
@@ -91,20 +61,20 @@ class ApiKeyManager @Inject constructor(@ApplicationContext private val context:
     }
 
     // Mutable state flows to allow reactive observing of key changes
-    private val _openAIKeyFlow by lazy { MutableStateFlow(sharedPreferences.getString(Keys.OPENAI_KEY, null)) }
-    private val _openAIModelFlow by lazy { MutableStateFlow(sharedPreferences.getString(Keys.OPENAI_MODEL, null)) }
-    private val _anthropicKeyFlow by lazy { MutableStateFlow(sharedPreferences.getString(Keys.ANTHROPIC_KEY, null)) }
-    private val _anthropicModelFlow by lazy {
-        MutableStateFlow(sharedPreferences.getString(Keys.ANTHROPIC_MODEL, null))
-    }
-    private val _googleKeyFlow by lazy { MutableStateFlow(sharedPreferences.getString(Keys.GOOGLE_KEY, null)) }
-    private val _googleModelFlow by lazy { MutableStateFlow(sharedPreferences.getString(Keys.GOOGLE_MODEL, null)) }
-    private val _deepSeekKeyFlow by lazy { MutableStateFlow(sharedPreferences.getString(Keys.DEEPSEEK_KEY, null)) }
-    private val _deepSeekModelFlow by lazy { MutableStateFlow(sharedPreferences.getString(Keys.DEEPSEEK_MODEL, null)) }
-    private val _ollamaUrlFlow by lazy { MutableStateFlow(sharedPreferences.getString(Keys.OLLAMA_URL, null)) }
-    private val _ollamaModelFlow by lazy { MutableStateFlow(sharedPreferences.getString(Keys.OLLAMA_MODEL, null)) }
+    private val _openAIKeyFlow by lazy { MutableStateFlow(readOrNull(Keys.OPENAI_KEY)) }
+    private val _openAIModelFlow by lazy { MutableStateFlow(readOrNull(Keys.OPENAI_MODEL)) }
+    private val _anthropicKeyFlow by lazy { MutableStateFlow(readOrNull(Keys.ANTHROPIC_KEY)) }
+    private val _anthropicModelFlow by lazy { MutableStateFlow(readOrNull(Keys.ANTHROPIC_MODEL)) }
+    private val _googleKeyFlow by lazy { MutableStateFlow(readOrNull(Keys.GOOGLE_KEY)) }
+    private val _googleModelFlow by lazy { MutableStateFlow(readOrNull(Keys.GOOGLE_MODEL)) }
+    private val _deepSeekKeyFlow by lazy { MutableStateFlow(readOrNull(Keys.DEEPSEEK_KEY)) }
+    private val _deepSeekModelFlow by lazy { MutableStateFlow(readOrNull(Keys.DEEPSEEK_MODEL)) }
+    private val _ollamaUrlFlow by lazy { MutableStateFlow(readOrNull(Keys.OLLAMA_URL)) }
+    private val _ollamaModelFlow by lazy { MutableStateFlow(readOrNull(Keys.OLLAMA_MODEL)) }
     private val _ollamaContextFlow by lazy {
-        MutableStateFlow(sharedPreferences.getInt(Keys.OLLAMA_CONTEXT, SettingsDefaults.OLLAMA_CONTEXT_WINDOW_DEFAULT))
+        MutableStateFlow(
+            readOrNull(Keys.OLLAMA_CONTEXT)?.toIntOrNull() ?: SettingsDefaults.OLLAMA_CONTEXT_WINDOW_DEFAULT,
+        )
     }
 
     override fun getOpenAIKey(): Flow<String?> = _openAIKeyFlow.asStateFlow()
@@ -180,19 +150,35 @@ class ApiKeyManager @Inject constructor(@ApplicationContext private val context:
     override fun getOllamaContextWindowSize(): Flow<Int> = _ollamaContextFlow.asStateFlow()
 
     override suspend fun setOllamaContextWindowSize(size: Int) {
-        sharedPreferences.edit {
-            putInt(Keys.OLLAMA_CONTEXT, size)
-        }
+        store.putString(Keys.OLLAMA_CONTEXT, size.toString())
         _ollamaContextFlow.value = size
     }
 
+    /**
+     * Reads a stored value, applying the re-enterable-secret recovery policy: an entry that
+     * cannot be decrypted is dropped and reported as absent instead of propagating the error.
+     */
+    private fun readOrNull(key: String): String? = try {
+        store.getString(key)
+    } catch (e: SecureValueUnreadableException) {
+        Timber.e(e, "Stored API-key entry '%s' is unreadable; treating it as unset.", key)
+        store.remove(key)
+        null
+    }
+
     private fun saveString(key: String, value: String?) {
-        sharedPreferences.edit {
-            if (value == null) {
-                remove(key)
-            } else {
-                putString(key, value)
-            }
+        if (value == null) {
+            store.remove(key)
+        } else {
+            store.putString(key, value)
         }
+    }
+
+    private companion object {
+        /** Name of the [KeystoreBackedPrefsStore] preferences file holding the API keys. */
+        const val PREFS_NAME = "secure_api_keys_v2"
+
+        /** Android Keystore alias of the AEAD key dedicated to the API-key store. */
+        const val KEY_ALIAS = "knotwork.api_keys"
     }
 }

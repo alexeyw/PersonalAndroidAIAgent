@@ -727,9 +727,6 @@ dependencies {
     // on the first network call.
     implementation(libs.koog.http.client.ktor)
 
-    // Security Crypto
-    implementation(libs.androidx.security.crypto)
-
     // SQLCipher for Android (encrypted Room database)
     implementation(libs.sqlcipher.android)
 

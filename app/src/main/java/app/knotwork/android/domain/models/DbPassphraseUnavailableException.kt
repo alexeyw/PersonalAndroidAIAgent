@@ -14,7 +14,7 @@ package app.knotwork.android.domain.models
  *
  * @property reason The specific failure mode that prevented passphrase retrieval.
  * @param cause The underlying throwable, when the failure originated from a
- *   lower-level API (e.g. `EncryptedSharedPreferences` failing to open).
+ *   lower-level API (e.g. an authenticated decryption failing).
  */
 class DbPassphraseUnavailableException(val reason: Reason, cause: Throwable? = null) :
     Exception("Database passphrase unavailable: $reason", cause) {
@@ -24,8 +24,13 @@ class DbPassphraseUnavailableException(val reason: Reason, cause: Throwable? = n
      * unavailable while the encrypted database file still exists.
      */
     enum class Reason {
-        /** The encrypted preferences file backing the passphrase could not be opened. */
-        PREFS_OPEN_FAILED,
+        /**
+         * A passphrase entry is stored but cannot be decrypted — the Android
+         * Keystore key backing the store is missing or rejects the blob, or
+         * the blob fails authentication. Keystore failures are frequently
+         * transient (backup/restore, OS update), so a retry may succeed.
+         */
+        DECRYPTION_FAILED,
 
         /** The preferences opened fine but contain no passphrase entry. */
         PASSPHRASE_MISSING,

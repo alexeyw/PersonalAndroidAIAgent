@@ -393,7 +393,7 @@ can map a free-text model id to a concrete Koog `LLModel`.
 
 ### 3.4. Store the API key securely
 
-API keys live in `EncryptedSharedPreferences` only — never in
+API keys live in the Keystore-backed encrypted store only — never in
 DataStore, never in `local.properties`, never committed to git.
 
 - Add a new key constant in

@@ -51,6 +51,27 @@ details.
 
 ### Changed
 
+- **⚠ BREAKING (local data): secret storage replaced —
+  `EncryptedSharedPreferences` → direct Android Keystore wrapper.** The
+  deprecated `androidx.security:security-crypto` library (no further
+  upstream development past its final `1.1.0` line) has been removed
+  entirely. The SQLCipher database passphrase and the cloud-provider API
+  keys now live in a small in-house store: a plain preferences file whose
+  values are encrypted with **AES-256-GCM under a dedicated,
+  non-exportable Android Keystore key**, each ciphertext authenticated
+  against its storage slot so blobs cannot be swapped between entries.
+  With the data key residing directly in the Keystore there is no
+  intermediate wrapped-keyset file left to corrupt — the failure surface
+  shrinks to "Keystore key lost", which the startup recovery screen
+  already handles. Recovery semantics are preserved: the passphrase is
+  never regenerated while a database exists (failures route to the
+  recovery screen), while an undecryptable API key is treated as unset
+  and simply re-entered. **There is no data migration** (as permitted by
+  the pre-release storage policy): an install upgraded across this change
+  boots into the startup recovery screen, where continuing requires the
+  explicit data wipe, and saved API keys must be re-entered. Export
+  chats, memory, and pipelines through the in-app export actions
+  *before* upgrading if you want to keep them.
 - **Chat home screen state consolidated into a single immutable snapshot.**
   The chat-home ViewModel previously exposed ~25 independent `StateFlow`
   properties (composer text, console pane, HITL/clarification snapshots,

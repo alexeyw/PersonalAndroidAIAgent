@@ -10,9 +10,9 @@ package app.knotwork.android.domain.models
  *
  * Storage note: tokens / passwords live in the same JSON-encoded
  * `MCP_SERVERS_JSON` DataStore entry as the rest of the config. They
- * are **not** routed through `EncryptedSharedPreferences` today — the
- * threat model matches the existing arbitrary-headers field. Hardening
- * this to use the encrypted store is tracked as a follow-up.
+ * are **not** routed through the Keystore-backed encrypted store today
+ * — the threat model matches the existing arbitrary-headers field.
+ * Hardening this to use the encrypted store is tracked as a follow-up.
  */
 sealed interface McpAuth {
     /** No authentication. */

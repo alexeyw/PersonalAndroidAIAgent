@@ -128,8 +128,8 @@ configured it.
   and exporting pipelines without launching the app.
 - Opt-in Firebase Crashlytics for anonymous crash reporting — off by
   default, never collects message content. See [SECURITY.md](SECURITY.md).
-- At-rest encryption: Room database is SQLCipher-encrypted, API keys live
-  in `EncryptedSharedPreferences` backed by the Android Keystore.
+- At-rest encryption: Room database is SQLCipher-encrypted, API keys are
+  encrypted with AES-GCM under a dedicated Android Keystore key.
 
 ## Screenshots
 

@@ -10,8 +10,8 @@ import kotlinx.coroutines.flow.Flow
 /**
  * Repository interface for managing application-wide settings and user
  * preferences. Provides abstraction over the underlying persistence
- * mechanism (DataStore + EncryptedSharedPreferences for the secret
- * payloads).
+ * mechanism (DataStore + the Keystore-backed encrypted store for the
+ * secret payloads).
  *
  * The interface is intentionally large; per-feature splits (Sampling /
  * Identity / Memory) are planned post-v0.1. The detekt suppression is
