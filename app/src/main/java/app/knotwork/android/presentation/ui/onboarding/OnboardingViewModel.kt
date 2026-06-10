@@ -124,7 +124,7 @@ class OnboardingViewModel @Inject constructor(
      * Streams the actual saved-key state for every cloud provider and
      * folds it into [OnboardingViewState.configuredCloudProviders]. The
      * "Configured" pill on step 3 is then a *truthful* signal — it
-     * reflects what's persisted in `EncryptedSharedPreferences`, not
+     * reflects what's persisted in the encrypted key store, not
      * which row the user happened to tap.
      *
      * Per provider:

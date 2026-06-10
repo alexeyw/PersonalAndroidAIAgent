@@ -11,6 +11,7 @@ import app.knotwork.android.domain.repositories.PromptPresetRepository
 import app.knotwork.android.domain.usecases.SavePromptAsPresetUseCase
 import app.knotwork.android.presentation.ui.common.UiText
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -99,6 +100,8 @@ class PromptLibraryViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 promptPresetRepository.deleteUserPreset(id)
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 _uiState.update {
                     it.copy(

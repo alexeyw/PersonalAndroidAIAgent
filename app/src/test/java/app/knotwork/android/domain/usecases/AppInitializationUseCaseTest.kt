@@ -1,6 +1,8 @@
 package app.knotwork.android.domain.usecases
 
 import app.knotwork.android.domain.models.AppError
+import app.knotwork.android.domain.models.DbPassphraseUnavailableException
+import app.knotwork.android.domain.models.InitFailureKind
 import app.knotwork.android.domain.models.InitStage
 import app.knotwork.android.domain.models.MemorySummary
 import app.knotwork.android.domain.models.PipelineGraph
@@ -154,6 +156,34 @@ class AppInitializationUseCaseTest {
         assertTrue(terminal.stage is InitStage.Failed)
         val failed = terminal.stage as InitStage.Failed
         assertEquals(InitStage.LoadingMemory, failed.failedStage)
+    }
+
+    @Test
+    fun `given passphrase exception in cause chain when invoked then Failed is classified as data-locked`() = runTest {
+        // Room / the open-helper stack may wrap the original exception, so the
+        // classifier must walk the cause chain rather than type-check the top.
+        val wrapped = RuntimeException(
+            "unable to open database",
+            DbPassphraseUnavailableException(DbPassphraseUnavailableException.Reason.DECRYPTION_FAILED),
+        )
+        coEvery { pipelineRepository.getAllPipelines() } returns flow { throw wrapped }
+
+        val emissions = useCase().toList()
+
+        val failed = emissions.last().stage as InitStage.Failed
+        assertEquals(InitFailureKind.DB_PASSPHRASE_UNAVAILABLE, failed.failureKind)
+    }
+
+    @Test
+    fun `given generic exception when invoked then Failed keeps GENERIC failure kind`() = runTest {
+        coEvery { pipelineRepository.getAllPipelines() } returns flow {
+            throw RuntimeException("pipeline read failed")
+        }
+
+        val emissions = useCase().toList()
+
+        val failed = emissions.last().stage as InitStage.Failed
+        assertEquals(InitFailureKind.GENERIC, failed.failureKind)
     }
 
     @Test

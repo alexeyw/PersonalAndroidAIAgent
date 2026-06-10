@@ -93,8 +93,11 @@ interface Tool {
   (thread-safe).
 - Connections are lazy: they open on first use and close when the agent
   session ends.
-- Wrap every MCP call in `runCatching` and map errors to
-  `ToolResult.Error`.
+- Every MCP call is wrapped in `try`/`catch` that **re-throws
+  `CancellationException` from a dedicated first catch clause** and maps all
+  other failures to `ToolResult.Error`. `runCatching` is never used around
+  these (suspending) calls — it would swallow cancellation; see
+  [code-style.md](code-style.md) § Coroutines & Flow.
 
 ---
 
@@ -102,9 +105,11 @@ interface Tool {
 
 - All cloud providers implement the domain interface
   `CloudLlmClientFactory` (data-layer impl: `KoogClientFactory`).
-- API keys are stored in **`EncryptedSharedPreferences` only** — never in
-  plain DataStore, log files, exported pipelines, or anything committed to
-  the repository.
+- API keys are stored in **the Keystore-backed encrypted store only**
+  (`KeystoreBackedPrefsStore` — AES-GCM under a dedicated Android Keystore
+  key; see [architecture.md](architecture.md) §5.2) — never in plain
+  DataStore, log files, exported pipelines, or anything committed to the
+  repository.
 - Requests include a `timeout` of 60 seconds (OkHttp).
 - Use the unified `CLOUD` pipeline node with a `provider` parameter — do
   not add per-provider node types to the pipeline graph.

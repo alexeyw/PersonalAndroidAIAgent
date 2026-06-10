@@ -1,6 +1,7 @@
 package app.knotwork.android.domain.usecases
 
 import app.knotwork.android.domain.repositories.PipelineRepository
+import kotlinx.coroutines.CancellationException
 import javax.inject.Inject
 
 /**
@@ -35,6 +36,8 @@ class DeletePipelineUseCase @Inject constructor(private val pipelineRepository: 
         return try {
             pipelineRepository.deletePipeline(pipelineId)
             Result.success(Unit)
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             Result.failure(e)
         }

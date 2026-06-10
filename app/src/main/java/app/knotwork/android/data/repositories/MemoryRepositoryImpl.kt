@@ -11,10 +11,9 @@ import app.knotwork.android.domain.models.MemorySummary
 import app.knotwork.android.domain.repositories.MemoryRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.withContext
+import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.math.sqrt
@@ -27,29 +26,18 @@ import kotlin.math.sqrt
 class MemoryRepositoryImpl @Inject constructor(private val memoryDao: MemoryDao, private val converters: Converters) :
     MemoryRepository {
 
-    /**
-     * Rolling average of the cosine similarity scores observed across the
-     * most recent `findSimilarMemories` calls. Read by [observeStats] and
-     * surfaced as the AVG SCORE stat cell in Settings → Memory.
-     *
-     * `null` until the user (or the agent on their behalf) performs at
-     * least one similarity search. Bounded to the last 32 observations so
-     * the value reflects recent behaviour, not the entire app lifetime.
-     */
-    private val recentSimilarityScores = MutableStateFlow<List<Float>>(emptyList())
-
     override suspend fun saveMemory(
         text: String,
         embedding: FloatArray,
         source: MemorySource,
         tags: List<String>,
     ): Long = withContext(Dispatchers.IO) {
-        val embeddingString = converters.fromFloatArray(embedding)
+        val embeddingBlob = converters.fromFloatArray(embedding)
             ?: throw IllegalArgumentException("Failed to serialize embedding")
 
         val entity = MemoryChunkEntity(
             text = text,
-            embedding = embeddingString,
+            embedding = embeddingBlob,
             timestamp = System.currentTimeMillis(),
             source = source,
             tagsCsv = TagsCsv.encode(tags),
@@ -69,36 +57,36 @@ class MemoryRepositoryImpl @Inject constructor(private val memoryDao: MemoryDao,
         }
     }
 
-    override suspend fun findSimilarMemories(
-        queryEmbedding: FloatArray,
-        searchPoolLimit: Int,
-        limit: Int,
-    ): List<Pair<MemoryChunk, Float>> = withContext(Dispatchers.Default) {
-        val recentMemories = memoryDao.getRecentMemories(searchPoolLimit).mapNotNull { entity ->
-            entity.toMemoryChunkOrNull()
-        }
-
-        val ranked = recentMemories.map { memory ->
-            val similarity = cosineSimilarity(queryEmbedding, memory.embedding)
-            memory to similarity
-        }
-            .sortedByDescending { it.second }
-            .take(limit)
-
-        // Record the strongest few scores so the Settings stats card surfaces a
-        // representative average. Only the head of the ranked list is sampled
-        // (not the whole returned set): retrieval now asks for the full scored
-        // pool to feed re-ranking, and folding hundreds of low-similarity tail
-        // scores into the window would drag the AVG SCORE cell toward zero.
-        val newScores = ranked.take(STATS_SAMPLE_SIZE).map { it.second }
-        if (newScores.isNotEmpty()) {
-            recentSimilarityScores.update { previous ->
-                (previous + newScores).takeLast(RECENT_SIMILARITY_WINDOW)
+    override suspend fun findSimilarMemories(queryEmbedding: FloatArray, limit: Int?): List<Pair<MemoryChunk, Float>> =
+        withContext(Dispatchers.Default) {
+            // Full-table scan, deliberately: a recency window here would make old
+            // but relevant chunks invisible to retrieval regardless of similarity
+            // (see the interface KDoc). The pool stays bounded by the compaction
+            // hard-limit; the warning below flags the pathological case where the
+            // linear scan starts to cost real time.
+            val startedAtNanos = System.nanoTime()
+            val pool = memoryDao.getAllMemories().mapNotNull { entity ->
+                entity.toMemoryChunkOrNull()
             }
-        }
+            if (pool.size > SEARCH_POOL_WARN_THRESHOLD) {
+                Timber.w(
+                    "Memory similarity search is scanning %d chunks; expect degraded latency",
+                    pool.size,
+                )
+            }
 
-        ranked
-    }
+            val ranked = pool.map { memory ->
+                val similarity = cosineSimilarity(queryEmbedding, memory.embedding)
+                memory to similarity
+            }.sortedByDescending { it.second }
+            Timber.d(
+                "findSimilarMemories scanned %d chunks in %d ms",
+                pool.size,
+                (System.nanoTime() - startedAtNanos) / NANOS_PER_MILLI,
+            )
+
+            if (limit != null) ranked.take(limit) else ranked
+        }
 
     override suspend fun compactMemory(keepLimit: Int) = withContext(Dispatchers.IO) {
         memoryDao.deleteOldestMemories(keepLimit)
@@ -120,19 +108,19 @@ class MemoryRepositoryImpl @Inject constructor(private val memoryDao: MemoryDao,
     }
 
     override suspend fun updateMemory(id: Long, text: String, embedding: FloatArray) = withContext(Dispatchers.IO) {
-        val embeddingString = converters.fromFloatArray(embedding)
+        val embeddingBlob = converters.fromFloatArray(embedding)
             ?: throw IllegalArgumentException("Failed to serialize embedding")
-        memoryDao.updateMemory(id = id, text = text, embedding = embeddingString)
+        memoryDao.updateMemory(id = id, text = text, embedding = embeddingBlob)
     }
 
     override suspend fun updateMemoryWithTags(id: Long, text: String, embedding: FloatArray, tags: List<String>) =
         withContext(Dispatchers.IO) {
-            val embeddingString = converters.fromFloatArray(embedding)
+            val embeddingBlob = converters.fromFloatArray(embedding)
                 ?: throw IllegalArgumentException("Failed to serialize embedding")
             memoryDao.updateMemoryWithTags(
                 id = id,
                 text = text,
-                embedding = embeddingString,
+                embedding = embeddingBlob,
                 tagsCsv = TagsCsv.encode(tags),
             )
         }
@@ -154,7 +142,6 @@ class MemoryRepositoryImpl @Inject constructor(private val memoryDao: MemoryDao,
 
     override suspend fun deleteAllMemories() = withContext(Dispatchers.IO) {
         memoryDao.deleteAllMemories()
-        recentSimilarityScores.value = emptyList()
     }
 
     override suspend fun getExistingMemoryIds(): Set<Long> = withContext(Dispatchers.IO) {
@@ -180,7 +167,7 @@ class MemoryRepositoryImpl @Inject constructor(private val memoryDao: MemoryDao,
     override suspend fun getMemoriesNeedingReembedding(): List<MemoryChunk> = withContext(Dispatchers.IO) {
         // Deliberately lenient (no `mapNotNull` drop): the re-embed pass recomputes
         // the vector from `text` and ignores the stored embedding, so a row whose
-        // embedding string is unparseable must still be returned — otherwise it
+        // embedding blob is unusable must still be returned — otherwise it
         // would be dropped here yet keep counting in `countNeedingReembedding`,
         // re-arming the worker on every startup as a permanent no-op. A bad
         // embedding falls back to an empty array (the caller never reads it).
@@ -188,10 +175,7 @@ class MemoryRepositoryImpl @Inject constructor(private val memoryDao: MemoryDao,
             MemoryChunk(
                 id = entity.id,
                 text = entity.text,
-                // runCatching: toFloatArray throws on a non-numeric string and
-                // returns null on a blank one; either way a corrupt embedding
-                // falls back to empty so the row is still returned and repaired.
-                embedding = runCatching { converters.toFloatArray(entity.embedding) }.getOrNull() ?: FloatArray(0),
+                embedding = converters.toFloatArray(entity.embedding) ?: FloatArray(0),
                 timestamp = entity.timestamp,
                 isPinned = entity.isPinned,
                 source = entity.source,
@@ -211,11 +195,11 @@ class MemoryRepositoryImpl @Inject constructor(private val memoryDao: MemoryDao,
      */
     private fun List<MemoryChunk>.toImportEntities(needsReembedding: Boolean): List<MemoryChunkEntity> =
         mapNotNull { chunk ->
-            val embeddingString = converters.fromFloatArray(chunk.embedding) ?: return@mapNotNull null
+            val embeddingBlob = converters.fromFloatArray(chunk.embedding) ?: return@mapNotNull null
             MemoryChunkEntity(
                 id = chunk.id,
                 text = chunk.text,
-                embedding = embeddingString,
+                embedding = embeddingBlob,
                 timestamp = chunk.timestamp,
                 isPinned = chunk.isPinned,
                 source = chunk.source,
@@ -225,33 +209,32 @@ class MemoryRepositoryImpl @Inject constructor(private val memoryDao: MemoryDao,
         }
 
     override suspend fun markMemoryReembedded(id: Long, embedding: FloatArray) = withContext(Dispatchers.IO) {
-        val embeddingString = converters.fromFloatArray(embedding)
+        val embeddingBlob = converters.fromFloatArray(embedding)
             ?: throw IllegalArgumentException("Failed to serialize embedding")
-        memoryDao.markReembedded(id = id, embedding = embeddingString)
+        memoryDao.markReembedded(id = id, embedding = embeddingBlob)
     }
 
     override fun observeStats(): Flow<MemoryStats> = combine(
         memoryDao.observeChunkCount(),
         memoryDao.observeTotalBytes(),
-        recentSimilarityScores,
-    ) { chunkCount, totalBytes, scores ->
+    ) { chunkCount, totalBytes ->
         MemoryStats(
             chunkCount = chunkCount,
             totalBytes = totalBytes,
             // Thread attribution lands in a follow-up — v0.1 reports zero
             // and the UI then renders a dash for the THREADS stat cell.
             threadCount = 0,
-            averageSimilarityScore = scores.takeIf { it.isNotEmpty() }?.average()?.toFloat(),
         )
     }
 
     /**
      * Maps a persisted [MemoryChunkEntity] to its domain [MemoryChunk],
-     * deserialising the comma-encoded embedding. Returns `null` when the
-     * embedding column cannot be parsed so a single corrupt row is skipped
-     * rather than aborting the whole load.
+     * decoding the binary-encoded embedding. Returns `null` when the
+     * embedding blob carries no usable vector (empty marker or corrupt
+     * length) so a single bad row is skipped rather than aborting the
+     * whole load.
      *
-     * @return The domain chunk, or `null` if the embedding failed to deserialise.
+     * @return The domain chunk, or `null` if the embedding failed to decode.
      */
     private fun MemoryChunkEntity.toMemoryChunkOrNull(): MemoryChunk? {
         val embeddingArray = converters.toFloatArray(embedding) ?: return null
@@ -297,14 +280,16 @@ class MemoryRepositoryImpl @Inject constructor(private val memoryDao: MemoryDao,
     }
 
     private companion object {
-        /** Number of recent cosine-similarity scores tracked for the AVG SCORE stat cell. */
-        const val RECENT_SIMILARITY_WINDOW: Int = 32
-
         /**
-         * Per-call cap on how many of the ranked scores feed the AVG SCORE
-         * window. Keeps the stat anchored to the strongest hits even when a
-         * caller requests a large pool for re-ranking.
+         * Pool size above which [findSimilarMemories] logs a warning: the
+         * linear cosine scan over every stored chunk starts to take a
+         * user-noticeable amount of time around this many rows. Purely a
+         * diagnostic — the search still scans the full pool, because cutting
+         * candidates by recency would silently expire old facts.
          */
-        const val STATS_SAMPLE_SIZE: Int = 5
+        const val SEARCH_POOL_WARN_THRESHOLD: Int = 5_000
+
+        /** Nanoseconds per millisecond, for the retrieval timing log. */
+        const val NANOS_PER_MILLI: Long = 1_000_000L
     }
 }

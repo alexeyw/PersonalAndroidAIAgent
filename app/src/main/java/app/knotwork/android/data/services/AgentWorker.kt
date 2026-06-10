@@ -9,6 +9,7 @@ import app.knotwork.android.domain.models.AgentOrchestratorState
 import app.knotwork.android.domain.usecases.AgentOrchestratorUseCase
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
+import kotlinx.coroutines.CancellationException
 import timber.log.Timber
 
 /**
@@ -58,6 +59,11 @@ class AgentWorker @AssistedInject constructor(
 
             Timber.d("AgentWorker completed with state: \$finalState")
             Result.success()
+        } catch (e: CancellationException) {
+            // WorkManager cancels the worker by cancelling this coroutine —
+            // mapping the cancellation to `retry()` would resurrect a job the
+            // system (or the user) just killed.
+            throw e
         } catch (e: Exception) {
             Timber.e(e, "AgentWorker encountered an error.")
             Result.retry()

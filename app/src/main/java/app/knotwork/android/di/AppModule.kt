@@ -9,6 +9,7 @@ import androidx.room.Room
 import androidx.work.WorkManager
 import app.knotwork.android.data.local.AppDatabase
 import app.knotwork.android.data.local.Converters
+import app.knotwork.android.data.local.DeferredPassphraseOpenHelperFactory
 import app.knotwork.android.data.local.EncryptedDbPassphraseProvider
 import app.knotwork.android.data.local.dao.ChatDao
 import app.knotwork.android.data.local.dao.LocalModelDao
@@ -48,7 +49,6 @@ import javax.inject.Singleton
 object AppModule {
 
     private const val USER_PREFERENCES_NAME = "agent_preferences"
-    private const val DATABASE_NAME = "agent_database.db"
 
     /**
      * Provides the singleton instance of the DataStore preferences.
@@ -64,7 +64,8 @@ object AppModule {
      * Provides the singleton instance of the Room Database.
      *
      * The database is encrypted at rest via SQLCipher. A random 32-byte passphrase is stored
-     * in [androidx.security.crypto.EncryptedSharedPreferences] (master key in Android Keystore).
+     * in a [app.knotwork.android.data.local.crypto.KeystoreBackedPrefsStore] (AES-GCM under a
+     * dedicated Android Keystore key).
      *
      * **Migration policy.** Every schema-version bump is backed by an explicit
      * [androidx.room.migration.Migration] registered through [addMigrations]; the full chain is
@@ -81,12 +82,38 @@ object AppModule {
      * Legacy plaintext databases from pre-SQLCipher development builds (which predate the public
      * release) are not supported: SQLCipher cannot open them and there is no downgrade path to
      * recreate them. This affects only such dev installs, never a released version.
+     *
+     * **Passphrase deferral.** The passphrase is intentionally NOT fetched here: this provider
+     * runs synchronously during Hilt injection (often on the main thread while a ViewModel is
+     * being constructed), so a passphrase failure here would crash the app before any UI error
+     * handling exists. [DeferredPassphraseOpenHelperFactory] postpones the fetch to the first
+     * real database open, where `AppInitializationUseCase` catches the failure and routes it to
+     * the splash recovery screen.
      */
+    /**
+     * Provides the deferred SQLCipher open-helper factory as its own singleton so the
+     * user-confirmed data wipe ([app.knotwork.android.data.local.DatabaseResetServiceImpl])
+     * can run inside [DeferredPassphraseOpenHelperFactory.runExclusive], serialized against
+     * every concurrent database open.
+     *
+     * sqlcipher-android retains the passphrase array for the helper's lifetime (it re-keys
+     * every pooled connection from it — unlike the legacy android-database-sqlcipher, it never
+     * zeroes the array); the provider hands over a fresh copy, so the retained array never
+     * aliases the stored value.
+     */
+    @Provides
+    @Singleton
+    fun provideDeferredPassphraseOpenHelperFactory(
+        passphraseProvider: EncryptedDbPassphraseProvider,
+    ): DeferredPassphraseOpenHelperFactory = DeferredPassphraseOpenHelperFactory(passphraseProvider) { passphrase ->
+        SupportOpenHelperFactory(passphrase)
+    }
+
     @Provides
     @Singleton
     fun provideAppDatabase(
         @ApplicationContext appContext: Context,
-        passphraseProvider: EncryptedDbPassphraseProvider,
+        factory: DeferredPassphraseOpenHelperFactory,
     ): AppDatabase {
         // net.zetetic:sqlcipher-android does NOT auto-load its native library the way the
         // legacy android-database-sqlcipher did. Without this explicit load, the first call
@@ -94,15 +121,10 @@ object AppModule {
         // idempotent, so calling it here (inside the @Singleton provider) is safe.
         System.loadLibrary("sqlcipher")
 
-        val passphrase = passphraseProvider.getOrCreatePassphrase()
-
-        // SupportOpenHelperFactory zeroes the byte array after consumption.
-        val factory = SupportOpenHelperFactory(passphrase)
-
         return Room.databaseBuilder(
             appContext,
             AppDatabase::class.java,
-            DATABASE_NAME,
+            AppDatabase.DATABASE_NAME,
         )
             .openHelperFactory(factory)
             .addMigrations(
@@ -125,6 +147,7 @@ object AppModule {
                 AppDatabase.MIGRATION_25_26,
                 AppDatabase.MIGRATION_26_27,
                 AppDatabase.MIGRATION_27_28,
+                AppDatabase.MIGRATION_28_29,
             )
             // No destructive fallback on upgrade: every version bump must supply an explicit
             // migration above so user data survives. Destructive recreation is kept only for the

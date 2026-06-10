@@ -63,4 +63,29 @@ class WorkManagerMemoryReembedSchedulerTest {
             workManager.enqueueUniqueWork(any(), any<ExistingWorkPolicy>(), any<OneTimeWorkRequest>())
         }
     }
+
+    @Test
+    fun `rearmIfPending swallows database failures instead of crashing the caller`() = runTest {
+        // The re-arm is fire-and-forget startup work: when the DB cannot be opened (e.g.
+        // SQLCipher passphrase unavailable — handled by the splash recovery screen), the
+        // call must skip quietly rather than crash the unguarded launching coroutine.
+        coEvery { memoryRepository.countMemoriesNeedingReembedding() } throws
+            IllegalStateException("database unavailable")
+
+        scheduler().rearmIfPending()
+
+        verify(exactly = 0) {
+            workManager.enqueueUniqueWork(any(), any<ExistingWorkPolicy>(), any<OneTimeWorkRequest>())
+        }
+    }
+
+    @Test
+    fun `rearmIfPending rethrows cancellation`() = runTest {
+        coEvery { memoryRepository.countMemoriesNeedingReembedding() } throws
+            kotlinx.coroutines.CancellationException("scope cancelled")
+
+        val thrown = runCatching { scheduler().rearmIfPending() }.exceptionOrNull()
+
+        assertEquals(true, thrown is kotlinx.coroutines.CancellationException)
+    }
 }

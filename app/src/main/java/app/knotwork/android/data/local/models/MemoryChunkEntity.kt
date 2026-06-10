@@ -10,7 +10,12 @@ import app.knotwork.android.domain.models.MemorySource
  *
  * @property id The unique auto-generated identifier for this memory chunk.
  * @property text The raw text content of the memory.
- * @property embedding The float array representing the text embedding, stored as a serialized string (e.g., comma-separated values).
+ * @property embedding The text's embedding vector encoded into a BLOB —
+ *   little-endian IEEE-754 floats, 4 bytes per component, no header (see
+ *   [app.knotwork.android.data.local.EmbeddingBlobCodec]). A zero-length blob
+ *   means "no usable embedding": the TEXT → BLOB migration writes it for
+ *   legacy rows whose string-encoded embedding could not be parsed, keeping
+ *   the row visible to the re-embedding repair path instead of deleting it.
  * @property timestamp The time the memory was recorded, in milliseconds since epoch.
  * @property isPinned When `true`, the user marked this chunk so it should sort
  *   ahead of unpinned rows in the memory surface and survive future
@@ -38,7 +43,7 @@ data class MemoryChunkEntity(
     @PrimaryKey(autoGenerate = true)
     val id: Long = 0,
     val text: String,
-    val embedding: String,
+    val embedding: ByteArray,
     val timestamp: Long,
     val isPinned: Boolean = false,
     @ColumnInfo(name = "source", defaultValue = MemoryChunkEntity.SOURCE_DEFAULT_JSON)
@@ -52,6 +57,42 @@ data class MemoryChunkEntity(
     @ColumnInfo(name = "needsReembedding", defaultValue = "0")
     val needsReembedding: Boolean = false,
 ) {
+    /**
+     * Structural equality. Hand-written because the [embedding] array would
+     * otherwise compare by reference in the data-class-generated `equals`,
+     * making two identical rows unequal.
+     */
+    @Suppress("CyclomaticComplexMethod")
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (other !is MemoryChunkEntity) return false
+        return id == other.id &&
+            text == other.text &&
+            embedding.contentEquals(other.embedding) &&
+            timestamp == other.timestamp &&
+            isPinned == other.isPinned &&
+            source == other.source &&
+            tagsCsv == other.tagsCsv &&
+            useCount == other.useCount &&
+            lastUsedAt == other.lastUsedAt &&
+            needsReembedding == other.needsReembedding
+    }
+
+    /** Structural hash consistent with [equals] ([embedding] hashes by content). */
+    override fun hashCode(): Int {
+        var result = id.hashCode()
+        result = 31 * result + text.hashCode()
+        result = 31 * result + embedding.contentHashCode()
+        result = 31 * result + timestamp.hashCode()
+        result = 31 * result + isPinned.hashCode()
+        result = 31 * result + source.hashCode()
+        result = 31 * result + tagsCsv.hashCode()
+        result = 31 * result + useCount
+        result = 31 * result + (lastUsedAt?.hashCode() ?: 0)
+        result = 31 * result + needsReembedding.hashCode()
+        return result
+    }
+
     companion object {
         /**
          * SQL-level default for the `source` column. Mirrors the JSON the

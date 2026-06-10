@@ -100,7 +100,13 @@ class TestBackendUseCase @Inject constructor(
     private suspend fun persistAndReturn(result: TestProbeResult): TestProbeResult {
         settingsRepository.setLastTestProbeResult(result)
         // Force a read so DataStore writes flush before the caller observes the row.
-        runCatching { settingsRepository.lastTestProbeResult.first() }
+        try {
+            settingsRepository.lastTestProbeResult.first()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Throwable) {
+            // Best-effort flush — the probe result is already persisted.
+        }
         return result
     }
 

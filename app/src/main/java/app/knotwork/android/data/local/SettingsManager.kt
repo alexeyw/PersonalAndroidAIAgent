@@ -1,5 +1,6 @@
 package app.knotwork.android.data.local
 
+import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
@@ -8,6 +9,9 @@ import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
+import app.knotwork.android.data.local.crypto.AeadCipher
+import app.knotwork.android.data.local.crypto.KeystoreBackedPrefsStore
+import app.knotwork.android.data.local.crypto.SecureValueUnreadableException
 import app.knotwork.android.domain.constants.DefaultPrompts
 import app.knotwork.android.domain.constants.SettingsDefaults
 import app.knotwork.android.domain.models.LocalBackend
@@ -19,10 +23,17 @@ import app.knotwork.android.domain.models.ToolApprovalPolicy
 import app.knotwork.android.domain.models.ToolRisk
 import app.knotwork.android.domain.models.UpdateMcpServerResult
 import app.knotwork.android.domain.repositories.SettingsRepository
+import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import org.json.JSONArray
 import org.json.JSONException
 import org.json.JSONObject
@@ -33,10 +44,29 @@ import javax.inject.Inject
 /**
  * Concrete implementation of [SettingsRepository] utilizing Androidx DataStore Preferences.
  *
+ * Secret payloads are **not** kept in DataStore: the HuggingFace access token lives in a
+ * [KeystoreBackedPrefsStore] (AES-GCM under a dedicated Android Keystore key), with the same
+ * re-enterable-secret recovery policy as [ApiKeyManager] — an undecryptable value is dropped
+ * and reported as unset. A token persisted by earlier releases in plain DataStore is migrated
+ * into the encrypted store on the first read and removed from DataStore.
+ *
  * @property dataStore The underlying DataStore instance for persistence.
+ * @property context The application context backing the encrypted secrets store.
+ * @param cipher The AEAD boundary used to protect stored secrets.
  */
 @Suppress("LargeClass") // 31-field DataStore facade by design; per-section split planned post-v0.1.
-class SettingsManager @Inject constructor(private val dataStore: DataStore<Preferences>) : SettingsRepository {
+class SettingsManager @Inject constructor(
+    private val dataStore: DataStore<Preferences>,
+    @ApplicationContext private val context: Context,
+    cipher: AeadCipher,
+) : SettingsRepository {
+
+    private val secretsStore = KeystoreBackedPrefsStore(
+        context = context,
+        prefsName = SECRETS_PREFS_NAME,
+        keyAlias = SECRETS_KEY_ALIAS,
+        cipher = cipher,
+    )
 
     private object PreferencesKeys {
         val IS_FIRST_LAUNCH = booleanPreferencesKey("is_first_launch")
@@ -55,7 +85,6 @@ class SettingsManager @Inject constructor(private val dataStore: DataStore<Prefe
         val DISABLED_MCP_TOOLS = stringSetPreferencesKey("disabled_mcp_tools")
         val APP_FUNCTION_RISK_OVERRIDES = stringPreferencesKey("app_function_risk_overrides")
         val CURRENT_CHAT_SESSION_ID = stringPreferencesKey("current_chat_session_id")
-        val MAX_MEMORY_CHUNKS_FOR_SEARCH = intPreferencesKey("max_memory_chunks_for_search")
         val MEMORY_LAST_COMPACTED_AT =
             androidx.datastore.preferences.core.longPreferencesKey("memory_last_compacted_at")
         val MEMORY_SEARCH_TOP_K = intPreferencesKey("memory_search_top_k")
@@ -93,6 +122,7 @@ class SettingsManager @Inject constructor(private val dataStore: DataStore<Prefe
 
         // Embedding provider abstraction.
         val ACTIVE_EMBEDDING_PROVIDER_ID = stringPreferencesKey("active_embedding_provider_id")
+        val LAST_REEMBED_PROVIDER_ID = stringPreferencesKey("last_reembed_provider_id")
 
         // Memory write auto-extraction.
         val AUTO_EXTRACT_ENABLED = booleanPreferencesKey("auto_extract_enabled")
@@ -104,6 +134,14 @@ class SettingsManager @Inject constructor(private val dataStore: DataStore<Prefe
 
         // Memory observability.
         val VERBOSE_MEMORY_LOGGING_ENABLED = booleanPreferencesKey("verbose_memory_logging_enabled")
+    }
+
+    /**
+     * Entry names inside [secretsStore]. Distinct from [PreferencesKeys]: these are slots in
+     * the Keystore-backed encrypted store, not DataStore preference keys.
+     */
+    private object SecretKeys {
+        const val HUGGING_FACE_TOKEN = "hugging_face_token"
     }
 
     override val isFirstLaunch: Flow<Boolean> = dataStore.data
@@ -144,26 +182,80 @@ class SettingsManager @Inject constructor(private val dataStore: DataStore<Prefe
         }
     }
 
-    override val huggingFaceAuthToken: Flow<String?> = dataStore.data
-        .catch { exception ->
-            if (exception is IOException) {
-                Timber.e(exception, "Error reading preferences")
-                emit(emptyPreferences())
-            } else {
-                throw exception
-            }
-        }
-        .map { preferences ->
-            preferences[PreferencesKeys.HUGGING_FACE_TOKEN]
-        }
+    /**
+     * In-memory mirror of the encrypted HuggingFace-token entry. Initialized lazily from the
+     * encrypted store with the re-enterable-secret policy applied; updated by
+     * [setHuggingFaceAuthToken] and by the one-time legacy migration.
+     */
+    private val huggingFaceTokenFlow by lazy { MutableStateFlow(readHuggingFaceTokenOrNull()) }
+
+    /** Serializes the legacy-DataStore migration so concurrent collectors run it once. */
+    private val huggingFaceMigrationMutex = Mutex()
+    private var huggingFaceMigrationDone = false
+
+    override val huggingFaceAuthToken: Flow<String?> = flow {
+        migrateLegacyHuggingFaceToken()
+        emitAll(huggingFaceTokenFlow)
+    }
 
     override suspend fun setHuggingFaceAuthToken(token: String?) {
+        if (token == null) {
+            secretsStore.remove(SecretKeys.HUGGING_FACE_TOKEN)
+        } else {
+            secretsStore.putString(SecretKeys.HUGGING_FACE_TOKEN, token)
+        }
+        huggingFaceTokenFlow.value = token
+        // Any explicit write supersedes whatever a pre-migration release left in DataStore;
+        // dropping the legacy key here also makes the one-time migration a no-op.
         dataStore.edit { preferences ->
-            if (token == null) {
-                preferences.remove(PreferencesKeys.HUGGING_FACE_TOKEN)
-            } else {
-                preferences[PreferencesKeys.HUGGING_FACE_TOKEN] = token
+            preferences.remove(PreferencesKeys.HUGGING_FACE_TOKEN)
+        }
+    }
+
+    /**
+     * Reads the encrypted token entry, applying the re-enterable-secret recovery policy:
+     * an entry that cannot be decrypted is dropped and reported as absent (the user pastes
+     * the token again), never propagated as an error.
+     */
+    private fun readHuggingFaceTokenOrNull(): String? = try {
+        secretsStore.getString(SecretKeys.HUGGING_FACE_TOKEN)
+    } catch (e: SecureValueUnreadableException) {
+        Timber.e(e, "Stored HuggingFace token is unreadable; treating it as unset.")
+        secretsStore.remove(SecretKeys.HUGGING_FACE_TOKEN)
+        null
+    }
+
+    /**
+     * One-time move of a token persisted by earlier releases in plain DataStore into the
+     * encrypted store. The encrypted copy is committed synchronously **before** the legacy
+     * entry is removed, so a crash in between leaves both copies rather than neither; if the
+     * encrypted store already holds a token, the legacy leftover is just deleted. An
+     * [IOException] while reading DataStore defers the migration to the next collection
+     * instead of failing the flow.
+     */
+    private suspend fun migrateLegacyHuggingFaceToken() {
+        if (huggingFaceMigrationDone) return
+        huggingFaceMigrationMutex.withLock {
+            if (huggingFaceMigrationDone) return
+            val legacyToken = try {
+                dataStore.data.first()[PreferencesKeys.HUGGING_FACE_TOKEN]
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: IOException) {
+                Timber.e(e, "Cannot read preferences for the HuggingFace token migration; retrying later.")
+                return
             }
+            if (legacyToken != null) {
+                if (huggingFaceTokenFlow.value == null) {
+                    secretsStore.putString(SecretKeys.HUGGING_FACE_TOKEN, legacyToken, synchronous = true)
+                    huggingFaceTokenFlow.value = legacyToken
+                    Timber.i("Migrated the HuggingFace token from plain DataStore to the encrypted store.")
+                }
+                dataStore.edit { preferences ->
+                    preferences.remove(PreferencesKeys.HUGGING_FACE_TOKEN)
+                }
+            }
+            huggingFaceMigrationDone = true
         }
     }
 
@@ -586,26 +678,6 @@ class SettingsManager @Inject constructor(private val dataStore: DataStore<Prefe
         }
     }
 
-    override val maxMemoryChunksForSearch: Flow<Int> = dataStore.data
-        .catch { exception ->
-            if (exception is IOException) {
-                Timber.e(exception, "Error reading preferences")
-                emit(emptyPreferences())
-            } else {
-                throw exception
-            }
-        }
-        .map { preferences ->
-            preferences[PreferencesKeys.MAX_MEMORY_CHUNKS_FOR_SEARCH]
-                ?: SettingsDefaults.MEMORY_CHUNK_SEARCH_LIMIT_DEFAULT
-        }
-
-    override suspend fun setMaxMemoryChunksForSearch(limit: Int) {
-        dataStore.edit { preferences ->
-            preferences[PreferencesKeys.MAX_MEMORY_CHUNKS_FOR_SEARCH] = limit
-        }
-    }
-
     override val memoryLastCompactedAt: Flow<Long> = dataStore.data
         .catch { exception ->
             if (exception is IOException) {
@@ -743,7 +815,35 @@ class SettingsManager @Inject constructor(private val dataStore: DataStore<Prefe
 
     override suspend fun setActiveEmbeddingProviderId(id: String) {
         dataStore.edit { preferences ->
+            // First provider switch ever: capture the provider the stored
+            // vectors were created with, so the re-embed reminder banner can
+            // compare it against the new active id. Done inside the same edit
+            // so the capture and the switch land atomically.
+            if (preferences[PreferencesKeys.LAST_REEMBED_PROVIDER_ID] == null) {
+                preferences[PreferencesKeys.LAST_REEMBED_PROVIDER_ID] =
+                    preferences[PreferencesKeys.ACTIVE_EMBEDDING_PROVIDER_ID]
+                        ?: SettingsDefaults.ACTIVE_EMBEDDING_PROVIDER_ID_DEFAULT
+            }
             preferences[PreferencesKeys.ACTIVE_EMBEDDING_PROVIDER_ID] = id
+        }
+    }
+
+    override val lastReembedProviderId: Flow<String?> = dataStore.data
+        .catch { exception ->
+            if (exception is IOException) {
+                Timber.e(exception, "Error reading preferences")
+                emit(emptyPreferences())
+            } else {
+                throw exception
+            }
+        }
+        .map { preferences ->
+            preferences[PreferencesKeys.LAST_REEMBED_PROVIDER_ID]
+        }
+
+    override suspend fun setLastReembedProviderId(id: String) {
+        dataStore.edit { preferences ->
+            preferences[PreferencesKeys.LAST_REEMBED_PROVIDER_ID] = id
         }
     }
 
@@ -1140,6 +1240,12 @@ class SettingsManager @Inject constructor(private val dataStore: DataStore<Prefe
     }
 
     private companion object {
+        /** Name of the [KeystoreBackedPrefsStore] preferences file holding settings secrets. */
+        const val SECRETS_PREFS_NAME = "secure_settings_secrets"
+
+        /** Android Keystore alias of the AEAD key dedicated to the settings-secrets store. */
+        const val SECRETS_KEY_ALIAS = "knotwork.settings_secrets"
+
         const val DEFAULT_MEMORY_SUMMARY_LIMIT = 5
 
         /**

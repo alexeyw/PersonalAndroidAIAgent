@@ -1,12 +1,14 @@
 package app.knotwork.android.data.repositories
 
 import app.knotwork.android.data.local.Converters
+import app.knotwork.android.data.local.EmbeddingBlobCodec
 import app.knotwork.android.data.local.dao.MemoryDao
 import app.knotwork.android.data.local.models.MemoryChunkEntity
 import app.knotwork.android.domain.models.MemoryChunk
 import app.knotwork.android.domain.models.MemorySource
 import app.knotwork.android.domain.models.MemorySummary
 import io.mockk.mockk
+import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Before
 import org.junit.Test
@@ -26,6 +28,9 @@ class MemoryRepositoryImplTest {
         converters = Converters()
         repository = MemoryRepositoryImpl(memoryDao, converters)
     }
+
+    /** Shorthand: encodes the given components into the stored BLOB form. */
+    private fun emb(vararg values: Float): ByteArray = EmbeddingBlobCodec.encode(floatArrayOf(*values))
 
     @Test
     fun `cosineSimilarity calculates correct similarity for identical vectors`() {
@@ -81,14 +86,14 @@ class MemoryRepositoryImplTest {
     }
 
     @Test
-    fun `findSimilarMemories uses getRecentMemories and returns correct pairs`() = kotlinx.coroutines.test.runTest {
+    fun `findSimilarMemories scans the full table and returns correct pairs`() = kotlinx.coroutines.test.runTest {
         val queryEmbedding = floatArrayOf(1f, 0f)
-        val entity1 = MemoryChunkEntity(1, "Text 1", "1.0,0.0", 1000L)
-        val entity2 = MemoryChunkEntity(2, "Text 2", "0.0,1.0", 2000L)
+        val entity1 = MemoryChunkEntity(1, "Text 1", emb(1.0f, 0.0f), 1000L)
+        val entity2 = MemoryChunkEntity(2, "Text 2", emb(0.0f, 1.0f), 2000L)
 
-        io.mockk.coEvery { memoryDao.getRecentMemories(100) } returns listOf(entity1, entity2)
+        io.mockk.coEvery { memoryDao.getAllMemories() } returns listOf(entity1, entity2)
 
-        val results = repository.findSimilarMemories(queryEmbedding, searchPoolLimit = 100, limit = 2)
+        val results = repository.findSimilarMemories(queryEmbedding, limit = 2)
 
         assertEquals(2, results.size)
         assertEquals(1L, results[0].first.id) // Most similar first
@@ -104,13 +109,13 @@ class MemoryRepositoryImplTest {
             // near it, so the real cosine math must surface it on top with a
             // near-1.0 score while the orthogonal/noisy chunks score far lower.
             val queryEmbedding = floatArrayOf(1f, 0f, 0f)
-            val berlin = MemoryChunkEntity(1, "user lives in Berlin", "0.9,0.1,0.0", 3000L)
-            val coffee = MemoryChunkEntity(2, "user likes coffee", "0.0,1.0,0.0", 2000L)
-            val sky = MemoryChunkEntity(3, "the sky is blue", "0.2,0.2,0.95", 1000L)
+            val berlin = MemoryChunkEntity(1, "user lives in Berlin", emb(0.9f, 0.1f, 0.0f), 3000L)
+            val coffee = MemoryChunkEntity(2, "user likes coffee", emb(0.0f, 1.0f, 0.0f), 2000L)
+            val sky = MemoryChunkEntity(3, "the sky is blue", emb(0.2f, 0.2f, 0.95f), 1000L)
 
-            io.mockk.coEvery { memoryDao.getRecentMemories(100) } returns listOf(coffee, sky, berlin)
+            io.mockk.coEvery { memoryDao.getAllMemories() } returns listOf(coffee, sky, berlin)
 
-            val results = repository.findSimilarMemories(queryEmbedding, searchPoolLimit = 100, limit = 3)
+            val results = repository.findSimilarMemories(queryEmbedding, limit = 3)
 
             assertEquals(3, results.size)
             // Highest-similarity chunk first.
@@ -121,6 +126,86 @@ class MemoryRepositoryImplTest {
             assertEquals(2L, results[2].first.id)
             assertEquals(0.0f, results[2].second, 0.001f)
         }
+
+    @Test
+    fun `given chunk older than any recency window when similarity is high then it is found`() =
+        kotlinx.coroutines.test.runTest {
+            // Given — an ancient chunk (epoch-adjacent timestamp) surrounded by
+            // thousands of fresher rows. Under the old recency-window pool it
+            // would never have been loaded for scoring; the full-table scan
+            // must surface it as the top hit purely on cosine similarity.
+            val queryEmbedding = floatArrayOf(1f, 0f)
+            val ancientRelevant = MemoryChunkEntity(1L, "user was born in Riga", emb(1.0f, 0.0f), 1L)
+            val freshNoise = (2L..1_502L).map { id ->
+                MemoryChunkEntity(id, "noise $id", emb(0.0f, 1.0f), 1_000_000L + id)
+            }
+            io.mockk.coEvery { memoryDao.getAllMemories() } returns freshNoise + ancientRelevant
+
+            // When
+            val results = repository.findSimilarMemories(queryEmbedding, limit = 1)
+
+            // Then — the old chunk wins despite being older than every other row.
+            assertEquals(1L, results.single().first.id)
+            assertEquals(1.0f, results.single().second, 0.001f)
+        }
+
+    @Test
+    fun `findSimilarMemories with null limit returns the entire scored pool`() = kotlinx.coroutines.test.runTest {
+        val queryEmbedding = floatArrayOf(1f, 0f)
+        val entities = (1L..7L).map { id ->
+            MemoryChunkEntity(id, "text $id", emb(1.0f, 0.0f), id)
+        }
+        io.mockk.coEvery { memoryDao.getAllMemories() } returns entities
+
+        val results = repository.findSimilarMemories(queryEmbedding)
+
+        assertEquals(7, results.size)
+    }
+
+    @Test
+    fun `findSimilarMemories skips rows whose blob carries no usable embedding`() = kotlinx.coroutines.test.runTest {
+        // The empty blob is the migration's marker for a legacy row whose
+        // string embedding could not be parsed; an odd-length blob is
+        // outright corrupt. Both must be invisible to retrieval without
+        // aborting the scan.
+        val healthy = MemoryChunkEntity(1, "healthy", emb(1.0f, 0.0f), 100L)
+        val emptyMarker = MemoryChunkEntity(2, "unparseable legacy row", ByteArray(0), 200L)
+        val corruptLength = MemoryChunkEntity(3, "corrupt blob", ByteArray(5), 300L)
+        io.mockk.coEvery { memoryDao.getAllMemories() } returns
+            listOf(healthy, emptyMarker, corruptLength)
+
+        val results = repository.findSimilarMemories(floatArrayOf(1f, 0f), limit = null)
+
+        assertEquals(listOf(1L), results.map { it.first.id })
+    }
+
+    @Test
+    fun `findSimilarMemories ranks correctly over a 5000-chunk synthetic pool`() = kotlinx.coroutines.test.runTest {
+        // Synthetic pool at the documented warn-threshold scale (512-dim
+        // vectors). Guards correctness of the decode + rank path at the
+        // size the BLOB storage change targets; the timing of this exact
+        // scenario is what the PR-description measurement quotes.
+        val dimensions = 512
+        val needleId = 4_321L
+        val entities = (1L..5_000L).map { id ->
+            val vector = FloatArray(dimensions) { index ->
+                if (id == needleId) {
+                    if (index == 0) 1f else 0f
+                } else {
+                    // Orthogonal-ish noise: zero first component, varying tail.
+                    if (index == ((id + index) % (dimensions - 1)).toInt() + 1) 1f else 0.01f
+                }
+            }
+            MemoryChunkEntity(id, "chunk $id", EmbeddingBlobCodec.encode(vector), id)
+        }
+        io.mockk.coEvery { memoryDao.getAllMemories() } returns entities
+        val query = FloatArray(dimensions) { index -> if (index == 0) 1f else 0f }
+
+        val results = repository.findSimilarMemories(query, limit = 3)
+
+        assertEquals(needleId, results.first().first.id)
+        assertEquals(1.0f, results.first().second, 0.001f)
+    }
 
     @Test
     fun `compactMemory calls dao deleteOldestMemories`() = kotlinx.coroutines.test.runTest {
@@ -177,8 +262,8 @@ class MemoryRepositoryImplTest {
 
     @Test
     fun `getCompactionCandidates forwards cutoff and maps entities`() = kotlinx.coroutines.test.runTest {
-        val a = MemoryChunkEntity(1, "older fact", "1.0,0.0", 500L)
-        val b = MemoryChunkEntity(2, "another fact", "0.0,1.0", 400L)
+        val a = MemoryChunkEntity(1, "older fact", emb(1.0f, 0.0f), 500L)
+        val b = MemoryChunkEntity(2, "another fact", emb(0.0f, 1.0f), 400L)
         io.mockk.coEvery { memoryDao.getCompactionCandidates(1000L) } returns listOf(a, b)
 
         val result = repository.getCompactionCandidates(olderThanMillis = 1000L)
@@ -232,7 +317,7 @@ class MemoryRepositoryImplTest {
             assertEquals(MemorySource.Manual, entity.source)
             assertEquals("preference", entity.tagsCsv)
             assertEquals(true, entity.needsReembedding)
-            assertEquals(converters.fromFloatArray(floatArrayOf(0.1f, 0.2f)), entity.embedding)
+            assertArrayEquals(converters.fromFloatArray(floatArrayOf(0.1f, 0.2f)), entity.embedding)
         }
 
     @Test
@@ -265,24 +350,35 @@ class MemoryRepositoryImplTest {
     @Test
     fun `getMemoriesNeedingReembedding returns a corrupt-embedding row instead of dropping it`() =
         kotlinx.coroutines.test.runTest {
-            // A row with an unparseable embedding string would otherwise be
-            // dropped, leaving it flagged forever while the COUNT keeps re-arming
-            // the worker. It must be returned (with an empty embedding) so the
-            // re-embed pass can repair it from text and clear the flag.
-            val corrupt = MemoryChunkEntity(
+            // A row whose blob carries no usable vector (the migration's empty
+            // marker, or a corrupt length) would otherwise be dropped, leaving
+            // it flagged forever while the COUNT keeps re-arming the worker. It
+            // must be returned (with an empty embedding) so the re-embed pass
+            // can repair it from text and clear the flag.
+            val emptyMarker = MemoryChunkEntity(
                 id = 1,
                 text = "still has text",
-                embedding = "not,a,float",
+                embedding = ByteArray(0),
                 timestamp = 10L,
                 needsReembedding = true,
             )
-            io.mockk.coEvery { memoryDao.getMemoriesNeedingReembedding() } returns listOf(corrupt)
+            val corruptLength = MemoryChunkEntity(
+                id = 2,
+                text = "also has text",
+                embedding = ByteArray(3),
+                timestamp = 11L,
+                needsReembedding = true,
+            )
+            io.mockk.coEvery { memoryDao.getMemoriesNeedingReembedding() } returns
+                listOf(emptyMarker, corruptLength)
 
             val result = repository.getMemoriesNeedingReembedding()
 
-            assertEquals(1, result.size)
+            assertEquals(2, result.size)
             assertEquals("still has text", result[0].text)
             assertEquals(0, result[0].embedding.size)
+            assertEquals("also has text", result[1].text)
+            assertEquals(0, result[1].embedding.size)
         }
 
     @Test

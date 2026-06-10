@@ -5,10 +5,12 @@ import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import app.knotwork.android.data.local.AppDatabase
+import app.knotwork.android.data.local.EmbeddingBlobCodec
 import app.knotwork.android.data.local.models.MemoryChunkEntity
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.After
+import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -92,17 +94,18 @@ class MemoryDaoTest {
         val id = dao.insertMemory(
             MemoryChunkEntity(
                 text = "before",
-                embedding = "0.1,0.2",
+                embedding = EmbeddingBlobCodec.encode(floatArrayOf(0.1f, 0.2f)),
                 timestamp = originalTimestamp,
                 isPinned = false,
             ),
         )
 
-        dao.updateMemory(id = id, text = "after", embedding = "0.9,0.8")
+        val newEmbedding = EmbeddingBlobCodec.encode(floatArrayOf(0.9f, 0.8f))
+        dao.updateMemory(id = id, text = "after", embedding = newEmbedding)
 
         val updated = dao.getAllMemories().first { it.id == id }
         assertEquals("after", updated.text)
-        assertEquals("0.9,0.8", updated.embedding)
+        assertArrayEquals(newEmbedding, updated.embedding)
         assertEquals(originalTimestamp, updated.timestamp)
         assertFalse(updated.isPinned)
     }
@@ -130,19 +133,14 @@ class MemoryDaoTest {
     }
 
     @Test
-    fun getRecentMemories_returnsNewestFirstUpToLimit() = runBlocking {
-        dao.insertMemory(unpinned(text = "oldest", timestamp = 1L))
-        dao.insertMemory(unpinned(text = "middle", timestamp = 2L))
-        dao.insertMemory(unpinned(text = "newest", timestamp = 3L))
-
-        val recent = dao.getRecentMemories(limit = 2)
-        assertEquals(listOf("newest", "middle"), recent.map { it.text })
-    }
-
-    @Test
     fun getRecentMemorySummaries_projectsIdTextTimestampOnly() = runBlocking {
         val id = dao.insertMemory(
-            MemoryChunkEntity(text = "hello", embedding = "1.0,2.0", timestamp = 5L, isPinned = false),
+            MemoryChunkEntity(
+                text = "hello",
+                embedding = EmbeddingBlobCodec.encode(floatArrayOf(1.0f, 2.0f)),
+                timestamp = 5L,
+                isPinned = false,
+            ),
         )
 
         val summaries = dao.getRecentMemorySummaries(limit = 10)
@@ -170,17 +168,22 @@ class MemoryDaoTest {
     fun observeTotalBytes_sumsTextAndEmbeddingLengths() = runBlocking {
         assertEquals(0L, dao.observeTotalBytes().first())
 
-        // `hello` (5) + `1.2,3.4` (7) = 12.
+        // `hello` (5 bytes) + a 2-component blob (8 bytes) = 13.
         dao.insertMemory(
-            MemoryChunkEntity(text = "hello", embedding = "1.2,3.4", timestamp = 1L, isPinned = false),
+            MemoryChunkEntity(
+                text = "hello",
+                embedding = EmbeddingBlobCodec.encode(floatArrayOf(1.2f, 3.4f)),
+                timestamp = 1L,
+                isPinned = false,
+            ),
         )
-        assertEquals(12L, dao.observeTotalBytes().first())
+        assertEquals(13L, dao.observeTotalBytes().first())
 
-        // Add `hi` (2) + empty embedding (0) → 12 + 2 = 14.
+        // Add `hi` (2 bytes) + empty blob marker (0 bytes) → 13 + 2 = 15.
         dao.insertMemory(
-            MemoryChunkEntity(text = "hi", embedding = "", timestamp = 2L, isPinned = false),
+            MemoryChunkEntity(text = "hi", embedding = ByteArray(0), timestamp = 2L, isPinned = false),
         )
-        assertEquals(14L, dao.observeTotalBytes().first())
+        assertEquals(15L, dao.observeTotalBytes().first())
     }
 
     @Test
@@ -197,14 +200,14 @@ class MemoryDaoTest {
 
     private fun unpinned(text: String, timestamp: Long): MemoryChunkEntity = MemoryChunkEntity(
         text = text,
-        embedding = "0.0",
+        embedding = EmbeddingBlobCodec.encode(floatArrayOf(0.0f)),
         timestamp = timestamp,
         isPinned = false,
     )
 
     private fun pinned(text: String, timestamp: Long): MemoryChunkEntity = MemoryChunkEntity(
         text = text,
-        embedding = "0.0",
+        embedding = EmbeddingBlobCodec.encode(floatArrayOf(0.0f)),
         timestamp = timestamp,
         isPinned = true,
     )

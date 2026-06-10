@@ -372,7 +372,7 @@ private fun buildViewState(uiState: SettingsUiState, context: android.content.Co
                 label = stringResource(R.string.settings_memory_stat_threads),
             ),
             MemoryStatCell(
-                value = uiState.memoryStats.averageSimilarityScore
+                value = uiState.averageSimilarityScore
                     ?.let { String.format(locale, "%.2f", it) }
                     ?: stringResource(R.string.settings_memory_stat_dash),
                 label = stringResource(R.string.settings_memory_stat_avg_score),
@@ -400,6 +400,10 @@ private fun buildViewState(uiState: SettingsUiState, context: android.content.Co
         clearLabel = stringResource(R.string.settings_memory_clear),
         validationError = uiState.memoryValidationError?.let { memoryValidationMessage(it, context) },
         reembedProgressPercent = uiState.reembedProgress?.let { (it * MAX_PERCENT).roundToInt() },
+        reembedBanner = stringResource(R.string.settings_memory_reembed_banner).takeIf {
+            uiState.lastReembedProviderId != null &&
+                uiState.lastReembedProviderId != uiState.activeEmbeddingProviderId
+        },
     )
     val notifications = NotificationsCardState(longRunningEnabled = uiState.longRunningTaskNotificationsEnabled)
     val privacy = PrivacyCardState(
@@ -422,7 +426,7 @@ private fun buildViewState(uiState: SettingsUiState, context: android.content.Co
                     R.string.settings_destructive_reset_body
                 },
             ),
-            keyword = stringResource(R.string.settings_destructive_typed_keyword),
+            keyword = stringResource(R.string.destructive_typed_keyword),
             hint = stringResource(R.string.settings_destructive_typed_hint),
             pendingInput = uiState.destructiveTypedInput,
             kind = if (kind == PendingDestructiveAction.ClearMemory) {

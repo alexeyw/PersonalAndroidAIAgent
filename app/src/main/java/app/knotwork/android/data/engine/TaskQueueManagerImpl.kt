@@ -9,8 +9,11 @@ import app.knotwork.android.domain.models.ChatMessage
 import app.knotwork.android.domain.models.Role
 import app.knotwork.android.domain.repositories.ChatRepository
 import app.knotwork.android.domain.repositories.PipelineRepository
+import app.knotwork.android.domain.repositories.SettingsRepository
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.channels.Channel
@@ -24,6 +27,7 @@ import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import java.util.PriorityQueue
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -37,6 +41,7 @@ import javax.inject.Singleton
 class TaskQueueManagerImpl @Inject constructor(
     private val chatRepository: ChatRepository,
     private val pipelineRepository: PipelineRepository,
+    private val settingsRepository: SettingsRepository,
     private val graphExecutionEngine: GraphExecutionEngine,
 ) : TaskQueueManager {
 
@@ -142,21 +147,37 @@ class TaskQueueManagerImpl @Inject constructor(
         )
         chatRepository.saveMessage(userMessage)
 
-        // 2. Load pipeline. Each chat session may bind its own
-        // `pipelineId`; honour that binding first, then fall back to the
-        // application-wide default (the first pipeline returned by the
-        // repository) for legacy chats and for tasks that don't specify a
-        // binding. If the bound pipeline was deleted while the task waited
-        // in the queue we silently fall back to the default rather than
-        // failing — the chat-level UI handles the deleted-pipeline rebind
-        // separately (Snackbar fallback).
+        // 2. Load pipeline. Resolution is a deterministic chain that never
+        // depends on the order pipelines come back from the repository:
+        //   1. `task.pipelineId` — the session binding captured at enqueue
+        //      time, when it still resolves to an existing pipeline;
+        //   2. `SettingsRepository.defaultPipelineId` — the user-marked
+        //      default, when set and still existing;
+        //   3. explicit `Error` — no silent "whatever the DAO returned
+        //      first" substitution.
+        // A bound pipeline deleted while the task waited in the queue falls
+        // through to the default; the chat-level UI handles the rebind +
+        // Snackbar notification separately, so the fall-through is never
+        // silent from the user's perspective.
         val pipelines = pipelineRepository.getAllPipelines().firstOrNull() ?: emptyList()
+        if (pipelines.isEmpty()) {
+            val errState = AgentOrchestratorState.Error(
+                "No active pipeline found. Please create one in the Visual Orchestrator.",
+            )
+            stateFlow.emit(errState)
+            _globalState.value = errState
+            return
+        }
         val boundPipeline = task.pipelineId?.let { id -> pipelines.firstOrNull { it.id == id } }
-        val activePipeline = boundPipeline ?: pipelines.firstOrNull()
+        // The default is resolved lazily — reading the settings flow is a
+        // suspend call that a successfully resolved binding never needs.
+        val activePipeline = boundPipeline
+            ?: settingsRepository.defaultPipelineId.firstOrNull()
+                ?.let { id -> pipelines.firstOrNull { it.id == id } }
 
         if (activePipeline == null) {
             val errState = AgentOrchestratorState.Error(
-                "No active pipeline found. Please create one in the Visual Orchestrator.",
+                "No default pipeline configured. Set one in Settings or bind a pipeline to this chat.",
             )
             stateFlow.emit(errState)
             _globalState.value = errState
@@ -171,18 +192,31 @@ class TaskQueueManagerImpl @Inject constructor(
                 stateFlow.emit(state)
                 _globalState.value = state
             }
+        } catch (e: CancellationException) {
+            // Cancellation (user Stop, scope teardown) is not a failure:
+            // mapping it to `Error` would both surface a false error banner
+            // and break cooperative cancellation. Re-throw so the worker
+            // coroutine dies with its scope; the `finally` below still
+            // resets the session state.
+            throw e
         } catch (e: Exception) {
             val errState = AgentOrchestratorState.Error(e.message ?: "Execution failed")
             stateFlow.emit(errState)
             _globalState.value = errState
         } finally {
-            val last = stateFlow.replayCache.lastOrNull()
-            if (last !is AgentOrchestratorState.Completed &&
-                last !is AgentOrchestratorState.Error
-            ) {
-                stateFlow.emit(AgentOrchestratorState.Idle)
+            // Runs on the cancellation path too, where the coroutine's job
+            // is already cancelled — `NonCancellable` lets the suspending
+            // `emit` reset the session to `Idle` instead of immediately
+            // re-throwing and leaving the UI stuck on a stale state.
+            withContext(NonCancellable) {
+                val last = stateFlow.replayCache.lastOrNull()
+                if (last !is AgentOrchestratorState.Completed &&
+                    last !is AgentOrchestratorState.Error
+                ) {
+                    stateFlow.emit(AgentOrchestratorState.Idle)
+                }
+                _globalState.value = AgentOrchestratorState.Idle
             }
-            _globalState.value = AgentOrchestratorState.Idle
         }
     }
 

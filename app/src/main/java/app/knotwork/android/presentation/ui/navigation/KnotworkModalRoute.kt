@@ -7,6 +7,7 @@ import androidx.compose.material3.SheetState
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
@@ -56,8 +57,17 @@ fun KnotworkModalRoute(
 
     val animateOutAndDismiss: () -> Unit = {
         scope.launch {
-            runCatching { sheetState.hide() }
-            onDismiss()
+            try {
+                sheetState.hide()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                // A failed hide animation must not block the dismissal.
+            } finally {
+                // Mirrors the previous contract: the sheet is dismissed even
+                // when the hide animation is interrupted by cancellation.
+                onDismiss()
+            }
         }
     }
 
@@ -69,7 +79,11 @@ fun KnotworkModalRoute(
     // (e.g. unsaved-changes warning in NodeConfigSheet) can do so
     // without losing the gesture.
     PredictiveBackHandler { progress: Flow<androidx.activity.BackEventCompat> ->
-        runCatching { progress.collect { /* observe to keep the handler alive */ } }
+        // A cancelled gesture makes `collect` throw CancellationException,
+        // which deliberately propagates: the sheet stays open instead of
+        // dismissing on a cancelled swipe. Only a completed gesture reaches
+        // the dismiss call below.
+        progress.collect { /* observe to keep the handler alive */ }
         animateOutAndDismiss()
     }
 

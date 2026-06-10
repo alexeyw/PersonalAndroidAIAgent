@@ -15,6 +15,32 @@ details.
 
 ### Added
 
+- **Re-embed reminder banner.** *Settings → Memory* now shows a persistent
+  warning under the embedding-provider dropdown whenever the stored memory
+  vectors were created with a different provider than the active one —
+  previously nothing surfaced the mismatch, even though affected chunks
+  silently score ~0 against every query. The banner carries an inline
+  button that runs the existing **Re-embed** action and disappears once a
+  full re-embed (or a memory wipe) re-aligns the store. Switching back to
+  the original provider also clears it.
+
+- **Coroutine-cancellation static gate.** `./gradlew check` now also runs
+  `detektDebug`, a type-resolution detekt pass with a dedicated config
+  ([`config/detekt/detekt-cancellation.yml`](config/detekt/detekt-cancellation.yml))
+  that activates a single rule, `SuspendFunSwallowedCancellation`: suspend
+  calls may not be wrapped in `runCatching`, and `try`/`catch` blocks
+  around suspend calls must re-throw `CancellationException` before any
+  generic handling. The contract is documented in
+  [docs/code-style.md](docs/code-style.md) § Coroutines & Flow and
+  [docs/static-analysis.md](docs/static-analysis.md).
+- **Startup recovery screen for locked data.** When the encryption key of
+  the local database cannot be read at startup, the splash screen now
+  shows a dedicated recovery surface instead of failing generically: a
+  plain-language explanation, a **Retry** action (keystore failures are
+  often transient — e.g. right after a backup/restore or an OS update),
+  and an explicit **Erase all data** action gated behind a typed
+  confirmation. The app never wipes or re-keys data automatically. See
+  *Troubleshooting* in [`docs/user-guide.md`](docs/user-guide.md).
 - **Public roadmap.** New [`docs/roadmap.md`](docs/roadmap.md) describes
   post-release directions across near / mid / long horizons — agent
   tool-set expansion (including evaluating file-oriented tools), the first
@@ -25,6 +51,49 @@ details.
 
 ### Changed
 
+- **⚠ BREAKING (local data): secret storage replaced —
+  `EncryptedSharedPreferences` → direct Android Keystore wrapper.** The
+  deprecated `androidx.security:security-crypto` library (no further
+  upstream development past its final `1.1.0` line) has been removed
+  entirely. The SQLCipher database passphrase and the cloud-provider API
+  keys now live in a small in-house store: a plain preferences file whose
+  values are encrypted with **AES-256-GCM under a dedicated,
+  non-exportable Android Keystore key**, each ciphertext authenticated
+  against its storage slot so blobs cannot be swapped between entries.
+  With the data key residing directly in the Keystore there is no
+  intermediate wrapped-keyset file left to corrupt — the failure surface
+  shrinks to "Keystore key lost", which the startup recovery screen
+  already handles. Recovery semantics are preserved: the passphrase is
+  never regenerated while a database exists (failures route to the
+  recovery screen), while an undecryptable API key is treated as unset
+  and simply re-entered. **There is no data migration** (as permitted by
+  the pre-release storage policy): an install upgraded across this change
+  boots into the startup recovery screen, where continuing requires the
+  explicit data wipe, and saved API keys must be re-entered. Export
+  chats, memory, and pipelines through the in-app export actions
+  *before* upgrading if you want to keep them.
+- **Chat home screen state consolidated into a single immutable snapshot.**
+  The chat-home ViewModel previously exposed ~25 independent `StateFlow`
+  properties (composer text, console pane, HITL/clarification snapshots,
+  thread metadata, model picker, token meter, …) and the screen subscribed
+  to each one separately. They are now aggregated into one
+  `ChatHomeScreenState` data class with logically grouped sub-structures,
+  observed through a single subscription. One-shot events (export payloads,
+  snackbars, the deleted-pipeline fallback signal) remain on dedicated
+  event channels. No user-visible behaviour changes; the refactor reduces
+  subscription overhead and makes state transitions atomic and easier to
+  test.
+- **Long-term-memory embeddings are now stored in binary form.** The
+  `memory_chunks.embedding` column changes from a comma-separated TEXT
+  encoding to a BLOB of little-endian IEEE-754 floats (4 bytes per
+  component). An automatic database migration rewrites existing rows in
+  place; a row whose legacy string cannot be parsed keeps its text with an
+  empty-blob marker so the re-embedding repair path can still rebuild its
+  vector instead of the row being deleted. Decoding the retrieval pool of
+  5000 synthetic 512-dimension chunks drops from ~280 ms to ~1 ms, and the
+  stored embedding payload shrinks ~2.8×. The memory export/import JSON
+  format is unchanged (`schemaVersion: 1`, embeddings as number arrays);
+  conversion happens at the storage boundary.
 - **Bump `com.squareup.okhttp3:okhttp` `5.3.2` → `5.4.0`** to clear the
   `NewerVersionAvailable` lint gate.
 - **Contributor onboarding refreshed.** `CONTRIBUTING.md` gains a *Where
@@ -36,6 +105,15 @@ details.
   placeholder in the bug-report issue form was bumped to the current
   version line.
 
+- **`docs/api-conventions.md` MCP error-handling rule aligned with the
+  cancellation gate.** The MCP section used to prescribe wrapping calls in
+  `runCatching`, which contradicts the coroutine-cancellation contract (and
+  the actual client code): the rule now requires `try`/`catch` with a
+  dedicated `CancellationException` re-throw before mapping failures to
+  `ToolResult.Error`. The architecture document also describes the
+  passphrase lifecycle (generated only while no database exists; typed
+  failures route to the startup recovery screen) and the binary embedding
+  column introduced in this release.
 - **`docs/code-style.md` restores the `*Preview.kt` file convention.** The
   Compose guidelines again state that preview-only Composables live in
   dedicated `*Preview.kt` files (as practised in the `:catalog` module);
@@ -95,6 +173,94 @@ details.
   verification. **Note:** the first release-signed build uses a different
   signer than earlier debug-signed builds, so it cannot be installed over a
   debug-signed copy in place — see the *Pre-release notice* in the README.
+
+### Fixed
+
+- **Unbound chats no longer execute an arbitrary pipeline.** A chat
+  without its own pipeline binding used to run "whatever pipeline the
+  database returned first" — so after creating a second pipeline,
+  unbound chats could silently switch to a different graph. Resolution
+  is now deterministic: the chat's own binding, then the default marked
+  in the pipeline library; when neither resolves, the run fails with an
+  explicit "No default pipeline configured" error instead of a silent
+  substitution. The chat subtitle follows the same chain, and switching
+  to a thread whose bound pipeline has been deleted rebinds it to the
+  default with the usual notification.
+
+- **Old memories are no longer invisible to retrieval.** The similarity
+  search behind long-term memory scanned only the most recent chunks (a
+  hidden 1,000-row recency window), so an old but relevant fact stopped
+  being findable — regardless of how well it matched — once enough newer
+  entries accumulated. The search now scans the full memory base on every
+  query; recency remains a *ranking* weight (the re-ranker's half-life
+  decay), never a visibility filter. The same window also silently let
+  near-duplicates of old facts back in through auto-extraction — the dedup
+  check now runs against the full pool too. The pool stays bounded by the
+  **Max stored chunks** compaction limit, and the now-redundant internal
+  search-pool setting was removed. As part of the same change the AVG
+  SCORE statistic moved out of the storage layer into a dedicated
+  session-scoped tracker — its on-screen behaviour is unchanged.
+
+- **Cancelling a generation no longer surfaces a false error.** Stopping a
+  run (or any scope teardown mid-pipeline) used to be caught by the
+  catch-all error mapping in the task queue and engine loop and shown as an
+  execution error. `CancellationException` is now re-thrown at every
+  boundary that wraps suspend calls — the task queue, the engine's per-node
+  collector, workers, MCP/AppFunction/cloud-embedding calls, and the
+  affected use cases and view models (53 call sites audited; `runCatching`
+  around suspend calls replaced with explicit `try`/`catch`) — so
+  cooperative cancellation propagates cleanly and the session state resets
+  to idle instead of flashing an error banner. A cancelled predictive-back
+  gesture on a modal sheet now keeps the sheet open instead of dismissing
+  it.
+
+### Security
+
+- **The HuggingFace access token is now stored encrypted.** The token —
+  a real credential granting access to gated HuggingFace repositories —
+  was previously persisted in plain, unencrypted DataStore, contradicting
+  the project's own storage policy (and the user guide, which incorrectly
+  claimed it was encrypted). It now lives in the same kind of
+  Keystore-backed encrypted store as the cloud API keys, with the same
+  re-enterable-secret recovery policy. **A previously saved token is
+  migrated automatically** on first read — the encrypted copy is written
+  before the plaintext copy is removed from DataStore, so the value
+  survives the upgrade (no re-entry needed, unlike the API keys above).
+- **Prompt injection via tool content is now a documented, accepted risk.**
+  `SECURITY.md` gains a threat-model section describing how content
+  returned by tools (built-in search extracts, MCP-server results,
+  AppFunction responses) flows into the context of subsequent pipeline
+  nodes — including planning and routing nodes — and can influence the
+  arguments of later tool calls. The stated backstop is the
+  human-in-the-loop gate (tool name + exact arguments shown for every
+  sensitive or destructive call; unknown-risk tools, MCP included, default
+  to sensitive), while read-only calls are deliberately ungated. The
+  section recommends switching the tool-approval policy to *approve every
+  call* when connecting untrusted MCP servers. No behaviour change —
+  a disclosure of an existing, deliberate trade-off.
+- **Database passphrase can no longer be destroyed by a transient
+  keystore failure.** The store holding the SQLCipher passphrase
+  previously deleted and recreated itself whenever its encrypted
+  preferences failed to open — the recovery path appropriate for
+  re-enterable API keys, but fatal for the database key: a transient
+  Android Keystore failure would silently discard the passphrase and
+  leave the existing encrypted database permanently unreadable. The
+  passphrase is now generated only when no database file exists yet;
+  while a database is present, any failure to read the stored passphrase
+  (preferences unopenable, entry missing or malformed) raises a typed
+  error that routes to the new startup recovery screen instead of
+  regenerating — while no database exists, the old self-heal (recreate a
+  corrupt store) still applies, since nothing can be orphaned. A
+  key/file mismatch (database restored from another install) is detected
+  at open time and routed to the same recovery screen. The passphrase is
+  also no longer fetched during dependency injection on the main thread —
+  it is read lazily at the first real database open, where the failure
+  can be handled by UI; best-effort background maintenance paths skip
+  their work instead of crashing the process while the recovery screen
+  is up. The user-confirmed wipe is serialized against concurrent
+  database opens and deletes the passphrase only after the database file
+  is verifiably gone. The API-key store intentionally keeps its
+  recreate-on-corruption recovery (keys can be re-entered by the user).
 
 ## [0.4.0] - 2026-06-07
 

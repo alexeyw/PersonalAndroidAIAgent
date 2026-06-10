@@ -4,6 +4,7 @@ import androidx.room.testing.MigrationTestHelper
 import androidx.sqlite.db.SupportSQLiteDatabase
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -16,7 +17,7 @@ import org.junit.runner.RunWith
  * [AppDatabaseMigrationTest] (which covers pre-baseline versions that were
  * never exported), this suite drives every migration whose **starting**
  * schema JSON is committed under `app/schemas/` — i.e. the
- * baseline-and-up range `23 → 28`.
+ * baseline-and-up range `23 → 29`.
  *
  * For each step it:
  * 1. Materialises the database at the older version straight from the
@@ -141,25 +142,83 @@ class AppDatabaseMigrationHelperTest {
     }
 
     @Test
-    fun migrateFullChain23to28_preservesDataAndValidatesFinalSchema() {
+    fun migrate28to29_convertsEmbeddingStringsToLittleEndianBlobs() {
+        helper.createDatabase(TEST_DB, 28).use { db ->
+            // Two representative legacy rows: one healthy comma-encoded
+            // embedding and one malformed string (the kind a hand-edited or
+            // partially corrupted DB can carry).
+            db.execSQL(
+                "INSERT INTO memory_chunks" +
+                    "(id, text, embedding, timestamp, isPinned, source, tagsCsv, useCount, lastUsedAt, " +
+                    "needsReembedding) " +
+                    "VALUES(1, '$CHUNK_TEXT', '$CHUNK_EMBEDDING', $CHUNK_TS, 1, '{\"type\":\"manual\"}', " +
+                    "'tag-a,tag-b', 3, 99, 0)",
+            )
+            db.execSQL(
+                "INSERT INTO memory_chunks" +
+                    "(id, text, embedding, timestamp, isPinned, source, tagsCsv, useCount, lastUsedAt, " +
+                    "needsReembedding) " +
+                    "VALUES(2, 'corrupt but repairable', 'not,a,float', $CHUNK_TS, 0, '{\"type\":\"unknown\"}', " +
+                    "'', 0, NULL, 1)",
+            )
+        }
+
+        helper.runMigrationsAndValidate(TEST_DB, 29, true, AppDatabase.MIGRATION_28_29).use { db ->
+            db.query(
+                "SELECT text, embedding, timestamp, isPinned, source, tagsCsv, useCount, lastUsedAt, " +
+                    "needsReembedding FROM memory_chunks WHERE id = 1",
+            ).use { c ->
+                assertTrue(c.moveToFirst())
+                assertEquals(CHUNK_TEXT, c.getString(0))
+                // The blob must be the exact little-endian encoding of the
+                // legacy comma-separated values.
+                assertArrayEquals(
+                    EmbeddingBlobCodec.encode(floatArrayOf(0.1f, 0.2f, 0.3f)),
+                    c.getBlob(1),
+                )
+                assertEquals(CHUNK_TS, c.getLong(2))
+                assertEquals(1, c.getInt(3))
+                assertEquals("{\"type\":\"manual\"}", c.getString(4))
+                assertEquals("tag-a,tag-b", c.getString(5))
+                assertEquals(3, c.getInt(6))
+                assertEquals(99L, c.getLong(7))
+                assertEquals(0, c.getInt(8))
+            }
+            // The malformed row survives with the zero-length "no usable
+            // embedding" marker — its text stays repairable by the re-embed
+            // path instead of being deleted.
+            db.query("SELECT text, embedding, needsReembedding FROM memory_chunks WHERE id = 2").use { c ->
+                assertTrue(c.moveToFirst())
+                assertEquals("corrupt but repairable", c.getString(0))
+                assertEquals(0, c.getBlob(1).size)
+                assertEquals(1, c.getInt(2))
+            }
+        }
+    }
+
+    @Test
+    fun migrateFullChain23to29_preservesDataAndValidatesFinalSchema() {
         helper.createDatabase(TEST_DB, 23).use { db ->
             seedMemoryChunkV23(db)
         }
 
         helper.runMigrationsAndValidate(
             TEST_DB,
-            28,
+            29,
             true,
             AppDatabase.MIGRATION_23_24,
             AppDatabase.MIGRATION_24_25,
             AppDatabase.MIGRATION_25_26,
             AppDatabase.MIGRATION_26_27,
             AppDatabase.MIGRATION_27_28,
+            AppDatabase.MIGRATION_28_29,
         ).use { db ->
             // The original v23 row must survive every step with the new
-            // columns filled by their documented defaults.
+            // columns filled by their documented defaults and the embedding
+            // re-encoded into its binary form.
             db.query(
-                "SELECT text, source, tagsCsv, useCount, lastUsedAt, needsReembedding FROM memory_chunks",
+                "SELECT text, source, tagsCsv, useCount, lastUsedAt, needsReembedding, embedding " +
+                    "FROM memory_chunks",
             ).use { c ->
                 assertTrue(c.moveToFirst())
                 assertEquals(CHUNK_TEXT, c.getString(0))
@@ -168,6 +227,10 @@ class AppDatabaseMigrationHelperTest {
                 assertEquals(0, c.getInt(3))
                 assertTrue(c.isNull(4))
                 assertEquals(0, c.getInt(5))
+                assertArrayEquals(
+                    EmbeddingBlobCodec.encode(floatArrayOf(0.1f, 0.2f, 0.3f)),
+                    c.getBlob(6),
+                )
             }
         }
     }

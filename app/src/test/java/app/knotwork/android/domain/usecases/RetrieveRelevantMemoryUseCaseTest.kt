@@ -6,6 +6,7 @@ import app.knotwork.android.domain.repositories.SettingsRepository
 import app.knotwork.android.domain.services.EmbeddingProvider
 import app.knotwork.android.domain.services.EmbeddingProviderResolver
 import app.knotwork.android.domain.services.MemoryReranker
+import app.knotwork.android.domain.services.MemorySearchStatsTracker
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
@@ -29,9 +30,9 @@ class RetrieveRelevantMemoryUseCaseTest {
     private lateinit var provider: EmbeddingProvider
     private lateinit var memoryRepository: MemoryRepository
     private lateinit var settingsRepository: SettingsRepository
+    private lateinit var memorySearchStatsTracker: MemorySearchStatsTracker
     private lateinit var useCase: RetrieveRelevantMemoryUseCase
 
-    private val searchPoolLimit = 1_000
     private val settingsTopK = 5
     private val settingsThreshold = 0.55f
     private val settingsHalfLifeDays = 30
@@ -43,15 +44,16 @@ class RetrieveRelevantMemoryUseCaseTest {
         provider = mockk()
         memoryRepository = mockk()
         settingsRepository = mockk()
+        memorySearchStatsTracker = mockk(relaxed = true)
         useCase = RetrieveRelevantMemoryUseCase(
             embeddingProviderResolver,
             memoryRepository,
             MemoryReranker(),
             settingsRepository,
+            memorySearchStatsTracker,
         )
 
         coEvery { embeddingProviderResolver.resolve() } returns provider
-        coEvery { settingsRepository.maxMemoryChunksForSearch } returns flowOf(searchPoolLimit)
         coEvery { settingsRepository.memorySearchTopK } returns flowOf(settingsTopK)
         coEvery { settingsRepository.memorySearchThreshold } returns flowOf(settingsThreshold)
         coEvery { settingsRepository.memoryRecencyHalfLifeDays } returns flowOf(settingsHalfLifeDays)
@@ -70,10 +72,10 @@ class RetrieveRelevantMemoryUseCaseTest {
         val weak = chunk(2, "user likes coffee", floatArrayOf(0f, 1f, 0f))
         val noise = chunk(3, "the sky is blue", floatArrayOf(0f, 0f, 1f))
 
-        // The use case asks for the full scored pool (limit == searchPoolLimit)
-        // and the re-ranker drops everything below the configured threshold.
+        // The use case asks for the full scored pool (limit == null) and the
+        // re-ranker drops everything below the configured threshold.
         coEvery {
-            memoryRepository.findSimilarMemories(queryEmbedding, searchPoolLimit, searchPoolLimit)
+            memoryRepository.findSimilarMemories(queryEmbedding, limit = null)
         } returns listOf(
             relevant to 0.82f, // clears 0.55
             weak to 0.40f, // below threshold
@@ -91,7 +93,7 @@ class RetrieveRelevantMemoryUseCaseTest {
         val queryEmbedding = floatArrayOf(0.1f, 0.2f)
         coEvery { provider.embed(query) } returns queryEmbedding
         coEvery {
-            memoryRepository.findSimilarMemories(queryEmbedding, searchPoolLimit, searchPoolLimit)
+            memoryRepository.findSimilarMemories(queryEmbedding, limit = null)
         } returns emptyList()
 
         useCase(query)
@@ -110,7 +112,7 @@ class RetrieveRelevantMemoryUseCaseTest {
         // 0.50 is below the settings threshold (0.55) and must be filtered out,
         // proving the threshold default is read from settings.
         coEvery {
-            memoryRepository.findSimilarMemories(queryEmbedding, searchPoolLimit, searchPoolLimit)
+            memoryRepository.findSimilarMemories(queryEmbedding, limit = null)
         } returns listOf(chunk to 0.50f)
 
         val result = useCase(query)
@@ -118,7 +120,7 @@ class RetrieveRelevantMemoryUseCaseTest {
         assertEquals(emptyList<MemoryChunk>(), result)
         coVerify(exactly = 1) { settingsRepository.memoryRecencyHalfLifeDays }
         coVerify(exactly = 1) {
-            memoryRepository.findSimilarMemories(queryEmbedding, searchPoolLimit, searchPoolLimit)
+            memoryRepository.findSimilarMemories(queryEmbedding, limit = null)
         }
     }
 
@@ -132,7 +134,7 @@ class RetrieveRelevantMemoryUseCaseTest {
 
         val chunk = chunk(1, "fact", floatArrayOf(0.5f))
         coEvery {
-            memoryRepository.findSimilarMemories(queryEmbedding, searchPoolLimit, searchPoolLimit)
+            memoryRepository.findSimilarMemories(queryEmbedding, limit = null)
         } returns listOf(chunk to 0.40f) // clears the 0.30 override but not the 0.55 default
 
         val result = useCase(query, limit = overrideLimit, threshold = overrideThreshold)
@@ -149,7 +151,7 @@ class RetrieveRelevantMemoryUseCaseTest {
         val first = chunk(1, "user lives in Berlin", floatArrayOf(1f, 0f, 0f))
         val second = chunk(2, "user moved from Munich", floatArrayOf(0.9f, 0.1f, 0f))
         coEvery {
-            memoryRepository.findSimilarMemories(queryEmbedding, searchPoolLimit, searchPoolLimit)
+            memoryRepository.findSimilarMemories(queryEmbedding, limit = null)
         } returns listOf(first to 0.95f, second to 0.80f)
 
         val scored = useCase.retrieveScored(query)
@@ -171,7 +173,7 @@ class RetrieveRelevantMemoryUseCaseTest {
         val pinned = chunk(1, "pinned fact", floatArrayOf(0.5f), isPinned = true)
         val strong = chunk(2, "strong but unpinned", floatArrayOf(0.5f))
         coEvery {
-            memoryRepository.findSimilarMemories(queryEmbedding, searchPoolLimit, searchPoolLimit)
+            memoryRepository.findSimilarMemories(queryEmbedding, limit = null)
         } returns listOf(strong to 0.90f, pinned to 0.30f)
 
         // top-K of 1 is applied AFTER re-ranking, so the pinned chunk wins the
@@ -179,5 +181,23 @@ class RetrieveRelevantMemoryUseCaseTest {
         val result = useCase(query, limit = 1)
 
         assertEquals(listOf(pinned), result)
+    }
+
+    @Test
+    fun `given a search when invoked then raw similarity scores are recorded in the stats tracker`() = runTest {
+        val query = "q"
+        val queryEmbedding = floatArrayOf(0.5f)
+        coEvery { provider.embed(query) } returns queryEmbedding
+
+        val first = chunk(1, "fact", floatArrayOf(0.5f))
+        val second = chunk(2, "other", floatArrayOf(0.4f))
+        coEvery {
+            memoryRepository.findSimilarMemories(queryEmbedding, limit = null)
+        } returns listOf(first to 0.90f, second to 0.20f)
+
+        useCase(query)
+
+        // Raw (pre-rerank) scores feed the AVG SCORE stat, best-first.
+        coVerify(exactly = 1) { memorySearchStatsTracker.record(listOf(0.90f, 0.20f)) }
     }
 }

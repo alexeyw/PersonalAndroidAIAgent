@@ -54,15 +54,9 @@ object SettingsDefaults {
     const val PIPELINE_MAX_STEPS_MAX: Int = 100
 
     /**
-     * Default ceiling on the number of memory chunks scanned by the semantic
-     * search path before ranking.
-     */
-    const val MEMORY_CHUNK_SEARCH_LIMIT_DEFAULT: Int = 1_000
-
-    /**
      * Default top-K for long-term memory retrieval: how many ranked chunks a
-     * single search returns into a node's context block. Distinct from
-     * [MEMORY_CHUNK_SEARCH_LIMIT_DEFAULT], which caps the *scanned* pool.
+     * single search returns into a node's context block. The semantic search
+     * itself always scans the full stored pool before ranking.
      */
     const val MEMORY_SEARCH_TOP_K_DEFAULT: Int = 5
 

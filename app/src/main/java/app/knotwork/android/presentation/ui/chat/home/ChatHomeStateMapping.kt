@@ -9,15 +9,8 @@ import app.knotwork.design.components.chat.ClarificationCardModel
 import app.knotwork.design.components.chat.ComposerState
 import app.knotwork.design.components.chat.HitlConfirmationModel
 import app.knotwork.design.components.chips.Risk
-import app.knotwork.design.components.console.ConsoleFilter
-import app.knotwork.design.components.console.ConsoleLine
 import app.knotwork.design.components.console.ConsoleSnap
-import app.knotwork.design.components.console.ConsoleTab
-import app.knotwork.design.components.console.ConsoleTraceSpan
-import app.knotwork.design.components.console.ConsoleVarRow
-import app.knotwork.design.screens.chat.ChatHomeConsoleState
 import app.knotwork.design.screens.chat.ChatHomeMessageRow
-import app.knotwork.design.screens.chat.ChatHomeThreadRow
 import app.knotwork.design.screens.chat.ChatHomeViewState
 import app.knotwork.design.screens.chat.ChatHomeVisualState
 import org.json.JSONArray
@@ -28,69 +21,43 @@ import java.util.Date
 import java.util.Locale
 
 /**
- * Pure-Kotlin projection of the sealed [ChatHomeUiState] onto the catalog
- * [ChatHomeViewState] consumed by `ChatHomeContent`. Lives in `:app` because
- * the catalog cannot reach `app.knotwork.android.*` (Clean Architecture keeps
- * `:catalog` free of `:app` types).
+ * Pure-Kotlin projection of the aggregated [ChatHomeScreenState] onto the
+ * catalog [ChatHomeViewState] consumed by `ChatHomeContent`. Lives in `:app`
+ * because the catalog cannot reach `app.knotwork.android.*` (Clean
+ * Architecture keeps `:catalog` free of `:app` types).
  *
- * The mapping is intentionally chunky — every state owns a complete fixture
- * block. The stub-VM stage holds no real conversation history, so a
+ * The mapping is intentionally chunky — every visual state owns a complete
+ * fixture block. The stub-VM stage holds no real conversation history, so a
  * deterministic story unique to each variant is the cheapest way to make
  * the state picker meaningful while the real backend wiring is still
  * pending (post-v0.1).
  *
- * @param state which UI state to render.
- * @param threadTitle pre-formatted thread title for the TopAppBar.
- * @param modelName display name of the currently-active model.
- * @param composerValue current composer input value.
- * @param pendingTypedConfirm typed-confirm input for Destructive HITL.
+ * The console slice ([ChatHomeScreenState.console]) is already the catalog
+ * `ChatHomeConsoleState`, so it passes through without re-projection.
+ *
+ * @param fixtures locale-resolved stub strings (status pills, drawer
+ *   fallbacks, empty-state suggestion cards).
  * @return the immutable view-state passed directly to `ChatHomeContent`.
  */
-// Single switch over 8 variants; splitting would just shuffle the fixtures.
-@Suppress("LongMethod", "LongParameterList")
-fun ChatHomeUiState.toViewState(
-    threadTitle: String,
-    modelName: String,
-    fixtures: ChatHomeFixtures = ChatHomeFixtures.forTesting(),
-    messages: List<ChatHomeMessageRow> = emptyList(),
-    composerValue: String = "",
-    pendingTypedConfirm: String = "",
-    consoleSearchQuery: String? = null,
-    consoleFilter: ConsoleFilter = ConsoleFilter.allOn,
-    consoleLogs: List<ConsoleLine> = emptyList(),
-    consoleVars: List<ConsoleVarRow> = emptyList(),
-    consoleTraces: List<ConsoleTraceSpan> = emptyList(),
-    consoleTab: ConsoleTab = ConsoleTab.Logs,
-    consoleSnap: ConsoleSnap? = null,
-    pipelineName: String = "default",
-    tokensUsed: Int = 0,
-    tokensMax: Int = 0,
-    favorite: Boolean = false,
-    pendingTool: HitlPending? = null,
-    pendingClarification: ClarificationRequest? = null,
-    threads: List<ChatHomeThreadRow> = emptyList(),
-    streamingTokens: Int = 0,
-): ChatHomeViewState {
-    val consoleState = ChatHomeConsoleState(
-        snap = consoleSnap,
-        tab = consoleTab,
-        logs = consoleLogs,
-        vars = consoleVars,
-        traces = consoleTraces,
-        filter = consoleFilter,
-        searchQuery = consoleSearchQuery,
-    )
-    return when (this) {
+// Reason: single switch over 8 visual variants, each branch a flat
+// constructor call; splitting would just shuffle the fixtures.
+@Suppress("LongMethod")
+fun ChatHomeScreenState.toViewState(fixtures: ChatHomeFixtures = ChatHomeFixtures.forTesting()): ChatHomeViewState {
+    val threadTitle = thread.title
+    val modelName = model.name
+    val composerValue = composer.value
+    val resolvedPipelineName = pipelineName ?: PIPELINE_NAME_PLACEHOLDER
+    return when (val visual = visual) {
         is ChatHomeUiState.Loading -> ChatHomeViewState(
             visualState = ChatHomeVisualState.Loading,
             threadTitle = threadTitle,
             modelName = modelName,
             composerValue = composerValue,
-            pipelineName = pipelineName,
-            tokensUsed = tokensUsed,
-            tokensMax = tokensMax,
-            favorite = favorite,
-            console = consoleState,
+            pipelineName = resolvedPipelineName,
+            tokensUsed = tokens.used,
+            tokensMax = tokens.max,
+            favorite = thread.favorite,
+            console = console,
         )
 
         is ChatHomeUiState.Empty -> ChatHomeViewState(
@@ -99,12 +66,12 @@ fun ChatHomeUiState.toViewState(
             modelName = modelName,
             composerValue = composerValue,
             samplePromptCards = fixtures.suggestionCards,
-            pipelineName = pipelineName,
-            tokensUsed = tokensUsed,
-            tokensMax = tokensMax,
-            favorite = favorite,
+            pipelineName = resolvedPipelineName,
+            tokensUsed = tokens.used,
+            tokensMax = tokens.max,
+            favorite = thread.favorite,
             agentStatusLine = fixtures.statusIdle,
-            console = consoleState,
+            console = console,
         )
 
         is ChatHomeUiState.Idle -> ChatHomeViewState(
@@ -113,12 +80,12 @@ fun ChatHomeUiState.toViewState(
             modelName = modelName,
             messages = messages,
             composerValue = composerValue,
-            pipelineName = pipelineName,
-            tokensUsed = tokensUsed,
-            tokensMax = tokensMax,
-            favorite = favorite,
+            pipelineName = resolvedPipelineName,
+            tokensUsed = tokens.used,
+            tokensMax = tokens.max,
+            favorite = thread.favorite,
             agentStatusLine = fixtures.statusIdle,
-            console = consoleState,
+            console = console,
         )
 
         is ChatHomeUiState.Generating -> ChatHomeViewState(
@@ -128,30 +95,30 @@ fun ChatHomeUiState.toViewState(
             messages = messages,
             composerValue = composerValue,
             composerState = ComposerState.Generating,
-            pipelineName = pipelineName,
-            tokensUsed = tokensUsed,
-            tokensMax = tokensMax,
-            favorite = favorite,
+            pipelineName = resolvedPipelineName,
+            tokensUsed = tokens.used,
+            tokensMax = tokens.max,
+            favorite = thread.favorite,
             // Append the running token count so the pill reads
             // "generating · 42 tok" — gives the user visible progress on
             // long generations.
-            agentStatusLine = formatGeneratingStatus(fixtures.statusGenerating, streamingTokens),
-            console = consoleState,
+            agentStatusLine = formatGeneratingStatus(fixtures.statusGenerating, tokens.streaming),
+            console = console,
         )
 
         is ChatHomeUiState.HitlConfirm -> ChatHomeViewState(
             visualState = ChatHomeVisualState.HitlConfirm,
             threadTitle = threadTitle,
             modelName = modelName,
-            messages = messages + (pendingTool?.let { liveHitlRow(modelName, it) } ?: hitlRow(modelName, risk)),
+            messages = messages + (pending.tool?.let { liveHitlRow(modelName, it) } ?: hitlRow(modelName, visual.risk)),
             composerValue = composerValue,
-            pendingTypedConfirm = pendingTypedConfirm,
-            pipelineName = pipelineName,
-            tokensUsed = tokensUsed,
-            tokensMax = tokensMax,
-            favorite = favorite,
+            pendingTypedConfirm = composer.typedConfirm,
+            pipelineName = resolvedPipelineName,
+            tokensUsed = tokens.used,
+            tokensMax = tokens.max,
+            favorite = thread.favorite,
             agentStatusLine = fixtures.statusHitl,
-            console = consoleState,
+            console = console,
         )
 
         is ChatHomeUiState.Clarification -> ChatHomeViewState(
@@ -159,16 +126,16 @@ fun ChatHomeUiState.toViewState(
             threadTitle = threadTitle,
             modelName = modelName,
             messages = messages + (
-                pendingClarification?.let { liveClarificationRow(modelName, it) }
+                pending.clarification?.let { liveClarificationRow(modelName, it) }
                     ?: clarificationRow(modelName)
                 ),
             composerValue = composerValue,
-            pipelineName = pipelineName,
-            tokensUsed = tokensUsed,
-            tokensMax = tokensMax,
-            favorite = favorite,
+            pipelineName = resolvedPipelineName,
+            tokensUsed = tokens.used,
+            tokensMax = tokens.max,
+            favorite = thread.favorite,
             agentStatusLine = fixtures.statusClarification,
-            console = consoleState,
+            console = console,
         )
 
         is ChatHomeUiState.Error -> ChatHomeViewState(
@@ -177,14 +144,14 @@ fun ChatHomeUiState.toViewState(
             modelName = modelName,
             messages = messages,
             composerValue = composerValue,
-            composerState = ComposerState.Error(message = message),
-            errorMessage = message,
-            pipelineName = pipelineName,
-            tokensUsed = tokensUsed,
-            tokensMax = tokensMax,
-            favorite = favorite,
+            composerState = ComposerState.Error(message = visual.message),
+            errorMessage = visual.message,
+            pipelineName = resolvedPipelineName,
+            tokensUsed = tokens.used,
+            tokensMax = tokens.max,
+            favorite = thread.favorite,
             agentStatusLine = fixtures.statusError,
-            console = consoleState,
+            console = console,
         )
 
         is ChatHomeUiState.DrawerOpen -> ChatHomeViewState(
@@ -197,13 +164,13 @@ fun ChatHomeUiState.toViewState(
             // the debug picker forces DrawerOpen on an empty session list
             // (e.g. before the first session is persisted) — production
             // flows always have at least the active session present.
-            threads = threads.ifEmpty { fixtures.sessionRows },
-            pipelineName = pipelineName,
-            tokensUsed = tokensUsed,
-            tokensMax = tokensMax,
-            favorite = favorite,
+            threads = thread.rows.ifEmpty { fixtures.sessionRows },
+            pipelineName = resolvedPipelineName,
+            tokensUsed = tokens.used,
+            tokensMax = tokens.max,
+            favorite = thread.favorite,
             agentStatusLine = fixtures.statusIdle,
-            console = consoleState,
+            console = console,
         )
     }
 }
@@ -369,6 +336,14 @@ private fun renderJsonFragment(value: Any?): String = when (value) {
 
 /** Pattern used for the HITL / clarification row timestamp. */
 private const val HITL_TIMESTAMP_PATTERN: String = "HH:mm"
+
+/**
+ * Fallback subtitle rendered when the pipeline library is still empty
+ * (no pipelines have been created yet). Matches the catalog default in
+ * `ChatHomeViewState.pipelineName` so the TopAppBar subtitle does not
+ * jump between values once a pipeline is created.
+ */
+internal const val PIPELINE_NAME_PLACEHOLDER: String = "default"
 
 /** Key used when the orchestrator's argument blob cannot be parsed as a JSON object. */
 internal const val RAW_ARGS_FALLBACK_KEY: String = "args"

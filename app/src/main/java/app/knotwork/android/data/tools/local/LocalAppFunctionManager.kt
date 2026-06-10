@@ -19,6 +19,7 @@ import androidx.appfunctions.metadata.AppFunctionReferenceTypeMetadata
 import androidx.appfunctions.metadata.AppFunctionStringTypeMetadata
 import app.knotwork.android.domain.models.AgentTool
 import app.knotwork.android.domain.models.ToolRisk
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import org.json.JSONArray
@@ -94,7 +95,7 @@ class LocalAppFunctionManager(private val context: Context, private val codec: A
     suspend fun invokeByName(name: String, arguments: String): String {
         val discovered = lookup(name)
             ?: throw IllegalArgumentException("AppFunction $name is not currently discovered")
-        return runCatching {
+        return try {
             val data = codec.encode(arguments, discovered.parameters)
             val request = ExecuteAppFunctionRequest(
                 discovered.packageName,
@@ -103,7 +104,11 @@ class LocalAppFunctionManager(private val context: Context, private val codec: A
             )
             val response = executeFunction(request)
             codec.decode(response)
-        }.getOrElse { e -> throw wrapInvocationError(name, e) }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Throwable) {
+            throw wrapInvocationError(name, e)
+        }
     }
 
     /**

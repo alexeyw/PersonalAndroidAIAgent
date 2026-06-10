@@ -1,11 +1,14 @@
 package app.knotwork.android.domain.usecases
 
+import app.knotwork.android.domain.models.DbPassphraseUnavailableException
+import app.knotwork.android.domain.models.InitFailureKind
 import app.knotwork.android.domain.models.InitProgress
 import app.knotwork.android.domain.models.InitStage
 import app.knotwork.android.domain.models.Result
 import app.knotwork.android.domain.repositories.ChatRepository
 import app.knotwork.android.domain.repositories.MemoryRepository
 import app.knotwork.android.domain.repositories.PipelineRepository
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
@@ -54,6 +57,8 @@ class AppInitializationUseCase @Inject constructor(
         emit(progress(InitStage.Initializing, "Preparing application…", completed = 0))
         try {
             initializeAppUseCase()
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             Timber.tag(TAG).e(e, "InitializeAppUseCase failed")
             emit(failure(InitStage.Initializing, e))
@@ -74,6 +79,8 @@ class AppInitializationUseCase @Inject constructor(
         emit(progress(InitStage.LoadingPipelines, "Reading pipelines…", completed = 2))
         try {
             pipelineRepository.getAllPipelines().first()
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             Timber.tag(TAG).e(e, "Pipeline prefetch failed")
             emit(failure(InitStage.LoadingPipelines, e))
@@ -83,6 +90,8 @@ class AppInitializationUseCase @Inject constructor(
         emit(progress(InitStage.LoadingChats, "Reading chats…", completed = 3))
         try {
             chatRepository.getSessionsFlow().first()
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             Timber.tag(TAG).e(e, "Chat sessions prefetch failed")
             emit(failure(InitStage.LoadingChats, e))
@@ -92,6 +101,8 @@ class AppInitializationUseCase @Inject constructor(
         emit(progress(InitStage.LoadingMemory, "Reading memory…", completed = 4))
         try {
             memoryRepository.getRecentMemorySummaries(MEMORY_PREFETCH_LIMIT)
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             Timber.tag(TAG).e(e, "Memory prefetch failed")
             emit(failure(InitStage.LoadingMemory, e))
@@ -108,15 +119,31 @@ class AppInitializationUseCase @Inject constructor(
         stage = InitStage.Failed(
             cause = cause.localizedMessage ?: cause.javaClass.simpleName,
             failedStage = stage,
+            failureKind = classifyFailure(cause),
         ),
         message = cause.localizedMessage ?: "Initialization failed",
         completedSteps = 0,
         totalSteps = TOTAL_STEPS,
     )
 
+    /**
+     * Walks the cause chain looking for [DbPassphraseUnavailableException]. Room and the
+     * SQLite open-helper stack may wrap the original throwable, so a direct type check on
+     * the caught exception is not enough.
+     */
+    private fun classifyFailure(cause: Throwable): InitFailureKind {
+        val isPassphraseUnavailable = generateSequence(cause) { it.cause }
+            .take(MAX_CAUSE_CHAIN_DEPTH)
+            .any { it is DbPassphraseUnavailableException }
+        return if (isPassphraseUnavailable) InitFailureKind.DB_PASSPHRASE_UNAVAILABLE else InitFailureKind.GENERIC
+    }
+
     private companion object {
         const val TAG = "AppInit"
         const val TOTAL_STEPS = 5
         const val MEMORY_PREFETCH_LIMIT = 10
+
+        /** Defensive bound for cause-chain traversal in case of cyclic causes. */
+        const val MAX_CAUSE_CHAIN_DEPTH = 20
     }
 }

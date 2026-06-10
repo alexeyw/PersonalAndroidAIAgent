@@ -64,8 +64,32 @@ For the broader layering rationale, see
   `CoroutineScope` injected via Hilt.
 - **Never** use `GlobalScope`.
 - Use `StateFlow` for UI state and `SharedFlow` for one-shot events.
-- Handle exceptions via `CoroutineExceptionHandler` or `runCatching` —
+- Handle exceptions via `CoroutineExceptionHandler` or `try`/`catch` —
   raw exceptions must not propagate to the presentation layer.
+- **Never swallow `CancellationException`.** A `try`/`catch` around suspend
+  calls (or a `collect`) must re-throw it from a dedicated first catch
+  clause, *before* the generic handler maps the failure to an error state:
+
+  ```kotlin
+  try {
+      repository.doWork()
+  } catch (e: CancellationException) {
+      throw e // cooperative cancellation — never map to an error
+  } catch (e: Exception) {
+      Result.failure(e)
+  }
+  ```
+
+  `runCatching` must **never wrap suspend calls** — it traps
+  `CancellationException` and breaks cooperative cancellation (a cancelled
+  coroutine keeps running, or surfaces a false error to the user). Use the
+  `try`/`catch` shape above instead. Both rules are enforced by the
+  coroutine-cancellation detekt gate — see
+  [`static-analysis.md`](static-analysis.md#coroutine-cancellation-gate-detektdebug);
+  note the gate's blind spot for `try`/`catch` inside non-suspend inline
+  lambdas (e.g. `forEach`), which reviewers must still check manually.
+  Cleanup that must also run on the cancellation path belongs in `finally`
+  (with `withContext(NonCancellable)` if it suspends).
 
 ## Dependency injection (Hilt)
 
@@ -83,7 +107,8 @@ branch, run:
 ./gradlew check
 ```
 
-This aggregates detekt, ktlint, Android lint, unit tests and Kover. The same
+This aggregates detekt (both the strict run and the coroutine-cancellation
+gate), ktlint, Android lint, unit tests and Kover. The same
 task gates every pull request in CI. See
 [`docs/static-analysis.md`](static-analysis.md) for the rule set, current
 baselines, and how to handle a new finding.

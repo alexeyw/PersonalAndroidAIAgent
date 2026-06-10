@@ -19,6 +19,7 @@ import app.knotwork.android.domain.repositories.LocalModelRepository
 import app.knotwork.android.domain.repositories.MemoryRepository
 import app.knotwork.android.domain.repositories.SettingsRepository
 import app.knotwork.android.domain.services.EmbeddingProvider
+import app.knotwork.android.domain.services.MemorySearchStatsTracker
 import app.knotwork.android.domain.usecases.ClearAllMemoryUseCase
 import app.knotwork.android.domain.usecases.ExportMemoryBaseUseCase
 import app.knotwork.android.domain.usecases.GetSystemPromptVariableCatalogUseCase
@@ -27,8 +28,10 @@ import app.knotwork.android.domain.usecases.MemoryImportUseCase
 import app.knotwork.android.domain.usecases.ReembedAllMemoriesUseCase
 import app.knotwork.android.domain.usecases.ResetSamplingDefaultsUseCase
 import app.knotwork.android.domain.usecases.TestBackendUseCase
+import app.knotwork.design.components.dialogs.typedConfirmMatches
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -80,6 +83,7 @@ class SettingsViewModel @Inject constructor(
     private val reembedAllMemoriesUseCase: ReembedAllMemoriesUseCase,
     private val getSystemPromptVariableCatalogUseCase: GetSystemPromptVariableCatalogUseCase,
     private val embeddingProviders: Map<String, @JvmSuppressWildcards EmbeddingProvider>,
+    private val memorySearchStatsTracker: MemorySearchStatsTracker,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(SettingsUiState())
@@ -222,6 +226,10 @@ class SettingsViewModel @Inject constructor(
             _uiState.update { it.copy(memoryStats = stats) }
         }.launchIn(viewModelScope)
 
+        memorySearchStatsTracker.averageScore.onEach { value ->
+            _uiState.update { it.copy(averageSimilarityScore = value) }
+        }.launchIn(viewModelScope)
+
         settingsRepository.autoExtractEnabled.onEach { value ->
             _uiState.update { it.copy(autoExtractEnabled = value) }
         }.launchIn(viewModelScope)
@@ -256,6 +264,10 @@ class SettingsViewModel @Inject constructor(
 
         settingsRepository.activeEmbeddingProviderId.onEach { value ->
             _uiState.update { it.copy(activeEmbeddingProviderId = value) }
+        }.launchIn(viewModelScope)
+
+        settingsRepository.lastReembedProviderId.onEach { value ->
+            _uiState.update { it.copy(lastReembedProviderId = value) }
         }.launchIn(viewModelScope)
 
         settingsRepository.longRunningTaskNotificationsEnabled.onEach { value ->
@@ -619,13 +631,14 @@ class SettingsViewModel @Inject constructor(
      */
     fun exportMemoryBase(target: OutputStream) {
         viewModelScope.launch {
-            runCatching {
-                exportMemoryBaseUseCase(target)
-            }.onSuccess { count ->
+            try {
+                val count = exportMemoryBaseUseCase(target)
                 emitSnackbar(appContext.getString(R.string.settings_memory_export_success, count))
-            }.onFailure { error ->
-                Timber.w(error, "Memory export failed")
-                emitSnackbar(appContext.getString(R.string.settings_memory_export_failed, error.message.orEmpty()))
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Throwable) {
+                Timber.w(e, "Memory export failed")
+                emitSnackbar(appContext.getString(R.string.settings_memory_export_failed, e.message.orEmpty()))
             }
         }
     }
@@ -644,11 +657,13 @@ class SettingsViewModel @Inject constructor(
      */
     fun importMemory(source: InputStream) {
         viewModelScope.launch {
-            val jsonText = runCatching {
+            val jsonText = try {
                 withContext(Dispatchers.IO) { source.bufferedReader().use { it.readText() } }
-            }.getOrElse { error ->
-                Timber.w(error, "Memory import: failed to read file")
-                emitSnackbar(appContext.getString(R.string.settings_memory_import_failed, error.message.orEmpty()))
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Throwable) {
+                Timber.w(e, "Memory import: failed to read file")
+                emitSnackbar(appContext.getString(R.string.settings_memory_import_failed, e.message.orEmpty()))
                 return@launch
             }
 
@@ -691,11 +706,12 @@ class SettingsViewModel @Inject constructor(
         val pending = _uiState.value.pendingImport ?: return
         _uiState.update { it.copy(pendingImport = null) }
         viewModelScope.launch {
-            runCatching {
-                memoryImportUseCase.import(pending.document, strategy)
-            }.onSuccess { result ->
+            try {
+                val result = memoryImportUseCase.import(pending.document, strategy)
                 emitSnackbar(importResultMessage(result))
-            }.onFailure { error ->
+            } catch (e: CancellationException) {
+                throw e
+            } catch (error: Throwable) {
                 Timber.w(error, "Memory import failed")
                 emitSnackbar(appContext.getString(R.string.settings_memory_import_failed, error.message.orEmpty()))
             }
@@ -729,6 +745,9 @@ class SettingsViewModel @Inject constructor(
             reembedAllMemoriesUseCase().collect { progress ->
                 _uiState.update { it.copy(reembedProgress = progress.takeIf { fraction -> fraction < 1f }) }
             }
+            // The store is now consistent with the active provider — record it
+            // so the "re-embed recommended" banner disappears.
+            settingsRepository.setLastReembedProviderId(_uiState.value.activeEmbeddingProviderId)
             emitSnackbar(appContext.getString(R.string.settings_memory_reembed_done))
         }
     }
@@ -761,8 +780,8 @@ class SettingsViewModel @Inject constructor(
 
     fun confirmDestructive() {
         val pending = _uiState.value.pendingDestructive ?: return
-        val keyword = appContext.getString(R.string.settings_destructive_typed_keyword)
-        if (!_uiState.value.destructiveTypedInput.trim().equals(keyword, ignoreCase = true)) return
+        val keyword = appContext.getString(R.string.destructive_typed_keyword)
+        if (!typedConfirmMatches(input = _uiState.value.destructiveTypedInput, keyword = keyword)) return
         when (pending) {
             PendingDestructiveAction.ClearMemory -> performClearMemory()
             PendingDestructiveAction.ResetSettings -> performResetSettings()
@@ -773,6 +792,10 @@ class SettingsViewModel @Inject constructor(
     private fun performClearMemory() {
         viewModelScope.launch {
             clearAllMemoryUseCase()
+            // An empty store has no stale vectors — mark it consistent with
+            // the active provider so the re-embed banner does not survive a
+            // full wipe.
+            settingsRepository.setLastReembedProviderId(_uiState.value.activeEmbeddingProviderId)
             emitSnackbar(appContext.getString(R.string.settings_memory_cleared_snackbar))
         }
     }

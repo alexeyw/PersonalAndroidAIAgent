@@ -49,23 +49,22 @@ class ReembedAllMemoriesUseCase @Inject constructor(
         emit(0f)
         val provider = embeddingProviderResolver.resolve()
         memories.forEachIndexed { index, memory ->
-            runCatching { provider.embed(memory.text) }
-                .onSuccess { embedding ->
-                    // markMemoryReembedded (not updateMemory) so this manual pass
-                    // also clears any `needsReembedding` flag left by an import
-                    // under a different provider — otherwise the two repair paths
-                    // diverge and the background worker would re-embed these rows
-                    // again. The text is unchanged by a re-embed, so only the
-                    // vector needs writing.
-                    memoryRepository.markMemoryReembedded(memory.id, embedding)
-                }
-                .onFailure { error ->
-                    // runCatching also traps CancellationException; rethrow it so
-                    // a cancelled re-embed actually halts instead of silently
-                    // grinding through the rest of the corpus.
-                    if (error is CancellationException) throw error
-                    Timber.w(error, "Failed to re-embed memory ${memory.id}")
-                }
+            try {
+                val embedding = provider.embed(memory.text)
+                // markMemoryReembedded (not updateMemory) so this manual pass
+                // also clears any `needsReembedding` flag left by an import
+                // under a different provider — otherwise the two repair paths
+                // diverge and the background worker would re-embed these rows
+                // again. The text is unchanged by a re-embed, so only the
+                // vector needs writing.
+                memoryRepository.markMemoryReembedded(memory.id, embedding)
+            } catch (e: CancellationException) {
+                // A cancelled re-embed must actually halt instead of silently
+                // grinding through the rest of the corpus.
+                throw e
+            } catch (e: Throwable) {
+                Timber.w(e, "Failed to re-embed memory ${memory.id}")
+            }
             emit((index + 1).toFloat() / memories.size)
         }
     }.flowOn(Dispatchers.IO)

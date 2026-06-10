@@ -12,6 +12,7 @@ import app.knotwork.android.domain.repositories.SettingsRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.launchIn
@@ -148,6 +149,15 @@ class MemoryCompactionScheduler @Inject constructor(
         ) { count, max -> count.takeIf { it > max } }
             .distinctUntilChanged()
             .onEach { overLimitCount -> if (overLimitCount != null) triggerImmediate() }
+            // The stats flow is the first database access on this app-lifetime scope: when the
+            // DB cannot be opened (e.g. SQLCipher passphrase unavailable — the splash recovery
+            // screen owns that failure), an uncaught throw here would crash the process before
+            // the recovery UI renders. Log, re-arm the guard, and let the next startHardLimitWatch
+            // call (activity recreation, post-recovery cold path) start a fresh collector.
+            .catch { e ->
+                watchStarted.set(false)
+                Timber.tag(TAG).w(e, "Hard-limit watch stopped: memory stats unavailable")
+            }
             .launchIn(watchScope)
     }
 

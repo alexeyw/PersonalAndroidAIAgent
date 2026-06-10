@@ -15,11 +15,15 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import app.knotwork.design.components.brand.KnotworkLogo
 import app.knotwork.design.components.brand.KnotworkLogoSize
 import app.knotwork.design.components.buttons.KnotworkPrimaryButton
+import app.knotwork.design.components.buttons.KnotworkSecondaryButton
+import app.knotwork.design.components.dialogs.TypedConfirmDialog
+import app.knotwork.design.components.dialogs.TypedConfirmDialogState
 import app.knotwork.design.theme.KnotworkTheme
 import app.knotwork.design.tokens.KnotworkTextStyles
 
@@ -72,8 +76,21 @@ fun SplashContent(
                     retryLabel = retryLabel,
                     onRetry = callbacks.onRetry,
                 )
+                is SplashViewState.DataLocked -> SplashDataLocked(
+                    state = state,
+                    retryLabel = retryLabel,
+                    callbacks = callbacks,
+                )
             }
         }
+    }
+    if (state is SplashViewState.DataLocked && state.resetDialog != null) {
+        SplashResetConfirmDialog(
+            payload = state.resetDialog,
+            onInputChange = callbacks.onResetInputChange,
+            onConfirm = callbacks.onResetConfirm,
+            onDismiss = callbacks.onResetDismiss,
+        )
     }
 }
 
@@ -119,5 +136,85 @@ private fun SplashError(message: String, retryLabel: String, onRetry: () -> Unit
     }
 }
 
+/**
+ * Recovery surface for [SplashViewState.DataLocked]: headline, plain-language
+ * explanation, a primary Retry CTA and a destructive secondary reset action.
+ * The reset itself is armed only through [SplashResetConfirmDialog].
+ */
+@Composable
+private fun SplashDataLocked(state: SplashViewState.DataLocked, retryLabel: String, callbacks: SplashCallbacks) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp4),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Text(
+            text = state.title,
+            style = KnotworkTextStyles.TitleMd,
+            color = KnotworkTheme.extended.signalError,
+            textAlign = TextAlign.Center,
+        )
+        Text(
+            text = state.body,
+            style = KnotworkTextStyles.BodyBase,
+            color = KnotworkTheme.extended.onSurfaceMuted,
+            textAlign = TextAlign.Center,
+        )
+        KnotworkPrimaryButton(
+            text = retryLabel,
+            onClick = callbacks.onRetry,
+            modifier = Modifier.testTag(SPLASH_DATA_LOCKED_RETRY_TEST_TAG),
+        )
+        KnotworkSecondaryButton(
+            text = state.resetLabel,
+            onClick = callbacks.onResetRequest,
+            destructive = true,
+            modifier = Modifier.testTag(SPLASH_DATA_LOCKED_RESET_TEST_TAG),
+        )
+    }
+}
+
+/**
+ * Typed-confirm dialog gating the irreversible full data reset. Thin wrapper
+ * over the shared [TypedConfirmDialog], so the splash and Settings destructive
+ * confirmations share one interaction contract.
+ */
+@Composable
+private fun SplashResetConfirmDialog(
+    payload: SplashResetDialogState,
+    onInputChange: (String) -> Unit,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    TypedConfirmDialog(
+        state = TypedConfirmDialogState(
+            title = payload.title,
+            body = payload.body,
+            keyword = payload.keyword,
+            hint = payload.hint,
+            pendingInput = payload.pendingInput,
+        ),
+        confirmLabel = payload.confirmLabel,
+        cancelLabel = payload.cancelLabel,
+        onInputChange = onInputChange,
+        onConfirm = onConfirm,
+        onCancel = onDismiss,
+        fieldTestTag = SPLASH_RESET_TYPED_FIELD_TEST_TAG,
+        confirmTestTag = SPLASH_RESET_CONFIRM_BUTTON_TEST_TAG,
+    )
+}
+
 /** Default Retry button label used by catalog previews / snapshots. */
 private const val SPLASH_RETRY_LABEL = "Retry"
+
+/** Test tag of the Retry button on the data-locked recovery surface. */
+const val SPLASH_DATA_LOCKED_RETRY_TEST_TAG: String = "splash_data_locked_retry"
+
+/** Test tag of the destructive reset button on the data-locked recovery surface. */
+const val SPLASH_DATA_LOCKED_RESET_TEST_TAG: String = "splash_data_locked_reset"
+
+/** Test tag of the typed-confirm input inside the reset dialog. */
+const val SPLASH_RESET_TYPED_FIELD_TEST_TAG: String = "splash_reset_typed_field"
+
+/** Test tag of the confirm button inside the reset dialog. */
+const val SPLASH_RESET_CONFIRM_BUTTON_TEST_TAG: String = "splash_reset_confirm_button"

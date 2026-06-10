@@ -10,8 +10,8 @@ import kotlinx.coroutines.flow.Flow
 /**
  * Repository interface for managing application-wide settings and user
  * preferences. Provides abstraction over the underlying persistence
- * mechanism (DataStore + EncryptedSharedPreferences for the secret
- * payloads).
+ * mechanism (DataStore + the Keystore-backed encrypted store for the
+ * secret payloads).
  *
  * The interface is intentionally large; per-feature splits (Sampling /
  * Identity / Memory) are planned post-v0.1. The detekt suppression is
@@ -273,18 +273,6 @@ interface SettingsRepository {
     suspend fun setConsolePreferredConsoleTabName(name: String)
 
     /**
-     * A [Flow] representing the maximum number of memory chunks to load for similarity search.
-     */
-    val maxMemoryChunksForSearch: Flow<Int>
-
-    /**
-     * Updates the maximum number of memory chunks for similarity search.
-     *
-     * @param limit The new limit.
-     */
-    suspend fun setMaxMemoryChunksForSearch(limit: Int)
-
-    /**
      * A [Flow] emitting the epoch-millis of the most recent successful memory
      * compaction pass (manual or background), or `0L` when compaction has
      * never run. Powers the "compacted N ago" line on the Memory stats card.
@@ -301,10 +289,9 @@ interface SettingsRepository {
     /**
      * A [Flow] emitting the maximum number of long-term memory chunks a single
      * retrieval returns into a node's context (the "top-K" of the similarity
-     * search). Distinct from [maxMemoryChunksForSearch], which caps how many
-     * chunks are *scanned*; this caps how many survive ranking and reach the
-     * prompt. Defaults to `SettingsDefaults.MEMORY_SEARCH_TOP_K_DEFAULT` (5)
-     * for a fresh install.
+     * search). The search itself always scans the full stored pool; this caps
+     * how many results survive ranking and reach the prompt. Defaults to
+     * `SettingsDefaults.MEMORY_SEARCH_TOP_K_DEFAULT` (5) for a fresh install.
      */
     val memorySearchTopK: Flow<Int>
 
@@ -413,9 +400,10 @@ interface SettingsRepository {
 
     /**
      * A [Flow] representing the id of the pipeline the user has marked as
-     * default. `null` means no explicit choice — callers should fall back
-     * to the first pipeline returned by `PipelineRepository.getAllPipelines()`
-     * (the same convention used before this setting was introduced).
+     * default. `null` means no explicit choice — chats without their own
+     * binding then have no pipeline to execute against and the task queue
+     * fails such runs with an explicit error (it never silently picks an
+     * arbitrary pipeline from the library).
      *
      * Set on first launch by `InitializeAppUseCase` to the seeded
      * `Default System Pipeline` so the default is unambiguous from the
@@ -425,8 +413,8 @@ interface SettingsRepository {
 
     /**
      * Updates the user-marked default pipeline id. Pass `null` to clear
-     * the marker (the resolution then falls back to the first pipeline
-     * in the library).
+     * the marker (unbound chats then refuse to run until a new default
+     * is marked or the chat is bound explicitly).
      *
      * @param pipelineId Pipeline id to mark as default, or `null` to clear.
      */
@@ -590,9 +578,35 @@ interface SettingsRepository {
     /**
      * Persists the active embedding provider id.
      *
+     * Implementations also capture the *previous* active id into
+     * [lastReembedProviderId] when that value has never been set, so the
+     * provider the stored embeddings were actually created with is known from
+     * the first provider switch onward (powers the re-embed reminder banner).
+     *
      * @param id One of the `EmbeddingProvider.ID_*` constants.
      */
     suspend fun setActiveEmbeddingProviderId(id: String)
+
+    /**
+     * Id of the embedding provider the stored memory vectors were last
+     * (re-)embedded with, or `null` when unknown (no provider switch and no
+     * re-embed has happened yet — the store is then in sync by definition).
+     *
+     * Settings → Memory compares this against [activeEmbeddingProviderId]:
+     * a mismatch means existing vectors live in a different embedding space
+     * than new queries, and a persistent "re-embed recommended" banner is
+     * shown until the user runs a successful re-embed (or wipes the store).
+     */
+    val lastReembedProviderId: Flow<String?>
+
+    /**
+     * Records the provider id the memory store is now consistent with —
+     * called after a successful full re-embed and after a full memory wipe
+     * (an empty store has no stale vectors).
+     *
+     * @param id One of the `EmbeddingProvider.ID_*` constants.
+     */
+    suspend fun setLastReembedProviderId(id: String)
 
     /**
      * `true` when the agent should automatically extract durable facts from a

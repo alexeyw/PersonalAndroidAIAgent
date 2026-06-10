@@ -8,7 +8,6 @@ import app.knotwork.android.domain.models.ChatMessage
 import app.knotwork.android.domain.models.ChatSession
 import app.knotwork.android.domain.models.ClarificationRequest
 import app.knotwork.android.domain.models.ConsoleEvent
-import app.knotwork.android.domain.models.LocalModel
 import app.knotwork.android.domain.models.Result
 import app.knotwork.android.domain.models.Role
 import app.knotwork.android.domain.models.ToolRisk
@@ -33,11 +32,10 @@ import app.knotwork.design.components.console.ConsoleLine
 import app.knotwork.design.components.console.ConsoleSnap
 import app.knotwork.design.components.console.ConsoleSource
 import app.knotwork.design.components.console.ConsoleTab
-import app.knotwork.design.components.console.ConsoleTraceSpan
-import app.knotwork.design.components.console.ConsoleVarRow
 import app.knotwork.design.screens.chat.ChatHomeMessageRow
 import app.knotwork.design.screens.chat.ChatHomeThreadRow
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -52,6 +50,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import org.json.JSONArray
 import org.json.JSONObject
+import timber.log.Timber
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -79,16 +78,25 @@ import javax.inject.Inject
  * thread switching, the token counter, and the drawer / composer / overflow
  * secondary actions (new-thread, rename, favorite, import, model picker,
  * settings).
+ *
+ * Everything the screen renders is aggregated into a single immutable
+ * [ChatHomeScreenState] exposed through [state]; every mutation funnels
+ * through `_state.update { it.copy(...) }`. One-shot side effects (export
+ * payloads, snackbars, the pipeline-fallback signal) stay on dedicated
+ * [SharedFlow] channels because replaying them on re-subscription would
+ * duplicate the side effect.
  */
 @HiltViewModel
 @Suppress(
     // Reason: Chat home is the single entry-point for every user-visible
-    // agent interaction (messaging, session switching, pipeline binding,
-    // token counter, deleted-pipeline fallback, debug picker). Splitting
-    // would require an external store; tracked for a future refactor.
+    // agent interaction. The render state is consolidated into one
+    // ChatHomeScreenState flow, but the *intent* surface remains wide by
+    // design: messaging, session switching, console pane, HITL +
+    // clarification, model picker, import/export each contribute public
+    // intent methods plus their private observers — well above the
+    // 25-function gate. Splitting would scatter one screen's contract
+    // across artificial helper classes.
     "TooManyFunctions",
-    "LargeClass",
-    "LongParameterList",
 )
 class ChatHomeViewModel @Inject constructor(
     private val agentOrchestratorUseCase: AgentOrchestratorUseCase,
@@ -104,158 +112,31 @@ class ChatHomeViewModel @Inject constructor(
     private val saveMessageToMemoryUseCase: SaveMessageToMemoryUseCase,
 ) : ViewModel() {
 
-    private val _currentSessionId: MutableStateFlow<String> = MutableStateFlow("")
-    private val _threadTitle: MutableStateFlow<String> = MutableStateFlow(DEFAULT_THREAD_TITLE)
-    private val _modelName: MutableStateFlow<String> = MutableStateFlow(DEFAULT_MODEL_NAME)
-    private val _composerValue: MutableStateFlow<String> = MutableStateFlow("")
-    private val _pendingTypedConfirm: MutableStateFlow<String> = MutableStateFlow("")
-    private val _messages: MutableStateFlow<List<ChatHomeMessageRow>> = MutableStateFlow(emptyList())
-    private val _state: MutableStateFlow<ChatHomeUiState> = MutableStateFlow(ChatHomeUiState.Loading)
-    private val _consoleSearchQuery: MutableStateFlow<String?> = MutableStateFlow(null)
-    private val _consoleFilter: MutableStateFlow<ConsoleFilter> = MutableStateFlow(ConsoleFilter.allOn)
-    private val _pipelineName: MutableStateFlow<String?> = MutableStateFlow(null)
-    private val _tokensUsed: MutableStateFlow<Int> = MutableStateFlow(0)
-    private val _tokensMax: MutableStateFlow<Int> = MutableStateFlow(0)
+    private val _state: MutableStateFlow<ChatHomeScreenState> = MutableStateFlow(ChatHomeScreenState())
+
+    /**
+     * Single source of truth for the chat-home surface. The screen performs
+     * one `collectAsStateWithLifecycle` on this flow and hands the immutable
+     * sub-structures (composer, console, pending, thread, model, tokens)
+     * down the tree as-is.
+     */
+    val state: StateFlow<ChatHomeScreenState> = _state.asStateFlow()
+
     private val _pipelineFallbackEvents: MutableSharedFlow<Unit> = MutableSharedFlow(extraBufferCapacity = 1)
-    private val _pendingTool: MutableStateFlow<HitlPending?> = MutableStateFlow(null)
-    private val _pendingClarification: MutableStateFlow<ClarificationRequest?> = MutableStateFlow(null)
-    private val _consoleLines: MutableStateFlow<List<ConsoleLine>> = MutableStateFlow(emptyList())
-    private val _consoleVars: MutableStateFlow<List<ConsoleVarRow>> = MutableStateFlow(emptyList())
-    private val _consoleTraces: MutableStateFlow<List<ConsoleTraceSpan>> = MutableStateFlow(emptyList())
-    private val _consoleTab: MutableStateFlow<ConsoleTab> = MutableStateFlow(ConsoleTab.Logs)
-    private val _consoleSnap: MutableStateFlow<ConsoleSnap?> = MutableStateFlow(null)
-    private val _consoleClearConfirmRequested: MutableStateFlow<Boolean> = MutableStateFlow(false)
     private val _consoleSnackbarEvents: MutableSharedFlow<ConsoleSnackbarEvent> =
         MutableSharedFlow(extraBufferCapacity = 1)
-    private val _favorite: MutableStateFlow<Boolean> = MutableStateFlow(false)
-    private val _threadRows: MutableStateFlow<List<ChatHomeThreadRow>> = MutableStateFlow(emptyList())
-    private val _installedModels: MutableStateFlow<List<LocalModel>> = MutableStateFlow(emptyList())
-    private val _activeModelId: MutableStateFlow<Long?> = MutableStateFlow(null)
-    private val _availablePipelines: MutableStateFlow<List<PipelineSummary>> = MutableStateFlow(emptyList())
-
-    // Running approximate token count for the in-flight LLM stream. Reset on
-    // each new send / Completed / Error and surfaced through the agent
-    // status pill so the user sees forward progress during long generations.
-    private val _streamingTokens: MutableStateFlow<Int> = MutableStateFlow(0)
     private val _exportEvents: MutableSharedFlow<ChatExportPayload> = MutableSharedFlow(extraBufferCapacity = 1)
     private val _importErrorEvents: MutableSharedFlow<String> = MutableSharedFlow(extraBufferCapacity = 1)
     private val _memorySaveEvents: MutableSharedFlow<MemorySaveEvent> = MutableSharedFlow(extraBufferCapacity = 1)
 
-    /** Externally-observable current session id. */
-    val currentSessionId: StateFlow<String> = _currentSessionId.asStateFlow()
-
-    /** Externally-observable thread title used by the screen-level composable. */
-    val threadTitle: StateFlow<String> = _threadTitle.asStateFlow()
-
-    /** Externally-observable model display name. */
-    val modelName: StateFlow<String> = _modelName.asStateFlow()
-
-    /** Externally-observable composer input value. */
-    val composerValue: StateFlow<String> = _composerValue.asStateFlow()
-
-    /** Externally-observable typed-confirm input. */
-    val pendingTypedConfirm: StateFlow<String> = _pendingTypedConfirm.asStateFlow()
-
-    /** Externally-observable chat message rows projected from [ChatRepository]. */
-    val messages: StateFlow<List<ChatHomeMessageRow>> = _messages.asStateFlow()
-
-    /** Externally-observable sealed UI state — single source of truth for the chat-home surface. */
-    val state: StateFlow<ChatHomeUiState> = _state.asStateFlow()
-
-    /** Externally-observable console search query (null = hidden, "" = visible but unfiltered). */
-    val consoleSearchQuery: StateFlow<String?> = _consoleSearchQuery.asStateFlow()
-
-    /** Externally-observable console source-set filter. */
-    val consoleFilter: StateFlow<ConsoleFilter> = _consoleFilter.asStateFlow()
-
-    /** Display name of the pipeline bound to the active chat — rendered as TopAppBar subtitle. */
-    val pipelineName: StateFlow<String?> = _pipelineName.asStateFlow()
-
-    /** Rough token usage of the active session (text-length / 4). */
-    val tokensUsed: StateFlow<Int> = _tokensUsed.asStateFlow()
-
-    /** Configured context-window cap propagated from [SettingsRepository.maxContextLength]. */
-    val tokensMax: StateFlow<Int> = _tokensMax.asStateFlow()
-
     /**
-     * Running approximate count of tokens produced by the in-flight LLM
-     * stream. Surfaced through the agent status pill as `generating · N tok`
-     * so users see forward progress on long generations. Zero outside of
-     * [ChatHomeUiState.Generating].
-     */
-    val streamingTokens: StateFlow<Int> = _streamingTokens.asStateFlow()
-
-    /**
-     * One-shot signal raised when the pipeline bound to the active chat
-     * disappears from the library and the binding silently falls back to
-     * the default pipeline. The screen surfaces a `KnotworkSnackbar` so
-     * the user is told their selection moved.
+     * One-shot signal raised when the binding of the active chat points
+     * at a pipeline that no longer exists in the library (deleted, or
+     * stale at thread-switch time) and the chat is rebound to the default
+     * pipeline. The screen surfaces a `KnotworkSnackbar` so the user is
+     * told their selection moved — the rebind is never silent.
      */
     val pipelineFallbackEvents: SharedFlow<Unit> = _pipelineFallbackEvents.asSharedFlow()
-
-    /**
-     * Snapshot of the tool invocation that the orchestrator has paused on,
-     * surfaced so the trailing HITL confirmation card can render its real
-     * tool name / arguments / risk. `null` whenever no approval gate is
-     * active. Mirrors [pendingClarification] which plays the same role for
-     * `AwaitingClarification`.
-     */
-    val pendingTool: StateFlow<HitlPending?> = _pendingTool.asStateFlow()
-
-    /**
-     * Snapshot of the clarification request the orchestrator has paused on,
-     * surfaced so the trailing clarification card can render the real
-     * question + canned answer options. `null` whenever the agent is not
-     * waiting on a clarification reply.
-     */
-    val pendingClarification: StateFlow<ClarificationRequest?> = _pendingClarification.asStateFlow()
-
-    /**
-     * Live snapshot of the console pane's Logs tab. Aggregated from every
-     * [AgentOrchestratorState.ConsoleLog] emission of the active run, with
-     * cleared rows trimmed off via [consoleClearBaseline] so a mid-run
-     * `Clear` survives the next cumulative engine snapshot.
-     */
-    val consoleLines: StateFlow<List<ConsoleLine>> = _consoleLines.asStateFlow()
-
-    /**
-     * Live snapshot of the console pane's Vars tab. Derived from every
-     * [AgentOrchestratorState.NodeIO] emission; two rows per node (`input`
-     * and `output`), grouped by node label inside the catalog body.
-     */
-    val consoleVars: StateFlow<List<ConsoleVarRow>> = _consoleVars.asStateFlow()
-
-    /**
-     * Live snapshot of the console pane's Traces tab. Built from every
-     * [AgentOrchestratorState.PipelineTrace] emission; the catalog spans
-     * carry pre-formatted start timestamps observed when the trace step
-     * landed (not the node's own wall-clock start, which the engine does
-     * not surface today).
-     */
-    val consoleTraces: StateFlow<List<ConsoleTraceSpan>> = _consoleTraces.asStateFlow()
-
-    /**
-     * User-selected console tab persisted via
-     * [SettingsRepository.consolePreferredConsoleTabName]. Hydrated on init
-     * and updated by [onConsoleTabChange].
-     */
-    val consoleTab: StateFlow<ConsoleTab> = _consoleTab.asStateFlow()
-
-    /**
-     * Active console-pane snap (`null` = closed). Independent of [state] so
-     * the pane can stay open across `Generating → HitlConfirm →
-     * Clarification → Idle / Completed / Error` transitions. The catalog
-     * renders the overlay whenever this is non-null, keeping the underlying
-     * chat surface visible behind the pane.
-     */
-    val consoleSnap: StateFlow<ConsoleSnap?> = _consoleSnap.asStateFlow()
-
-    /**
-     * Whether the destructive "Clear console for this session?" confirmation
-     * dialog is requested. Toggled by [requestConsoleClear] /
-     * [dismissConsoleClear] / [confirmConsoleClear].
-     */
-    val consoleClearConfirmRequested: StateFlow<Boolean> = _consoleClearConfirmRequested.asStateFlow()
 
     /**
      * One-shot stream of snackbar events raised by the console pane (line
@@ -264,27 +145,6 @@ class ChatHomeViewModel @Inject constructor(
      * by the Composable (which owns `LocalClipboardManager`).
      */
     val consoleSnackbarEvents: SharedFlow<ConsoleSnackbarEvent> = _consoleSnackbarEvents.asSharedFlow()
-
-    /** Whether the currently active session is favorited. Drives the TopAppBar star icon. */
-    val favorite: StateFlow<Boolean> = _favorite.asStateFlow()
-
-    /**
-     * Drawer thread list projected from the live [ChatSession] cache. Favorited
-     * sessions sort to the top; the rest follow the repository's `updatedAt
-     * DESC` order. The catalog `ChatHomeViewState.threads` slot is wired to
-     * this flow so the screen no longer needs to call into fixtures for the
-     * drawer body.
-     */
-    val threadRows: StateFlow<List<ChatHomeThreadRow>> = _threadRows.asStateFlow()
-
-    /** Locally installed LiteRT models — feeds the chat-home model-picker sheet. */
-    val installedModels: StateFlow<List<LocalModel>> = _installedModels.asStateFlow()
-
-    /** Row id of the currently active local model (`null` when none is active). */
-    val activeModelId: StateFlow<Long?> = _activeModelId.asStateFlow()
-
-    /** Available pipelines — surfaced by the new-chat pipeline picker. */
-    internal val availablePipelinesFlow: StateFlow<List<PipelineSummary>> = _availablePipelines.asStateFlow()
 
     /**
      * One-shot stream raised when the user picks `Export chat` from the
@@ -313,7 +173,6 @@ class ChatHomeViewModel @Inject constructor(
     private var clarificationTimeoutJob: Job? = null
     private var sessions: List<ChatSession> = emptyList()
     private var availablePipelinesObserved: Boolean = false
-    private var availablePipelines: List<PipelineSummary> = emptyList()
     private var defaultPipelineId: String? = null
 
     /**
@@ -350,12 +209,12 @@ class ChatHomeViewModel @Inject constructor(
 
     /** Updates the composer input value. Hoisted to the VM so screen recompositions never own the text. */
     fun onComposerValueChange(value: String) {
-        _composerValue.value = value
+        _state.update { it.copy(composer = it.composer.copy(value = value)) }
     }
 
     /** Updates the typed-confirm input shown next to the Destructive HITL confirmation row. */
     fun onTypedConfirmChange(value: String) {
-        _pendingTypedConfirm.value = value
+        _state.update { it.copy(composer = it.composer.copy(typedConfirm = value)) }
     }
 
     /**
@@ -372,35 +231,41 @@ class ChatHomeViewModel @Inject constructor(
      * the `isFinal = true` row when the pipeline reaches OUTPUT.
      */
     fun sendMessage() {
-        val draft = _composerValue.value.trim()
+        val draft = _state.value.composer.value.trim()
         if (draft.isEmpty()) return
-        if (_state.value is ChatHomeUiState.Generating) return
+        if (_state.value.visual is ChatHomeUiState.Generating) return
         if (!llmInferenceEngine.isInitialized) {
             // Surface the error with copy that matches what Retry actually
             // does — Retry attempts to load the active model in-place
             // through `retryAfterError`, not "open Settings and load it
             // there". If no active model is registered the load fails and
             // the error message switches to the Settings-redirect copy.
-            _state.value = ChatHomeUiState.Error(MODEL_NOT_LOADED_MESSAGE)
+            _state.update { it.copy(visual = ChatHomeUiState.Error(MODEL_NOT_LOADED_MESSAGE)) }
             return
         }
-        _composerValue.value = ""
+        _state.update { it.copy(composer = it.composer.copy(value = "")) }
 
-        val sessionId = _currentSessionId.value
+        val sessionId = _state.value.thread.currentSessionId
         if (sessionId.isBlank()) return
         val pipelineId = sessions.firstOrNull { it.id == sessionId }?.pipelineId
 
-        _state.value = ChatHomeUiState.Generating
-        // Reset the streaming token counter at the start of every run so the
-        // pill displays "generating · 0 tok" → "generating · N tok" rather
-        // than carrying over the previous response's final count.
-        _streamingTokens.value = 0
-        clearPendingApprovalAndClarification()
+        cancelClarificationWatchdog()
         // Fresh run = fresh cumulative log upstream; the baseline carried
         // over from a previous run's mid-stream Clear no longer applies
         // (the engine restarts events from scratch). Mirrors legacy
         // `ChatViewModel.sendMessage`.
-        resetConsoleStateForNewRun()
+        resetConsoleCachesForNewRun()
+        // Single atomic transition: flip to Generating, reset the streaming
+        // token counter (the pill displays "generating · 0 tok" →
+        // "generating · N tok" rather than carrying over the previous
+        // response's final count), drop pending HITL / clarification
+        // snapshots, and clear the console projections of the previous run.
+        _state.update { current ->
+            current.withPendingCleared().withConsoleProjectionsCleared().copy(
+                visual = ChatHomeUiState.Generating,
+                tokens = current.tokens.copy(streaming = 0),
+            )
+        }
 
         autoRenameIfDefault(sessionId, draft)
 
@@ -408,7 +273,9 @@ class ChatHomeViewModel @Inject constructor(
         generationJob = viewModelScope.launch {
             agentOrchestratorUseCase(sessionId, draft, pipelineId)
                 .catch { error ->
-                    _state.value = ChatHomeUiState.Error(error.message ?: UNKNOWN_ERROR_FALLBACK)
+                    _state.update {
+                        it.copy(visual = ChatHomeUiState.Error(error.message ?: UNKNOWN_ERROR_FALLBACK))
+                    }
                 }
                 .collect { orchestratorState -> handleOrchestratorState(orchestratorState) }
         }
@@ -431,18 +298,25 @@ class ChatHomeViewModel @Inject constructor(
      */
     fun retryAfterError() {
         if (llmInferenceEngine.isInitialized) {
-            _state.value = restingState()
+            _state.update { it.copy(visual = it.restingVisual()) }
             return
         }
         // Surface a transient "loading…" hint via the generating state — the
         // catalog renders the same composer affordance and the user sees
         // forward motion. Reset back to Error / resting on the load result.
-        _state.value = ChatHomeUiState.Generating
+        _state.update { it.copy(visual = ChatHomeUiState.Generating) }
         viewModelScope.launch {
             val outcome = loadModelUseCase()
-            _state.value = when (outcome) {
-                is Result.Success -> restingState()
-                is Result.Error -> ChatHomeUiState.Error(outcome.message ?: NO_ACTIVE_MODEL_MESSAGE)
+            // The resting visual is derived from the update receiver, not a
+            // pre-computed snapshot — a message emission landing while
+            // `loadModelUseCase` was suspended must be reflected here.
+            _state.update { current ->
+                current.copy(
+                    visual = when (outcome) {
+                        is Result.Success -> current.restingVisual()
+                        is Result.Error -> ChatHomeUiState.Error(outcome.message ?: NO_ACTIVE_MODEL_MESSAGE)
+                    },
+                )
             }
         }
     }
@@ -456,25 +330,30 @@ class ChatHomeViewModel @Inject constructor(
      */
     fun stopGeneration() {
         generationJob?.cancel()
-        clearPendingApprovalAndClarification()
+        cancelClarificationWatchdog()
         _state.update { current ->
-            if (current is ChatHomeUiState.Generating) {
-                if (_messages.value.isEmpty()) ChatHomeUiState.Empty else ChatHomeUiState.Idle
+            val cleared = current.withPendingCleared()
+            if (current.visual is ChatHomeUiState.Generating) {
+                cleared.copy(visual = cleared.restingVisual())
             } else {
-                current
+                cleared
             }
         }
     }
 
     /** Opens the drawer overlay. */
     fun openDrawer() {
-        _state.value = ChatHomeUiState.DrawerOpen
+        _state.update { it.copy(visual = ChatHomeUiState.DrawerOpen) }
     }
 
     /** Closes the drawer overlay, settling on the right state for the current message list. */
     fun closeDrawer() {
-        if (_state.value is ChatHomeUiState.DrawerOpen) {
-            _state.value = restingState()
+        _state.update { current ->
+            if (current.visual is ChatHomeUiState.DrawerOpen) {
+                current.copy(visual = current.restingVisual())
+            } else {
+                current
+            }
         }
     }
 
@@ -483,38 +362,48 @@ class ChatHomeViewModel @Inject constructor(
      * any in-flight generation, and re-subscribes the message stream to
      * the newly-selected session.
      *
-     * The previous thread's rows are cleared *synchronously* before the
-     * persistence coroutine launches — otherwise [restingState] would
-     * read stale data from [_messages] and resolve to `Idle` while the
-     * UI is conceptually empty, producing a brief flicker of the
-     * outgoing thread's content.
+     * The previous thread's rows are cleared in the same atomic state
+     * update that flips the surface to `Empty` and installs the new
+     * session id — otherwise [restingVisual] would read stale data from
+     * the message list and resolve to `Idle` while the UI is conceptually
+     * empty, producing a brief flicker of the outgoing thread's content.
      */
     fun selectThread(threadId: String) {
-        if (threadId.isBlank() || threadId == _currentSessionId.value) return
+        if (threadId.isBlank() || threadId == _state.value.thread.currentSessionId) return
         generationJob?.cancel()
         messagesJob?.cancel()
-        clearPendingApprovalAndClarification()
-        resetConsoleStateForNewRun()
-        _consoleSnap.value = null
-        _messages.value = emptyList()
-        _tokensUsed.value = 0
-        _state.value = ChatHomeUiState.Empty
-        _currentSessionId.value = threadId
-        applyCurrentSessionMetadata()
+        cancelClarificationWatchdog()
+        resetConsoleCachesForNewRun()
+        _state.update { current ->
+            val cleared = current.withPendingCleared().withConsoleProjectionsCleared()
+            cleared.copy(
+                console = cleared.console.copy(snap = null),
+                messages = emptyList(),
+                tokens = cleared.tokens.copy(used = 0),
+                visual = ChatHomeUiState.Empty,
+                thread = cleared.thread.copy(currentSessionId = threadId),
+            ).withSessionMetadataRefreshed()
+        }
         observeMessages(threadId)
         viewModelScope.launch {
             settingsRepository.setCurrentChatSessionId(threadId)
+            // The pipelines / sessions flows do not re-emit on a thread
+            // switch, so a binding that went stale since their last
+            // emission would otherwise reach the task queue silently.
+            // Re-running the deleted-binding check here rebinds the chat
+            // to the default and surfaces the one-shot Snackbar instead.
+            handleDeletedBoundPipeline(_state.value.availablePipelines)
         }
     }
 
     /**
      * Opens the console pane at the given [snap] (default: Partial). The
-     * pane is an independent overlay — the underlying [state] is left
-     * untouched, so the user can drill into pipeline activity during
+     * pane is an independent overlay — the underlying [ChatHomeScreenState.visual]
+     * is left untouched, so the user can drill into pipeline activity during
      * Generating / HitlConfirm / Clarification without losing their place.
      */
     fun openConsole(snap: ConsoleSnap = ConsoleSnap.Partial) {
-        _consoleSnap.value = snap
+        _state.update { it.copy(console = it.console.copy(snap = snap)) }
     }
 
     /**
@@ -522,44 +411,51 @@ class ChatHomeViewModel @Inject constructor(
      * when the pane is closed.
      */
     fun setConsoleSnap(snap: ConsoleSnap) {
-        if (_consoleSnap.value != null) {
-            _consoleSnap.value = snap
+        _state.update { current ->
+            if (current.console.snap != null) {
+                current.copy(console = current.console.copy(snap = snap))
+            } else {
+                current
+            }
         }
     }
 
     /** Dismisses the console pane without touching the underlying chat state. */
     fun closeConsole() {
-        _consoleSnap.value = null
+        _state.update { it.copy(console = it.console.copy(snap = null)) }
     }
 
     /** Toggles the console inline-search field. Cycles `null → "" → null`. */
     fun toggleConsoleSearch() {
-        _consoleSearchQuery.update { current -> if (current == null) "" else null }
+        _state.update { current ->
+            val next = if (current.console.searchQuery == null) "" else null
+            current.copy(console = current.console.copy(searchQuery = next))
+        }
     }
 
     /** Updates the console inline-search query while the field is visible. */
     fun onConsoleSearchQueryChange(query: String) {
-        _consoleSearchQuery.value = query
+        _state.update { it.copy(console = it.console.copy(searchQuery = query)) }
     }
 
     /** Replaces the active console source-set filter. */
     fun onConsoleFilterChange(filter: ConsoleFilter) {
-        _consoleFilter.value = filter
+        _state.update { it.copy(console = it.console.copy(filter = filter)) }
     }
 
     /** Reacts to the long-press "Only show this source" menu item. */
     fun filterConsoleByLineSource(source: ConsoleSource) {
-        _consoleFilter.value = ConsoleFilter(sources = setOf(source))
+        _state.update { it.copy(console = it.console.copy(filter = ConsoleFilter(sources = setOf(source)))) }
     }
 
     /**
      * Persists the user's currently-selected console tab. Mirrors the
-     * change into the local [consoleTab] flow synchronously so the catalog
+     * change into the local console state synchronously so the catalog
      * tab strip re-renders without waiting for the DataStore round-trip.
      */
     fun onConsoleTabChange(tab: ConsoleTab) {
-        if (_consoleTab.value == tab) return
-        _consoleTab.value = tab
+        if (_state.value.console.tab == tab) return
+        _state.update { it.copy(console = it.console.copy(tab = tab)) }
         viewModelScope.launch {
             settingsRepository.setConsolePreferredConsoleTabName(tab.name)
         }
@@ -568,30 +464,30 @@ class ChatHomeViewModel @Inject constructor(
     /**
      * Requests the destructive "Clear console for this session?" dialog —
      * the screen renders an [AlertDialog] driven by
-     * [consoleClearConfirmRequested]. The actual clear runs on
-     * [confirmConsoleClear] so the user has a chance to back out.
+     * [ChatHomeScreenState.consoleClearConfirmRequested]. The actual clear
+     * runs on [confirmConsoleClear] so the user has a chance to back out.
      */
     fun requestConsoleClear() {
-        if (_consoleLines.value.isEmpty()) return
-        _consoleClearConfirmRequested.value = true
+        if (_state.value.console.logs.isEmpty()) return
+        _state.update { it.copy(consoleClearConfirmRequested = true) }
     }
 
     /** Dismisses the confirmation dialog without altering the log. */
     fun dismissConsoleClear() {
-        _consoleClearConfirmRequested.value = false
+        _state.update { it.copy(consoleClearConfirmRequested = false) }
     }
 
     /**
      * Advances [consoleClearBaseline] by the count of currently-visible
-     * lines and clears [consoleLines]. The next cumulative engine snapshot
-     * trims its leading slice, so cleared rows do not pop back in.
+     * lines and clears the console Logs tab. The next cumulative engine
+     * snapshot trims its leading slice, so cleared rows do not pop back in.
      */
     fun confirmConsoleClear() {
-        val visible = _consoleLines.value
-        _consoleClearConfirmRequested.value = false
+        val visible = _state.value.console.logs
+        _state.update { it.copy(consoleClearConfirmRequested = false) }
         if (visible.isEmpty()) return
         consoleClearBaseline += visible.size
-        _consoleLines.value = emptyList()
+        _state.update { it.copy(console = it.console.copy(logs = emptyList())) }
     }
 
     /**
@@ -630,12 +526,12 @@ class ChatHomeViewModel @Inject constructor(
 
     /**
      * Debug-only escape hatch used by the triple-tap state picker to force
-     * the surface into an arbitrary state. The picker UI is gated on
+     * the surface into an arbitrary visual state. The picker UI is gated on
      * `BuildConfig.DEBUG`, but the VM accepts the call in any build so
      * unit tests can drive the state machine deterministically.
      */
     fun forceState(state: ChatHomeUiState) {
-        _state.value = state
+        _state.update { it.copy(visual = state) }
     }
 
     /**
@@ -661,8 +557,9 @@ class ChatHomeViewModel @Inject constructor(
             } else {
                 savedSessionId
             }
-            _currentSessionId.value = sessionId
-            applyCurrentSessionMetadata()
+            _state.update {
+                it.copy(thread = it.thread.copy(currentSessionId = sessionId)).withSessionMetadataRefreshed()
+            }
             observeMessages(sessionId)
         }
     }
@@ -671,37 +568,41 @@ class ChatHomeViewModel @Inject constructor(
      * Continuously observes the pipeline library. Used for three things:
      *  1. Caching the available pipelines so [sendMessage] can resolve
      *     the bound pipeline name.
-     *  2. Recomputing the TopAppBar subtitle ([pipelineName]).
+     *  2. Recomputing the TopAppBar subtitle ([ChatHomeScreenState.pipelineName]).
      *  3. Detecting deletion of the pipeline bound to the active chat
-     *     and silently rebinding it to the default pipeline, surfacing
-     *     a one-shot Snackbar via [pipelineFallbackEvents].
+     *     and rebinding it to the default pipeline, surfacing a one-shot
+     *     Snackbar via [pipelineFallbackEvents].
      */
     private fun observeAvailablePipelines() {
         viewModelScope.launch {
             pipelineRepository.getAllPipelines().collect { graphs ->
                 val summaries = graphs.map { PipelineSummary(id = it.id, name = it.name) }
-                availablePipelines = summaries
-                _availablePipelines.value = summaries
+                _state.update { it.copy(availablePipelines = summaries).withPipelineNameRefreshed() }
                 availablePipelinesObserved = true
-                refreshPipelineName()
                 handleDeletedBoundPipeline(summaries)
             }
         }
     }
 
     /**
-     * Observes the installed-model list and mirrors it into [installedModels]
-     * + [activeModelId]. Also keeps [_modelName] in sync with the currently
-     * active model so the TopAppBar subtitle always reflects the real
-     * inference engine bound to the chat.
+     * Observes the installed-model list and mirrors it into the
+     * [ChatHomeModelState] slice. Also keeps the model display name in sync
+     * with the currently active model so the TopAppBar subtitle always
+     * reflects the real inference engine bound to the chat.
      */
     private fun observeInstalledModels() {
         viewModelScope.launch {
             localModelRepository.getAllModels().collect { models ->
-                _installedModels.value = models
                 val active = models.firstOrNull { it.isActive }
-                _activeModelId.value = active?.id
-                _modelName.value = active?.name ?: DEFAULT_MODEL_NAME
+                _state.update {
+                    it.copy(
+                        model = ChatHomeModelState(
+                            name = active?.name ?: ChatHomeModelState.DEFAULT_NAME,
+                            installed = models,
+                            activeId = active?.id,
+                        ),
+                    )
+                }
             }
         }
     }
@@ -711,7 +612,7 @@ class ChatHomeViewModel @Inject constructor(
         viewModelScope.launch {
             settingsRepository.defaultPipelineId.collect { id ->
                 defaultPipelineId = id
-                refreshPipelineName()
+                _state.update { it.withPipelineNameRefreshed() }
             }
         }
     }
@@ -721,29 +622,32 @@ class ChatHomeViewModel @Inject constructor(
         viewModelScope.launch {
             chatRepository.getSessionsFlow().collect { current ->
                 sessions = current
-                applyCurrentSessionMetadata()
-                refreshThreadRows()
-                handleDeletedBoundPipeline(availablePipelines)
+                _state.update { it.withSessionMetadataRefreshed() }
+                handleDeletedBoundPipeline(_state.value.availablePipelines)
             }
         }
     }
 
     /**
-     * Rebuilds [_threadRows] from the live [sessions] cache. Favorited
+     * Projects the live [sessions] cache into drawer thread rows. Favorited
      * sessions sort to the top of the drawer; the rest follow the
      * repository's `updatedAt DESC` ordering. The catalog drawer renders
-     * the `selected`/`active` chrome from the matching flags here.
+     * the `selected`/`active` chrome from the matching flags here. Pure
+     * projection — composed into a state update by
+     * [withSessionMetadataRefreshed].
+     *
+     * @param activeId id of the active session used for the
+     *   `selected`/`active` flags.
      */
-    private fun refreshThreadRows() {
-        val activeId = _currentSessionId.value
+    private fun buildThreadRows(activeId: String): List<ChatHomeThreadRow> {
         val sorted = sessions.sortedWith(
             compareByDescending<ChatSession> { it.isStarred }
                 .thenByDescending { it.updatedAt },
         )
-        _threadRows.value = sorted.map { session ->
+        return sorted.map { session ->
             ChatHomeThreadRow(
                 id = session.id,
-                title = session.name.ifBlank { DEFAULT_THREAD_TITLE },
+                title = session.name.ifBlank { ChatHomeThreadState.DEFAULT_TITLE },
                 subtitle = formatThreadSubtitle(session.updatedAt),
                 selected = session.id == activeId,
                 active = session.id == activeId,
@@ -752,17 +656,17 @@ class ChatHomeViewModel @Inject constructor(
         }
     }
 
-    /** Observes the configured context-window cap and mirrors it into [tokensMax]. */
+    /** Observes the configured context-window cap and mirrors it into [ChatHomeTokenState.max]. */
     private fun observeMaxContextSize() {
         viewModelScope.launch {
             settingsRepository.maxContextLength.collect { value ->
-                _tokensMax.value = value
+                _state.update { it.copy(tokens = it.tokens.copy(max = value)) }
             }
         }
     }
 
     /**
-     * Hydrates [consoleTab] from the persisted DataStore preference. An
+     * Hydrates the console tab from the persisted DataStore preference. An
      * unrecognised value (e.g. an enum entry removed in a future version)
      * falls back to [ConsoleTab.Logs] so the surface never renders an
      * undefined tab.
@@ -770,7 +674,8 @@ class ChatHomeViewModel @Inject constructor(
     private fun observeConsolePreferredTab() {
         viewModelScope.launch {
             settingsRepository.consolePreferredConsoleTabName.collect { name ->
-                _consoleTab.value = ConsoleTab.entries.firstOrNull { it.name == name } ?: ConsoleTab.Logs
+                val tab = ConsoleTab.entries.firstOrNull { it.name == name } ?: ConsoleTab.Logs
+                _state.update { it.copy(console = it.console.copy(tab = tab)) }
             }
         }
     }
@@ -778,19 +683,18 @@ class ChatHomeViewModel @Inject constructor(
     /**
      * Subscribes the message stream to [sessionId], cancelling any prior
      * subscription. Each emission is projected through
-     * [chatMessageToRow] and folded into [_messages]; the rough token
-     * counter is recomputed *concurrently* via [GetContextWindowUseCase]
-     * so that the suspending tokenisation never stalls the collector
-     * (otherwise [rebalanceRestingState] would only fire after the use
-     * case resumes, gating the UI behind a background computation that
-     * could take dozens of milliseconds on a cold session).
+     * [chatMessageToRow] and folded into [ChatHomeScreenState.messages];
+     * the rough token counter is recomputed *concurrently* via
+     * [GetContextWindowUseCase] so that the suspending tokenisation never
+     * stalls the collector (otherwise [rebalanceRestingState] would only
+     * fire after the use case resumes, gating the UI behind a background
+     * computation that could take dozens of milliseconds on a cold session).
      */
     private fun observeMessages(sessionId: String) {
         messagesJob?.cancel()
         tokenCounterJob?.cancel()
         if (sessionId.isBlank()) {
-            _messages.value = emptyList()
-            _tokensUsed.value = 0
+            _state.update { it.copy(messages = emptyList(), tokens = it.tokens.copy(used = 0)) }
             // No session to load — settle Loading to Empty so the surface
             // renders the empty-state hero instead of spinning forever.
             rebalanceRestingState()
@@ -798,14 +702,20 @@ class ChatHomeViewModel @Inject constructor(
         }
         messagesJob = viewModelScope.launch {
             chatRepository.getDisplayMessagesForSession(sessionId).collect { incoming ->
-                _messages.value = incoming.map { chatMessageToRow(it, _modelName.value) }
+                _state.update { current ->
+                    current.copy(messages = incoming.map { chatMessageToRow(it, current.model.name) })
+                }
                 rebalanceRestingState()
                 tokenCounterJob?.cancel()
                 tokenCounterJob = launch {
-                    val approx = runCatching {
+                    val approx = try {
                         getContextWindowUseCase(sessionId).length / TOKEN_CHARS_PER_TOKEN
-                    }.getOrDefault(0)
-                    _tokensUsed.value = approx
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Throwable) {
+                        0
+                    }
+                    _state.update { it.copy(tokens = it.tokens.copy(used = approx)) }
                 }
             }
         }
@@ -823,10 +733,12 @@ class ChatHomeViewModel @Inject constructor(
             when {
                 // Cold-start: first message emission settles Loading into the
                 // matching resting state (Empty if no messages, Idle if any).
-                current is ChatHomeUiState.Loading ->
-                    if (_messages.value.isEmpty()) ChatHomeUiState.Empty else ChatHomeUiState.Idle
-                current is ChatHomeUiState.Empty && _messages.value.isNotEmpty() -> ChatHomeUiState.Idle
-                current is ChatHomeUiState.Idle && _messages.value.isEmpty() -> ChatHomeUiState.Empty
+                current.visual is ChatHomeUiState.Loading ->
+                    current.copy(visual = current.restingVisual())
+                current.visual is ChatHomeUiState.Empty && current.messages.isNotEmpty() ->
+                    current.copy(visual = ChatHomeUiState.Idle)
+                current.visual is ChatHomeUiState.Idle && current.messages.isEmpty() ->
+                    current.copy(visual = ChatHomeUiState.Empty)
                 else -> current
             }
         }
@@ -844,42 +756,55 @@ class ChatHomeViewModel @Inject constructor(
                 // Approximate-token estimate from the cumulative partial text
                 // length divided by `TOKEN_CHARS_PER_TOKEN`. Same heuristic
                 // we use for the chat-level token meter.
-                _streamingTokens.value = state.partialText.length / TOKEN_CHARS_PER_TOKEN
+                updateStreamingTokens(state.partialText.length / TOKEN_CHARS_PER_TOKEN)
             is AgentOrchestratorState.Answering ->
-                _streamingTokens.value = state.partialText.length / TOKEN_CHARS_PER_TOKEN
+                updateStreamingTokens(state.partialText.length / TOKEN_CHARS_PER_TOKEN)
             is AgentOrchestratorState.Completed -> {
-                clearPendingApprovalAndClarification()
-                _streamingTokens.value = 0
-                _state.value = if (_messages.value.isEmpty()) ChatHomeUiState.Empty else ChatHomeUiState.Idle
+                cancelClarificationWatchdog()
+                _state.update { current ->
+                    current.withPendingCleared().copy(
+                        tokens = current.tokens.copy(streaming = 0),
+                        visual = current.restingVisual(),
+                    )
+                }
                 // Fire-and-forget: distil durable facts from the just-finished
                 // conversation into long-term memory. The coordinator debounces
                 // and owns its own scope, so this survives ViewModel teardown.
-                memoryAutoExtractionCoordinator.onPipelineCompleted(_currentSessionId.value)
+                memoryAutoExtractionCoordinator.onPipelineCompleted(_state.value.thread.currentSessionId)
             }
             is AgentOrchestratorState.Error -> {
-                clearPendingApprovalAndClarification()
-                _streamingTokens.value = 0
-                _state.value = ChatHomeUiState.Error(state.message)
+                cancelClarificationWatchdog()
+                _state.update {
+                    it.withPendingCleared().copy(
+                        tokens = it.tokens.copy(streaming = 0),
+                        visual = ChatHomeUiState.Error(state.message),
+                    )
+                }
             }
             // Intermediate states keep `Generating` while the request is in flight.
             else -> Unit
         }
     }
 
+    /** Mirrors the running streamed-token estimate into [ChatHomeTokenState.streaming]. */
+    private fun updateStreamingTokens(tokens: Int) {
+        _state.update { it.copy(tokens = it.tokens.copy(streaming = tokens)) }
+    }
+
     /**
      * Mirrors a cumulative [AgentOrchestratorState.ConsoleLog.events]
-     * snapshot into [consoleLines]. Applies the baseline so events the
-     * user just dismissed via [confirmConsoleClear] stay hidden until the
-     * next session switch / send.
+     * snapshot into the console Logs tab. Applies the baseline so events
+     * the user just dismissed via [confirmConsoleClear] stay hidden until
+     * the next session switch / send.
      */
     private fun handleConsoleLog(events: List<ConsoleEvent>) {
         val trimmed = applyConsoleClearBaseline(events)
-        _consoleLines.value = trimmed.map(ConsoleEvent::toConsoleLine)
+        _state.update { it.copy(console = it.console.copy(logs = trimmed.map(ConsoleEvent::toConsoleLine))) }
     }
 
     /**
      * Mirrors the latest [AgentOrchestratorState.PipelineTrace.steps]
-     * snapshot into [consoleTraces]. The catalog span requires a
+     * snapshot into the console Traces tab. The catalog span requires a
      * pre-formatted `startedAt` — we observe wall-clock time the first
      * time we see each step index and reuse it for subsequent emissions of
      * the same step so the displayed start does not jitter on every
@@ -891,19 +816,21 @@ class ChatHomeViewModel @Inject constructor(
         while (traceStepStartMs.size < steps.size) {
             traceStepStartMs.add(nowMs)
         }
-        _consoleTraces.value = steps.mapIndexed { index, step ->
+        val spans = steps.mapIndexed { index, step ->
             traceStepToConsoleSpan(step, traceStepStartMs[index])
         }
+        _state.update { it.copy(console = it.console.copy(traces = spans)) }
     }
 
     /**
-     * Captures a per-node I/O snapshot and re-projects [consoleVars] from
-     * the accumulated map so repeated emissions for the same node id
+     * Captures a per-node I/O snapshot and re-projects the console Vars tab
+     * from the accumulated map so repeated emissions for the same node id
      * overwrite (not duplicate) the previous Vars rows.
      */
     private fun handleNodeIo(io: AgentOrchestratorState.NodeIO) {
         nodeIoSnapshots[io.nodeId] = io
-        _consoleVars.value = nodeIoSnapshots.values.flatMap(::nodeIoToVarRows)
+        val vars = nodeIoSnapshots.values.flatMap(::nodeIoToVarRows)
+        _state.update { it.copy(console = it.console.copy(vars = vars)) }
     }
 
     /**
@@ -918,15 +845,32 @@ class ChatHomeViewModel @Inject constructor(
         return events.subList(consoleClearBaseline, events.size)
     }
 
-    /** Drops every cached console-side projection. Called at the start of each new run. */
-    private fun resetConsoleStateForNewRun() {
+    /**
+     * Drops the VM-side console caches (clear baseline, per-node I/O map,
+     * trace start timestamps). Called at the start of each new run, always
+     * paired with [withConsoleProjectionsCleared] inside the caller's
+     * single `_state.update` block so the flow emission stays atomic.
+     */
+    private fun resetConsoleCachesForNewRun() {
         consoleClearBaseline = 0
         nodeIoSnapshots.clear()
         traceStepStartMs.clear()
-        _consoleLines.value = emptyList()
-        _consoleVars.value = emptyList()
-        _consoleTraces.value = emptyList()
     }
+
+    /**
+     * Pure transformer: clears the console Logs / Vars / Traces projections
+     * of the previous run. The pane's snap, tab, filter, and search query
+     * survive — only run-scoped data is dropped. Composed into the caller's
+     * `_state.update` block (never its own emission) so multi-field
+     * transitions remain a single atomic flow emission.
+     */
+    private fun ChatHomeScreenState.withConsoleProjectionsCleared(): ChatHomeScreenState = copy(
+        console = console.copy(
+            logs = emptyList(),
+            vars = emptyList(),
+            traces = emptyList(),
+        ),
+    )
 
     /**
      * Approves the tool the orchestrator is paused on. For a destructive
@@ -939,14 +883,18 @@ class ChatHomeViewModel @Inject constructor(
      * No-op when no tool is pending.
      */
     fun approveTool() {
-        val pending = _pendingTool.value ?: return
+        val pending = _state.value.pending.tool ?: return
         if (pending.risk == ToolRisk.DESTRUCTIVE && !isTypedConfirmValid()) return
-        val sessionId = _currentSessionId.value
+        val sessionId = _state.value.thread.currentSessionId
         if (sessionId.isBlank()) return
         agentOrchestratorUseCase.resumeWithApproval(sessionId, true)
-        _pendingTool.value = null
-        _pendingTypedConfirm.value = ""
-        _state.value = ChatHomeUiState.Generating
+        _state.update {
+            it.copy(
+                pending = it.pending.copy(tool = null),
+                composer = it.composer.copy(typedConfirm = ""),
+                visual = ChatHomeUiState.Generating,
+            )
+        }
     }
 
     /**
@@ -958,17 +906,21 @@ class ChatHomeViewModel @Inject constructor(
      * No-op when no tool is pending.
      */
     fun rejectTool() {
-        val pending = _pendingTool.value ?: return
-        val sessionId = _currentSessionId.value
+        val pending = _state.value.pending.tool ?: return
+        val sessionId = _state.value.thread.currentSessionId
         if (sessionId.isBlank()) return
         agentOrchestratorUseCase.resumeWithApproval(sessionId, false)
-        _pendingTool.value = null
-        _pendingTypedConfirm.value = ""
         // Resuming the pipeline restarts orchestrator emission — keep the
         // surface in `Generating` until the next state (or a terminal
         // Completed / Error) settles it, otherwise the chat appears idle
         // while the agent is actively producing the denial follow-up.
-        _state.value = ChatHomeUiState.Generating
+        _state.update {
+            it.copy(
+                pending = it.pending.copy(tool = null),
+                composer = it.composer.copy(typedConfirm = ""),
+                visual = ChatHomeUiState.Generating,
+            )
+        }
         viewModelScope.launch {
             chatRepository.saveMessage(
                 ChatMessage(
@@ -991,14 +943,18 @@ class ChatHomeViewModel @Inject constructor(
      * @param answer the user's reply text (option label or free-form).
      */
     fun submitClarificationReply(answer: String) {
-        val pending = _pendingClarification.value ?: return
+        val pending = _state.value.pending.clarification ?: return
         // Allow an empty reply through — the orchestrator already accepts
         // `""` as the timeout fallback for free-form requests, so an
         // intentional blank submit is a legitimate "skip" affordance.
         val trimmed = answer.trim()
-        clarificationTimeoutJob?.cancel()
-        _pendingClarification.value = null
-        _state.value = ChatHomeUiState.Generating
+        cancelClarificationWatchdog()
+        _state.update {
+            it.copy(
+                pending = it.pending.copy(clarification = null),
+                visual = ChatHomeUiState.Generating,
+            )
+        }
         viewModelScope.launch {
             clarificationRepository.submitClarification(pending.id, trimmed)
         }
@@ -1006,13 +962,19 @@ class ChatHomeViewModel @Inject constructor(
 
     /** Captures the orchestrator's pending approval and flips the UI to the HITL state. */
     private fun handleWaitingForApproval(state: AgentOrchestratorState.WaitingForApproval) {
-        _pendingTool.value = HitlPending(
-            toolName = state.toolName,
-            arguments = state.arguments,
-            risk = state.risk,
-        )
-        _pendingTypedConfirm.value = ""
-        _state.value = ChatHomeUiState.HitlConfirm(state.risk.toCatalogRisk())
+        _state.update {
+            it.copy(
+                pending = it.pending.copy(
+                    tool = HitlPending(
+                        toolName = state.toolName,
+                        arguments = state.arguments,
+                        risk = state.risk,
+                    ),
+                ),
+                composer = it.composer.copy(typedConfirm = ""),
+                visual = ChatHomeUiState.HitlConfirm(state.risk.toCatalogRisk()),
+            )
+        }
     }
 
     /**
@@ -1020,11 +982,15 @@ class ChatHomeViewModel @Inject constructor(
      * the Clarification state, and arms the watchdog timer. The repository
      * owns the authoritative timeout via `withTimeout`; this watchdog is a
      * UI safety-net that ensures the surface flips back to a resting state
-     * even if the user backgrounds the app for longer than [timeoutMs].
+     * even if the user backgrounds the app for longer than [ClarificationRequest.timeoutMs].
      */
     private fun handleAwaitingClarification(request: ClarificationRequest) {
-        _pendingClarification.value = request
-        _state.value = ChatHomeUiState.Clarification
+        _state.update {
+            it.copy(
+                pending = it.pending.copy(clarification = request),
+                visual = ChatHomeUiState.Clarification,
+            )
+        }
         clarificationTimeoutJob?.cancel()
         if (request.timeoutMs > 0) {
             clarificationTimeoutJob = viewModelScope.launch {
@@ -1043,11 +1009,15 @@ class ChatHomeViewModel @Inject constructor(
      * (terminal `Completed` / `Error` settles the resting state).
      */
     private fun onClarificationTimeout(request: ClarificationRequest) {
-        if (_pendingClarification.value?.id != request.id) return
+        if (_state.value.pending.clarification?.id != request.id) return
         val defaultAnswer = request.options?.firstOrNull().orEmpty()
-        val sessionId = _currentSessionId.value
-        _pendingClarification.value = null
-        _state.value = ChatHomeUiState.Generating
+        val sessionId = _state.value.thread.currentSessionId
+        _state.update {
+            it.copy(
+                pending = it.pending.copy(clarification = null),
+                visual = ChatHomeUiState.Generating,
+            )
+        }
         viewModelScope.launch {
             clarificationRepository.submitClarification(request.id, defaultAnswer)
             if (sessionId.isNotBlank()) {
@@ -1067,16 +1037,27 @@ class ChatHomeViewModel @Inject constructor(
 
     /** Whether the current typed-confirm input satisfies the destructive HITL gate. */
     private fun isTypedConfirmValid(): Boolean =
-        _pendingTypedConfirm.value.trim().equals(DESTRUCTIVE_TYPED_CONFIRM_WORD, ignoreCase = true)
+        _state.value.composer.typedConfirm.trim().equals(DESTRUCTIVE_TYPED_CONFIRM_WORD, ignoreCase = true)
 
-    /** Clears every pending HITL / clarification snapshot and cancels the watchdog. */
-    private fun clearPendingApprovalAndClarification() {
+    /** Cancels and drops the clarification watchdog timer. */
+    private fun cancelClarificationWatchdog() {
         clarificationTimeoutJob?.cancel()
         clarificationTimeoutJob = null
-        _pendingTool.value = null
-        _pendingClarification.value = null
-        _pendingTypedConfirm.value = ""
     }
+
+    /**
+     * Pure transformer: drops every pending HITL / clarification snapshot
+     * and resets the typed-confirm input. Composed into the caller's
+     * `_state.update` block (never its own emission) so multi-field
+     * transitions remain a single atomic flow emission. Callers cancel the
+     * watchdog separately via [cancelClarificationWatchdog] — job
+     * cancellation is a side effect and must not live inside the `update`
+     * lambda, which may re-run on contention.
+     */
+    private fun ChatHomeScreenState.withPendingCleared(): ChatHomeScreenState = copy(
+        pending = ChatHomePendingState(),
+        composer = composer.copy(typedConfirm = ""),
+    )
 
     /**
      * Auto-renames a newly-created chat to the first user message
@@ -1098,37 +1079,46 @@ class ChatHomeViewModel @Inject constructor(
     }
 
     /**
-     * Rebinds the active chat to the default pipeline when the bound
-     * pipeline disappears from the library. No-op while the pipeline
-     * flow has not produced its initial snapshot — without this guard a
-     * startup race would misread the empty initial `availablePipelines`
-     * as "the bound pipeline no longer exists" and silently rebind every
-     * chat to the default.
+     * Rebinds the active chat to the default pipeline when its binding
+     * points at a pipeline that no longer exists in the library, and
+     * raises the one-shot [pipelineFallbackEvents] Snackbar. Invoked from
+     * the pipelines / sessions observers (deletion while the chat is
+     * active) and from [selectThread] (binding already stale when the
+     * thread is opened). No-op while the pipeline flow has not produced
+     * its initial snapshot — without this guard a startup race would
+     * misread the empty initial pipeline list as "the bound pipeline no
+     * longer exists" and silently rebind every chat to the default.
      */
     private suspend fun handleDeletedBoundPipeline(summaries: List<PipelineSummary>) {
         if (!availablePipelinesObserved) return
-        val session = sessions.firstOrNull { it.id == _currentSessionId.value } ?: return
+        val session = sessions.firstOrNull { it.id == _state.value.thread.currentSessionId } ?: return
         val boundId = session.pipelineId ?: return
         if (summaries.any { it.id == boundId }) return
         chatRepository.saveSession(session.copy(pipelineId = null))
         _pipelineFallbackEvents.tryEmit(Unit)
     }
 
-    /** Refreshes [pipelineName] from the latest cache of sessions + pipelines + default-pipeline id. */
-    private fun refreshPipelineName() {
-        _pipelineName.value = resolvePipelineName(
+    /**
+     * Pure transformer: recomputes the pipeline subtitle for this snapshot
+     * from the [sessions] / [defaultPipelineId] caches. Composed into the
+     * caller's `_state.update` block (never its own emission) so refreshes
+     * ride the same atomic emission as the change that triggered them.
+     */
+    private fun ChatHomeScreenState.withPipelineNameRefreshed(): ChatHomeScreenState = copy(
+        pipelineName = resolvePipelineName(
             sessions = sessions,
-            currentSessionId = _currentSessionId.value,
+            currentSessionId = thread.currentSessionId,
             summaries = availablePipelines,
             defaultPipelineId = defaultPipelineId,
-        )
-    }
+        ),
+    )
 
     /**
      * Resolves the pipeline display name for the active chat — explicit
-     * binding when set, otherwise the user-marked default (or the first
-     * pipeline in the library as a final fallback). Returns `null` only
-     * when the pipeline library is still empty.
+     * binding when set, otherwise the user-marked default. Returns `null`
+     * when neither resolves (empty library, or no default marked): the
+     * subtitle must not advertise a pipeline that execution would never
+     * pick, so there is no order-dependent "first in the library" fallback.
      */
     private fun resolvePipelineName(
         sessions: List<ChatSession>,
@@ -1141,22 +1131,37 @@ class ChatHomeViewModel @Inject constructor(
         val boundId = session?.pipelineId
         val boundMatch = boundId?.let { id -> summaries.firstOrNull { it.id == id } }
         if (boundMatch != null) return boundMatch.name
-        val defaultMatch = defaultPipelineId?.let { id -> summaries.firstOrNull { it.id == id } }
-        return (defaultMatch ?: summaries.first()).name
+        return defaultPipelineId?.let { id -> summaries.firstOrNull { it.id == id } }?.name
     }
 
-    /** Refreshes thread title + pipeline subtitle from the latest session/pipeline caches. */
-    private fun applyCurrentSessionMetadata() {
-        val session = sessions.firstOrNull { it.id == _currentSessionId.value }
-        if (session != null) {
-            _threadTitle.value = session.name.ifBlank { DEFAULT_THREAD_TITLE }
-            _favorite.value = session.isStarred
-        } else if (_currentSessionId.value.isBlank()) {
-            _threadTitle.value = DEFAULT_THREAD_TITLE
-            _favorite.value = false
+    /**
+     * Pure transformer: recomputes thread title + favorite, the drawer
+     * rows, and the pipeline subtitle for this snapshot from the latest
+     * session/pipeline caches. Composed into the caller's single
+     * `_state.update` block so one upstream emission (sessions flow,
+     * session init, thread switch) produces exactly one state emission —
+     * collectors never observe a frame with a fresh title but stale rows.
+     *
+     * Title/favorite are left untouched when the active session id is
+     * non-blank but missing from the cache (mid-deletion window) —
+     * mirrors the pre-consolidation behaviour.
+     */
+    private fun ChatHomeScreenState.withSessionMetadataRefreshed(): ChatHomeScreenState {
+        val currentId = thread.currentSessionId
+        val session = sessions.firstOrNull { it.id == currentId }
+        val refreshedThread = when {
+            session != null -> thread.copy(
+                title = session.name.ifBlank { ChatHomeThreadState.DEFAULT_TITLE },
+                favorite = session.isStarred,
+            )
+            currentId.isBlank() -> thread.copy(
+                title = ChatHomeThreadState.DEFAULT_TITLE,
+                favorite = false,
+            )
+            else -> thread
         }
-        refreshPipelineName()
-        refreshThreadRows()
+        return copy(thread = refreshedThread.copy(rows = buildThreadRows(currentId)))
+            .withPipelineNameRefreshed()
     }
 
     /**
@@ -1165,7 +1170,8 @@ class ChatHomeViewModel @Inject constructor(
      * new-thread picker can pre-select the same pipeline as the current
      * chat, matching legacy `ChatViewModel.requestNewSession` ergonomics.
      */
-    fun currentPipelineId(): String? = sessions.firstOrNull { it.id == _currentSessionId.value }?.pipelineId
+    fun currentPipelineId(): String? =
+        sessions.firstOrNull { it.id == _state.value.thread.currentSessionId }?.pipelineId
 
     /**
      * Extracts the plain-text body of a chat-home row by its catalog id
@@ -1178,7 +1184,7 @@ class ChatHomeViewModel @Inject constructor(
      * resolve Copy / Rerun targets.
      */
     fun textForRow(rowId: String): String? {
-        val row = _messages.value.firstOrNull { it.id == rowId } ?: return null
+        val row = _state.value.messages.firstOrNull { it.id == rowId } ?: return null
         return when (val content = row.content) {
             is ChatContent.Text -> content.text
             is ChatContent.Markdown -> content.source
@@ -1205,9 +1211,14 @@ class ChatHomeViewModel @Inject constructor(
         }
     }
 
-    /** Resting (non-overlay) state given the current message list — `Empty` if no messages, else `Idle`. */
-    private fun restingState(): ChatHomeUiState =
-        if (_messages.value.isEmpty()) ChatHomeUiState.Empty else ChatHomeUiState.Idle
+    /**
+     * Resting (non-overlay) visual for this snapshot — `Empty` if the
+     * message list is empty, else `Idle`. Derived from the receiver (never
+     * `_state.value`) so calls inside an `_state.update` lambda stay
+     * consistent with the snapshot being transformed.
+     */
+    private fun ChatHomeScreenState.restingVisual(): ChatHomeUiState =
+        if (messages.isEmpty()) ChatHomeUiState.Empty else ChatHomeUiState.Idle
 
     /**
      * Creates a new chat session bound to [pipelineId] and switches to it.
@@ -1251,7 +1262,7 @@ class ChatHomeViewModel @Inject constructor(
      * No-op when no session is loaded.
      */
     fun toggleFavoriteCurrent() {
-        val sessionId = _currentSessionId.value
+        val sessionId = _state.value.thread.currentSessionId
         if (sessionId.isBlank()) return
         val current = sessions.firstOrNull { it.id == sessionId }?.isStarred ?: false
         viewModelScope.launch {
@@ -1268,13 +1279,16 @@ class ChatHomeViewModel @Inject constructor(
      */
     fun importChatFromJson(json: String) {
         viewModelScope.launch {
-            runCatching { chatRepository.importChat(json) }
-                .onSuccess { newId -> selectThread(newId) }
-                .onFailure { error ->
-                    _importErrorEvents.tryEmit(
-                        error.localizedMessage ?: IMPORT_GENERIC_FAILURE_MESSAGE,
-                    )
-                }
+            try {
+                val newId = chatRepository.importChat(json)
+                selectThread(newId)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Throwable) {
+                _importErrorEvents.tryEmit(
+                    e.localizedMessage ?: IMPORT_GENERIC_FAILURE_MESSAGE,
+                )
+            }
         }
     }
 
@@ -1297,10 +1311,10 @@ class ChatHomeViewModel @Inject constructor(
      * — kept in the screen because Hilt-ViewModels stay free of `Context`.
      */
     fun exportCurrentSession() {
-        val sessionId = _currentSessionId.value
+        val sessionId = _state.value.thread.currentSessionId
         if (sessionId.isBlank()) return
         viewModelScope.launch {
-            runCatching {
+            try {
                 val rawMessages = chatRepository.getMessagesForSession(sessionId).first()
                 val session = chatRepository.getSessionById(sessionId)
                 val sessionName = session?.name ?: EXPORT_FALLBACK_SESSION_NAME
@@ -1318,8 +1332,16 @@ class ChatHomeViewModel @Inject constructor(
                     .put("sessionName", sessionName)
                     .put("exportedAt", System.currentTimeMillis())
                     .put("messages", messagesArray)
-                ChatExportPayload(sessionName = sessionName, json = root.toString(EXPORT_JSON_INDENT))
-            }.onSuccess { payload -> _exportEvents.tryEmit(payload) }
+                val payload =
+                    ChatExportPayload(sessionName = sessionName, json = root.toString(EXPORT_JSON_INDENT))
+                _exportEvents.tryEmit(payload)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Throwable) {
+                // Mirrors the previous silent-failure contract: an export
+                // that cannot be serialised simply emits nothing.
+                Timber.w(e, "Chat export failed")
+            }
         }
     }
 
@@ -1330,7 +1352,7 @@ class ChatHomeViewModel @Inject constructor(
      * session id.
      */
     fun deleteCurrentSession() {
-        val sessionId = _currentSessionId.value
+        val sessionId = _state.value.thread.currentSessionId
         if (sessionId.isBlank()) return
         viewModelScope.launch {
             chatRepository.deleteSession(sessionId)
@@ -1344,12 +1366,6 @@ class ChatHomeViewModel @Inject constructor(
     }
 
     companion object {
-        /** Pre-formatted fallback thread title surfaced before any thread is selected. */
-        const val DEFAULT_THREAD_TITLE: String = "New conversation"
-
-        /** Pre-formatted fallback model name surfaced when no local model is loaded. */
-        const val DEFAULT_MODEL_NAME: String = "Local model"
-
         /** Default name of a freshly-created chat session — must match legacy `ChatViewModel` for compatibility. */
         const val DEFAULT_NEW_CHAT_NAME: String = "New Chat"
 
@@ -1485,11 +1501,11 @@ class ChatHomeViewModel @Inject constructor(
  * @property id stable identifier of the pipeline.
  * @property name display name of the pipeline.
  */
-internal data class PipelineSummary(val id: String, val name: String)
+data class PipelineSummary(val id: String, val name: String)
 
 /**
  * Snapshot of the tool the orchestrator is currently paused on, exposed
- * by [ChatHomeViewModel.pendingTool] so the mapper can render the
+ * through [ChatHomePendingState.tool] so the mapper can render the
  * trailing HITL confirmation card from real data instead of fixtures.
  *
  * @property toolName fully-qualified tool id (e.g. `fs.write_file`).

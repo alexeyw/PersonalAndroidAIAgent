@@ -16,8 +16,8 @@ import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 
 /**
- * Roborazzi baseline for `SplashContent`. Covers the three documented
- * states (Initializing / Loading / Error) in both themes.
+ * Roborazzi baseline for `SplashContent`. Covers the documented states
+ * (Initializing / Loading / Error / DataLocked) in both themes.
  */
 @RunWith(AndroidJUnit4::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -46,6 +46,16 @@ class SplashContentSnapshotTest {
         SplashContent(appName = "Knotwork Agent", state = SplashPreview.error())
     }
 
+    @Test
+    fun splash_data_locked_light() = snapshot(name = "data_locked", dark = false) {
+        SplashContent(appName = "Knotwork Agent", state = SplashPreview.dataLocked())
+    }
+
+    @Test
+    fun splash_data_locked_dark() = snapshot(name = "data_locked", dark = true) {
+        SplashContent(appName = "Knotwork Agent", state = SplashPreview.dataLocked())
+    }
+
     private fun snapshot(name: String, dark: Boolean, content: @Composable () -> Unit) {
         composeTestRule.setContent {
             CompositionLocalProvider(LocalKnotworkA11y provides FixedKnotworkA11y(reducedMotion = true)) {
@@ -68,5 +78,13 @@ internal object SplashPreview {
 
     fun error(): SplashViewState = SplashViewState.Error(
         message = "Initialisation failed: model file not found. Reinstall the model from Settings.",
+    )
+
+    fun dataLocked(): SplashViewState = SplashViewState.DataLocked(
+        title = "Your data can’t be unlocked",
+        body = "The encryption key protecting your local data could not be read. " +
+            "This is often temporary — try again first. If the problem persists, " +
+            "the only way forward is erasing all local data.",
+        resetLabel = "Erase all data",
     )
 }

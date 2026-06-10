@@ -85,10 +85,11 @@ interface MemoryDao {
      *
      * @param id Identifier of the chunk to update.
      * @param text New raw text content.
-     * @param embedding Serialized embedding vector (comma-encoded floats).
+     * @param embedding Embedding vector encoded into the binary BLOB form
+     *   (see [app.knotwork.android.data.local.EmbeddingBlobCodec]).
      */
     @Query("UPDATE memory_chunks SET text = :text, embedding = :embedding WHERE id = :id")
-    suspend fun updateMemory(id: Long, text: String, embedding: String)
+    suspend fun updateMemory(id: Long, text: String, embedding: ByteArray)
 
     /**
      * Sets the `isPinned` flag on a single memory chunk.
@@ -116,11 +117,11 @@ interface MemoryDao {
      *
      * @param id Identifier of the chunk to update.
      * @param text New raw text content.
-     * @param embedding Serialized embedding vector for [text].
+     * @param embedding Binary-encoded embedding vector for [text].
      * @param tagsCsv New comma-separated tag list.
      */
     @Transaction
-    suspend fun updateMemoryWithTags(id: Long, text: String, embedding: String, tagsCsv: String) {
+    suspend fun updateMemoryWithTags(id: Long, text: String, embedding: ByteArray, tagsCsv: String) {
         updateMemory(id = id, text = text, embedding = embedding)
         setMemoryTags(id = id, tagsCsv = tagsCsv)
     }
@@ -135,16 +136,6 @@ interface MemoryDao {
      */
     @Query("UPDATE memory_chunks SET useCount = useCount + 1, lastUsedAt = :atMillis WHERE id IN (:ids)")
     suspend fun recordUsage(ids: List<Long>, atMillis: Long)
-
-    /**
-     * Retrieves a limited number of the most recent memory chunks from the database.
-     * This is used to load a bounded number of embeddings into memory for vector similarity search.
-     *
-     * @param limit The maximum number of recent chunks to return.
-     * @return A list of the most recent [MemoryChunkEntity] items.
-     */
-    @Query("SELECT * FROM memory_chunks ORDER BY timestamp DESC LIMIT :limit")
-    suspend fun getRecentMemories(limit: Int): List<MemoryChunkEntity>
 
     /**
      * Retrieves the [limit] most recent memory chunks projected to text/timestamp
@@ -241,10 +232,10 @@ interface MemoryDao {
      * once. The `text` and `timestamp` are untouched.
      *
      * @param id Identifier of the chunk to repair.
-     * @param embedding Serialized embedding vector produced by the active provider.
+     * @param embedding Binary-encoded embedding vector produced by the active provider.
      */
     @Query("UPDATE memory_chunks SET embedding = :embedding, needsReembedding = 0 WHERE id = :id")
-    suspend fun markReembedded(id: Long, embedding: String)
+    suspend fun markReembedded(id: Long, embedding: ByteArray)
 
     /**
      * Live count of stored memory chunks. Powers the Settings → Memory
@@ -256,8 +247,9 @@ interface MemoryDao {
     /**
      * Live aggregate byte size of the table content. Uses `LENGTH(text)` +
      * `LENGTH(embedding)` so the estimate matches what the SQLite VFS
-     * actually stores rather than a raw row count. Powers the
-     * Settings → Memory "SIZE" stat cell.
+     * actually stores rather than a raw row count (`LENGTH` on the embedding
+     * BLOB counts bytes directly). Powers the Settings → Memory "SIZE"
+     * stat cell.
      */
     @Query("SELECT COALESCE(SUM(LENGTH(text) + LENGTH(embedding)), 0) FROM memory_chunks")
     fun observeTotalBytes(): Flow<Long>

@@ -383,6 +383,14 @@ When you create a new chat from the drawer, you can attach a specific
 pipeline to it. Chats without an explicit binding fall back to the
 default pipeline marked in the library.
 
+If no pipeline is marked as default (for example after deleting the one
+that was), an unbound chat refuses to run and shows an explicit error
+instead of silently picking an arbitrary pipeline from the library. To
+fix it, mark a default via the pipeline card's `⋮` menu in the library,
+or bind a pipeline to the chat directly. If a chat's bound pipeline has
+been deleted, the chat is rebound to the default and a brief
+notification tells you the selection moved.
+
 ### Visual editor
 
 Loading a pipeline opens the **Pipeline editor**. The editor surface
@@ -878,7 +886,12 @@ daily charging-and-idle worker consolidates stale clusters, and an
 Universal Sentence Encoder, OpenAI, or Ollama). Switching the provider
 applies on the next embed/retrieval; existing chunks keep their old
 vectors until you run **Re-embed** (or import flags them for a
-background re-embed).
+background re-embed). After a switch, a persistent warning banner
+appears under the dropdown — *"Embeddings were created with a different
+provider — re-embed recommended"* — with an inline button that runs the
+same **Re-embed** action. The banner disappears once a full re-embed
+(or a memory wipe) re-aligns the store, or if you switch back to the
+original provider.
 
 The action trio:
 
@@ -932,8 +945,9 @@ LLMs.
   inference memory. Its mono subtitle shows size, accelerator
   backend, and execution backend.
 - The **HuggingFace** section lets you paste a personal access token
-  (kept in `EncryptedSharedPreferences`) so gated repositories can be
-  downloaded. The `+ Paste` button reads the system clipboard.
+  (stored encrypted, in the same Keystore-backed store as cloud API
+  keys) so gated repositories can be downloaded. The `+ Paste` button
+  reads the system clipboard.
 - The **Custom model URL** field accepts a direct link to any
   `.litertlm`, `.task`, or `.gguf` file. Tap `Get` to start
   downloading.
@@ -1074,11 +1088,34 @@ screen's search), work down this list:
   force it with **Settings → Memory → Re-embed**.
 - **The provider changed.** Switching the **Embedding model** leaves
   existing chunks in the old vector space; run **Re-embed** so the whole
-  store shares the active provider's space again.
+  store shares the active provider's space again. The Memory card shows
+  a persistent *re-embed recommended* banner while this mismatch holds.
 - **It was never extracted.** Auto-extract only keeps durable facts
   (preferences, events, relationships) and skips small talk and
   near-duplicates. If a fact didn't make the cut, add it by hand with
   **Save to memory** or the **Add memory** FAB.
+
+### "Your data can't be unlocked" appears at startup
+
+All local data is stored in an encrypted database whose key lives in
+Android's hardware keystore. In rare situations — typically right after
+restoring the app from a backup, after an OS update, or due to a
+transient keystore glitch — that key can become temporarily unreadable,
+and the app shows a dedicated recovery screen instead of starting:
+
+- **Tap Retry first — possibly more than once.** Keystore failures are
+  often transient; if the key becomes readable again, the app opens your
+  existing data untouched. Rebooting the device before another retry
+  helps in some cases.
+- **Erase all data is the last resort.** If retrying never gets past the
+  screen, the key is gone for good and the encrypted database can no
+  longer be opened by anyone — including the app itself. **Erase all
+  data** deletes the database and generates a fresh key so you can start
+  over. The action is irreversible and guarded by a typed confirmation.
+
+The app never deletes or re-keys your data automatically in this state:
+without the original key the database contents cannot be recovered, so
+the decision to wipe is always yours.
 
 ---
 

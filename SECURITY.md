@@ -44,9 +44,35 @@ storage and credentials:
     prior conversations.
   - `trace_steps` — intermediate per-node outputs produced during pipeline
     execution.
-- The SQLCipher passphrase is a **32-byte random value** generated on first
-  launch and persisted in `EncryptedSharedPreferences`. The master key
-  protecting `EncryptedSharedPreferences` is stored in the Android Keystore.
+- The SQLCipher passphrase is a **32-byte random value** persisted in a
+  Keystore-backed encrypted store: each value is encrypted with AES-256-GCM
+  under a dedicated, non-exportable key held in the Android Keystore, and
+  every ciphertext is authenticated against its storage slot so blobs cannot
+  be swapped between entries. (Earlier releases used the now-deprecated
+  `EncryptedSharedPreferences`; it was replaced — together with the
+  `androidx.security:security-crypto` dependency — by this direct Keystore
+  wrapper, removing the intermediate wrapped-keyset file and its corruption
+  modes. As permitted by the pre-release storage policy, there is **no data
+  migration**: an install upgraded across this change boots into the startup
+  recovery screen, where the only path forward for the old database is the
+  explicit wipe, and previously saved API keys must be re-entered.)
+- **The passphrase is generated only while no database file exists yet, and
+  is never regenerated once one does.** While a database is present, any
+  failure to read the stored passphrase — unopenable preferences, a missing
+  or malformed entry, or a key/file mismatch after the database was restored
+  from another install — raises a typed error that routes to a dedicated
+  startup recovery screen. That screen offers **Retry** (keystore failures
+  are often transient) and an explicit **Erase all data** action behind a
+  typed confirmation; the app never wipes, re-keys, or silently recreates
+  the passphrase store on its own while user data could be orphaned by it.
+  The passphrase is read lazily at the first real database open — never
+  during dependency injection — so a failure always surfaces where the UI
+  can handle it.
+- The store holding **cloud API keys** intentionally keeps the opposite,
+  availability-first recovery: a key value that can no longer be decrypted is
+  treated as unset and dropped. Unlike the database passphrase, keys can
+  simply be re-entered by the user, so availability wins over preservation
+  there.
 - The app does not retain any plaintext copy of the passphrase.
 - **Schema migrations preserve data on upgrade.** Every schema-version bump is
   backed by an explicit Room `Migration` registered through `addMigrations(...)`;
@@ -77,7 +103,9 @@ storage and credentials:
 ### API keys for cloud providers
 
 - Keys for optional cloud LLM providers (OpenAI, Anthropic, Google, DeepSeek,
-  Ollama) are stored exclusively in `EncryptedSharedPreferences`.
+  Ollama) are stored exclusively in the same kind of Keystore-backed
+  encrypted store as the database passphrase (AES-256-GCM under its own
+  dedicated Android Keystore key).
 - Keys are never written to plain `SharedPreferences`, DataStore, log files,
   exported chat archives, or any artifact checked into the repository.
 
@@ -93,6 +121,37 @@ storage and credentials:
     Hugging Face).
   - Anonymous crash reporting **after** the user has opted in (see below).
 
+### Prompt injection via tool content (accepted risk)
+
+Content returned by tools is **untrusted model input**, and the agent does
+not attempt to sanitize it. This is a deliberate, accepted trade-off — not an
+oversight — and it works as follows:
+
+- Text returned by any tool — Wikipedia extracts from the built-in
+  `search_tool`, results from user-configured **MCP servers**, and responses
+  from **AppFunctions** exposed by other installed apps — is fed back into
+  the context of subsequent pipeline nodes. That includes planning and
+  routing nodes (`DECOMPOSITION`, `INTENT_ROUTER`), so a crafted tool result
+  can steer which branch a pipeline takes and **influence the arguments of
+  later tool calls** in the same run.
+- The backstop is the **human-in-the-loop gate**: before any `SENSITIVE` or
+  `DESTRUCTIVE` tool executes, the chat surfaces a confirmation card showing
+  the **tool name and the exact arguments** the model produced, and the run
+  suspends until the user approves or denies. An injected instruction can
+  therefore *propose* a harmful call, but cannot *execute* it unreviewed.
+- `READ_ONLY` tools are **not gated by design** — prompting on every lookup
+  would make the agent unusable. The residual exposure is that injected
+  content can shape further read-only queries and the text of the final
+  answer.
+- Tools without a known risk level (all MCP-provided tools included) default
+  to `SENSITIVE`, the conservative fallback, so they always hit the gate.
+
+**Recommendation:** when connecting an MCP server you do not fully trust —
+or one that serves content from the open web — set the tool-approval policy
+in **Settings → Restrictions** to require approval for **every** tool call,
+regardless of risk level. That closes the ungated read-only path for the
+price of one extra tap per call.
+
 ### Out of scope
 
 The threat model does not attempt to defend against:
@@ -105,7 +164,9 @@ The threat model does not attempt to defend against:
 - Prompt-injection attacks delivered through content the user feeds into the
   model. The agent confirms destructive or sensitive tool invocations with
   the user (human-in-the-loop), but it cannot prevent the model from
-  producing untrusted output.
+  producing untrusted output. Injection through **tool-returned** content is
+  documented separately above (*Prompt injection via tool content*) — same
+  conclusion, same backstop.
 - Vulnerabilities in third-party dependencies. Those should be reported to
   the respective upstream projects.
 
@@ -146,8 +207,8 @@ enabled:
 - The contents of chat messages, model prompts, or model replies.
 - Long-term memory chunks or any user-authored text.
 - Tool inputs, tool outputs, or arguments produced by the agent.
-- API keys, passphrases, or any value stored in
-  `EncryptedSharedPreferences`.
+- API keys, passphrases, or any value stored in the Keystore-backed
+  encrypted stores.
 - Personally identifying information beyond the device/app metadata listed
   above.
 

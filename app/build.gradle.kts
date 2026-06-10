@@ -276,6 +276,22 @@ detekt {
     source.setFrom("src/main/java", "src/main/kotlin")
 }
 
+// Coroutine-cancellation gate. `SuspendFunSwallowedCancellation` requires
+// type resolution, which the plain `detekt` task above cannot provide, so the
+// rule lives in a second, deliberately narrow run: `detektDebug` (the
+// plugin-generated type-resolution task for the debug variant) is rewired to
+// `detekt-cancellation.yml`, a config that activates only that single rule.
+// Running the full strict config under type resolution instead would surface
+// ~1.1k findings from rules that have never been part of the gate — adopting
+// them is a separate effort, not a side effect of this wiring. Full-config
+// type-resolution analysis remains available via `detektMain`/`detektRelease`.
+tasks.matching { it.name == "detektDebug" }.configureEach {
+    this as Detekt
+    config.setFrom(files("$rootDir/config/detekt/detekt-cancellation.yml"))
+    buildUponDefaultConfig.set(false)
+}
+tasks.named("check") { dependsOn("detektDebug") }
+
 tasks.withType<Detekt>().configureEach {
     reports {
         html.required.set(true)
@@ -710,9 +726,6 @@ dependencies {
     // `No KoogHttpClient.Factory provider found on the runtime classpath`
     // on the first network call.
     implementation(libs.koog.http.client.ktor)
-
-    // Security Crypto
-    implementation(libs.androidx.security.crypto)
 
     // SQLCipher for Android (encrypted Room database)
     implementation(libs.sqlcipher.android)

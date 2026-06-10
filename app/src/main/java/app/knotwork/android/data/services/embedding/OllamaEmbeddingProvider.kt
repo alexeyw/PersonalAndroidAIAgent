@@ -61,13 +61,14 @@ class OllamaEmbeddingProvider @Inject constructor(
         }
 
         val client = embedderFactory.ollamaClient(baseUrl)
-        return runCatching {
+        return try {
             client.embed(texts, OllamaModels.Embeddings.NOMIC_EMBED_TEXT)
                 .map { it.toFloatVector() }
-        }.getOrElse { throwable ->
-            if (throwable is CancellationException) throw throwable
-            Timber.e(throwable, "Ollama embedding request failed")
-            throw EmbeddingException("Ollama embedding request failed", throwable)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Throwable) {
+            Timber.e(e, "Ollama embedding request failed")
+            throw EmbeddingException("Ollama embedding request failed", e)
         }
     }
 

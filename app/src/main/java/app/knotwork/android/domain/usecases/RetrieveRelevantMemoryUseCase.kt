@@ -5,6 +5,7 @@ import app.knotwork.android.domain.repositories.MemoryRepository
 import app.knotwork.android.domain.repositories.SettingsRepository
 import app.knotwork.android.domain.services.EmbeddingProviderResolver
 import app.knotwork.android.domain.services.MemoryReranker
+import app.knotwork.android.domain.services.MemorySearchStatsTracker
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
@@ -44,12 +45,15 @@ import javax.inject.Inject
  *   the raw search hits.
  * @property settingsRepository Source of the default top-K / threshold /
  *   recency half-life when the caller does not override them.
+ * @property memorySearchStatsTracker Records the raw similarity scores of each
+ *   search so the Settings AVG SCORE stat cell reflects retrieval quality.
  */
 class RetrieveRelevantMemoryUseCase @Inject constructor(
     private val embeddingProviderResolver: EmbeddingProviderResolver,
     private val memoryRepository: MemoryRepository,
     private val memoryReranker: MemoryReranker,
     private val settingsRepository: SettingsRepository,
+    private val memorySearchStatsTracker: MemorySearchStatsTracker,
 ) {
     /**
      * Executes the retrieval process.
@@ -105,12 +109,19 @@ class RetrieveRelevantMemoryUseCase @Inject constructor(
         val effectiveLimit = limit ?: settingsRepository.memorySearchTopK.first()
         val effectiveThreshold = threshold ?: settingsRepository.memorySearchThreshold.first()
         val halfLifeDays = settingsRepository.memoryRecencyHalfLifeDays.first()
-        val searchPoolLimit = settingsRepository.maxMemoryChunksForSearch.first()
 
         // Pull the full scored pool (not just the raw-cosine top-K) so the
         // re-ranker can promote a pinned or fresh chunk that the raw search
         // would have left just outside the top-K. Top-K is applied last.
-        memoryRepository.findSimilarMemories(queryEmbedding, searchPoolLimit, limit = searchPoolLimit)
+        memoryRepository.findSimilarMemories(queryEmbedding)
+            .also { candidates ->
+                // Pre-trim to the tracker's sample size: the pool can hold
+                // thousands of entries and record() only keeps the head, so
+                // mapping every score would allocate a large list for nothing.
+                memorySearchStatsTracker.record(
+                    candidates.take(MemorySearchStatsTracker.STATS_SAMPLE_SIZE).map { it.second },
+                )
+            }
             .let { candidates ->
                 memoryReranker.rerank(
                     candidates = candidates,
