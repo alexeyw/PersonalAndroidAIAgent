@@ -15,6 +15,15 @@ details.
 
 ### Added
 
+- **Re-embed reminder banner.** *Settings → Memory* now shows a persistent
+  warning under the embedding-provider dropdown whenever the stored memory
+  vectors were created with a different provider than the active one —
+  previously nothing surfaced the mismatch, even though affected chunks
+  silently score ~0 against every query. The banner carries an inline
+  button that runs the existing **Re-embed** action and disappears once a
+  full re-embed (or a memory wipe) re-aligns the store. Switching back to
+  the original provider also clears it.
+
 - **Coroutine-cancellation static gate.** `./gradlew check` now also runs
   `detektDebug`, a type-resolution detekt pass with a dedicated config
   ([`config/detekt/detekt-cancellation.yml`](config/detekt/detekt-cancellation.yml))
@@ -114,6 +123,20 @@ details.
   debug-signed copy in place — see the *Pre-release notice* in the README.
 
 ### Fixed
+
+- **Old memories are no longer invisible to retrieval.** The similarity
+  search behind long-term memory scanned only the most recent chunks (a
+  hidden 1,000-row recency window), so an old but relevant fact stopped
+  being findable — regardless of how well it matched — once enough newer
+  entries accumulated. The search now scans the full memory base on every
+  query; recency remains a *ranking* weight (the re-ranker's half-life
+  decay), never a visibility filter. The same window also silently let
+  near-duplicates of old facts back in through auto-extraction — the dedup
+  check now runs against the full pool too. The pool stays bounded by the
+  **Max stored chunks** compaction limit, and the now-redundant internal
+  search-pool setting was removed. As part of the same change the AVG
+  SCORE statistic moved out of the storage layer into a dedicated
+  session-scoped tracker — its on-screen behaviour is unchanged.
 
 - **Cancelling a generation no longer surfaces a false error.** Stopping a
   run (or any scope teardown mid-pipeline) used to be caught by the

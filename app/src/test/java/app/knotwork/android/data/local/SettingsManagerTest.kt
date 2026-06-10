@@ -24,6 +24,7 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -54,9 +55,7 @@ class SettingsManagerTest {
     private val topKKey = androidx.datastore.preferences.core.intPreferencesKey("top_k")
     private val topPKey = androidx.datastore.preferences.core.floatPreferencesKey("top_p")
     private val requiresUserConfirmationKey = booleanPreferencesKey("requires_user_confirmation")
-    private val maxMemoryChunksForSearchKey = androidx.datastore.preferences.core.intPreferencesKey(
-        "max_memory_chunks_for_search",
-    )
+    private val lastReembedProviderIdKey = stringPreferencesKey("last_reembed_provider_id")
     private val pipelineMaxStepsKey = androidx.datastore.preferences.core.intPreferencesKey("pipeline_max_steps")
     private val crashReportingEnabledKey = booleanPreferencesKey("crash_reporting_enabled")
     private val appFunctionRiskOverridesKey = stringPreferencesKey("app_function_risk_overrides")
@@ -143,14 +142,64 @@ class SettingsManagerTest {
     }
 
     @Test
-    fun `maxMemoryChunksForSearch returns default value`() = runTest {
+    fun `lastReembedProviderId returns null by default`() = runTest {
         val prefs = mockk<Preferences>()
-        every { prefs[maxMemoryChunksForSearchKey] } returns null
+        every { prefs[lastReembedProviderIdKey] } returns null
         every { dataStore.data } returns flowOf(prefs)
 
         val settingsManager = SettingsManager(dataStore)
-        val result = settingsManager.maxMemoryChunksForSearch.first()
-        assertEquals(1000, result)
+        assertNull(settingsManager.lastReembedProviderId.first())
+    }
+
+    @Test
+    fun `setLastReembedProviderId persists and is read back`() = runTest {
+        val (manager, scope) = freshManagerWithRealDataStore()
+        try {
+            manager.setLastReembedProviderId("ollama")
+            assertEquals("ollama", manager.lastReembedProviderId.first())
+        } finally {
+            scope.cancel()
+        }
+    }
+
+    @Test
+    fun `setActiveEmbeddingProviderId captures the previous provider as baseline on first switch only`() = runTest {
+        val (manager, scope) = freshManagerWithRealDataStore()
+        try {
+            // Given — a fresh install: the default provider is active and no
+            // baseline has ever been captured.
+            assertNull(manager.lastReembedProviderId.first())
+
+            // When — the user switches providers for the first time.
+            manager.setActiveEmbeddingProviderId("ollama")
+
+            // Then — the provider the stored vectors were created with (the
+            // default) is captured as the baseline.
+            assertEquals("ollama", manager.activeEmbeddingProviderId.first())
+            assertEquals(
+                SettingsDefaults.ACTIVE_EMBEDDING_PROVIDER_ID_DEFAULT,
+                manager.lastReembedProviderId.first(),
+            )
+
+            // When — a second switch happens without a re-embed in between.
+            manager.setActiveEmbeddingProviderId("openai_3_small")
+
+            // Then — the baseline is NOT overwritten (the vectors are still in
+            // the original provider's space).
+            assertEquals(
+                SettingsDefaults.ACTIVE_EMBEDDING_PROVIDER_ID_DEFAULT,
+                manager.lastReembedProviderId.first(),
+            )
+
+            // When — the user switches back to the baseline provider.
+            manager.setActiveEmbeddingProviderId(SettingsDefaults.ACTIVE_EMBEDDING_PROVIDER_ID_DEFAULT)
+
+            // Then — active equals baseline again, so the mismatch banner
+            // condition no longer holds.
+            assertEquals(manager.lastReembedProviderId.first(), manager.activeEmbeddingProviderId.first())
+        } finally {
+            scope.cancel()
+        }
     }
 
     @Test

@@ -9,11 +9,10 @@ import app.knotwork.android.domain.models.Role
 import app.knotwork.android.domain.prompt.PromptTemplateEngine
 import app.knotwork.android.domain.prompt.PromptVariableProvider
 import app.knotwork.android.domain.repositories.MemoryRepository
-import app.knotwork.android.domain.repositories.SettingsRepository
 import app.knotwork.android.domain.services.EmbeddingProviderResolver
+import app.knotwork.android.domain.services.MemorySearchStatsTracker
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
@@ -33,8 +32,9 @@ import javax.inject.Inject
  *  3. Parse the model's reply as a JSON array of `{type, text}` facts.
  *  4. For each fact, compute its embedding with the **active** provider and
  *     reject near-duplicates (cosine similarity ≥ [DEDUP_SIMILARITY_THRESHOLD])
- *     of either an already-stored chunk or a fact accepted earlier in the same
- *     pass.
+ *     of either an already-stored chunk (checked against the **full** stored
+ *     pool — an old fact must stay dedup-visible no matter its age) or a fact
+ *     accepted earlier in the same pass.
  *  5. Save the survivors tagged with [MemorySource.ChatSession].
  *
  * The use case is intentionally free of the auto-extract feature toggle: the
@@ -50,7 +50,8 @@ import javax.inject.Inject
  * @property promptVariableProviders Registered providers backing the templating.
  * @property embeddingProviderResolver Resolves the active embedding backend per call.
  * @property memoryRepository Persistence + similarity search over stored chunks.
- * @property settingsRepository Source of the similarity-search pool size.
+ * @property memorySearchStatsTracker Records the dedup-search scores so the
+ *   Settings AVG SCORE stat cell keeps reflecting every similarity search.
  */
 class MemoryExtractionUseCase @Inject constructor(
     private val llmInferenceEngine: LlmInferenceEngine,
@@ -59,7 +60,7 @@ class MemoryExtractionUseCase @Inject constructor(
     private val promptVariableProviders: Set<@JvmSuppressWildcards PromptVariableProvider>,
     private val embeddingProviderResolver: EmbeddingProviderResolver,
     private val memoryRepository: MemoryRepository,
-    private val settingsRepository: SettingsRepository,
+    private val memorySearchStatsTracker: MemorySearchStatsTracker,
 ) {
 
     /**
@@ -136,7 +137,6 @@ class MemoryExtractionUseCase @Inject constructor(
      * @return Outcome counters for the pass.
      */
     private suspend fun persistNovelFacts(sessionId: String, facts: List<ExtractedFact>): MemoryExtractionOutcome {
-        val searchPoolLimit = settingsRepository.maxMemoryChunksForSearch.first()
         val provider = embeddingProviderResolver.resolve()
 
         // Embed every fact in a single batch call. Cloud providers turn this
@@ -170,7 +170,7 @@ class MemoryExtractionUseCase @Inject constructor(
 
         for (i in facts.indices) {
             val embedding = embeddings[i]
-            if (isDuplicate(embedding, searchPoolLimit, acceptedEmbeddings)) {
+            if (isDuplicate(embedding, acceptedEmbeddings)) {
                 skipped++
                 continue
             }
@@ -193,23 +193,18 @@ class MemoryExtractionUseCase @Inject constructor(
     /**
      * Decides whether [embedding] is a near-duplicate. A fact is a duplicate
      * when its cosine similarity to either a stored chunk or a fact already
-     * accepted in this pass is at least [DEDUP_SIMILARITY_THRESHOLD].
+     * accepted in this pass is at least [DEDUP_SIMILARITY_THRESHOLD]. The
+     * stored-chunk check runs against the **full** stored pool — an old fact
+     * must keep rejecting its re-extracted duplicates no matter its age.
      *
      * @param embedding Embedding of the candidate fact.
-     * @param searchPoolLimit Number of recent chunks to scan for the stored-chunk check.
      * @param acceptedEmbeddings Embeddings accepted earlier in the same pass.
      * @return `true` if the candidate should be skipped as a duplicate.
      */
-    private suspend fun isDuplicate(
-        embedding: FloatArray,
-        searchPoolLimit: Int,
-        acceptedEmbeddings: List<FloatArray>,
-    ): Boolean {
-        val topStored = memoryRepository
-            .findSimilarMemories(embedding, searchPoolLimit, limit = 1)
-            .firstOrNull()
-            ?.second
-            ?: 0f
+    private suspend fun isDuplicate(embedding: FloatArray, acceptedEmbeddings: List<FloatArray>): Boolean {
+        val hits = memoryRepository.findSimilarMemories(embedding, limit = 1)
+        memorySearchStatsTracker.record(hits.map { it.second })
+        val topStored = hits.firstOrNull()?.second ?: 0f
         if (topStored >= DEDUP_SIMILARITY_THRESHOLD) return true
         return acceptedEmbeddings.any { cosineSimilarity(embedding, it) >= DEDUP_SIMILARITY_THRESHOLD }
     }

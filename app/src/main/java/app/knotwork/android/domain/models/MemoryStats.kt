@@ -16,16 +16,8 @@ package app.knotwork.android.domain.models
  *   least one associated memory chunk. v0.1 uses the chunk's originating
  *   session id when available; until thread-attribution lands this is
  *   exposed as `0` and the UI renders a dash.
- * @property averageSimilarityScore Mean cosine-similarity score across the
- *   last similarity-search call, in `0f..1f`. `null` when no search has
- *   been performed in the current session — the UI then renders a dash.
  */
-data class MemoryStats(
-    val chunkCount: Int,
-    val totalBytes: Long,
-    val threadCount: Int,
-    val averageSimilarityScore: Float?,
-) {
+data class MemoryStats(val chunkCount: Int, val totalBytes: Long, val threadCount: Int) {
     /** Holds the [EMPTY] sentinel used while the first observation is in flight. */
     companion object {
         /** Empty stats projection — used while the first observation is in flight. */
@@ -33,7 +25,6 @@ data class MemoryStats(
             chunkCount = 0,
             totalBytes = 0L,
             threadCount = 0,
-            averageSimilarityScore = null,
         )
     }
 }

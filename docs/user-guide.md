@@ -878,7 +878,12 @@ daily charging-and-idle worker consolidates stale clusters, and an
 Universal Sentence Encoder, OpenAI, or Ollama). Switching the provider
 applies on the next embed/retrieval; existing chunks keep their old
 vectors until you run **Re-embed** (or import flags them for a
-background re-embed).
+background re-embed). After a switch, a persistent warning banner
+appears under the dropdown — *"Embeddings were created with a different
+provider — re-embed recommended"* — with an inline button that runs the
+same **Re-embed** action. The banner disappears once a full re-embed
+(or a memory wipe) re-aligns the store, or if you switch back to the
+original provider.
 
 The action trio:
 
@@ -1074,7 +1079,8 @@ screen's search), work down this list:
   force it with **Settings → Memory → Re-embed**.
 - **The provider changed.** Switching the **Embedding model** leaves
   existing chunks in the old vector space; run **Re-embed** so the whole
-  store shares the active provider's space again.
+  store shares the active provider's space again. The Memory card shows
+  a persistent *re-embed recommended* banner while this mismatch holds.
 - **It was never extracted.** Auto-extract only keeps durable facts
   (preferences, events, relationships) and skips small talk and
   near-duplicates. If a fact didn't make the cut, add it by hand with

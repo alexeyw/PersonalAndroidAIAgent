@@ -85,6 +85,11 @@
     <string name="settings_memory_reembed">Re-embed</string>
     <string name="settings_memory_clear">Clear</string>
 
+    <!-- Persistent banner shown when stored embeddings were created with a
+         different provider than the active one (hidden after a successful
+         re-embed or a full memory wipe). -->
+    <string name="settings_memory_reembed_banner">Embeddings were created with a different provider — re-embed recommended</string>
+
     <!-- Memory snackbar messages emitted after the destructive action completes. -->
     <string name="settings_memory_cleared_snackbar">Memory cleared.</string>
     <string name="settings_memory_export_filename">memory-base.json</string>

@@ -14,9 +14,9 @@ import app.knotwork.android.domain.models.Result
 import app.knotwork.android.domain.models.Role
 import app.knotwork.android.domain.prompt.PromptTemplateEngine
 import app.knotwork.android.domain.repositories.MemoryRepository
-import app.knotwork.android.domain.repositories.SettingsRepository
 import app.knotwork.android.domain.services.EmbeddingProvider
 import app.knotwork.android.domain.services.EmbeddingProviderResolver
+import app.knotwork.android.domain.services.MemorySearchStatsTracker
 import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
@@ -48,7 +48,6 @@ class MemoryExtractionIntegrationTest {
     private lateinit var promptTemplateEngine: PromptTemplateEngine
     private lateinit var embeddingProviderResolver: EmbeddingProviderResolver
     private lateinit var embeddingProvider: EmbeddingProvider
-    private lateinit var settingsRepository: SettingsRepository
     private lateinit var useCase: MemoryExtractionUseCase
 
     private val sessionId = "session-int"
@@ -70,12 +69,10 @@ class MemoryExtractionIntegrationTest {
         promptTemplateEngine = mockk()
         embeddingProviderResolver = mockk()
         embeddingProvider = mockk()
-        settingsRepository = mockk()
 
         coEvery { loadModelUseCase.invoke(any()) } returns Result.Success(Unit)
         coEvery { promptTemplateEngine.render(any(), any()) } answers { firstArg() }
         coEvery { embeddingProviderResolver.resolve() } returns embeddingProvider
-        every { settingsRepository.maxMemoryChunksForSearch } returns flowOf(1000)
         every { llmInferenceEngine.generateResponseStream(any()) } returns
             flowOf("""[{"type": "preference", "text": "Prefers dark mode"}]""")
 
@@ -86,7 +83,7 @@ class MemoryExtractionIntegrationTest {
             promptVariableProviders = emptySet(),
             embeddingProviderResolver = embeddingProviderResolver,
             memoryRepository = repository,
-            settingsRepository = settingsRepository,
+            memorySearchStatsTracker = MemorySearchStatsTracker(),
         )
     }
 

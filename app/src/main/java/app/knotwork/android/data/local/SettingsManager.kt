@@ -55,7 +55,6 @@ class SettingsManager @Inject constructor(private val dataStore: DataStore<Prefe
         val DISABLED_MCP_TOOLS = stringSetPreferencesKey("disabled_mcp_tools")
         val APP_FUNCTION_RISK_OVERRIDES = stringPreferencesKey("app_function_risk_overrides")
         val CURRENT_CHAT_SESSION_ID = stringPreferencesKey("current_chat_session_id")
-        val MAX_MEMORY_CHUNKS_FOR_SEARCH = intPreferencesKey("max_memory_chunks_for_search")
         val MEMORY_LAST_COMPACTED_AT =
             androidx.datastore.preferences.core.longPreferencesKey("memory_last_compacted_at")
         val MEMORY_SEARCH_TOP_K = intPreferencesKey("memory_search_top_k")
@@ -93,6 +92,7 @@ class SettingsManager @Inject constructor(private val dataStore: DataStore<Prefe
 
         // Embedding provider abstraction.
         val ACTIVE_EMBEDDING_PROVIDER_ID = stringPreferencesKey("active_embedding_provider_id")
+        val LAST_REEMBED_PROVIDER_ID = stringPreferencesKey("last_reembed_provider_id")
 
         // Memory write auto-extraction.
         val AUTO_EXTRACT_ENABLED = booleanPreferencesKey("auto_extract_enabled")
@@ -586,26 +586,6 @@ class SettingsManager @Inject constructor(private val dataStore: DataStore<Prefe
         }
     }
 
-    override val maxMemoryChunksForSearch: Flow<Int> = dataStore.data
-        .catch { exception ->
-            if (exception is IOException) {
-                Timber.e(exception, "Error reading preferences")
-                emit(emptyPreferences())
-            } else {
-                throw exception
-            }
-        }
-        .map { preferences ->
-            preferences[PreferencesKeys.MAX_MEMORY_CHUNKS_FOR_SEARCH]
-                ?: SettingsDefaults.MEMORY_CHUNK_SEARCH_LIMIT_DEFAULT
-        }
-
-    override suspend fun setMaxMemoryChunksForSearch(limit: Int) {
-        dataStore.edit { preferences ->
-            preferences[PreferencesKeys.MAX_MEMORY_CHUNKS_FOR_SEARCH] = limit
-        }
-    }
-
     override val memoryLastCompactedAt: Flow<Long> = dataStore.data
         .catch { exception ->
             if (exception is IOException) {
@@ -743,7 +723,35 @@ class SettingsManager @Inject constructor(private val dataStore: DataStore<Prefe
 
     override suspend fun setActiveEmbeddingProviderId(id: String) {
         dataStore.edit { preferences ->
+            // First provider switch ever: capture the provider the stored
+            // vectors were created with, so the re-embed reminder banner can
+            // compare it against the new active id. Done inside the same edit
+            // so the capture and the switch land atomically.
+            if (preferences[PreferencesKeys.LAST_REEMBED_PROVIDER_ID] == null) {
+                preferences[PreferencesKeys.LAST_REEMBED_PROVIDER_ID] =
+                    preferences[PreferencesKeys.ACTIVE_EMBEDDING_PROVIDER_ID]
+                        ?: SettingsDefaults.ACTIVE_EMBEDDING_PROVIDER_ID_DEFAULT
+            }
             preferences[PreferencesKeys.ACTIVE_EMBEDDING_PROVIDER_ID] = id
+        }
+    }
+
+    override val lastReembedProviderId: Flow<String?> = dataStore.data
+        .catch { exception ->
+            if (exception is IOException) {
+                Timber.e(exception, "Error reading preferences")
+                emit(emptyPreferences())
+            } else {
+                throw exception
+            }
+        }
+        .map { preferences ->
+            preferences[PreferencesKeys.LAST_REEMBED_PROVIDER_ID]
+        }
+
+    override suspend fun setLastReembedProviderId(id: String) {
+        dataStore.edit { preferences ->
+            preferences[PreferencesKeys.LAST_REEMBED_PROVIDER_ID] = id
         }
     }
 

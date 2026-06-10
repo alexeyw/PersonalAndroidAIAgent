@@ -9,9 +9,9 @@ import app.knotwork.android.domain.models.Result
 import app.knotwork.android.domain.models.Role
 import app.knotwork.android.domain.prompt.PromptTemplateEngine
 import app.knotwork.android.domain.repositories.MemoryRepository
-import app.knotwork.android.domain.repositories.SettingsRepository
 import app.knotwork.android.domain.services.EmbeddingProvider
 import app.knotwork.android.domain.services.EmbeddingProviderResolver
+import app.knotwork.android.domain.services.MemorySearchStatsTracker
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -37,7 +37,7 @@ class MemoryExtractionUseCaseTest {
     private lateinit var embeddingProviderResolver: EmbeddingProviderResolver
     private lateinit var embeddingProvider: EmbeddingProvider
     private lateinit var memoryRepository: MemoryRepository
-    private lateinit var settingsRepository: SettingsRepository
+    private lateinit var memorySearchStatsTracker: MemorySearchStatsTracker
     private lateinit var useCase: MemoryExtractionUseCase
 
     private val sessionId = "session-1"
@@ -54,7 +54,7 @@ class MemoryExtractionUseCaseTest {
         embeddingProviderResolver = mockk()
         embeddingProvider = mockk()
         memoryRepository = mockk()
-        settingsRepository = mockk()
+        memorySearchStatsTracker = mockk(relaxed = true)
 
         // Default happy-path plumbing; individual tests override the model reply.
         coEvery { loadModelUseCase.invoke(any()) } returns Result.Success(Unit)
@@ -67,8 +67,7 @@ class MemoryExtractionUseCaseTest {
             val texts = firstArg<List<String>>()
             texts.indices.map { i -> FloatArray(texts.size) { if (it == i) 1f else 0f } }
         }
-        every { settingsRepository.maxMemoryChunksForSearch } returns flowOf(1000)
-        coEvery { memoryRepository.findSimilarMemories(any(), any(), any()) } returns emptyList()
+        coEvery { memoryRepository.findSimilarMemories(any(), any()) } returns emptyList()
         coEvery { memoryRepository.saveMemory(any(), any(), any(), any()) } returns 1L
 
         useCase = MemoryExtractionUseCase(
@@ -78,7 +77,7 @@ class MemoryExtractionUseCaseTest {
             promptVariableProviders = emptySet(),
             embeddingProviderResolver = embeddingProviderResolver,
             memoryRepository = memoryRepository,
-            settingsRepository = settingsRepository,
+            memorySearchStatsTracker = memorySearchStatsTracker,
         )
     }
 
@@ -163,7 +162,7 @@ class MemoryExtractionUseCaseTest {
     fun `given a near-duplicate of an existing chunk when invoke then skips it`() = runTest {
         stubReply("""[{"type": "preference", "text": "Prefers dark mode"}]""")
         // The stored-chunk search reports a 0.95 similarity (>= 0.92 threshold).
-        coEvery { memoryRepository.findSimilarMemories(any(), any(), any()) } returns
+        coEvery { memoryRepository.findSimilarMemories(any(), any()) } returns
             listOf(mockk<MemoryChunk>() to 0.95f)
 
         val outcome = useCase(sessionId, messages)
@@ -172,6 +171,41 @@ class MemoryExtractionUseCaseTest {
         assertEquals(0, outcome.saved)
         assertEquals(1, outcome.skippedDuplicates)
         coVerify(exactly = 0) { memoryRepository.saveMemory(any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun `given a duplicate of an old stored fact when invoke then dedup still rejects it`() = runTest {
+        stubReply("""[{"type": "preference", "text": "Prefers dark mode"}]""")
+        // The matching chunk is ancient (epoch-adjacent timestamp). The dedup
+        // check runs against the full stored pool, so its age must not matter
+        // — under the old recency-window pool this duplicate slipped through.
+        val ancientChunk = MemoryChunk(
+            id = 1L,
+            text = "Prefers dark mode",
+            embedding = floatArrayOf(1f, 0f),
+            timestamp = 1L,
+        )
+        coEvery { memoryRepository.findSimilarMemories(any(), any()) } returns listOf(ancientChunk to 0.99f)
+
+        val outcome = useCase(sessionId, messages)
+
+        assertEquals(1, outcome.parsed)
+        assertEquals(0, outcome.saved)
+        assertEquals(1, outcome.skippedDuplicates)
+        // The dedup probe asks only for the single best stored hit.
+        coVerify(exactly = 1) { memoryRepository.findSimilarMemories(any(), limit = 1) }
+        coVerify(exactly = 0) { memoryRepository.saveMemory(any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun `given dedup searches when invoke then their scores are recorded in the stats tracker`() = runTest {
+        stubReply("""[{"type": "preference", "text": "Prefers dark mode"}]""")
+        coEvery { memoryRepository.findSimilarMemories(any(), any()) } returns
+            listOf(mockk<MemoryChunk>() to 0.4f)
+
+        useCase(sessionId, messages)
+
+        coVerify(exactly = 1) { memorySearchStatsTracker.record(listOf(0.4f)) }
     }
 
     @Test

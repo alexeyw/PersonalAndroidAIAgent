@@ -222,6 +222,10 @@ data class MemoryParamSlider(
  * @property selectedEmbeddingLabel Display name of the selected provider.
  * @property validationError Optional inline error rendered beneath the
  *   sliders when the last tuning edit was rejected.
+ * @property reembedBanner Optional persistent warning rendered beneath the
+ *   embedding-provider dropdown when the stored vectors were created with a
+ *   different provider than the active one; carries a button that triggers
+ *   the same action as the Re-embed button. `null` hides the banner.
  */
 data class MemoryCardState(
     val stats: List<MemoryStatCell>,
@@ -245,6 +249,7 @@ data class MemoryCardState(
     val validationError: String? = null,
     /** Re-embed progress in `0..100`, or `null` when no re-embed is in flight. */
     val reembedProgressPercent: Int?,
+    val reembedBanner: String? = null,
 )
 
 data class NotificationsCardState(val longRunningEnabled: Boolean)

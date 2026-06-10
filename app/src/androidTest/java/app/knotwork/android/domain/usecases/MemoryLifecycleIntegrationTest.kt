@@ -23,6 +23,7 @@ import app.knotwork.android.domain.services.EmbeddingProvider
 import app.knotwork.android.domain.services.EmbeddingProviderResolver
 import app.knotwork.android.domain.services.KMeansClusterer
 import app.knotwork.android.domain.services.MemoryReranker
+import app.knotwork.android.domain.services.MemorySearchStatsTracker
 import io.mockk.Runs
 import io.mockk.coEvery
 import io.mockk.every
@@ -139,7 +140,6 @@ class MemoryLifecycleIntegrationTest {
             }
         }
 
-        every { settingsRepository.maxMemoryChunksForSearch } returns flowOf(SEARCH_POOL)
         every { settingsRepository.memorySearchTopK } returns flowOf(TOP_K)
         every { settingsRepository.memorySearchThreshold } returns flowOf(THRESHOLD)
         every { settingsRepository.memoryRecencyHalfLifeDays } returns flowOf(HALF_LIFE_DAYS)
@@ -153,6 +153,7 @@ class MemoryLifecycleIntegrationTest {
             settingsRepository = settingsRepository,
         )
 
+        val searchStatsTracker = MemorySearchStatsTracker()
         extractionUseCase = MemoryExtractionUseCase(
             llmInferenceEngine = llmInferenceEngine,
             loadModelUseCase = loadModelUseCase,
@@ -160,13 +161,14 @@ class MemoryLifecycleIntegrationTest {
             promptVariableProviders = emptySet(),
             embeddingProviderResolver = embeddingProviderResolver,
             memoryRepository = repository,
-            settingsRepository = settingsRepository,
+            memorySearchStatsTracker = searchStatsTracker,
         )
         retrieveUseCase = RetrieveRelevantMemoryUseCase(
             embeddingProviderResolver = embeddingProviderResolver,
             memoryRepository = repository,
             memoryReranker = MemoryReranker(),
             settingsRepository = settingsRepository,
+            memorySearchStatsTracker = searchStatsTracker,
         )
         compactionUseCase = MemoryCompactionUseCase(
             llmInferenceEngine = llmInferenceEngine,
@@ -272,7 +274,6 @@ class MemoryLifecycleIntegrationTest {
         /** Catch-all for any unmapped text — orthogonal to both of the above. */
         val OTHER_VEC = floatArrayOf(0f, 0f, 1f)
 
-        const val SEARCH_POOL = 1000
         const val TOP_K = 5
         const val THRESHOLD = 0.55f
         const val HALF_LIFE_DAYS = 30
