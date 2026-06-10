@@ -4,6 +4,7 @@ import app.knotwork.android.domain.constants.PromptPresetConstants
 import app.knotwork.android.domain.models.NodeType
 import app.knotwork.android.domain.models.PromptPreset
 import app.knotwork.android.domain.repositories.PromptPresetRepository
+import kotlinx.coroutines.CancellationException
 import java.util.UUID
 import javax.inject.Inject
 
@@ -107,6 +108,8 @@ class SavePromptAsPresetUseCase @Inject constructor(private val promptPresetRepo
         return try {
             promptPresetRepository.saveUserPreset(preset)
             Result.success(preset.id)
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             Result.failure(e)
         }

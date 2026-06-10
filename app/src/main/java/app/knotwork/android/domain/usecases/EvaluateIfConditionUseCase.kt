@@ -4,6 +4,7 @@ import app.knotwork.android.domain.constants.DefaultPrompts
 import app.knotwork.android.domain.engine.LlmInferenceEngine
 import app.knotwork.android.domain.models.NodeModel
 import app.knotwork.android.domain.models.NodeType
+import kotlinx.coroutines.CancellationException
 import javax.inject.Inject
 
 /**
@@ -74,6 +75,8 @@ class EvaluateIfConditionUseCase @Inject constructor(private val llmInferenceEng
                 llmInferenceEngine.generateResponseStream(prompt).collect { tokens.add(it) }
                 val responseText = tokens.joinToString("").trim().lowercase()
                 responseText.contains("true")
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 false
             }

@@ -23,6 +23,7 @@ This invokes (transitively):
 | Sub-task                                      | Purpose                                                                 |
 |-----------------------------------------------|-------------------------------------------------------------------------|
 | `:app:detekt`                                 | Kotlin static analysis. Fails on any unsuppressed finding.              |
+| `:app:detektDebug`                            | Coroutine-cancellation gate (type-resolution run, single rule). See below. |
 | `:app:ktlintCheck`                            | Kotlin formatting & idiomatic style rules. Run `ktlintFormat` to fix.  |
 | `:app:lintDebug`                              | Android Lint over the debug variant + library dependencies.             |
 | `:app:testDebugUnitTest`                      | JVM unit tests for the debug variant.                                   |
@@ -87,6 +88,37 @@ Bare `@Suppress("X")` without a reason comment is rejected in code review.
 **Reports**:
 - `app/build/reports/detekt/detekt.html` — visual checklist.
 - `app/build/reports/detekt/detekt.xml` — checkstyle-compatible for CI parsers.
+
+### Coroutine-cancellation gate (`detektDebug`)
+
+A second, deliberately narrow detekt run enforces the project's
+coroutine-cancellation contract (see
+[`code-style.md` § Coroutines & Flow](code-style.md#coroutines--flow)):
+
+- **Rule**: `coroutines.SuspendFunSwallowedCancellation` — flags
+  `runCatching` wrapping suspend calls, and `try`/`catch` blocks in suspend
+  functions that catch `CancellationException` (or a superclass such as
+  `Exception` / `Throwable` / `IllegalStateException`) without immediately
+  re-throwing it.
+- **Why a separate run**: the rule requires type resolution, which the plain
+  `:app:detekt` task cannot provide. The plugin-generated `:app:detektDebug`
+  task (type resolution over the debug variant) is rewired in
+  `app/build.gradle.kts` to
+  [`config/detekt/detekt-cancellation.yml`](../config/detekt/detekt-cancellation.yml)
+  — a config that activates **only** this rule — and added to `check`.
+  Running the full strict config under type resolution would surface ~1.1k
+  findings from rules that have never been part of the gate; adopting them
+  is a separate effort. Full-config type-resolution analysis remains
+  available via `:app:detektMain` / `:app:detektRelease` (not part of the
+  gate).
+- **Compliant patterns**: a dedicated first catch clause
+  `catch (e: CancellationException) { throw e }` before the generic catch,
+  or a `try`/`finally` without a catch. `runCatching` must never wrap
+  suspend calls.
+- **Known blind spot**: the rule does not analyse `try`/`catch` blocks
+  nested inside non-suspend inline lambdas (e.g. `forEach { ... }`) because
+  the enclosing function literal is not itself suspend-typed. Reviewers
+  must still check those sites manually.
 
 ---
 

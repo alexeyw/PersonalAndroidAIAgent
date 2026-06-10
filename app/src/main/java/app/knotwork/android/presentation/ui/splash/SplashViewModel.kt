@@ -12,6 +12,7 @@ import app.knotwork.android.domain.usecases.ResetLockedDatabaseUseCase
 import app.knotwork.design.components.dialogs.typedConfirmMatches
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -111,6 +112,8 @@ class SplashViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 resetLockedDatabaseUseCase()
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 // Even a failed wipe should fall through to a fresh init attempt:
                 // the next failure (if any) re-surfaces on the same screen.

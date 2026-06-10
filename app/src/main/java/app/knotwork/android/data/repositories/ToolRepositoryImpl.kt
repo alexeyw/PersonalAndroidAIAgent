@@ -13,6 +13,7 @@ import app.knotwork.android.domain.repositories.ApiKeyRepository
 import app.knotwork.android.domain.repositories.LocalToolExecutor
 import app.knotwork.android.domain.repositories.SettingsRepository
 import app.knotwork.android.domain.repositories.ToolRepository
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.firstOrNull
 import timber.log.Timber
@@ -162,6 +163,8 @@ class ToolRepositoryImpl @Inject constructor(
         (mcpClients.keys.toSet() - persistedUrls).forEach { url ->
             try {
                 mcpClients[url]?.client?.disconnect()
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 Timber.w(e, "MCP disconnect of removed server %s failed; dropping from pool anyway", url)
             }
@@ -180,6 +183,8 @@ class ToolRepositoryImpl @Inject constructor(
                 // the new settings instead of holding the old auth.
                 try {
                     existing.client.disconnect()
+                } catch (e: CancellationException) {
+                    throw e
                 } catch (e: Exception) {
                     Timber.w(e, "MCP disconnect of stale config for %s failed; reconnecting anyway", config.url)
                 }
@@ -189,6 +194,8 @@ class ToolRepositoryImpl @Inject constructor(
             try {
                 client.connect(config)
                 mcpClients[config.url] = ConnectedClient(client = client, config = config)
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 Timber.w(e, "MCP connect to %s failed; will retry on next sync", config.url)
             }
@@ -254,6 +261,8 @@ class ToolRepositoryImpl @Inject constructor(
                 entry.client.getTools().filter { tool ->
                     McpServerRepositoryImpl.mcpToolId(serverUrl = config.url, toolName = tool.name) !in disabledMcp
                 }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 emptyList()
             }
@@ -347,20 +356,20 @@ class ToolRepositoryImpl @Inject constructor(
         // priority the user actually configured.
         for (config in configs) {
             val entry = mcpClients[config.url] ?: continue
-            val advertised = runCatching { entry.client.getTools().any { it.name == name } }
-                .getOrDefault(false)
-            if (!advertised) continue
+            if (!advertisesTool(entry.client, name)) continue
             val mcpId = McpServerRepositoryImpl.mcpToolId(serverUrl = config.url, toolName = name)
             if (mcpId in disabledMcp) {
                 sawDisabled = true
                 continue
             }
-            runCatching { entry.client.executeTool(name, arguments) }
-                .onSuccess { return it }
-                .onFailure { error ->
-                    Timber.w(error, "MCP execute of %s on %s failed; trying other providers", name, config.url)
-                    lastExecutionError = error
-                }
+            try {
+                return entry.client.executeTool(name, arguments)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Throwable) {
+                Timber.w(e, "MCP execute of %s on %s failed; trying other providers", name, config.url)
+                lastExecutionError = e
+            }
         }
         lastExecutionError?.let { throw it }
         if (sawDisabled) {
@@ -395,13 +404,25 @@ class ToolRepositoryImpl @Inject constructor(
         // against a duplicate-URL row that updateMcpServer can persist.
         for (config in distinctMcpConfigs()) {
             val entry = mcpClients[config.url] ?: continue
-            val isMcpTool = runCatching { entry.client.getTools().any { it.name == toolName } }
-                .getOrDefault(false)
-            if (isMcpTool) {
+            if (advertisesTool(entry.client, toolName)) {
                 return ToolRisk.SENSITIVE
             }
         }
 
         throw IllegalArgumentException("Unknown tool: $toolName")
+    }
+
+    /**
+     * Probes whether the connected [client] advertises a tool named [toolName].
+     * A failed `tools/list` call counts as "not advertised" so multi-provider
+     * routing keeps walking the remaining providers; cancellation is re-thrown
+     * to keep the probe cooperative.
+     */
+    private suspend fun advertisesTool(client: McpClient, toolName: String): Boolean = try {
+        client.getTools().any { it.name == toolName }
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Throwable) {
+        false
     }
 }

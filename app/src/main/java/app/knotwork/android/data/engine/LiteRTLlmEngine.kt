@@ -163,6 +163,8 @@ class LiteRTLlmEngine @Inject constructor(
             Timber.i("LiteRT-LM Engine successfully initialized with $modelPath")
 
             Result.Success(Unit)
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Throwable) {
             // Catch `Throwable` (not just `Exception`) so JVM-side
             // `Error`s thrown by the LiteRT JNI layer (e.g.
@@ -173,7 +175,6 @@ class LiteRTLlmEngine @Inject constructor(
             // auto-falls back to CPU.
             Timber.e(e, "Failed to initialize LiteRTLlmEngine")
             _currentModelPath = null
-            if (e is CancellationException) throw e
             Result.Error(
                 error = LlmSystemError,
                 message = e.localizedMessage ?: "Unknown initialization error",
@@ -220,6 +221,8 @@ class LiteRTLlmEngine @Inject constructor(
                     }
                 }
             }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             Timber.e(e, "Error during text generation")
             throw e

@@ -8,6 +8,7 @@ import app.knotwork.android.domain.models.McpConnectionStatus
 import app.knotwork.android.domain.models.McpServerConfig
 import app.knotwork.android.domain.models.McpTool
 import app.knotwork.android.domain.repositories.McpServerRepository
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -64,16 +65,23 @@ class McpServerRepositoryImpl @Inject constructor(private val clientFactory: Mcp
             }
             flow.value = McpConnectionStatus.Connecting
 
-            runCatching {
+            // try/catch instead of runCatching: the block suspends
+            // (connect / getTools), and runCatching would trap the
+            // CancellationException that must propagate for cooperative
+            // cancellation. `Throwable` keeps runCatching's catch surface.
+            try {
                 val client = clients.getOrPut(serverUrl) { clientFactory.create() }
                 client.connect(config)
-                client.getTools().map { agentTool -> agentTool.toMcpTool(serverUrl) }
-            }.onSuccess { tools ->
+                val tools = client.getTools().map { agentTool -> agentTool.toMcpTool(serverUrl) }
                 caches[serverUrl] = CachedToolList(tools = tools, fetchedAtMs = clockMs())
                 flow.value = McpConnectionStatus.Connected
-            }.onFailure { error ->
-                Timber.e(error, "MCP tools/list failed for %s", serverUrl)
-                flow.value = McpConnectionStatus.Error(reason = error.localizedMessage ?: error.javaClass.simpleName)
+                Result.success(tools)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Throwable) {
+                Timber.e(e, "MCP tools/list failed for %s", serverUrl)
+                flow.value = McpConnectionStatus.Error(reason = e.localizedMessage ?: e.javaClass.simpleName)
+                Result.failure(e)
             }
         }
     }
@@ -93,8 +101,13 @@ class McpServerRepositoryImpl @Inject constructor(private val clientFactory: Mcp
         val mutex = mutexes.getOrPut(serverUrl) { Mutex() }
         mutex.withLock {
             val client = clients.remove(serverUrl)
-            runCatching { client?.disconnect() }
-                .onFailure { Timber.w(it, "MCP disconnect failed for %s", serverUrl) }
+            try {
+                client?.disconnect()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Throwable) {
+                Timber.w(e, "MCP disconnect failed for %s", serverUrl)
+            }
             caches.remove(serverUrl)
             // Status flow entry stays in the map so any active observer keeps a
             // live handle. Removing it here would orphan the observer's

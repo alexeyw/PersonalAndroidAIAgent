@@ -5,6 +5,7 @@ import app.knotwork.android.domain.models.AppError
 import app.knotwork.android.domain.models.DownloadState
 import app.knotwork.android.domain.repositories.ModelDownloadManager
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -86,6 +87,8 @@ class AndroidModelDownloadManager @Inject constructor(
             }
 
             emit(DownloadState.Success(targetFile.absolutePath))
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             emit(DownloadState.Error(DownloadError(e.message ?: "Unknown download error")))
         }

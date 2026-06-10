@@ -3,6 +3,7 @@ package app.knotwork.android.domain.usecases
 import app.knotwork.android.domain.models.PipelineGraph
 import app.knotwork.android.domain.models.PipelineValidationException
 import app.knotwork.android.domain.repositories.PipelineRepository
+import kotlinx.coroutines.CancellationException
 import javax.inject.Inject
 
 /**
@@ -26,6 +27,8 @@ class SavePipelineUseCase @Inject constructor(private val pipelineRepository: Pi
         return try {
             pipelineRepository.savePipeline(pipeline)
             Result.success(Unit)
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             Result.failure(e)
         }

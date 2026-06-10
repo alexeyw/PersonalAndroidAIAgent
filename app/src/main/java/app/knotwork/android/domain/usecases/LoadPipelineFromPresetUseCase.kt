@@ -4,6 +4,7 @@ import app.knotwork.android.domain.models.PipelineGraph
 import app.knotwork.android.domain.models.PipelineValidationException
 import app.knotwork.android.domain.repositories.PipelinePresetRepository
 import app.knotwork.android.domain.repositories.PipelineRepository
+import kotlinx.coroutines.CancellationException
 import java.util.UUID
 import javax.inject.Inject
 
@@ -49,6 +50,8 @@ class LoadPipelineFromPresetUseCase @Inject constructor(
         val pipeline = materialize(presetId).getOrElse { return Result.failure(it) }
         pipelineRepository.savePipeline(pipeline)
         Result.success(pipeline.id)
+    } catch (e: CancellationException) {
+        throw e
     } catch (e: Exception) {
         Result.failure(e)
     }
@@ -107,6 +110,8 @@ class LoadPipelineFromPresetUseCase @Inject constructor(
         } else {
             Result.success(pipeline)
         }
+    } catch (e: CancellationException) {
+        throw e
     } catch (e: Exception) {
         Result.failure(e)
     }

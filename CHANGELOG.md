@@ -15,6 +15,15 @@ details.
 
 ### Added
 
+- **Coroutine-cancellation static gate.** `./gradlew check` now also runs
+  `detektDebug`, a type-resolution detekt pass with a dedicated config
+  ([`config/detekt/detekt-cancellation.yml`](config/detekt/detekt-cancellation.yml))
+  that activates a single rule, `SuspendFunSwallowedCancellation`: suspend
+  calls may not be wrapped in `runCatching`, and `try`/`catch` blocks
+  around suspend calls must re-throw `CancellationException` before any
+  generic handling. The contract is documented in
+  [docs/code-style.md](docs/code-style.md) § Coroutines & Flow and
+  [docs/static-analysis.md](docs/static-analysis.md).
 - **Startup recovery screen for locked data.** When the encryption key of
   the local database cannot be read at startup, the splash screen now
   shows a dedicated recovery surface instead of failing generically: a
@@ -103,6 +112,21 @@ details.
   verification. **Note:** the first release-signed build uses a different
   signer than earlier debug-signed builds, so it cannot be installed over a
   debug-signed copy in place — see the *Pre-release notice* in the README.
+
+### Fixed
+
+- **Cancelling a generation no longer surfaces a false error.** Stopping a
+  run (or any scope teardown mid-pipeline) used to be caught by the
+  catch-all error mapping in the task queue and engine loop and shown as an
+  execution error. `CancellationException` is now re-thrown at every
+  boundary that wraps suspend calls — the task queue, the engine's per-node
+  collector, workers, MCP/AppFunction/cloud-embedding calls, and the
+  affected use cases and view models (53 call sites audited; `runCatching`
+  around suspend calls replaced with explicit `try`/`catch`) — so
+  cooperative cancellation propagates cleanly and the session state resets
+  to idle instead of flashing an error banner. A cancelled predictive-back
+  gesture on a modal sheet now keeps the sheet open instead of dismissing
+  it.
 
 ### Security
 

@@ -4,6 +4,7 @@ import app.knotwork.android.domain.constants.DefaultPrompts
 import app.knotwork.android.domain.models.NodeType
 import app.knotwork.android.domain.models.PromptTemplate
 import app.knotwork.android.domain.repositories.PromptRepository
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.onStart
@@ -47,6 +48,8 @@ class GetPromptTemplatesUseCase @Inject constructor(private val repository: Prom
                     repository.savePrompt(template)
                 }
             }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             // Best-effort seed — a transient DB error here just means the user
             // sees an empty library this open; next open retries.

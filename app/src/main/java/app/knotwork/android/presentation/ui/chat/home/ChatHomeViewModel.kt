@@ -38,6 +38,7 @@ import app.knotwork.design.components.console.ConsoleVarRow
 import app.knotwork.design.screens.chat.ChatHomeMessageRow
 import app.knotwork.design.screens.chat.ChatHomeThreadRow
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -52,6 +53,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import org.json.JSONArray
 import org.json.JSONObject
+import timber.log.Timber
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -802,9 +804,13 @@ class ChatHomeViewModel @Inject constructor(
                 rebalanceRestingState()
                 tokenCounterJob?.cancel()
                 tokenCounterJob = launch {
-                    val approx = runCatching {
+                    val approx = try {
                         getContextWindowUseCase(sessionId).length / TOKEN_CHARS_PER_TOKEN
-                    }.getOrDefault(0)
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Throwable) {
+                        0
+                    }
                     _tokensUsed.value = approx
                 }
             }
@@ -1268,13 +1274,16 @@ class ChatHomeViewModel @Inject constructor(
      */
     fun importChatFromJson(json: String) {
         viewModelScope.launch {
-            runCatching { chatRepository.importChat(json) }
-                .onSuccess { newId -> selectThread(newId) }
-                .onFailure { error ->
-                    _importErrorEvents.tryEmit(
-                        error.localizedMessage ?: IMPORT_GENERIC_FAILURE_MESSAGE,
-                    )
-                }
+            try {
+                val newId = chatRepository.importChat(json)
+                selectThread(newId)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Throwable) {
+                _importErrorEvents.tryEmit(
+                    e.localizedMessage ?: IMPORT_GENERIC_FAILURE_MESSAGE,
+                )
+            }
         }
     }
 
@@ -1300,7 +1309,7 @@ class ChatHomeViewModel @Inject constructor(
         val sessionId = _currentSessionId.value
         if (sessionId.isBlank()) return
         viewModelScope.launch {
-            runCatching {
+            try {
                 val rawMessages = chatRepository.getMessagesForSession(sessionId).first()
                 val session = chatRepository.getSessionById(sessionId)
                 val sessionName = session?.name ?: EXPORT_FALLBACK_SESSION_NAME
@@ -1318,8 +1327,16 @@ class ChatHomeViewModel @Inject constructor(
                     .put("sessionName", sessionName)
                     .put("exportedAt", System.currentTimeMillis())
                     .put("messages", messagesArray)
-                ChatExportPayload(sessionName = sessionName, json = root.toString(EXPORT_JSON_INDENT))
-            }.onSuccess { payload -> _exportEvents.tryEmit(payload) }
+                val payload =
+                    ChatExportPayload(sessionName = sessionName, json = root.toString(EXPORT_JSON_INDENT))
+                _exportEvents.tryEmit(payload)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Throwable) {
+                // Mirrors the previous silent-failure contract: an export
+                // that cannot be serialised simply emits nothing.
+                Timber.w(e, "Chat export failed")
+            }
         }
     }
 

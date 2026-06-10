@@ -38,6 +38,7 @@ import app.knotwork.android.domain.usecases.SavePromptAsPresetUseCase
 import app.knotwork.android.domain.usecases.SavePromptTemplateUseCase
 import app.knotwork.android.presentation.ui.common.UiText
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -202,6 +203,8 @@ class OrchestratorViewModel @Inject constructor(
                 savePromptTemplateUseCase(
                     PromptTemplate(name = name, text = text, category = category),
                 )
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 _uiState.update { it.copy(errorMessage = throwableAsUiText(e)) }
             }
@@ -263,6 +266,8 @@ class OrchestratorViewModel @Inject constructor(
             try {
                 val tools = toolRepository.getAvailableTools()
                 _uiState.update { it.copy(availableTools = tools) }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 _uiState.update { it.copy(errorMessage = throwableAsUiText(e)) }
             }
