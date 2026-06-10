@@ -298,7 +298,7 @@ class ChatHomeViewModel @Inject constructor(
      */
     fun retryAfterError() {
         if (llmInferenceEngine.isInitialized) {
-            _state.update { it.copy(visual = restingState()) }
+            _state.update { it.copy(visual = it.restingVisual()) }
             return
         }
         // Surface a transient "loading…" hint via the generating state — the
@@ -307,11 +307,17 @@ class ChatHomeViewModel @Inject constructor(
         _state.update { it.copy(visual = ChatHomeUiState.Generating) }
         viewModelScope.launch {
             val outcome = loadModelUseCase()
-            val settled = when (outcome) {
-                is Result.Success -> restingState()
-                is Result.Error -> ChatHomeUiState.Error(outcome.message ?: NO_ACTIVE_MODEL_MESSAGE)
+            // The resting visual is derived from the update receiver, not a
+            // pre-computed snapshot — a message emission landing while
+            // `loadModelUseCase` was suspended must be reflected here.
+            _state.update { current ->
+                current.copy(
+                    visual = when (outcome) {
+                        is Result.Success -> current.restingVisual()
+                        is Result.Error -> ChatHomeUiState.Error(outcome.message ?: NO_ACTIVE_MODEL_MESSAGE)
+                    },
+                )
             }
-            _state.update { it.copy(visual = settled) }
         }
     }
 
@@ -328,9 +334,7 @@ class ChatHomeViewModel @Inject constructor(
         _state.update { current ->
             val cleared = current.withPendingCleared()
             if (current.visual is ChatHomeUiState.Generating) {
-                cleared.copy(
-                    visual = if (current.messages.isEmpty()) ChatHomeUiState.Empty else ChatHomeUiState.Idle,
-                )
+                cleared.copy(visual = cleared.restingVisual())
             } else {
                 cleared
             }
@@ -346,9 +350,7 @@ class ChatHomeViewModel @Inject constructor(
     fun closeDrawer() {
         _state.update { current ->
             if (current.visual is ChatHomeUiState.DrawerOpen) {
-                current.copy(
-                    visual = if (current.messages.isEmpty()) ChatHomeUiState.Empty else ChatHomeUiState.Idle,
-                )
+                current.copy(visual = current.restingVisual())
             } else {
                 current
             }
@@ -362,7 +364,7 @@ class ChatHomeViewModel @Inject constructor(
      *
      * The previous thread's rows are cleared in the same atomic state
      * update that flips the surface to `Empty` and installs the new
-     * session id — otherwise [restingState] would read stale data from
+     * session id — otherwise [restingVisual] would read stale data from
      * the message list and resolve to `Idle` while the UI is conceptually
      * empty, producing a brief flicker of the outgoing thread's content.
      */
@@ -380,9 +382,8 @@ class ChatHomeViewModel @Inject constructor(
                 tokens = cleared.tokens.copy(used = 0),
                 visual = ChatHomeUiState.Empty,
                 thread = cleared.thread.copy(currentSessionId = threadId),
-            )
+            ).withSessionMetadataRefreshed()
         }
-        applyCurrentSessionMetadata()
         observeMessages(threadId)
         viewModelScope.launch {
             settingsRepository.setCurrentChatSessionId(threadId)
@@ -556,8 +557,9 @@ class ChatHomeViewModel @Inject constructor(
             } else {
                 savedSessionId
             }
-            _state.update { it.copy(thread = it.thread.copy(currentSessionId = sessionId)) }
-            applyCurrentSessionMetadata()
+            _state.update {
+                it.copy(thread = it.thread.copy(currentSessionId = sessionId)).withSessionMetadataRefreshed()
+            }
             observeMessages(sessionId)
         }
     }
@@ -575,9 +577,8 @@ class ChatHomeViewModel @Inject constructor(
         viewModelScope.launch {
             pipelineRepository.getAllPipelines().collect { graphs ->
                 val summaries = graphs.map { PipelineSummary(id = it.id, name = it.name) }
-                _state.update { it.copy(availablePipelines = summaries) }
+                _state.update { it.copy(availablePipelines = summaries).withPipelineNameRefreshed() }
                 availablePipelinesObserved = true
-                refreshPipelineName()
                 handleDeletedBoundPipeline(summaries)
             }
         }
@@ -596,7 +597,7 @@ class ChatHomeViewModel @Inject constructor(
                 _state.update {
                     it.copy(
                         model = ChatHomeModelState(
-                            name = active?.name ?: DEFAULT_MODEL_NAME,
+                            name = active?.name ?: ChatHomeModelState.DEFAULT_NAME,
                             installed = models,
                             activeId = active?.id,
                         ),
@@ -611,7 +612,7 @@ class ChatHomeViewModel @Inject constructor(
         viewModelScope.launch {
             settingsRepository.defaultPipelineId.collect { id ->
                 defaultPipelineId = id
-                refreshPipelineName()
+                _state.update { it.withPipelineNameRefreshed() }
             }
         }
     }
@@ -621,35 +622,38 @@ class ChatHomeViewModel @Inject constructor(
         viewModelScope.launch {
             chatRepository.getSessionsFlow().collect { current ->
                 sessions = current
-                applyCurrentSessionMetadata()
+                _state.update { it.withSessionMetadataRefreshed() }
                 handleDeletedBoundPipeline(_state.value.availablePipelines)
             }
         }
     }
 
     /**
-     * Rebuilds [ChatHomeThreadState.rows] from the live [sessions] cache.
-     * Favorited sessions sort to the top of the drawer; the rest follow the
+     * Projects the live [sessions] cache into drawer thread rows. Favorited
+     * sessions sort to the top of the drawer; the rest follow the
      * repository's `updatedAt DESC` ordering. The catalog drawer renders
-     * the `selected`/`active` chrome from the matching flags here.
+     * the `selected`/`active` chrome from the matching flags here. Pure
+     * projection — composed into a state update by
+     * [withSessionMetadataRefreshed].
+     *
+     * @param activeId id of the active session used for the
+     *   `selected`/`active` flags.
      */
-    private fun refreshThreadRows() {
-        val activeId = _state.value.thread.currentSessionId
+    private fun buildThreadRows(activeId: String): List<ChatHomeThreadRow> {
         val sorted = sessions.sortedWith(
             compareByDescending<ChatSession> { it.isStarred }
                 .thenByDescending { it.updatedAt },
         )
-        val rows = sorted.map { session ->
+        return sorted.map { session ->
             ChatHomeThreadRow(
                 id = session.id,
-                title = session.name.ifBlank { DEFAULT_THREAD_TITLE },
+                title = session.name.ifBlank { ChatHomeThreadState.DEFAULT_TITLE },
                 subtitle = formatThreadSubtitle(session.updatedAt),
                 selected = session.id == activeId,
                 active = session.id == activeId,
                 starred = session.isStarred,
             )
         }
-        _state.update { it.copy(thread = it.thread.copy(rows = rows)) }
     }
 
     /** Observes the configured context-window cap and mirrors it into [ChatHomeTokenState.max]. */
@@ -730,9 +734,7 @@ class ChatHomeViewModel @Inject constructor(
                 // Cold-start: first message emission settles Loading into the
                 // matching resting state (Empty if no messages, Idle if any).
                 current.visual is ChatHomeUiState.Loading ->
-                    current.copy(
-                        visual = if (current.messages.isEmpty()) ChatHomeUiState.Empty else ChatHomeUiState.Idle,
-                    )
+                    current.copy(visual = current.restingVisual())
                 current.visual is ChatHomeUiState.Empty && current.messages.isNotEmpty() ->
                     current.copy(visual = ChatHomeUiState.Idle)
                 current.visual is ChatHomeUiState.Idle && current.messages.isEmpty() ->
@@ -762,7 +764,7 @@ class ChatHomeViewModel @Inject constructor(
                 _state.update { current ->
                     current.withPendingCleared().copy(
                         tokens = current.tokens.copy(streaming = 0),
-                        visual = if (current.messages.isEmpty()) ChatHomeUiState.Empty else ChatHomeUiState.Idle,
+                        visual = current.restingVisual(),
                     )
                 }
                 // Fire-and-forget: distil durable facts from the just-finished
@@ -1096,19 +1098,20 @@ class ChatHomeViewModel @Inject constructor(
         _pipelineFallbackEvents.tryEmit(Unit)
     }
 
-    /** Refreshes the pipeline subtitle from the latest cache of sessions + pipelines + default-pipeline id. */
-    private fun refreshPipelineName() {
-        _state.update { current ->
-            current.copy(
-                pipelineName = resolvePipelineName(
-                    sessions = sessions,
-                    currentSessionId = current.thread.currentSessionId,
-                    summaries = current.availablePipelines,
-                    defaultPipelineId = defaultPipelineId,
-                ),
-            )
-        }
-    }
+    /**
+     * Pure transformer: recomputes the pipeline subtitle for this snapshot
+     * from the [sessions] / [defaultPipelineId] caches. Composed into the
+     * caller's `_state.update` block (never its own emission) so refreshes
+     * ride the same atomic emission as the change that triggered them.
+     */
+    private fun ChatHomeScreenState.withPipelineNameRefreshed(): ChatHomeScreenState = copy(
+        pipelineName = resolvePipelineName(
+            sessions = sessions,
+            currentSessionId = thread.currentSessionId,
+            summaries = availablePipelines,
+            defaultPipelineId = defaultPipelineId,
+        ),
+    )
 
     /**
      * Resolves the pipeline display name for the active chat — explicit
@@ -1131,26 +1134,34 @@ class ChatHomeViewModel @Inject constructor(
         return defaultPipelineId?.let { id -> summaries.firstOrNull { it.id == id } }?.name
     }
 
-    /** Refreshes thread title + pipeline subtitle from the latest session/pipeline caches. */
-    private fun applyCurrentSessionMetadata() {
-        val currentId = _state.value.thread.currentSessionId
+    /**
+     * Pure transformer: recomputes thread title + favorite, the drawer
+     * rows, and the pipeline subtitle for this snapshot from the latest
+     * session/pipeline caches. Composed into the caller's single
+     * `_state.update` block so one upstream emission (sessions flow,
+     * session init, thread switch) produces exactly one state emission —
+     * collectors never observe a frame with a fresh title but stale rows.
+     *
+     * Title/favorite are left untouched when the active session id is
+     * non-blank but missing from the cache (mid-deletion window) —
+     * mirrors the pre-consolidation behaviour.
+     */
+    private fun ChatHomeScreenState.withSessionMetadataRefreshed(): ChatHomeScreenState {
+        val currentId = thread.currentSessionId
         val session = sessions.firstOrNull { it.id == currentId }
-        if (session != null) {
-            _state.update {
-                it.copy(
-                    thread = it.thread.copy(
-                        title = session.name.ifBlank { DEFAULT_THREAD_TITLE },
-                        favorite = session.isStarred,
-                    ),
-                )
-            }
-        } else if (currentId.isBlank()) {
-            _state.update {
-                it.copy(thread = it.thread.copy(title = DEFAULT_THREAD_TITLE, favorite = false))
-            }
+        val refreshedThread = when {
+            session != null -> thread.copy(
+                title = session.name.ifBlank { ChatHomeThreadState.DEFAULT_TITLE },
+                favorite = session.isStarred,
+            )
+            currentId.isBlank() -> thread.copy(
+                title = ChatHomeThreadState.DEFAULT_TITLE,
+                favorite = false,
+            )
+            else -> thread
         }
-        refreshPipelineName()
-        refreshThreadRows()
+        return copy(thread = refreshedThread.copy(rows = buildThreadRows(currentId)))
+            .withPipelineNameRefreshed()
     }
 
     /**
@@ -1200,9 +1211,14 @@ class ChatHomeViewModel @Inject constructor(
         }
     }
 
-    /** Resting (non-overlay) state given the current message list — `Empty` if no messages, else `Idle`. */
-    private fun restingState(): ChatHomeUiState =
-        if (_state.value.messages.isEmpty()) ChatHomeUiState.Empty else ChatHomeUiState.Idle
+    /**
+     * Resting (non-overlay) visual for this snapshot — `Empty` if the
+     * message list is empty, else `Idle`. Derived from the receiver (never
+     * `_state.value`) so calls inside an `_state.update` lambda stay
+     * consistent with the snapshot being transformed.
+     */
+    private fun ChatHomeScreenState.restingVisual(): ChatHomeUiState =
+        if (messages.isEmpty()) ChatHomeUiState.Empty else ChatHomeUiState.Idle
 
     /**
      * Creates a new chat session bound to [pipelineId] and switches to it.
@@ -1350,12 +1366,6 @@ class ChatHomeViewModel @Inject constructor(
     }
 
     companion object {
-        /** Pre-formatted fallback thread title surfaced before any thread is selected. */
-        const val DEFAULT_THREAD_TITLE: String = "New conversation"
-
-        /** Pre-formatted fallback model name surfaced when no local model is loaded. */
-        const val DEFAULT_MODEL_NAME: String = "Local model"
-
         /** Default name of a freshly-created chat session — must match legacy `ChatViewModel` for compatibility. */
         const val DEFAULT_NEW_CHAT_NAME: String = "New Chat"
 

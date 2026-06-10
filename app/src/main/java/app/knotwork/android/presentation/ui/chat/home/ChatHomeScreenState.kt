@@ -99,27 +99,37 @@ data class ChatHomePendingState(val tool: HitlPending? = null, val clarification
  *   session initialisation completes).
  */
 data class ChatHomeThreadState(
-    val title: String = ChatHomeViewModel.DEFAULT_THREAD_TITLE,
+    val title: String = DEFAULT_TITLE,
     val rows: List<ChatHomeThreadRow> = emptyList(),
     val favorite: Boolean = false,
     val currentSessionId: String = "",
-)
+) {
+    companion object {
+        /** Pre-formatted fallback thread title surfaced before any thread is selected. */
+        const val DEFAULT_TITLE: String = "New conversation"
+    }
+}
 
 /**
  * Local-model slice feeding the TopAppBar subtitle and the model-picker
  * sheet.
  *
  * @property name display name of the currently active local model, or the
- *   [ChatHomeViewModel.DEFAULT_MODEL_NAME] placeholder when none is active.
+ *   [DEFAULT_NAME] placeholder when none is active.
  * @property installed locally installed LiteRT models listed by the picker.
  * @property activeId row id of the currently active model (`null` when none
  *   is active) — the picker renders the checkmark from this.
  */
 data class ChatHomeModelState(
-    val name: String = ChatHomeViewModel.DEFAULT_MODEL_NAME,
+    val name: String = DEFAULT_NAME,
     val installed: List<LocalModel> = emptyList(),
     val activeId: Long? = null,
-)
+) {
+    companion object {
+        /** Pre-formatted fallback model name surfaced when no local model is loaded. */
+        const val DEFAULT_NAME: String = "Local model"
+    }
+}
 
 /**
  * Token-meter slice of [ChatHomeScreenState].

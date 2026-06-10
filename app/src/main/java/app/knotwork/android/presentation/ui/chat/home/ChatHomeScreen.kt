@@ -100,7 +100,6 @@ fun ChatHomeScreen(
     // are handed down the tree as-is, so child composables skip when their
     // slice did not change.
     val screenState by viewModel.state.collectAsStateWithLifecycle()
-    val messages = screenState.messages
     val currentSessionId = screenState.thread.currentSessionId
     val chatListState = rememberLazyListState()
 
@@ -119,17 +118,24 @@ fun ChatHomeScreen(
         var knownMessages = -1
         var knownItems = -1
         // Observe BOTH the message count and the rendered item count:
-        //  - `messages.size` grows by one for each appended user/agent row (and
-        //    stays correct even when a generating-loader item is swapped for the
-        //    agent's final message, which leaves the rendered count flat);
+        //  - `screenState.messages.size` grows by one for each appended
+        //    user/agent row (and stays correct even when a generating-loader
+        //    item is swapped for the agent's final message, which leaves the
+        //    rendered count flat);
         //  - `layoutInfo.totalItemsCount` also captures the trailing service rows
         //    (the generating loader and the error tile) that are NOT part of
-        //    `messages`, so those scroll into view too.
+        //    the message list, so those scroll into view too.
+        // Both reads MUST go through snapshot state inside the lambda:
+        // `screenState` is a delegated Compose State, so reading it here keeps
+        // snapshotFlow reactive across recompositions. A plain local copy of
+        // the list would be frozen at effect-launch time (the effect only
+        // restarts on a thread switch) and the loader-swap case would never
+        // re-emit.
         // On either growth (or a freshly opened thread) we scroll to the list's
         // real last item. `scrollToItem` is reliable on its own: a short last
         // item clamps to the bottom (bottom-aligned), a tall one aligns its top
         // to the viewport (top-aligned), and a list that already fits is a no-op.
-        snapshotFlow { messages.size to chatListState.layoutInfo.totalItemsCount }
+        snapshotFlow { screenState.messages.size to chatListState.layoutInfo.totalItemsCount }
             .collect { (messageCount, itemCount) ->
                 if (messageCount <= 0 || itemCount <= 0) {
                     knownMessages = messageCount
