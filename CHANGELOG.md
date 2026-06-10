@@ -216,6 +216,16 @@ details.
 
 ### Security
 
+- **The HuggingFace access token is now stored encrypted.** The token —
+  a real credential granting access to gated HuggingFace repositories —
+  was previously persisted in plain, unencrypted DataStore, contradicting
+  the project's own storage policy (and the user guide, which incorrectly
+  claimed it was encrypted). It now lives in the same kind of
+  Keystore-backed encrypted store as the cloud API keys, with the same
+  re-enterable-secret recovery policy. **A previously saved token is
+  migrated automatically** on first read — the encrypted copy is written
+  before the plaintext copy is removed from DataStore, so the value
+  survives the upgrade (no re-entry needed, unlike the API keys above).
 - **Prompt injection via tool content is now a documented, accepted risk.**
   `SECURITY.md` gains a threat-model section describing how content
   returned by tools (built-in search extracts, MCP-server results,

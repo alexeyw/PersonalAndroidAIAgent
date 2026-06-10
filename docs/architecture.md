@@ -597,7 +597,8 @@ Encryption applies to every table that may hold user-derived content:
 - `trace_steps` — intermediate pipeline-node outputs derived from
   user input.
 
-Secrets — the SQLCipher passphrase and per-provider cloud API keys —
+Secrets — the SQLCipher passphrase, per-provider cloud API keys, and
+the HuggingFace access token —
 live in **`KeystoreBackedPrefsStore`** instances (`data/local/crypto/`):
 plain `SharedPreferences` files whose values are encrypted with
 **AES-256-GCM under a dedicated, non-exportable Android Keystore key**

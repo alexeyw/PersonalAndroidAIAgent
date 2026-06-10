@@ -1,11 +1,15 @@
 package app.knotwork.android.data.local
 
+import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
+import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
+import app.knotwork.android.data.local.crypto.FakeAeadCipher
+import app.knotwork.android.data.local.crypto.InMemorySharedPreferences
 import app.knotwork.android.domain.constants.SettingsDefaults
 import app.knotwork.android.domain.models.McpAuth
 import app.knotwork.android.domain.models.McpServerConfig
@@ -39,6 +43,17 @@ class SettingsManagerTest {
     private val dataStore = mockk<DataStore<Preferences>>()
 
     /**
+     * Fakes backing the Keystore-backed secrets store (HuggingFace token):
+     * an in-memory prefs file plus a deterministic AEAD cipher, wired
+     * through a relaxed context mock shared by every construction below.
+     */
+    private val securePrefs = InMemorySharedPreferences()
+    private val cipher = FakeAeadCipher()
+    private val context = mockk<Context>(relaxed = true) {
+        every { getSharedPreferences("secure_settings_secrets", Context.MODE_PRIVATE) } returns securePrefs
+    }
+
+    /**
      * Backs the `updateMcpServer` write-path integration tests below with a
      * **real** file-backed `PreferenceDataStore` so the assertions can
      * round-trip through `dataStore.edit { … }` and observe the persisted
@@ -49,7 +64,7 @@ class SettingsManagerTest {
     @get:Rule
     val tempFolder: TemporaryFolder = TemporaryFolder()
 
-    // private val settingsManager = SettingsManager(dataStore)
+    // private val settingsManager = SettingsManager(dataStore, context, cipher)
     private val isFirstLaunchKey = booleanPreferencesKey("is_first_launch")
     private val temperatureKey = androidx.datastore.preferences.core.floatPreferencesKey("temperature")
     private val topKKey = androidx.datastore.preferences.core.intPreferencesKey("top_k")
@@ -76,7 +91,7 @@ class SettingsManagerTest {
         every { prefs[isFirstLaunchKey] } returns null
         every { dataStore.data } returns flowOf(prefs)
 
-        val settingsManager = SettingsManager(dataStore)
+        val settingsManager = SettingsManager(dataStore, context, cipher)
         val result = settingsManager.isFirstLaunch.first()
         assertTrue(result)
     }
@@ -92,7 +107,7 @@ class SettingsManagerTest {
         every { prefs[hasCompletedOnboardingKey] } returns null
         every { dataStore.data } returns flowOf(prefs)
 
-        val settingsManager = SettingsManager(dataStore)
+        val settingsManager = SettingsManager(dataStore, context, cipher)
         val result = settingsManager.hasCompletedOnboarding.first()
         org.junit.Assert.assertFalse(result)
     }
@@ -103,7 +118,7 @@ class SettingsManagerTest {
         every { prefs[temperatureKey] } returns null
         every { dataStore.data } returns flowOf(prefs)
 
-        val settingsManager = SettingsManager(dataStore)
+        val settingsManager = SettingsManager(dataStore, context, cipher)
         val result = settingsManager.temperature.first()
         assertEquals(SettingsDefaults.TEMPERATURE_DEFAULT, result)
     }
@@ -114,7 +129,7 @@ class SettingsManagerTest {
         every { prefs[topKKey] } returns null
         every { dataStore.data } returns flowOf(prefs)
 
-        val settingsManager = SettingsManager(dataStore)
+        val settingsManager = SettingsManager(dataStore, context, cipher)
         val result = settingsManager.topK.first()
         assertEquals(SettingsDefaults.TOP_K_DEFAULT, result)
     }
@@ -125,7 +140,7 @@ class SettingsManagerTest {
         every { prefs[topPKey] } returns null
         every { dataStore.data } returns flowOf(prefs)
 
-        val settingsManager = SettingsManager(dataStore)
+        val settingsManager = SettingsManager(dataStore, context, cipher)
         val result = settingsManager.topP.first()
         assertEquals(SettingsDefaults.TOP_P_DEFAULT, result)
     }
@@ -136,7 +151,7 @@ class SettingsManagerTest {
         every { prefs[requiresUserConfirmationKey] } returns null
         every { dataStore.data } returns flowOf(prefs)
 
-        val settingsManager = SettingsManager(dataStore)
+        val settingsManager = SettingsManager(dataStore, context, cipher)
         val result = settingsManager.requiresUserConfirmation.first()
         assertTrue(result)
     }
@@ -147,7 +162,7 @@ class SettingsManagerTest {
         every { prefs[lastReembedProviderIdKey] } returns null
         every { dataStore.data } returns flowOf(prefs)
 
-        val settingsManager = SettingsManager(dataStore)
+        val settingsManager = SettingsManager(dataStore, context, cipher)
         assertNull(settingsManager.lastReembedProviderId.first())
     }
 
@@ -208,7 +223,7 @@ class SettingsManagerTest {
         every { prefs[memorySearchTopKKey] } returns null
         every { dataStore.data } returns flowOf(prefs)
 
-        val settingsManager = SettingsManager(dataStore)
+        val settingsManager = SettingsManager(dataStore, context, cipher)
         val result = settingsManager.memorySearchTopK.first()
         assertEquals(SettingsDefaults.MEMORY_SEARCH_TOP_K_DEFAULT, result)
     }
@@ -219,7 +234,7 @@ class SettingsManagerTest {
         every { prefs[memorySearchThresholdKey] } returns null
         every { dataStore.data } returns flowOf(prefs)
 
-        val settingsManager = SettingsManager(dataStore)
+        val settingsManager = SettingsManager(dataStore, context, cipher)
         val result = settingsManager.memorySearchThreshold.first()
         assertEquals(SettingsDefaults.MEMORY_SEARCH_THRESHOLD_DEFAULT, result)
     }
@@ -252,7 +267,7 @@ class SettingsManagerTest {
         every { prefs[memoryCompactionEnabledKey] } returns null
         every { dataStore.data } returns flowOf(prefs)
 
-        val settingsManager = SettingsManager(dataStore)
+        val settingsManager = SettingsManager(dataStore, context, cipher)
         val result = settingsManager.memoryCompactionEnabled.first()
         assertEquals(SettingsDefaults.MEMORY_COMPACTION_ENABLED_DEFAULT, result)
     }
@@ -274,7 +289,7 @@ class SettingsManagerTest {
         every { prefs[verboseMemoryLoggingEnabledKey] } returns null
         every { dataStore.data } returns flowOf(prefs)
 
-        val settingsManager = SettingsManager(dataStore)
+        val settingsManager = SettingsManager(dataStore, context, cipher)
         val result = settingsManager.verboseMemoryLoggingEnabled.first()
         assertEquals(SettingsDefaults.VERBOSE_MEMORY_LOGGING_ENABLED_DEFAULT, result)
     }
@@ -296,7 +311,7 @@ class SettingsManagerTest {
         every { prefs[memoryCompactionAgeDaysKey] } returns null
         every { dataStore.data } returns flowOf(prefs)
 
-        val settingsManager = SettingsManager(dataStore)
+        val settingsManager = SettingsManager(dataStore, context, cipher)
         val result = settingsManager.memoryCompactionAgeDays.first()
         assertEquals(SettingsDefaults.MEMORY_COMPACTION_AGE_DAYS_DEFAULT, result)
     }
@@ -318,7 +333,7 @@ class SettingsManagerTest {
         every { prefs[maxMemoryChunksKey] } returns null
         every { dataStore.data } returns flowOf(prefs)
 
-        val settingsManager = SettingsManager(dataStore)
+        val settingsManager = SettingsManager(dataStore, context, cipher)
         val result = settingsManager.maxMemoryChunks.first()
         assertEquals(SettingsDefaults.MAX_MEMORY_CHUNKS_DEFAULT, result)
     }
@@ -340,7 +355,7 @@ class SettingsManagerTest {
         every { prefs[isFirstLaunchKey] } returns false
         every { dataStore.data } returns flowOf(prefs)
 
-        val settingsManager = SettingsManager(dataStore)
+        val settingsManager = SettingsManager(dataStore, context, cipher)
         val result = settingsManager.isFirstLaunch.first()
         assertEquals(false, result)
     }
@@ -349,7 +364,7 @@ class SettingsManagerTest {
     fun `isFirstLaunch handles IOException and returns default`() = runTest {
         every { dataStore.data } returns flow { throw IOException("Test") }
 
-        val settingsManager = SettingsManager(dataStore)
+        val settingsManager = SettingsManager(dataStore, context, cipher)
         val result = settingsManager.isFirstLaunch.first()
         assertTrue(result)
     }
@@ -360,7 +375,7 @@ class SettingsManagerTest {
         every { prefs[pipelineMaxStepsKey] } returns null
         every { dataStore.data } returns flowOf(prefs)
 
-        val settingsManager = SettingsManager(dataStore)
+        val settingsManager = SettingsManager(dataStore, context, cipher)
         val result = settingsManager.pipelineMaxSteps.first()
         assertEquals(15, result)
     }
@@ -371,7 +386,7 @@ class SettingsManagerTest {
         every { prefs[pipelineMaxStepsKey] } returns 30
         every { dataStore.data } returns flowOf(prefs)
 
-        val settingsManager = SettingsManager(dataStore)
+        val settingsManager = SettingsManager(dataStore, context, cipher)
         val result = settingsManager.pipelineMaxSteps.first()
         assertEquals(30, result)
     }
@@ -382,7 +397,7 @@ class SettingsManagerTest {
         every { prefs[crashReportingEnabledKey] } returns null
         every { dataStore.data } returns flowOf(prefs)
 
-        val settingsManager = SettingsManager(dataStore)
+        val settingsManager = SettingsManager(dataStore, context, cipher)
         val result = settingsManager.crashReportingEnabled.first()
         assertEquals(false, result)
     }
@@ -393,7 +408,7 @@ class SettingsManagerTest {
         every { prefs[crashReportingEnabledKey] } returns true
         every { dataStore.data } returns flowOf(prefs)
 
-        val settingsManager = SettingsManager(dataStore)
+        val settingsManager = SettingsManager(dataStore, context, cipher)
         val result = settingsManager.crashReportingEnabled.first()
         assertTrue(result)
     }
@@ -402,7 +417,7 @@ class SettingsManagerTest {
     fun `crashReportingEnabled handles IOException and falls back to false`() = runTest {
         every { dataStore.data } returns flow { throw IOException("Test") }
 
-        val settingsManager = SettingsManager(dataStore)
+        val settingsManager = SettingsManager(dataStore, context, cipher)
         val result = settingsManager.crashReportingEnabled.first()
         assertEquals(false, result)
     }
@@ -413,7 +428,7 @@ class SettingsManagerTest {
         every { prefs[appFunctionRiskOverridesKey] } returns null
         every { dataStore.data } returns flowOf(prefs)
 
-        val settingsManager = SettingsManager(dataStore)
+        val settingsManager = SettingsManager(dataStore, context, cipher)
         val result = settingsManager.appFunctionRiskOverrides.first()
         assertTrue(result.isEmpty())
     }
@@ -425,7 +440,7 @@ class SettingsManagerTest {
             "{\"echo\":\"READ_ONLY\",\"send_email\":\"DESTRUCTIVE\"}"
         every { dataStore.data } returns flowOf(prefs)
 
-        val settingsManager = SettingsManager(dataStore)
+        val settingsManager = SettingsManager(dataStore, context, cipher)
         val result = settingsManager.appFunctionRiskOverrides.first()
 
         assertEquals(2, result.size)
@@ -440,7 +455,7 @@ class SettingsManagerTest {
             "{\"echo\":\"READ_ONLY\",\"bogus\":\"NOT_A_REAL_RISK\"}"
         every { dataStore.data } returns flowOf(prefs)
 
-        val settingsManager = SettingsManager(dataStore)
+        val settingsManager = SettingsManager(dataStore, context, cipher)
         val result = settingsManager.appFunctionRiskOverrides.first()
 
         assertEquals(1, result.size)
@@ -454,7 +469,7 @@ class SettingsManagerTest {
         every { prefs[appFunctionRiskOverridesKey] } returns "this is not json"
         every { dataStore.data } returns flowOf(prefs)
 
-        val settingsManager = SettingsManager(dataStore)
+        val settingsManager = SettingsManager(dataStore, context, cipher)
         val result = settingsManager.appFunctionRiskOverrides.first()
         assertTrue(result.isEmpty())
     }
@@ -463,7 +478,7 @@ class SettingsManagerTest {
     fun `appFunctionRiskOverrides handles IOException and falls back to empty map`() = runTest {
         every { dataStore.data } returns flow { throw IOException("Test") }
 
-        val settingsManager = SettingsManager(dataStore)
+        val settingsManager = SettingsManager(dataStore, context, cipher)
         val result = settingsManager.appFunctionRiskOverrides.first()
         assertTrue(result.isEmpty())
     }
@@ -475,7 +490,7 @@ class SettingsManagerTest {
         every { prefs[pipelineMaxStepsKey] } returns 50
         every { dataStore.data } returns flowOf(prefs)
 
-        val settingsManager = SettingsManager(dataStore)
+        val settingsManager = SettingsManager(dataStore, context, cipher)
         val result = settingsManager.pipelineMaxSteps.first()
         assertEquals(50, result)
     }
@@ -493,7 +508,7 @@ class SettingsManagerTest {
         every { prefs[newJsonKey] } returns null
         every { dataStore.data } returns flowOf(prefs)
 
-        val result = SettingsManager(dataStore).mcpServers.first()
+        val result = SettingsManager(dataStore, context, cipher).mcpServers.first()
 
         assertEquals(1, result.size)
         assertEquals("https://legacy.example/mcp", result[0].url)
@@ -522,7 +537,7 @@ class SettingsManagerTest {
         """.trimIndent()
         every { dataStore.data } returns flowOf(prefs)
 
-        val result = SettingsManager(dataStore).mcpServers.first()
+        val result = SettingsManager(dataStore, context, cipher).mcpServers.first()
 
         assertEquals(1, result.size)
         assertEquals("HuggingFace", result[0].name)
@@ -547,7 +562,7 @@ class SettingsManagerTest {
         """.trimIndent()
         every { dataStore.data } returns flowOf(prefs)
 
-        val result = SettingsManager(dataStore).mcpServers.first()
+        val result = SettingsManager(dataStore, context, cipher).mcpServers.first()
 
         assertEquals(McpAuth.Bearer(token = "abc"), result.single().auth)
     }
@@ -569,9 +584,120 @@ class SettingsManagerTest {
         """.trimIndent()
         every { dataStore.data } returns flowOf(prefs)
 
-        val result = SettingsManager(dataStore).mcpServers.first()
+        val result = SettingsManager(dataStore, context, cipher).mcpServers.first()
 
         assertEquals(McpAuth.ApiKey(headerName = "X-API-Key", value = "v1"), result.single().auth)
+    }
+
+    // ───────────────────────────────────────────────────────────────────
+    // HuggingFace token: encrypted storage + legacy-DataStore migration
+    // (real PreferenceDataStore, same pattern as the MCP tests below).
+    // ───────────────────────────────────────────────────────────────────
+
+    private val huggingFaceTokenKey = stringPreferencesKey("hugging_face_token")
+
+    /** Like [freshManagerWithRealDataStore] but also exposes the backing DataStore. */
+    private fun freshManagerWithExposedDataStore(): Triple<SettingsManager, DataStore<Preferences>, CoroutineScope> {
+        val file = tempFolder.newFile("settings-manager-hf-${System.nanoTime()}.preferences_pb")
+        file.delete()
+        val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+        val ds = PreferenceDataStoreFactory.create(scope = scope, produceFile = { file })
+        return Triple(SettingsManager(ds, context, cipher), ds, scope)
+    }
+
+    @Test
+    fun `huggingFace token round-trips through the encrypted store across instances`() = runTest {
+        val (manager, ds, scope) = freshManagerWithExposedDataStore()
+        try {
+            manager.setHuggingFaceAuthToken("hf_secret_token")
+
+            val fresh = SettingsManager(ds, context, cipher)
+            assertEquals("hf_secret_token", fresh.huggingFaceAuthToken.first())
+        } finally {
+            scope.cancel()
+        }
+    }
+
+    @Test
+    fun `huggingFace token is not stored as plaintext`() = runTest {
+        val (manager, _, scope) = freshManagerWithExposedDataStore()
+        try {
+            manager.setHuggingFaceAuthToken("hf_secret_token")
+
+            val raw = securePrefs.values["hugging_face_token"] as String
+            assertTrue(!raw.contains("hf_secret_token"))
+        } finally {
+            scope.cancel()
+        }
+    }
+
+    @Test
+    fun `legacy DataStore token migrates to the encrypted store on first read`() = runTest {
+        val (manager, ds, scope) = freshManagerWithExposedDataStore()
+        try {
+            ds.edit { it[huggingFaceTokenKey] = "hf_legacy_token" }
+
+            val token = manager.huggingFaceAuthToken.first()
+
+            assertEquals("hf_legacy_token", token)
+            // The plaintext copy is gone from DataStore…
+            assertNull(ds.data.first()[huggingFaceTokenKey])
+            // …and the encrypted store now holds it (not in plaintext).
+            val raw = securePrefs.values["hugging_face_token"] as String
+            assertTrue(!raw.contains("hf_legacy_token"))
+        } finally {
+            scope.cancel()
+        }
+    }
+
+    @Test
+    fun `migration does not overwrite an already-encrypted token`() = runTest {
+        val (manager, ds, scope) = freshManagerWithExposedDataStore()
+        try {
+            manager.setHuggingFaceAuthToken("hf_current_token")
+            // Simulate a stale plaintext leftover from a crashed earlier migration.
+            ds.edit { it[huggingFaceTokenKey] = "hf_stale_legacy" }
+            val fresh = SettingsManager(ds, context, cipher)
+
+            val token = fresh.huggingFaceAuthToken.first()
+
+            assertEquals("hf_current_token", token)
+            assertNull(ds.data.first()[huggingFaceTokenKey])
+        } finally {
+            scope.cancel()
+        }
+    }
+
+    @Test
+    fun `setting token to null removes the encrypted entry`() = runTest {
+        val (manager, _, scope) = freshManagerWithExposedDataStore()
+        try {
+            manager.setHuggingFaceAuthToken("hf_secret_token")
+
+            manager.setHuggingFaceAuthToken(null)
+
+            assertNull(manager.huggingFaceAuthToken.first())
+            assertTrue(!securePrefs.values.containsKey("hugging_face_token"))
+        } finally {
+            scope.cancel()
+        }
+    }
+
+    @Test
+    fun `undecryptable stored token is treated as unset and dropped`() = runTest {
+        val (manager, ds, scope) = freshManagerWithExposedDataStore()
+        try {
+            manager.setHuggingFaceAuthToken("hf_secret_token")
+            cipher.failDecrypt = true
+            val fresh = SettingsManager(ds, context, cipher)
+
+            // A lost Keystore key must surface as "no token configured":
+            // the token is user re-enterable, same policy as API keys.
+            assertNull(fresh.huggingFaceAuthToken.first())
+            assertTrue(!securePrefs.values.containsKey("hugging_face_token"))
+        } finally {
+            scope.cancel()
+        }
     }
 
     // ───────────────────────────────────────────────────────────────────
@@ -593,7 +719,7 @@ class SettingsManagerTest {
         file.delete()
         val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
         val ds = PreferenceDataStoreFactory.create(scope = scope, produceFile = { file })
-        return SettingsManager(ds) to scope
+        return SettingsManager(ds, context, cipher) to scope
     }
 
     @Test
@@ -681,7 +807,7 @@ class SettingsManagerTest {
         every { prefs[activeEmbeddingProviderIdKey] } returns null
         every { dataStore.data } returns flowOf(prefs)
 
-        val settingsManager = SettingsManager(dataStore)
+        val settingsManager = SettingsManager(dataStore, context, cipher)
         val result = settingsManager.activeEmbeddingProviderId.first()
 
         assertEquals(SettingsDefaults.ACTIVE_EMBEDDING_PROVIDER_ID_DEFAULT, result)
@@ -694,7 +820,7 @@ class SettingsManagerTest {
         every { prefs[activeEmbeddingProviderIdKey] } returns "openai_3_small"
         every { dataStore.data } returns flowOf(prefs)
 
-        val settingsManager = SettingsManager(dataStore)
+        val settingsManager = SettingsManager(dataStore, context, cipher)
         val result = settingsManager.activeEmbeddingProviderId.first()
 
         assertEquals("openai_3_small", result)
@@ -704,7 +830,7 @@ class SettingsManagerTest {
     fun `activeEmbeddingProviderId handles IOException and returns default`() = runTest {
         every { dataStore.data } returns flow { throw IOException("Test") }
 
-        val settingsManager = SettingsManager(dataStore)
+        val settingsManager = SettingsManager(dataStore, context, cipher)
         val result = settingsManager.activeEmbeddingProviderId.first()
 
         assertEquals(SettingsDefaults.ACTIVE_EMBEDDING_PROVIDER_ID_DEFAULT, result)

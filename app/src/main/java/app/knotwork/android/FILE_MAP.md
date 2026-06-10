@@ -29,7 +29,7 @@ This file maps the contents of the main application package.
       - `AndroidKeystoreAeadCipher.kt` - Production `AeadCipher`: lazy non-exportable AES-256-GCM key per alias in `AndroidKeyStore`, delegates framing to `AesGcmCodec`; keys are created on encrypt only, never on decrypt.
       - `KeystoreBackedPrefsStore.kt` - Plain `SharedPreferences` file with AEAD-encrypted values (base64 blobs, AAD = `store/entry` slot binding). Opening never fails — failures move to per-value reads (`SecureValueUnreadableException`), letting each consumer pick its recovery policy; `destroy()` clears entries, deletes the file and the Keystore key.
     - `McpServerCollisionCheck.kt` - Pure helper that detects when an `updateMcpServer` call would persist a duplicate URL row (editing server A's URL to match an existing server B's URL). Extracted from `SettingsManager.updateMcpServer` so the decision matrix is unit-testable without DataStore plumbing.
-    - `SettingsManager.kt` - App settings manager.
+    - `SettingsManager.kt` - App settings manager (DataStore facade). The HuggingFace token is kept out of DataStore in a `KeystoreBackedPrefsStore` (re-enterable-secret policy); a legacy plain-DataStore token migrates to the encrypted store on first read.
     - `dao/` - Data Access Objects (DAOs).
       - `ChatDao.kt` - Chat messages DAO.
       - `LocalModelDao.kt` - Local models DAO.
