@@ -177,7 +177,7 @@ class ChatHomeViewModelTest {
         viewModel = createViewModel()
         advanceUntilIdle()
 
-        val sessionId = viewModel.currentSessionId.value
+        val sessionId = viewModel.state.value.thread.currentSessionId
         assertTrue("Generated session id must not be blank", sessionId.isNotBlank())
         coVerify { settingsRepository.setCurrentChatSessionId(any()) }
         coVerify { chatRepository.saveSession(match { it.id == sessionId }) }
@@ -192,7 +192,7 @@ class ChatHomeViewModelTest {
         viewModel = createViewModel()
         advanceUntilIdle()
 
-        assertEquals(saved, viewModel.currentSessionId.value)
+        assertEquals(saved, viewModel.state.value.thread.currentSessionId)
         coVerify(exactly = 0) { settingsRepository.setCurrentChatSessionId(any()) }
     }
 
@@ -201,15 +201,15 @@ class ChatHomeViewModelTest {
         viewModel = createViewModel()
         advanceUntilIdle()
 
-        assertEquals(ChatHomeUiState.Empty, viewModel.state.value)
-        assertTrue(viewModel.messages.value.isEmpty())
+        assertEquals(ChatHomeUiState.Empty, viewModel.state.value.visual)
+        assertTrue(viewModel.state.value.messages.isEmpty())
     }
 
     @Test
     fun `messages flow projects ChatMessage rows when display flow emits`() = runTest(testDispatcher) {
         viewModel = createViewModel()
         advanceUntilIdle()
-        val sessionId = viewModel.currentSessionId.value
+        val sessionId = viewModel.state.value.thread.currentSessionId
 
         messagesFlow.value = listOf(
             ChatMessage(id = 1, sessionId = sessionId, role = Role.USER, content = "hi", timestamp = 0),
@@ -217,7 +217,7 @@ class ChatHomeViewModelTest {
         )
         advanceUntilIdle()
 
-        val rows = viewModel.messages.value
+        val rows = viewModel.state.value.messages
         assertEquals(2, rows.size)
         assertEquals(ChatRole.User, rows[0].role)
         assertEquals(ChatRole.Assistant, rows[1].role)
@@ -225,19 +225,19 @@ class ChatHomeViewModelTest {
         // Agent rows now carry Markdown
         // content so the host-supplied markdown renderer formats them.
         assertEquals("hello", (rows[1].content as ChatContent.Markdown).source)
-        assertEquals(ChatHomeUiState.Idle, viewModel.state.value)
+        assertEquals(ChatHomeUiState.Idle, viewModel.state.value.visual)
     }
 
     @Test
     fun `saveMessageToMemory persists the row text and emits a Saved event`() = runTest(testDispatcher) {
         viewModel = createViewModel()
         advanceUntilIdle()
-        val sessionId = viewModel.currentSessionId.value
+        val sessionId = viewModel.state.value.thread.currentSessionId
         messagesFlow.value = listOf(
             ChatMessage(id = 1, sessionId = sessionId, role = Role.USER, content = "remember me", timestamp = 0),
         )
         advanceUntilIdle()
-        val rowId = viewModel.messages.value.first().id
+        val rowId = viewModel.state.value.messages.first().id
         coEvery { saveMessageToMemoryUseCase("remember me") } returns SaveToMemoryOutcome.Saved(id = 1L)
 
         val events = mutableListOf<MemorySaveEvent>()
@@ -256,12 +256,12 @@ class ChatHomeViewModelTest {
     fun `saveMessageToMemory emits a Failed event when the use case fails`() = runTest(testDispatcher) {
         viewModel = createViewModel()
         advanceUntilIdle()
-        val sessionId = viewModel.currentSessionId.value
+        val sessionId = viewModel.state.value.thread.currentSessionId
         messagesFlow.value = listOf(
             ChatMessage(id = 1, sessionId = sessionId, role = Role.USER, content = "remember me", timestamp = 0),
         )
         advanceUntilIdle()
-        val rowId = viewModel.messages.value.first().id
+        val rowId = viewModel.state.value.messages.first().id
         coEvery { saveMessageToMemoryUseCase(any()) } returns SaveToMemoryOutcome.Failed(RuntimeException("boom"))
 
         val events = mutableListOf<MemorySaveEvent>()
@@ -280,7 +280,7 @@ class ChatHomeViewModelTest {
         viewModel = createViewModel()
         advanceUntilIdle()
         viewModel.onComposerValueChange("hello")
-        assertEquals("hello", viewModel.composerValue.value)
+        assertEquals("hello", viewModel.state.value.composer.value)
     }
 
     @Test
@@ -288,7 +288,7 @@ class ChatHomeViewModelTest {
         viewModel = createViewModel()
         advanceUntilIdle()
         viewModel.onTypedConfirmChange("yes")
-        assertEquals("yes", viewModel.pendingTypedConfirm.value)
+        assertEquals("yes", viewModel.state.value.composer.typedConfirm)
     }
 
     @Test
@@ -299,7 +299,7 @@ class ChatHomeViewModelTest {
         viewModel.sendMessage()
         advanceUntilIdle()
 
-        assertEquals(ChatHomeUiState.Empty, viewModel.state.value)
+        assertEquals(ChatHomeUiState.Empty, viewModel.state.value.visual)
         coVerify(exactly = 0) { agentOrchestratorUseCase(any(), any(), any()) }
     }
 
@@ -313,7 +313,7 @@ class ChatHomeViewModelTest {
         viewModel.sendMessage()
         advanceUntilIdle()
 
-        val state = viewModel.state.value
+        val state = viewModel.state.value.visual
         assertTrue("Expected Error, got $state", state is ChatHomeUiState.Error)
         assertEquals(
             ChatHomeViewModel.MODEL_NOT_LOADED_MESSAGE,
@@ -326,7 +326,7 @@ class ChatHomeViewModelTest {
     fun `sendMessage flips to Generating then Idle when orchestrator completes`() = runTest(testDispatcher) {
         viewModel = createViewModel()
         advanceUntilIdle()
-        val sessionId = viewModel.currentSessionId.value
+        val sessionId = viewModel.state.value.thread.currentSessionId
         coEvery { agentOrchestratorUseCase(sessionId, "hi", null) } returns flow {
             emit(AgentOrchestratorState.Loading)
             emit(AgentOrchestratorState.Completed("done"))
@@ -336,16 +336,59 @@ class ChatHomeViewModelTest {
         viewModel.sendMessage()
         advanceUntilIdle()
 
-        assertEquals("", viewModel.composerValue.value)
-        assertEquals(ChatHomeUiState.Empty, viewModel.state.value) // no messages persisted in this stub
+        assertEquals("", viewModel.state.value.composer.value)
+        assertEquals(ChatHomeUiState.Empty, viewModel.state.value.visual) // no messages persisted in this stub
         coVerify { agentOrchestratorUseCase(sessionId, "hi", null) }
     }
+
+    @Test
+    fun `sendMessage clears pending approval and flips to Generating in one atomic emission`() =
+        runTest(testDispatcher) {
+            viewModel = createViewModel()
+            advanceUntilIdle()
+            val sessionId = viewModel.state.value.thread.currentSessionId
+            // Drive the surface into HitlConfirm with a captured pending tool.
+            coEvery { agentOrchestratorUseCase(sessionId, "hi", null) } returns flow {
+                emit(
+                    AgentOrchestratorState.WaitingForApproval(
+                        toolName = "fs.write_file",
+                        arguments = "{}",
+                        risk = ToolRisk.SENSITIVE,
+                    ),
+                )
+                delay(10_000)
+            }
+            viewModel.onComposerValueChange("hi")
+            viewModel.sendMessage()
+            advanceUntilIdle()
+            assertTrue(viewModel.state.value.visual is ChatHomeUiState.HitlConfirm)
+            assertNotNull(viewModel.state.value.pending.tool)
+
+            // Record every emission while a new send supersedes the paused run.
+            val emissions = mutableListOf<ChatHomeScreenState>()
+            backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+                viewModel.state.collect { emissions.add(it) }
+            }
+            coEvery { agentOrchestratorUseCase(sessionId, "again", null) } returns flow { delay(10_000) }
+            viewModel.onComposerValueChange("again")
+            viewModel.sendMessage()
+            advanceUntilIdle()
+
+            // The Generating flip and the pending-snapshot clear must land in
+            // the same flow emission — no observer may ever see the new run's
+            // Generating surface still carrying the previous run's tool card.
+            assertTrue(
+                "Expected no emission with Generating + stale pending tool",
+                emissions.none { it.visual is ChatHomeUiState.Generating && it.pending.tool != null },
+            )
+            assertNull(viewModel.state.value.pending.tool)
+        }
 
     @Test
     fun `sendMessage flips to Error when orchestrator throws`() = runTest(testDispatcher) {
         viewModel = createViewModel()
         advanceUntilIdle()
-        val sessionId = viewModel.currentSessionId.value
+        val sessionId = viewModel.state.value.thread.currentSessionId
         coEvery { agentOrchestratorUseCase(sessionId, "hi", null) } returns flow {
             throw RuntimeException("boom")
         }
@@ -354,7 +397,7 @@ class ChatHomeViewModelTest {
         viewModel.sendMessage()
         advanceUntilIdle()
 
-        val state = viewModel.state.value
+        val state = viewModel.state.value.visual
         assertTrue("Expected Error, got $state", state is ChatHomeUiState.Error)
         assertEquals("boom", (state as ChatHomeUiState.Error).message)
     }
@@ -363,7 +406,7 @@ class ChatHomeViewModelTest {
     fun `sendMessage forwards the pipelineId bound to the active session`() = runTest(testDispatcher) {
         viewModel = createViewModel()
         advanceUntilIdle()
-        val sessionId = viewModel.currentSessionId.value
+        val sessionId = viewModel.state.value.thread.currentSessionId
         val expectedPipeline = "pipeline-abc"
         // Publish the pipeline first so the deleted-fallback handler keeps the binding intact.
         pipelinesFlow.value = listOf(PipelineGraph(id = expectedPipeline, name = "Bound"))
@@ -386,7 +429,7 @@ class ChatHomeViewModelTest {
     fun `sendMessage auto-renames a new chat after the first user prompt`() = runTest(testDispatcher) {
         viewModel = createViewModel()
         advanceUntilIdle()
-        val sessionId = viewModel.currentSessionId.value
+        val sessionId = viewModel.state.value.thread.currentSessionId
         // initializeSession() created a session named DEFAULT_NEW_CHAT_NAME
         assertEquals(
             ChatHomeViewModel.DEFAULT_NEW_CHAT_NAME,
@@ -408,7 +451,7 @@ class ChatHomeViewModelTest {
     fun `sendMessage truncates an over-long prompt when auto-renaming`() = runTest(testDispatcher) {
         viewModel = createViewModel()
         advanceUntilIdle()
-        val sessionId = viewModel.currentSessionId.value
+        val sessionId = viewModel.state.value.thread.currentSessionId
         val long = "x".repeat(ChatHomeViewModel.AUTO_RENAME_CHAR_LIMIT + 5)
         coEvery { agentOrchestratorUseCase(sessionId, any(), any()) } returns flowOf(
             AgentOrchestratorState.Completed("ok"),
@@ -429,7 +472,7 @@ class ChatHomeViewModelTest {
     fun `stopGeneration cancels the in-flight job and returns to a resting state`() = runTest(testDispatcher) {
         viewModel = createViewModel()
         advanceUntilIdle()
-        val sessionId = viewModel.currentSessionId.value
+        val sessionId = viewModel.state.value.thread.currentSessionId
         coEvery { agentOrchestratorUseCase(sessionId, "hi", null) } returns flow {
             emit(AgentOrchestratorState.Loading)
             delay(10_000)
@@ -439,12 +482,12 @@ class ChatHomeViewModelTest {
         viewModel.onComposerValueChange("hi")
         viewModel.sendMessage()
         testScheduler.advanceTimeBy(100)
-        assertEquals(ChatHomeUiState.Generating, viewModel.state.value)
+        assertEquals(ChatHomeUiState.Generating, viewModel.state.value.visual)
 
         viewModel.stopGeneration()
         advanceUntilIdle()
 
-        assertEquals(ChatHomeUiState.Empty, viewModel.state.value)
+        assertEquals(ChatHomeUiState.Empty, viewModel.state.value.visual)
     }
 
     @Test
@@ -454,7 +497,7 @@ class ChatHomeViewModelTest {
 
         viewModel.forceState(ChatHomeUiState.HitlConfirm(Risk.Sensitive))
         viewModel.stopGeneration()
-        assertEquals(ChatHomeUiState.HitlConfirm(Risk.Sensitive), viewModel.state.value)
+        assertEquals(ChatHomeUiState.HitlConfirm(Risk.Sensitive), viewModel.state.value.visual)
     }
 
     @Test
@@ -470,8 +513,8 @@ class ChatHomeViewModelTest {
             viewModel.selectThread(target)
             advanceUntilIdle()
 
-            assertEquals(target, viewModel.currentSessionId.value)
-            assertEquals("Other", viewModel.threadTitle.value)
+            assertEquals(target, viewModel.state.value.thread.currentSessionId)
+            assertEquals("Other", viewModel.state.value.thread.title)
             coVerify { settingsRepository.setCurrentChatSessionId(target) }
             verify { chatRepository.getDisplayMessagesForSession(target) }
         }
@@ -480,7 +523,7 @@ class ChatHomeViewModelTest {
     fun `deleted bound pipeline triggers default fallback and emits one-shot event`() = runTest(testDispatcher) {
         viewModel = createViewModel()
         advanceUntilIdle()
-        val sessionId = viewModel.currentSessionId.value
+        val sessionId = viewModel.state.value.thread.currentSessionId
         // Bind the session to a pipeline that exists initially…
         pipelinesFlow.value = listOf(PipelineGraph(id = "deleted-id", name = "Doomed"))
         sessionsFlow.value = listOf(
@@ -501,14 +544,14 @@ class ChatHomeViewModelTest {
         advanceUntilIdle()
         maxContextLengthFlow.value = ALT_TOKENS_MAX
         advanceUntilIdle()
-        assertEquals(ALT_TOKENS_MAX, viewModel.tokensMax.value)
+        assertEquals(ALT_TOKENS_MAX, viewModel.state.value.tokens.max)
     }
 
     @Test
     fun `tokensUsed reflects rough chars-per-token estimate of the context window`() = runTest(testDispatcher) {
         viewModel = createViewModel()
         advanceUntilIdle()
-        val sessionId = viewModel.currentSessionId.value
+        val sessionId = viewModel.state.value.thread.currentSessionId
         coEvery { getContextWindowUseCase(sessionId) } returns "x".repeat(40)
 
         messagesFlow.value = listOf(
@@ -516,14 +559,14 @@ class ChatHomeViewModelTest {
         )
         advanceUntilIdle()
 
-        assertEquals(40 / ChatHomeViewModel.TOKEN_CHARS_PER_TOKEN, viewModel.tokensUsed.value)
+        assertEquals(40 / ChatHomeViewModel.TOKEN_CHARS_PER_TOKEN, viewModel.state.value.tokens.used)
     }
 
     @Test
     fun `pipelineName resolves to the bound pipeline display name`() = runTest(testDispatcher) {
         viewModel = createViewModel()
         advanceUntilIdle()
-        val sessionId = viewModel.currentSessionId.value
+        val sessionId = viewModel.state.value.thread.currentSessionId
         pipelinesFlow.value = listOf(
             PipelineGraph(id = "p1", name = "Knot Default"),
             PipelineGraph(id = "p2", name = "Research"),
@@ -533,7 +576,7 @@ class ChatHomeViewModelTest {
         )
         advanceUntilIdle()
 
-        assertEquals("Research", viewModel.pipelineName.value)
+        assertEquals("Research", viewModel.state.value.pipelineName)
     }
 
     @Test
@@ -547,7 +590,7 @@ class ChatHomeViewModelTest {
         defaultPipelineIdFlow.value = "p2"
         advanceUntilIdle()
 
-        assertEquals("Default", viewModel.pipelineName.value)
+        assertEquals("Default", viewModel.state.value.pipelineName)
     }
 
     @Test
@@ -563,7 +606,7 @@ class ChatHomeViewModelTest {
 
         // No order-dependent "first in the library" fallback: the subtitle
         // must not advertise a pipeline that execution would never pick.
-        assertNull(viewModel.pipelineName.value)
+        assertNull(viewModel.state.value.pipelineName)
     }
 
     @Test
@@ -598,19 +641,19 @@ class ChatHomeViewModelTest {
         viewModel = createViewModel()
         advanceUntilIdle()
         viewModel.openDrawer()
-        assertEquals(ChatHomeUiState.DrawerOpen, viewModel.state.value)
+        assertEquals(ChatHomeUiState.DrawerOpen, viewModel.state.value.visual)
         viewModel.closeDrawer()
-        assertEquals(ChatHomeUiState.Empty, viewModel.state.value)
+        assertEquals(ChatHomeUiState.Empty, viewModel.state.value.visual)
     }
 
     @Test
     fun `openConsole flips consoleSnap without touching chat state`() = runTest(testDispatcher) {
         viewModel = createViewModel()
         advanceUntilIdle()
-        val stateBefore = viewModel.state.value
+        val stateBefore = viewModel.state.value.visual
         viewModel.openConsole(ConsoleSnap.Full)
-        assertEquals(ConsoleSnap.Full, viewModel.consoleSnap.value)
-        assertEquals(stateBefore, viewModel.state.value)
+        assertEquals(ConsoleSnap.Full, viewModel.state.value.console.snap)
+        assertEquals(stateBefore, viewModel.state.value.visual)
     }
 
     @Test
@@ -618,10 +661,10 @@ class ChatHomeViewModelTest {
         viewModel = createViewModel()
         advanceUntilIdle()
         viewModel.openConsole(ConsoleSnap.Partial)
-        val stateBefore = viewModel.state.value
+        val stateBefore = viewModel.state.value.visual
         viewModel.closeConsole()
-        assertNull(viewModel.consoleSnap.value)
-        assertEquals(stateBefore, viewModel.state.value)
+        assertNull(viewModel.state.value.console.snap)
+        assertEquals(stateBefore, viewModel.state.value.visual)
     }
 
     @Test
@@ -630,7 +673,7 @@ class ChatHomeViewModelTest {
         advanceUntilIdle()
         viewModel.openConsole(ConsoleSnap.Partial)
         viewModel.setConsoleSnap(ConsoleSnap.Full)
-        assertEquals(ConsoleSnap.Full, viewModel.consoleSnap.value)
+        assertEquals(ConsoleSnap.Full, viewModel.state.value.console.snap)
     }
 
     @Test
@@ -638,7 +681,7 @@ class ChatHomeViewModelTest {
         viewModel = createViewModel()
         advanceUntilIdle()
         viewModel.setConsoleSnap(ConsoleSnap.Full)
-        assertNull(viewModel.consoleSnap.value)
+        assertNull(viewModel.state.value.console.snap)
     }
 
     @Test
@@ -651,7 +694,7 @@ class ChatHomeViewModelTest {
         advanceUntilIdle()
         viewModel.openConsole(ConsoleSnap.Partial)
         viewModel.forceState(ChatHomeUiState.Idle)
-        assertEquals(ConsoleSnap.Partial, viewModel.consoleSnap.value)
+        assertEquals(ConsoleSnap.Partial, viewModel.state.value.console.snap)
     }
 
     @Test
@@ -659,14 +702,14 @@ class ChatHomeViewModelTest {
         viewModel = createViewModel()
         advanceUntilIdle()
         viewModel.forceState(ChatHomeUiState.HitlConfirm(Risk.Destructive))
-        assertEquals(ChatHomeUiState.HitlConfirm(Risk.Destructive), viewModel.state.value)
+        assertEquals(ChatHomeUiState.HitlConfirm(Risk.Destructive), viewModel.state.value.visual)
     }
 
     @Test
     fun `sendMessage emits HitlConfirm when orchestrator waits for approval`() = runTest(testDispatcher) {
         viewModel = createViewModel()
         advanceUntilIdle()
-        val sessionId = viewModel.currentSessionId.value
+        val sessionId = viewModel.state.value.thread.currentSessionId
         coEvery { agentOrchestratorUseCase(sessionId, "hi", null) } returns flow {
             emit(
                 AgentOrchestratorState.WaitingForApproval(
@@ -682,10 +725,10 @@ class ChatHomeViewModelTest {
         viewModel.sendMessage()
         advanceUntilIdle()
 
-        val state = viewModel.state.value
+        val state = viewModel.state.value.visual
         assertTrue("Expected HitlConfirm, got $state", state is ChatHomeUiState.HitlConfirm)
         assertEquals(Risk.Sensitive, (state as ChatHomeUiState.HitlConfirm).risk)
-        val pending = viewModel.pendingTool.value
+        val pending = viewModel.state.value.pending.tool
         assertNotNull(pending)
         assertEquals("fs.write_file", pending!!.toolName)
         assertEquals(ToolRisk.SENSITIVE, pending.risk)
@@ -695,7 +738,7 @@ class ChatHomeViewModelTest {
     fun `approveTool calls resumeWithApproval(true) and flips to Generating`() = runTest(testDispatcher) {
         viewModel = createViewModel()
         advanceUntilIdle()
-        val sessionId = viewModel.currentSessionId.value
+        val sessionId = viewModel.state.value.thread.currentSessionId
         coEvery { agentOrchestratorUseCase(sessionId, "hi", null) } returns flow {
             emit(
                 AgentOrchestratorState.WaitingForApproval(
@@ -714,15 +757,15 @@ class ChatHomeViewModelTest {
         advanceUntilIdle()
 
         verify { agentOrchestratorUseCase.resumeWithApproval(sessionId, true) }
-        assertEquals(ChatHomeUiState.Generating, viewModel.state.value)
-        assertNull(viewModel.pendingTool.value)
+        assertEquals(ChatHomeUiState.Generating, viewModel.state.value.visual)
+        assertNull(viewModel.state.value.pending.tool)
     }
 
     @Test
     fun `rejectTool calls resumeWithApproval(false) and appends system denial message`() = runTest(testDispatcher) {
         viewModel = createViewModel()
         advanceUntilIdle()
-        val sessionId = viewModel.currentSessionId.value
+        val sessionId = viewModel.state.value.thread.currentSessionId
         coEvery { agentOrchestratorUseCase(sessionId, "hi", null) } returns flow {
             emit(
                 AgentOrchestratorState.WaitingForApproval(
@@ -750,17 +793,17 @@ class ChatHomeViewModelTest {
                 },
             )
         }
-        assertNull(viewModel.pendingTool.value)
+        assertNull(viewModel.state.value.pending.tool)
         // Resuming the pipeline restarts orchestrator emission — the surface stays
         // in Generating until the next state (or a terminal Completed / Error) lands.
-        assertEquals(ChatHomeUiState.Generating, viewModel.state.value)
+        assertEquals(ChatHomeUiState.Generating, viewModel.state.value.visual)
     }
 
     @Test
     fun `approveTool destructive is a no-op without typed yes`() = runTest(testDispatcher) {
         viewModel = createViewModel()
         advanceUntilIdle()
-        val sessionId = viewModel.currentSessionId.value
+        val sessionId = viewModel.state.value.thread.currentSessionId
         coEvery { agentOrchestratorUseCase(sessionId, "hi", null) } returns flow {
             emit(
                 AgentOrchestratorState.WaitingForApproval(
@@ -779,21 +822,21 @@ class ChatHomeViewModelTest {
         viewModel.approveTool()
         advanceUntilIdle()
         verify(exactly = 0) { agentOrchestratorUseCase.resumeWithApproval(any(), true) }
-        assertTrue(viewModel.state.value is ChatHomeUiState.HitlConfirm)
+        assertTrue(viewModel.state.value.visual is ChatHomeUiState.HitlConfirm)
 
         // Typing the canonical magic word unlocks the gate.
         viewModel.onTypedConfirmChange("yes")
         viewModel.approveTool()
         advanceUntilIdle()
         verify { agentOrchestratorUseCase.resumeWithApproval(sessionId, true) }
-        assertEquals(ChatHomeUiState.Generating, viewModel.state.value)
+        assertEquals(ChatHomeUiState.Generating, viewModel.state.value.visual)
     }
 
     @Test
     fun `AwaitingClarification emits Clarification state and captures the request`() = runTest(testDispatcher) {
         viewModel = createViewModel()
         advanceUntilIdle()
-        val sessionId = viewModel.currentSessionId.value
+        val sessionId = viewModel.state.value.thread.currentSessionId
         val request = ClarificationRequest(
             id = "req-1",
             question = "Which calendar?",
@@ -809,15 +852,15 @@ class ChatHomeViewModelTest {
         viewModel.sendMessage()
         advanceUntilIdle()
 
-        assertEquals(ChatHomeUiState.Clarification, viewModel.state.value)
-        assertEquals(request, viewModel.pendingClarification.value)
+        assertEquals(ChatHomeUiState.Clarification, viewModel.state.value.visual)
+        assertEquals(request, viewModel.state.value.pending.clarification)
     }
 
     @Test
     fun `submitClarificationReply calls repository and flips to Generating`() = runTest(testDispatcher) {
         viewModel = createViewModel()
         advanceUntilIdle()
-        val sessionId = viewModel.currentSessionId.value
+        val sessionId = viewModel.state.value.thread.currentSessionId
         val request = ClarificationRequest(
             id = "req-7",
             question = "Q?",
@@ -836,15 +879,15 @@ class ChatHomeViewModelTest {
         advanceUntilIdle()
 
         coVerify { clarificationRepository.submitClarification("req-7", "Yes") }
-        assertNull(viewModel.pendingClarification.value)
-        assertEquals(ChatHomeUiState.Generating, viewModel.state.value)
+        assertNull(viewModel.state.value.pending.clarification)
+        assertEquals(ChatHomeUiState.Generating, viewModel.state.value.visual)
     }
 
     @Test
     fun `clarification watchdog submits default answer on timeout`() = runTest(testDispatcher) {
         viewModel = createViewModel()
         advanceUntilIdle()
-        val sessionId = viewModel.currentSessionId.value
+        val sessionId = viewModel.state.value.thread.currentSessionId
         val request = ClarificationRequest(
             id = "req-timeout",
             question = "Pick one",
@@ -860,7 +903,7 @@ class ChatHomeViewModelTest {
         // Use runCurrent() not advanceUntilIdle: the latter would skip past the
         // 500ms watchdog delay and fire the timeout *before* this assertion.
         testScheduler.runCurrent()
-        assertEquals(ChatHomeUiState.Clarification, viewModel.state.value)
+        assertEquals(ChatHomeUiState.Clarification, viewModel.state.value.visual)
 
         testScheduler.advanceTimeBy(600L)
         testScheduler.runCurrent()
@@ -875,17 +918,17 @@ class ChatHomeViewModelTest {
                 },
             )
         }
-        assertNull(viewModel.pendingClarification.value)
+        assertNull(viewModel.state.value.pending.clarification)
         // Pipeline resumes after the default answer is submitted — keep Generating
         // until the orchestrator's next state lands.
-        assertEquals(ChatHomeUiState.Generating, viewModel.state.value)
+        assertEquals(ChatHomeUiState.Generating, viewModel.state.value.visual)
     }
 
     @Test
     fun `submitClarificationReply forwards an empty reply for free-form requests`() = runTest(testDispatcher) {
         viewModel = createViewModel()
         advanceUntilIdle()
-        val sessionId = viewModel.currentSessionId.value
+        val sessionId = viewModel.state.value.thread.currentSessionId
         val request = ClarificationRequest(
             id = "req-blank",
             question = "Anything else?",
@@ -904,8 +947,8 @@ class ChatHomeViewModelTest {
         advanceUntilIdle()
 
         coVerify { clarificationRepository.submitClarification("req-blank", "") }
-        assertNull(viewModel.pendingClarification.value)
-        assertEquals(ChatHomeUiState.Generating, viewModel.state.value)
+        assertNull(viewModel.state.value.pending.clarification)
+        assertEquals(ChatHomeUiState.Generating, viewModel.state.value.visual)
     }
 
     @Test
@@ -945,7 +988,7 @@ class ChatHomeViewModelTest {
 
         coVerify { chatRepository.saveSession(match { it.pipelineId == "pipe-42" }) }
         // After save, the new session id is propagated as the active session.
-        assertTrue(viewModel.currentSessionId.value.isNotBlank())
+        assertTrue(viewModel.state.value.thread.currentSessionId.isNotBlank())
     }
 
     @Test
@@ -996,7 +1039,7 @@ class ChatHomeViewModelTest {
         viewModel = createViewModel()
         advanceUntilIdle()
 
-        assertEquals(true, viewModel.favorite.value)
+        assertEquals(true, viewModel.state.value.thread.favorite)
     }
 
     @Test
@@ -1022,9 +1065,9 @@ class ChatHomeViewModelTest {
         )
         advanceUntilIdle()
 
-        assertEquals(2, viewModel.installedModels.value.size)
-        assertEquals(1L, viewModel.activeModelId.value)
-        assertEquals("Gemma 2B", viewModel.modelName.value)
+        assertEquals(2, viewModel.state.value.model.installed.size)
+        assertEquals(1L, viewModel.state.value.model.activeId)
+        assertEquals("Gemma 2B", viewModel.state.value.model.name)
     }
 
     @Test
@@ -1049,7 +1092,7 @@ class ChatHomeViewModelTest {
         advanceUntilIdle()
 
         coVerify { chatRepository.deleteSession(sessionId) }
-        assertEquals(other, viewModel.currentSessionId.value)
+        assertEquals(other, viewModel.state.value.thread.currentSessionId)
     }
 
     @Test
@@ -1070,7 +1113,7 @@ class ChatHomeViewModelTest {
 
         coVerify { chatRepository.deleteSession(sessionId) }
         // After delete + auto-create, the active session id is the newly-created one.
-        assertTrue(viewModel.currentSessionId.value.isNotBlank())
+        assertTrue(viewModel.state.value.thread.currentSessionId.isNotBlank())
         coVerify(atLeast = 1) { chatRepository.saveSession(any()) }
     }
 
@@ -1083,7 +1126,7 @@ class ChatHomeViewModelTest {
         advanceUntilIdle()
 
         coVerify { chatRepository.importChat(any()) }
-        assertEquals("imported-session-id", viewModel.currentSessionId.value)
+        assertEquals("imported-session-id", viewModel.state.value.thread.currentSessionId)
     }
 
     @Test
@@ -1142,7 +1185,7 @@ class ChatHomeViewModelTest {
         viewModel = createViewModel()
         advanceUntilIdle()
 
-        val rows = viewModel.threadRows.value
+        val rows = viewModel.state.value.thread.rows
         assertEquals(b, rows.first().id)
         assertTrue(rows.first().starred)
         assertEquals(a, rows.last().id)

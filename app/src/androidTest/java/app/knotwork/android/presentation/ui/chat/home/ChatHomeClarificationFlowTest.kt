@@ -94,8 +94,8 @@ class ChatHomeClarificationFlowTest {
         // Simulate the VM-side watchdog (or a successful submit): the VM
         // clears `pendingClarification` and flips state back to Idle. The
         // clarification card must drop out of the tree.
-        handles.pendingClarificationFlow.value = null
-        handles.stateFlow.value = ChatHomeUiState.Idle
+        handles.setPendingClarification(null)
+        handles.setVisual(ChatHomeUiState.Idle)
         composeTestRule.waitForIdle()
 
         composeTestRule.onNodeWithText("Pick a calendar for the rollout").assertDoesNotExist()

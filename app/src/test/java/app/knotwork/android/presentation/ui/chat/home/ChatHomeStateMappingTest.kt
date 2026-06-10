@@ -11,6 +11,8 @@ import app.knotwork.design.components.console.ConsoleTab
 import app.knotwork.design.components.console.ConsoleTraceSpan
 import app.knotwork.design.components.console.ConsoleVarRow
 import app.knotwork.design.components.console.SpanStatus
+import app.knotwork.design.screens.chat.ChatHomeConsoleState
+import app.knotwork.design.screens.chat.ChatHomeMessageRow
 import app.knotwork.design.screens.chat.ChatHomeVisualState
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -19,12 +21,12 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * Pure-Kotlin unit tests for [ChatHomeUiState.toViewState] — the boundary
- * mapper between the sealed UI state owned by `:app` and the
- * [app.knotwork.design.screens.chat.ChatHomeViewState] consumed by the
+ * Pure-Kotlin unit tests for [ChatHomeScreenState.toViewState] — the
+ * boundary mapper between the aggregated screen state owned by `:app` and
+ * the [app.knotwork.design.screens.chat.ChatHomeViewState] consumed by the
  * stateless `ChatHomeContent` in `:catalog`.
  *
- * Each test pins one variant of the sealed state and asserts the
+ * Each test pins one variant of the sealed visual state and asserts the
  * downstream view-state has the right [ChatHomeVisualState], the right
  * trailing tile (HITL / clarification / error), and the right composer
  * machinery.
@@ -34,9 +36,25 @@ class ChatHomeStateMappingTest {
     private val title = "Yesterday's deploy"
     private val model = "Gemma 2 · 2B"
 
+    /** Builds a [ChatHomeScreenState] around [visual] with the shared test fixtures. */
+    private fun screenState(
+        visual: ChatHomeUiState,
+        messages: List<ChatHomeMessageRow> = emptyList(),
+        composerValue: String = "",
+        pendingTypedConfirm: String = "",
+        console: ChatHomeConsoleState = ChatHomeConsoleState(),
+    ): ChatHomeScreenState = ChatHomeScreenState(
+        visual = visual,
+        composer = ChatHomeComposerState(value = composerValue, typedConfirm = pendingTypedConfirm),
+        console = console,
+        thread = ChatHomeThreadState(title = title),
+        model = ChatHomeModelState(name = model),
+        messages = messages,
+    )
+
     @Test
     fun `Empty maps to ChatHomeVisualState_Empty with sample prompt cards and no messages`() {
-        val view = ChatHomeUiState.Empty.toViewState(title, model)
+        val view = screenState(ChatHomeUiState.Empty).toViewState()
         assertEquals(ChatHomeVisualState.Empty, view.visualState)
         assertTrue(view.messages.isEmpty())
         // The empty-state body now renders rich suggestion cards
@@ -49,7 +67,7 @@ class ChatHomeStateMappingTest {
     @Test
     fun `Idle maps to ChatHomeVisualState_Idle and threads supplied messages`() {
         val supplied = baselineMessages(model)
-        val view = ChatHomeUiState.Idle.toViewState(title, model, messages = supplied)
+        val view = screenState(ChatHomeUiState.Idle, messages = supplied).toViewState()
         assertEquals(ChatHomeVisualState.Idle, view.visualState)
         assertEquals(supplied, view.messages)
         assertEquals(ComposerState.Idle, view.composerState)
@@ -57,21 +75,21 @@ class ChatHomeStateMappingTest {
 
     @Test
     fun `Idle with no supplied messages renders an empty list`() {
-        val view = ChatHomeUiState.Idle.toViewState(title, model)
+        val view = screenState(ChatHomeUiState.Idle).toViewState()
         assertEquals(ChatHomeVisualState.Idle, view.visualState)
         assertTrue(view.messages.isEmpty())
     }
 
     @Test
     fun `Generating pairs the visual with ComposerState_Generating`() {
-        val view = ChatHomeUiState.Generating.toViewState(title, model)
+        val view = screenState(ChatHomeUiState.Generating).toViewState()
         assertEquals(ChatHomeVisualState.Generating, view.visualState)
         assertTrue(view.composerState is ComposerState.Generating)
     }
 
     @Test
     fun `HitlConfirm appends a Sensitive Confirmation row to the baseline`() {
-        val view = ChatHomeUiState.HitlConfirm(Risk.Sensitive).toViewState(title, model)
+        val view = screenState(ChatHomeUiState.HitlConfirm(Risk.Sensitive)).toViewState()
         assertEquals(ChatHomeVisualState.HitlConfirm, view.visualState)
         val tail = view.messages.last().content
         assertTrue(tail is ChatContent.Confirmation)
@@ -82,7 +100,7 @@ class ChatHomeStateMappingTest {
 
     @Test
     fun `HitlConfirm with Destructive risk surfaces a destructive tool`() {
-        val view = ChatHomeUiState.HitlConfirm(Risk.Destructive).toViewState(title, model)
+        val view = screenState(ChatHomeUiState.HitlConfirm(Risk.Destructive)).toViewState()
         val tail = view.messages.last().content as ChatContent.Confirmation
         assertEquals(Risk.Destructive, tail.model.risk)
         assertEquals("fs.delete_file", tail.model.toolName)
@@ -90,14 +108,14 @@ class ChatHomeStateMappingTest {
 
     @Test
     fun `HitlConfirm threads pendingTypedConfirm through to the view state`() {
-        val view = ChatHomeUiState.HitlConfirm(Risk.Destructive)
-            .toViewState(title, model, pendingTypedConfirm = "ye")
+        val view = screenState(ChatHomeUiState.HitlConfirm(Risk.Destructive), pendingTypedConfirm = "ye")
+            .toViewState()
         assertEquals("ye", view.pendingTypedConfirm)
     }
 
     @Test
     fun `Clarification appends a clarification row with quick replies`() {
-        val view = ChatHomeUiState.Clarification.toViewState(title, model)
+        val view = screenState(ChatHomeUiState.Clarification).toViewState()
         assertEquals(ChatHomeVisualState.Clarification, view.visualState)
         val tail = view.messages.last().content
         assertTrue(tail is ChatContent.Clarification)
@@ -108,7 +126,7 @@ class ChatHomeStateMappingTest {
     @Test
     fun `Error carries the message into both the inline tile and the composer banner`() {
         val state = ChatHomeUiState.Error(message = "Network unreachable")
-        val view = state.toViewState(title, model)
+        val view = screenState(state).toViewState()
         assertEquals(ChatHomeVisualState.Error, view.visualState)
         assertEquals("Network unreachable", view.errorMessage)
         val banner = view.composerState
@@ -118,7 +136,7 @@ class ChatHomeStateMappingTest {
 
     @Test
     fun `DrawerOpen populates the threads list and hides any error message`() {
-        val view = ChatHomeUiState.DrawerOpen.toViewState(title, model)
+        val view = screenState(ChatHomeUiState.DrawerOpen).toViewState()
         assertEquals(ChatHomeVisualState.DrawerOpen, view.visualState)
         assertTrue(view.threads.isNotEmpty())
         assertNull(view.errorMessage)
@@ -141,15 +159,16 @@ class ChatHomeStateMappingTest {
 
         // Console pane open while the chat state is Generating — overlay
         // and underlying state are orthogonal post-refactor.
-        val view = ChatHomeUiState.Generating.toViewState(
-            threadTitle = title,
-            modelName = model,
-            consoleLogs = logs,
-            consoleVars = vars,
-            consoleTraces = traces,
-            consoleTab = ConsoleTab.Traces,
-            consoleSnap = ConsoleSnap.Full,
-        )
+        val view = screenState(
+            ChatHomeUiState.Generating,
+            console = ChatHomeConsoleState(
+                snap = ConsoleSnap.Full,
+                tab = ConsoleTab.Traces,
+                logs = logs,
+                vars = vars,
+                traces = traces,
+            ),
+        ).toViewState()
 
         assertEquals(ChatHomeVisualState.Generating, view.visualState)
         assertEquals(ConsoleSnap.Full, view.console.snap)
@@ -161,7 +180,7 @@ class ChatHomeStateMappingTest {
 
     @Test
     fun `console snap null means the overlay is closed`() {
-        val view = ChatHomeUiState.Idle.toViewState(title, model)
+        val view = screenState(ChatHomeUiState.Idle).toViewState()
         assertNull(view.console.snap)
         assertTrue(view.console.logs.isEmpty())
         assertTrue(view.console.vars.isEmpty())
@@ -181,7 +200,7 @@ class ChatHomeStateMappingTest {
             ChatHomeUiState.DrawerOpen,
         )
         states.forEach { state ->
-            val view = state.toViewState(title, model, composerValue = "draft")
+            val view = screenState(state, composerValue = "draft").toViewState()
             assertEquals("composer for ${state::class.simpleName}", "draft", view.composerValue)
         }
     }

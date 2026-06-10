@@ -162,7 +162,7 @@ class ChatHomeConsoleStreamingTest {
             orchestratorStateFlow.emit(AgentOrchestratorState.ConsoleLog(listOf(first, second)))
             advanceUntilIdle()
 
-            val lines = viewModel.consoleLines.value
+            val lines = viewModel.state.value.console.logs
             assertEquals(2, lines.size)
             assertEquals(ConsoleSource.NODE, lines[0].source)
             assertEquals(ConsoleLevel.Trace, lines[0].level)
@@ -188,7 +188,7 @@ class ChatHomeConsoleStreamingTest {
         orchestratorStateFlow.emit(AgentOrchestratorState.PipelineTrace(listOf(step)))
         advanceUntilIdle()
 
-        val traces = viewModel.consoleTraces.value
+        val traces = viewModel.state.value.console.traces
         assertEquals(1, traces.size)
         assertEquals("LITE_RT", traces[0].name)
         assertEquals(100L, traces[0].durationMs)
@@ -212,7 +212,7 @@ class ChatHomeConsoleStreamingTest {
         )
         advanceUntilIdle()
 
-        val varsAfterFirst = viewModel.consoleVars.value
+        val varsAfterFirst = viewModel.state.value.console.vars
         assertEquals(2, varsAfterFirst.size)
         assertEquals(CONSOLE_VAR_KEY_INPUT, varsAfterFirst[0].key)
         assertEquals(CONSOLE_VAR_KEY_OUTPUT, varsAfterFirst[1].key)
@@ -222,7 +222,7 @@ class ChatHomeConsoleStreamingTest {
             AgentOrchestratorState.NodeIO(nodeId = "n1", nodeType = "LITE_RT", input = "in2", output = "out2"),
         )
         advanceUntilIdle()
-        val rewritten = viewModel.consoleVars.value
+        val rewritten = viewModel.state.value.console.vars
         assertEquals(2, rewritten.size)
         assertEquals("\"in2\"", rewritten[0].valueJson)
         assertEquals("\"out2\"", rewritten[1].valueJson)
@@ -232,7 +232,7 @@ class ChatHomeConsoleStreamingTest {
             AgentOrchestratorState.NodeIO(nodeId = "n2", nodeType = "TOOL", input = "x", output = "y"),
         )
         advanceUntilIdle()
-        assertEquals(4, viewModel.consoleVars.value.size)
+        assertEquals(4, viewModel.state.value.console.vars.size)
     }
 
     @Test
@@ -248,7 +248,7 @@ class ChatHomeConsoleStreamingTest {
             ),
         )
         advanceUntilIdle()
-        assertEquals(1, viewModel.consoleLines.value.size)
+        assertEquals(1, viewModel.state.value.console.logs.size)
 
         // The first run must terminate before a second `sendMessage` is
         // accepted — otherwise the VM's "already generating" guard turns
@@ -261,9 +261,9 @@ class ChatHomeConsoleStreamingTest {
         advanceUntilIdle()
 
         // Fresh run = empty log + empty vars + empty traces, regardless of prior buffer.
-        assertTrue(viewModel.consoleLines.value.isEmpty())
-        assertTrue(viewModel.consoleVars.value.isEmpty())
-        assertTrue(viewModel.consoleTraces.value.isEmpty())
+        assertTrue(viewModel.state.value.console.logs.isEmpty())
+        assertTrue(viewModel.state.value.console.vars.isEmpty())
+        assertTrue(viewModel.state.value.console.traces.isEmpty())
     }
 
     @Test
@@ -280,19 +280,19 @@ class ChatHomeConsoleStreamingTest {
             advanceUntilIdle()
 
             viewModel.requestConsoleClear()
-            assertTrue(viewModel.consoleClearConfirmRequested.value)
+            assertTrue(viewModel.state.value.consoleClearConfirmRequested)
             viewModel.confirmConsoleClear()
             advanceUntilIdle()
 
-            assertTrue(viewModel.consoleLines.value.isEmpty())
-            assertFalse(viewModel.consoleClearConfirmRequested.value)
+            assertTrue(viewModel.state.value.console.logs.isEmpty())
+            assertFalse(viewModel.state.value.consoleClearConfirmRequested)
 
             // Next cumulative snapshot still carries [a, b] plus a new event;
             // baseline must trim leading 2 rows so only the new one shows.
             val c = ConsoleEvent(0L, ConsoleEventType.NodeExecution, "c")
             orchestratorStateFlow.emit(AgentOrchestratorState.ConsoleLog(listOf(a, b, c)))
             advanceUntilIdle()
-            val visible = viewModel.consoleLines.value
+            val visible = viewModel.state.value.console.logs
             assertEquals(1, visible.size)
             assertEquals("c", visible[0].text)
         }
@@ -302,12 +302,12 @@ class ChatHomeConsoleStreamingTest {
         runTest(testDispatcher) {
             viewModel = createViewModel()
             advanceUntilIdle()
-            assertEquals(ConsoleTab.Logs, viewModel.consoleTab.value)
+            assertEquals(ConsoleTab.Logs, viewModel.state.value.console.tab)
 
             viewModel.onConsoleTabChange(ConsoleTab.Traces)
             advanceUntilIdle()
 
-            assertEquals(ConsoleTab.Traces, viewModel.consoleTab.value)
+            assertEquals(ConsoleTab.Traces, viewModel.state.value.console.tab)
             coVerify { settingsRepository.setConsolePreferredConsoleTabName("Traces") }
         }
 
@@ -317,6 +317,6 @@ class ChatHomeConsoleStreamingTest {
         viewModel = createViewModel()
         advanceUntilIdle()
 
-        assertEquals(ConsoleTab.Vars, viewModel.consoleTab.value)
+        assertEquals(ConsoleTab.Vars, viewModel.state.value.console.tab)
     }
 }
