@@ -32,12 +32,12 @@ class MemoryRepositoryImpl @Inject constructor(private val memoryDao: MemoryDao,
         source: MemorySource,
         tags: List<String>,
     ): Long = withContext(Dispatchers.IO) {
-        val embeddingString = converters.fromFloatArray(embedding)
+        val embeddingBlob = converters.fromFloatArray(embedding)
             ?: throw IllegalArgumentException("Failed to serialize embedding")
 
         val entity = MemoryChunkEntity(
             text = text,
-            embedding = embeddingString,
+            embedding = embeddingBlob,
             timestamp = System.currentTimeMillis(),
             source = source,
             tagsCsv = TagsCsv.encode(tags),
@@ -64,6 +64,7 @@ class MemoryRepositoryImpl @Inject constructor(private val memoryDao: MemoryDao,
             // (see the interface KDoc). The pool stays bounded by the compaction
             // hard-limit; the warning below flags the pathological case where the
             // linear scan starts to cost real time.
+            val startedAtNanos = System.nanoTime()
             val pool = memoryDao.getAllMemories().mapNotNull { entity ->
                 entity.toMemoryChunkOrNull()
             }
@@ -78,6 +79,11 @@ class MemoryRepositoryImpl @Inject constructor(private val memoryDao: MemoryDao,
                 val similarity = cosineSimilarity(queryEmbedding, memory.embedding)
                 memory to similarity
             }.sortedByDescending { it.second }
+            Timber.d(
+                "findSimilarMemories scanned %d chunks in %d ms",
+                pool.size,
+                (System.nanoTime() - startedAtNanos) / NANOS_PER_MILLI,
+            )
 
             if (limit != null) ranked.take(limit) else ranked
         }
@@ -102,19 +108,19 @@ class MemoryRepositoryImpl @Inject constructor(private val memoryDao: MemoryDao,
     }
 
     override suspend fun updateMemory(id: Long, text: String, embedding: FloatArray) = withContext(Dispatchers.IO) {
-        val embeddingString = converters.fromFloatArray(embedding)
+        val embeddingBlob = converters.fromFloatArray(embedding)
             ?: throw IllegalArgumentException("Failed to serialize embedding")
-        memoryDao.updateMemory(id = id, text = text, embedding = embeddingString)
+        memoryDao.updateMemory(id = id, text = text, embedding = embeddingBlob)
     }
 
     override suspend fun updateMemoryWithTags(id: Long, text: String, embedding: FloatArray, tags: List<String>) =
         withContext(Dispatchers.IO) {
-            val embeddingString = converters.fromFloatArray(embedding)
+            val embeddingBlob = converters.fromFloatArray(embedding)
                 ?: throw IllegalArgumentException("Failed to serialize embedding")
             memoryDao.updateMemoryWithTags(
                 id = id,
                 text = text,
-                embedding = embeddingString,
+                embedding = embeddingBlob,
                 tagsCsv = TagsCsv.encode(tags),
             )
         }
@@ -161,7 +167,7 @@ class MemoryRepositoryImpl @Inject constructor(private val memoryDao: MemoryDao,
     override suspend fun getMemoriesNeedingReembedding(): List<MemoryChunk> = withContext(Dispatchers.IO) {
         // Deliberately lenient (no `mapNotNull` drop): the re-embed pass recomputes
         // the vector from `text` and ignores the stored embedding, so a row whose
-        // embedding string is unparseable must still be returned — otherwise it
+        // embedding blob is unusable must still be returned — otherwise it
         // would be dropped here yet keep counting in `countNeedingReembedding`,
         // re-arming the worker on every startup as a permanent no-op. A bad
         // embedding falls back to an empty array (the caller never reads it).
@@ -169,10 +175,7 @@ class MemoryRepositoryImpl @Inject constructor(private val memoryDao: MemoryDao,
             MemoryChunk(
                 id = entity.id,
                 text = entity.text,
-                // runCatching: toFloatArray throws on a non-numeric string and
-                // returns null on a blank one; either way a corrupt embedding
-                // falls back to empty so the row is still returned and repaired.
-                embedding = runCatching { converters.toFloatArray(entity.embedding) }.getOrNull() ?: FloatArray(0),
+                embedding = converters.toFloatArray(entity.embedding) ?: FloatArray(0),
                 timestamp = entity.timestamp,
                 isPinned = entity.isPinned,
                 source = entity.source,
@@ -192,11 +195,11 @@ class MemoryRepositoryImpl @Inject constructor(private val memoryDao: MemoryDao,
      */
     private fun List<MemoryChunk>.toImportEntities(needsReembedding: Boolean): List<MemoryChunkEntity> =
         mapNotNull { chunk ->
-            val embeddingString = converters.fromFloatArray(chunk.embedding) ?: return@mapNotNull null
+            val embeddingBlob = converters.fromFloatArray(chunk.embedding) ?: return@mapNotNull null
             MemoryChunkEntity(
                 id = chunk.id,
                 text = chunk.text,
-                embedding = embeddingString,
+                embedding = embeddingBlob,
                 timestamp = chunk.timestamp,
                 isPinned = chunk.isPinned,
                 source = chunk.source,
@@ -206,9 +209,9 @@ class MemoryRepositoryImpl @Inject constructor(private val memoryDao: MemoryDao,
         }
 
     override suspend fun markMemoryReembedded(id: Long, embedding: FloatArray) = withContext(Dispatchers.IO) {
-        val embeddingString = converters.fromFloatArray(embedding)
+        val embeddingBlob = converters.fromFloatArray(embedding)
             ?: throw IllegalArgumentException("Failed to serialize embedding")
-        memoryDao.markReembedded(id = id, embedding = embeddingString)
+        memoryDao.markReembedded(id = id, embedding = embeddingBlob)
     }
 
     override fun observeStats(): Flow<MemoryStats> = combine(
@@ -226,11 +229,12 @@ class MemoryRepositoryImpl @Inject constructor(private val memoryDao: MemoryDao,
 
     /**
      * Maps a persisted [MemoryChunkEntity] to its domain [MemoryChunk],
-     * deserialising the comma-encoded embedding. Returns `null` when the
-     * embedding column cannot be parsed so a single corrupt row is skipped
-     * rather than aborting the whole load.
+     * decoding the binary-encoded embedding. Returns `null` when the
+     * embedding blob carries no usable vector (empty marker or corrupt
+     * length) so a single bad row is skipped rather than aborting the
+     * whole load.
      *
-     * @return The domain chunk, or `null` if the embedding failed to deserialise.
+     * @return The domain chunk, or `null` if the embedding failed to decode.
      */
     private fun MemoryChunkEntity.toMemoryChunkOrNull(): MemoryChunk? {
         val embeddingArray = converters.toFloatArray(embedding) ?: return null
@@ -284,5 +288,8 @@ class MemoryRepositoryImpl @Inject constructor(private val memoryDao: MemoryDao,
          * candidates by recency would silently expire old facts.
          */
         const val SEARCH_POOL_WARN_THRESHOLD: Int = 5_000
+
+        /** Nanoseconds per millisecond, for the retrieval timing log. */
+        const val NANOS_PER_MILLI: Long = 1_000_000L
     }
 }

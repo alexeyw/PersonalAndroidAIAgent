@@ -18,6 +18,7 @@ This file maps the contents of the main application package.
     - `ApiKeyManager.kt` - API key manager.
     - `AppDatabase.kt` - Room database definition.
     - `Converters.kt` - Type converters for Room.
+    - `EmbeddingBlobCodec.kt` - Binary wire format of the `memory_chunks.embedding` BLOB column (little-endian IEEE-754 floats, no header; empty blob = "no usable embedding" marker); shared by `Converters` and the TEXT→BLOB migration so the encoding cannot drift.
     - `TagsCsv.kt` - Single comma-separated `tagsCsv` codec (encode/decode, trims + drops blanks) shared by every tag-bearing entity (`MemoryChunkEntity`, `PromptPresetEntity`, `PipelinePresetEntity`) so the separator/blank rules live in one place.
     - `DatabaseResetServiceImpl.kt` - Data-layer `DatabaseResetService`: quiesces the open helper (`runExclusive`), deletes the encrypted DB file (with journals), verifies it is gone (aborting with `DatabaseWipeFailedException` while keeping the passphrase otherwise), then deletes the stored passphrase — one user-confirmed wipe operation.
     - `DeferredPassphraseOpenHelperFactory.kt` - `SupportSQLiteOpenHelper.Factory` wrapper that defers the SQLCipher passphrase fetch to the first real database open, so a passphrase failure surfaces inside `AppInitializationUseCase` (splash recovery screen) instead of crashing Hilt injection; failed delegate construction is not cached (Retry support); rewraps SQLCipher's "file is not a database" wrong-key error as `KEY_MISMATCH`; `runExclusive` serializes the data wipe against concurrent opens.
