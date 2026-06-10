@@ -15,6 +15,14 @@ details.
 
 ### Added
 
+- **Startup recovery screen for locked data.** When the encryption key of
+  the local database cannot be read at startup, the splash screen now
+  shows a dedicated recovery surface instead of failing generically: a
+  plain-language explanation, a **Retry** action (keystore failures are
+  often transient — e.g. right after a backup/restore or an OS update),
+  and an explicit **Erase all data** action gated behind a typed
+  confirmation. The app never wipes or re-keys data automatically. See
+  *Troubleshooting* in [`docs/user-guide.md`](docs/user-guide.md).
 - **Public roadmap.** New [`docs/roadmap.md`](docs/roadmap.md) describes
   post-release directions across near / mid / long horizons — agent
   tool-set expansion (including evaluating file-oriented tools), the first
@@ -95,6 +103,32 @@ details.
   verification. **Note:** the first release-signed build uses a different
   signer than earlier debug-signed builds, so it cannot be installed over a
   debug-signed copy in place — see the *Pre-release notice* in the README.
+
+### Security
+
+- **Database passphrase can no longer be destroyed by a transient
+  keystore failure.** The store holding the SQLCipher passphrase
+  previously deleted and recreated itself whenever its encrypted
+  preferences failed to open — the recovery path appropriate for
+  re-enterable API keys, but fatal for the database key: a transient
+  Android Keystore failure would silently discard the passphrase and
+  leave the existing encrypted database permanently unreadable. The
+  passphrase is now generated only when no database file exists yet;
+  while a database is present, any failure to read the stored passphrase
+  (preferences unopenable, entry missing or malformed) raises a typed
+  error that routes to the new startup recovery screen instead of
+  regenerating — while no database exists, the old self-heal (recreate a
+  corrupt store) still applies, since nothing can be orphaned. A
+  key/file mismatch (database restored from another install) is detected
+  at open time and routed to the same recovery screen. The passphrase is
+  also no longer fetched during dependency injection on the main thread —
+  it is read lazily at the first real database open, where the failure
+  can be handled by UI; best-effort background maintenance paths skip
+  their work instead of crashing the process while the recovery screen
+  is up. The user-confirmed wipe is serialized against concurrent
+  database opens and deletes the passphrase only after the database file
+  is verifiably gone. The API-key store intentionally keeps its
+  recreate-on-corruption recovery (keys can be re-entered by the user).
 
 ## [0.4.0] - 2026-06-07
 

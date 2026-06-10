@@ -7,6 +7,7 @@ import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
 import app.knotwork.android.domain.repositories.MemoryRepository
 import app.knotwork.android.domain.services.MemoryReembedScheduler
+import kotlinx.coroutines.CancellationException
 import timber.log.Timber
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
@@ -57,7 +58,20 @@ class WorkManagerMemoryReembedScheduler @Inject constructor(
     }
 
     override suspend fun rearmIfPending() {
-        if (memoryRepository.countMemoriesNeedingReembedding() > 0) {
+        // Best-effort startup self-heal launched fire-and-forget from MainActivity and the
+        // foreground service, with no UI to surface a failure. The count is the first database
+        // access on those paths: when the DB cannot be opened (e.g. the SQLCipher passphrase is
+        // unavailable and the splash recovery screen is about to handle it), crashing the
+        // process here would preempt that recovery — skip the re-arm instead.
+        val pending = try {
+            memoryRepository.countMemoriesNeedingReembedding()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Timber.tag(TAG).w(e, "Skipping re-embed re-arm: pending-chunk count unavailable")
+            return
+        }
+        if (pending > 0) {
             Timber.tag(TAG).d("Pending re-embed chunks found on startup; re-arming the pass")
             schedule()
         }

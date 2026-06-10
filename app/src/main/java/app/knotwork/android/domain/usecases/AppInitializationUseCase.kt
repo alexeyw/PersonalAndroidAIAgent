@@ -1,5 +1,7 @@
 package app.knotwork.android.domain.usecases
 
+import app.knotwork.android.domain.models.DbPassphraseUnavailableException
+import app.knotwork.android.domain.models.InitFailureKind
 import app.knotwork.android.domain.models.InitProgress
 import app.knotwork.android.domain.models.InitStage
 import app.knotwork.android.domain.models.Result
@@ -108,15 +110,31 @@ class AppInitializationUseCase @Inject constructor(
         stage = InitStage.Failed(
             cause = cause.localizedMessage ?: cause.javaClass.simpleName,
             failedStage = stage,
+            failureKind = classifyFailure(cause),
         ),
         message = cause.localizedMessage ?: "Initialization failed",
         completedSteps = 0,
         totalSteps = TOTAL_STEPS,
     )
 
+    /**
+     * Walks the cause chain looking for [DbPassphraseUnavailableException]. Room and the
+     * SQLite open-helper stack may wrap the original throwable, so a direct type check on
+     * the caught exception is not enough.
+     */
+    private fun classifyFailure(cause: Throwable): InitFailureKind {
+        val isPassphraseUnavailable = generateSequence(cause) { it.cause }
+            .take(MAX_CAUSE_CHAIN_DEPTH)
+            .any { it is DbPassphraseUnavailableException }
+        return if (isPassphraseUnavailable) InitFailureKind.DB_PASSPHRASE_UNAVAILABLE else InitFailureKind.GENERIC
+    }
+
     private companion object {
         const val TAG = "AppInit"
         const val TOTAL_STEPS = 5
         const val MEMORY_PREFETCH_LIMIT = 10
+
+        /** Defensive bound for cause-chain traversal in case of cyclic causes. */
+        const val MAX_CAUSE_CHAIN_DEPTH = 20
     }
 }

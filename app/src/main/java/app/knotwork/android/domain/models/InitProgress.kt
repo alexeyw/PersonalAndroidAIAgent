@@ -35,8 +35,31 @@ sealed interface InitStage {
      *
      * @property cause Human-readable failure message.
      * @property failedStage The stage that failed, useful for diagnostics.
+     * @property failureKind Classification of the failure so the UI can pick
+     *   between the generic retry surface and a dedicated recovery screen.
      */
-    data class Failed(val cause: String, val failedStage: InitStage) : InitStage
+    data class Failed(
+        val cause: String,
+        val failedStage: InitStage,
+        val failureKind: InitFailureKind = InitFailureKind.GENERIC,
+    ) : InitStage
+}
+
+/**
+ * Coarse classification of a fatal initialization failure, used by the splash
+ * UI to decide which terminal surface to render.
+ */
+enum class InitFailureKind {
+    /** Any failure without special handling — rendered as message + Retry. */
+    GENERIC,
+
+    /**
+     * The SQLCipher passphrase is unavailable while an encrypted database
+     * exists ([DbPassphraseUnavailableException] somewhere in the cause
+     * chain). Rendered as a dedicated recovery screen with Retry and an
+     * explicit typed-confirm "reset all data" action.
+     */
+    DB_PASSPHRASE_UNAVAILABLE,
 }
 
 /**

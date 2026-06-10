@@ -110,6 +110,11 @@ project — `:app` consumes it as an `implementation` dependency.
       `KnotworkTextField`.
     - `KnotworkCompactSlider.kt` — 4×18 dp pill thumb + 4 dp track.
     - `KnotworkSegmentedControl.kt` — segmented row of filter chips.
+  - `dialogs/` — dialog components.
+    - `TypedConfirmDialog.kt` — canonical destructive typed-confirm dialog
+      (`TypedConfirmDialogState` payload + `typedConfirmMatches` keyword
+      rule). Shared by the Settings destructive actions and the splash
+      data-recovery wipe so the confirmation contract cannot drift.
   - `lists/` — `PipelineListRow` / `ToolListRow` / `MemoryEntryRow` /
     `KnotworkNavListRow` (leading-icon + title + chevron routing row) +
     previews.

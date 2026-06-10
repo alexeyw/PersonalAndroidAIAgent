@@ -20,6 +20,13 @@ import javax.inject.Singleton
  * Concrete implementation of [ApiKeyRepository] that securely stores API keys
  * using Android's EncryptedSharedPreferences.
  *
+ * **Recovery semantics — deliberately different from [EncryptedDbPassphraseProvider].**
+ * When the encrypted preferences file cannot be opened (e.g. the Keystore master key was lost
+ * during a backup/restore), this class deletes the corrupt store and recreates it empty. That
+ * is safe here because API keys are user-re-enterable: the worst outcome is the user pasting
+ * their keys again. The database passphrase provider must never do this — its secret cannot be
+ * re-derived, and destroying it would render the encrypted database permanently unreadable.
+ *
  * @property context The application context used to create the shared preferences.
  */
 @Singleton

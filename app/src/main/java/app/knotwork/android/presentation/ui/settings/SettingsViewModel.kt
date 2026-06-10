@@ -27,6 +27,7 @@ import app.knotwork.android.domain.usecases.MemoryImportUseCase
 import app.knotwork.android.domain.usecases.ReembedAllMemoriesUseCase
 import app.knotwork.android.domain.usecases.ResetSamplingDefaultsUseCase
 import app.knotwork.android.domain.usecases.TestBackendUseCase
+import app.knotwork.design.components.dialogs.typedConfirmMatches
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
@@ -761,8 +762,8 @@ class SettingsViewModel @Inject constructor(
 
     fun confirmDestructive() {
         val pending = _uiState.value.pendingDestructive ?: return
-        val keyword = appContext.getString(R.string.settings_destructive_typed_keyword)
-        if (!_uiState.value.destructiveTypedInput.trim().equals(keyword, ignoreCase = true)) return
+        val keyword = appContext.getString(R.string.destructive_typed_keyword)
+        if (!typedConfirmMatches(input = _uiState.value.destructiveTypedInput, keyword = keyword)) return
         when (pending) {
             PendingDestructiveAction.ClearMemory -> performClearMemory()
             PendingDestructiveAction.ResetSettings -> performResetSettings()

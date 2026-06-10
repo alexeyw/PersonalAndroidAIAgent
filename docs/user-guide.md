@@ -1080,6 +1080,28 @@ screen's search), work down this list:
   near-duplicates. If a fact didn't make the cut, add it by hand with
   **Save to memory** or the **Add memory** FAB.
 
+### "Your data can't be unlocked" appears at startup
+
+All local data is stored in an encrypted database whose key lives in
+Android's hardware keystore. In rare situations — typically right after
+restoring the app from a backup, after an OS update, or due to a
+transient keystore glitch — that key can become temporarily unreadable,
+and the app shows a dedicated recovery screen instead of starting:
+
+- **Tap Retry first — possibly more than once.** Keystore failures are
+  often transient; if the key becomes readable again, the app opens your
+  existing data untouched. Rebooting the device before another retry
+  helps in some cases.
+- **Erase all data is the last resort.** If retrying never gets past the
+  screen, the key is gone for good and the encrypted database can no
+  longer be opened by anyone — including the app itself. **Erase all
+  data** deletes the database and generates a fresh key so you can start
+  over. The action is irreversible and guarded by a typed confirmation.
+
+The app never deletes or re-keys your data automatically in this state:
+without the original key the database contents cannot be recovered, so
+the decision to wipe is always yours.
+
 ---
 
 ## See also

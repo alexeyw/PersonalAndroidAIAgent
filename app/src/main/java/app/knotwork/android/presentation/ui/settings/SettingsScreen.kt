@@ -422,7 +422,7 @@ private fun buildViewState(uiState: SettingsUiState, context: android.content.Co
                     R.string.settings_destructive_reset_body
                 },
             ),
-            keyword = stringResource(R.string.settings_destructive_typed_keyword),
+            keyword = stringResource(R.string.destructive_typed_keyword),
             hint = stringResource(R.string.settings_destructive_typed_hint),
             pendingInput = uiState.destructiveTypedInput,
             kind = if (kind == PendingDestructiveAction.ClearMemory) {

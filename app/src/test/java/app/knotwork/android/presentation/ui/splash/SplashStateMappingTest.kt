@@ -2,6 +2,8 @@ package app.knotwork.android.presentation.ui.splash
 
 import app.knotwork.design.screens.splash.SplashViewState
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -14,11 +16,26 @@ class SplashStateMappingTest {
 
     private val defaultMessage = "Starting…"
 
+    private val dataLockedTexts = DataLockedTexts(
+        title = "Your data can’t be unlocked",
+        body = "Explanation",
+        resetLabel = "Erase all data",
+        dialogTitle = "Erase all data?",
+        dialogBody = "Type RESET to confirm.",
+        dialogHint = "Type RESET to confirm",
+        dialogConfirm = "Erase everything",
+        dialogCancel = "Cancel",
+        keyword = "RESET",
+    )
+
+    private fun map(state: SplashUiState): SplashViewState =
+        state.toViewState(defaultMessage = defaultMessage, dataLockedTexts = dataLockedTexts)
+
     @Test
     fun `given pristine ui state when mapped then Initializing`() {
         val state = SplashUiState()
 
-        val result = state.toViewState(defaultMessage = defaultMessage)
+        val result = map(state)
 
         assertEquals(SplashViewState.Initializing, result)
     }
@@ -30,7 +47,7 @@ class SplashStateMappingTest {
             progressFraction = 0.42f,
         )
 
-        val result = state.toViewState(defaultMessage = defaultMessage)
+        val result = map(state)
 
         assertTrue(result is SplashViewState.Loading)
         result as SplashViewState.Loading
@@ -42,7 +59,7 @@ class SplashStateMappingTest {
     fun `given default message but non-zero progress when mapped then Loading with localised default`() {
         val state = SplashUiState(progressFraction = 0.10f)
 
-        val result = state.toViewState(defaultMessage = defaultMessage)
+        val result = map(state)
 
         assertTrue(result is SplashViewState.Loading)
         assertEquals(defaultMessage, (result as SplashViewState.Loading).message)
@@ -52,7 +69,7 @@ class SplashStateMappingTest {
     fun `given out-of-range progress when mapped then coerced into 0_1f`() {
         val state = SplashUiState(message = "x", progressFraction = 2f)
 
-        val result = state.toViewState(defaultMessage = defaultMessage)
+        val result = map(state)
 
         assertEquals(1f, (result as SplashViewState.Loading).progress, 0.001f)
     }
@@ -65,9 +82,57 @@ class SplashStateMappingTest {
             errorMessage = "model file missing",
         )
 
-        val result = state.toViewState(defaultMessage = defaultMessage)
+        val result = map(state)
 
         assertTrue(result is SplashViewState.Error)
         assertEquals("model file missing", (result as SplashViewState.Error).message)
+    }
+
+    @Test
+    fun `given data-locked state when mapped then DataLocked wins over generic error`() {
+        val state = SplashUiState(
+            errorMessage = "Database passphrase unavailable",
+            isDataLocked = true,
+        )
+
+        val result = map(state)
+
+        assertTrue(result is SplashViewState.DataLocked)
+        result as SplashViewState.DataLocked
+        assertEquals(dataLockedTexts.title, result.title)
+        assertEquals(dataLockedTexts.body, result.body)
+        assertEquals(dataLockedTexts.resetLabel, result.resetLabel)
+        assertNull(result.resetDialog)
+    }
+
+    @Test
+    fun `given data-locked state with open dialog when mapped then dialog payload carries typed input`() {
+        val state = SplashUiState(
+            errorMessage = "Database passphrase unavailable",
+            isDataLocked = true,
+            showResetDialog = true,
+            resetTypedInput = "RES",
+        )
+
+        val result = map(state)
+
+        result as SplashViewState.DataLocked
+        assertNotNull(result.resetDialog)
+        assertEquals("RES", result.resetDialog?.pendingInput)
+        assertEquals("RESET", result.resetDialog?.keyword)
+        assertEquals(dataLockedTexts.dialogTitle, result.resetDialog?.title)
+    }
+
+    @Test
+    fun `given resetting state when mapped then Loading instead of DataLocked`() {
+        val state = SplashUiState(
+            errorMessage = "Database passphrase unavailable",
+            isDataLocked = true,
+            isResetting = true,
+        )
+
+        val result = map(state)
+
+        assertTrue(result is SplashViewState.Loading)
     }
 }
