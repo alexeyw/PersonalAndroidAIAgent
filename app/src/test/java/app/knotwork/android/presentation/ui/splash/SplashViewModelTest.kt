@@ -1,8 +1,13 @@
 package app.knotwork.android.presentation.ui.splash
 
+import android.content.Context
+import app.knotwork.android.domain.models.InitFailureKind
 import app.knotwork.android.domain.models.InitProgress
 import app.knotwork.android.domain.models.InitStage
 import app.knotwork.android.domain.usecases.AppInitializationUseCase
+import app.knotwork.android.domain.usecases.ResetLockedDatabaseUseCase
+import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
@@ -25,25 +30,45 @@ import org.junit.Test
 
 /**
  * Verifies that [SplashViewModel] folds [InitProgress] emissions into the
- * UI state correctly across the success path, the failed path, and the
- * retry path.
+ * UI state correctly across the success path, the failed path, the retry
+ * path, and the data-locked recovery flow (typed-confirm full reset).
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class SplashViewModelTest {
 
     private val testDispatcher = StandardTestDispatcher()
+    private lateinit var appContext: Context
     private lateinit var appInitializationUseCase: AppInitializationUseCase
+    private lateinit var resetLockedDatabaseUseCase: ResetLockedDatabaseUseCase
 
     @Before
     fun setUp() {
         Dispatchers.setMain(testDispatcher)
+        appContext = mockk()
+        every { appContext.getString(any()) } returns RESET_KEYWORD
         appInitializationUseCase = mockk()
+        resetLockedDatabaseUseCase = mockk()
+        coEvery { resetLockedDatabaseUseCase() } returns Unit
     }
 
     @After
     fun tearDown() {
         Dispatchers.resetMain()
     }
+
+    private fun createViewModel(): SplashViewModel =
+        SplashViewModel(appContext, appInitializationUseCase, resetLockedDatabaseUseCase)
+
+    private fun passphraseFailure(): InitProgress = InitProgress(
+        stage = InitStage.Failed(
+            cause = "Database passphrase unavailable",
+            failedStage = InitStage.LoadingPipelines,
+            failureKind = InitFailureKind.DB_PASSPHRASE_UNAVAILABLE,
+        ),
+        message = "Database passphrase unavailable",
+        completedSteps = 0,
+        totalSteps = 5,
+    )
 
     @Test
     fun `given full successful run when collected then ends in done state`() = runTest {
@@ -56,7 +81,7 @@ class SplashViewModelTest {
             InitProgress(InitStage.Done, "Ready", 5, 5),
         )
 
-        val viewModel = SplashViewModel(appInitializationUseCase)
+        val viewModel = createViewModel()
         advanceUntilIdle()
 
         val state = viewModel.uiState.value
@@ -73,7 +98,7 @@ class SplashViewModelTest {
             InitProgress(InitStage.LoadingPipelines, "Reading pipelines…", 2, 5),
         )
 
-        val viewModel = SplashViewModel(appInitializationUseCase)
+        val viewModel = createViewModel()
         advanceUntilIdle()
 
         val state = viewModel.uiState.value
@@ -95,13 +120,14 @@ class SplashViewModelTest {
             ),
         )
 
-        val viewModel = SplashViewModel(appInitializationUseCase)
+        val viewModel = createViewModel()
         advanceUntilIdle()
 
         val state = viewModel.uiState.value
         assertFalse(state.isDone)
         assertNotNull(state.errorMessage)
         assertEquals("seed prompts failed", state.errorMessage)
+        assertFalse(state.isDataLocked)
     }
 
     @Test
@@ -126,7 +152,7 @@ class SplashViewModelTest {
             }
         }
 
-        val viewModel = SplashViewModel(appInitializationUseCase)
+        val viewModel = createViewModel()
         advanceUntilIdle()
         assertNotNull(viewModel.uiState.value.errorMessage)
 
@@ -144,7 +170,7 @@ class SplashViewModelTest {
         // A flow that never terminates so the VM stays in flight.
         every { appInitializationUseCase() } returns MutableSharedFlow<InitProgress>()
 
-        val viewModel = SplashViewModel(appInitializationUseCase)
+        val viewModel = createViewModel()
         advanceUntilIdle()
 
         // Retry while the run is in flight (errorMessage == null && !isDone)
@@ -154,5 +180,127 @@ class SplashViewModelTest {
 
         // Use case still invoked exactly once (the implicit init call).
         io.mockk.verify(exactly = 1) { appInitializationUseCase() }
+    }
+
+    @Test
+    fun `given passphrase failure when collected then state is data-locked`() = runTest {
+        every { appInitializationUseCase() } returns flowOf(passphraseFailure())
+
+        val viewModel = createViewModel()
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertTrue(state.isDataLocked)
+        assertNotNull(state.errorMessage)
+        assertFalse(state.showResetDialog)
+    }
+
+    @Test
+    fun `given data-locked state when reset requested and dismissed then dialog toggles`() = runTest {
+        every { appInitializationUseCase() } returns flowOf(passphraseFailure())
+        val viewModel = createViewModel()
+        advanceUntilIdle()
+
+        viewModel.requestReset()
+        assertTrue(viewModel.uiState.value.showResetDialog)
+
+        viewModel.updateResetTypedInput("RES")
+        assertEquals("RES", viewModel.uiState.value.resetTypedInput)
+
+        viewModel.dismissResetDialog()
+        assertFalse(viewModel.uiState.value.showResetDialog)
+        assertEquals("", viewModel.uiState.value.resetTypedInput)
+    }
+
+    @Test
+    fun `given non-matching typed input when confirmReset then wipe is not executed`() = runTest {
+        every { appInitializationUseCase() } returns flowOf(passphraseFailure())
+        val viewModel = createViewModel()
+        advanceUntilIdle()
+
+        viewModel.requestReset()
+        viewModel.updateResetTypedInput("nope")
+        viewModel.confirmReset()
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) { resetLockedDatabaseUseCase() }
+        assertTrue(viewModel.uiState.value.isDataLocked)
+    }
+
+    @Test
+    fun `given matching typed input when confirmReset then wipes and restarts initialization`() = runTest {
+        var invocationCount = 0
+        every { appInitializationUseCase() } answers {
+            invocationCount++
+            if (invocationCount == 1) {
+                flowOf(passphraseFailure())
+            } else {
+                flowOf(InitProgress(InitStage.Done, "Ready", 5, 5))
+            }
+        }
+
+        val viewModel = createViewModel()
+        advanceUntilIdle()
+        assertTrue(viewModel.uiState.value.isDataLocked)
+
+        viewModel.requestReset()
+        viewModel.updateResetTypedInput(RESET_KEYWORD)
+        viewModel.confirmReset()
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { resetLockedDatabaseUseCase() }
+        val state = viewModel.uiState.value
+        assertTrue(state.isDone)
+        assertFalse(state.isDataLocked)
+        assertEquals(2, invocationCount)
+    }
+
+    @Test
+    fun `given keyword in different case when confirmReset then still wipes`() = runTest {
+        var invocationCount = 0
+        every { appInitializationUseCase() } answers {
+            invocationCount++
+            if (invocationCount == 1) {
+                flowOf(passphraseFailure())
+            } else {
+                flowOf(InitProgress(InitStage.Done, "Ready", 5, 5))
+            }
+        }
+
+        val viewModel = createViewModel()
+        advanceUntilIdle()
+
+        viewModel.requestReset()
+        viewModel.updateResetTypedInput(" reset ")
+        viewModel.confirmReset()
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { resetLockedDatabaseUseCase() }
+        assertTrue(viewModel.uiState.value.isDone)
+    }
+
+    @Test
+    fun `given generic failure when confirmReset then is no-op`() = runTest {
+        every { appInitializationUseCase() } returns flowOf(
+            InitProgress(
+                stage = InitStage.Failed("boom", InitStage.LoadingPipelines),
+                message = "boom",
+                completedSteps = 0,
+                totalSteps = 5,
+            ),
+        )
+
+        val viewModel = createViewModel()
+        advanceUntilIdle()
+
+        viewModel.updateResetTypedInput(RESET_KEYWORD)
+        viewModel.confirmReset()
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) { resetLockedDatabaseUseCase() }
+    }
+
+    private companion object {
+        const val RESET_KEYWORD = "RESET"
     }
 }

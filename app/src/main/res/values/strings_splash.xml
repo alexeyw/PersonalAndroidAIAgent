@@ -1,4 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="splash_starting">Starting…</string>
+
+    <!-- Data-locked recovery surface (database passphrase unavailable). -->
+    <string name="splash_data_locked_title">Your data can’t be unlocked</string>
+    <string name="splash_data_locked_body">The encryption key protecting your local data could not be read. This is often temporary — for example right after restoring a backup or updating Android. Try again first. If the problem persists, the only way to keep using the app is to erase all local data and start fresh.</string>
+    <string name="splash_data_locked_reset">Erase all data</string>
+    <string name="splash_reset_dialog_title">Erase all data?</string>
+    <string name="splash_reset_dialog_body">This permanently deletes all chats, long-term memory, pipelines and presets stored on this device. This cannot be undone. Type %1$s to confirm.</string>
+    <string name="splash_reset_dialog_hint">Type %1$s to confirm</string>
+    <string name="splash_reset_typed_keyword" translatable="false">RESET</string>
+    <string name="splash_reset_dialog_confirm">Erase everything</string>
+    <string name="splash_reset_dialog_cancel">Cancel</string>
 </resources>

@@ -1,17 +1,23 @@
 package app.knotwork.android.presentation.ui.splash
 
+import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import app.knotwork.android.R
+import app.knotwork.android.domain.models.InitFailureKind
 import app.knotwork.android.domain.models.InitProgress
 import app.knotwork.android.domain.models.InitStage
 import app.knotwork.android.domain.usecases.AppInitializationUseCase
+import app.knotwork.android.domain.usecases.ResetLockedDatabaseUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import timber.log.Timber
 import javax.inject.Inject
 
 /**
@@ -19,10 +25,18 @@ import javax.inject.Inject
  * construction, maps each [InitProgress] into [SplashUiState], and exposes a
  * [retry] entry-point that re-runs the entire initialization pipeline after
  * a fatal failure.
+ *
+ * For the `DB_PASSPHRASE_UNAVAILABLE` failure kind it additionally drives the
+ * data-locked recovery surface: a typed-confirm dialog gating
+ * [ResetLockedDatabaseUseCase] (full wipe), followed by an automatic restart
+ * of the initialization pipeline against the now-empty data set.
  */
 @HiltViewModel
-class SplashViewModel @Inject constructor(private val appInitializationUseCase: AppInitializationUseCase) :
-    ViewModel() {
+class SplashViewModel @Inject constructor(
+    @ApplicationContext private val appContext: Context,
+    private val appInitializationUseCase: AppInitializationUseCase,
+    private val resetLockedDatabaseUseCase: ResetLockedDatabaseUseCase,
+) : ViewModel() {
 
     private val _uiState = MutableStateFlow(SplashUiState())
     val uiState: StateFlow<SplashUiState> = _uiState.asStateFlow()
@@ -57,6 +71,48 @@ class SplashViewModel @Inject constructor(private val appInitializationUseCase: 
         if (_uiState.value.errorMessage == null && !_uiState.value.isDone) return
         startInitialization()
     }
+
+    /** Opens the typed-confirm reset dialog on the data-locked surface. */
+    fun requestReset() {
+        if (!_uiState.value.isDataLocked) return
+        _uiState.update { it.copy(showResetDialog = true, resetTypedInput = "") }
+    }
+
+    /** Mirrors the live text of the typed-confirm field into the state. */
+    fun updateResetTypedInput(value: String) {
+        _uiState.update { it.copy(resetTypedInput = value) }
+    }
+
+    /** Closes the reset dialog without any action. */
+    fun dismissResetDialog() {
+        _uiState.update { it.copy(showResetDialog = false, resetTypedInput = "") }
+    }
+
+    /**
+     * Executes the full data wipe and restarts initialization. Guarded twice:
+     * the catalog dialog disables its confirm button until the typed keyword
+     * matches, and this method re-validates the input so a programmatic call
+     * can never bypass the confirmation contract.
+     */
+    fun confirmReset() {
+        val state = _uiState.value
+        if (!state.isDataLocked || state.isResetting) return
+        val keyword = appContext.getString(R.string.splash_reset_typed_keyword)
+        if (!state.resetTypedInput.trim().equals(keyword, ignoreCase = true)) return
+
+        initJob?.cancel()
+        _uiState.update { it.copy(isResetting = true, showResetDialog = false) }
+        viewModelScope.launch {
+            try {
+                resetLockedDatabaseUseCase()
+            } catch (e: Exception) {
+                // Even a failed wipe should fall through to a fresh init attempt:
+                // the next failure (if any) re-surfaces on the same screen.
+                Timber.e(e, "Data wipe failed; re-running initialization anyway.")
+            }
+            startInitialization()
+        }
+    }
 }
 
 /**
@@ -82,6 +138,7 @@ private fun SplashUiState.merge(progress: InitProgress): SplashUiState {
             progressFraction = fraction,
             isDone = false,
             errorMessage = stage.cause,
+            isDataLocked = stage.failureKind == InitFailureKind.DB_PASSPHRASE_UNAVAILABLE,
         )
         else -> SplashUiState(
             message = progress.message,

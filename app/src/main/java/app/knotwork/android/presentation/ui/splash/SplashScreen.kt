@@ -10,6 +10,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.knotwork.android.R
 import app.knotwork.design.screens.splash.SplashCallbacks
 import app.knotwork.design.screens.splash.SplashContent
+import app.knotwork.design.screens.splash.SplashResetDialogState
 import app.knotwork.design.screens.splash.SplashViewState
 
 /**
@@ -20,6 +21,10 @@ import app.knotwork.design.screens.splash.SplashViewState
  * On successful initialisation the screen invokes [onInitialized], which the
  * activity wires to a `popUpTo(splash) { inclusive = true }` navigation so
  * the splash route is removed from the back stack.
+ *
+ * When initialization fails because the database passphrase is unavailable,
+ * the screen renders the dedicated data-locked recovery surface instead of
+ * the generic error layout: explanation + Retry + typed-confirm full reset.
  *
  * @param onInitialized Invoked once when the use case reaches `InitStage.Done`.
  * @param viewModel Hilt-injected [SplashViewModel].
@@ -39,7 +44,19 @@ fun SplashScreen(
 
     val startingMessage = stringResource(R.string.splash_starting)
     val retryLabel = stringResource(R.string.common_retry)
-    val viewState = uiState.toViewState(defaultMessage = startingMessage)
+    val keyword = stringResource(R.string.splash_reset_typed_keyword)
+    val dataLockedTexts = DataLockedTexts(
+        title = stringResource(R.string.splash_data_locked_title),
+        body = stringResource(R.string.splash_data_locked_body),
+        resetLabel = stringResource(R.string.splash_data_locked_reset),
+        dialogTitle = stringResource(R.string.splash_reset_dialog_title),
+        dialogBody = stringResource(R.string.splash_reset_dialog_body, keyword),
+        dialogHint = stringResource(R.string.splash_reset_dialog_hint, keyword),
+        dialogConfirm = stringResource(R.string.splash_reset_dialog_confirm),
+        dialogCancel = stringResource(R.string.splash_reset_dialog_cancel),
+        keyword = keyword,
+    )
+    val viewState = uiState.toViewState(defaultMessage = startingMessage, dataLockedTexts = dataLockedTexts)
     val appName = stringResource(R.string.app_name)
 
     SplashContent(
@@ -47,9 +64,41 @@ fun SplashScreen(
         state = viewState,
         modifier = modifier,
         retryLabel = retryLabel,
-        callbacks = SplashCallbacks(onRetry = viewModel::retry),
+        callbacks = SplashCallbacks(
+            onRetry = viewModel::retry,
+            onResetRequest = viewModel::requestReset,
+            onResetInputChange = viewModel::updateResetTypedInput,
+            onResetConfirm = viewModel::confirmReset,
+            onResetDismiss = viewModel::dismissResetDialog,
+        ),
     )
 }
+
+/**
+ * Pre-resolved string resources of the data-locked recovery surface, bundled
+ * so [toViewState] stays a pure mapping function testable without Compose.
+ *
+ * @property title headline of the recovery surface.
+ * @property body plain-language explanation paragraph.
+ * @property resetLabel label of the destructive reset button.
+ * @property dialogTitle reset dialog headline.
+ * @property dialogBody reset dialog warning text (keyword already substituted).
+ * @property dialogHint typed-confirm field placeholder (keyword substituted).
+ * @property dialogConfirm label of the dialog's destructive confirm button.
+ * @property dialogCancel label of the dialog's dismiss button.
+ * @property keyword token the user must type to arm the confirm button.
+ */
+internal data class DataLockedTexts(
+    val title: String,
+    val body: String,
+    val resetLabel: String,
+    val dialogTitle: String,
+    val dialogBody: String,
+    val dialogHint: String,
+    val dialogConfirm: String,
+    val dialogCancel: String,
+    val keyword: String,
+)
 
 /**
  * Map the cold-start [SplashUiState] onto the catalog
@@ -57,15 +106,36 @@ fun SplashScreen(
  *
  * @param defaultMessage placeholder text shown while the use case has not
  * yet emitted a localised status.
+ * @param dataLockedTexts pre-resolved strings for the data-locked surface.
  */
-internal fun SplashUiState.toViewState(defaultMessage: String): SplashViewState = when {
-    errorMessage != null -> SplashViewState.Error(message = errorMessage)
-    message == SplashUiState.DEFAULT_STARTING_MESSAGE && progressFraction == 0f -> SplashViewState.Initializing
-    else -> {
-        val displayed = if (message == SplashUiState.DEFAULT_STARTING_MESSAGE) defaultMessage else message
-        SplashViewState.Loading(
-            message = displayed,
-            progress = progressFraction.coerceIn(minimumValue = 0f, maximumValue = 1f),
+internal fun SplashUiState.toViewState(defaultMessage: String, dataLockedTexts: DataLockedTexts): SplashViewState =
+    when {
+        isResetting -> SplashViewState.Loading(message = defaultMessage, progress = 0f)
+        isDataLocked -> SplashViewState.DataLocked(
+            title = dataLockedTexts.title,
+            body = dataLockedTexts.body,
+            resetLabel = dataLockedTexts.resetLabel,
+            resetDialog = if (showResetDialog) {
+                SplashResetDialogState(
+                    title = dataLockedTexts.dialogTitle,
+                    body = dataLockedTexts.dialogBody,
+                    keyword = dataLockedTexts.keyword,
+                    hint = dataLockedTexts.dialogHint,
+                    pendingInput = resetTypedInput,
+                    confirmLabel = dataLockedTexts.dialogConfirm,
+                    cancelLabel = dataLockedTexts.dialogCancel,
+                )
+            } else {
+                null
+            },
         )
+        errorMessage != null -> SplashViewState.Error(message = errorMessage)
+        message == SplashUiState.DEFAULT_STARTING_MESSAGE && progressFraction == 0f -> SplashViewState.Initializing
+        else -> {
+            val displayed = if (message == SplashUiState.DEFAULT_STARTING_MESSAGE) defaultMessage else message
+            SplashViewState.Loading(
+                message = displayed,
+                progress = progressFraction.coerceIn(minimumValue = 0f, maximumValue = 1f),
+            )
+        }
     }
-}

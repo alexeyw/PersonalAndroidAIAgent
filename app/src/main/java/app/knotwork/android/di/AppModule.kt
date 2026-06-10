@@ -9,6 +9,7 @@ import androidx.room.Room
 import androidx.work.WorkManager
 import app.knotwork.android.data.local.AppDatabase
 import app.knotwork.android.data.local.Converters
+import app.knotwork.android.data.local.DeferredPassphraseOpenHelperFactory
 import app.knotwork.android.data.local.EncryptedDbPassphraseProvider
 import app.knotwork.android.data.local.dao.ChatDao
 import app.knotwork.android.data.local.dao.LocalModelDao
@@ -48,7 +49,6 @@ import javax.inject.Singleton
 object AppModule {
 
     private const val USER_PREFERENCES_NAME = "agent_preferences"
-    private const val DATABASE_NAME = "agent_database.db"
 
     /**
      * Provides the singleton instance of the DataStore preferences.
@@ -81,6 +81,13 @@ object AppModule {
      * Legacy plaintext databases from pre-SQLCipher development builds (which predate the public
      * release) are not supported: SQLCipher cannot open them and there is no downgrade path to
      * recreate them. This affects only such dev installs, never a released version.
+     *
+     * **Passphrase deferral.** The passphrase is intentionally NOT fetched here: this provider
+     * runs synchronously during Hilt injection (often on the main thread while a ViewModel is
+     * being constructed), so a passphrase failure here would crash the app before any UI error
+     * handling exists. [DeferredPassphraseOpenHelperFactory] postpones the fetch to the first
+     * real database open, where `AppInitializationUseCase` catches the failure and routes it to
+     * the splash recovery screen.
      */
     @Provides
     @Singleton
@@ -94,15 +101,16 @@ object AppModule {
         // idempotent, so calling it here (inside the @Singleton provider) is safe.
         System.loadLibrary("sqlcipher")
 
-        val passphrase = passphraseProvider.getOrCreatePassphrase()
-
-        // SupportOpenHelperFactory zeroes the byte array after consumption.
-        val factory = SupportOpenHelperFactory(passphrase)
+        // SupportOpenHelperFactory zeroes the passphrase byte array after consumption; the
+        // deferred wrapper hands it a fresh copy at first-open time.
+        val factory = DeferredPassphraseOpenHelperFactory(passphraseProvider) { passphrase ->
+            SupportOpenHelperFactory(passphrase)
+        }
 
         return Room.databaseBuilder(
             appContext,
             AppDatabase::class.java,
-            DATABASE_NAME,
+            AppDatabase.DATABASE_NAME,
         )
             .openHelperFactory(factory)
             .addMigrations(

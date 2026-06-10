@@ -6,6 +6,7 @@ import app.knotwork.android.data.engine.MediaPipeTextEmbeddingEngine
 import app.knotwork.android.data.engine.TaskQueueManagerImpl
 import app.knotwork.android.data.engine.TextEmbedderFactory
 import app.knotwork.android.data.local.ApiKeyManager
+import app.knotwork.android.data.local.DatabaseResetServiceImpl
 import app.knotwork.android.data.local.SettingsManager
 import app.knotwork.android.data.mcp.KoogMcpClientFactory
 import app.knotwork.android.data.mcp.McpClientFactory
@@ -50,6 +51,7 @@ import app.knotwork.android.domain.repositories.PromptPresetRepository
 import app.knotwork.android.domain.repositories.PromptRepository
 import app.knotwork.android.domain.repositories.SettingsRepository
 import app.knotwork.android.domain.repositories.ToolRepository
+import app.knotwork.android.domain.services.DatabaseResetService
 import app.knotwork.android.domain.services.LongRunningTaskNotifier
 import app.knotwork.android.domain.services.MemoryReembedScheduler
 import dagger.Binds
@@ -77,6 +79,13 @@ abstract class DataModule {
     @Binds
     @Singleton
     abstract fun bindApiKeyRepository(apiKeyManager: ApiKeyManager): ApiKeyRepository
+
+    /**
+     * Binds the [DatabaseResetServiceImpl] implementation to the [DatabaseResetService] interface.
+     */
+    @Binds
+    @Singleton
+    abstract fun bindDatabaseResetService(service: DatabaseResetServiceImpl): DatabaseResetService
 
     /**
      * Binds the [LocalModelRepositoryImpl] implementation to the [LocalModelRepository] interface.

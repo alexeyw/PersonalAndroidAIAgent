@@ -116,6 +116,14 @@ abstract class AppDatabase : RoomDatabase() {
 
     companion object {
         /**
+         * Canonical on-disk file name of the encrypted Room database. Single
+         * source of truth shared by the Hilt provider, the passphrase
+         * provider's "does the database already exist" invariant check, and
+         * the explicit wipe path — so the three can never drift apart.
+         */
+        const val DATABASE_NAME: String = "agent_database.db"
+
+        /**
          * Migration from version 9 to 10.
          * Adds the `prompt_templates` table.
          */

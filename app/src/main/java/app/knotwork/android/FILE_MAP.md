@@ -19,7 +19,9 @@ This file maps the contents of the main application package.
     - `AppDatabase.kt` - Room database definition.
     - `Converters.kt` - Type converters for Room.
     - `TagsCsv.kt` - Single comma-separated `tagsCsv` codec (encode/decode, trims + drops blanks) shared by every tag-bearing entity (`MemoryChunkEntity`, `PromptPresetEntity`, `PipelinePresetEntity`) so the separator/blank rules live in one place.
-    - `EncryptedDbPassphraseProvider.kt` - Provides the SQLCipher passphrase stored in EncryptedSharedPreferences.
+    - `DatabaseResetServiceImpl.kt` - Data-layer `DatabaseResetService`: deletes the encrypted DB file (with journals) and the stored passphrase in one user-confirmed wipe operation.
+    - `DeferredPassphraseOpenHelperFactory.kt` - `SupportSQLiteOpenHelper.Factory` wrapper that defers the SQLCipher passphrase fetch to the first real database open, so a passphrase failure surfaces inside `AppInitializationUseCase` (splash recovery screen) instead of crashing Hilt injection; failed delegate construction is not cached (Retry support).
+    - `EncryptedDbPassphraseProvider.kt` - Provides the SQLCipher passphrase stored in EncryptedSharedPreferences. Loss-protection invariant: generates only when no DB file exists; otherwise any read failure throws `DbPassphraseUnavailableException` instead of regenerating (regeneration would orphan the encrypted DB).
     - `McpServerCollisionCheck.kt` - Pure helper that detects when an `updateMcpServer` call would persist a duplicate URL row (editing server A's URL to match an existing server B's URL). Extracted from `SettingsManager.updateMcpServer` so the decision matrix is unit-testable without DataStore plumbing.
     - `SettingsManager.kt` - App settings manager.
     - `dao/` - Data Access Objects (DAOs).
@@ -173,7 +175,8 @@ This file maps the contents of the main application package.
     - `CloudProvider.kt` - Typed enum identifying the cloud LLM providers the agent can dispatch to (`openai`, `anthropic`, `google`, `deepseek`, `ollama`); owns `fromId` parsing with legacy `"gemini"` alias and the `AUTO_KEY` UI sentinel.
     - `ConnectionModel.kt` - Connection model.
     - `ConsoleEvent.kt` - Domain model of a single agent-console entry (`timestamp`, `type`, `message`) with `ConsoleEventType` sealed interface (`NodeExecution`, `ToolCall`, `MemoryAccess`, `SystemMessage`, `Error`).
-    - `InitProgress.kt` - Domain model of cold-start progress (`stage`, `message`, `completedSteps`, `totalSteps`) plus `InitStage` sealed interface (Initializing, LoadingModel, LoadingPipelines, LoadingChats, LoadingMemory, Done, Failed) consumed by the splash screen.
+    - `DbPassphraseUnavailableException.kt` - Typed exception raised when the SQLCipher passphrase cannot be read while an encrypted DB file exists (`Reason`: PREFS_OPEN_FAILED / PASSPHRASE_MISSING / PASSPHRASE_MALFORMED); routes to the splash data-locked recovery screen.
+    - `InitProgress.kt` - Domain model of cold-start progress (`stage`, `message`, `completedSteps`, `totalSteps`) plus `InitStage` sealed interface (Initializing, LoadingModel, LoadingPipelines, LoadingChats, LoadingMemory, Done, Failed) and `InitFailureKind` (GENERIC / DB_PASSPHRASE_UNAVAILABLE) consumed by the splash screen.
     - `DownloadState.kt` - Download state model.
     - `Identity.kt` - Snapshot of the device-local identity (display name, 8-hex device id, AndroidKeyStore availability) shown on the Settings identity card.
     - `LocalBackend.kt` - Typed enum for the on-device LiteRT execution backend (CPU/GPU/NPU); owns the persisted wire keys via `LocalBackend.key`.
@@ -239,6 +242,7 @@ This file maps the contents of the main application package.
     - `ToolRepository.kt` - Tool repository interface.
   - `services/` - Domain-level services.
     - `ApprovalNotifier.kt` - Notifier for approval requests.
+    - `DatabaseResetService.kt` - Domain seam for the explicit, user-confirmed full data wipe (encrypted DB + stored passphrase) offered by the splash data-locked recovery screen; data-layer impl: `DatabaseResetServiceImpl`.
     - `EmbeddingProvider.kt` - Text-embedding backend abstraction (`embed` / `dimension` / `id` / `displayName`) + provider-id constants and `EmbeddingException`.
     - `EmbeddingProviderResolver.kt` - Resolves the active `EmbeddingProvider` from the Hilt map and `SettingsRepository.activeEmbeddingProviderId`, falling back to on-device USE.
     - `KMeansClusterer.kt` - Deterministic k-means clusterer over embedding vectors (farthest-first seeding, cosine distance, no randomness). Groups stale memory chunks for `MemoryCompactionUseCase`; `k = max(1, floor(sqrt(N) / 2))`.
@@ -248,7 +252,8 @@ This file maps the contents of the main application package.
     - `MemoryReranker.kt` - Pure, clock-free re-ranker for long-term-memory search hits. Re-scores `(MemoryChunk, similarity)` pairs with recency decay (half-life-based), a flat pinned boost (+0.2, hard-sorted to the top and threshold-exempt), 80-char-prefix deduplication (newest survivor), and a final-score threshold filter. Used by `RetrieveRelevantMemoryUseCase`; the caller supplies `nowMillis`.
   - `usecases/` - Business logic Use Cases.
     - `AgentOrchestratorUseCase.kt` - Use case for agent orchestration.
-    - `AppInitializationUseCase.kt` - Cold-start orchestrator: streams `InitProgress` snapshots while running first-launch defaults, loading the LiteRT model, and prefetching pipelines / chat sessions / memory summaries. Drives the splash screen.
+    - `AppInitializationUseCase.kt` - Cold-start orchestrator: streams `InitProgress` snapshots while running first-launch defaults, loading the LiteRT model, and prefetching pipelines / chat sessions / memory summaries. Classifies fatal failures (`InitFailureKind`) by walking the cause chain for `DbPassphraseUnavailableException`. Drives the splash screen.
+    - `ResetLockedDatabaseUseCase.kt` - Wraps `DatabaseResetService` for the splash recovery screen's typed-confirm "erase all data" action.
     - `EvaluateIfConditionUseCase.kt` - Use case for evaluating IF condition nodes.
     - `GetContextWindowUseCase.kt` - Use case to get context window.
     - `GetPromptTemplatesUseCase.kt` - Streams all prompt templates, seeding the bundled defaults on first observation when the table is empty.
