@@ -551,6 +551,49 @@ class ChatHomeViewModelTest {
     }
 
     @Test
+    fun `pipelineName is null when session is unbound and no default is marked`() = runTest(testDispatcher) {
+        viewModel = createViewModel()
+        advanceUntilIdle()
+        pipelinesFlow.value = listOf(
+            PipelineGraph(id = "p1", name = "First"),
+            PipelineGraph(id = "p2", name = "Second"),
+        )
+        defaultPipelineIdFlow.value = null
+        advanceUntilIdle()
+
+        // No order-dependent "first in the library" fallback: the subtitle
+        // must not advertise a pipeline that execution would never pick.
+        assertNull(viewModel.pipelineName.value)
+    }
+
+    @Test
+    fun `selectThread rebinds a stale pipeline binding and emits the fallback event`() = runTest(testDispatcher) {
+        viewModel = createViewModel()
+        advanceUntilIdle()
+        pipelinesFlow.value = listOf(PipelineGraph(id = "real-id", name = "Real"))
+        advanceUntilIdle()
+        // A thread whose binding points at an id that no longer exists in
+        // the library. While it is not the active session the observers
+        // leave it untouched.
+        val target = "thread-stale"
+        sessionsFlow.value = sessionsFlow.value +
+            ChatSession(id = target, name = "Stale", updatedAt = 0, pipelineId = "ghost-id")
+        advanceUntilIdle()
+        // Await the one-shot event on the foreground test scope. Subscribe
+        // before the switch — the event flow has no replay, so a late
+        // subscriber would miss it.
+        val fallbackEvent = async { viewModel.pipelineFallbackEvents.first() }
+        testScheduler.runCurrent()
+
+        viewModel.selectThread(target)
+        advanceUntilIdle()
+
+        val rebound = sessionsFlow.value.first { it.id == target }
+        assertNull("Stale binding must be cleared on thread switch", rebound.pipelineId)
+        assertTrue("Fallback Snackbar event must fire on rebind", fallbackEvent.isCompleted)
+    }
+
+    @Test
     fun `openDrawer + closeDrawer with no messages settles back on Empty`() = runTest(testDispatcher) {
         viewModel = createViewModel()
         advanceUntilIdle()

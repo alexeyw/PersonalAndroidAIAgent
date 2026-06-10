@@ -400,9 +400,10 @@ interface SettingsRepository {
 
     /**
      * A [Flow] representing the id of the pipeline the user has marked as
-     * default. `null` means no explicit choice — callers should fall back
-     * to the first pipeline returned by `PipelineRepository.getAllPipelines()`
-     * (the same convention used before this setting was introduced).
+     * default. `null` means no explicit choice — chats without their own
+     * binding then have no pipeline to execute against and the task queue
+     * fails such runs with an explicit error (it never silently picks an
+     * arbitrary pipeline from the library).
      *
      * Set on first launch by `InitializeAppUseCase` to the seeded
      * `Default System Pipeline` so the default is unambiguous from the
@@ -412,8 +413,8 @@ interface SettingsRepository {
 
     /**
      * Updates the user-marked default pipeline id. Pass `null` to clear
-     * the marker (the resolution then falls back to the first pipeline
-     * in the library).
+     * the marker (unbound chats then refuse to run until a new default
+     * is marked or the chat is bound explicitly).
      *
      * @param pipelineId Pipeline id to mark as default, or `null` to clear.
      */

@@ -383,6 +383,14 @@ When you create a new chat from the drawer, you can attach a specific
 pipeline to it. Chats without an explicit binding fall back to the
 default pipeline marked in the library.
 
+If no pipeline is marked as default (for example after deleting the one
+that was), an unbound chat refuses to run and shows an explicit error
+instead of silently picking an arbitrary pipeline from the library. To
+fix it, mark a default via the pipeline card's `⋮` menu in the library,
+or bind a pipeline to the chat directly. If a chat's bound pipeline has
+been deleted, the chat is rebound to the default and a brief
+notification tells you the selection moved.
+
 ### Visual editor
 
 Loading a pipeline opens the **Pipeline editor**. The editor surface

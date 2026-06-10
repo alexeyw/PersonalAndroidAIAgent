@@ -188,10 +188,11 @@ class ChatHomeViewModel @Inject constructor(
     val streamingTokens: StateFlow<Int> = _streamingTokens.asStateFlow()
 
     /**
-     * One-shot signal raised when the pipeline bound to the active chat
-     * disappears from the library and the binding silently falls back to
-     * the default pipeline. The screen surfaces a `KnotworkSnackbar` so
-     * the user is told their selection moved.
+     * One-shot signal raised when the binding of the active chat points
+     * at a pipeline that no longer exists in the library (deleted, or
+     * stale at thread-switch time) and the chat is rebound to the default
+     * pipeline. The screen surfaces a `KnotworkSnackbar` so the user is
+     * told their selection moved — the rebind is never silent.
      */
     val pipelineFallbackEvents: SharedFlow<Unit> = _pipelineFallbackEvents.asSharedFlow()
 
@@ -506,6 +507,12 @@ class ChatHomeViewModel @Inject constructor(
         observeMessages(threadId)
         viewModelScope.launch {
             settingsRepository.setCurrentChatSessionId(threadId)
+            // The pipelines / sessions flows do not re-emit on a thread
+            // switch, so a binding that went stale since their last
+            // emission would otherwise reach the task queue silently.
+            // Re-running the deleted-binding check here rebinds the chat
+            // to the default and surfaces the one-shot Snackbar instead.
+            handleDeletedBoundPipeline(availablePipelines)
         }
     }
 
@@ -675,8 +682,8 @@ class ChatHomeViewModel @Inject constructor(
      *     the bound pipeline name.
      *  2. Recomputing the TopAppBar subtitle ([pipelineName]).
      *  3. Detecting deletion of the pipeline bound to the active chat
-     *     and silently rebinding it to the default pipeline, surfacing
-     *     a one-shot Snackbar via [pipelineFallbackEvents].
+     *     and rebinding it to the default pipeline, surfacing a one-shot
+     *     Snackbar via [pipelineFallbackEvents].
      */
     private fun observeAvailablePipelines() {
         viewModelScope.launch {
@@ -1104,12 +1111,16 @@ class ChatHomeViewModel @Inject constructor(
     }
 
     /**
-     * Rebinds the active chat to the default pipeline when the bound
-     * pipeline disappears from the library. No-op while the pipeline
-     * flow has not produced its initial snapshot — without this guard a
-     * startup race would misread the empty initial `availablePipelines`
-     * as "the bound pipeline no longer exists" and silently rebind every
-     * chat to the default.
+     * Rebinds the active chat to the default pipeline when its binding
+     * points at a pipeline that no longer exists in the library, and
+     * raises the one-shot [pipelineFallbackEvents] Snackbar. Invoked from
+     * the pipelines / sessions observers (deletion while the chat is
+     * active) and from [selectThread] (binding already stale when the
+     * thread is opened). No-op while the pipeline flow has not produced
+     * its initial snapshot — without this guard a startup race would
+     * misread the empty initial `availablePipelines` as "the bound
+     * pipeline no longer exists" and silently rebind every chat to the
+     * default.
      */
     private suspend fun handleDeletedBoundPipeline(summaries: List<PipelineSummary>) {
         if (!availablePipelinesObserved) return
@@ -1132,9 +1143,10 @@ class ChatHomeViewModel @Inject constructor(
 
     /**
      * Resolves the pipeline display name for the active chat — explicit
-     * binding when set, otherwise the user-marked default (or the first
-     * pipeline in the library as a final fallback). Returns `null` only
-     * when the pipeline library is still empty.
+     * binding when set, otherwise the user-marked default. Returns `null`
+     * when neither resolves (empty library, or no default marked): the
+     * subtitle must not advertise a pipeline that execution would never
+     * pick, so there is no order-dependent "first in the library" fallback.
      */
     private fun resolvePipelineName(
         sessions: List<ChatSession>,
@@ -1147,8 +1159,7 @@ class ChatHomeViewModel @Inject constructor(
         val boundId = session?.pipelineId
         val boundMatch = boundId?.let { id -> summaries.firstOrNull { it.id == id } }
         if (boundMatch != null) return boundMatch.name
-        val defaultMatch = defaultPipelineId?.let { id -> summaries.firstOrNull { it.id == id } }
-        return (defaultMatch ?: summaries.first()).name
+        return defaultPipelineId?.let { id -> summaries.firstOrNull { it.id == id } }?.name
     }
 
     /** Refreshes thread title + pipeline subtitle from the latest session/pipeline caches. */

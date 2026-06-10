@@ -7,6 +7,7 @@ import app.knotwork.android.domain.models.PipelineGraph
 import app.knotwork.android.domain.models.TaskPriority
 import app.knotwork.android.domain.repositories.ChatRepository
 import app.knotwork.android.domain.repositories.PipelineRepository
+import app.knotwork.android.domain.repositories.SettingsRepository
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
@@ -38,6 +39,7 @@ class TaskQueueManagerImplTest {
 
     private lateinit var chatRepository: ChatRepository
     private lateinit var pipelineRepository: PipelineRepository
+    private lateinit var settingsRepository: SettingsRepository
     private lateinit var graphExecutionEngine: GraphExecutionEngine
 
     private lateinit var taskQueueManager: TaskQueueManagerImpl
@@ -48,14 +50,20 @@ class TaskQueueManagerImplTest {
 
         chatRepository = mockk(relaxed = true)
         pipelineRepository = mockk()
+        settingsRepository = mockk()
         graphExecutionEngine = mockk()
 
-        val mockPipeline = mockk<PipelineGraph>()
-        every { pipelineRepository.getAllPipelines() } returns flowOf(listOf(mockPipeline))
+        // Baseline library: a single pipeline marked as the user default, so
+        // tests that exercise unrelated behaviour (eviction, cancellation)
+        // resolve a pipeline without caring about the resolution chain.
+        val seedPipeline = PipelineGraph(id = "seed-id", name = "Seed")
+        every { pipelineRepository.getAllPipelines() } returns flowOf(listOf(seedPipeline))
+        every { settingsRepository.defaultPipelineId } returns flowOf("seed-id")
 
         taskQueueManager = TaskQueueManagerImpl(
             chatRepository = chatRepository,
             pipelineRepository = pipelineRepository,
+            settingsRepository = settingsRepository,
             graphExecutionEngine = graphExecutionEngine,
         ).apply {
             dispatcher = testDispatcher
@@ -161,15 +169,20 @@ class TaskQueueManagerImplTest {
     }
 
     /**
-     * When the bound pipeline has been deleted while the task
-     * waited in the queue, fall back to the default pipeline rather than
-     * failing the task. The chat-level UI handles the "deleted pipeline"
-     * Snackbar fallback separately.
+     * When the bound pipeline has been deleted while the task waited in
+     * the queue, fall back to the user-marked default rather than failing
+     * the task. The chat-level UI handles the rebind + Snackbar
+     * notification separately. The default is deliberately not the first
+     * element of the library to prove the resolution is order-independent.
      */
     @Test
-    fun `enqueueTask falls back to first pipeline when bound id is missing`() = testScope.runTest {
+    fun `enqueueTask falls back to user default when bound id is missing`() = testScope.runTest {
+        val otherPipeline = PipelineGraph(id = "other-id", name = "Other")
         val defaultPipeline = PipelineGraph(id = "default-id", name = "Default")
-        every { pipelineRepository.getAllPipelines() } returns flowOf(listOf(defaultPipeline))
+        every { pipelineRepository.getAllPipelines() } returns flowOf(
+            listOf(otherPipeline, defaultPipeline),
+        )
+        every { settingsRepository.defaultPipelineId } returns flowOf("default-id")
         every {
             graphExecutionEngine.invoke(any(), any(), any())
         } returns flowOf(AgentOrchestratorState.Completed("ok"))
@@ -194,17 +207,19 @@ class TaskQueueManagerImplTest {
     }
 
     /**
-     * When the task carries no `pipelineId`, the queue uses
-     * the application-wide default (the first pipeline returned by the
-     * repository), preserving the pre-Phase-17.2 behaviour.
+     * When the task carries no `pipelineId`, the queue uses the
+     * user-marked default from `SettingsRepository.defaultPipelineId` —
+     * never "whatever the repository returned first". The default sits
+     * last in the library to prove the order does not matter.
      */
     @Test
     fun `enqueueTask uses default pipeline when task has no pipelineId`() = testScope.runTest {
-        val defaultPipeline = PipelineGraph(id = "default-id", name = "Default")
         val otherPipeline = PipelineGraph(id = "other-id", name = "Other")
+        val defaultPipeline = PipelineGraph(id = "default-id", name = "Default")
         every { pipelineRepository.getAllPipelines() } returns flowOf(
-            listOf(defaultPipeline, otherPipeline),
+            listOf(otherPipeline, defaultPipeline),
         )
+        every { settingsRepository.defaultPipelineId } returns flowOf("default-id")
         every {
             graphExecutionEngine.invoke(any(), any(), any())
         } returns flowOf(AgentOrchestratorState.Completed("ok"))
@@ -226,6 +241,93 @@ class TaskQueueManagerImplTest {
                 match<PipelineGraph> { it.id == "default-id" },
             )
         }
+    }
+
+    /**
+     * No binding and no configured default must surface an explicit,
+     * actionable `Error` — even though the library is non-empty, the
+     * queue never executes an arbitrary pipeline.
+     */
+    @Test
+    fun `enqueueTask errors when no binding and no default configured`() = testScope.runTest {
+        val pipelines = listOf(
+            PipelineGraph(id = "a-id", name = "A"),
+            PipelineGraph(id = "b-id", name = "B"),
+        )
+        every { pipelineRepository.getAllPipelines() } returns flowOf(pipelines)
+        every { settingsRepository.defaultPipelineId } returns flowOf(null)
+
+        val task = AgentTask(
+            sessionId = "session-no-default",
+            prompt = "go",
+            priority = TaskPriority.NORMAL,
+            pipelineId = null,
+        )
+
+        taskQueueManager.enqueueTask(task)
+        advanceUntilIdle()
+
+        val state = taskQueueManager.observeTaskState("session-no-default").first()
+        assertTrue("Expected Error, got $state", state is AgentOrchestratorState.Error)
+        assertEquals(
+            "No default pipeline configured. Set one in Settings or bind a pipeline to this chat.",
+            (state as AgentOrchestratorState.Error).message,
+        )
+        verify(exactly = 0) { graphExecutionEngine.invoke(any(), any(), any()) }
+    }
+
+    /**
+     * A stale binding combined with a missing default has nothing left in
+     * the resolution chain — the task fails with the same explicit error
+     * instead of silently substituting a library pipeline.
+     */
+    @Test
+    fun `enqueueTask errors when bound id is missing and no default configured`() = testScope.runTest {
+        every { pipelineRepository.getAllPipelines() } returns flowOf(
+            listOf(PipelineGraph(id = "a-id", name = "A")),
+        )
+        every { settingsRepository.defaultPipelineId } returns flowOf(null)
+
+        val task = AgentTask(
+            sessionId = "session-orphaned-no-default",
+            prompt = "go",
+            priority = TaskPriority.NORMAL,
+            pipelineId = "missing-id",
+        )
+
+        taskQueueManager.enqueueTask(task)
+        advanceUntilIdle()
+
+        val state = taskQueueManager.observeTaskState("session-orphaned-no-default").first()
+        assertTrue("Expected Error, got $state", state is AgentOrchestratorState.Error)
+        verify(exactly = 0) { graphExecutionEngine.invoke(any(), any(), any()) }
+    }
+
+    /**
+     * An empty pipeline library keeps its own, more specific error copy —
+     * "Set one in Settings" would be misleading when there is nothing to
+     * set a default to.
+     */
+    @Test
+    fun `enqueueTask errors with create-one message when library is empty`() = testScope.runTest {
+        every { pipelineRepository.getAllPipelines() } returns flowOf(emptyList())
+        every { settingsRepository.defaultPipelineId } returns flowOf(null)
+
+        val task = AgentTask(
+            sessionId = "session-empty-library",
+            prompt = "go",
+            priority = TaskPriority.NORMAL,
+        )
+
+        taskQueueManager.enqueueTask(task)
+        advanceUntilIdle()
+
+        val state = taskQueueManager.observeTaskState("session-empty-library").first()
+        assertTrue("Expected Error, got $state", state is AgentOrchestratorState.Error)
+        assertEquals(
+            "No active pipeline found. Please create one in the Visual Orchestrator.",
+            (state as AgentOrchestratorState.Error).message,
+        )
     }
 
     /**
