@@ -249,21 +249,23 @@ class ChatHomeViewModel @Inject constructor(
         if (sessionId.isBlank()) return
         val pipelineId = sessions.firstOrNull { it.id == sessionId }?.pipelineId
 
-        // Reset the streaming token counter at the start of every run so the
-        // pill displays "generating · 0 tok" → "generating · N tok" rather
-        // than carrying over the previous response's final count.
-        _state.update {
-            it.copy(
-                visual = ChatHomeUiState.Generating,
-                tokens = it.tokens.copy(streaming = 0),
-            )
-        }
-        clearPendingApprovalAndClarification()
+        cancelClarificationWatchdog()
         // Fresh run = fresh cumulative log upstream; the baseline carried
         // over from a previous run's mid-stream Clear no longer applies
         // (the engine restarts events from scratch). Mirrors legacy
         // `ChatViewModel.sendMessage`.
-        resetConsoleStateForNewRun()
+        resetConsoleCachesForNewRun()
+        // Single atomic transition: flip to Generating, reset the streaming
+        // token counter (the pill displays "generating · 0 tok" →
+        // "generating · N tok" rather than carrying over the previous
+        // response's final count), drop pending HITL / clarification
+        // snapshots, and clear the console projections of the previous run.
+        _state.update { current ->
+            current.withPendingCleared().withConsoleProjectionsCleared().copy(
+                visual = ChatHomeUiState.Generating,
+                tokens = current.tokens.copy(streaming = 0),
+            )
+        }
 
         autoRenameIfDefault(sessionId, draft)
 
@@ -322,14 +324,15 @@ class ChatHomeViewModel @Inject constructor(
      */
     fun stopGeneration() {
         generationJob?.cancel()
-        clearPendingApprovalAndClarification()
+        cancelClarificationWatchdog()
         _state.update { current ->
+            val cleared = current.withPendingCleared()
             if (current.visual is ChatHomeUiState.Generating) {
-                current.copy(
+                cleared.copy(
                     visual = if (current.messages.isEmpty()) ChatHomeUiState.Empty else ChatHomeUiState.Idle,
                 )
             } else {
-                current
+                cleared
             }
         }
     }
@@ -367,15 +370,16 @@ class ChatHomeViewModel @Inject constructor(
         if (threadId.isBlank() || threadId == _state.value.thread.currentSessionId) return
         generationJob?.cancel()
         messagesJob?.cancel()
-        clearPendingApprovalAndClarification()
-        resetConsoleStateForNewRun()
-        _state.update {
-            it.copy(
-                console = it.console.copy(snap = null),
+        cancelClarificationWatchdog()
+        resetConsoleCachesForNewRun()
+        _state.update { current ->
+            val cleared = current.withPendingCleared().withConsoleProjectionsCleared()
+            cleared.copy(
+                console = cleared.console.copy(snap = null),
                 messages = emptyList(),
-                tokens = it.tokens.copy(used = 0),
+                tokens = cleared.tokens.copy(used = 0),
                 visual = ChatHomeUiState.Empty,
-                thread = it.thread.copy(currentSessionId = threadId),
+                thread = cleared.thread.copy(currentSessionId = threadId),
             )
         }
         applyCurrentSessionMetadata()
@@ -754,9 +758,9 @@ class ChatHomeViewModel @Inject constructor(
             is AgentOrchestratorState.Answering ->
                 updateStreamingTokens(state.partialText.length / TOKEN_CHARS_PER_TOKEN)
             is AgentOrchestratorState.Completed -> {
-                clearPendingApprovalAndClarification()
+                cancelClarificationWatchdog()
                 _state.update { current ->
-                    current.copy(
+                    current.withPendingCleared().copy(
                         tokens = current.tokens.copy(streaming = 0),
                         visual = if (current.messages.isEmpty()) ChatHomeUiState.Empty else ChatHomeUiState.Idle,
                     )
@@ -767,9 +771,9 @@ class ChatHomeViewModel @Inject constructor(
                 memoryAutoExtractionCoordinator.onPipelineCompleted(_state.value.thread.currentSessionId)
             }
             is AgentOrchestratorState.Error -> {
-                clearPendingApprovalAndClarification()
+                cancelClarificationWatchdog()
                 _state.update {
-                    it.copy(
+                    it.withPendingCleared().copy(
                         tokens = it.tokens.copy(streaming = 0),
                         visual = ChatHomeUiState.Error(state.message),
                     )
@@ -839,21 +843,32 @@ class ChatHomeViewModel @Inject constructor(
         return events.subList(consoleClearBaseline, events.size)
     }
 
-    /** Drops every cached console-side projection. Called at the start of each new run. */
-    private fun resetConsoleStateForNewRun() {
+    /**
+     * Drops the VM-side console caches (clear baseline, per-node I/O map,
+     * trace start timestamps). Called at the start of each new run, always
+     * paired with [withConsoleProjectionsCleared] inside the caller's
+     * single `_state.update` block so the flow emission stays atomic.
+     */
+    private fun resetConsoleCachesForNewRun() {
         consoleClearBaseline = 0
         nodeIoSnapshots.clear()
         traceStepStartMs.clear()
-        _state.update {
-            it.copy(
-                console = it.console.copy(
-                    logs = emptyList(),
-                    vars = emptyList(),
-                    traces = emptyList(),
-                ),
-            )
-        }
     }
+
+    /**
+     * Pure transformer: clears the console Logs / Vars / Traces projections
+     * of the previous run. The pane's snap, tab, filter, and search query
+     * survive — only run-scoped data is dropped. Composed into the caller's
+     * `_state.update` block (never its own emission) so multi-field
+     * transitions remain a single atomic flow emission.
+     */
+    private fun ChatHomeScreenState.withConsoleProjectionsCleared(): ChatHomeScreenState = copy(
+        console = console.copy(
+            logs = emptyList(),
+            vars = emptyList(),
+            traces = emptyList(),
+        ),
+    )
 
     /**
      * Approves the tool the orchestrator is paused on. For a destructive
@@ -931,7 +946,7 @@ class ChatHomeViewModel @Inject constructor(
         // `""` as the timeout fallback for free-form requests, so an
         // intentional blank submit is a legitimate "skip" affordance.
         val trimmed = answer.trim()
-        clarificationTimeoutJob?.cancel()
+        cancelClarificationWatchdog()
         _state.update {
             it.copy(
                 pending = it.pending.copy(clarification = null),
@@ -1022,17 +1037,25 @@ class ChatHomeViewModel @Inject constructor(
     private fun isTypedConfirmValid(): Boolean =
         _state.value.composer.typedConfirm.trim().equals(DESTRUCTIVE_TYPED_CONFIRM_WORD, ignoreCase = true)
 
-    /** Clears every pending HITL / clarification snapshot and cancels the watchdog. */
-    private fun clearPendingApprovalAndClarification() {
+    /** Cancels and drops the clarification watchdog timer. */
+    private fun cancelClarificationWatchdog() {
         clarificationTimeoutJob?.cancel()
         clarificationTimeoutJob = null
-        _state.update {
-            it.copy(
-                pending = ChatHomePendingState(),
-                composer = it.composer.copy(typedConfirm = ""),
-            )
-        }
     }
+
+    /**
+     * Pure transformer: drops every pending HITL / clarification snapshot
+     * and resets the typed-confirm input. Composed into the caller's
+     * `_state.update` block (never its own emission) so multi-field
+     * transitions remain a single atomic flow emission. Callers cancel the
+     * watchdog separately via [cancelClarificationWatchdog] — job
+     * cancellation is a side effect and must not live inside the `update`
+     * lambda, which may re-run on contention.
+     */
+    private fun ChatHomeScreenState.withPendingCleared(): ChatHomeScreenState = copy(
+        pending = ChatHomePendingState(),
+        composer = composer.copy(typedConfirm = ""),
+    )
 
     /**
      * Auto-renames a newly-created chat to the first user message

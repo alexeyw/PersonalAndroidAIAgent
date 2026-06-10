@@ -342,6 +342,49 @@ class ChatHomeViewModelTest {
     }
 
     @Test
+    fun `sendMessage clears pending approval and flips to Generating in one atomic emission`() =
+        runTest(testDispatcher) {
+            viewModel = createViewModel()
+            advanceUntilIdle()
+            val sessionId = viewModel.state.value.thread.currentSessionId
+            // Drive the surface into HitlConfirm with a captured pending tool.
+            coEvery { agentOrchestratorUseCase(sessionId, "hi", null) } returns flow {
+                emit(
+                    AgentOrchestratorState.WaitingForApproval(
+                        toolName = "fs.write_file",
+                        arguments = "{}",
+                        risk = ToolRisk.SENSITIVE,
+                    ),
+                )
+                delay(10_000)
+            }
+            viewModel.onComposerValueChange("hi")
+            viewModel.sendMessage()
+            advanceUntilIdle()
+            assertTrue(viewModel.state.value.visual is ChatHomeUiState.HitlConfirm)
+            assertNotNull(viewModel.state.value.pending.tool)
+
+            // Record every emission while a new send supersedes the paused run.
+            val emissions = mutableListOf<ChatHomeScreenState>()
+            backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+                viewModel.state.collect { emissions.add(it) }
+            }
+            coEvery { agentOrchestratorUseCase(sessionId, "again", null) } returns flow { delay(10_000) }
+            viewModel.onComposerValueChange("again")
+            viewModel.sendMessage()
+            advanceUntilIdle()
+
+            // The Generating flip and the pending-snapshot clear must land in
+            // the same flow emission — no observer may ever see the new run's
+            // Generating surface still carrying the previous run's tool card.
+            assertTrue(
+                "Expected no emission with Generating + stale pending tool",
+                emissions.none { it.visual is ChatHomeUiState.Generating && it.pending.tool != null },
+            )
+            assertNull(viewModel.state.value.pending.tool)
+        }
+
+    @Test
     fun `sendMessage flips to Error when orchestrator throws`() = runTest(testDispatcher) {
         viewModel = createViewModel()
         advanceUntilIdle()
