@@ -15,16 +15,21 @@ This file maps the contents of the main application package.
     - `TaskQueueManagerImpl.kt` - Task queue manager implementation.
     - `TextEmbedderFactory.kt` - Factory for text embedders.
   - `local/` - Local database and data storage components (Room DB, DataStore).
-    - `ApiKeyManager.kt` - API key manager.
+    - `ApiKeyManager.kt` - API key manager (`KeystoreBackedPrefsStore`-backed); an undecryptable value is dropped and reported as unset — keys are user re-enterable, opposite policy to the DB passphrase.
     - `AppDatabase.kt` - Room database definition.
     - `Converters.kt` - Type converters for Room.
     - `EmbeddingBlobCodec.kt` - Binary wire format of the `memory_chunks.embedding` BLOB column (little-endian IEEE-754 floats, no header; empty blob = "no usable embedding" marker); shared by `Converters` and the TEXT→BLOB migration so the encoding cannot drift.
     - `TagsCsv.kt` - Single comma-separated `tagsCsv` codec (encode/decode, trims + drops blanks) shared by every tag-bearing entity (`MemoryChunkEntity`, `PromptPresetEntity`, `PipelinePresetEntity`) so the separator/blank rules live in one place.
     - `DatabaseResetServiceImpl.kt` - Data-layer `DatabaseResetService`: quiesces the open helper (`runExclusive`), deletes the encrypted DB file (with journals), verifies it is gone (aborting with `DatabaseWipeFailedException` while keeping the passphrase otherwise), then deletes the stored passphrase — one user-confirmed wipe operation.
     - `DeferredPassphraseOpenHelperFactory.kt` - `SupportSQLiteOpenHelper.Factory` wrapper that defers the SQLCipher passphrase fetch to the first real database open, so a passphrase failure surfaces inside `AppInitializationUseCase` (splash recovery screen) instead of crashing Hilt injection; failed delegate construction is not cached (Retry support); rewraps SQLCipher's "file is not a database" wrong-key error as `KEY_MISMATCH`; `runExclusive` serializes the data wipe against concurrent opens.
-    - `EncryptedDbPassphraseProvider.kt` - Provides the SQLCipher passphrase stored in EncryptedSharedPreferences. Loss-protection invariant: generates only when no DB file exists; otherwise any read failure throws `DbPassphraseUnavailableException` instead of regenerating (regeneration would orphan the encrypted DB).
+    - `EncryptedDbPassphraseProvider.kt` - Provides the SQLCipher passphrase stored in a `KeystoreBackedPrefsStore`. Loss-protection invariant: generates only when no DB file exists; otherwise any read failure throws `DbPassphraseUnavailableException` instead of regenerating (regeneration would orphan the encrypted DB). Deletes the legacy ESP file only on fresh generation / explicit wipe, never on failure paths (APK-downgrade escape hatch).
+    - `crypto/` - Keystore-backed secret storage (replacement for the removed `androidx.security:security-crypto`).
+      - `AeadCipher.kt` - AEAD boundary interface (encrypt/decrypt/deleteKey per key alias); exists so stores are JVM-testable with a fake cipher.
+      - `AesGcmCodec.kt` - Pure AES-GCM framing (`IV ‖ ciphertext+tag`, AAD binding) over any `SecretKey`; Keystore-free, fully unit-tested with a software key.
+      - `AndroidKeystoreAeadCipher.kt` - Production `AeadCipher`: lazy non-exportable AES-256-GCM key per alias in `AndroidKeyStore`, delegates framing to `AesGcmCodec`; keys are created on encrypt only, never on decrypt.
+      - `KeystoreBackedPrefsStore.kt` - Plain `SharedPreferences` file with AEAD-encrypted values (base64 blobs, AAD = `store/entry` slot binding). Opening never fails — failures move to per-value reads (`SecureValueUnreadableException`), letting each consumer pick its recovery policy; `destroy()` clears entries, deletes the file and the Keystore key.
     - `McpServerCollisionCheck.kt` - Pure helper that detects when an `updateMcpServer` call would persist a duplicate URL row (editing server A's URL to match an existing server B's URL). Extracted from `SettingsManager.updateMcpServer` so the decision matrix is unit-testable without DataStore plumbing.
-    - `SettingsManager.kt` - App settings manager.
+    - `SettingsManager.kt` - App settings manager (DataStore facade). The HuggingFace token is kept out of DataStore in a `KeystoreBackedPrefsStore` (re-enterable-secret policy); a legacy plain-DataStore token migrates to the encrypted store on first read.
     - `dao/` - Data Access Objects (DAOs).
       - `ChatDao.kt` - Chat messages DAO.
       - `LocalModelDao.kt` - Local models DAO.

@@ -164,7 +164,7 @@ class AppInitializationUseCaseTest {
         // classifier must walk the cause chain rather than type-check the top.
         val wrapped = RuntimeException(
             "unable to open database",
-            DbPassphraseUnavailableException(DbPassphraseUnavailableException.Reason.PREFS_OPEN_FAILED),
+            DbPassphraseUnavailableException(DbPassphraseUnavailableException.Reason.DECRYPTION_FAILED),
         )
         coEvery { pipelineRepository.getAllPipelines() } returns flow { throw wrapped }
 

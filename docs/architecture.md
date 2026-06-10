@@ -552,8 +552,8 @@ implement the `CloudLlmProvider` interface in `domain`. They are
 dispatched by the single unified `CLOUD` node, which takes the
 provider id as a parameter — there is no provider-specific node type,
 and adding a new provider does not require touching the pipeline
-engine. API keys live in `EncryptedSharedPreferences` (see §5.2) and
-are never serialized into DataStore or git.
+engine. API keys live in the Keystore-backed encrypted store (see §5.2)
+and are never serialized into DataStore or git.
 
 ---
 
@@ -597,18 +597,32 @@ Encryption applies to every table that may hold user-derived content:
 - `trace_steps` — intermediate pipeline-node outputs derived from
   user input.
 
-The SQLCipher passphrase is a 32-byte random value stored in
-`EncryptedSharedPreferences`. The master key backing those preferences
-lives in the Android Keystore. `EncryptedSharedPreferences` also stores
-per-provider cloud API keys.
+Secrets — the SQLCipher passphrase, per-provider cloud API keys, and
+the HuggingFace access token —
+live in **`KeystoreBackedPrefsStore`** instances (`data/local/crypto/`):
+plain `SharedPreferences` files whose values are encrypted with
+**AES-256-GCM under a dedicated, non-exportable Android Keystore key**
+(`AndroidKeystoreAeadCipher` behind the `AeadCipher` boundary, framing
+in `AesGcmCodec`). Each value is authenticated with associated data
+derived from the store name and the entry key, so a ciphertext copied
+between slots fails authentication instead of decrypting under the
+wrong label. This replaced the deprecated `EncryptedSharedPreferences`
+(and removed the `androidx.security:security-crypto` dependency): with
+the data key living directly in the Keystore there is no intermediate
+wrapped-keyset file left to corrupt, and opening a store can no longer
+fail — failures move to individual value reads, where each consumer
+applies its own recovery policy. The replacement shipped without a data
+migration under the pre-release storage policy: pre-existing installs
+go through the startup recovery screen (explicit wipe) and re-enter
+their API keys.
 
 The passphrase lifecycle is asymmetric by design
 (`EncryptedDbPassphraseProvider`):
 
 - A passphrase is **generated only while no database file exists yet**.
   Once a database is present it is never regenerated: any failure to read
-  the stored value (unopenable preferences, missing or malformed entry) or
-  a key/file mismatch detected at open time raises a typed
+  the stored value (missing or malformed entry, failed authenticated
+  decryption) or a key/file mismatch detected at open time raises a typed
   `DbPassphraseUnavailableException` that routes to the startup recovery
   screen, where the user chooses between retrying and an explicitly
   confirmed wipe. Silent self-healing of the passphrase store is allowed
@@ -618,8 +632,9 @@ The passphrase lifecycle is asymmetric by design
   so a keystore failure surfaces where the UI can handle it; best-effort
   background maintenance skips its work instead of crashing while the
   recovery screen is up.
-- The API-key store keeps the older recreate-on-corruption recovery —
-  keys are user re-enterable, so availability wins there.
+- The API-key store applies the opposite, availability-first policy: a
+  value that no longer decrypts is dropped and reported as unset — keys
+  are user re-enterable, so availability wins there.
 
 Inside the encrypted database, `memory_chunks.embedding` is stored as a
 **BLOB of little-endian IEEE-754 float32 values** (4 bytes per
@@ -633,7 +648,7 @@ bounds, default pipeline id, opt-in flags) live in **DataStore**, one
 instance per feature module. DataStore is not encrypted — it is
 explicitly reserved for non-sensitive preferences. Any value that is
 sensitive (an API key, a passphrase, a personal identifier) goes
-through `EncryptedSharedPreferences` instead.
+through a `KeystoreBackedPrefsStore` instead.
 
 ### 5.3. JSON parsing
 

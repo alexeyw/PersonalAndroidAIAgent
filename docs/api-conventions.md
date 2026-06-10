@@ -105,9 +105,11 @@ interface Tool {
 
 - All cloud providers implement the domain interface
   `CloudLlmClientFactory` (data-layer impl: `KoogClientFactory`).
-- API keys are stored in **`EncryptedSharedPreferences` only** — never in
-  plain DataStore, log files, exported pipelines, or anything committed to
-  the repository.
+- API keys are stored in **the Keystore-backed encrypted store only**
+  (`KeystoreBackedPrefsStore` — AES-GCM under a dedicated Android Keystore
+  key; see [architecture.md](architecture.md) §5.2) — never in plain
+  DataStore, log files, exported pipelines, or anything committed to the
+  repository.
 - Requests include a `timeout` of 60 seconds (OkHttp).
 - Use the unified `CLOUD` pipeline node with a `provider` parameter — do
   not add per-provider node types to the pipeline graph.

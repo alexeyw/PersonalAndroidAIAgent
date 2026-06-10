@@ -91,7 +91,7 @@ class DeferredPassphraseOpenHelperFactoryTest {
         every { passphraseProvider.getOrCreatePassphrase() } answers {
             attempts++
             if (attempts == 1) {
-                throw DbPassphraseUnavailableException(DbPassphraseUnavailableException.Reason.PREFS_OPEN_FAILED)
+                throw DbPassphraseUnavailableException(DbPassphraseUnavailableException.Reason.DECRYPTION_FAILED)
             }
             ByteArray(32)
         }

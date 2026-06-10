@@ -44,9 +44,18 @@ storage and credentials:
     prior conversations.
   - `trace_steps` — intermediate per-node outputs produced during pipeline
     execution.
-- The SQLCipher passphrase is a **32-byte random value** persisted in
-  `EncryptedSharedPreferences`. The master key protecting
-  `EncryptedSharedPreferences` is stored in the Android Keystore.
+- The SQLCipher passphrase is a **32-byte random value** persisted in a
+  Keystore-backed encrypted store: each value is encrypted with AES-256-GCM
+  under a dedicated, non-exportable key held in the Android Keystore, and
+  every ciphertext is authenticated against its storage slot so blobs cannot
+  be swapped between entries. (Earlier releases used the now-deprecated
+  `EncryptedSharedPreferences`; it was replaced — together with the
+  `androidx.security:security-crypto` dependency — by this direct Keystore
+  wrapper, removing the intermediate wrapped-keyset file and its corruption
+  modes. As permitted by the pre-release storage policy, there is **no data
+  migration**: an install upgraded across this change boots into the startup
+  recovery screen, where the only path forward for the old database is the
+  explicit wipe, and previously saved API keys must be re-entered.)
 - **The passphrase is generated only while no database file exists yet, and
   is never regenerated once one does.** While a database is present, any
   failure to read the stored passphrase — unopenable preferences, a missing
@@ -59,8 +68,9 @@ storage and credentials:
   The passphrase is read lazily at the first real database open — never
   during dependency injection — so a failure always surfaces where the UI
   can handle it.
-- The store holding **cloud API keys** intentionally keeps the older
-  recreate-on-corruption recovery: unlike the database passphrase, keys can
+- The store holding **cloud API keys** intentionally keeps the opposite,
+  availability-first recovery: a key value that can no longer be decrypted is
+  treated as unset and dropped. Unlike the database passphrase, keys can
   simply be re-entered by the user, so availability wins over preservation
   there.
 - The app does not retain any plaintext copy of the passphrase.
@@ -93,7 +103,9 @@ storage and credentials:
 ### API keys for cloud providers
 
 - Keys for optional cloud LLM providers (OpenAI, Anthropic, Google, DeepSeek,
-  Ollama) are stored exclusively in `EncryptedSharedPreferences`.
+  Ollama) are stored exclusively in the same kind of Keystore-backed
+  encrypted store as the database passphrase (AES-256-GCM under its own
+  dedicated Android Keystore key).
 - Keys are never written to plain `SharedPreferences`, DataStore, log files,
   exported chat archives, or any artifact checked into the repository.
 
@@ -195,8 +207,8 @@ enabled:
 - The contents of chat messages, model prompts, or model replies.
 - Long-term memory chunks or any user-authored text.
 - Tool inputs, tool outputs, or arguments produced by the agent.
-- API keys, passphrases, or any value stored in
-  `EncryptedSharedPreferences`.
+- API keys, passphrases, or any value stored in the Keystore-backed
+  encrypted stores.
 - Personally identifying information beyond the device/app metadata listed
   above.
 

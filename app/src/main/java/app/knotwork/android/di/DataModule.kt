@@ -8,6 +8,8 @@ import app.knotwork.android.data.engine.TextEmbedderFactory
 import app.knotwork.android.data.local.ApiKeyManager
 import app.knotwork.android.data.local.DatabaseResetServiceImpl
 import app.knotwork.android.data.local.SettingsManager
+import app.knotwork.android.data.local.crypto.AeadCipher
+import app.knotwork.android.data.local.crypto.AndroidKeystoreAeadCipher
 import app.knotwork.android.data.mcp.KoogMcpClientFactory
 import app.knotwork.android.data.mcp.McpClientFactory
 import app.knotwork.android.data.network.AndroidModelDownloadManager
@@ -72,6 +74,14 @@ import javax.inject.Singleton
 @InstallIn(SingletonComponent::class)
 @Suppress("TooManyFunctions") // Binding-only module: one @Binds per data-layer implementation.
 abstract class DataModule {
+
+    /**
+     * Binds the Android-Keystore-backed [AeadCipher] implementation used by the secret
+     * stores ([ApiKeyManager], [app.knotwork.android.data.local.EncryptedDbPassphraseProvider]).
+     */
+    @Binds
+    @Singleton
+    abstract fun bindAeadCipher(cipher: AndroidKeystoreAeadCipher): AeadCipher
 
     /**
      * Binds the [ApiKeyManager] implementation to the [ApiKeyRepository] interface.
