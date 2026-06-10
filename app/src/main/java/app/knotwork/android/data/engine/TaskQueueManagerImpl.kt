@@ -169,9 +169,11 @@ class TaskQueueManagerImpl @Inject constructor(
             return
         }
         val boundPipeline = task.pipelineId?.let { id -> pipelines.firstOrNull { it.id == id } }
-        val defaultPipeline = settingsRepository.defaultPipelineId.firstOrNull()
-            ?.let { id -> pipelines.firstOrNull { it.id == id } }
-        val activePipeline = boundPipeline ?: defaultPipeline
+        // The default is resolved lazily — reading the settings flow is a
+        // suspend call that a successfully resolved binding never needs.
+        val activePipeline = boundPipeline
+            ?: settingsRepository.defaultPipelineId.firstOrNull()
+                ?.let { id -> pipelines.firstOrNull { it.id == id } }
 
         if (activePipeline == null) {
             val errState = AgentOrchestratorState.Error(
