@@ -43,7 +43,6 @@ class SettingsDefaultsTest {
 
     @Test
     fun `given memory and ollama defaults when read then match documented values`() {
-        assertEquals(1_000, SettingsDefaults.MEMORY_CHUNK_SEARCH_LIMIT_DEFAULT)
         assertEquals(4_096, SettingsDefaults.OLLAMA_CONTEXT_WINDOW_DEFAULT)
     }
 }

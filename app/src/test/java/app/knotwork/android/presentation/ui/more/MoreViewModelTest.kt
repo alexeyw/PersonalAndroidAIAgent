@@ -170,7 +170,6 @@ class MoreViewModelTest {
             chunkCount = 12,
             totalBytes = 2_000_000L,
             threadCount = 1,
-            averageSimilarityScore = null,
         )
 
         val viewModel = buildViewModel()

@@ -11,10 +11,9 @@ import app.knotwork.android.domain.models.MemorySummary
 import app.knotwork.android.domain.repositories.MemoryRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.withContext
+import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.math.sqrt
@@ -26,17 +25,6 @@ import kotlin.math.sqrt
 @Singleton
 class MemoryRepositoryImpl @Inject constructor(private val memoryDao: MemoryDao, private val converters: Converters) :
     MemoryRepository {
-
-    /**
-     * Rolling average of the cosine similarity scores observed across the
-     * most recent `findSimilarMemories` calls. Read by [observeStats] and
-     * surfaced as the AVG SCORE stat cell in Settings → Memory.
-     *
-     * `null` until the user (or the agent on their behalf) performs at
-     * least one similarity search. Bounded to the last 32 observations so
-     * the value reflects recent behaviour, not the entire app lifetime.
-     */
-    private val recentSimilarityScores = MutableStateFlow<List<Float>>(emptyList())
 
     override suspend fun saveMemory(
         text: String,
@@ -69,36 +57,30 @@ class MemoryRepositoryImpl @Inject constructor(private val memoryDao: MemoryDao,
         }
     }
 
-    override suspend fun findSimilarMemories(
-        queryEmbedding: FloatArray,
-        searchPoolLimit: Int,
-        limit: Int,
-    ): List<Pair<MemoryChunk, Float>> = withContext(Dispatchers.Default) {
-        val recentMemories = memoryDao.getRecentMemories(searchPoolLimit).mapNotNull { entity ->
-            entity.toMemoryChunkOrNull()
-        }
-
-        val ranked = recentMemories.map { memory ->
-            val similarity = cosineSimilarity(queryEmbedding, memory.embedding)
-            memory to similarity
-        }
-            .sortedByDescending { it.second }
-            .take(limit)
-
-        // Record the strongest few scores so the Settings stats card surfaces a
-        // representative average. Only the head of the ranked list is sampled
-        // (not the whole returned set): retrieval now asks for the full scored
-        // pool to feed re-ranking, and folding hundreds of low-similarity tail
-        // scores into the window would drag the AVG SCORE cell toward zero.
-        val newScores = ranked.take(STATS_SAMPLE_SIZE).map { it.second }
-        if (newScores.isNotEmpty()) {
-            recentSimilarityScores.update { previous ->
-                (previous + newScores).takeLast(RECENT_SIMILARITY_WINDOW)
+    override suspend fun findSimilarMemories(queryEmbedding: FloatArray, limit: Int?): List<Pair<MemoryChunk, Float>> =
+        withContext(Dispatchers.Default) {
+            // Full-table scan, deliberately: a recency window here would make old
+            // but relevant chunks invisible to retrieval regardless of similarity
+            // (see the interface KDoc). The pool stays bounded by the compaction
+            // hard-limit; the warning below flags the pathological case where the
+            // linear scan starts to cost real time.
+            val pool = memoryDao.getAllMemories().mapNotNull { entity ->
+                entity.toMemoryChunkOrNull()
             }
-        }
+            if (pool.size > SEARCH_POOL_WARN_THRESHOLD) {
+                Timber.w(
+                    "Memory similarity search is scanning %d chunks; expect degraded latency",
+                    pool.size,
+                )
+            }
 
-        ranked
-    }
+            val ranked = pool.map { memory ->
+                val similarity = cosineSimilarity(queryEmbedding, memory.embedding)
+                memory to similarity
+            }.sortedByDescending { it.second }
+
+            if (limit != null) ranked.take(limit) else ranked
+        }
 
     override suspend fun compactMemory(keepLimit: Int) = withContext(Dispatchers.IO) {
         memoryDao.deleteOldestMemories(keepLimit)
@@ -154,7 +136,6 @@ class MemoryRepositoryImpl @Inject constructor(private val memoryDao: MemoryDao,
 
     override suspend fun deleteAllMemories() = withContext(Dispatchers.IO) {
         memoryDao.deleteAllMemories()
-        recentSimilarityScores.value = emptyList()
     }
 
     override suspend fun getExistingMemoryIds(): Set<Long> = withContext(Dispatchers.IO) {
@@ -233,15 +214,13 @@ class MemoryRepositoryImpl @Inject constructor(private val memoryDao: MemoryDao,
     override fun observeStats(): Flow<MemoryStats> = combine(
         memoryDao.observeChunkCount(),
         memoryDao.observeTotalBytes(),
-        recentSimilarityScores,
-    ) { chunkCount, totalBytes, scores ->
+    ) { chunkCount, totalBytes ->
         MemoryStats(
             chunkCount = chunkCount,
             totalBytes = totalBytes,
             // Thread attribution lands in a follow-up — v0.1 reports zero
             // and the UI then renders a dash for the THREADS stat cell.
             threadCount = 0,
-            averageSimilarityScore = scores.takeIf { it.isNotEmpty() }?.average()?.toFloat(),
         )
     }
 
@@ -297,14 +276,13 @@ class MemoryRepositoryImpl @Inject constructor(private val memoryDao: MemoryDao,
     }
 
     private companion object {
-        /** Number of recent cosine-similarity scores tracked for the AVG SCORE stat cell. */
-        const val RECENT_SIMILARITY_WINDOW: Int = 32
-
         /**
-         * Per-call cap on how many of the ranked scores feed the AVG SCORE
-         * window. Keeps the stat anchored to the strongest hits even when a
-         * caller requests a large pool for re-ranking.
+         * Pool size above which [findSimilarMemories] logs a warning: the
+         * linear cosine scan over every stored chunk starts to take a
+         * user-noticeable amount of time around this many rows. Purely a
+         * diagnostic — the search still scans the full pool, because cutting
+         * candidates by recency would silently expire old facts.
          */
-        const val STATS_SAMPLE_SIZE: Int = 5
+        const val SEARCH_POOL_WARN_THRESHOLD: Int = 5_000
     }
 }

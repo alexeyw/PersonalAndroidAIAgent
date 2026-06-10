@@ -137,16 +137,6 @@ interface MemoryDao {
     suspend fun recordUsage(ids: List<Long>, atMillis: Long)
 
     /**
-     * Retrieves a limited number of the most recent memory chunks from the database.
-     * This is used to load a bounded number of embeddings into memory for vector similarity search.
-     *
-     * @param limit The maximum number of recent chunks to return.
-     * @return A list of the most recent [MemoryChunkEntity] items.
-     */
-    @Query("SELECT * FROM memory_chunks ORDER BY timestamp DESC LIMIT :limit")
-    suspend fun getRecentMemories(limit: Int): List<MemoryChunkEntity>
-
-    /**
      * Retrieves the [limit] most recent memory chunks projected to text/timestamp
      * fields only — without the (potentially large) embedding payload.
      *

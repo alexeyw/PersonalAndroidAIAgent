@@ -81,14 +81,14 @@ class MemoryRepositoryImplTest {
     }
 
     @Test
-    fun `findSimilarMemories uses getRecentMemories and returns correct pairs`() = kotlinx.coroutines.test.runTest {
+    fun `findSimilarMemories scans the full table and returns correct pairs`() = kotlinx.coroutines.test.runTest {
         val queryEmbedding = floatArrayOf(1f, 0f)
         val entity1 = MemoryChunkEntity(1, "Text 1", "1.0,0.0", 1000L)
         val entity2 = MemoryChunkEntity(2, "Text 2", "0.0,1.0", 2000L)
 
-        io.mockk.coEvery { memoryDao.getRecentMemories(100) } returns listOf(entity1, entity2)
+        io.mockk.coEvery { memoryDao.getAllMemories() } returns listOf(entity1, entity2)
 
-        val results = repository.findSimilarMemories(queryEmbedding, searchPoolLimit = 100, limit = 2)
+        val results = repository.findSimilarMemories(queryEmbedding, limit = 2)
 
         assertEquals(2, results.size)
         assertEquals(1L, results[0].first.id) // Most similar first
@@ -108,9 +108,9 @@ class MemoryRepositoryImplTest {
             val coffee = MemoryChunkEntity(2, "user likes coffee", "0.0,1.0,0.0", 2000L)
             val sky = MemoryChunkEntity(3, "the sky is blue", "0.2,0.2,0.95", 1000L)
 
-            io.mockk.coEvery { memoryDao.getRecentMemories(100) } returns listOf(coffee, sky, berlin)
+            io.mockk.coEvery { memoryDao.getAllMemories() } returns listOf(coffee, sky, berlin)
 
-            val results = repository.findSimilarMemories(queryEmbedding, searchPoolLimit = 100, limit = 3)
+            val results = repository.findSimilarMemories(queryEmbedding, limit = 3)
 
             assertEquals(3, results.size)
             // Highest-similarity chunk first.
@@ -121,6 +121,41 @@ class MemoryRepositoryImplTest {
             assertEquals(2L, results[2].first.id)
             assertEquals(0.0f, results[2].second, 0.001f)
         }
+
+    @Test
+    fun `given chunk older than any recency window when similarity is high then it is found`() =
+        kotlinx.coroutines.test.runTest {
+            // Given — an ancient chunk (epoch-adjacent timestamp) surrounded by
+            // thousands of fresher rows. Under the old recency-window pool it
+            // would never have been loaded for scoring; the full-table scan
+            // must surface it as the top hit purely on cosine similarity.
+            val queryEmbedding = floatArrayOf(1f, 0f)
+            val ancientRelevant = MemoryChunkEntity(1L, "user was born in Riga", "1.0,0.0", 1L)
+            val freshNoise = (2L..1_502L).map { id ->
+                MemoryChunkEntity(id, "noise $id", "0.0,1.0", 1_000_000L + id)
+            }
+            io.mockk.coEvery { memoryDao.getAllMemories() } returns freshNoise + ancientRelevant
+
+            // When
+            val results = repository.findSimilarMemories(queryEmbedding, limit = 1)
+
+            // Then — the old chunk wins despite being older than every other row.
+            assertEquals(1L, results.single().first.id)
+            assertEquals(1.0f, results.single().second, 0.001f)
+        }
+
+    @Test
+    fun `findSimilarMemories with null limit returns the entire scored pool`() = kotlinx.coroutines.test.runTest {
+        val queryEmbedding = floatArrayOf(1f, 0f)
+        val entities = (1L..7L).map { id ->
+            MemoryChunkEntity(id, "text $id", "1.0,0.0", id)
+        }
+        io.mockk.coEvery { memoryDao.getAllMemories() } returns entities
+
+        val results = repository.findSimilarMemories(queryEmbedding)
+
+        assertEquals(7, results.size)
+    }
 
     @Test
     fun `compactMemory calls dao deleteOldestMemories`() = kotlinx.coroutines.test.runTest {

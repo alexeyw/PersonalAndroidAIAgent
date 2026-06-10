@@ -13,6 +13,7 @@ import app.knotwork.android.domain.repositories.LocalModelRepository
 import app.knotwork.android.domain.repositories.MemoryRepository
 import app.knotwork.android.domain.repositories.SettingsRepository
 import app.knotwork.android.domain.services.EmbeddingProvider
+import app.knotwork.android.domain.services.MemorySearchStatsTracker
 import app.knotwork.android.domain.usecases.ClearAllMemoryUseCase
 import app.knotwork.android.domain.usecases.ExportMemoryBaseUseCase
 import app.knotwork.android.domain.usecases.GetSystemPromptVariableCatalogUseCase
@@ -71,6 +72,10 @@ class SettingsViewModelTest {
     private val reembed = mockk<ReembedAllMemoriesUseCase>(relaxed = true)
     private val variableCatalog = mockk<GetSystemPromptVariableCatalogUseCase>(relaxed = true)
 
+    // Real instance: the tracker is a pure in-memory rolling window, so using
+    // it directly doubles as integration coverage of the AVG SCORE plumbing.
+    private val searchStatsTracker = MemorySearchStatsTracker()
+
     private val useProvider = fakeProvider(EmbeddingProvider.ID_USE, "On-device (USE)")
     private val openAiProvider = fakeProvider(EmbeddingProvider.ID_OPENAI_3_SMALL, "OpenAI (3-small)")
     private val embeddingProviders: Map<String, EmbeddingProvider> = mapOf(
@@ -117,6 +122,7 @@ class SettingsViewModelTest {
             MutableStateFlow(SettingsDefaults.MEMORY_COMPACTION_AGE_DAYS_DEFAULT)
         every { settings.maxMemoryChunks } returns MutableStateFlow(SettingsDefaults.MAX_MEMORY_CHUNKS_DEFAULT)
         every { settings.activeEmbeddingProviderId } returns MutableStateFlow(EmbeddingProvider.ID_USE)
+        every { settings.lastReembedProviderId } returns MutableStateFlow<String?>(null)
         every { settings.longRunningTaskNotificationsEnabled } returns MutableStateFlow(true)
         every { settings.crashReportingEnabled } returns MutableStateFlow(false)
         every { settings.verboseMemoryLoggingEnabled } returns MutableStateFlow(false)
@@ -541,6 +547,55 @@ class SettingsViewModelTest {
     }
 
     @Test
+    fun `given recorded search scores when init then averageSimilarityScore mirrors the tracker`() = runTest {
+        searchStatsTracker.record(listOf(0.8f, 0.6f))
+        val vm = newViewModel()
+        advanceUntilIdle()
+        assertEquals(0.7f, vm.uiState.value.averageSimilarityScore!!, 0.0001f)
+    }
+
+    @Test
+    fun `given provider mismatch when init then lastReembedProviderId is mirrored into uiState`() = runTest {
+        // Given — vectors were created with OpenAI but USE is now active.
+        every { settings.lastReembedProviderId } returns
+            MutableStateFlow<String?>(EmbeddingProvider.ID_OPENAI_3_SMALL)
+        val vm = newViewModel()
+
+        advanceUntilIdle()
+
+        // Then — the state carries the mismatch the screen turns into a banner.
+        val state = vm.uiState.value
+        assertEquals(EmbeddingProvider.ID_OPENAI_3_SMALL, state.lastReembedProviderId)
+        assertEquals(EmbeddingProvider.ID_USE, state.activeEmbeddingProviderId)
+    }
+
+    @Test
+    fun `given successful reembed when runReembed then the active provider is recorded as baseline`() = runTest {
+        coEvery { reembed() } returns flowOf(0.5f, 1f)
+        advanceUntilIdle()
+
+        viewModel.runReembed()
+        advanceUntilIdle()
+
+        // The store is now in the active provider's space — the banner condition clears.
+        coVerify { settings.setLastReembedProviderId(EmbeddingProvider.ID_USE) }
+    }
+
+    @Test
+    fun `given confirmed memory wipe when performed then the active provider is recorded as baseline`() = runTest {
+        every { context.getString(app.knotwork.android.R.string.destructive_typed_keyword) } returns "yes"
+        advanceUntilIdle()
+
+        viewModel.stageClearMemory()
+        viewModel.updateDestructiveTypedInput("yes")
+        viewModel.confirmDestructive()
+        advanceUntilIdle()
+
+        coVerify { clearMemory() }
+        coVerify { settings.setLastReembedProviderId(EmbeddingProvider.ID_USE) }
+    }
+
+    @Test
     fun `runBackendProbe persists outcome and surfaces snackbar`() = runTest {
         coEvery { testBackend() } returns TestProbeResult(
             tokensGenerated = 100,
@@ -571,5 +626,6 @@ class SettingsViewModelTest {
         reembedAllMemoriesUseCase = reembed,
         getSystemPromptVariableCatalogUseCase = variableCatalog,
         embeddingProviders = embeddingProviders,
+        memorySearchStatsTracker = searchStatsTracker,
     )
 }

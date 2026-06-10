@@ -257,7 +257,7 @@ flowchart TB
 
     subgraph Retrieval["Retrieval (next session, longTermMemory node)"]
         Engine[GraphExecutionEngine<br/>resolveMemoriesOnce userPrompt] --> Retrieve[RetrieveRelevantMemoryUseCase]
-        Retrieve --> Search[findSimilarMemories<br/>cosine over pool]
+        Retrieve --> Search[findSimilarMemories<br/>cosine over the full table]
         Store --> Search
         Search --> Rerank[MemoryReranker<br/>dedup · recency decay<br/>pinned boost · threshold]
         Rerank --> Console[ConsoleEvent.MemoryAccess<br/>+ recordUsage]
@@ -287,6 +287,12 @@ Key invariants:
 3. **Pinned is sacred.** Pinned chunks bypass the recency decay and
    threshold filter on retrieval and are never compaction candidates — the
    one mechanism a user has to guarantee a fact stays findable.
+4. **Age never hides a fact.** `findSimilarMemories` scans the *entire*
+   `memory_chunks` table on every query — there is no recency window on
+   visibility. Recency only *weights* candidates inside `MemoryReranker`'s
+   half-life decay, and the same full-pool rule applies to the extraction
+   dedup check. The pool stays bounded by the compaction hard-limit
+   (`maxMemoryChunks`), which is the explicit performance cap.
 
 The on-device write path is covered end-to-end by the instrumented
 `MemoryLifecycleIntegrationTest` (extract → retrieve into the context block

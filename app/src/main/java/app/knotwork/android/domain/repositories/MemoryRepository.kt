@@ -57,17 +57,24 @@ interface MemoryRepository {
      * Finds the most semantically similar memories to a given query embedding
      * using cosine similarity.
      *
+     * **The whole table is scanned on every call — there is no recency
+     * window.** A chunk's age must never decide whether it is *visible* to
+     * retrieval (that would silently expire long-term facts); recency only
+     * *weights* already-found candidates, and that weighting lives in
+     * [app.knotwork.android.domain.services.MemoryReranker]. The pool is
+     * bounded in practice by the compaction hard-limit
+     * (`SettingsRepository.maxMemoryChunks`), which is the explicit
+     * performance cap; implementations log a warning when the scanned pool
+     * grows large enough for the linear scan to become noticeable.
+     *
      * @param queryEmbedding The vector embedding of the user's query.
-     * @param searchPoolLimit The maximum number of recent memories to load into memory for searching.
-     * @param limit The maximum number of results to return.
+     * @param limit The maximum number of results to return, or `null` to
+     *   return the entire scored pool (used by retrieval, which re-ranks
+     *   before applying its own top-K).
      * @return A list of pairs containing the [MemoryChunk] and its similarity score (0.0 to 1.0),
      *         sorted by similarity in descending order (highest first).
      */
-    suspend fun findSimilarMemories(
-        queryEmbedding: FloatArray,
-        searchPoolLimit: Int,
-        limit: Int = 5,
-    ): List<Pair<MemoryChunk, Float>>
+    suspend fun findSimilarMemories(queryEmbedding: FloatArray, limit: Int? = null): List<Pair<MemoryChunk, Float>>
 
     /**
      * Deletes older memory chunks, keeping only the specified number of the most recent ones.
@@ -227,14 +234,17 @@ interface MemoryRepository {
     suspend fun markMemoryReembedded(id: Long, embedding: FloatArray)
 
     /**
-     * Live snapshot of the aggregate stats rendered in the Settings →
-     * Memory card. Emits a fresh value whenever the underlying table
-     * mutates; consumers should `collectAsState` or `stateIn` it.
+     * Live snapshot of the persistent aggregate stats rendered in the
+     * Settings → Memory card. Emits a fresh value whenever the underlying
+     * table mutates; consumers should `collectAsState` or `stateIn` it.
      *
-     * Thread count and average similarity score are best-effort: the v0.1
-     * implementation returns `0` for threads (thread-attribution lands in
-     * a follow-up) and `null` for averageSimilarityScore until a
-     * similarity-search call has been recorded.
+     * Only table-level figures are reported here. The volatile AVG SCORE
+     * statistic is session-scoped and lives in
+     * [app.knotwork.android.domain.services.MemorySearchStatsTracker],
+     * recorded by the search call sites rather than the repository.
+     *
+     * Thread count is best-effort: the v0.1 implementation returns `0`
+     * (thread-attribution lands in a follow-up) and the UI renders a dash.
      */
     fun observeStats(): Flow<MemoryStats>
 }

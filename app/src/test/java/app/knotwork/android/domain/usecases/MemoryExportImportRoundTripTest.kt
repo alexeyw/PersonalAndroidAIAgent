@@ -150,11 +150,8 @@ private class InMemoryMemoryStore : MemoryRepository {
 
     override suspend fun getRecentMemorySummaries(limit: Int): List<MemorySummary> = throw NotImplementedError()
 
-    override suspend fun findSimilarMemories(
-        queryEmbedding: FloatArray,
-        searchPoolLimit: Int,
-        limit: Int,
-    ): List<Pair<MemoryChunk, Float>> = throw NotImplementedError()
+    override suspend fun findSimilarMemories(queryEmbedding: FloatArray, limit: Int?): List<Pair<MemoryChunk, Float>> =
+        throw NotImplementedError()
 
     override suspend fun compactMemory(keepLimit: Int) = throw NotImplementedError()
 

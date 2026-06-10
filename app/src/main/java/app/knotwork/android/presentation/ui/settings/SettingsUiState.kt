@@ -34,6 +34,9 @@ import app.knotwork.android.domain.models.ToolApprovalPolicy
  * @property lastTestProbeResult Most recent persisted probe outcome.
  * @property providers Collapsed external-provider rows.
  * @property memoryStats Live aggregate counters.
+ * @property averageSimilarityScore Rolling average of recent similarity-search
+ *   scores (session-scoped, from `MemorySearchStatsTracker`); `null` until a
+ *   search has been recorded — the AVG SCORE cell then renders a dash.
  * @property autoSummarizeThreshold Fraction (0..1) for the threshold
  *   slider.
  * @property memorySearchTopK How many ranked chunks a single retrieval
@@ -49,6 +52,10 @@ import app.knotwork.android.domain.models.ToolApprovalPolicy
  * @property maxMemoryChunks Hard ceiling on the number of stored chunks.
  * @property activeEmbeddingProviderId Wire id of the selected embedding
  *   provider.
+ * @property lastReembedProviderId Wire id of the provider the stored memory
+ *   vectors were last (re-)embedded with, or `null` when unknown (no provider
+ *   switch yet). A non-null value differing from [activeEmbeddingProviderId]
+ *   surfaces the persistent "re-embed recommended" banner.
  * @property embeddingProviderOptions Available embedding providers (id +
  *   display name) for the Memory-section dropdown.
  * @property memoryValidationError Transient validation error surfaced when a
@@ -87,6 +94,7 @@ data class SettingsUiState(
     val testProbeInFlight: Boolean = false,
     val providers: List<ProviderSummary> = emptyList(),
     val memoryStats: MemoryStats = MemoryStats.EMPTY,
+    val averageSimilarityScore: Float? = null,
     val autoExtractEnabled: Boolean = SettingsDefaults.AUTO_EXTRACT_ENABLED_DEFAULT,
     val autoSummarizeThreshold: Float = SettingsDefaults.AUTO_SUMMARIZE_THRESHOLD_DEFAULT,
     val memorySearchTopK: Int = SettingsDefaults.MEMORY_SEARCH_TOP_K_DEFAULT,
@@ -96,6 +104,7 @@ data class SettingsUiState(
     val memoryCompactionAgeDays: Int = SettingsDefaults.MEMORY_COMPACTION_AGE_DAYS_DEFAULT,
     val maxMemoryChunks: Int = SettingsDefaults.MAX_MEMORY_CHUNKS_DEFAULT,
     val activeEmbeddingProviderId: String = SettingsDefaults.ACTIVE_EMBEDDING_PROVIDER_ID_DEFAULT,
+    val lastReembedProviderId: String? = null,
     val embeddingProviderOptions: List<EmbeddingProviderOption> = emptyList(),
     val memoryValidationError: MemoryValidationError? = null,
     val reembedProgress: Float? = null,

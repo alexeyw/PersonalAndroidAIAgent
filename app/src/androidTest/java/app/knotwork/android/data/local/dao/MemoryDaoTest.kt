@@ -130,16 +130,6 @@ class MemoryDaoTest {
     }
 
     @Test
-    fun getRecentMemories_returnsNewestFirstUpToLimit() = runBlocking {
-        dao.insertMemory(unpinned(text = "oldest", timestamp = 1L))
-        dao.insertMemory(unpinned(text = "middle", timestamp = 2L))
-        dao.insertMemory(unpinned(text = "newest", timestamp = 3L))
-
-        val recent = dao.getRecentMemories(limit = 2)
-        assertEquals(listOf("newest", "middle"), recent.map { it.text })
-    }
-
-    @Test
     fun getRecentMemorySummaries_projectsIdTextTimestampOnly() = runBlocking {
         val id = dao.insertMemory(
             MemoryChunkEntity(text = "hello", embedding = "1.0,2.0", timestamp = 5L, isPinned = false),

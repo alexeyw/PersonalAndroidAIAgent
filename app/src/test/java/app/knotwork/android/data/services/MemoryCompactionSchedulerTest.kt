@@ -39,7 +39,6 @@ class MemoryCompactionSchedulerTest {
         chunkCount = chunkCount,
         totalBytes = 0L,
         threadCount = 0,
-        averageSimilarityScore = null,
     )
 
     @Before

@@ -922,6 +922,13 @@ private fun MemoryCard(state: MemoryCardState, callbacks: SettingsCallbacks) {
             onCheckedChange = callbacks.onMemoryCompactionToggle,
         )
         EmbeddingProviderDropdown(state = state, callbacks = callbacks)
+        if (state.reembedBanner != null) {
+            ReembedBanner(
+                text = state.reembedBanner,
+                buttonLabel = state.reembedLabel,
+                onReembedClick = callbacks.onReembedClick,
+            )
+        }
         if (state.validationError != null) {
             Text(
                 text = state.validationError,
@@ -992,6 +999,46 @@ private fun MemoryCard(state: MemoryCardState, callbacks: SettingsCallbacks) {
                     )
                 }
             }
+        }
+    }
+}
+
+/**
+ * Persistent warning banner rendered when the stored memory embeddings were
+ * created with a different provider than the active one. Stays visible until
+ * a successful re-embed (or a full memory wipe) re-aligns the store; the
+ * inline button triggers the same action as the Re-embed button below it.
+ *
+ * @param text Localised banner message supplied by the caller.
+ * @param buttonLabel Localised label of the inline re-embed button.
+ * @param onReembedClick Same callback as the Memory card's Re-embed button.
+ */
+@Composable
+private fun ReembedBanner(text: String, buttonLabel: String, onReembedClick: () -> Unit) {
+    Surface(
+        shape = KnotworkTheme.shapes.md,
+        color = KnotworkTheme.extended.signalWarn.copy(alpha = REEMBED_BANNER_TINT_ALPHA),
+        border = BorderStroke(SectionCardBorder, KnotworkTheme.extended.signalWarn),
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag(MEMORY_REEMBED_BANNER_TAG),
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(KnotworkTheme.spacing.sp3),
+            verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp2),
+        ) {
+            Text(
+                text = text,
+                style = KnotworkTextStyles.MonoSm,
+                color = KnotworkTheme.extended.onSurfaceMuted,
+            )
+            KnotworkSecondaryButton(
+                text = buttonLabel,
+                onClick = onReembedClick,
+                size = app.knotwork.design.components.buttons.KnotworkButtonSize.Sm,
+            )
         }
     }
 }
@@ -1216,6 +1263,9 @@ const val MEMORY_EMBEDDING_ROW_TAG: String = "settings_memory_embedding_row"
 /** Test tag for the inline Memory tuning validation-error text. */
 const val MEMORY_VALIDATION_ERROR_TAG: String = "settings_memory_validation_error"
 
+/** Test tag for the embedding-provider-mismatch "re-embed recommended" banner. */
+const val MEMORY_REEMBED_BANNER_TAG: String = "settings_memory_reembed_banner"
+
 private val LOCAL_MODEL_TILE_SIZE = 40.dp
 private val SectionCardBorder = 1.dp
 private val LOADING_ROW_HEIGHT = 56.dp
@@ -1225,6 +1275,9 @@ private const val SETTINGS_LOADING_ROWS = 6
 private const val SYSTEM_INSTRUCTIONS_MIN_LINES = 5
 private const val SYSTEM_INSTRUCTIONS_MAX_LINES = 12
 private const val ACTIVE_PILL_ALPHA = 0.18f
+
+/** Background tint of the re-embed warning banner (over the warn signal color). */
+private const val REEMBED_BANNER_TINT_ALPHA = 0.12f
 
 /**
  * Relative weight of the trailing segmented control inside the restrictions

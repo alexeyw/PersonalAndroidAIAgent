@@ -82,7 +82,7 @@ class MemoryViewModelTest {
 
         coEvery { embeddingProviderResolver.resolve() } returns embeddingProvider
         coEvery { memoryRepository.getAllMemories() } returns emptyList()
-        coEvery { memoryRepository.observeStats() } returns flowOf(MemoryStats(0, 0L, 0, null))
+        coEvery { memoryRepository.observeStats() } returns flowOf(MemoryStats(0, 0L, 0))
         coEvery { settingsRepository.memoryLastCompactedAt } returns flowOf(0L)
     }
 
@@ -117,7 +117,7 @@ class MemoryViewModelTest {
             chunk(1, source = MemorySource.ChatSession("s1")),
             chunk(2),
         )
-        coEvery { memoryRepository.observeStats() } returns flowOf(MemoryStats(2, 4096L, 0, null))
+        coEvery { memoryRepository.observeStats() } returns flowOf(MemoryStats(2, 4096L, 0))
         coEvery { settingsRepository.memoryLastCompactedAt } returns flowOf(123L)
         coEvery { chatRepository.getSessionById("s1") } returns
             ChatSession(id = "s1", name = "Setup chat", updatedAt = 0)
