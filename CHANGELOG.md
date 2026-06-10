@@ -51,6 +51,17 @@ details.
 
 ### Changed
 
+- **Long-term-memory embeddings are now stored in binary form.** The
+  `memory_chunks.embedding` column changes from a comma-separated TEXT
+  encoding to a BLOB of little-endian IEEE-754 floats (4 bytes per
+  component). An automatic database migration rewrites existing rows in
+  place; a row whose legacy string cannot be parsed keeps its text with an
+  empty-blob marker so the re-embedding repair path can still rebuild its
+  vector instead of the row being deleted. Decoding the retrieval pool of
+  5000 synthetic 512-dimension chunks drops from ~280 ms to ~1 ms, and the
+  stored embedding payload shrinks ~2.8×. The memory export/import JSON
+  format is unchanged (`schemaVersion: 1`, embeddings as number arrays);
+  conversion happens at the storage boundary.
 - **Bump `com.squareup.okhttp3:okhttp` `5.3.2` → `5.4.0`** to clear the
   `NewerVersionAvailable` lint gate.
 - **Contributor onboarding refreshed.** `CONTRIBUTING.md` gains a *Where

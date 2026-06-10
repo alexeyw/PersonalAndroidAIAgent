@@ -12,32 +12,33 @@ import timber.log.Timber
  * Provides TypeConverters for Room to handle custom data types.
  *
  * Currently handles:
- * - [FloatArray] ↔ comma-separated [String] for vector embeddings;
+ * - [FloatArray] ↔ little-endian [ByteArray] for vector embeddings (BLOB column);
  * - [NodeContextConfig] ↔ JSON [String] for per-node pipeline context flags;
  * - [MemorySource] ↔ JSON [String] for memory-chunk provenance.
  */
 class Converters {
 
     /**
-     * Converts a [FloatArray] to a comma-separated [String].
+     * Encodes a [FloatArray] embedding into its binary BLOB form (little-endian
+     * IEEE-754, 4 bytes per component — see [EmbeddingBlobCodec]).
      *
-     * @param array The float array to convert.
-     * @return A comma-separated string representation of the array, or null if the array is null.
+     * @param array The float array to encode.
+     * @return The encoded bytes, or null if the array is null.
      */
     @TypeConverter
-    fun fromFloatArray(array: FloatArray?): String? = array?.joinToString(separator = ",")
+    fun fromFloatArray(array: FloatArray?): ByteArray? = array?.let(EmbeddingBlobCodec::encode)
 
     /**
-     * Converts a comma-separated [String] back into a [FloatArray].
+     * Decodes an embedding BLOB produced by [fromFloatArray] back into a
+     * [FloatArray]. Total — never throws.
      *
-     * @param value The string to convert.
-     * @return The resulting [FloatArray], or null if the input is null or empty.
+     * @param value The stored bytes.
+     * @return The decoded [FloatArray], or null if the input is null, empty
+     *   (the migration's "no usable embedding" marker), or not a valid float
+     *   sequence.
      */
     @TypeConverter
-    fun toFloatArray(value: String?): FloatArray? {
-        if (value.isNullOrBlank()) return null
-        return value.split(",").map { it.toFloat() }.toFloatArray()
-    }
+    fun toFloatArray(value: ByteArray?): FloatArray? = value?.let(EmbeddingBlobCodec::decode)
 
     /**
      * Serialises a [NodeContextConfig] to a compact JSON string suitable for

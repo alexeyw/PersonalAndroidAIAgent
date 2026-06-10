@@ -2,7 +2,9 @@ package app.knotwork.android.data.local
 
 import app.knotwork.android.domain.models.MemorySource
 import app.knotwork.android.domain.models.NodeContextConfig
+import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Before
 import org.junit.Test
 
@@ -98,5 +100,33 @@ class ConvertersTest {
     @Test
     fun `fromMemorySource encodes unknown as the migration default`() {
         assertEquals("{\"type\":\"unknown\"}", converters.fromMemorySource(MemorySource.Unknown))
+    }
+
+    // The FloatArray ↔ ByteArray pair delegates to EmbeddingBlobCodec (whose
+    // wire format is exhaustively covered by EmbeddingBlobCodecTest); these
+    // tests pin the null-passthrough contract and the delegation itself.
+
+    @Test
+    fun `fromFloatArray returns null for null input`() {
+        assertNull(converters.fromFloatArray(null))
+    }
+
+    @Test
+    fun `toFloatArray returns null for null input`() {
+        assertNull(converters.toFloatArray(null))
+    }
+
+    @Test
+    fun `toFloatArray returns null for empty blob marker`() {
+        assertNull(converters.toFloatArray(ByteArray(0)))
+    }
+
+    @Test
+    fun `embedding round-trip through converters preserves values`() {
+        val original = floatArrayOf(0.5f, -1.25f, 3.75f)
+
+        val restored = converters.toFloatArray(converters.fromFloatArray(original))
+
+        assertArrayEquals(original, restored, 0.0f)
     }
 }
