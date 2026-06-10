@@ -99,7 +99,7 @@ class ChatHomeHitlScreenFlowTest {
         composeTestRule.onAllNodesWithText(allowLabel)[0].assertIsNotEnabled()
 
         // Flip the typed-confirm flow to the magic word; the gate opens.
-        handles.pendingTypedConfirmFlow.value = "yes"
+        handles.setTypedConfirm("yes")
         composeTestRule.waitForIdle()
         composeTestRule.onAllNodesWithText(allowLabel)[0].assertIsEnabled()
     }

@@ -52,8 +52,8 @@ class ChatHomeSendFlowTest {
         // UI side; the VM clears it after persistence. We sanity-check the
         // flow is still readable after a click so the test fails loudly if a
         // future refactor moves clearing into the screen.
-        assert(handles.composerValueFlow.value == "Hello there") {
-            "Composer value should still be readable post-Send; was ${handles.composerValueFlow.value}"
+        assert(handles.composerValue == "Hello there") {
+            "Composer value should still be readable post-Send; was ${handles.composerValue}"
         }
     }
 
@@ -75,7 +75,7 @@ class ChatHomeSendFlowTest {
 
         // Step 2 — flip to Generating; the loader bubble appears in the body
         // and the composer's trailing action morphs to the stop affordance.
-        handles.stateFlow.value = ChatHomeUiState.Generating
+        handles.setVisual(ChatHomeUiState.Generating)
         composeTestRule.waitForIdle()
         composeTestRule.onNodeWithText(generatingLabel).assertIsDisplayed()
         val stopCd = ctx.getString(KnotworkR.string.knotwork_composer_stop)
@@ -101,7 +101,7 @@ class ChatHomeSendFlowTest {
         composeTestRule.onNodeWithContentDescription(stopCd).assertIsDisplayed()
 
         // Flip back to Idle — the send icon should return.
-        handles.stateFlow.value = ChatHomeUiState.Idle
+        handles.setVisual(ChatHomeUiState.Idle)
         composeTestRule.waitForIdle()
         composeTestRule.onNodeWithContentDescription(sendCd).assertIsDisplayed()
     }

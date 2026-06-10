@@ -88,9 +88,6 @@ import kotlinx.coroutines.withContext
  * @param modifier optional layout modifier applied to the screen root.
  */
 @OptIn(ExperimentalMaterial3Api::class)
-// Reason: this screen coordinates 4 sheets + an overflow DropdownMenu + the
-// destructive delete dialog. Splitting would only shuffle state hoists.
-@Suppress("LongMethod")
 @Composable
 fun ChatHomeScreen(
     viewModel: ChatHomeViewModel,
@@ -98,32 +95,13 @@ fun ChatHomeScreen(
     onOpenSettings: () -> Unit = {},
     onOpenModels: () -> Unit = {},
 ) {
-    val uiState by viewModel.state.collectAsStateWithLifecycle()
-    val threadTitle by viewModel.threadTitle.collectAsStateWithLifecycle()
-    val modelName by viewModel.modelName.collectAsStateWithLifecycle()
-    val composerValue by viewModel.composerValue.collectAsStateWithLifecycle()
-    val pendingTypedConfirm by viewModel.pendingTypedConfirm.collectAsStateWithLifecycle()
-    val messages by viewModel.messages.collectAsStateWithLifecycle()
-    val consoleSearchQuery by viewModel.consoleSearchQuery.collectAsStateWithLifecycle()
-    val consoleFilter by viewModel.consoleFilter.collectAsStateWithLifecycle()
-    val pipelineName by viewModel.pipelineName.collectAsStateWithLifecycle()
-    val tokensUsed by viewModel.tokensUsed.collectAsStateWithLifecycle()
-    val tokensMax by viewModel.tokensMax.collectAsStateWithLifecycle()
-    val streamingTokens by viewModel.streamingTokens.collectAsStateWithLifecycle()
-    val pendingTool by viewModel.pendingTool.collectAsStateWithLifecycle()
-    val pendingClarification by viewModel.pendingClarification.collectAsStateWithLifecycle()
-    val consoleLogs by viewModel.consoleLines.collectAsStateWithLifecycle()
-    val consoleVars by viewModel.consoleVars.collectAsStateWithLifecycle()
-    val consoleTraces by viewModel.consoleTraces.collectAsStateWithLifecycle()
-    val consoleTab by viewModel.consoleTab.collectAsStateWithLifecycle()
-    val consoleSnap by viewModel.consoleSnap.collectAsStateWithLifecycle()
-    val consoleClearConfirm by viewModel.consoleClearConfirmRequested.collectAsStateWithLifecycle()
-    val favorite by viewModel.favorite.collectAsStateWithLifecycle()
-    val threadRows by viewModel.threadRows.collectAsStateWithLifecycle()
-    val installedModels by viewModel.installedModels.collectAsStateWithLifecycle()
-    val activeModelId by viewModel.activeModelId.collectAsStateWithLifecycle()
-    val availablePipelines by viewModel.availablePipelinesFlow.collectAsStateWithLifecycle()
-    val currentSessionId by viewModel.currentSessionId.collectAsStateWithLifecycle()
+    // Single subscription to the consolidated screen state — the immutable
+    // sub-structures (composer, console, pending, thread, model, tokens)
+    // are handed down the tree as-is, so child composables skip when their
+    // slice did not change.
+    val screenState by viewModel.state.collectAsStateWithLifecycle()
+    val messages = screenState.messages
+    val currentSessionId = screenState.thread.currentSessionId
     val chatListState = rememberLazyListState()
 
     // Auto-scroll for the message list, re-armed on every thread switch.
@@ -254,29 +232,7 @@ fun ChatHomeScreen(
     // `strings_chat.xml`.
     val fixtures = rememberChatHomeFixtures()
 
-    val viewState = uiState.toViewState(
-        threadTitle = threadTitle,
-        modelName = modelName,
-        fixtures = fixtures,
-        messages = messages,
-        composerValue = composerValue,
-        pendingTypedConfirm = pendingTypedConfirm,
-        consoleSearchQuery = consoleSearchQuery,
-        consoleFilter = consoleFilter,
-        consoleLogs = consoleLogs,
-        consoleVars = consoleVars,
-        consoleTraces = consoleTraces,
-        consoleTab = consoleTab,
-        consoleSnap = consoleSnap,
-        pipelineName = pipelineName ?: PIPELINE_NAME_PLACEHOLDER,
-        tokensUsed = tokensUsed,
-        tokensMax = tokensMax,
-        pendingTool = pendingTool,
-        pendingClarification = pendingClarification,
-        favorite = favorite,
-        threads = threadRows,
-        streamingTokens = streamingTokens,
-    )
+    val viewState = screenState.toViewState(fixtures = fixtures)
 
     val callbacks = ChatHomeCallbacks(
         onComposerValueChange = viewModel::onComposerValueChange,
@@ -304,7 +260,8 @@ fun ChatHomeScreen(
         // user is actively looking at, so the screen reproduces the same
         // pre-filter here.
         onConsoleCopyAll = {
-            val visible = visibleConsoleLogs(consoleLogs, consoleFilter, consoleSearchQuery)
+            val console = screenState.console
+            val visible = visibleConsoleLogs(console.logs, console.filter, console.searchQuery)
             clipboardManager.setText(AnnotatedString(viewModel.buildConsoleAllCopyPayload(visible)))
             viewModel.signalConsoleAllCopied()
         },
@@ -318,7 +275,7 @@ fun ChatHomeScreen(
         onTitleTripleTap = { debugPickerExpanded = true },
         onToggleFavorite = viewModel::toggleFavoriteCurrent,
         onEditThread = { threadId ->
-            val session = threadRows.firstOrNull { it.id == threadId }
+            val session = screenState.thread.rows.firstOrNull { it.id == threadId }
             renameDraft = session?.title.orEmpty()
             renameTargetId = threadId
         },
@@ -448,7 +405,7 @@ fun ChatHomeScreen(
                 )
             }
         }
-        if (consoleClearConfirm) {
+        if (screenState.consoleClearConfirmRequested) {
             AlertDialog(
                 onDismissRequest = viewModel::dismissConsoleClear,
                 title = { Text(stringResource(R.string.chat_console_clear_dialog_title)) },
@@ -514,7 +471,7 @@ fun ChatHomeScreen(
                 sheetState = sheetState,
             ) {
                 NewThreadPipelinePickerSheetContent(
-                    pipelines = availablePipelines,
+                    pipelines = screenState.availablePipelines,
                     initialPipelineId = viewModel.currentPipelineId(),
                     onCancel = { newThreadSheetVisible = false },
                     onCreate = { pipelineId ->
@@ -531,8 +488,8 @@ fun ChatHomeScreen(
                 sheetState = sheetState,
             ) {
                 ModelPickerSheetContent(
-                    models = installedModels.map { ModelPickerRow(id = it.id, name = it.name) },
-                    activeId = activeModelId,
+                    models = screenState.model.installed.map { ModelPickerRow(id = it.id, name = it.name) },
+                    activeId = screenState.model.activeId,
                     onPick = { id ->
                         modelPickerVisible = false
                         viewModel.pickModel(id)
@@ -780,14 +737,6 @@ internal fun visibleConsoleLogs(
     if (searchQuery.isNullOrEmpty()) return sourceFiltered
     return sourceFiltered.filter { it.text.contains(searchQuery, ignoreCase = true) }
 }
-
-/**
- * Fallback subtitle rendered when the pipeline library is still empty
- * (no pipelines have been created yet). Matches the catalog default in
- * `ChatHomeViewState.pipelineName` so the TopAppBar subtitle does not
- * jump between values once a pipeline is created.
- */
-private const val PIPELINE_NAME_PLACEHOLDER: String = "default"
 
 /** MIME type used by both the export share-sheet and the import file picker. */
 private const val MIME_JSON: String = "application/json"

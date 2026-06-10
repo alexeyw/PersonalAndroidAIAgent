@@ -51,6 +51,17 @@ details.
 
 ### Changed
 
+- **Chat home screen state consolidated into a single immutable snapshot.**
+  The chat-home ViewModel previously exposed ~25 independent `StateFlow`
+  properties (composer text, console pane, HITL/clarification snapshots,
+  thread metadata, model picker, token meter, …) and the screen subscribed
+  to each one separately. They are now aggregated into one
+  `ChatHomeScreenState` data class with logically grouped sub-structures,
+  observed through a single subscription. One-shot events (export payloads,
+  snackbars, the deleted-pipeline fallback signal) remain on dedicated
+  event channels. No user-visible behaviour changes; the refactor reduces
+  subscription overhead and makes state transitions atomic and easier to
+  test.
 - **Long-term-memory embeddings are now stored in binary form.** The
   `memory_chunks.embedding` column changes from a comma-separated TEXT
   encoding to a BLOB of little-endian IEEE-754 floats (4 bytes per
