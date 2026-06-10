@@ -2,6 +2,7 @@ package app.knotwork.android.domain.usecases
 
 import app.knotwork.android.domain.models.PipelineGraph
 import app.knotwork.android.domain.repositories.PipelineRepository
+import kotlinx.coroutines.CancellationException
 import java.util.UUID
 import javax.inject.Inject
 
@@ -81,6 +82,8 @@ class DuplicatePipelineUseCase @Inject constructor(private val pipelineRepositor
 
             pipelineRepository.savePipeline(duplicate)
             Result.success(duplicate)
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             Result.failure(e)
         }

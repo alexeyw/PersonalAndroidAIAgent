@@ -2,6 +2,7 @@ package app.knotwork.android.data.tools.local
 
 import app.knotwork.android.domain.engine.LlmInferenceEngine
 import app.knotwork.android.domain.models.AgentTool
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
@@ -131,6 +132,8 @@ class SearchTool @Inject constructor(private val llmEngine: LlmInferenceEngine) 
                                 summary.append(token)
                             }
                             return@withContext summary.toString()
+                        } catch (e: CancellationException) {
+                            throw e
                         } catch (e: Exception) {
                             return@withContext truncateCleanly(extract)
                         }
@@ -142,6 +145,8 @@ class SearchTool @Inject constructor(private val llmEngine: LlmInferenceEngine) 
             } else {
                 return@withContext "Failed to fetch data: HTTP ${connection.responseCode}"
             }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             return@withContext "Error executing search: ${e.message}"
         }

@@ -8,6 +8,7 @@ import app.knotwork.android.domain.models.Result
 import app.knotwork.android.domain.repositories.ChatRepository
 import app.knotwork.android.domain.repositories.MemoryRepository
 import app.knotwork.android.domain.repositories.PipelineRepository
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
@@ -56,6 +57,8 @@ class AppInitializationUseCase @Inject constructor(
         emit(progress(InitStage.Initializing, "Preparing application…", completed = 0))
         try {
             initializeAppUseCase()
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             Timber.tag(TAG).e(e, "InitializeAppUseCase failed")
             emit(failure(InitStage.Initializing, e))
@@ -76,6 +79,8 @@ class AppInitializationUseCase @Inject constructor(
         emit(progress(InitStage.LoadingPipelines, "Reading pipelines…", completed = 2))
         try {
             pipelineRepository.getAllPipelines().first()
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             Timber.tag(TAG).e(e, "Pipeline prefetch failed")
             emit(failure(InitStage.LoadingPipelines, e))
@@ -85,6 +90,8 @@ class AppInitializationUseCase @Inject constructor(
         emit(progress(InitStage.LoadingChats, "Reading chats…", completed = 3))
         try {
             chatRepository.getSessionsFlow().first()
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             Timber.tag(TAG).e(e, "Chat sessions prefetch failed")
             emit(failure(InitStage.LoadingChats, e))
@@ -94,6 +101,8 @@ class AppInitializationUseCase @Inject constructor(
         emit(progress(InitStage.LoadingMemory, "Reading memory…", completed = 4))
         try {
             memoryRepository.getRecentMemorySummaries(MEMORY_PREFETCH_LIMIT)
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             Timber.tag(TAG).e(e, "Memory prefetch failed")
             emit(failure(InitStage.LoadingMemory, e))

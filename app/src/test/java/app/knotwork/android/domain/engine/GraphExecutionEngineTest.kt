@@ -57,10 +57,13 @@ import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
 import io.mockk.verify
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -302,6 +305,47 @@ class GraphExecutionEngineTest {
 
         val completedState = states.last() as AgentOrchestratorState.Completed
         assertEquals("LLM Response", completedState.finalResponse)
+    }
+
+    /**
+     * Cooperative-cancellation contract of the per-node catch in the engine
+     * loop: a [CancellationException] escaping a node executor must propagate
+     * out of the engine flow unchanged and must never be collapsed into an
+     * [AgentOrchestratorState.Error] emission.
+     */
+    @Test
+    fun `given executor throws CancellationException then engine rethrows without Error emission`() = runTest {
+        val inputNode = NodeModel("input_1", NodeType.INPUT, 0f, 0f)
+        val llmNode = NodeModel("llm_1", NodeType.LITE_RT, 0f, 0f)
+        val outputNode = NodeModel("output_1", NodeType.OUTPUT, 0f, 0f)
+
+        val graph = PipelineGraph(
+            id = "g1",
+            name = "Test Graph",
+            nodes = listOf(inputNode, llmNode, outputNode),
+            connections = listOf(
+                ConnectionModel("c1", "input_1", "llm_1"),
+                ConnectionModel("c2", "llm_1", "output_1"),
+            ),
+        )
+
+        every { llmEngine.generateResponseStream(any()) } returns flow {
+            throw CancellationException("user stop")
+        }
+
+        val states = mutableListOf<AgentOrchestratorState>()
+        var cancellation: CancellationException? = null
+        try {
+            engine(sessionId, "User prompt", graph).collect { states.add(it) }
+        } catch (e: CancellationException) {
+            cancellation = e
+        }
+
+        assertNotNull("CancellationException must propagate out of the engine flow", cancellation)
+        assertTrue(
+            "No Error state may be emitted on cancellation, got $states",
+            states.none { it is AgentOrchestratorState.Error },
+        )
     }
 
     @Test

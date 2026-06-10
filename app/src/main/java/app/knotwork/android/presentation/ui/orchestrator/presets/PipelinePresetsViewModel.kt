@@ -11,6 +11,7 @@ import app.knotwork.android.domain.usecases.LoadPipelineFromPresetUseCase
 import app.knotwork.android.domain.usecases.SavePipelineAsPresetUseCase
 import app.knotwork.android.presentation.ui.common.UiText
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -140,6 +141,8 @@ class PipelinePresetsViewModel @Inject constructor(
                         feedbackMessage = UiText(R.string.orchestrator_preset_manager_deleted),
                     )
                 }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 _uiState.update {
                     it.copy(isLoading = false, errorMessage = throwableAsUiText(e))
@@ -172,6 +175,8 @@ class PipelinePresetsViewModel @Inject constructor(
                         feedbackMessage = UiText(R.string.orchestrator_preset_manager_renamed),
                     )
                 }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 _uiState.update {
                     it.copy(isLoading = false, errorMessage = throwableAsUiText(e))

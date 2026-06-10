@@ -4,6 +4,7 @@ import app.knotwork.android.domain.engine.LlmInferenceEngine
 import app.knotwork.android.domain.models.AppError
 import app.knotwork.android.domain.models.Result
 import app.knotwork.android.domain.repositories.LocalModelRepository
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -59,6 +60,8 @@ class LoadModelUseCase @Inject constructor(
             }
 
             return@withContext llmInferenceEngine.initialize(pathToLoad)
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             return@withContext Result.Error(
                 error = LlmSystemError,

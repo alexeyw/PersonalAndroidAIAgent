@@ -1,6 +1,7 @@
 package app.knotwork.android.domain.usecases
 
 import app.knotwork.android.domain.prompt.PromptVariableProvider
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
@@ -38,7 +39,13 @@ class GetSystemPromptVariableCatalogUseCase @Inject constructor(
     suspend operator fun invoke(): List<PromptVariableCatalogEntry> = withContext(Dispatchers.Default) {
         providers
             .map { provider ->
-                val sample = runCatching { provider.resolve() }.getOrDefault("")
+                val sample = try {
+                    provider.resolve()
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Throwable) {
+                    ""
+                }
                 PromptVariableCatalogEntry(
                     placeholder = "\$${provider.key()}",
                     sample = sample,

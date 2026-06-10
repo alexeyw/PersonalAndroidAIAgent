@@ -9,8 +9,10 @@ import app.knotwork.android.domain.models.ChatMessage
 import app.knotwork.android.domain.models.Role
 import app.knotwork.android.domain.repositories.ChatRepository
 import app.knotwork.android.domain.repositories.PipelineRepository
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.channels.Channel
@@ -24,6 +26,7 @@ import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import java.util.PriorityQueue
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -171,18 +174,31 @@ class TaskQueueManagerImpl @Inject constructor(
                 stateFlow.emit(state)
                 _globalState.value = state
             }
+        } catch (e: CancellationException) {
+            // Cancellation (user Stop, scope teardown) is not a failure:
+            // mapping it to `Error` would both surface a false error banner
+            // and break cooperative cancellation. Re-throw so the worker
+            // coroutine dies with its scope; the `finally` below still
+            // resets the session state.
+            throw e
         } catch (e: Exception) {
             val errState = AgentOrchestratorState.Error(e.message ?: "Execution failed")
             stateFlow.emit(errState)
             _globalState.value = errState
         } finally {
-            val last = stateFlow.replayCache.lastOrNull()
-            if (last !is AgentOrchestratorState.Completed &&
-                last !is AgentOrchestratorState.Error
-            ) {
-                stateFlow.emit(AgentOrchestratorState.Idle)
+            // Runs on the cancellation path too, where the coroutine's job
+            // is already cancelled — `NonCancellable` lets the suspending
+            // `emit` reset the session to `Idle` instead of immediately
+            // re-throwing and leaving the UI stuck on a stale state.
+            withContext(NonCancellable) {
+                val last = stateFlow.replayCache.lastOrNull()
+                if (last !is AgentOrchestratorState.Completed &&
+                    last !is AgentOrchestratorState.Error
+                ) {
+                    stateFlow.emit(AgentOrchestratorState.Idle)
+                }
+                _globalState.value = AgentOrchestratorState.Idle
             }
-            _globalState.value = AgentOrchestratorState.Idle
         }
     }
 

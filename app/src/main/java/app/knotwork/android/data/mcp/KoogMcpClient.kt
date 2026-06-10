@@ -93,6 +93,12 @@ class KoogMcpClient(private val networkActivityTracker: NetworkActivityTracker? 
                     }
                 }
             }
+            // try/finally (no catch) so every failure — including
+            // cancellation — propagates unchanged while the locally created
+            // client is still closed; a catch-and-rethrow here would have to
+            // special-case CancellationException to keep cancellation
+            // cooperative.
+            var attached = false
             try {
                 val transport: Transport = when (config.transport) {
                     McpTransport.SSE -> McpToolRegistryProvider.defaultSseTransport(
@@ -106,9 +112,11 @@ class KoogMcpClient(private val networkActivityTracker: NetworkActivityTracker? 
                 // Publish the client into the field only after the transport has been
                 // attached successfully — failure paths must close it locally.
                 httpClient = client
-            } catch (t: Throwable) {
-                runCatching { client.close() }
-                throw t
+                attached = true
+            } finally {
+                if (!attached) {
+                    runCatching { client.close() }
+                }
             }
         }
     }

@@ -30,6 +30,7 @@ import app.knotwork.android.domain.usecases.TestBackendUseCase
 import app.knotwork.design.components.dialogs.typedConfirmMatches
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -620,13 +621,14 @@ class SettingsViewModel @Inject constructor(
      */
     fun exportMemoryBase(target: OutputStream) {
         viewModelScope.launch {
-            runCatching {
-                exportMemoryBaseUseCase(target)
-            }.onSuccess { count ->
+            try {
+                val count = exportMemoryBaseUseCase(target)
                 emitSnackbar(appContext.getString(R.string.settings_memory_export_success, count))
-            }.onFailure { error ->
-                Timber.w(error, "Memory export failed")
-                emitSnackbar(appContext.getString(R.string.settings_memory_export_failed, error.message.orEmpty()))
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Throwable) {
+                Timber.w(e, "Memory export failed")
+                emitSnackbar(appContext.getString(R.string.settings_memory_export_failed, e.message.orEmpty()))
             }
         }
     }
@@ -645,11 +647,13 @@ class SettingsViewModel @Inject constructor(
      */
     fun importMemory(source: InputStream) {
         viewModelScope.launch {
-            val jsonText = runCatching {
+            val jsonText = try {
                 withContext(Dispatchers.IO) { source.bufferedReader().use { it.readText() } }
-            }.getOrElse { error ->
-                Timber.w(error, "Memory import: failed to read file")
-                emitSnackbar(appContext.getString(R.string.settings_memory_import_failed, error.message.orEmpty()))
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Throwable) {
+                Timber.w(e, "Memory import: failed to read file")
+                emitSnackbar(appContext.getString(R.string.settings_memory_import_failed, e.message.orEmpty()))
                 return@launch
             }
 
@@ -692,11 +696,12 @@ class SettingsViewModel @Inject constructor(
         val pending = _uiState.value.pendingImport ?: return
         _uiState.update { it.copy(pendingImport = null) }
         viewModelScope.launch {
-            runCatching {
-                memoryImportUseCase.import(pending.document, strategy)
-            }.onSuccess { result ->
+            try {
+                val result = memoryImportUseCase.import(pending.document, strategy)
                 emitSnackbar(importResultMessage(result))
-            }.onFailure { error ->
+            } catch (e: CancellationException) {
+                throw e
+            } catch (error: Throwable) {
                 Timber.w(error, "Memory import failed")
                 emitSnackbar(appContext.getString(R.string.settings_memory_import_failed, error.message.orEmpty()))
             }

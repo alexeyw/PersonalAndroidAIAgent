@@ -251,7 +251,13 @@ class MemoryViewModel @Inject constructor(
     fun showCompactDialog() {
         _uiState.update { it.copy(compactDialogVisible = true, compactEstimate = null) }
         viewModelScope.launch {
-            val estimate = runCatching { estimateCompactionUseCase() }.getOrNull()
+            val estimate = try {
+                estimateCompactionUseCase()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Throwable) {
+                null
+            }
             _uiState.update { it.copy(compactEstimate = estimate) }
         }
     }
@@ -265,8 +271,13 @@ class MemoryViewModel @Inject constructor(
     fun confirmCompact() {
         _uiState.update { it.copy(compactDialogVisible = false) }
         viewModelScope.launch {
-            runCatching { memoryCompactionUseCase() }
-                .onFailure { Timber.w(it, "Manual compaction failed") }
+            try {
+                memoryCompactionUseCase()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Throwable) {
+                Timber.w(e, "Manual compaction failed")
+            }
             refresh()
         }
     }
@@ -309,8 +320,13 @@ class MemoryViewModel @Inject constructor(
     /** Serialises every chunk into the SAF-provided [target]. */
     fun exportAllTo(target: OutputStream) {
         viewModelScope.launch {
-            runCatching { exportMemoryBaseUseCase(target = target, ids = null) }
-                .onFailure { Timber.w(it, "Memory export failed") }
+            try {
+                exportMemoryBaseUseCase(target = target, ids = null)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Throwable) {
+                Timber.w(e, "Memory export failed")
+            }
         }
     }
 

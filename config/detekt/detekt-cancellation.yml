@@ -1,0 +1,58 @@
+# Detekt configuration for the coroutine-cancellation gate.
+#
+# This config backs the dedicated `detektDebug` run wired into
+# `./gradlew check` (see `app/build.gradle.kts`). It exists because
+# `SuspendFunSwallowedCancellation` requires type resolution, which the
+# plain `detekt` task (the main strict gate, `config/detekt/detekt.yml`)
+# cannot provide. Running the full strict config under type resolution
+# would surface ~1.1k findings from rules that have never been part of
+# the gate, so this file deliberately activates a single rule and turns
+# every other rule set off (`buildUponDefaultConfig = false` on the
+# task keeps detekt's bundled defaults out of the run as well).
+#
+# The rule enforces the project-wide coroutine-cancellation contract
+# (docs/code-style.md § Coroutines & Flow):
+#  - a `try`/`catch` around suspend calls must re-throw
+#    `CancellationException` from a dedicated first catch clause whose
+#    body is exactly `throw e`;
+#  - `runCatching` must never wrap suspend calls — use `try`/`catch`
+#    with the explicit re-throw instead.
+
+config:
+  validation: true
+
+comments:
+  active: false
+complexity:
+  active: false
+empty-blocks:
+  active: false
+exceptions:
+  active: false
+naming:
+  active: false
+performance:
+  active: false
+potential-bugs:
+  active: false
+style:
+  active: false
+
+coroutines:
+  active: true
+  CoroutineLaunchedInTestWithoutRunTest:
+    active: false
+  GlobalCoroutineUsage:
+    active: false
+  InjectDispatcher:
+    active: false
+  RedundantSuspendModifier:
+    active: false
+  SleepInsteadOfDelay:
+    active: false
+  SuspendFunSwallowedCancellation:
+    active: true
+  SuspendFunWithCoroutineScopeReceiver:
+    active: false
+  SuspendFunWithFlowReturnType:
+    active: false

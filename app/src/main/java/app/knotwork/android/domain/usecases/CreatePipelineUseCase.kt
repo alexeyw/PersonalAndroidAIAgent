@@ -6,6 +6,7 @@ import app.knotwork.android.domain.models.NodeModel
 import app.knotwork.android.domain.models.NodeType
 import app.knotwork.android.domain.models.PipelineGraph
 import app.knotwork.android.domain.repositories.PipelineRepository
+import kotlinx.coroutines.CancellationException
 import java.util.UUID
 import javax.inject.Inject
 
@@ -77,6 +78,8 @@ class CreatePipelineUseCase @Inject constructor(private val pipelineRepository: 
         return try {
             pipelineRepository.savePipeline(newPipeline)
             Result.success(newPipeline)
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             Result.failure(e)
         }

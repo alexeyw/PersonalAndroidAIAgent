@@ -257,6 +257,11 @@ class GraphExecutionEngine @Inject constructor(
                         "[NODE_OUT] type=${currentNode.type.name} id=${currentNode.id} " +
                             "output=${nodeResult?.outputText?.take(PipelineExecutionDefaults.NODE_IO_LOG_CHAR_LIMIT)}",
                     )
+                } catch (e: kotlinx.coroutines.CancellationException) {
+                    // Node executors suspend; collapsing a cancelled run into
+                    // an `Error` emission would both surface a false error and
+                    // keep the flow alive past its collector's cancellation.
+                    throw e
                 } catch (e: Exception) {
                     Timber.tag(
                         "PipelineDebug",

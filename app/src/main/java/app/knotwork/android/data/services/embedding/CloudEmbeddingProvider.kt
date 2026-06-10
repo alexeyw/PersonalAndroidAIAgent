@@ -61,13 +61,14 @@ class CloudEmbeddingProvider @Inject constructor(
         }
 
         val client = embedderFactory.openAiClient(key)
-        return runCatching {
+        return try {
             client.embed(texts, OpenAIModels.Embeddings.TextEmbedding3Small)
                 .map { it.toFloatVector() }
-        }.getOrElse { throwable ->
-            if (throwable is CancellationException) throw throwable
-            Timber.e(throwable, "OpenAI embedding request failed")
-            throw EmbeddingException("OpenAI embedding request failed", throwable)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Throwable) {
+            Timber.e(e, "OpenAI embedding request failed")
+            throw EmbeddingException("OpenAI embedding request failed", e)
         }
     }
 
