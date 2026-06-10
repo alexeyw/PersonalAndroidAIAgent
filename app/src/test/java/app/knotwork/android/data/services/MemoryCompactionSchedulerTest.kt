@@ -101,6 +101,40 @@ class MemoryCompactionSchedulerTest {
     }
 
     @Test
+    fun `startHardLimitWatch survives a failing stats flow and can be re-armed`() = runTest {
+        // The stats flow is the first DB access on an app-lifetime scope with no exception
+        // handler: an uncaught throw (e.g. SQLCipher passphrase unavailable) would crash the
+        // process before the splash recovery screen renders. The watch must absorb the
+        // failure and release its idempotency guard so a later call starts a fresh collector.
+        var emissions = 0
+        every { memoryRepository.observeStats() } answers {
+            emissions++
+            if (emissions == 1) {
+                kotlinx.coroutines.flow.flow { throw IllegalStateException("database unavailable") }
+            } else {
+                flowOf(stats(chunkCount = 6_000))
+            }
+        }
+        every { settingsRepository.maxMemoryChunks } returns flowOf(5_000)
+        scheduler.watchScope = this
+
+        scheduler.startHardLimitWatch()
+        advanceUntilIdle()
+
+        // First collector died quietly; the guard is released, so a re-arm works.
+        scheduler.startHardLimitWatch()
+        advanceUntilIdle()
+
+        verify(exactly = 1) {
+            workManager.enqueueUniqueWork(
+                MemoryCompactionWorker.UNIQUE_IMMEDIATE_NAME,
+                ExistingWorkPolicy.KEEP,
+                any<OneTimeWorkRequest>(),
+            )
+        }
+    }
+
+    @Test
     fun `startHardLimitWatch does not trigger when within the limit`() = runTest {
         every { memoryRepository.observeStats() } returns flowOf(stats(chunkCount = 100))
         every { settingsRepository.maxMemoryChunks } returns flowOf(5_000)

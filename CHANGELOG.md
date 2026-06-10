@@ -117,11 +117,18 @@ details.
   while a database is present, any failure to read the stored passphrase
   (preferences unopenable, entry missing or malformed) raises a typed
   error that routes to the new startup recovery screen instead of
-  regenerating. The passphrase is also no longer fetched during
-  dependency injection on the main thread — it is read lazily at the
-  first real database open, where the failure can be handled by UI. The
-  API-key store intentionally keeps its recreate-on-corruption recovery
-  (keys can be re-entered by the user).
+  regenerating — while no database exists, the old self-heal (recreate a
+  corrupt store) still applies, since nothing can be orphaned. A
+  key/file mismatch (database restored from another install) is detected
+  at open time and routed to the same recovery screen. The passphrase is
+  also no longer fetched during dependency injection on the main thread —
+  it is read lazily at the first real database open, where the failure
+  can be handled by UI; best-effort background maintenance paths skip
+  their work instead of crashing the process while the recovery screen
+  is up. The user-confirmed wipe is serialized against concurrent
+  database opens and deletes the passphrase only after the database file
+  is verifiably gone. The API-key store intentionally keeps its
+  recreate-on-corruption recovery (keys can be re-entered by the user).
 
 ## [0.4.0] - 2026-06-07
 

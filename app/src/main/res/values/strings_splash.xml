@@ -9,7 +9,5 @@
     <string name="splash_reset_dialog_title">Erase all data?</string>
     <string name="splash_reset_dialog_body">This permanently deletes all chats, long-term memory, pipelines and presets stored on this device. This cannot be undone. Type %1$s to confirm.</string>
     <string name="splash_reset_dialog_hint">Type %1$s to confirm</string>
-    <string name="splash_reset_typed_keyword" translatable="false">RESET</string>
     <string name="splash_reset_dialog_confirm">Erase everything</string>
-    <string name="splash_reset_dialog_cancel">Cancel</string>
 </resources>

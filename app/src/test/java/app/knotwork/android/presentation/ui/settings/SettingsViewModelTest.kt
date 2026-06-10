@@ -433,7 +433,7 @@ class SettingsViewModelTest {
 
     @Test
     fun `confirmDestructive without matching keyword is a no-op`() = runTest {
-        every { context.getString(app.knotwork.android.R.string.settings_destructive_typed_keyword) } returns "yes"
+        every { context.getString(app.knotwork.android.R.string.destructive_typed_keyword) } returns "yes"
         advanceUntilIdle()
         viewModel.stageClearMemory()
         viewModel.updateDestructiveTypedInput("nope")
@@ -445,7 +445,7 @@ class SettingsViewModelTest {
 
     @Test
     fun `confirmDestructive with matching keyword clears memory`() = runTest {
-        every { context.getString(app.knotwork.android.R.string.settings_destructive_typed_keyword) } returns "yes"
+        every { context.getString(app.knotwork.android.R.string.destructive_typed_keyword) } returns "yes"
         advanceUntilIdle()
         viewModel.stageClearMemory()
         viewModel.updateDestructiveTypedInput("yes")
@@ -457,7 +457,7 @@ class SettingsViewModelTest {
 
     @Test
     fun `confirmDestructive ResetSettings resets multiple preferences`() = runTest {
-        every { context.getString(app.knotwork.android.R.string.settings_destructive_typed_keyword) } returns "yes"
+        every { context.getString(app.knotwork.android.R.string.destructive_typed_keyword) } returns "yes"
         advanceUntilIdle()
         viewModel.stageResetSettings()
         viewModel.updateDestructiveTypedInput("YES")
@@ -472,7 +472,7 @@ class SettingsViewModelTest {
 
     @Test
     fun `confirmDestructive ResetSettings also reverts memory tuning to defaults`() = runTest {
-        every { context.getString(app.knotwork.android.R.string.settings_destructive_typed_keyword) } returns "yes"
+        every { context.getString(app.knotwork.android.R.string.destructive_typed_keyword) } returns "yes"
         advanceUntilIdle()
         viewModel.stageResetSettings()
         viewModel.updateDestructiveTypedInput("yes")

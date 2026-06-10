@@ -32,5 +32,13 @@ class DbPassphraseUnavailableException(val reason: Reason, cause: Throwable? = n
 
         /** A passphrase entry exists but cannot be decoded into a valid key. */
         PASSPHRASE_MALFORMED,
+
+        /**
+         * The passphrase was read back fine but SQLCipher rejected it for the existing
+         * database file ("file is not a database") — the file was restored from a different
+         * install or corrupted. Functionally identical to a lost passphrase: the data cannot
+         * be decrypted with what this device knows.
+         */
+        KEY_MISMATCH,
     }
 }

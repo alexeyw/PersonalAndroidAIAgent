@@ -3,6 +3,7 @@ package app.knotwork.android.presentation.ui.splash
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
@@ -44,7 +45,7 @@ fun SplashScreen(
 
     val startingMessage = stringResource(R.string.splash_starting)
     val retryLabel = stringResource(R.string.common_retry)
-    val keyword = stringResource(R.string.splash_reset_typed_keyword)
+    val keyword = stringResource(R.string.destructive_typed_keyword)
     val dataLockedTexts = DataLockedTexts(
         title = stringResource(R.string.splash_data_locked_title),
         body = stringResource(R.string.splash_data_locked_body),
@@ -53,24 +54,27 @@ fun SplashScreen(
         dialogBody = stringResource(R.string.splash_reset_dialog_body, keyword),
         dialogHint = stringResource(R.string.splash_reset_dialog_hint, keyword),
         dialogConfirm = stringResource(R.string.splash_reset_dialog_confirm),
-        dialogCancel = stringResource(R.string.splash_reset_dialog_cancel),
+        dialogCancel = stringResource(R.string.common_cancel),
         keyword = keyword,
     )
     val viewState = uiState.toViewState(defaultMessage = startingMessage, dataLockedTexts = dataLockedTexts)
     val appName = stringResource(R.string.app_name)
+    val callbacks = remember(viewModel) {
+        SplashCallbacks(
+            onRetry = viewModel::retry,
+            onResetRequest = viewModel::requestReset,
+            onResetInputChange = viewModel::updateResetTypedInput,
+            onResetConfirm = viewModel::confirmReset,
+            onResetDismiss = viewModel::dismissResetDialog,
+        )
+    }
 
     SplashContent(
         appName = appName,
         state = viewState,
         modifier = modifier,
         retryLabel = retryLabel,
-        callbacks = SplashCallbacks(
-            onRetry = viewModel::retry,
-            onResetRequest = viewModel::requestReset,
-            onResetInputChange = viewModel::updateResetTypedInput,
-            onResetConfirm = viewModel::confirmReset,
-            onResetDismiss = viewModel::dismissResetDialog,
-        ),
+        callbacks = callbacks,
     )
 }
 

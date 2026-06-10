@@ -280,6 +280,41 @@ class SplashViewModelTest {
     }
 
     @Test
+    fun `given wipe in flight when retry tapped then is no-op until wipe restarts initialization`() = runTest {
+        var invocationCount = 0
+        every { appInitializationUseCase() } answers {
+            invocationCount++
+            if (invocationCount == 1) {
+                flowOf(passphraseFailure())
+            } else {
+                flowOf(InitProgress(InitStage.Done, "Ready", 5, 5))
+            }
+        }
+        // Hold the wipe open so retry() can race it.
+        val wipeGate = kotlinx.coroutines.CompletableDeferred<Unit>()
+        coEvery { resetLockedDatabaseUseCase() } coAnswers { wipeGate.await() }
+
+        val viewModel = createViewModel()
+        advanceUntilIdle()
+
+        viewModel.requestReset()
+        viewModel.updateResetTypedInput(RESET_KEYWORD)
+        viewModel.confirmReset()
+        testScheduler.runCurrent()
+
+        // Wipe suspended; a racing Retry tap must not start a parallel init run.
+        viewModel.retry()
+        testScheduler.runCurrent()
+
+        wipeGate.complete(Unit)
+        advanceUntilIdle()
+
+        // Exactly two runs: the implicit init + the post-wipe restart. No third from retry().
+        assertEquals(2, invocationCount)
+        assertTrue(viewModel.uiState.value.isDone)
+    }
+
+    @Test
     fun `given generic failure when confirmReset then is no-op`() = runTest {
         every { appInitializationUseCase() } returns flowOf(
             InitProgress(

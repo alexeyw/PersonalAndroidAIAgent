@@ -30,7 +30,6 @@ import androidx.compose.material.icons.outlined.Bolt
 import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Shield
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
@@ -44,7 +43,6 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -61,12 +59,13 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import app.knotwork.design.R
-import app.knotwork.design.components.buttons.KnotworkPrimaryButton
 import app.knotwork.design.components.buttons.KnotworkSecondaryButton
 import app.knotwork.design.components.buttons.KnotworkTextButton
 import app.knotwork.design.components.chips.ChipStyle
 import app.knotwork.design.components.chips.KnotworkChip
 import app.knotwork.design.components.controls.KnotworkSegmentedControl
+import app.knotwork.design.components.dialogs.TypedConfirmDialog
+import app.knotwork.design.components.dialogs.TypedConfirmDialogState
 import app.knotwork.design.components.misc.KnotworkLoader
 import app.knotwork.design.components.misc.KnotworkSectionAction
 import app.knotwork.design.components.misc.KnotworkStatCell
@@ -1178,39 +1177,21 @@ private fun DestructiveTypedConfirmDialog(
     onConfirm: () -> Unit,
     onCancel: () -> Unit,
 ) {
-    val canConfirm = payload.pendingInput.trim().equals(payload.keyword, ignoreCase = true)
-    AlertDialog(
-        onDismissRequest = onCancel,
-        title = { Text(payload.title) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp2)) {
-                Text(text = payload.body, style = KnotworkTextStyles.BodyBase)
-                OutlinedTextField(
-                    value = payload.pendingInput,
-                    onValueChange = onTypedConfirmChange,
-                    placeholder = { Text(payload.hint, style = KnotworkTextStyles.BodySm) },
-                    singleLine = true,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .testTag(DESTRUCTIVE_TYPED_FIELD_TEST_TAG),
-                )
-            }
-        },
-        confirmButton = {
-            KnotworkPrimaryButton(
-                text = androidx.compose.ui.res.stringResource(R.string.knotwork_settings_destructive_confirm),
-                onClick = onConfirm,
-                enabled = canConfirm,
-                modifier = Modifier.testTag(DESTRUCTIVE_CONFIRM_BUTTON_TEST_TAG),
-            )
-        },
-        dismissButton = {
-            TextButton(onClick = onCancel) {
-                Text(
-                    text = androidx.compose.ui.res.stringResource(R.string.knotwork_settings_destructive_cancel),
-                )
-            }
-        },
+    TypedConfirmDialog(
+        state = TypedConfirmDialogState(
+            title = payload.title,
+            body = payload.body,
+            keyword = payload.keyword,
+            hint = payload.hint,
+            pendingInput = payload.pendingInput,
+        ),
+        confirmLabel = androidx.compose.ui.res.stringResource(R.string.knotwork_settings_destructive_confirm),
+        cancelLabel = androidx.compose.ui.res.stringResource(R.string.knotwork_settings_destructive_cancel),
+        onInputChange = onTypedConfirmChange,
+        onConfirm = onConfirm,
+        onCancel = onCancel,
+        fieldTestTag = DESTRUCTIVE_TYPED_FIELD_TEST_TAG,
+        confirmTestTag = DESTRUCTIVE_CONFIRM_BUTTON_TEST_TAG,
     )
 }
 

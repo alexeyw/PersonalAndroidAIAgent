@@ -132,4 +132,47 @@ class DeferredPassphraseOpenHelperFactoryTest {
         helper.writableDatabase
         verify(exactly = 2) { delegateFactory.create(configuration) }
     }
+
+    @Test
+    fun `given open delegate when runExclusive then delegate is quiesced and action runs`() {
+        every { passphraseProvider.getOrCreatePassphrase() } returns ByteArray(32)
+
+        val factory = createFactory()
+        val helper = factory.create(configuration)
+        helper.writableDatabase
+
+        var actionRan = false
+        factory.runExclusive { actionRan = true }
+
+        assertEquals(true, actionRan)
+        verify(exactly = 1) { delegateHelper.close() }
+
+        // The access after the exclusive section performs a full fresh open.
+        helper.writableDatabase
+        verify(exactly = 2) { delegateFactory.create(configuration) }
+        verify(exactly = 2) { passphraseProvider.getOrCreatePassphrase() }
+    }
+
+    @Test
+    fun `given wrong-key open failure when writableDatabase then rethrows as KEY_MISMATCH`() {
+        every { passphraseProvider.getOrCreatePassphrase() } returns ByteArray(32)
+        every { delegateHelper.writableDatabase } throws
+            RuntimeException("file is not a database: , while compiling: select count(*) from sqlite_master")
+
+        val helper = createFactory().create(configuration)
+
+        val thrown = assertThrows(DbPassphraseUnavailableException::class.java) { helper.writableDatabase }
+        assertEquals(DbPassphraseUnavailableException.Reason.KEY_MISMATCH, thrown.reason)
+    }
+
+    @Test
+    fun `given unrelated open failure when writableDatabase then exception passes through unchanged`() {
+        every { passphraseProvider.getOrCreatePassphrase() } returns ByteArray(32)
+        every { delegateHelper.writableDatabase } throws RuntimeException("disk I/O error")
+
+        val helper = createFactory().create(configuration)
+
+        val thrown = assertThrows(RuntimeException::class.java) { helper.writableDatabase }
+        assertEquals("disk I/O error", thrown.message)
+    }
 }

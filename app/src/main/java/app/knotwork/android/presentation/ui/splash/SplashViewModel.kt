@@ -9,6 +9,7 @@ import app.knotwork.android.domain.models.InitProgress
 import app.knotwork.android.domain.models.InitStage
 import app.knotwork.android.domain.usecases.AppInitializationUseCase
 import app.knotwork.android.domain.usecases.ResetLockedDatabaseUseCase
+import app.knotwork.design.components.dialogs.typedConfirmMatches
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Job
@@ -65,10 +66,15 @@ class SplashViewModel @Inject constructor(
     /**
      * Re-runs initialization after a [InitStage.Failed] terminal state. No-op
      * while the splash is mid-flight or already done — the UI hides the
-     * retry button in those cases anyway.
+     * retry button in those cases anyway — and while a wipe is in flight:
+     * `errorMessage` is still set during the wipe, so without the
+     * [SplashUiState.isResetting] check a racing Retry tap would start an
+     * initialization run concurrently with the wipe's file deletions.
      */
     fun retry() {
-        if (_uiState.value.errorMessage == null && !_uiState.value.isDone) return
+        val state = _uiState.value
+        if (state.isResetting) return
+        if (state.errorMessage == null && !state.isDone) return
         startInitialization()
     }
 
@@ -97,8 +103,8 @@ class SplashViewModel @Inject constructor(
     fun confirmReset() {
         val state = _uiState.value
         if (!state.isDataLocked || state.isResetting) return
-        val keyword = appContext.getString(R.string.splash_reset_typed_keyword)
-        if (!state.resetTypedInput.trim().equals(keyword, ignoreCase = true)) return
+        val keyword = appContext.getString(R.string.destructive_typed_keyword)
+        if (!typedConfirmMatches(input = state.resetTypedInput, keyword = keyword)) return
 
         initJob?.cancel()
         _uiState.update { it.copy(isResetting = true, showResetDialog = false) }

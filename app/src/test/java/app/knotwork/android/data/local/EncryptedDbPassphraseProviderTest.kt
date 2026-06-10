@@ -188,4 +188,48 @@ class EncryptedDbPassphraseProviderTest {
 
         verify(exactly = 1) { context.deleteSharedPreferences("secure_db_passphrase") }
     }
+
+    @Test
+    fun `given prefs open failure without database when getOrCreatePassphrase then self-heals and generates`() {
+        // No DB file: nothing can be orphaned, so the corrupt store may be recreated —
+        // e.g. an Auto-Backup-restored prefs file on a device that has no data yet.
+        var attempts = 0
+        stubPrefsCreate {
+            attempts++
+            if (attempts == 1) throw SecurityException("Keyset undecryptable after restore") else sharedPrefs
+        }
+        stubStoredHex(null)
+        every { editor.commit() } returns true
+
+        val provider = EncryptedDbPassphraseProvider(context)
+        val passphrase = provider.getOrCreatePassphrase()
+
+        assertEquals(32, passphrase.size)
+        verify(exactly = 1) { context.deleteSharedPreferences("secure_db_passphrase") }
+        verify(exactly = 1) { editor.putString("db_passphrase_hex", any()) }
+        assertEquals(2, attempts)
+    }
+
+    @Test
+    fun `given cached prefs when reset then next access opens a fresh prefs instance`() {
+        // Context.deleteSharedPreferences declares results undefined while a live instance
+        // for the same name is retained — the reset must drop the cached holder so the
+        // post-wipe regeneration goes through a freshly created store.
+        var createCount = 0
+        stubPrefsCreate {
+            createCount++
+            sharedPrefs
+        }
+        stubStoredHex("01".repeat(32))
+        every { editor.commit() } returns true
+
+        val provider = EncryptedDbPassphraseProvider(context)
+        provider.getOrCreatePassphrase()
+        assertEquals(1, createCount)
+
+        provider.resetStoredPassphrase()
+        provider.getOrCreatePassphrase()
+
+        assertEquals(2, createCount)
+    }
 }

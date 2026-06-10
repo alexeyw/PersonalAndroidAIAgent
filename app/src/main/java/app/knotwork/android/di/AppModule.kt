@@ -89,23 +89,36 @@ object AppModule {
      * real database open, where `AppInitializationUseCase` catches the failure and routes it to
      * the splash recovery screen.
      */
+    /**
+     * Provides the deferred SQLCipher open-helper factory as its own singleton so the
+     * user-confirmed data wipe ([app.knotwork.android.data.local.DatabaseResetServiceImpl])
+     * can run inside [DeferredPassphraseOpenHelperFactory.runExclusive], serialized against
+     * every concurrent database open.
+     *
+     * sqlcipher-android retains the passphrase array for the helper's lifetime (it re-keys
+     * every pooled connection from it — unlike the legacy android-database-sqlcipher, it never
+     * zeroes the array); the provider hands over a fresh copy, so the retained array never
+     * aliases the stored value.
+     */
+    @Provides
+    @Singleton
+    fun provideDeferredPassphraseOpenHelperFactory(
+        passphraseProvider: EncryptedDbPassphraseProvider,
+    ): DeferredPassphraseOpenHelperFactory = DeferredPassphraseOpenHelperFactory(passphraseProvider) { passphrase ->
+        SupportOpenHelperFactory(passphrase)
+    }
+
     @Provides
     @Singleton
     fun provideAppDatabase(
         @ApplicationContext appContext: Context,
-        passphraseProvider: EncryptedDbPassphraseProvider,
+        factory: DeferredPassphraseOpenHelperFactory,
     ): AppDatabase {
         // net.zetetic:sqlcipher-android does NOT auto-load its native library the way the
         // legacy android-database-sqlcipher did. Without this explicit load, the first call
         // into SupportOpenHelperFactory would crash with UnsatisfiedLinkError. loadLibrary is
         // idempotent, so calling it here (inside the @Singleton provider) is safe.
         System.loadLibrary("sqlcipher")
-
-        // SupportOpenHelperFactory zeroes the passphrase byte array after consumption; the
-        // deferred wrapper hands it a fresh copy at first-open time.
-        val factory = DeferredPassphraseOpenHelperFactory(passphraseProvider) { passphrase ->
-            SupportOpenHelperFactory(passphrase)
-        }
 
         return Room.databaseBuilder(
             appContext,

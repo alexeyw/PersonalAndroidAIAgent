@@ -8,13 +8,10 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.ProgressIndicatorDefaults
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -25,6 +22,8 @@ import app.knotwork.design.components.brand.KnotworkLogo
 import app.knotwork.design.components.brand.KnotworkLogoSize
 import app.knotwork.design.components.buttons.KnotworkPrimaryButton
 import app.knotwork.design.components.buttons.KnotworkSecondaryButton
+import app.knotwork.design.components.dialogs.TypedConfirmDialog
+import app.knotwork.design.components.dialogs.TypedConfirmDialogState
 import app.knotwork.design.theme.KnotworkTheme
 import app.knotwork.design.tokens.KnotworkTextStyles
 
@@ -176,9 +175,9 @@ private fun SplashDataLocked(state: SplashViewState.DataLocked, retryLabel: Stri
 }
 
 /**
- * Typed-confirm dialog gating the irreversible full data reset. Mirrors the
- * Settings destructive-action dialog: the confirm button stays disabled until
- * the typed input matches the keyword (case-insensitive, trimmed).
+ * Typed-confirm dialog gating the irreversible full data reset. Thin wrapper
+ * over the shared [TypedConfirmDialog], so the splash and Settings destructive
+ * confirmations share one interaction contract.
  */
 @Composable
 private fun SplashResetConfirmDialog(
@@ -187,37 +186,21 @@ private fun SplashResetConfirmDialog(
     onConfirm: () -> Unit,
     onDismiss: () -> Unit,
 ) {
-    val canConfirm = payload.pendingInput.trim().equals(payload.keyword, ignoreCase = true)
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(payload.title) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp2)) {
-                Text(text = payload.body, style = KnotworkTextStyles.BodyBase)
-                OutlinedTextField(
-                    value = payload.pendingInput,
-                    onValueChange = onInputChange,
-                    placeholder = { Text(payload.hint, style = KnotworkTextStyles.BodySm) },
-                    singleLine = true,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .testTag(SPLASH_RESET_TYPED_FIELD_TEST_TAG),
-                )
-            }
-        },
-        confirmButton = {
-            KnotworkPrimaryButton(
-                text = payload.confirmLabel,
-                onClick = onConfirm,
-                enabled = canConfirm,
-                modifier = Modifier.testTag(SPLASH_RESET_CONFIRM_BUTTON_TEST_TAG),
-            )
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text(text = payload.cancelLabel)
-            }
-        },
+    TypedConfirmDialog(
+        state = TypedConfirmDialogState(
+            title = payload.title,
+            body = payload.body,
+            keyword = payload.keyword,
+            hint = payload.hint,
+            pendingInput = payload.pendingInput,
+        ),
+        confirmLabel = payload.confirmLabel,
+        cancelLabel = payload.cancelLabel,
+        onInputChange = onInputChange,
+        onConfirm = onConfirm,
+        onCancel = onDismiss,
+        fieldTestTag = SPLASH_RESET_TYPED_FIELD_TEST_TAG,
+        confirmTestTag = SPLASH_RESET_CONFIRM_BUTTON_TEST_TAG,
     )
 }
 

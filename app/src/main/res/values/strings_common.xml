@@ -16,6 +16,11 @@
     <string name="common_back">Back</string>
     <string name="common_retry">Retry</string>
 
+    <!-- Keyword the user must type to arm a destructive typed-confirm dialog.
+         Shared by every destructive confirmation surface (Settings, splash data
+         recovery) so the convention cannot drift between screens. -->
+    <string name="destructive_typed_keyword">yes</string>
+
     <!-- Bottom navigation tab labels -->
     <string name="nav_tab_chat">Chat</string>
     <string name="nav_tab_pipelines">Pipelines</string>
