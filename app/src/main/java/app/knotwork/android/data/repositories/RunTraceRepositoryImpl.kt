@@ -4,6 +4,7 @@ import androidx.annotation.VisibleForTesting
 import app.knotwork.android.data.local.dao.TraceStepDao
 import app.knotwork.android.data.local.models.TraceStepEntity
 import app.knotwork.android.domain.models.ConsoleEventType
+import app.knotwork.android.domain.models.MemoryChunk
 import app.knotwork.android.domain.models.RunTraceRecord
 import app.knotwork.android.domain.repositories.RunTraceRepository
 import kotlinx.coroutines.CoroutineDispatcher
@@ -17,6 +18,9 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import org.json.JSONArray
+import org.json.JSONException
+import org.json.JSONObject
 import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -175,6 +179,9 @@ private fun RunTraceRecord.toEntity(): TraceStepEntity = when (this) {
         recordKind = TraceStepEntity.KIND_NODE_IO,
         nodeId = nodeId,
         inputText = inputText,
+        conditionResult = conditionResult,
+        routingKey = routingKey,
+        resolvedToolName = resolvedToolName,
     )
     is RunTraceRecord.ConsoleEntry -> TraceStepEntity(
         sessionId = sessionId,
@@ -185,6 +192,15 @@ private fun RunTraceRecord.toEntity(): TraceStepEntity = when (this) {
         seq = seq,
         recordKind = TraceStepEntity.KIND_CONSOLE_EVENT,
         consoleEventType = type.toStorageName(),
+    )
+    is RunTraceRecord.MemorySnapshot -> TraceStepEntity(
+        sessionId = sessionId,
+        nodeName = "",
+        outputText = serializeMemoryEntries(entries),
+        timestamp = timestamp,
+        runId = runId,
+        seq = seq,
+        recordKind = TraceStepEntity.KIND_MEMORY_SNAPSHOT,
     )
 }
 
@@ -209,6 +225,9 @@ private fun TraceStepEntity.toRecordOrNull(): RunTraceRecord? {
             outputText = outputText,
             durationMs = durationMs,
             tokenCount = tokenCount,
+            conditionResult = conditionResult,
+            routingKey = routingKey,
+            resolvedToolName = resolvedToolName,
         )
         TraceStepEntity.KIND_CONSOLE_EVENT -> consoleEventTypeFromStorage(consoleEventType)?.let { type ->
             RunTraceRecord.ConsoleEntry(
@@ -219,6 +238,18 @@ private fun TraceStepEntity.toRecordOrNull(): RunTraceRecord? {
                 type = type,
                 message = outputText,
             )
+        }
+        TraceStepEntity.KIND_MEMORY_SNAPSHOT -> deserializeMemoryEntries(outputText)?.let { entries ->
+            RunTraceRecord.MemorySnapshot(
+                runId = recordRunId,
+                sessionId = sessionId,
+                seq = seq,
+                timestamp = timestamp,
+                entries = entries,
+            )
+        } ?: run {
+            Timber.w("Skipping memory-snapshot trace row %d with unreadable payload", id)
+            null
         }
         else -> {
             Timber.w("Skipping trace row %d with unknown recordKind '%s'", id, recordKind)
@@ -258,4 +289,57 @@ private fun consoleEventTypeFromStorage(name: String?): ConsoleEventType? = when
         Timber.w("Unknown stored console event type '%s'; skipping row", name)
         null
     }
+}
+
+/** JSON key of a memory chunk's id inside a `MEMORY_SNAPSHOT` payload. */
+private const val MEMORY_JSON_KEY_ID: String = "id"
+
+/** JSON key of a memory chunk's text inside a `MEMORY_SNAPSHOT` payload. */
+private const val MEMORY_JSON_KEY_TEXT: String = "text"
+
+/**
+ * Serializes the resolved memory chunks of a
+ * [RunTraceRecord.MemorySnapshot] into the shared `outputText` payload
+ * column as a JSON array of `{id, text}` objects. Only identity and text
+ * survive persistence — embeddings are not needed to rebuild the context
+ * block on resume and are not worth the storage.
+ *
+ * @param entries The chunks to serialize, in retrieval-rank order.
+ * @return The JSON array string.
+ */
+private fun serializeMemoryEntries(entries: List<MemoryChunk>): String {
+    val array = JSONArray()
+    entries.forEach { chunk ->
+        array.put(
+            JSONObject()
+                .put(MEMORY_JSON_KEY_ID, chunk.id)
+                .put(MEMORY_JSON_KEY_TEXT, chunk.text),
+        )
+    }
+    return array.toString()
+}
+
+/**
+ * Inverse of [serializeMemoryEntries]. A chunk restored from a snapshot
+ * carries an empty embedding vector and default metadata — resume only needs
+ * the text (context block) and the id (identity).
+ *
+ * @param payload The stored JSON array string.
+ * @return The restored chunks, or `null` when the payload is not valid JSON
+ *   (the row is skipped by the read path's best-effort contract).
+ */
+private fun deserializeMemoryEntries(payload: String): List<MemoryChunk>? = try {
+    val array = JSONArray(payload)
+    (0 until array.length()).map { index ->
+        val item = array.getJSONObject(index)
+        MemoryChunk(
+            id = item.getLong(MEMORY_JSON_KEY_ID),
+            text = item.getString(MEMORY_JSON_KEY_TEXT),
+            embedding = FloatArray(0),
+            timestamp = 0L,
+        )
+    }
+} catch (e: JSONException) {
+    Timber.w(e, "Failed to parse memory-snapshot payload")
+    null
 }

@@ -16,10 +16,14 @@ import androidx.room.PrimaryKey
  * - **`CONSOLE_EVENT`** — one console log line mirroring
  *   [app.knotwork.android.domain.models.ConsoleEvent]: [consoleEventType] holds the event
  *   type name, [outputText] holds the pre-formatted message, [timestamp] the emission time.
+ * - **`MEMORY_SNAPSHOT`** — the long-term memory chunks resolved by the run's single lazy
+ *   retrieval, serialized as a JSON array of `{id, text}` objects into [outputText].
+ *   Checkpoint resume seeds the engine's memoized memory list from this row so a resumed
+ *   run rebuilds the exact memory context block the interrupted run saw.
  *
- * [outputText] is deliberately the single payload column for both kinds (node output for
- * `NODE_IO`, console message for `CONSOLE_EVENT`) — the two are mutually exclusive per row,
- * so a dedicated `message` column would always be redundant.
+ * [outputText] is deliberately the single payload column for all kinds (node output for
+ * `NODE_IO`, console message for `CONSOLE_EVENT`, chunk JSON for `MEMORY_SNAPSHOT`) — the
+ * payloads are mutually exclusive per row, so dedicated columns would always be redundant.
  *
  * Rows written before run-trace persistence have `runId = NULL` and keep legacy semantics
  * (per-session node outputs without run attribution).
@@ -46,6 +50,12 @@ import androidx.room.PrimaryKey
  *   legacy rows.
  * @property inputText The text the node received as input for `NODE_IO` rows; `null` for
  *   console events and legacy rows.
+ * @property conditionResult The recorded IF_CONDITION verdict for `NODE_IO` rows of that
+ *   node type (`null` otherwise) — restores the True/False branch on checkpoint resume.
+ * @property routingKey The recorded INTENT_ROUTER / EVALUATION routing key for `NODE_IO`
+ *   rows of those node types (`null` otherwise) — restores the picked edge on resume.
+ * @property resolvedToolName The tool a TOOL node actually executed for `NODE_IO` rows of
+ *   that node type (`null` otherwise) — attributes the replayed observation on resume.
  */
 @Entity(
     tableName = "trace_steps",
@@ -80,6 +90,9 @@ data class TraceStepEntity(
     val consoleEventType: String? = null,
     val nodeId: String? = null,
     val inputText: String? = null,
+    val conditionResult: Boolean? = null,
+    val routingKey: String? = null,
+    val resolvedToolName: String? = null,
 ) {
     companion object {
         /** [recordKind] value of a per-node input/output record. */
@@ -87,5 +100,8 @@ data class TraceStepEntity(
 
         /** [recordKind] value of a persisted console log event. */
         const val KIND_CONSOLE_EVENT: String = "CONSOLE_EVENT"
+
+        /** [recordKind] value of a resolved long-term-memory snapshot. */
+        const val KIND_MEMORY_SNAPSHOT: String = "MEMORY_SNAPSHOT"
     }
 }

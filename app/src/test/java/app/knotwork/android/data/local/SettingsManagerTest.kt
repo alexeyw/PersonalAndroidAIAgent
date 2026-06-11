@@ -72,6 +72,7 @@ class SettingsManagerTest {
     private val requiresUserConfirmationKey = booleanPreferencesKey("requires_user_confirmation")
     private val lastReembedProviderIdKey = stringPreferencesKey("last_reembed_provider_id")
     private val pipelineMaxStepsKey = androidx.datastore.preferences.core.intPreferencesKey("pipeline_max_steps")
+    private val resumeMaxAgeHoursKey = androidx.datastore.preferences.core.intPreferencesKey("resume_max_age_hours")
     private val crashReportingEnabledKey = booleanPreferencesKey("crash_reporting_enabled")
     private val appFunctionRiskOverridesKey = stringPreferencesKey("app_function_risk_overrides")
     private val hasCompletedOnboardingKey = booleanPreferencesKey("has_completed_onboarding")
@@ -389,6 +390,43 @@ class SettingsManagerTest {
         val settingsManager = SettingsManager(dataStore, context, cipher)
         val result = settingsManager.pipelineMaxSteps.first()
         assertEquals(30, result)
+    }
+
+    @Test
+    fun `resumeMaxAgeHours returns default value of 48`() = runTest {
+        val prefs = mockk<Preferences>()
+        every { prefs[resumeMaxAgeHoursKey] } returns null
+        every { dataStore.data } returns flowOf(prefs)
+
+        val settingsManager = SettingsManager(dataStore, context, cipher)
+        assertEquals(48, settingsManager.resumeMaxAgeHours.first())
+    }
+
+    @Test
+    fun `resumeMaxAgeHours returns stored value`() = runTest {
+        val prefs = mockk<Preferences>()
+        every { prefs[resumeMaxAgeHoursKey] } returns 72
+        every { dataStore.data } returns flowOf(prefs)
+
+        val settingsManager = SettingsManager(dataStore, context, cipher)
+        assertEquals(72, settingsManager.resumeMaxAgeHours.first())
+    }
+
+    @Test
+    fun `setResumeMaxAgeHours coerces into the sanctioned 1-168 range`() = runTest {
+        val (manager, scope) = freshManagerWithRealDataStore()
+        try {
+            manager.setResumeMaxAgeHours(0)
+            assertEquals(1, manager.resumeMaxAgeHours.first())
+
+            manager.setResumeMaxAgeHours(9_000)
+            assertEquals(168, manager.resumeMaxAgeHours.first())
+
+            manager.setResumeMaxAgeHours(24)
+            assertEquals(24, manager.resumeMaxAgeHours.first())
+        } finally {
+            scope.cancel()
+        }
     }
 
     @Test

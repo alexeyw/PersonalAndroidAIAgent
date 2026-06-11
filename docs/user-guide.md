@@ -307,8 +307,15 @@ the persistent run record and reattaches accordingly:
   optimisation, memory pressure, swiping the app away), the chat shows
   a **Run interrupted** card naming the node the run stopped at, with
   **Resume** and **Discard** buttons. *Discard* dismisses the run for
-  good; *Resume* continues it without redoing completed work (if your
-  build does not support resuming yet, the app says so).
+  good. *Resume* continues from the checkpoint: nodes that already
+  finished replay their recorded results instantly (no re-inference),
+  and execution restarts at the first unfinished node. A tool call the
+  run died on is never replayed — the tool may or may not have acted —
+  so it runs again from scratch, asking for your approval as usual.
+  Resume is offered while the interruption is younger than the
+  **Resume window** setting (default 48 hours) and the pipeline has not
+  been edited since the run started; an edited or deleted pipeline
+  means the task can only be restarted from the beginning.
 
 Conversations with a run still working in the background are easy to
 spot: their row in the thread drawer shows a small in-progress
@@ -867,6 +874,10 @@ The "Reset to defaults" action restores every slider in this card.
 - **Max steps** (5 – 100) — pipeline-iteration cap (same value
   as Restrictions → Cap autonomous steps; the two surfaces share
   the underlying preference).
+- **Resume window** (1 – 168 hours, default 48) — how long an
+  interrupted run stays resumable from its checkpoint. Older
+  interrupted runs only offer **Discard** — their recorded context
+  grows stale with time.
 
 ### Local Model
 

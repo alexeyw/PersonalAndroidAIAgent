@@ -326,6 +326,14 @@ private fun buildViewState(uiState: SettingsUiState, context: android.content.Co
                 valueRange = 5f..100f,
                 steps = 94,
             ),
+            LlmParameterSlider(
+                id = "resume_window",
+                title = stringResource(R.string.settings_row_resume_window_title),
+                valueLabel = "${uiState.resumeMaxAgeHours} h",
+                value = uiState.resumeMaxAgeHours.toFloat(),
+                valueRange = 1f..168f,
+                steps = 166,
+            ),
         ),
     )
     val activeMeta = uiState.activeModelMeta
@@ -611,6 +619,7 @@ private fun buildCallbacks(
             "repetition_penalty" -> viewModel.setRepetitionPenalty(value)
             "max_context" -> viewModel.setMaxContextLength(value.roundToInt())
             "max_steps" -> viewModel.setCapAutonomousSteps(value.roundToInt())
+            "resume_window" -> viewModel.setResumeMaxAgeHours(value.roundToInt())
         }
     },
     onResetLlmDefaults = viewModel::resetSamplingDefaults,

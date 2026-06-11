@@ -3,6 +3,7 @@ package app.knotwork.android.data.repositories
 import app.knotwork.android.data.local.dao.TraceStepDao
 import app.knotwork.android.data.local.models.TraceStepEntity
 import app.knotwork.android.domain.models.ConsoleEventType
+import app.knotwork.android.domain.models.MemoryChunk
 import app.knotwork.android.domain.models.RunTraceRecord
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -273,6 +274,93 @@ class RunTraceRepositoryImplTest {
 
         assertEquals(emptyList<RunTraceRecord>(), repository.getTraceForRun(RUN_ID))
     }
+
+    // region Checkpoint columns and memory snapshots
+
+    @Test
+    fun `given NodeIo with routing verdicts then entity and read-back carry them`() = runTest {
+        repository.dispatcher = StandardTestDispatcher(testScheduler)
+        val batches = mutableListOf<List<TraceStepEntity>>()
+        coEvery { traceStepDao.insertTraceSteps(capture(batches)) } returns Unit
+
+        repository.append(
+            nodeIo(0L).copy(conditionResult = true, routingKey = "Pass", resolvedToolName = "calendar.create"),
+        )
+        repository.flush()
+        runCurrent()
+
+        val entity = batches.single().single()
+        assertEquals(true, entity.conditionResult)
+        assertEquals("Pass", entity.routingKey)
+        assertEquals("calendar.create", entity.resolvedToolName)
+
+        coEvery { traceStepDao.getTraceStepsForRun(RUN_ID) } returns listOf(entity.copy(id = 1))
+        val readBack = repository.getTraceForRun(RUN_ID).single() as RunTraceRecord.NodeIo
+        assertEquals(true, readBack.conditionResult)
+        assertEquals("Pass", readBack.routingKey)
+        assertEquals("calendar.create", readBack.resolvedToolName)
+    }
+
+    @Test
+    fun `given memory snapshot then chunks roundtrip through the JSON payload`() = runTest {
+        repository.dispatcher = StandardTestDispatcher(testScheduler)
+        val batches = mutableListOf<List<TraceStepEntity>>()
+        coEvery { traceStepDao.insertTraceSteps(capture(batches)) } returns Unit
+
+        repository.append(
+            RunTraceRecord.MemorySnapshot(
+                runId = RUN_ID,
+                sessionId = SESSION_ID,
+                seq = 7L,
+                timestamp = 1_007L,
+                entries = listOf(
+                    MemoryChunk(id = 3L, text = "prefers dark mode", embedding = FloatArray(4), timestamp = 9L),
+                    MemoryChunk(id = 5L, text = "lives in Berlin", embedding = FloatArray(4), timestamp = 9L),
+                ),
+            ),
+        )
+        repository.flush()
+        runCurrent()
+
+        val entity = batches.single().single()
+        assertEquals(TraceStepEntity.KIND_MEMORY_SNAPSHOT, entity.recordKind)
+
+        coEvery { traceStepDao.getTraceStepsForRun(RUN_ID) } returns listOf(entity.copy(id = 1))
+        val readBack = repository.getTraceForRun(RUN_ID).single() as RunTraceRecord.MemorySnapshot
+        assertEquals(listOf(3L, 5L), readBack.entries.map { it.id })
+        assertEquals(listOf("prefers dark mode", "lives in Berlin"), readBack.entries.map { it.text })
+        // Embeddings deliberately do not survive persistence.
+        assertEquals(0, readBack.entries.first().embedding.size)
+    }
+
+    @Test
+    fun `given memory snapshot row with corrupt payload then it is skipped not fatal`() = runTest {
+        repository.dispatcher = StandardTestDispatcher(testScheduler)
+        coEvery { traceStepDao.getTraceStepsForRun(RUN_ID) } returns listOf(
+            TraceStepEntity(
+                id = 1,
+                sessionId = SESSION_ID,
+                nodeName = "",
+                outputText = "{not-json",
+                timestamp = 1L,
+                runId = RUN_ID,
+                seq = 0,
+                recordKind = TraceStepEntity.KIND_MEMORY_SNAPSHOT,
+            ),
+            TraceStepEntity(
+                id = 2, sessionId = SESSION_ID, nodeName = "", outputText = "ok",
+                timestamp = 2L, runId = RUN_ID, seq = 1,
+                recordKind = TraceStepEntity.KIND_CONSOLE_EVENT, consoleEventType = "ERROR",
+            ),
+        )
+
+        val records = repository.getTraceForRun(RUN_ID)
+
+        assertEquals(1, records.size)
+        assertTrue(records.single() is RunTraceRecord.ConsoleEntry)
+    }
+
+    // endregion
 
     private companion object {
         const val RUN_ID = "run-1"

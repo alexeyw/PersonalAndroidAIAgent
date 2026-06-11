@@ -187,6 +187,10 @@ class SettingsViewModel @Inject constructor(
             _uiState.update { it.copy(capAutonomousSteps = value) }
         }.launchIn(viewModelScope)
 
+        settingsRepository.resumeMaxAgeHours.onEach { value ->
+            _uiState.update { it.copy(resumeMaxAgeHours = value) }
+        }.launchIn(viewModelScope)
+
         settingsRepository.temperature.onEach { value ->
             _uiState.update { it.copy(temperature = value) }
         }.launchIn(viewModelScope)
@@ -420,6 +424,16 @@ class SettingsViewModel @Inject constructor(
 
     fun setCapAutonomousSteps(steps: Int) {
         viewModelScope.launch { settingsRepository.setPipelineMaxSteps(steps) }
+    }
+
+    /**
+     * Persists the checkpoint-resume window (hours). The repository coerces
+     * the value into the sanctioned 1–168 range.
+     *
+     * @param hours The new window picked on the slider.
+     */
+    fun setResumeMaxAgeHours(hours: Int) {
+        viewModelScope.launch { settingsRepository.setResumeMaxAgeHours(hours) }
     }
 
     // ─── LLM parameters ────────────────────────────────────────────────────

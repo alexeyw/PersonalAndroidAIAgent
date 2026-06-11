@@ -26,6 +26,8 @@ import app.knotwork.android.domain.models.ToolApprovalPolicy
  * @property blockNetworkFromLocalModel Mirror of the persisted toggle.
  * @property capAutonomousSteps Renamed `pipelineMaxSteps`; trailing value
  *   in the restrictions card.
+ * @property resumeMaxAgeHours Window (hours) during which an interrupted
+ *   pipeline run can still be resumed from its checkpoint.
  * @property temperature / [topK] / [topP] / [repetitionPenalty] /
  *   [maxContextLength] Sampling parameters mirrored from DataStore.
  * @property activeModelMeta Live snapshot of the active model card.
@@ -83,6 +85,7 @@ data class SettingsUiState(
     val blockDestructiveTools: Boolean = false,
     val blockNetworkFromLocalModel: Boolean = false,
     val capAutonomousSteps: Int = SettingsDefaults.PIPELINE_MAX_STEPS_DEFAULT,
+    val resumeMaxAgeHours: Int = SettingsDefaults.RESUME_MAX_AGE_HOURS_DEFAULT,
     val temperature: Float = SettingsDefaults.TEMPERATURE_DEFAULT,
     val topK: Int = SettingsDefaults.TOP_K_DEFAULT,
     val topP: Float = SettingsDefaults.TOP_P_DEFAULT,

@@ -380,7 +380,7 @@ internal fun liveInterruptedRow(modelName: String, pending: InterruptedRunPendin
         id = "a-interrupted-${pending.runId}",
         role = ChatRole.Assistant,
         content = ChatContent.RunInterrupted(
-            model = InterruptedRunCardModel(nodeLabel = pending.nodeLabel),
+            model = InterruptedRunCardModel(nodeLabel = pending.nodeLabel, resumable = pending.resumable),
         ),
         metadata = ChatMetadata(timestamp = pending.timestamp, model = modelName),
     )

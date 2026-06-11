@@ -121,6 +121,12 @@ configured it.
   persistent run record, flags busy conversations with an in-progress
   indicator in the thread drawer, and surfaces a Resume / Discard card for
   runs interrupted by a process death.
+- Checkpoint resume: an interrupted run continues from its last completed
+  node — recorded node results (including routing decisions and the
+  retrieved memory context) replay from the persisted trace without
+  re-inference, while tool calls the run died on re-execute with a fresh
+  approval. Resume is guarded by a graph content hash (an edited pipeline
+  requires a restart) and a configurable freshness window.
 - Long-term memory with semantic retrieval (RAG) over past conversations,
   including automatic extraction of durable facts from finished conversations
   (toggleable in Settings → Memory), manual "Save to memory" from any chat

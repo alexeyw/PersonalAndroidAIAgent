@@ -90,6 +90,8 @@
     <string name="knotwork_interrupted_run_resume">Resume</string>
     <!-- Secondary CTA: dismiss the interrupted run for good. -->
     <string name="knotwork_interrupted_run_discard">Discard</string>
+    <!-- Muted note appended when the run can no longer be resumed (window elapsed). -->
+    <string name="knotwork_interrupted_run_expired_note">This run can no longer be resumed.</string>
 
     <!-- ============ ChatComposer ============ -->
 

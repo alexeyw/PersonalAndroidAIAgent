@@ -46,13 +46,16 @@ private val HeaderIconSize = 18.dp
  *  - **Body.** "Execution was interrupted at node …" with the host-resolved
  *    node label.
  *  - **Action row.** Primary **Resume** CTA (continue from the last completed
- *    node) and a secondary **Discard** CTA (dismiss the run for good).
+ *    node) and a secondary **Discard** CTA (dismiss the run for good). When
+ *    [InterruptedRunCardModel.resumable] is `false` the Resume CTA is hidden,
+ *    an explanatory "can no longer be resumed" note is appended to the body,
+ *    and Discard remains the only action.
  *
  * Stateless: both CTAs only dispatch the supplied callbacks; the host owns
  * the resume/discard semantics and removes the card by dropping the row from
  * the message list.
  *
- * @param model immutable card payload (resolved node label).
+ * @param model immutable card payload (resolved node label + resumability).
  * @param onResume invoked when the user taps the Resume CTA.
  * @param onDiscard invoked when the user taps the Discard CTA.
  * @param modifier optional layout modifier applied to the card root.
@@ -98,11 +101,20 @@ fun InterruptedRunCard(
             style = KnotworkTextStyles.BodyBase,
             color = MaterialTheme.colorScheme.onSurface,
         )
-        Row(horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp2)) {
-            KnotworkPrimaryButton(
-                text = stringResource(R.string.knotwork_interrupted_run_resume),
-                onClick = onResume,
+        if (!model.resumable) {
+            Text(
+                text = stringResource(R.string.knotwork_interrupted_run_expired_note),
+                style = KnotworkTextStyles.BodyBase,
+                color = KnotworkTheme.extended.onSurfaceMuted,
             )
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp2)) {
+            if (model.resumable) {
+                KnotworkPrimaryButton(
+                    text = stringResource(R.string.knotwork_interrupted_run_resume),
+                    onClick = onResume,
+                )
+            }
             KnotworkSecondaryButton(
                 text = stringResource(R.string.knotwork_interrupted_run_discard),
                 onClick = onDiscard,

@@ -32,6 +32,7 @@ import app.knotwork.android.domain.models.NodeType
 import app.knotwork.android.domain.models.PipelineGraph
 import app.knotwork.android.domain.models.PipelineRunStatus
 import app.knotwork.android.domain.models.Result
+import app.knotwork.android.domain.models.ResumeContext
 import app.knotwork.android.domain.models.Role
 import app.knotwork.android.domain.models.RunTraceRecord
 import app.knotwork.android.domain.models.ToolApprovalPolicy
@@ -67,6 +68,7 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
@@ -2128,5 +2130,370 @@ class GraphExecutionEngineTest {
             pipelineRunRepository.updateStatus("run-45", PipelineRunStatus.RUNNING)
         }
         job.cancel()
+    }
+
+    // ─── Checkpoint resume ──────────────────────────────────────────────────
+
+    /** Recorded NodeIo snapshot shorthand for the resume tests. */
+    private fun nodeIoRecord(
+        runId: String,
+        seq: Long,
+        nodeId: String,
+        nodeType: NodeType,
+        outputText: String,
+        conditionResult: Boolean? = null,
+        routingKey: String? = null,
+        resolvedToolName: String? = null,
+    ): RunTraceRecord.NodeIo = RunTraceRecord.NodeIo(
+        runId = runId,
+        sessionId = sessionId,
+        seq = seq,
+        timestamp = 0L,
+        nodeId = nodeId,
+        nodeType = nodeType.name,
+        inputText = "recorded-input",
+        outputText = outputText,
+        durationMs = 5L,
+        tokenCount = null,
+        conditionResult = conditionResult,
+        routingKey = routingKey,
+        resolvedToolName = resolvedToolName,
+    )
+
+    @Test
+    fun `given resume with full prefix then completed nodes replay without executor calls`() = runTest {
+        val graph = PipelineGraph(
+            id = "g-resume",
+            name = "Resume",
+            nodes = listOf(
+                NodeModel("input_1", NodeType.INPUT, 0f, 0f),
+                NodeModel("llm_1", NodeType.LITE_RT, 0f, 0f),
+                NodeModel("output_1", NodeType.OUTPUT, 0f, 0f, systemPrompt = null),
+            ),
+            connections = listOf(
+                ConnectionModel("c1", "input_1", "llm_1"),
+                ConnectionModel("c2", "llm_1", "output_1"),
+            ),
+        )
+        val resume = ResumeContext(
+            records = listOf(nodeIoRecord("run-r1", 3L, "llm_1", NodeType.LITE_RT, "Recorded")),
+            memorySnapshot = null,
+            nextSeq = 4L,
+        )
+
+        val states = engine(sessionId, "prompt", graph, "run-r1", resume).toList()
+
+        // The LITE_RT node replays from the checkpoint: zero LLM calls, the
+        // recorded output reaches OUTPUT (echo mode), and the compact replay
+        // event lands in the console.
+        verify(exactly = 0) { llmEngine.generateResponseStream(any()) }
+        val completed = states.last() as AgentOrchestratorState.Completed
+        assertEquals("Recorded", completed.finalResponse)
+        val consoleLines = states.filterIsInstance<AgentOrchestratorState.ConsoleLog>()
+            .last().events.map { it.message }
+        assertTrue(consoleLines.any { it.contains("replayed from checkpoint") })
+        // The replayed node appends no second NodeIo record.
+        coVerify(exactly = 0) {
+            runTraceRepository.append(match { it is RunTraceRecord.NodeIo && it.nodeId == "llm_1" })
+        }
+    }
+
+    @Test
+    fun `given resume with partial prefix then first unrecorded node executes live with continued seq`() = runTest {
+        val graph = PipelineGraph(
+            id = "g-resume-partial",
+            name = "Resume Partial",
+            nodes = listOf(
+                NodeModel("input_1", NodeType.INPUT, 0f, 0f),
+                NodeModel("llm_1", NodeType.LITE_RT, 0f, 0f),
+                NodeModel("llm_2", NodeType.LITE_RT, 0f, 0f),
+                NodeModel("output_1", NodeType.OUTPUT, 0f, 0f, systemPrompt = null),
+            ),
+            connections = listOf(
+                ConnectionModel("c1", "input_1", "llm_1"),
+                ConnectionModel("c2", "llm_1", "llm_2"),
+                ConnectionModel("c3", "llm_2", "output_1"),
+            ),
+        )
+        every { llmEngine.generateResponseStream(any()) } returns flowOf("Live")
+        val resume = ResumeContext(
+            records = listOf(nodeIoRecord("run-r2", 2L, "llm_1", NodeType.LITE_RT, "Recorded")),
+            memorySnapshot = null,
+            nextSeq = 3L,
+        )
+
+        val states = engine(sessionId, "prompt", graph, "run-r2", resume).toList()
+
+        // Exactly one live LLM call (llm_2); llm_1 replayed.
+        verify(exactly = 1) { llmEngine.generateResponseStream(any()) }
+        assertEquals("Live", (states.last() as AgentOrchestratorState.Completed).finalResponse)
+        // The live node's NodeIo continues the persisted seq numbering.
+        val appended = mutableListOf<RunTraceRecord>()
+        coVerify { runTraceRepository.append(capture(appended)) }
+        val liveNodeIo = appended.filterIsInstance<RunTraceRecord.NodeIo>().single { it.nodeId == "llm_2" }
+        assertTrue("live record seq must continue after nextSeq", liveNodeIo.seq >= 3L)
+    }
+
+    @Test
+    fun `given resume with recorded IF_CONDITION verdict then branch is restored without re-evaluation`() = runTest {
+        val graph = PipelineGraph(
+            id = "g-resume-if",
+            name = "Resume If",
+            nodes = listOf(
+                NodeModel("input_1", NodeType.INPUT, 0f, 0f),
+                NodeModel("if_1", NodeType.IF_CONDITION, 0f, 0f),
+                NodeModel("llm_true", NodeType.LITE_RT, 0f, 0f),
+                NodeModel("llm_false", NodeType.LITE_RT, 0f, 0f),
+                NodeModel("output_1", NodeType.OUTPUT, 0f, 0f, systemPrompt = null),
+            ),
+            connections = listOf(
+                ConnectionModel("c1", "input_1", "if_1"),
+                ConnectionModel("c2", "if_1", "llm_true", label = "True"),
+                ConnectionModel("c3", "if_1", "llm_false", label = "False"),
+                ConnectionModel("c4", "llm_true", "output_1"),
+                ConnectionModel("c5", "llm_false", "output_1"),
+            ),
+        )
+        every { llmEngine.generateResponseStream(any()) } returns flowOf("FalseBranch")
+        val resume = ResumeContext(
+            records = listOf(
+                nodeIoRecord(
+                    runId = "run-r3",
+                    seq = 1L,
+                    nodeId = "if_1",
+                    nodeType = NodeType.IF_CONDITION,
+                    outputText = "prompt",
+                    conditionResult = false,
+                ),
+            ),
+            memorySnapshot = null,
+            nextSeq = 2L,
+        )
+
+        val states = engine(sessionId, "prompt", graph, "run-r3", resume).toList()
+
+        // The condition is never re-evaluated (the strict mock would throw),
+        // and the recorded False verdict routes into llm_false.
+        coVerify(exactly = 0) { evaluateIfConditionUseCase(any(), any()) }
+        assertEquals("FalseBranch", (states.last() as AgentOrchestratorState.Completed).finalResponse)
+    }
+
+    @Test
+    fun `given resume with completed TOOL record then observation replays without HITL`() = runTest {
+        every { settingsRepository.toolApprovalPolicy } returns flowOf(ToolApprovalPolicy.SensitiveOrDestructive)
+        every { settingsRepository.blockDestructiveTools } returns flowOf(false)
+        val graph = PipelineGraph(
+            id = "g-resume-tool-done",
+            name = "Resume Tool Done",
+            nodes = listOf(
+                NodeModel("input_1", NodeType.INPUT, 0f, 0f),
+                NodeModel("tool_1", NodeType.TOOL, 0f, 0f, toolName = "sens.tool"),
+                NodeModel("output_1", NodeType.OUTPUT, 0f, 0f, systemPrompt = null),
+            ),
+            connections = listOf(
+                ConnectionModel("c1", "input_1", "tool_1"),
+                ConnectionModel("c2", "tool_1", "output_1"),
+            ),
+        )
+        val resume = ResumeContext(
+            records = listOf(
+                nodeIoRecord(
+                    runId = "run-r4",
+                    seq = 1L,
+                    nodeId = "tool_1",
+                    nodeType = NodeType.TOOL,
+                    outputText = "tool-observation",
+                    resolvedToolName = "sens.tool",
+                ),
+            ),
+            memorySnapshot = null,
+            nextSeq = 2L,
+        )
+
+        val states = engine(sessionId, "prompt", graph, "run-r4", resume).toList()
+
+        // Completed before the interruption → replayed: no approval gate, no
+        // tool execution, the recorded observation flows to OUTPUT.
+        assertTrue(states.filterIsInstance<AgentOrchestratorState.WaitingForApproval>().isEmpty())
+        coVerify(exactly = 0) { toolRepository.executeTool(any(), any()) }
+        assertEquals("tool-observation", (states.last() as AgentOrchestratorState.Completed).finalResponse)
+    }
+
+    @Test
+    fun `given resume stopping at TOOL node then tool executes live with fresh HITL`() = runTest {
+        every { settingsRepository.toolApprovalPolicy } returns flowOf(ToolApprovalPolicy.SensitiveOrDestructive)
+        every { settingsRepository.blockDestructiveTools } returns flowOf(false)
+        every { settingsRepository.toolCallTimeoutMs } returns flowOf(5_000L)
+        coEvery { toolRepository.getRisk("sens.tool") } returns ToolRisk.SENSITIVE
+        coEvery { toolRepository.getAvailableTools() } returns listOf(AgentTool("sens.tool", "Desc", "{}"))
+        coEvery { toolRepository.executeTool("sens.tool", any()) } returns "fresh-result"
+
+        val graph = PipelineGraph(
+            id = "g-resume-tool-live",
+            name = "Resume Tool Live",
+            nodes = listOf(
+                NodeModel("input_1", NodeType.INPUT, 0f, 0f),
+                NodeModel("llm_1", NodeType.LITE_RT, 0f, 0f),
+                NodeModel("tool_1", NodeType.TOOL, 0f, 0f, toolName = "sens.tool"),
+                NodeModel("output_1", NodeType.OUTPUT, 0f, 0f, systemPrompt = null),
+            ),
+            connections = listOf(
+                ConnectionModel("c1", "input_1", "llm_1"),
+                ConnectionModel("c2", "llm_1", "tool_1"),
+                ConnectionModel("c3", "tool_1", "output_1"),
+            ),
+        )
+        // The TOOL executor's planning step goes through the LLM; the replayed
+        // llm_1 never calls it, so the single stream stub serves tool planning.
+        every { llmEngine.generateResponseStream(any()) } returns
+            flowOf("""{"tool":"sens.tool","arguments":"a=1"}""")
+        val resume = ResumeContext(
+            records = listOf(
+                nodeIoRecord("run-r5", 1L, "llm_1", NodeType.LITE_RT, """{"tool":"sens.tool","arguments":"a=1"}"""),
+            ),
+            memorySnapshot = null,
+            nextSeq = 2L,
+        )
+
+        val states = mutableListOf<AgentOrchestratorState>()
+        val job = launch {
+            engine(sessionId, "prompt", graph, "run-r5", resume).toList(states)
+        }
+        // Walk past the per-node prewarm delays (INPUT + TOOL, 500 ms each;
+        // the replayed llm_1 skips its delay) without reaching the 5 s
+        // approval timeout, so the gate is raised but still pending.
+        advanceTimeBy(1_500L)
+        runCurrent()
+        // Interrupted at the TOOL node → never replayed: a fresh approval
+        // gate must be raised even though the run is a resume.
+        assertTrue(states.filterIsInstance<AgentOrchestratorState.WaitingForApproval>().isNotEmpty())
+        engine.resumeWithApproval(sessionId, true)
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { toolRepository.executeTool("sens.tool", any()) }
+        assertEquals("fresh-result", (states.last() as AgentOrchestratorState.Completed).finalResponse)
+        job.cancel()
+    }
+
+    @Test
+    fun `given resume whose trace diverges from the graph walk then run fails with explicit error`() = runTest {
+        val graph = PipelineGraph(
+            id = "g-resume-diverged",
+            name = "Resume Diverged",
+            nodes = listOf(
+                NodeModel("input_1", NodeType.INPUT, 0f, 0f),
+                NodeModel("llm_1", NodeType.LITE_RT, 0f, 0f),
+                NodeModel("output_1", NodeType.OUTPUT, 0f, 0f, systemPrompt = null),
+            ),
+            connections = listOf(
+                ConnectionModel("c1", "input_1", "llm_1"),
+                ConnectionModel("c2", "llm_1", "output_1"),
+            ),
+        )
+        val resume = ResumeContext(
+            records = listOf(nodeIoRecord("run-r6", 1L, "some_other_node", NodeType.LITE_RT, "stale")),
+            memorySnapshot = null,
+            nextSeq = 2L,
+        )
+
+        val states = engine(sessionId, "prompt", graph, "run-r6", resume).toList()
+
+        val error = states.last() as AgentOrchestratorState.Error
+        assertTrue(error.message.contains("no longer matches"))
+        verify(exactly = 0) { llmEngine.generateResponseStream(any()) }
+    }
+
+    @Test
+    fun `given resume with memory snapshot then retrieval is not re-run and the block is rebuilt`() = runTest {
+        val graph = PipelineGraph(
+            id = "g-resume-mem",
+            name = "Resume Memory",
+            nodes = listOf(
+                NodeModel("input_1", NodeType.INPUT, 0f, 0f),
+                NodeModel(
+                    id = "llm_1",
+                    type = NodeType.LITE_RT,
+                    x = 0f,
+                    y = 0f,
+                    contextConfig = NodeContextConfig(
+                        chatHistory = false,
+                        originalTask = false,
+                        nodeInput = false,
+                        longTermMemory = true,
+                        toolResults = false,
+                    ),
+                ),
+                NodeModel("output_1", NodeType.OUTPUT, 0f, 0f, systemPrompt = null),
+            ),
+            connections = listOf(
+                ConnectionModel("c1", "input_1", "llm_1"),
+                ConnectionModel("c2", "llm_1", "output_1"),
+            ),
+        )
+        every { llmEngine.generateResponseStream(any()) } returns flowOf("ok")
+        val resume = ResumeContext(
+            records = emptyList(),
+            memorySnapshot = listOf(
+                MemoryChunk(id = 7L, text = "user prefers dark mode", embedding = FloatArray(0), timestamp = 0L),
+            ),
+            nextSeq = 1L,
+        )
+
+        engine(sessionId, "prompt", graph, "run-r7", resume).toList()
+
+        // The snapshot seeds the memoized list: no fresh retrieval, no usage
+        // re-count, and the snapshot chunk reaches the LLM prompt.
+        coVerify(exactly = 0) { retrieveRelevantMemoryUseCase.retrieveScored(any()) }
+        coVerify(exactly = 0) { memoryRepository.recordUsage(any(), any()) }
+        verify {
+            llmEngine.generateResponseStream(
+                match { it.contains("--- Long-Term Memory ---") && it.contains("user prefers dark mode") },
+            )
+        }
+    }
+
+    @Test
+    fun `given fresh memory resolution with runId then memory snapshot record lands in the trace`() = runTest {
+        coEvery { retrieveRelevantMemoryUseCase.retrieveScored(any()) } returns listOf(
+            MemoryChunk(id = 7L, text = "user prefers dark mode", embedding = FloatArray(0), timestamp = 0L) to 0.8f,
+        )
+        val graph = PipelineGraph(
+            id = "g-mem-snap",
+            name = "Memory Snapshot",
+            nodes = listOf(
+                NodeModel("input_1", NodeType.INPUT, 0f, 0f),
+                NodeModel(
+                    id = "llm_1",
+                    type = NodeType.LITE_RT,
+                    x = 0f,
+                    y = 0f,
+                    contextConfig = NodeContextConfig(
+                        chatHistory = false,
+                        originalTask = false,
+                        nodeInput = false,
+                        longTermMemory = true,
+                        toolResults = false,
+                    ),
+                ),
+                NodeModel("output_1", NodeType.OUTPUT, 0f, 0f, systemPrompt = null),
+            ),
+            connections = listOf(
+                ConnectionModel("c1", "input_1", "llm_1"),
+                ConnectionModel("c2", "llm_1", "output_1"),
+            ),
+        )
+        every { llmEngine.generateResponseStream(any()) } returns flowOf("ok")
+
+        engine(sessionId, "prompt", graph, "run-snap").toList()
+
+        coVerify {
+            runTraceRepository.append(
+                match {
+                    it is RunTraceRecord.MemorySnapshot &&
+                        it.runId == "run-snap" &&
+                        it.entries.single().text == "user prefers dark mode"
+                },
+            )
+        }
     }
 }

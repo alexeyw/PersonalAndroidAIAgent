@@ -1,5 +1,6 @@
 package app.knotwork.android.presentation.ui.chat.home
 
+import app.knotwork.android.domain.constants.SettingsDefaults
 import app.knotwork.android.domain.engine.LlmInferenceEngine
 import app.knotwork.android.domain.models.AgentOrchestratorState
 import app.knotwork.android.domain.models.ChatMessage
@@ -25,6 +26,8 @@ import app.knotwork.android.domain.repositories.SettingsRepository
 import app.knotwork.android.domain.usecases.AgentOrchestratorUseCase
 import app.knotwork.android.domain.usecases.GetContextWindowUseCase
 import app.knotwork.android.domain.usecases.LoadModelUseCase
+import app.knotwork.android.domain.usecases.ResumeOutcome
+import app.knotwork.android.domain.usecases.ResumePipelineRunUseCase
 import app.knotwork.android.domain.usecases.SaveMessageToMemoryUseCase
 import app.knotwork.android.domain.usecases.SaveToMemoryOutcome
 import app.knotwork.design.components.chat.ChatContent
@@ -96,6 +99,7 @@ class ChatHomeViewModelTest {
     private lateinit var saveMessageToMemoryUseCase: SaveMessageToMemoryUseCase
     private lateinit var pipelineRunRepository: PipelineRunRepository
     private lateinit var runTraceRepository: RunTraceRepository
+    private lateinit var resumePipelineRunUseCase: ResumePipelineRunUseCase
 
     private lateinit var sessionsFlow: MutableStateFlow<List<ChatSession>>
     private lateinit var localModelsFlow: MutableStateFlow<List<LocalModel>>
@@ -124,9 +128,12 @@ class ChatHomeViewModelTest {
         saveMessageToMemoryUseCase = mockk()
         pipelineRunRepository = mockk()
         runTraceRepository = mockk()
+        resumePipelineRunUseCase = mockk()
         coEvery { pipelineRunRepository.getActiveRunForSession(any()) } returns null
         coEvery { pipelineRunRepository.getLatestRunForSession(any()) } returns null
         coEvery { runTraceRepository.getTraceForRun(any()) } returns emptyList()
+        every { settingsRepository.resumeMaxAgeHours } returns
+            MutableStateFlow(SettingsDefaults.RESUME_MAX_AGE_HOURS_DEFAULT)
         activeRunsFlow = MutableStateFlow(emptySet())
         every { pipelineRunRepository.observeActiveRunSessionIds() } returns activeRunsFlow
         coEvery { clarificationRepository.submitClarification(any(), any()) } returns true
@@ -190,6 +197,7 @@ class ChatHomeViewModelTest {
         saveMessageToMemoryUseCase,
         pipelineRunRepository,
         runTraceRepository,
+        resumePipelineRunUseCase,
     ).also { vm ->
         // Keep the replay projection on the test scheduler so
         // advanceUntilIdle() deterministically covers it.
@@ -1228,6 +1236,8 @@ class ChatHomeViewModelTest {
         id: String = "run-1",
         pipelineId: String? = null,
         currentNodeId: String? = null,
+        finishedAt: Long? = null,
+        userPrompt: String? = null,
     ): PipelineRun = PipelineRun(
         id = id,
         sessionId = sessionId,
@@ -1236,9 +1246,19 @@ class ChatHomeViewModelTest {
         status = status,
         currentNodeId = currentNodeId,
         startedAt = 0L,
-        finishedAt = null,
+        finishedAt = finishedAt,
         errorMessage = null,
         graphContentHash = null,
+        userPrompt = userPrompt,
+    )
+
+    /** Interrupted-run record fresh and complete enough to offer the Resume CTA. */
+    private fun resumableRunRecord(sessionId: String, id: String): PipelineRun = runRecord(
+        sessionId = sessionId,
+        status = PipelineRunStatus.INTERRUPTED,
+        id = id,
+        finishedAt = System.currentTimeMillis(),
+        userPrompt = "original prompt",
     )
 
     /** Persists [sessionId] as the saved session so `initializeSession` restores it. */
@@ -1433,26 +1453,87 @@ class ChatHomeViewModelTest {
     }
 
     @Test
-    fun `resumeInterruptedRun emits the resume-unavailable event and keeps the card`() = runTest(testDispatcher) {
+    fun `resumeInterruptedRun on success clears the card and flips to Generating`() = runTest(testDispatcher) {
         val sessionId = "session-resume"
         seedSavedSession(sessionId)
         coEvery { pipelineRunRepository.getLatestRunForSession(sessionId) } returns
-            runRecord(sessionId, PipelineRunStatus.INTERRUPTED, id = "run-r")
+            resumableRunRecord(sessionId, id = "run-r")
+        coEvery { resumePipelineRunUseCase("run-r") } returns ResumeOutcome.Resumed
+
+        viewModel = createViewModel()
+        advanceUntilIdle()
+        assertEquals(ChatHomeUiState.Interrupted, viewModel.state.value.visual)
+        assertTrue(viewModel.state.value.pending.interrupted?.resumable == true)
+
+        viewModel.resumeInterruptedRun()
+        advanceUntilIdle()
+
+        assertNull(viewModel.state.value.pending.interrupted)
+        assertEquals(ChatHomeUiState.Generating, viewModel.state.value.visual)
+        coVerify { resumePipelineRunUseCase("run-r") }
+    }
+
+    @Test
+    fun `resumeInterruptedRun surfaces GraphChanged feedback and keeps the card`() = runTest(testDispatcher) {
+        val sessionId = "session-resume-gc"
+        seedSavedSession(sessionId)
+        coEvery { pipelineRunRepository.getLatestRunForSession(sessionId) } returns
+            resumableRunRecord(sessionId, id = "run-gc")
+        coEvery { resumePipelineRunUseCase("run-gc") } returns ResumeOutcome.GraphChanged
 
         viewModel = createViewModel()
         advanceUntilIdle()
 
-        val events = mutableListOf<Unit>()
+        val events = mutableListOf<ResumeFeedbackEvent>()
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
-            viewModel.resumeUnavailableEvents.collect { events.add(it) }
+            viewModel.resumeFeedbackEvents.collect { events.add(it) }
         }
         runCurrent()
 
         viewModel.resumeInterruptedRun()
         advanceUntilIdle()
 
-        assertEquals(1, events.size)
+        assertEquals(listOf(ResumeFeedbackEvent.GraphChanged), events)
         assertNotNull(viewModel.state.value.pending.interrupted)
+        assertEquals(ChatHomeUiState.Interrupted, viewModel.state.value.visual)
+    }
+
+    @Test
+    fun `resumeInterruptedRun on Expired demotes the card to discard-only`() = runTest(testDispatcher) {
+        val sessionId = "session-resume-exp"
+        seedSavedSession(sessionId)
+        coEvery { pipelineRunRepository.getLatestRunForSession(sessionId) } returns
+            resumableRunRecord(sessionId, id = "run-exp")
+        coEvery { resumePipelineRunUseCase("run-exp") } returns ResumeOutcome.Expired
+
+        viewModel = createViewModel()
+        advanceUntilIdle()
+
+        val events = mutableListOf<ResumeFeedbackEvent>()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            viewModel.resumeFeedbackEvents.collect { events.add(it) }
+        }
+        runCurrent()
+
+        viewModel.resumeInterruptedRun()
+        advanceUntilIdle()
+
+        assertEquals(listOf(ResumeFeedbackEvent.Expired), events)
+        assertEquals(false, viewModel.state.value.pending.interrupted?.resumable)
+    }
+
+    @Test
+    fun `interrupted record without the original prompt presents a discard-only card`() = runTest(testDispatcher) {
+        val sessionId = "session-legacy"
+        seedSavedSession(sessionId)
+        coEvery { pipelineRunRepository.getLatestRunForSession(sessionId) } returns
+            runRecord(sessionId, PipelineRunStatus.INTERRUPTED, id = "run-legacy", userPrompt = null)
+
+        viewModel = createViewModel()
+        advanceUntilIdle()
+
+        assertEquals(ChatHomeUiState.Interrupted, viewModel.state.value.visual)
+        assertEquals(false, viewModel.state.value.pending.interrupted?.resumable)
     }
 
     @Test

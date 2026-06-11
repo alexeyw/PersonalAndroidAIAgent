@@ -3,18 +3,27 @@ package app.knotwork.android.data.engine
 import app.knotwork.android.domain.engine.GraphExecutionEngine
 import app.knotwork.android.domain.models.AgentOrchestratorState
 import app.knotwork.android.domain.models.AgentTask
+import app.knotwork.android.domain.models.ConsoleEventType
+import app.knotwork.android.domain.models.MemoryChunk
+import app.knotwork.android.domain.models.NodeModel
+import app.knotwork.android.domain.models.NodeType
 import app.knotwork.android.domain.models.PipelineGraph
 import app.knotwork.android.domain.models.PipelineRun
 import app.knotwork.android.domain.models.PipelineRunStatus
+import app.knotwork.android.domain.models.ResumeContext
 import app.knotwork.android.domain.models.RunOrigin
+import app.knotwork.android.domain.models.RunTraceRecord
 import app.knotwork.android.domain.models.TaskPriority
 import app.knotwork.android.domain.repositories.ChatRepository
 import app.knotwork.android.domain.repositories.PipelineRepository
 import app.knotwork.android.domain.repositories.PipelineRunRepository
+import app.knotwork.android.domain.repositories.RunTraceRepository
 import app.knotwork.android.domain.repositories.SettingsRepository
+import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.slot
 import io.mockk.verify
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -47,6 +56,7 @@ class TaskQueueManagerImplTest {
     private lateinit var settingsRepository: SettingsRepository
     private lateinit var graphExecutionEngine: GraphExecutionEngine
     private lateinit var pipelineRunRepository: PipelineRunRepository
+    private lateinit var runTraceRepository: RunTraceRepository
 
     private lateinit var taskQueueManager: TaskQueueManagerImpl
 
@@ -59,6 +69,7 @@ class TaskQueueManagerImplTest {
         settingsRepository = mockk()
         graphExecutionEngine = mockk()
         pipelineRunRepository = mockk(relaxed = true)
+        runTraceRepository = mockk(relaxed = true)
 
         // Baseline library: a single pipeline marked as the user default, so
         // tests that exercise unrelated behaviour (eviction, cancellation)
@@ -73,6 +84,7 @@ class TaskQueueManagerImplTest {
             settingsRepository = settingsRepository,
             graphExecutionEngine = graphExecutionEngine,
             pipelineRunRepository = pipelineRunRepository,
+            runTraceRepository = runTraceRepository,
         ).apply {
             dispatcher = testDispatcher
         }
@@ -556,6 +568,111 @@ class TaskQueueManagerImplTest {
         coVerify(exactly = 0) {
             pipelineRunRepository.finishRun(task.id, PipelineRunStatus.FAILED, any())
         }
+    }
+
+    // endregion
+
+    // region Checkpoint resume
+
+    /** Interrupted-then-requeued run record matching the [graph] under resume. */
+    private fun resumedRun(graph: PipelineGraph, runId: String): PipelineRun = PipelineRun(
+        id = runId,
+        sessionId = "session_resume",
+        pipelineId = graph.id,
+        origin = RunOrigin.CHAT,
+        status = PipelineRunStatus.QUEUED,
+        currentNodeId = null,
+        startedAt = 0L,
+        finishedAt = null,
+        errorMessage = null,
+        graphContentHash = graph.contentHash(),
+        userPrompt = "original prompt",
+    )
+
+    /**
+     * The resume branch must not repeat the fresh-task side effects: the user
+     * message is already in the chat history, and the pipeline resolves by
+     * the run's recorded id. The engine receives the checkpoint rebuilt from
+     * the persisted trace — seq-ordered NodeIo prefix, latest memory
+     * snapshot, and the next free seq.
+     */
+    @Test
+    fun `given resume task then user message is not re-saved and engine gets the rebuilt checkpoint`() =
+        testScope.runTest {
+            val graph = PipelineGraph(id = "pipe-r", name = "Resume")
+            val runId = "run-resume-1"
+            coEvery { pipelineRunRepository.getRun(runId) } returns resumedRun(graph, runId)
+            coEvery { pipelineRepository.getPipelineById("pipe-r") } returns graph
+            val nodeIo = RunTraceRecord.NodeIo(
+                runId = runId, sessionId = "session_resume", seq = 2L, timestamp = 0L,
+                nodeId = "llm_1", nodeType = "LITE_RT", inputText = "in", outputText = "out",
+                durationMs = 1L, tokenCount = null,
+            )
+            val memory = RunTraceRecord.MemorySnapshot(
+                runId = runId,
+                sessionId = "session_resume",
+                seq = 3L,
+                timestamp = 0L,
+                entries = listOf(MemoryChunk(id = 1L, text = "fact", embedding = FloatArray(0), timestamp = 0L)),
+            )
+            val console = RunTraceRecord.ConsoleEntry(
+                runId = runId,
+                sessionId = "session_resume",
+                seq = 5L,
+                timestamp = 0L,
+                type = ConsoleEventType.NodeExecution,
+                message = "▶ LITE_RT",
+            )
+            coEvery { runTraceRepository.getTraceForRun(runId) } returns listOf(console, memory, nodeIo)
+            val resumeSlot = slot<ResumeContext>()
+            every {
+                graphExecutionEngine.invoke(any(), any(), any(), any(), capture(resumeSlot))
+            } returns flowOf(AgentOrchestratorState.Completed("ok"))
+
+            taskQueueManager.enqueueTask(
+                AgentTask(id = runId, sessionId = "session_resume", prompt = "original prompt", isResume = true),
+            )
+            advanceUntilIdle()
+
+            coVerify(exactly = 0) { chatRepository.saveMessage(any()) }
+            coVerify { pipelineRunRepository.markRunning(runId, "pipe-r", graph.contentHash()) }
+            assertEquals(listOf(nodeIo), resumeSlot.captured.records)
+            assertEquals(listOf(1L), resumeSlot.captured.memorySnapshot?.map { it.id })
+            assertEquals(6L, resumeSlot.captured.nextSeq)
+            coVerify { pipelineRunRepository.finishRun(runId, PipelineRunStatus.COMPLETED) }
+        }
+
+    /**
+     * The graph hash is re-validated at worker pickup: an edit saved in the
+     * validation→worker window settles the run back to INTERRUPTED with an
+     * explicit message, and the engine is never invoked.
+     */
+    @Test
+    fun `given resume task with edited graph then run settles back to INTERRUPTED before engine`() = testScope.runTest {
+        val recordedGraph = PipelineGraph(id = "pipe-r", name = "Recorded")
+        val editedGraph = PipelineGraph(
+            id = "pipe-r",
+            name = "Recorded",
+            nodes = listOf(NodeModel("extra", NodeType.INPUT, 0f, 0f)),
+        )
+        val runId = "run-resume-2"
+        coEvery { pipelineRunRepository.getRun(runId) } returns resumedRun(recordedGraph, runId)
+        coEvery { pipelineRepository.getPipelineById("pipe-r") } returns editedGraph
+
+        taskQueueManager.enqueueTask(
+            AgentTask(id = runId, sessionId = "session_resume", prompt = "original prompt", isResume = true),
+        )
+        advanceUntilIdle()
+
+        coVerify {
+            pipelineRunRepository.finishRun(
+                runId,
+                PipelineRunStatus.INTERRUPTED,
+                "Pipeline graph changed before resume could start. Restart the task instead.",
+            )
+        }
+        verify(exactly = 0) { graphExecutionEngine.invoke(any(), any(), any(), any(), any()) }
+        coVerify(exactly = 0) { chatRepository.saveMessage(any()) }
     }
 
     // endregion

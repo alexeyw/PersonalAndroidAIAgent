@@ -6,12 +6,16 @@ import app.knotwork.android.domain.engine.TaskQueueManager
 import app.knotwork.android.domain.models.AgentOrchestratorState
 import app.knotwork.android.domain.models.AgentTask
 import app.knotwork.android.domain.models.ChatMessage
+import app.knotwork.android.domain.models.PipelineGraph
 import app.knotwork.android.domain.models.PipelineRun
 import app.knotwork.android.domain.models.PipelineRunStatus
+import app.knotwork.android.domain.models.ResumeContext
 import app.knotwork.android.domain.models.Role
+import app.knotwork.android.domain.models.RunTraceRecord
 import app.knotwork.android.domain.repositories.ChatRepository
 import app.knotwork.android.domain.repositories.PipelineRepository
 import app.knotwork.android.domain.repositories.PipelineRunRepository
+import app.knotwork.android.domain.repositories.RunTraceRepository
 import app.knotwork.android.domain.repositories.SettingsRepository
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -47,6 +51,7 @@ class TaskQueueManagerImpl @Inject constructor(
     private val settingsRepository: SettingsRepository,
     private val graphExecutionEngine: GraphExecutionEngine,
     private val pipelineRunRepository: PipelineRunRepository,
+    private val runTraceRepository: RunTraceRepository,
 ) : TaskQueueManager {
 
     @VisibleForTesting
@@ -137,6 +142,10 @@ class TaskQueueManagerImpl @Inject constructor(
     }
 
     private suspend fun processTask(task: AgentTask) {
+        if (task.isResume) {
+            processResumeTask(task)
+            return
+        }
         val stateFlow = getOrCreateStateFlow(task.sessionId)
         val loadingState = AgentOrchestratorState.Loading
         stateFlow.emit(loadingState)
@@ -202,9 +211,77 @@ class TaskQueueManagerImpl @Inject constructor(
         // checkpoint-invalidation contract.
         pipelineRunRepository.markRunning(task.id, activePipeline.id, activePipeline.contentHash())
 
-        // 3. Delegate to engine
+        executeRun(task, activePipeline, resume = null)
+    }
+
+    /**
+     * Resume branch of the worker: drives a checkpoint resume of the
+     * interrupted run identified by [AgentTask.id] (flagged via
+     * [AgentTask.isResume]). Deliberately skips everything a fresh task does
+     * before engine start — the user message is already in the chat history,
+     * the QUEUED record already exists (`markResumed` flipped it back), and
+     * the pipeline resolves strictly by the run's recorded pipeline id, never
+     * through the session-binding → default chain (the run must continue on
+     * the exact graph it started with).
+     *
+     * The graph hash is re-validated here even though
+     * `ResumePipelineRunUseCase` already checked it: the user can save a
+     * pipeline edit in the window between that validation and this worker
+     * picking the task up. On a mismatch the run settles back to INTERRUPTED
+     * (a fresh resume attempt will then fail fast with `GraphChanged`), and
+     * the session surfaces an explicit error instead of executing a
+     * half-valid checkpoint.
+     */
+    private suspend fun processResumeTask(task: AgentTask) {
+        val stateFlow = getOrCreateStateFlow(task.sessionId)
+        val loadingState = AgentOrchestratorState.Loading
+        stateFlow.emit(loadingState)
+        _globalState.value = loadingState
+
+        val run = pipelineRunRepository.getRun(task.id)
+        val recordedHash = run?.graphContentHash
+        val graph = run?.pipelineId?.let { pipelineRepository.getPipelineById(it) }
+        if (run == null || graph == null || recordedHash == null || graph.contentHash() != recordedHash) {
+            val message = "Pipeline graph changed before resume could start. Restart the task instead."
+            pipelineRunRepository.finishRun(task.id, PipelineRunStatus.INTERRUPTED, message)
+            val errState = AgentOrchestratorState.Error(message)
+            stateFlow.emit(errState)
+            _globalState.value = errState
+            return
+        }
+
+        // Rebuild the checkpoint from the persisted trace: the seq-ordered
+        // NodeIo prefix to replay, the latest memory snapshot (if the
+        // interrupted run ever resolved memory), and the first free seq for
+        // the records the resumed engine will append.
+        val trace = runTraceRepository.getTraceForRun(task.id)
+        val resume = ResumeContext(
+            records = trace.filterIsInstance<RunTraceRecord.NodeIo>().sortedBy { it.seq },
+            memorySnapshot = trace.filterIsInstance<RunTraceRecord.MemorySnapshot>()
+                .maxByOrNull { it.seq }
+                ?.entries,
+            nextSeq = (trace.maxOfOrNull { it.seq } ?: -1L) + 1,
+        )
+
+        pipelineRunRepository.markRunning(task.id, graph.id, recordedHash)
+        executeRun(task, graph, resume)
+    }
+
+    /**
+     * Shared engine-delegation tail of both worker branches: drives the
+     * engine over [pipeline], mirrors terminal states into the persistent run
+     * record, and resets the session flow in its `finally`. Identical for
+     * fresh and resumed runs — the only difference is the [resume] payload
+     * forwarded to the engine.
+     *
+     * @param task The task being processed ([AgentTask.id] is the run id).
+     * @param pipeline The resolved graph to execute.
+     * @param resume Checkpoint payload for a resumed run, `null` for a fresh one.
+     */
+    private suspend fun executeRun(task: AgentTask, pipeline: PipelineGraph, resume: ResumeContext?) {
+        val stateFlow = getOrCreateStateFlow(task.sessionId)
         try {
-            graphExecutionEngine(task.sessionId, task.prompt, activePipeline, task.id).collect { state ->
+            graphExecutionEngine(task.sessionId, task.prompt, pipeline, task.id, resume).collect { state ->
                 // Terminal engine states are mirrored into the persistent run
                 // record as they pass through, so the record is already
                 // settled when the in-memory flow reaches its observers.
@@ -275,6 +352,7 @@ class TaskQueueManagerImpl @Inject constructor(
         finishedAt = null,
         errorMessage = null,
         graphContentHash = null,
+        userPrompt = prompt,
     )
 
     /**

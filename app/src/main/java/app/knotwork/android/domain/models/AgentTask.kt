@@ -22,6 +22,13 @@ import java.util.UUID
  * @property origin What triggered the task — an interactive chat message
  *   ([RunOrigin.CHAT], the default) or the background scheduler
  *   ([RunOrigin.SCHEDULER]). Recorded into the persistent [PipelineRun].
+ * @property isResume When `true`, this task resumes an interrupted run
+ *   instead of starting a fresh one: [id] is the id of the existing
+ *   [PipelineRun] record (already flipped back to queued by
+ *   `PipelineRunRepository.markResumed`), the queue worker skips re-saving
+ *   the user message and re-creating the run record, resolves the pipeline
+ *   strictly by the run's recorded pipeline id, and drives the engine in
+ *   checkpoint-replay mode from the persisted trace.
  */
 data class AgentTask(
     val id: String = UUID.randomUUID().toString(),
@@ -31,4 +38,5 @@ data class AgentTask(
     val timestamp: Long = System.currentTimeMillis(),
     val pipelineId: String? = null,
     val origin: RunOrigin = RunOrigin.CHAT,
+    val isResume: Boolean = false,
 )

@@ -174,6 +174,8 @@ fun ChatHomeScreen(
     val rateComingSoonMessage = stringResource(R.string.chat_message_rate_coming_soon)
     val savedToMemoryMessage = stringResource(R.string.chat_snackbar_saved_to_memory)
     val saveToMemoryFailedMessage = stringResource(R.string.chat_snackbar_save_to_memory_failed)
+    val resumeGraphChangedMessage = stringResource(R.string.chat_snackbar_resume_graph_changed)
+    val resumeExpiredMessage = stringResource(R.string.chat_snackbar_resume_expired)
     val resumeUnavailableMessage = stringResource(R.string.chat_snackbar_resume_unavailable)
 
     LaunchedEffect(viewModel) {
@@ -206,8 +208,13 @@ fun ChatHomeScreen(
         }
     }
     LaunchedEffect(viewModel) {
-        viewModel.resumeUnavailableEvents.collect {
-            snackbarHostState.showSnackbar(message = resumeUnavailableMessage)
+        viewModel.resumeFeedbackEvents.collect { event ->
+            val message = when (event) {
+                ResumeFeedbackEvent.GraphChanged -> resumeGraphChangedMessage
+                ResumeFeedbackEvent.Expired -> resumeExpiredMessage
+                ResumeFeedbackEvent.NotResumable -> resumeUnavailableMessage
+            }
+            snackbarHostState.showSnackbar(message = message)
         }
     }
     LaunchedEffect(viewModel) {
