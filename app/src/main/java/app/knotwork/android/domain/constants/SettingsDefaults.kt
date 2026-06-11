@@ -44,6 +44,21 @@ object SettingsDefaults {
      */
     const val CLARIFICATION_TIMEOUT_MS_DEFAULT: Long = 60_000L
 
+    /**
+     * Default window, in hours, during which an interrupted pipeline run can
+     * be resumed from its checkpoint. Older interrupted runs only offer the
+     * regular discard path — their recorded context (chat history, memory,
+     * tool observations) is increasingly stale, and replaying it as if no
+     * time had passed gets less defensible the older the run is.
+     */
+    const val RESUME_MAX_AGE_HOURS_DEFAULT: Int = 48
+
+    /** Lower bound enforced when the user edits the resume-window setting. */
+    const val RESUME_MAX_AGE_HOURS_MIN: Int = 1
+
+    /** Upper bound enforced when the user edits the resume-window setting. */
+    const val RESUME_MAX_AGE_HOURS_MAX: Int = 168
+
     /** Default maximum number of pipeline steps allowed per user request. */
     const val PIPELINE_MAX_STEPS_DEFAULT: Int = 15
 

@@ -26,6 +26,8 @@ import app.knotwork.android.domain.services.MemoryAutoExtractionCoordinator
 import app.knotwork.android.domain.usecases.AgentOrchestratorUseCase
 import app.knotwork.android.domain.usecases.GetContextWindowUseCase
 import app.knotwork.android.domain.usecases.LoadModelUseCase
+import app.knotwork.android.domain.usecases.ResumeOutcome
+import app.knotwork.android.domain.usecases.ResumePipelineRunUseCase
 import app.knotwork.android.domain.usecases.SaveMessageToMemoryUseCase
 import app.knotwork.android.domain.usecases.SaveToMemoryOutcome
 import app.knotwork.design.components.chat.ChatContent
@@ -125,6 +127,7 @@ class ChatHomeViewModel @Inject constructor(
     private val saveMessageToMemoryUseCase: SaveMessageToMemoryUseCase,
     private val pipelineRunRepository: PipelineRunRepository,
     private val runTraceRepository: RunTraceRepository,
+    private val resumePipelineRunUseCase: ResumePipelineRunUseCase,
 ) : ViewModel() {
 
     private val _state: MutableStateFlow<ChatHomeScreenState> = MutableStateFlow(ChatHomeScreenState())
@@ -143,7 +146,8 @@ class ChatHomeViewModel @Inject constructor(
     private val _exportEvents: MutableSharedFlow<ChatExportPayload> = MutableSharedFlow(extraBufferCapacity = 1)
     private val _importErrorEvents: MutableSharedFlow<String> = MutableSharedFlow(extraBufferCapacity = 1)
     private val _memorySaveEvents: MutableSharedFlow<MemorySaveEvent> = MutableSharedFlow(extraBufferCapacity = 1)
-    private val _resumeUnavailableEvents: MutableSharedFlow<Unit> = MutableSharedFlow(extraBufferCapacity = 1)
+    private val _resumeFeedbackEvents: MutableSharedFlow<ResumeFeedbackEvent> =
+        MutableSharedFlow(extraBufferCapacity = 1)
 
     /**
      * One-shot signal raised when the binding of the active chat points
@@ -184,13 +188,12 @@ class ChatHomeViewModel @Inject constructor(
     val memorySaveEvents: SharedFlow<MemorySaveEvent> = _memorySaveEvents.asSharedFlow()
 
     /**
-     * One-shot signal raised when the user taps Resume on the interrupted-run
-     * card while checkpoint-resume is not shipped yet. The screen surfaces a
-     * snackbar explaining the limitation. The flow (and the explanatory copy)
-     * disappears once the resume mechanism replaces the stub in
-     * [resumeInterruptedRun].
+     * One-shot signal raised when a Resume tap on the interrupted-run card
+     * could not start the checkpoint resume. Each variant maps to its own
+     * snackbar copy on the screen; a successful resume emits nothing here —
+     * the surface flips to `Generating` and the live state flow takes over.
      */
-    val resumeUnavailableEvents: SharedFlow<Unit> = _resumeUnavailableEvents.asSharedFlow()
+    val resumeFeedbackEvents: SharedFlow<ResumeFeedbackEvent> = _resumeFeedbackEvents.asSharedFlow()
 
     private var messagesJob: Job? = null
     private var generationJob: Job? = null
@@ -1049,6 +1052,14 @@ class ChatHomeViewModel @Inject constructor(
      */
     private suspend fun presentInterruptedRun(run: PipelineRun) {
         val nodeLabel = resolveNodeLabel(run)
+        // The card only offers Resume while the checkpoint is inside the
+        // resume window and the record carries everything resume needs (the
+        // original prompt — absent on legacy rows). The use case re-validates
+        // on tap; this pre-check just keeps the CTA honest.
+        val maxAgeMillis = settingsRepository.resumeMaxAgeHours.first() * MILLIS_PER_HOUR
+        val interruptedAt = run.finishedAt ?: run.startedAt
+        val resumable = run.userPrompt != null &&
+            System.currentTimeMillis() - interruptedAt <= maxAgeMillis
         val pending = InterruptedRunPending(
             runId = run.id,
             nodeLabel = nodeLabel,
@@ -1057,6 +1068,7 @@ class ChatHomeViewModel @Inject constructor(
             // terminal write; startedAt is the defensive fallback for a
             // record that somehow lost it.
             timestamp = formatMessageTimestamp(run.finishedAt ?: run.startedAt),
+            resumable = resumable,
         )
         _state.update { current ->
             val withPending = current.copy(pending = current.pending.copy(interrupted = pending))
@@ -1103,16 +1115,38 @@ class ChatHomeViewModel @Inject constructor(
     }
 
     /**
-     * Resume CTA of the interrupted-run card. Checkpoint-resume is not
-     * shipped yet — until the resume mechanism lands this surfaces the
-     * "not available yet" snackbar via [resumeUnavailableEvents] and keeps
-     * the card up so the user can still Discard. The card and both intents
-     * are wired end-to-end so the mechanism can slot in here without
-     * touching the UI contract.
+     * Resume CTA of the interrupted-run card. Delegates to
+     * [ResumePipelineRunUseCase]: on success the card is dropped, the surface
+     * flips to `Generating` and the live orchestrator-state collector
+     * attaches — the resumed run then streams into the chat exactly like a
+     * reattached background run. On failure the card stays up (the user can
+     * still Discard) and the typed reason is surfaced through
+     * [resumeFeedbackEvents]; an expired checkpoint additionally demotes the
+     * card to its discard-only variant.
      */
     fun resumeInterruptedRun() {
-        if (_state.value.pending.interrupted == null) return
-        _resumeUnavailableEvents.tryEmit(Unit)
+        val pending = _state.value.pending.interrupted ?: return
+        val sessionId = _state.value.thread.currentSessionId
+        viewModelScope.launch {
+            when (resumePipelineRunUseCase(pending.runId)) {
+                ResumeOutcome.Resumed -> {
+                    _state.update { current ->
+                        val cleared = current.copy(pending = current.pending.copy(interrupted = null))
+                        cleared.copy(visual = ChatHomeUiState.Generating)
+                    }
+                    attachToLiveRun(sessionId, PipelineRunStatus.QUEUED)
+                }
+                ResumeOutcome.GraphChanged -> _resumeFeedbackEvents.tryEmit(ResumeFeedbackEvent.GraphChanged)
+                ResumeOutcome.Expired -> {
+                    _state.update { current ->
+                        val demoted = current.pending.interrupted?.copy(resumable = false)
+                        current.copy(pending = current.pending.copy(interrupted = demoted))
+                    }
+                    _resumeFeedbackEvents.tryEmit(ResumeFeedbackEvent.Expired)
+                }
+                ResumeOutcome.NotResumable -> _resumeFeedbackEvents.tryEmit(ResumeFeedbackEvent.NotResumable)
+            }
+        }
     }
 
     /**
@@ -1865,6 +1899,9 @@ class ChatHomeViewModel @Inject constructor(
          */
         const val INTERRUPTED_UNKNOWN_NODE_LABEL: String = "unknown step"
 
+        /** Milliseconds in one hour, for the resume-window pre-check on the interrupted card. */
+        private const val MILLIS_PER_HOUR: Long = 3_600_000L
+
         /** Pre-formatted timestamp format used in [ChatMetadata.timestamp] (24h, locale-aware). */
         private const val TIMESTAMP_PATTERN: String = "HH:mm"
 
@@ -1965,8 +2002,34 @@ data class HitlPending(val toolName: String, val arguments: String, val risk: To
  *   (`finishedAt` of the record). Captured once here so the card shows a
  *   stable, truthful time instead of re-deriving "now" on every
  *   recomposition.
+ * @property resumable whether the card offers the Resume CTA: `false` when
+ *   the interruption is older than the resume window or the record predates
+ *   prompt persistence — only Discard remains. The use case re-validates on
+ *   tap regardless; this flag just keeps the offered action honest.
  */
-data class InterruptedRunPending(val runId: String, val nodeLabel: String, val timestamp: String)
+data class InterruptedRunPending(
+    val runId: String,
+    val nodeLabel: String,
+    val timestamp: String,
+    val resumable: Boolean = true,
+)
+
+/**
+ * One-shot failure outcomes of a Resume tap on the interrupted-run card,
+ * mapped to snackbar copy by the screen. Modelled as an enum so resource ids
+ * stay out of the ViewModel. A successful resume emits no event — the
+ * surface flips to `Generating` instead.
+ */
+enum class ResumeFeedbackEvent {
+    /** The pipeline graph was edited or deleted; only a full restart can help. */
+    GraphChanged,
+
+    /** The interruption is older than the configured resume window. */
+    Expired,
+
+    /** The run is no longer resumable (raced discard/resume, legacy record). */
+    NotResumable,
+}
 
 /**
  * Maps the domain [ToolRisk] enum onto the catalog [Risk] enum. The two

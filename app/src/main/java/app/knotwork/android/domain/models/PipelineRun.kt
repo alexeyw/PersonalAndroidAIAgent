@@ -32,6 +32,12 @@ package app.knotwork.android.domain.models
  *   [PipelineRunStatus.RUNNING] (see `PipelineGraph.contentHash`). Used to
  *   invalidate checkpoint resume when the graph was edited between
  *   interruption and resume. `null` while the run is still queued.
+ * @property userPrompt The user message that started the run, captured at
+ *   enqueue time. Checkpoint resume feeds it back into the engine as the
+ *   immutable `originalUserMessage` (context blocks, lazy memory retrieval,
+ *   INPUT-node passthrough) — recovering it from chat history would be
+ *   ambiguous. `null` only for records written before this field existed;
+ *   such runs cannot be resumed.
  */
 data class PipelineRun(
     val id: String,
@@ -44,6 +50,7 @@ data class PipelineRun(
     val finishedAt: Long?,
     val errorMessage: String?,
     val graphContentHash: String?,
+    val userPrompt: String? = null,
 )
 
 /**

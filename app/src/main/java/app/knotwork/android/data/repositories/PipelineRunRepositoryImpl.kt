@@ -116,6 +116,29 @@ class PipelineRunRepositoryImpl @Inject constructor(private val pipelineRunDao: 
         }
     }
 
+    override suspend fun getRun(runId: String): PipelineRun? = absorbing("getRun") {
+        withContext(Dispatchers.IO) {
+            pipelineRunDao.getRun(runId)?.toDomain()
+        }
+    }
+
+    override suspend fun markResumed(runId: String): Boolean {
+        // Re-register ownership before the transition for the same reason
+        // createRun does: from this moment the run's machinery lives in this
+        // process, and a failed write must still keep the id invisible to
+        // the orphan sweep.
+        liveRunIds.add(runId)
+        return absorbing("markResumed") {
+            withContext(Dispatchers.IO) {
+                pipelineRunDao.markResumed(
+                    runId = runId,
+                    fromStatus = PipelineRunStatus.INTERRUPTED.name,
+                    toStatus = PipelineRunStatus.QUEUED.name,
+                ) == 1
+            }
+        } ?: false
+    }
+
     override suspend fun getActiveRunForSession(sessionId: String): PipelineRun? = absorbing("getActiveRunForSession") {
         withContext(Dispatchers.IO) {
             pipelineRunDao.getActiveRunForSession(sessionId, ACTIVE_STATUS_NAMES)?.toDomain()
@@ -211,6 +234,7 @@ private fun PipelineRun.toEntity(): PipelineRunEntity = PipelineRunEntity(
     finishedAt = finishedAt,
     errorMessage = errorMessage,
     graphContentHash = graphContentHash,
+    userPrompt = userPrompt,
 )
 
 /**
@@ -232,4 +256,5 @@ private fun PipelineRunEntity.toDomain(): PipelineRun = PipelineRun(
     finishedAt = finishedAt,
     errorMessage = errorMessage,
     graphContentHash = graphContentHash,
+    userPrompt = userPrompt,
 )

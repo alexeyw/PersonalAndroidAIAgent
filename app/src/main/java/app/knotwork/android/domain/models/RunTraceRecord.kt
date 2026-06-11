@@ -38,6 +38,18 @@ sealed class RunTraceRecord {
      * @property durationMs How long the node took to execute, in milliseconds.
      * @property tokenCount The approximate number of LLM tokens produced, or
      *   `null` for non-LLM nodes.
+     * @property conditionResult The recorded boolean verdict of an
+     *   `IF_CONDITION` node, or `null` for every other node type. Persisted so
+     *   checkpoint resume re-routes the True/False branch exactly as the
+     *   interrupted run did, without re-evaluating the condition.
+     * @property routingKey The recorded routing key of an `INTENT_ROUTER` or
+     *   `EVALUATION` node (edge-label selector), or `null` for every other
+     *   node type. Persisted for the same branch-restoration reason as
+     *   [conditionResult].
+     * @property resolvedToolName The tool a `TOOL` node actually executed
+     *   (relevant for "auto"-configured nodes), or `null` for non-TOOL nodes.
+     *   Persisted so a replayed tool observation is attributed to the real
+     *   tool in the `--- Tool Results ---` context block.
      */
     data class NodeIo(
         override val runId: String,
@@ -50,6 +62,9 @@ sealed class RunTraceRecord {
         val outputText: String,
         val durationMs: Long,
         val tokenCount: Int?,
+        val conditionResult: Boolean? = null,
+        val routingKey: String? = null,
+        val resolvedToolName: String? = null,
     ) : RunTraceRecord()
 
     /**
@@ -66,5 +81,27 @@ sealed class RunTraceRecord {
         override val timestamp: Long,
         val type: ConsoleEventType,
         val message: String,
+    ) : RunTraceRecord()
+
+    /**
+     * Snapshot of the long-term memory chunks resolved for this run, written
+     * at the moment the run's single lazy memory retrieval actually happens.
+     * Checkpoint resume seeds the engine's memoized memory list from this
+     * record instead of re-running retrieval, so a resumed run sees exactly
+     * the `--- Long-Term Memory ---` block the interrupted run saw (and the
+     * per-chunk usage counters are not double-counted).
+     *
+     * Only the chunk identity and text survive persistence — embeddings are
+     * neither needed to rebuild the context block nor worth the storage; a
+     * chunk restored from a snapshot carries an empty embedding vector.
+     *
+     * @property entries The resolved memory chunks in retrieval-rank order.
+     */
+    data class MemorySnapshot(
+        override val runId: String,
+        override val sessionId: String,
+        override val seq: Long,
+        override val timestamp: Long,
+        val entries: List<MemoryChunk>,
     ) : RunTraceRecord()
 }

@@ -14,6 +14,7 @@ import app.knotwork.android.domain.models.NodeOutput
 import app.knotwork.android.domain.models.NodeType
 import app.knotwork.android.domain.models.PipelineGraph
 import app.knotwork.android.domain.models.PipelineRunStatus
+import app.knotwork.android.domain.models.ResumeContext
 import app.knotwork.android.domain.models.RunTraceRecord
 import app.knotwork.android.domain.models.ToolInvocationResult
 import app.knotwork.android.domain.models.usesContextConfig
@@ -96,6 +97,18 @@ class GraphExecutionEngine @Inject constructor(
      *   points). `null` disables run persistence entirely — terminal statuses
      *   and the RUNNING transition are owned by the task queue, never by the
      *   engine.
+     * @param resume Checkpoint payload that switches the walk into resume
+     *   mode (see [ResumeContext]): while its seq-ordered record cursor is
+     *   not exhausted, each visited non-INPUT/OUTPUT node consumes the next
+     *   recorded snapshot instead of executing — the recorded output and
+     *   routing verdicts drive the very same control-flow code live results
+     *   would, so branches, queue iterations and inter-node inputs are
+     *   re-derived deterministically without re-running executors. The first
+     *   node without a record executes live; in particular a TOOL node the
+     *   run died on raises a fresh HITL approval (see the TOOL asymmetry
+     *   contract on [ResumeContext]). Requires a non-null [runId] — resuming
+     *   without the persistent record/trace to continue makes no sense.
+     *   `null` (the default) is a normal fresh run.
      * @return A cold flow of orchestrator states describing the run.
      */
     // Reason: this is the agent's core orchestrator. It is a long single
@@ -110,6 +123,7 @@ class GraphExecutionEngine @Inject constructor(
         userPrompt: String,
         graph: PipelineGraph,
         runId: String? = null,
+        resume: ResumeContext? = null,
     ): Flow<AgentOrchestratorState> = flow {
         // Buffer of console events accumulated for this run. The engine emits a
         // fresh `ConsoleLog` snapshot on every append so the UI reactively
@@ -118,8 +132,15 @@ class GraphExecutionEngine @Inject constructor(
 
         // Monotonic position of the next trace record within this run, shared
         // by console events and per-node I/O snapshots. Uniqueness per run is
-        // what lets the console deduplicate the replay/live seam by seq.
-        var traceSeq = 0L
+        // what lets the console deduplicate the replay/live seam by seq. A
+        // resumed run continues the interrupted run's numbering instead of
+        // colliding with its persisted records.
+        var traceSeq = resume?.nextSeq ?: 0L
+
+        // Position of the next checkpoint record to replay; meaningful only
+        // in resume mode. Once it reaches the end of the recorded prefix the
+        // walk is live for the rest of the run.
+        var replayCursor = 0
 
         suspend fun pushConsole(type: ConsoleEventType, message: String) {
             val event = ConsoleEvent(
@@ -200,8 +221,10 @@ class GraphExecutionEngine @Inject constructor(
         // graph where no executed node requests memory never embeds the prompt
         // at all — sparing avoidable embedding-provider latency/cost and not
         // shipping the prompt to a cloud embedding backend the user did not ask
-        // memory for.
-        var memoizedMemories: List<MemoryChunk>? = null
+        // memory for. A resumed run is seeded from the interrupted run's
+        // persisted snapshot, so it neither re-runs retrieval (the context
+        // must be identical to the interrupted one) nor re-counts usage.
+        var memoizedMemories: List<MemoryChunk>? = resume?.memorySnapshot
         suspend fun resolveMemoriesOnce(): List<MemoryChunk> {
             memoizedMemories?.let { return it }
             val scored: List<Pair<MemoryChunk, Float>> = try {
@@ -230,6 +253,20 @@ class GraphExecutionEngine @Inject constructor(
                 throw e
             } catch (e: Exception) {
                 Timber.tag("PipelineDebug").w(e, "Failed to record memory usage; continuing")
+            }
+            // Persist the resolved chunks so a checkpoint resume of this run
+            // can seed its memory from the snapshot instead of re-running
+            // retrieval — the resumed context must be identical to this one.
+            if (runId != null) {
+                runTraceRepository.append(
+                    RunTraceRecord.MemorySnapshot(
+                        runId = runId,
+                        sessionId = sessionId,
+                        seq = traceSeq++,
+                        timestamp = System.currentTimeMillis(),
+                        entries = hits,
+                    ),
+                )
             }
             return hits.also { memoizedMemories = it }
         }
@@ -262,111 +299,167 @@ class GraphExecutionEngine @Inject constructor(
                     ),
                 ),
             )
-            pushConsole(ConsoleEventType.NodeExecution, "▶ ${currentNode.type.name}")
-
-            // Give UI time to render the stage before CPU-heavy inference starts
-            kotlinx.coroutines.delay(PipelineExecutionDefaults.LITE_RT_PREWARM_DELAY_MS)
-
-            var nodeResult: NodeExecutionResult? = null
-
-            val executor = nodeExecutorFactory.getExecutor(currentNode.type)
-            Timber.tag(
-                "PipelineDebug",
-            ).d(
-                "[NODE_IN] type=${currentNode.type.name} id=${currentNode.id} " +
-                    "input=${currentInputText.take(PipelineExecutionDefaults.NODE_IO_LOG_CHAR_LIMIT)}",
-            )
-
-            // Render `$VARIABLE` placeholders in the node's system prompt before the LLM
-            // sees it. We only touch nodes whose system prompt is actually fed into an LLM
-            // engine — the others (TOOL, IF_CONDITION, INPUT, QUEUE_PROCESSOR) either ignore
-            // `systemPrompt` or use it for non-LLM logic where placeholders are not expected.
-            val nodeForExecution = renderNodeSystemPrompt(currentNode)
-
-            // Compose the executor input by selecting only the context blocks the node
-            // opted into via its [NodeContextConfig]. Control-flow nodes (INPUT,
-            // IF_CONDITION, QUEUE_PROCESSOR) keep their raw passthrough semantics —
-            // wrapping them would corrupt routing/queue state. OUTPUT in echo mode
-            // (no systemPrompt) is also passed through so it forwards the upstream
-            // result verbatim instead of leaking context headers to the user.
-            val executorInput = if (shouldComposeContext(currentNode)) {
-                // Embed + search only when this node actually renders the
-                // memory block; otherwise pass an empty list so retrieval is
-                // never triggered on its behalf.
-                val memoryEntries = if (currentNode.contextConfig.longTermMemory) {
-                    resolveMemoriesOnce()
-                } else {
-                    emptyList()
-                }
-                val executionContext = PipelineExecutionContext(
-                    originalUserMessage = userPrompt,
-                    chatHistory = chatRepository.getMessagesForSession(sessionId).first(),
-                    previousNodeOutput = currentInputText,
-                    toolResults = toolInvocationResults.toList(),
-                    memoryEntries = memoryEntries,
-                )
-                // No fallback to currentInputText: an empty result is the
-                // intended outcome of a sparse config (e.g. only toolResults=true
-                // before any tool has run). Step 3/6 forbids the all-flags-false
-                // case at the validation layer, so we will not silently leak
-                // previous-node output back into a node that opted out.
-                nodeContextBuilder.build(currentNode.contextConfig, executionContext)
+            // Checkpoint replay decision: while the resume cursor still holds
+            // records, the recorded snapshot of this node substitutes for
+            // execution. INPUT and OUTPUT nodes are never recorded (the trace
+            // skips them by design), so they always run their executors even
+            // mid-replay — INPUT is a pure passthrough, and a recorded OUTPUT
+            // cannot exist for an interrupted run.
+            val replayRecord = if (resume != null &&
+                replayCursor < resume.records.size &&
+                currentNode.type != NodeType.INPUT &&
+                currentNode.type != NodeType.OUTPUT
+            ) {
+                resume.records[replayCursor]
             } else {
-                currentInputText
+                null
+            }
+            if (replayRecord != null && replayRecord.nodeId != currentNode.id) {
+                // The persisted prefix diverged from the graph walk: the trace
+                // cannot serve as a checkpoint (corruption, or an edit that
+                // slipped past hash validation). Failing loudly beats silently
+                // executing a half-replayed run on inconsistent inputs.
+                pushConsole(
+                    ConsoleEventType.Error,
+                    "Checkpoint trace diverged at ${currentNode.type.name}; resume aborted",
+                )
+                emit(
+                    AgentOrchestratorState.Error(
+                        "Recorded checkpoint no longer matches the pipeline graph. Restart the task instead.",
+                    ),
+                )
+                return@flow
             }
 
-            val nodeStartMs = System.currentTimeMillis()
-            try {
-                executor.execute(nodeForExecution, executorInput, sessionId, userPrompt)
-                    .collect { output ->
-                        when (output) {
-                            is NodeOutput.State -> {
-                                if (runId != null) {
-                                    runSuspended =
-                                        persistSuspensionTransition(runId, output.state, runSuspended)
-                                }
-                                emit(output.state)
-                            }
-                            is NodeOutput.Result -> nodeResult = output.result
-                        }
-                    }
+            var nodeResult: NodeExecutionResult? = null
+            val executorInput: String
+            val nodeDurationMs: Long
 
-                // The executor flow completing means any HITL suspension of
-                // this node is definitively resolved — flip the record back
-                // to RUNNING here instead of waiting for the next forwarded
-                // state (a clarification node, for instance, emits no state
-                // after its answer arrives, which would otherwise leave the
-                // record stale-WAITING through the next node's model load).
-                if (runId != null && runSuspended) {
-                    pipelineRunRepository.updateStatus(runId, PipelineRunStatus.RUNNING)
-                    runSuspended = false
-                }
+            if (replayRecord != null) {
+                // Replay branch: the node completed before the interruption —
+                // its recorded output (and routing verdicts) feed the same
+                // control flow a live result would. No executor call, no
+                // metrics, no new NodeIo trace record; the compact console
+                // event below is the only addition to the persisted trace.
+                replayCursor++
+                nodeResult = NodeExecutionResult(
+                    outputText = replayRecord.outputText,
+                    conditionResult = replayRecord.conditionResult,
+                    routingKey = replayRecord.routingKey,
+                    tokenCount = replayRecord.tokenCount,
+                    resolvedToolName = replayRecord.resolvedToolName,
+                )
+                executorInput = replayRecord.inputText
+                nodeDurationMs = replayRecord.durationMs
+                pushConsole(
+                    ConsoleEventType.NodeExecution,
+                    "↻ ${currentNode.type.name} replayed from checkpoint",
+                )
+            } else {
+                pushConsole(ConsoleEventType.NodeExecution, "▶ ${currentNode.type.name}")
 
+                // Give UI time to render the stage before CPU-heavy inference starts
+                kotlinx.coroutines.delay(PipelineExecutionDefaults.LITE_RT_PREWARM_DELAY_MS)
+
+                val executor = nodeExecutorFactory.getExecutor(currentNode.type)
                 Timber.tag(
                     "PipelineDebug",
                 ).d(
-                    "[NODE_OUT] type=${currentNode.type.name} id=${currentNode.id} " +
-                        "output=${nodeResult?.outputText?.take(PipelineExecutionDefaults.NODE_IO_LOG_CHAR_LIMIT)}",
+                    "[NODE_IN] type=${currentNode.type.name} id=${currentNode.id} " +
+                        "input=${currentInputText.take(PipelineExecutionDefaults.NODE_IO_LOG_CHAR_LIMIT)}",
                 )
-            } catch (e: kotlinx.coroutines.CancellationException) {
-                // Node executors suspend; collapsing a cancelled run into
-                // an `Error` emission would both surface a false error and
-                // keep the flow alive past its collector's cancellation.
-                throw e
-            } catch (e: Exception) {
-                Timber.tag(
-                    "PipelineDebug",
-                ).e(e, "[NODE_ERR] type=${currentNode.type.name} id=${currentNode.id} error=${e.message}")
-                pushConsole(
-                    ConsoleEventType.Error,
-                    "${currentNode.type.name}: ${e.message ?: "Unknown error"}",
-                )
-                emit(AgentOrchestratorState.Error(e.message ?: "Unknown error"))
-                return@flow
+
+                // Render `$VARIABLE` placeholders in the node's system prompt before the LLM
+                // sees it. We only touch nodes whose system prompt is actually fed into an LLM
+                // engine — the others (TOOL, IF_CONDITION, INPUT, QUEUE_PROCESSOR) either ignore
+                // `systemPrompt` or use it for non-LLM logic where placeholders are not expected.
+                val nodeForExecution = renderNodeSystemPrompt(currentNode)
+
+                // Compose the executor input by selecting only the context blocks the node
+                // opted into via its [NodeContextConfig]. Control-flow nodes (INPUT,
+                // IF_CONDITION, QUEUE_PROCESSOR) keep their raw passthrough semantics —
+                // wrapping them would corrupt routing/queue state. OUTPUT in echo mode
+                // (no systemPrompt) is also passed through so it forwards the upstream
+                // result verbatim instead of leaking context headers to the user.
+                executorInput = if (shouldComposeContext(currentNode)) {
+                    // Embed + search only when this node actually renders the
+                    // memory block; otherwise pass an empty list so retrieval is
+                    // never triggered on its behalf.
+                    val memoryEntries = if (currentNode.contextConfig.longTermMemory) {
+                        resolveMemoriesOnce()
+                    } else {
+                        emptyList()
+                    }
+                    val executionContext = PipelineExecutionContext(
+                        originalUserMessage = userPrompt,
+                        chatHistory = chatRepository.getMessagesForSession(sessionId).first(),
+                        previousNodeOutput = currentInputText,
+                        toolResults = toolInvocationResults.toList(),
+                        memoryEntries = memoryEntries,
+                    )
+                    // No fallback to currentInputText: an empty result is the
+                    // intended outcome of a sparse config (e.g. only toolResults=true
+                    // before any tool has run). Step 3/6 forbids the all-flags-false
+                    // case at the validation layer, so we will not silently leak
+                    // previous-node output back into a node that opted out.
+                    nodeContextBuilder.build(currentNode.contextConfig, executionContext)
+                } else {
+                    currentInputText
+                }
+
+                val nodeStartMs = System.currentTimeMillis()
+                try {
+                    executor.execute(nodeForExecution, executorInput, sessionId, userPrompt)
+                        .collect { output ->
+                            when (output) {
+                                is NodeOutput.State -> {
+                                    if (runId != null) {
+                                        runSuspended =
+                                            persistSuspensionTransition(runId, output.state, runSuspended)
+                                    }
+                                    emit(output.state)
+                                }
+                                is NodeOutput.Result -> nodeResult = output.result
+                            }
+                        }
+
+                    // The executor flow completing means any HITL suspension of
+                    // this node is definitively resolved — flip the record back
+                    // to RUNNING here instead of waiting for the next forwarded
+                    // state (a clarification node, for instance, emits no state
+                    // after its answer arrives, which would otherwise leave the
+                    // record stale-WAITING through the next node's model load).
+                    if (runId != null && runSuspended) {
+                        pipelineRunRepository.updateStatus(runId, PipelineRunStatus.RUNNING)
+                        runSuspended = false
+                    }
+
+                    Timber.tag(
+                        "PipelineDebug",
+                    ).d(
+                        "[NODE_OUT] type=${currentNode.type.name} id=${currentNode.id} " +
+                            "output=${nodeResult?.outputText?.take(PipelineExecutionDefaults.NODE_IO_LOG_CHAR_LIMIT)}",
+                    )
+                } catch (e: kotlinx.coroutines.CancellationException) {
+                    // Node executors suspend; collapsing a cancelled run into
+                    // an `Error` emission would both surface a false error and
+                    // keep the flow alive past its collector's cancellation.
+                    throw e
+                } catch (e: Exception) {
+                    Timber.tag(
+                        "PipelineDebug",
+                    ).e(e, "[NODE_ERR] type=${currentNode.type.name} id=${currentNode.id} error=${e.message}")
+                    pushConsole(
+                        ConsoleEventType.Error,
+                        "${currentNode.type.name}: ${e.message ?: "Unknown error"}",
+                    )
+                    emit(AgentOrchestratorState.Error(e.message ?: "Unknown error"))
+                    return@flow
+                }
+                nodeDurationMs = System.currentTimeMillis() - nodeStartMs
+                metricsRepository.recordNodeExecution(currentNode.type, nodeDurationMs, nodeResult?.tokenCount)
             }
-            val nodeDurationMs = System.currentTimeMillis() - nodeStartMs
             val nodeTokenCount = nodeResult?.tokenCount
-            metricsRepository.recordNodeExecution(currentNode.type, nodeDurationMs, nodeTokenCount)
 
             if (nodeResult?.error != null) {
                 Timber.tag(
@@ -383,8 +476,9 @@ class GraphExecutionEngine @Inject constructor(
             // Skip the "✓" event for OUTPUT — its own emitted Completed state
             // already marks the end of the pipeline, and pushing a ConsoleLog
             // after Completed would shift the terminal state away from the
-            // tail of the flow.
-            if (currentNode.type != NodeType.OUTPUT) {
+            // tail of the flow. Replayed nodes already pushed their compact
+            // "↻ replayed" event instead.
+            if (currentNode.type != NodeType.OUTPUT && replayRecord == null) {
                 pushConsole(
                     ConsoleEventType.NodeExecution,
                     "✓ ${currentNode.type.name} in ${nodeDurationMs}ms",
@@ -418,8 +512,10 @@ class GraphExecutionEngine @Inject constructor(
                 // record carries the full input/output pair so the Vars and
                 // Traces console tabs can be rebuilt for a finished run, and
                 // the checkpoint/resume path can substitute the recorded
-                // output for re-execution.
-                if (runId != null) {
+                // output for re-execution (the routing verdicts and tool
+                // attribution ride along for exactly that replay). A replayed
+                // node appends nothing — its record is already in the trace.
+                if (runId != null && replayRecord == null) {
                     runTraceRepository.append(
                         RunTraceRecord.NodeIo(
                             runId = runId,
@@ -432,6 +528,9 @@ class GraphExecutionEngine @Inject constructor(
                             outputText = outputText,
                             durationMs = nodeDurationMs,
                             tokenCount = nodeTokenCount,
+                            conditionResult = nodeResult?.conditionResult,
+                            routingKey = nodeResult?.routingKey,
+                            resolvedToolName = nodeResult?.resolvedToolName,
                         ),
                     )
                 }

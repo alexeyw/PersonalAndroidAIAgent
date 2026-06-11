@@ -15,6 +15,23 @@ details.
 
 ### Added
 
+- **Checkpoint resume for interrupted runs.** The **Resume** button on the
+  "Run interrupted" card now works: the run continues from its last
+  completed node instead of starting over. Node results recorded in the
+  persistent trace — including condition / router branch decisions and
+  the long-term-memory context retrieved by the original run — replay
+  without re-inference, so a background run killed mid-pipeline only pays
+  for the nodes it never finished. Tool calls are the deliberate
+  exception: a tool node the run died on is never replayed (whether its
+  side effects happened is unknowable) and re-executes with a fresh
+  human-in-the-loop approval, while a tool that demonstrably finished
+  reuses its recorded observation. Resume is refused with an explicit
+  message when the pipeline was edited or deleted since the run started
+  (graph content-hash check) and when the interruption is older than the
+  new **Resume window** setting (1–168 hours, default 48) — expired runs
+  offer Discard only. Database schema v32 adds the recorded routing
+  verdicts and the originating prompt to the encrypted run records.
+
 - **Persistent pipeline-run records.** Every pipeline run is now a
   first-class row in the encrypted local database (`pipeline_runs`,
   schema v30): enqueueing creates a `QUEUED` record, the engine writes

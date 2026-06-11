@@ -54,8 +54,12 @@
     <string name="chat_snackbar_save_to_memory_failed">Couldn\'t save to memory</string>
     <string name="chat_snackbar_console_copied">Console log copied</string>
     <string name="chat_snackbar_console_line_copied">Line copied</string>
-    <!-- Shown when the user taps Resume on the interrupted-run card before checkpoint-resume ships. -->
-    <string name="chat_snackbar_resume_unavailable">Resuming interrupted runs isn\'t available yet</string>
+    <!-- Shown when a Resume tap finds the run no longer resumable (raced discard, legacy record). -->
+    <string name="chat_snackbar_resume_unavailable">This run can no longer be resumed</string>
+    <!-- Shown when the pipeline graph was edited or deleted after the interrupted run started. -->
+    <string name="chat_snackbar_resume_graph_changed">Pipeline was edited \u2014 resume is unavailable, restart the task instead</string>
+    <!-- Shown when the interruption is older than the configured resume window. -->
+    <string name="chat_snackbar_resume_expired">Resume window elapsed \u2014 this run can only be discarded</string>
     <string name="chat_console_clear_dialog_confirm">Clear</string>
     <string name="chat_console_clear_dialog_cancel">Cancel</string>
 

@@ -102,6 +102,35 @@ interface PipelineRunDao {
     )
 
     /**
+     * Returns the run with [runId], or `null` when no such row exists. Backs
+     * checkpoint-resume validation, which addresses one specific run.
+     *
+     * @param runId Id of the run to load.
+     */
+    @Query("SELECT * FROM pipeline_runs WHERE id = :runId")
+    suspend fun getRun(runId: String): PipelineRunEntity?
+
+    /**
+     * Flips an interrupted run back to the QUEUED status for checkpoint
+     * resume, clearing the terminal markers ([PipelineRunEntity.finishedAt],
+     * [PipelineRunEntity.errorMessage]) the orphan sweep stamped. The
+     * `WHERE status = :fromStatus` guard pins the transition to INTERRUPTED
+     * rows only — the second sanctioned terminal-exit transition next to
+     * [discardInterruptedRun]; any other status leaves the row untouched.
+     *
+     * @param runId Id of the run to resume.
+     * @param fromStatus The INTERRUPTED status name the row must currently hold.
+     * @param toStatus The QUEUED status name to write.
+     * @return The number of updated rows — `1` when the guarded transition
+     *   applied, `0` when the row was missing or not INTERRUPTED.
+     */
+    @Query(
+        "UPDATE pipeline_runs SET status = :toStatus, finishedAt = NULL, errorMessage = NULL " +
+            "WHERE id = :runId AND status = :fromStatus",
+    )
+    suspend fun markResumed(runId: String, fromStatus: String, toStatus: String): Int
+
+    /**
      * Returns the most recently started run of [sessionId] whose status is in
      * [activeStatuses], or `null` when the session has no active run.
      *

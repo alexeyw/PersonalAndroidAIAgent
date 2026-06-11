@@ -87,4 +87,21 @@ class InterruptedRunCardTest {
         assertTrue(discarded)
         assertFalse(resumed)
     }
+
+    @Test
+    fun nonResumableVariantHidesResumeAndShowsExpiredNote() {
+        composeTestRule.setContent {
+            KnotworkTheme {
+                InterruptedRunCard(
+                    model = InterruptedRunCardModel(nodeLabel = "Summarise", resumable = false),
+                    onResume = {},
+                    onDiscard = {},
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithText("Resume").assertDoesNotExist()
+        composeTestRule.onNodeWithText("This run can no longer be resumed.").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Discard").assertIsDisplayed()
+    }
 }

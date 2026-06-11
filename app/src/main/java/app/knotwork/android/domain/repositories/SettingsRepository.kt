@@ -399,6 +399,21 @@ interface SettingsRepository {
     suspend fun setPipelineMaxSteps(steps: Int)
 
     /**
+     * A [Flow] representing the window, in hours, during which an interrupted
+     * pipeline run can still be resumed from its checkpoint. Interrupted runs
+     * older than this only offer the regular discard path — their recorded
+     * context grows stale with time. Valid range: 1–168.
+     */
+    val resumeMaxAgeHours: Flow<Int>
+
+    /**
+     * Updates the checkpoint-resume window.
+     *
+     * @param hours The new window in hours. Will be coerced to the range 1–168.
+     */
+    suspend fun setResumeMaxAgeHours(hours: Int)
+
+    /**
      * A [Flow] representing the id of the pipeline the user has marked as
      * default. `null` means no explicit choice — chats without their own
      * binding then have no pipeline to execute against and the task queue

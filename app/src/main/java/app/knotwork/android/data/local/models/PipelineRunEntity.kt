@@ -28,6 +28,9 @@ import androidx.room.PrimaryKey
  * @property errorMessage Failure / interruption reason for FAILED and INTERRUPTED runs.
  * @property graphContentHash Content hash of the executing graph, captured at the
  *   RUNNING transition; `null` while queued.
+ * @property userPrompt The user message that started the run, captured at enqueue
+ *   time for checkpoint resume; `null` only for rows written before the column
+ *   existed (such runs cannot be resumed).
  */
 @Entity(
     tableName = "pipeline_runs",
@@ -48,4 +51,5 @@ data class PipelineRunEntity(
     val finishedAt: Long?,
     val errorMessage: String?,
     val graphContentHash: String?,
+    val userPrompt: String? = null,
 )

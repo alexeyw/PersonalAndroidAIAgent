@@ -90,6 +90,33 @@ interface PipelineRunRepository {
     suspend fun finishRun(runId: String, status: PipelineRunStatus, errorMessage: String? = null)
 
     /**
+     * Returns the run with [runId], or `null` when no such run exists (or the
+     * store is unreadable — best-effort contract). Checkpoint resume uses it
+     * to load and validate the one specific run being resumed.
+     *
+     * @param runId Id of the run to load.
+     * @return The run record, or `null` when not found.
+     */
+    suspend fun getRun(runId: String): PipelineRun?
+
+    /**
+     * Flips an interrupted run back to [PipelineRunStatus.QUEUED] for
+     * checkpoint resume, clearing the `finishedAt` / `errorMessage` markers
+     * stamped by the orphan sweep, and re-registers the run as owned by the
+     * current process (see [getOrphanedRuns]) — the resumed execution is
+     * hosted here, and a second interruption must again be detectable. This
+     * is the second sanctioned terminal-exit transition next to
+     * [discardInterruptedRun] and is equally guarded in SQL: a run in any
+     * other status is left untouched and the method reports failure.
+     *
+     * @param runId Id of the run to resume.
+     * @return `true` when the guarded INTERRUPTED → QUEUED transition was
+     *   applied; `false` when the run is missing, not INTERRUPTED, or the
+     *   store failed (best-effort contract).
+     */
+    suspend fun markResumed(runId: String): Boolean
+
+    /**
      * Returns the most recently started non-terminal run of [sessionId], or
      * `null` when every run of the session already finished (or the store is
      * unreadable — best-effort contract). This is the entry point of the

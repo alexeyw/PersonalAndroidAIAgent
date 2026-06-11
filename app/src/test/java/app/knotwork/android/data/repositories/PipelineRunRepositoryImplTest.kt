@@ -358,6 +358,73 @@ class PipelineRunRepositoryImplTest {
 
     // endregion
 
+    // region Checkpoint resume
+
+    @Test
+    fun `given entity when getRun then maps to domain including userPrompt`() = runTest {
+        coEvery { pipelineRunDao.getRun("run-1") } returns sampleEntity.copy(userPrompt = "original prompt")
+
+        val run = repository.getRun("run-1")
+
+        assertEquals("run-1", run?.id)
+        assertEquals(RunOrigin.SCHEDULER, run?.origin)
+        assertEquals(PipelineRunStatus.WAITING_APPROVAL, run?.status)
+        assertEquals("original prompt", run?.userPrompt)
+    }
+
+    @Test
+    fun `given missing row when getRun then returns null`() = runTest {
+        coEvery { pipelineRunDao.getRun("run-1") } returns null
+
+        assertNull(repository.getRun("run-1"))
+    }
+
+    @Test
+    fun `given userPrompt on createRun then entity carries it`() = runTest {
+        val captured = slot<PipelineRunEntity>()
+        coEvery { pipelineRunDao.insertRun(capture(captured)) } returns Unit
+
+        repository.createRun(sampleRun.copy(userPrompt = "ask the agent"))
+
+        assertEquals("ask the agent", captured.captured.userPrompt)
+    }
+
+    @Test
+    fun `markResumed issues the guarded INTERRUPTED to QUEUED transition and reports success`() = runTest {
+        coEvery { pipelineRunDao.markResumed("run-1", "INTERRUPTED", "QUEUED") } returns 1
+
+        assertTrue(repository.markResumed("run-1"))
+        coVerify { pipelineRunDao.markResumed("run-1", "INTERRUPTED", "QUEUED") }
+    }
+
+    @Test
+    fun `given row not INTERRUPTED when markResumed then reports failure`() = runTest {
+        coEvery { pipelineRunDao.markResumed(any(), any(), any()) } returns 0
+
+        assertTrue(!repository.markResumed("run-1"))
+    }
+
+    @Test
+    fun `given DAO failure when markResumed then absorbed as failure`() = runTest {
+        coEvery { pipelineRunDao.markResumed(any(), any(), any()) } throws IllegalStateException("io")
+
+        assertTrue(!repository.markResumed("run-1"))
+    }
+
+    @Test
+    fun `markResumed re-registers process ownership so the run is no orphan`() = runTest {
+        coEvery { pipelineRunDao.markResumed(any(), any(), any()) } returns 1
+        coEvery { pipelineRunDao.getRunsByStatuses(activeNames) } returns listOf(
+            sampleEntity.copy(id = "run-1", status = "QUEUED"),
+        )
+
+        repository.markResumed("run-1")
+
+        assertEquals(emptyList<PipelineRun>(), repository.getOrphanedRuns())
+    }
+
+    // endregion
+
     @Test
     fun `terminal flag covers exactly the four terminal statuses`() {
         val terminal = PipelineRunStatus.entries.filter { it.isTerminal }

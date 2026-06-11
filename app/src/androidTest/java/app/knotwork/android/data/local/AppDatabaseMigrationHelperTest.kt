@@ -252,14 +252,67 @@ class AppDatabaseMigrationHelperTest {
     }
 
     @Test
-    fun migrateFullChain23to31_preservesDataAndValidatesFinalSchema() {
+    fun migrate31to32_addsCheckpointColumnsPreservingRows() {
+        helper.createDatabase(TEST_DB, 31).use { db ->
+            db.execSQL(
+                "INSERT INTO chat_sessions(id, name, updatedAt, isStarred) " +
+                    "VALUES('$SESSION_ID', 'Chat', $CHUNK_TS, 0)",
+            )
+            db.execSQL(
+                "INSERT INTO pipeline_runs(id, sessionId, pipelineId, origin, status, startedAt) " +
+                    "VALUES('run-1', '$SESSION_ID', 'p1', 'CHAT', 'INTERRUPTED', $CHUNK_TS)",
+            )
+            db.execSQL(
+                "INSERT INTO trace_steps(sessionId, nodeName, outputText, timestamp, durationMs, " +
+                    "runId, seq, recordKind, nodeId, inputText) " +
+                    "VALUES('$SESSION_ID', 'LITE_RT', 'out', $CHUNK_TS, 5, 'run-1', 0, 'NODE_IO', 'n1', 'in')",
+            )
+        }
+
+        helper.runMigrationsAndValidate(TEST_DB, 32, true, AppDatabase.MIGRATION_31_32).use { db ->
+            // Pre-existing rows survive with the new columns defaulting to
+            // NULL — the documented "recorded before checkpoint support"
+            // semantics on both tables.
+            db.query("SELECT conditionResult, routingKey, resolvedToolName, outputText FROM trace_steps").use { c ->
+                assertTrue("pre-existing trace row must survive", c.moveToFirst())
+                assertTrue(c.isNull(0))
+                assertTrue(c.isNull(1))
+                assertTrue(c.isNull(2))
+                assertEquals("out", c.getString(3))
+            }
+            db.query("SELECT userPrompt, status FROM pipeline_runs WHERE id = 'run-1'").use { c ->
+                assertTrue(c.moveToFirst())
+                assertTrue("legacy runs carry no recorded prompt", c.isNull(0))
+                assertEquals("INTERRUPTED", c.getString(1))
+            }
+            // New-style values round-trip against the validated schema.
+            db.execSQL(
+                "UPDATE trace_steps SET conditionResult = 1, routingKey = 'Pass', " +
+                    "resolvedToolName = 'calendar.create'",
+            )
+            db.execSQL("UPDATE pipeline_runs SET userPrompt = 'original prompt' WHERE id = 'run-1'")
+            db.query("SELECT conditionResult, routingKey, resolvedToolName FROM trace_steps").use { c ->
+                assertTrue(c.moveToFirst())
+                assertEquals(1, c.getInt(0))
+                assertEquals("Pass", c.getString(1))
+                assertEquals("calendar.create", c.getString(2))
+            }
+            assertEquals(
+                "original prompt",
+                querySingleString(db, "SELECT userPrompt FROM pipeline_runs WHERE id = 'run-1'"),
+            )
+        }
+    }
+
+    @Test
+    fun migrateFullChain23to32_preservesDataAndValidatesFinalSchema() {
         helper.createDatabase(TEST_DB, 23).use { db ->
             seedMemoryChunkV23(db)
         }
 
         helper.runMigrationsAndValidate(
             TEST_DB,
-            31,
+            32,
             true,
             AppDatabase.MIGRATION_23_24,
             AppDatabase.MIGRATION_24_25,
@@ -269,6 +322,7 @@ class AppDatabaseMigrationHelperTest {
             AppDatabase.MIGRATION_28_29,
             AppDatabase.MIGRATION_29_30,
             AppDatabase.MIGRATION_30_31,
+            AppDatabase.MIGRATION_31_32,
         ).use { db ->
             // The original v23 row must survive every step with the new
             // columns filled by their documented defaults and the embedding
